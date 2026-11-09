@@ -13,10 +13,15 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>Crossbows (docs/game/combat.md "Ranged and turrets"): a skilled shooter hits and spends a bolt, runs dry and draws its melee weapon, and a skirmish is deterministic.</summary>
+/// <summary>
+/// Crossbows (docs/game/combat.md "Ranged and turrets"): a skilled shooter hits and spends a bolt, runs dry and draws its melee weapon,
+/// and a skirmish is deterministic.
+/// </summary>
 public class RangedTests(ITestOutputHelper output)
 {
-    /// <summary>CROSSBOW "Ranger" (66169-Newwworld.mod) as dumped from the base game; its ammunition stands in as "bolts".</summary>
+    /// <summary>
+    /// CROSSBOW "Ranger" (66169-Newwworld.mod) as dumped from the base game; its ammunition stands in as "bolts".
+    /// </summary>
     internal static CrossbowData Ranger { get; } = new()
     {
         StringId = "66169-Newwworld.mod", Name = "Ranger",
@@ -27,7 +32,9 @@ public class RangedTests(ITestOutputHelper output)
 
     // ------------------------------------------------------------------ worlds
 
-    /// <summary>A crossbowman: the given skills, a Ranger at quality 0 (or none) and <paramref name="bolts"/> bolts in one item, plus a katana for melee.</summary>
+    /// <summary>
+    /// A crossbowman: the given skills, a Ranger at quality 0 (or none) and <paramref name="bolts"/> bolts in one item, plus a katana for melee.
+    /// </summary>
     internal static CharacterCold Shooter(float crossbows, float perception, int bolts, int faction = 0, CrossbowData? bow = null, float friendlyFire = 0)
     {
         var cold = new Combatant { Name = "shooter" }.MakeCold();
@@ -38,11 +45,16 @@ public class RangedTests(ITestOutputHelper output)
         cold.Fighter = new Fighter(cold.Fighter!.Weapon) { Crossbow = CrossbowInstance.Create(0, x, Constants, 1) };
         cold.Faction = faction;
         cold.Inventory = new Inventory();
-        if (bolts > 0) cold.Inventory.Items.Add(new ItemInstance { Record = x.AmmoId, Section = "main", Charges = bolts, MaxCharges = 30, StackLimit = 99 });
+        if (bolts > 0)
+        {
+            cold.Inventory.Items.Add(new ItemInstance { Record = x.AmmoId, Section = "main", Charges = bolts, MaxCharges = 30, StackLimit = 99 });
+        }
+
         return cold;
     }
 
-    static CharacterId Put(SimWorld world, CharacterCold cold, Vector3 at) => world.Characters.Spawn(new CharacterHot { Position = at, Health = 100 }, cold, 0);
+    static CharacterId Put(SimWorld world, CharacterCold cold, Vector3 at) =>
+        world.Characters.Spawn(new CharacterHot { Position = at, Health = 100 }, cold, 0);
 
     static CharacterCold Dummy(int faction, float toughness = 50)
     {
@@ -79,8 +91,9 @@ public class RangedTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Combat mode (docs/game/ui-screens.md section 4 "Combat mode"): a shooting fight is the ranged controller's combatMode, not the melee flag, so isInCombatMode(1, 1) holds
-    /// while its target is up and (1, 0) does not; the shooting task sets Current Skill to Crossbows; the stats show the crossbow lines (mode 2) only while the shooter stands still.
+    /// Combat mode (docs/game/ui-screens.md section 4 "Combat mode"): a shooting fight is the ranged controller's combatMode,
+    /// not the melee flag, so isInCombatMode(1, 1) holds while its target is up and (1, 0) does not; the shooting task sets
+    /// Current Skill to Crossbows; the stats show the crossbow lines (mode 2) only while the shooter stands still.
     /// </summary>
     [Fact]
     public void A_shooter_is_in_ranged_combat_mode_only_and_shows_the_crossbow_stats_while_still()
@@ -106,15 +119,16 @@ public class RangedTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Strength XP in combat mode (calculateWeaponWeightXPMult, docs/game/ui-screens.md section 4): the weight of the weapon in hand, a drawn crossbow's own, and 1 - encumbrance
-    /// with nothing drawn; out of combat mode the carrying rate stays.
+    /// Strength XP in combat mode (calculateWeaponWeightXPMult, docs/game/ui-screens.md section 4): the weight of the weapon in hand,
+    /// a drawn crossbow's own, and 1 - encumbrance with nothing drawn; out of combat mode the carrying rate stays.
     /// </summary>
     [Fact]
     public void Strength_xp_in_combat_mode_takes_the_drawn_weapons_weight_or_fists()
     {
         var bodies = new BodySystem(Bodies.BodyFixtures.BaseGame);
         var cold = Shooter(50, 50, 0);
-        cold.Fighter = new Fighter(cold.Fighter!.Weapon) { Crossbow = CrossbowInstance.Create(0, Ranger, Constants, 1, weight: 75), EncumbranceFactor = 0.6f };
+        var drawnBow = CrossbowInstance.Create(0, Ranger, Constants, 1, weight: 75);
+        cold.Fighter = new Fighter(cold.Fighter!.Weapon) { Crossbow = drawnBow, EncumbranceFactor = 0.6f };
         float strength = cold.Stats!.Strength, mult = cold.Medical!.StatMultiplier(StatsEnumerated.Strength);
         float Factor(float w) => 0.1f + Math.Clamp((w - strength * mult) / 20, 0, 1);
         var x = new ExtendedStats(1, 0.3f, 3, -40, 30, 40, 1);
@@ -155,7 +169,9 @@ public class RangedTests(ITestOutputHelper output)
 
     // ------------------------------------------------------------------ determinism
 
-    /// <summary>Six squads of three: crossbowmen of faction 0 against katana fighters of faction 1, 250 units apart, cut into one-slot partitions.</summary>
+    /// <summary>
+    /// Six squads of three: crossbowmen of faction 0 against katana fighters of faction 1, 250 units apart, cut into one-slot partitions.
+    /// </summary>
     static SimWorld Skirmish(ulong seed, int threads, out CombatSystem combat)
     {
         var world = NewWorld(seed, threads, out combat, minPartition: 1);
@@ -205,14 +221,20 @@ public class RangedTests(ITestOutputHelper output)
         Assert.NotEqual(one, Hashes(1, 14));
         using var world = Skirmish(13, 4, out var combat);
         world.RunTicks(1200);
-        output.WriteLine($"fired {combat.ProjectilesFired}, ranged hits {combat.Log.Count(e => e.Ranged)} (to a friend or another: {combat.Log.Count(e => e.Ranged && !e.Intended)}), melee blows {combat.Log.Count(e => !e.Ranged)}");
+        int rangedHits = combat.Log.Count(e => e.Ranged);
+        int strayHits = combat.Log.Count(e => e.Ranged && !e.Intended);
+        int meleeBlows = combat.Log.Count(e => !e.Ranged);
+        output.WriteLine($"fired {combat.ProjectilesFired}, ranged hits {rangedHits} (to a friend or another: {strayHits}), melee blows {meleeBlows}");
         Assert.True(combat.ProjectilesFired > 10);
         Assert.Contains(combat.Log, e => e.Ranged);
         Assert.Contains(combat.Log, e => !e.Ranged);
     }
 }
 
-/// <summary>The crossbow facts of docs/game/combat.md "Ranged and turrets" against the install's records (base load order), and a real crossbowman shooting. Skipped without the game.</summary>
+/// <summary>
+/// The crossbow facts of docs/game/combat.md "Ranged and turrets" against the install's records (base load order),
+/// and a real crossbowman shooting. Skipped without the game.
+/// </summary>
 [Slow]
 public class RangedInstallTests(ITestOutputHelper output)
 {
@@ -229,22 +251,37 @@ public class RangedInstallTests(ITestOutputHelper output)
         var combatData = CombatDatabase.From(db);
         var constants = GameConstants.FromDatabase(db);
         var race = RaceData.From(db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander"), db);
-        var combat = new CombatSystem(combatData.Techniques, combatData.Constants, constants, BodyOptions.Default, new AnimationLengths(), new CombatOptions { RecordLog = true });
-        using var world = new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [combat, Senses(combat)]);
+        var combat = new CombatSystem(
+            combatData.Techniques, combatData.Constants, constants, BodyOptions.Default, new AnimationLengths(),
+            new CombatOptions { RecordLog = true });
+        var settings = new WorldSettings { Seed = 3, PublishSnapshots = false };
+        using var world = new SimWorld(settings, new OpenGroundWalkability((_, _) => 150), [combat, Senses(combat)]);
         var items = new ItemFactory(db, constants);
         var ranger = combatData.Crossbows.Single(x => x.Name == "Ranger");
         CharacterCold Make(bool shooter, int faction)
         {
             var stats = new CharacterStats();
-            foreach (var s in new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity, StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Crossbows, StatsEnumerated.Perception })
+            var skills = new[]
+            {
+                StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity,
+                StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Crossbows, StatsEnumerated.Perception,
+            };
+            foreach (var s in skills)
+            {
                 stats[s] = 60;
+            }
+
             var fighter = new Fighter(WeaponInstance.Create(0.5f, combatData.Weapon("476-gamedata.base")!, null, null, combatData.Constants))
             {
                 Crossbow = shooter ? CrossbowInstance.Create(0, ranger, combatData.Constants, 1) : null,
             };
             var inv = new Inventory();
             if (shooter) inv.Add(items.Create(ranger.AmmoId)!);
-            return new CharacterCold { Name = shooter ? "shooter" : "fighter", Faction = faction, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter, Inventory = inv };
+            return new CharacterCold
+            {
+                Name = shooter ? "shooter" : "fighter", Faction = faction, Stats = stats, Race = race,
+                Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter, Inventory = inv,
+            };
         }
         var a = world.Characters.Spawn(new CharacterHot { Position = new(1000, 150, 1000), Health = 100 }, Make(true, 0), 0);
         var b = world.Characters.Spawn(new CharacterHot { Position = new(1200, 150, 1000), Health = 100 }, Make(false, 1), 0);

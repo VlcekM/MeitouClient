@@ -12,7 +12,10 @@ using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation.Ragdolls;
 
-/// <summary>The parts of a body that are a ragdoll (the game's <c>RagdollPart</c>, <b>Verified</b> in <c>fcs_enums.def</c>; LOCATIONAL_DAMAGE <c>collapse part</c> uses it).</summary>
+/// <summary>
+/// The parts of a body that are a ragdoll (the game's <c>RagdollPart</c>, <b>Verified</b> in <c>fcs_enums.def</c>; LOCATIONAL_DAMAGE <c>collapse
+/// part</c> uses it).
+/// </summary>
 [Flags]
 public enum RagdollPart
 {
@@ -26,19 +29,29 @@ public enum RagdollPart
 /// </summary>
 public readonly record struct RagdollBlow(Vector3 Velocity, Vector3 Push, string? Bone);
 
-/// <summary>What the animation system asks about ragdolls (in its parallel phase: answers are the last tick's state or fixed data).</summary>
+/// <summary>
+/// What the animation system asks about ragdolls (in its parallel phase: answers are the last tick's state or fixed data).
+/// </summary>
 public interface IRagdollState
 {
-    /// <summary>Whether the character's look has a ragdoll (its race names a ragdoll file that binds to its skeleton).</summary>
+    /// <summary>
+    /// Whether the character's look has a ragdoll (its race names a ragdoll file that binds to its skeleton).
+    /// </summary>
     bool HasRagdoll(CharacterCold cold);
-    /// <summary>Whether the whole body was a ragdoll at the end of the last tick.</summary>
+    /// <summary>
+    /// Whether the whole body was a ragdoll at the end of the last tick.
+    /// </summary>
     bool WasWhole(CharacterId id);
 }
 
-/// <summary>What the world asks to publish a character's ragdoll.</summary>
+/// <summary>
+/// What the world asks to publish a character's ragdoll.
+/// </summary>
 public interface IRagdollSource
 {
-    /// <summary>The bones the ragdoll sets, in the model space of the character's drawn placement; null without a ragdoll.</summary>
+    /// <summary>
+    /// The bones the ragdoll sets, in the model space of the character's drawn placement; null without a ragdoll.
+    /// </summary>
     BonePose? Publish(CharacterId id);
 }
 
@@ -50,11 +63,17 @@ public interface IRagdollSource
 /// </summary>
 public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IRagdollSource, IDisposable
 {
-    /// <summary>Getting up blends from the ragdoll's pose to the animation over this many seconds (<b>Observed</b>, <c>FUN_1407d3130</c>).</summary>
+    /// <summary>
+    /// Getting up blends from the ragdoll's pose to the animation over this many seconds (<b>Observed</b>, <c>FUN_1407d3130</c>).
+    /// </summary>
     public const float GetUpBlend = 0.75f;
-    /// <summary>The edge of a square of static ground and buildings the scene is made of, in world units, on a grid from the origin (engine choice).</summary>
+    /// <summary>
+    /// The edge of a square of static ground and buildings the scene is made of, in world units, on a grid from the origin (engine choice).
+    /// </summary>
     public const float TileSize = 32;
-    /// <summary>Ground tiles are kept this far round a moving ragdoll's root (<see cref="RagdollPhysics.Cover"/>).</summary>
+    /// <summary>
+    /// Ground tiles are kept this far round a moving ragdoll's root (<see cref="RagdollPhysics.Cover"/>).
+    /// </summary>
     const float TileReach = 12;
     /// <summary>
     /// Ground tile units made in one tick (<see cref="RagdollPhysics.Cover"/>: a ground mesh 1, a building mesh <see cref="RagdollPhysics.BuildingUnits"/>), the starting ragdolls'
@@ -73,7 +92,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// stalled the step for a scheduler quantum or more (16-85 ms waits in the probe's trace), which a single thread cannot suffer from another thread.
     /// </summary>
     const int ThreadedBodies = 256;
-    /// <summary>Freezing (docs/game/ragdolls.md "Sleep and limits"): not before this age, then when this share of the bodies is still; at the latest after <see cref="FreezeLatest"/>.</summary>
+    /// <summary>
+    /// Freezing (docs/game/ragdolls.md "Sleep and limits"): not before this age, then when this share of the bodies is still; at the latest after
+    /// <see cref="FreezeLatest"/>.
+    /// </summary>
     public const float FreezeEarliest = 2, FreezeShare = 0.6f, FreezeLatest = 7;
     /// <summary>
     /// Meitou (<b>engine choice</b>): a collapsed limb of a character still up dangles only within this of the camera (<see cref="World.ViewPosition"/>; about where the human body's first
@@ -81,9 +103,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// any distance (docs/game/ragdolls.md "Sleep and limits").
     /// </summary>
     public const float LimbReach = 300;
-    /// <summary>A body is still under these squared speeds (the game's PhysX sleep velocities: linear² 2.25, angular² 1.96).</summary>
+    /// <summary>
+    /// A body is still under these squared speeds (the game's PhysX sleep velocities: linear² 2.25, angular² 1.96).
+    /// </summary>
     const float StillLinear = 2.25f, StillAngular = 1.96f;
-    /// <summary>How far under the terrain a body's centre must get, in world units, to count as through it (engine choice; a resting limb's centre is at least its radius, 0.4 and up, above it).</summary>
+    /// <summary>
+    /// How far under the terrain a body's centre must get, in world units, to count as through it (engine choice; a resting limb's centre is at least
+    /// its radius, 0.4 and up, above it).
+    /// </summary>
     const float SinkDepth = 1, MaxLift = 8;
 
     readonly CharacterRigs _rigs;
@@ -109,17 +136,23 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         RagdollPhysics.WarmUpOnce();
     }
 
-    /// <summary>Ragdolls in play (frozen ones included) and how many are moving.</summary>
+    /// <summary>
+    /// Ragdolls in play (frozen ones included) and how many are moving.
+    /// </summary>
     public int Count => _ragdolls.Count;
     public int Moving { get; private set; }
-    /// <summary>The moving ones by kind: carried, whole-body (falling or settling) and limbs only (a collapsed arm or leg of a character still up).</summary>
+    /// <summary>
+    /// The moving ones by kind: carried, whole-body (falling or settling) and limbs only (a collapsed arm or leg of a character still up).
+    /// </summary>
     public int MovingCarried { get; private set; }
     public int MovingWhole { get; private set; }
     public int MovingLimbs { get; private set; }
     public int Tiles => _physics.TileCount;
     // Real seconds of physics owed since the last step (SlowWorld); not saved or hashed.
     float _physicsDue;
-    /// <summary>Bodies the physics steps (its awake set, ground tiles included).</summary>
+    /// <summary>
+    /// Bodies the physics steps (its awake set, ground tiles included).
+    /// </summary>
     public int AwakeBodies => _physics.Simulation.Bodies.ActiveSet.Count;
 
     sealed class Ragdoll
@@ -133,25 +166,39 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         /// actor is named <c>Actor</c> and moves <c>Bip01</c>.
         /// </summary>
         public int CarryBone = -1;
-        /// <summary>While carried: the placement it hangs in (<see cref="Placement"/>), where it falls from when set down or dropped.</summary>
+        /// <summary>
+        /// While carried: the placement it hangs in (<see cref="Placement"/>), where it falls from when set down or dropped.
+        /// </summary>
         public Matrix4x4? HungIn;
         public RagdollPart Mask;
         public int Tag;
-        /// <summary>By body: its handle when it is in the scene.</summary>
+        /// <summary>
+        /// By body: its handle when it is in the scene.
+        /// </summary>
         public BodyHandle?[] Bodies = [];
         public bool[] Dynamic = [];
         public readonly List<ConstraintHandle> Joints = [];
-        /// <summary>Advanced ragdolls: the joints have soft limits (set when the bodies are built), and the relaxed pull of <see cref="Tone"/> (its servos in <see cref="Relax"/>).</summary>
+        /// <summary>
+        /// Advanced ragdolls: the joints have soft limits (set when the bodies are built), and the relaxed pull of <see cref="Tone"/> (its servos in
+        /// <see cref="Relax"/>).
+        /// </summary>
         public bool Soft;
         public Tone Tone;
         public readonly List<ConstraintHandle> Relax = [];
-        /// <summary>By body: the last world pose (also kept for bodies not in the scene while getting up).</summary>
+        /// <summary>
+        /// By body: the last world pose (also kept for bodies not in the scene while getting up).
+        /// </summary>
         public RigidTransform[] Pose = [];
         public bool Frozen;
         public float Age;
-        /// <summary>Seconds of the get-up blend left (0: none), and the bones it blends from, in world space.</summary>
+        /// <summary>
+        /// Seconds of the get-up blend left (0: none), and the bones it blends from, in world space.
+        /// </summary>
         public float BlendLeft;
-        /// <summary>The published bones and the placement they were made in: a frozen ragdoll still in it hands over the same object (the renderer poses it again only for new bones).</summary>
+        /// <summary>
+        /// The published bones and the placement they were made in: a frozen ragdoll still in it hands over the same object (the renderer poses it
+        /// again only for new bones).
+        /// </summary>
         public BonePose? Published;
         public Matrix4x4 PublishedIn;
         public bool InScene => Bodies.Any(b => b is not null);
@@ -186,7 +233,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         return _definitions.GetOrAdd((file.Path, rig, key), _ => new(() => RagdollDefinition.Build(file.File, rig, key / 100f, Hull))).Value;
     }
 
-    /// <summary>The bone a carried animal's ragdoll is pinned by: RACE <c>carry bone</c> when the skeleton has it, else the skeleton's root (<c>FUN_1407d3850</c>); -1 for neither.</summary>
+    /// <summary>
+    /// The bone a carried animal's ragdoll is pinned by: RACE <c>carry bone</c> when the skeleton has it, else the skeleton's root
+    /// (<c>FUN_1407d3850</c>); -1 for neither.
+    /// </summary>
     static int CarryBoneOf(CharacterAppearance look, SkeletonRig rig)
     {
         if (look.Race.GetString("carry bone") is { Length: > 0 } named && rig.Handle(named) is int bone) return bone;
@@ -209,7 +259,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     internal static bool IsRagdoll(CharacterCold cold) => (Wanted(cold) & (RagdollPart.Whole | RagdollPart.CarryMode)) != 0;
 
-    /// <summary>The parts that should be a ragdoll now (docs/game/ragdolls.md "Triggers").</summary>
+    /// <summary>
+    /// The parts that should be a ragdoll now (docs/game/ragdolls.md "Triggers").
+    /// </summary>
     static RagdollPart Wanted(CharacterCold cold)
     {
         // In a bed or a cage: no ragdoll ("on" requests are refused in furniture, and using it releases all).
@@ -325,8 +377,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 if ((r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0) Launch(r, launch, advanced, world.Seed);
             }
             if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
-            if (!r.Frozen && r.Dynamic.Any(d => !d))
-                Pin(r, animated ?? Animated(r, cold, placement), dt);
+            if (!r.Frozen && r.Dynamic.Any(d => !d)) Pin(r, animated ?? Animated(r, cold, placement), dt);
             if (!r.Frozen) _physics.Cover(r.Definition.RootAt(r.Pose), TileReach * r.Scale, env, tick, ref tilesLeft);
         }
 
@@ -404,7 +455,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (cold.Race is { } race && cold.StandHeight > 0) cold.WaterState = (byte)Bodies.Speed.WaterState(cold.StandHeight, 1, race.Swims);
     }
 
-    /// <summary>The character's drawn placement: position, facing (a carried body's on its carrier's shoulder: <see cref="CarryPose"/>), size; the renderer's world matrix.</summary>
+    /// <summary>
+    /// The character's drawn placement: position, facing (a carried body's on its carrier's shoulder: <see cref="CarryPose"/>), size; the renderer's
+    /// world matrix.
+    /// </summary>
     static Matrix4x4 Placement(Ragdoll r, CharacterCold cold, in CharacterHot hot)
     {
         if (cold.CarriedBy.IsNone) return CharacterRigs.Placement(r.Setup, hot.Position, hot.Yaw, r.Scale);
@@ -412,7 +466,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         return CharacterRigs.Placement(r.Setup, at, rotation, r.Scale);
     }
 
-    /// <summary>Where a carried body hangs: on its carrier's attach bone as the carrier's animation poses it now; null without the carrier's skeleton or that bone.</summary>
+    /// <summary>
+    /// Where a carried body hangs: on its carrier's attach bone as the carrier's animation poses it now; null without the carrier's skeleton or that
+    /// bone.
+    /// </summary>
     CarryAttach? AttachOf(CharacterTable table, CharacterCold cold)
     {
         if (!table.TryResolveNext(cold.CarriedBy, out int slot) || table.Cold(slot) is not { Appearance: { } look } carrier || _rigs.For(look) is not { } setup) return null;
@@ -454,10 +511,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         finally { setup.Rig.Return(scratch); }
     }
 
-    /// <summary>The ragdoll's size: an animal's age-lerped size, 1 for a person.</summary>
+    /// <summary>
+    /// The ragdoll's size: an animal's age-lerped size, 1 for a person.
+    /// </summary>
     static float ScaleOf(CharacterCold cold) => cold is { Fighter.IsAnimal: true, Medical: { } size } ? size.ScaleK : 1;
 
-    /// <summary>Poses <paramref name="scratch"/> as the character's animation and its fixed posture layers do now (model space).</summary>
+    /// <summary>
+    /// Poses <paramref name="scratch"/> as the character's animation and its fixed posture layers do now (model space).
+    /// </summary>
     void PoseDerived(PoseScratch scratch, CharacterPoseSetup setup, CharacterCold cold)
     {
         var layers = new List<ActiveLayer>();
@@ -481,13 +542,17 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     static bool Near(Vector3 root, Vector3 at) =>
         Vector2.DistanceSquared(new Vector2(root.X, root.Z), new Vector2(at.X, at.Z)) <= 20 * 20 && MathF.Abs(root.Y - at.Y) <= 50;
 
-    /// <summary>A whole-body ragdoll's state for a save (<see cref="RagdollSave"/>); null when the character has none or only a carried or limb ragdoll.</summary>
+    /// <summary>
+    /// A whole-body ragdoll's state for a save (<see cref="RagdollSave"/>); null when the character has none or only a carried or limb ragdoll.
+    /// </summary>
     public SavedRagdoll? SaveState(CharacterId id) =>
         _ragdolls.TryGetValue(id, out var r) && (r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0 && r.Pose.Length > 0
             ? new SavedRagdoll(r.Frozen, r.Age, (RigidTransform[])r.Pose.Clone())
             : null;
 
-    /// <summary>Every body's pose where the character's animation puts its bone now, in world space.</summary>
+    /// <summary>
+    /// Every body's pose where the character's animation puts its bone now, in world space.
+    /// </summary>
     RigidTransform[] Animated(Ragdoll r, CharacterCold cold, Matrix4x4 placement)
     {
         var rig = r.Setup.Rig;
@@ -510,7 +575,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         finally { rig.Return(scratch); }
     }
 
-    /// <summary>Which bodies a mask simulates (docs/game/ragdolls.md, "Bodies: kinematic or simulated").</summary>
+    /// <summary>
+    /// Which bodies a mask simulates (docs/game/ragdolls.md, "Bodies: kinematic or simulated").
+    /// </summary>
     static bool Simulates(Ragdoll r, RagdollPart mask, RagdollBody body)
     {
         if ((mask & RagdollPart.Whole) != 0) return true;
@@ -588,7 +655,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (dynamic[j.A] || dynamic[j.B]) AddJoint(r, j);
     }
 
-    /// <summary>How far a new whole-body ragdoll must go up to have no body centre under the terrain (the lowest ends 0.25 above it); 0 when none is under it, or when it is more than <see cref="MaxLift"/> (a floor sunk into a hill, not a foot in a slope).</summary>
+    /// <summary>
+    /// How far a new whole-body ragdoll must go up to have no body centre under the terrain (the lowest ends 0.25 above it); 0 when none is under it,
+    /// or when it is more than <see cref="MaxLift"/> (a floor sunk into a hill, not a foot in a slope).
+    /// </summary>
     internal static float OutOfGround(IRagdollEnvironment? environment, RigidTransform[] animated, bool[] dynamic)
     {
         if (environment is not { } env) return 0;
@@ -704,7 +774,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     // ---- advanced ragdolls (Meitou, BodyOptions.AdvancedRagdolls; docs/game/ragdolls.md "Advanced ragdolls (Meitou)") ----
 
-    /// <summary>The relaxed pull a ragdoll's joints get: none (awake, or Faithful), the weak one of a dead body, the resting muscle tone of an unconscious one.</summary>
+    /// <summary>
+    /// The relaxed pull a ragdoll's joints get: none (awake, or Faithful), the weak one of a dead body, the resting muscle tone of an unconscious
+    /// one.
+    /// </summary>
     internal enum Tone { None, Dead, Unconscious }
 
     /// <summary>
@@ -713,14 +786,25 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     const float SoftBand = 0.25f;
     static readonly SpringSettings SoftLimit = new(5, 3);
-    /// <summary>The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an elbow about 45).</summary>
+    /// <summary>
+    /// The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an
+    /// elbow about 45).
+    /// </summary>
     const float RelaxedShare = 0.6f;
-    /// <summary>The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.</summary>
+    /// <summary>
+    /// The spin a blow's push gives an arm or a leg: rad/s per unit/s of push, at most this, scaled by a roll of 0.6 to 1.4.
+    /// </summary>
     const float SpinPerPush = 0.15f, MaxPushSpin = 6;
-    /// <summary>The share of a blow's push the other bodies take when one is struck (it takes the whole push), and at most this many times its own share of the body's mass.</summary>
+    /// <summary>
+    /// The share of a blow's push the other bodies take when one is struck (it takes the whole push), and at most this many times its own share of
+    /// the body's mass.
+    /// </summary>
     const float PushSpread = 0.4f, MaxFocusGain = 4;
 
-    /// <summary>The tone of a whole or carried ragdoll; none for a conscious character's collapsed limbs (a broken limb hangs loose) or without advanced ragdolls.</summary>
+    /// <summary>
+    /// The tone of a whole or carried ragdoll; none for a conscious character's collapsed limbs (a broken limb hangs loose) or without advanced
+    /// ragdolls.
+    /// </summary>
     static Tone ToneOf(CharacterCold cold, RagdollPart mask, bool advanced) =>
         !advanced || (mask & (RagdollPart.Whole | RagdollPart.CarryMode)) == 0 || cold.Medical is not { Incapacitated: true } medical ? Tone.None
         : medical.Dead ? Tone.Dead : Tone.Unconscious;
@@ -795,7 +879,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         return Vector3.Normalize(Vector3.Cross(flat, Vector3.UnitY)) * (side * speed);
     }
 
-    /// <summary>Sets the pinned bodies to the animated pose with no velocity, as the original does: the joints and contacts see the jump, not a speed.</summary>
+    /// <summary>
+    /// Sets the pinned bodies to the animated pose with no velocity, as the original does: the joints and contacts see the jump, not a speed.
+    /// </summary>
     void Pin(Ragdoll r, RigidTransform[] animated, float dt)
     {
         for (int b = 0; b < r.Bodies.Length; b++)
@@ -859,7 +945,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         return count == 0 ? 1 : still / (float)count;
     }
 
-    /// <summary>A ragdoll of a race that <c>swims</c> (race byte <c>+0x79</c>) whose root is at or under the water level (docs/game/ragdolls.md "Bodies: kinematic or simulated").</summary>
+    /// <summary>
+    /// A ragdoll of a race that <c>swims</c> (race byte <c>+0x79</c>) whose root is at or under the water level (docs/game/ragdolls.md "Bodies:
+    /// kinematic or simulated").
+    /// </summary>
     static bool Afloat(World world, Ragdoll r) =>
         r.Pose.Length > 0 && r.Definition.RootAt(r.Pose).Y <= Data.World.WorldWater.Height
         && world.Characters.TryResolveNext(r.Id, out int slot) && world.Characters.Cold(slot)?.Race is { Swims: true };
@@ -883,7 +972,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         }
     }
 
-    /// <summary>Drag of a slide (per second) and the flat speed below which it stops: a 30 u/s throw goes about 10 units.</summary>
+    /// <summary>
+    /// Drag of a slide (per second) and the flat speed below which it stops: a 30 u/s throw goes about 10 units.
+    /// </summary>
     const float SlideDrag = 3, SlideStop = 0.5f;
 
     /// <summary>
@@ -926,7 +1017,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.Age = 0;
     }
 
-    /// <summary>Freezes a settled ragdoll: the joints go and the bodies stay as still kinematic ones, which others still land on.</summary>
+    /// <summary>
+    /// Freezes a settled ragdoll: the joints go and the bodies stay as still kinematic ones, which others still land on.
+    /// </summary>
     void Freeze(Ragdoll r)
     {
         ReadBack(r);
@@ -955,7 +1048,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         ReadBack(r);
     }
 
-    /// <summary>Starts getting up: the character turns to face from the root to the head along the ground and stands where the root lies; the bones blend back.</summary>
+    /// <summary>
+    /// Starts getting up: the character turns to face from the root to the head along the ground and stands where the root lies; the bones blend
+    /// back.
+    /// </summary>
     void StartGetUp(World world, Ragdoll r, ref CharacterHot hot)
     {
         var rig = r.Setup.Rig;
@@ -970,7 +1066,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.BlendLeft = GetUpBlend;
     }
 
-    /// <summary>The bones the ragdoll sets, in the model space of <paramref name="placement"/>: the simulated bodies' bones (all of them while getting up, blended).</summary>
+    /// <summary>
+    /// The bones the ragdoll sets, in the model space of <paramref name="placement"/>: the simulated bodies' bones (all of them while getting up,
+    /// blended).
+    /// </summary>
     static BonePose? Build(Ragdoll r, Matrix4x4 placement)
     {
         bool blending = r.Mask == RagdollPart.None;

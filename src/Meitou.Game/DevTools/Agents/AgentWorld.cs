@@ -10,13 +10,17 @@ using Meitou.Simulation.Navigation;
 namespace Meitou.Game.DevTools.Agents;
 
 /// <summary>
-/// The agent control channel's world layer (docs/procedures/game-launch-procedure.md "Driving a running game by command"): <c>world</c>, <c>world pick</c>, <c>entity-screen</c>, <c>camera ...</c>, <c>select</c>, <c>order move|attack</c>,
-/// <c>pause</c>, <c>resume</c>, <c>speed</c>, and the wait-for keys <c>camera-settled</c>, <c>selected</c> and <c>pos-near</c>. The commands are registered by <see cref="AgentChannel.RegisterControlCommands"/>; the data comes from
-/// <see cref="PlayerInterface"/> (AgentOrders), which reads the same snapshot and picking the pointer uses.
+/// The agent control channel's world layer (docs/procedures/game-launch-procedure.md "Driving a running game by command"): <c>world</c>, <c>world
+/// pick</c>, <c>entity-screen</c>, <c>camera ...</c>, <c>select</c>, <c>order move|attack</c>, <c>pause</c>, <c>resume</c>, <c>speed</c>, and the
+/// wait-for keys <c>camera-settled</c>, <c>selected</c> and <c>pos-near</c>. The commands are registered by
+/// <see cref="AgentChannel.RegisterControlCommands"/>; the data comes from <see cref="PlayerInterface"/> (AgentOrders), which reads the same snapshot
+/// and picking the pointer uses.
 /// </summary>
 sealed class AgentWorld(GameHost host)
 {
-    /// <summary>The camera at the last poll tick and for how many ticks in a row it did not move (0.25 s each): <c>camera-settled</c> waits for two.</summary>
+    /// <summary>
+    /// The camera at the last poll tick and for how many ticks in a row it did not move (0.25 s each): <c>camera-settled</c> waits for two.
+    /// </summary>
     (Vector3 Eye, Vector3 Target, float Distance) _camStamp;
     int _camStable;
 
@@ -30,7 +34,10 @@ sealed class AgentWorld(GameHost host)
         _camStamp = stamp;
     }
 
-    /// <summary>A timed camera move (<c>--over</c>): driven once per frame from <see cref="ControlCameraMoveTick"/>, eased in and out; the command replies when it ends.</summary>
+    /// <summary>
+    /// A timed camera move (<c>--over</c>): driven once per frame from <see cref="ControlCameraMoveTick"/>, eased in and out; the command replies
+    /// when it ends.
+    /// </summary>
     sealed class CameraMove
     {
         public string? Id;
@@ -44,7 +51,10 @@ sealed class AgentWorld(GameHost host)
 
     CameraMove? _cameraMove;
 
-    /// <summary>Once per frame, before the camera is drawn: advances the running timed move (smoothstep from start to end) and, at its end, replies to the command that started it.</summary>
+    /// <summary>
+    /// Once per frame, before the camera is drawn: advances the running timed move (smoothstep from start to end) and, at its end, replies to the
+    /// command that started it.
+    /// </summary>
     internal void ControlCameraMoveTick()
     {
         if (_cameraMove is not { } m) return;
@@ -62,7 +72,9 @@ sealed class AgentWorld(GameHost host)
 
     internal static bool Num(string text, out float value) => float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
 
-    /// <summary>Splits <c>--flag v v --flag2 v</c> into flag name to values; the words before the first flag are under "".</summary>
+    /// <summary>
+    /// Splits <c>--flag v v --flag2 v</c> into flag name to values; the words before the first flag are under "".
+    /// </summary>
     static Dictionary<string, List<string>> ControlFlags(IReadOnlyList<string> args)
     {
         var map = new Dictionary<string, List<string>> { [""] = [] };
@@ -109,7 +121,9 @@ sealed class AgentWorld(GameHost host)
         host.Session.Camera.Place(pivot, yaw ?? c.Yaw, pitch ?? c.Pitch, zoom ?? c.Distance);
     }
 
-    /// <summary>The world position of an entity id, or an error line for the console.</summary>
+    /// <summary>
+    /// The world position of an entity id, or an error line for the console.
+    /// </summary>
     Vector3? ControlEntity(string id, DevConsole con)
     {
         if (host.Player.AgentOrders.ControlPosition(id) is { } p) return p;
@@ -500,7 +514,10 @@ sealed class AgentWorld(GameHost host)
         });
     }
 
-    /// <summary>The world-layer wait-for keys: camera-settled, selected=&lt;n&gt;, pos-near=&lt;x&gt;,&lt;z&gt;,&lt;r&gt;[,&lt;id&gt;] (the first selected character, or the given one, within r of x z).</summary>
+    /// <summary>
+    /// The world-layer wait-for keys: camera-settled, selected=&lt;n&gt;, pos-near=&lt;x&gt;,&lt;z&gt;,&lt;r&gt;[,&lt;id&gt;] (the first selected
+    /// character, or the given one, within r of x z).
+    /// </summary>
     internal bool WorldWaitHolds(string key, string value)
     {
         switch (key)
@@ -609,7 +626,10 @@ sealed class AgentWorld(GameHost host)
         });
     }
 
-    /// <summary>The <c>door</c> command: sets a door fixture's state in a test save (the fields <c>path-check</c> reports) and tells navigation, so the nav door table sees it at once.</summary>
+    /// <summary>
+    /// The <c>door</c> command: sets a door fixture's state in a test save (the fields <c>path-check</c> reports) and tells navigation, so the nav
+    /// door table sees it at once.
+    /// </summary>
     void RegisterControlDoorCommand(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
     {
         add("door", "door <fixture id> | door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]", "set a door's state for a test (flags apply in the order given): --lock locks it (level at least 1, an open leaf starts closing), --unlock, --close and --open set the leaf at once, --break breaks door and lock, --repair undoes it; --all applies to every door of the building (navigation treats a building as shut only when all its doors are locked); no flag only reports; reply: JSON with the door's lock, broken, motion, openAmount and whether navigation now has the building closed", (args, con) =>
@@ -675,8 +695,9 @@ sealed class AgentWorld(GameHost host)
     }
 
     /// <summary>
-    /// Why a failed path failed: the same <see cref="NavQuery"/> with the doors table left out finds the corridor the walk would take if no door were shut; the door polygons on it that
-    /// the real doors table has closed are the blockers, in order from the start. Empty (with the reason) when the unrestricted query fails too, or the corridor crosses a zone border (only the first zone pair is searched).
+    /// Why a failed path failed: the same <see cref="NavQuery"/> with the doors table left out finds the corridor the walk would take if no door were
+    /// shut; the door polygons on it that the real doors table has closed are the blockers, in order from the start. Empty (with the reason) when the
+    /// unrestricted query fails too, or the corridor crosses a zone border (only the first zone pair is searched).
     /// </summary>
     List<(string Polygon, string Building, List<Fixture> Doors)> BlockingDoors(NavmeshWalkability walk, Vector3 from, Vector3 to, out string why)
     {
@@ -818,7 +839,10 @@ sealed class AgentWorld(GameHost host)
         });
     }
 
-    /// <summary>The gap in X/Z between two convex hulls: negative (the penetration depth of the separating-axis test) when they overlap, else the shortest distance between their edges.</summary>
+    /// <summary>
+    /// The gap in X/Z between two convex hulls: negative (the penetration depth of the separating-axis test) when they overlap, else the shortest
+    /// distance between their edges.
+    /// </summary>
     static float HullGap(Vector2[] a, Vector2[] b)
     {
         float depth = float.MaxValue;

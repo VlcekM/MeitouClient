@@ -10,15 +10,19 @@ namespace Meitou.ModelViewer;
 
 static partial class WorldApp
 {
-    /// <summary><c>--field-tour &lt;dir&gt;</c> (with <c>--terrain-sandbox</c>): a picture of every texture field tile, close up, and an index.html.</summary>
+    /// <summary>
+    /// <c>--field-tour &lt;dir&gt;</c> (with <c>--terrain-sandbox</c>): a picture of every texture field tile, close up, and an index.html.
+    /// </summary>
     static string? s_fieldTour;
-    /// <summary>The tour's camera: distance from the tile's centre and degrees above the horizon (<c>--tour-distance</c>, <c>--tour-pitch</c>).</summary>
+    /// <summary>
+    /// The tour's camera: distance from the tile's centre and degrees above the horizon (<c>--tour-distance</c>, <c>--tour-pitch</c>).
+    /// </summary>
     static float s_tourDistance = 120, s_tourPitch = 30;
 
     /// <summary>
-    /// Takes <c>--terrain-sandbox [x,z]</c> and <c>--field-tour &lt;dir&gt;</c> out of <paramref name="args"/> (docs/render-terrain.md, "Texture field"): the
-    /// field round the spot (default the game's), the camera there, no foliage or objects, clear weather at 10:00 unless given; a tour also asks for
-    /// a picture (the overview, taken after the tour).
+    /// Takes <c>--terrain-sandbox [x,z]</c> and <c>--field-tour &lt;dir&gt;</c> out of <paramref name="args"/> (docs/render-terrain.md, "Texture
+    /// field"): the field round the spot (default the game's), the camera there, no foliage or objects, clear weather at 10:00 unless given; a tour
+    /// also asks for a picture (the overview, taken after the tour).
     /// </summary>
     static string[] TerrainSandboxArgs(string[] args)
     {
@@ -34,7 +38,8 @@ static partial class WorldApp
             rest.RemoveAt(at);
             if (!rest.Contains("--yaw")) rest.AddRange(["--yaw", "180"]);
         }
-        if (at < rest.Count && rest[at].Split(',') is [var x, var z] && float.TryParse(x, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
+        if (at < rest.Count && rest[at].Split(',') is [var x, var z]
+                && float.TryParse(x, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
             && float.TryParse(z, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
         {
             spot = new Vector2(fx, fz);
@@ -65,21 +70,29 @@ static partial class WorldApp
         return [.. rest];
     }
 
-    /// <summary>Takes every <c>--relief Name=value</c> out of <paramref name="rest"/>: a <see cref="GroundRelief"/> or <see cref="RockSmoothing"/> setting for the run.</summary>
+    /// <summary>
+    /// Takes every <c>--relief Name=value</c> out of <paramref name="rest"/>: a <see cref="GroundRelief"/> or <see cref="RockSmoothing"/> setting for
+    /// the run.
+    /// </summary>
     static void ReliefArgs(List<string> rest)
     {
         for (int k; (k = rest.IndexOf("--relief")) >= 0 && k + 1 < rest.Count;)
         {
             var (name, value) = (rest[k + 1].Split('=')[0], float.Parse(rest[k + 1].Split('=')[1], CultureInfo.InvariantCulture));
-            var property = typeof(GroundRelief).GetProperty(name) ?? typeof(RockSmoothing).GetProperty(name) ?? throw new ArgumentException($"--relief {name}: no such setting");
-            property.SetValue(null, property.PropertyType == typeof(bool) ? value != 0 : Convert.ChangeType(value, property.PropertyType, CultureInfo.InvariantCulture));
+            var property = typeof(GroundRelief).GetProperty(name) ?? typeof(RockSmoothing).GetProperty(name)
+                    ?? throw new ArgumentException($"--relief {name}: no such setting");
+            property.SetValue(null, property.PropertyType == typeof(bool) ? value != 0
+                    : Convert.ChangeType(value, property.PropertyType, CultureInfo.InvariantCulture));
             Console.WriteLine($"relief    {name} = {property.GetValue(null)}");
             rest.RemoveRange(k, 2);
         }
     }
 
-    /// <summary>The tour: each tile from <see cref="s_tourDistance"/> back at the camera's heading and <see cref="s_tourPitch"/> up, saved as tile-NNN.png.</summary>
-    static void FieldTour(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context, GpuTexture target)
+    /// <summary>
+    /// The tour: each tile from <see cref="s_tourDistance"/> back at the camera's heading and <see cref="s_tourPitch"/> up, saved as tile-NNN.png.
+    /// </summary>
+    static void FieldTour(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
+            GpuTexture target)
     {
         if (s_fieldTour is null || gpu.Terrain.TextureSet is not { FieldCount: > 0 } t) return;
         var (yaw, pitch, distance, targetAt) = (camera.Yaw, camera.Pitch, camera.Distance, camera.Target);
@@ -95,11 +108,16 @@ static partial class WorldApp
             float cx = t.FieldOrigin.X + (i % t.FieldColumns + 0.5f) * t.FieldTile, cz = t.FieldOrigin.Y + (i / t.FieldColumns + 0.5f) * t.FieldTile;
             camera.Target = new Vector3(cx, gpu.Terrain.HeightAt(cx, cz), cz);
             gpu.Streamer?.Settle(camera.Eye);
-            for (int f = 0; f < gpu.Post!.WarmupFrames + 3; f++) { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
+            for (int f = 0; f < gpu.Post!.WarmupFrames
+                    + 3;
+                    f++) { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+                    EndFrame(context);
+                    }
             context.Finish();
             string name = $"tile-{i + 1:000}.png", label = t.FieldLabel(cx, cz) ?? "";
             FramebufferCapture.SavePng(context, target, Path.Combine(s_fieldTour, name), w, h);
-            html.Append(CultureInfo.InvariantCulture, $"<div class=\"t\"><img loading=\"lazy\" src=\"{name}\" alt=\"\">{System.Net.WebUtility.HtmlEncode(label)}</div>\n");
+            html.Append(CultureInfo.InvariantCulture,
+                    $"<div class=\"t\"><img loading=\"lazy\" src=\"{name}\" alt=\"\">{System.Net.WebUtility.HtmlEncode(label)}</div>\n");
             Console.WriteLine($"tour      {label}");
         }
         File.WriteAllText(Path.Combine(s_fieldTour, "index.html"), html.Append("</body></html>\n").ToString());

@@ -14,7 +14,9 @@ namespace Meitou.Game.Rendering.Ui;
 /// </summary>
 public sealed partial class UiPainter
 {
-    /// <summary>Frames a record is kept without being drawn.</summary>
+    /// <summary>
+    /// Frames a record is kept without being drawn.
+    /// </summary>
     const int PaintRecordLife = 120;
 
     readonly Dictionary<PaintKey, PaintRecord> _painted = new(PaintKeyComparer.Instance);
@@ -22,7 +24,9 @@ public sealed partial class UiPainter
     long _paintFrame;
     int _textureVersion;
 
-    /// <summary>Set while a control is painted when its picture changes on its own (it is never recorded).</summary>
+    /// <summary>
+    /// Set while a control is painted when its picture changes on its own (it is never recorded).
+    /// </summary>
     bool _paintVolatile;
 
     readonly List<DebugOverlay.OverlayPass.Recorded> _recordAdds = [];
@@ -40,7 +44,9 @@ public sealed partial class UiPainter
         public (UiRect Box, DebugOverlay Font, float Scale, float X, string Text)[] Edits = [];
     }
 
-    /// <summary>A new frame of <see cref="Draw"/>: every record dropped when what they were painted against changed; old ones dropped now and then.</summary>
+    /// <summary>
+    /// A new frame of <see cref="Draw"/>: every record dropped when what they were painted against changed; old ones dropped now and then.
+    /// </summary>
     void BeginPaintFrame(int width, int height, float minimumTextPixels)
     {
         _paintFrame++;
@@ -52,8 +58,11 @@ public sealed partial class UiPainter
         }
 
         if (_paintFrame % 60 != 0) return;
+
         foreach (var (key, record) in _painted)
+        {
             if (record.Seen < _paintFrame - PaintRecordLife) _painted.Remove(key);
+        }
     }
 
     void PaintCached(UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels, DebugOverlay.OverlayPass pass)
@@ -77,13 +86,17 @@ public sealed partial class UiPainter
     {
         // The fonts draw into the painter's target, as painting sets them (the loading screen's and the HUD's targets differ).
         foreach (var add in record.Adds) add.Owner.Target = _overlay.Target;
+
         pass.Replay(record.Floats, record.Adds);
         _opaqueRects.AddRange(record.Opaque);
         _editBoxes.AddRange(record.Edits);
     }
 
-    /// <summary>Paints the control while the pass records what it adds; kept unless the control turned out to change on its own.</summary>
-    void Record(PaintRecord record, UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels, DebugOverlay.OverlayPass pass)
+    /// <summary>
+    /// Paints the control while the pass records what it adds; kept unless the control turned out to change on its own.
+    /// </summary>
+    void Record(PaintRecord record, UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels,
+        DebugOverlay.OverlayPass pass)
     {
         int opaqueFrom = _opaqueRects.Count, editsFrom = _editBoxes.Count, fonts = UiFont.Changes, textures = _textureVersion;
         _paintVolatile = false;
@@ -98,7 +111,10 @@ public sealed partial class UiPainter
         }
 
         // A texture loaded or an atlas grown while it was painted: the next frame starts afresh anyway.
-        if (_paintVolatile || fonts != UiFont.Changes || textures != _textureVersion) record.Volatile = _paintVolatile;
+        if (_paintVolatile || fonts != UiFont.Changes || textures != _textureVersion)
+        {
+            record.Volatile = _paintVolatile;
+        }
         else
         {
             record.Floats = [.. _recordFloats];
@@ -112,7 +128,9 @@ public sealed partial class UiPainter
         _recordFloats.Clear();
     }
 
-    /// <summary>Controls equal in everything the painter reads: their fields and their properties' contents.</summary>
+    /// <summary>
+    /// Controls equal in everything the painter reads: their fields and their properties' contents.
+    /// </summary>
     sealed class PaintKeyComparer : IEqualityComparer<PaintKey>
     {
         public static readonly PaintKeyComparer Instance = new();
@@ -120,8 +138,10 @@ public sealed partial class UiPainter
         public bool Equals(PaintKey x, PaintKey y)
         {
             if (x.State != y.State) return false;
+
             var (a, b) = (x.Control, y.Control);
             if (ReferenceEquals(a, b)) return true;
+
             return a.Name == b.Name && a.Type == b.Type && a.Bounds == b.Bounds && a.Caption == b.Caption && a.Action == b.Action && a.Skin == b.Skin
                 && a.Enabled == b.Enabled && a.Background == b.Background && a.TextColour == b.TextColour && a.HoverColour == b.HoverColour
                 && a.ActiveColour == b.ActiveColour && a.DisabledColour == b.DisabledColour && a.TextScale == b.TextScale && a.Clip == b.Clip
@@ -146,14 +166,22 @@ public sealed partial class UiPainter
         {
             if (ReferenceEquals(a, b)) return true;
             if (a.Count != b.Count) return false;
+
             if (a is Dictionary<string, string> concrete)
             {
                 foreach (var (k, v) in concrete)
+                {
                     if (!b.TryGetValue(k, out var other) || other != v) return false;
+                }
+
                 return true;
             }
+
             foreach (var (k, v) in a)
+            {
                 if (!b.TryGetValue(k, out var other) || other != v) return false;
+            }
+
             return true;
         }
     }

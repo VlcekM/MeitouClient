@@ -17,7 +17,9 @@ internal static partial class ZoneNavMeshBuilder
     /// </summary>
     const float StepEdgeAlignment = 0.8f;
 
-    /// <summary>How near (units) the terrain under its cell a span counts as standing on the terrain (the heightmap is sampled bilinearly here).</summary>
+    /// <summary>
+    /// How near (units) the terrain under its cell a span counts as standing on the terrain (the heightmap is sampled bilinearly here).
+    /// </summary>
     const float TerrainSlack = 4;
 
     /// <summary>
@@ -26,7 +28,9 @@ internal static partial class ZoneNavMeshBuilder
     /// </summary>
     const int SlopeBaseCells = 3;
 
-    /// <summary>Cells each way along the edge a side's slope is measured over, at most.</summary>
+    /// <summary>
+    /// Cells each way along the edge a side's slope is measured over, at most.
+    /// </summary>
     const int SlopeReachCells = 3;
 
     /// <summary>
@@ -45,20 +49,35 @@ internal static partial class ZoneNavMeshBuilder
     {
         var steps = new List<StepLink>();
         for (int z = 0; z < chf.height; z++)
+        {
             for (int x = 0; x < chf.width; x++)
             {
                 var cell = chf.cells[x + z * chf.width];
                 for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
-                    for (int d = 1; d <= 2; d++)
-                    {
-                        if (Neighbour(chf, x, z, i, d) is not { } j || !IsSideStep(chf, x, z, i, d, j) || OnTerrain(chf, terrain, x, z, i, d, j)) continue;
-                        steps.Add(new StepLink(i, d, j, RcRecast.GetCon(chf.spans[i], d), RcRecast.GetCon(chf.spans[j], (d + 2) % 4)));
-                    }
+                    AddSideSteps(chf, terrain, steps, x, z, i);
             }
+        }
+
         return steps;
     }
 
-    /// <summary>Unlinks the side steps before the regions are built, so a surface reached only over one becomes a region of its own.</summary>
+    /// <summary>
+    /// Adds the side steps leaving span <paramref name="i"/> of cell (<paramref name="x"/>, <paramref name="z"/>) in its two positive directions.
+    /// </summary>
+    static void AddSideSteps(RcCompactHeightfield chf, HeightWindow? terrain, List<StepLink> steps, int x, int z, int i)
+    {
+        for (int d = 1; d <= 2; d++)
+        {
+            if (Neighbour(chf, x, z, i, d) is not { } j || !IsSideStep(chf, x, z, i, d, j) || OnTerrain(chf, terrain, x, z, i, d, j))
+                continue;
+
+            steps.Add(new StepLink(i, d, j, RcRecast.GetCon(chf.spans[i], d), RcRecast.GetCon(chf.spans[j], (d + 2) % 4)));
+        }
+    }
+
+    /// <summary>
+    /// Unlinks the side steps before the regions are built, so a surface reached only over one becomes a region of its own.
+    /// </summary>
     static void CutSteps(RcCompactHeightfield chf, List<StepLink> steps)
     {
         foreach (var s in steps)
@@ -99,8 +118,10 @@ internal static partial class ZoneNavMeshBuilder
         if (chf.areas[i] == NavArea.Null || chf.areas[j] == NavArea.Null) return false;
 
         float jump = (chf.spans[j].y - chf.spans[i].y) * chf.ch;
-        int nx = x + RcRecast.GetDirOffsetX(d), nz = z + RcRecast.GetDirOffsetY(d);
-        if (MathF.Abs(jump) >= StepJump && MathF.Abs(jump - ExpectedRise(chf, x, z, i, d, nx, nz, j)) < StepJump) return false;
+        int nx = x + RcRecast.GetDirOffsetX(d);
+        int nz = z + RcRecast.GetDirOffsetY(d);
+        if (MathF.Abs(jump) >= StepJump && MathF.Abs(jump - ExpectedRise(chf, x, z, i, d, nx, nz, j)) < StepJump)
+            return false;
 
         if (SlopeAlong(chf, x, z, i, d) is not { } here || SlopeAlong(chf, nx, nz, j, d) is not { } there) return false;
 
@@ -108,7 +129,9 @@ internal static partial class ZoneNavMeshBuilder
         return cos < StepEdgeAlignment;
     }
 
-    /// <summary>The rise across the link the two surfaces' own slopes towards it explain (their mean, or the one measured; 0 when neither is).</summary>
+    /// <summary>
+    /// The rise across the link the two surfaces' own slopes towards it explain (their mean, or the one measured; 0 when neither is).
+    /// </summary>
     static float ExpectedRise(RcCompactHeightfield chf, int x, int z, int i, int d, int nx, int nz, int j)
     {
         float? before = Rise(chf, x, z, i, (d + 2) % 4) is { } b ? -b : null;
@@ -122,18 +145,23 @@ internal static partial class ZoneNavMeshBuilder
         };
     }
 
-    /// <summary>Whether either span of a link stands on the terrain: steps onto rocks, features and slabs from the ground keep Recast's links.</summary>
+    /// <summary>
+    /// Whether either span of a link stands on the terrain: steps onto rocks, features and slabs from the ground keep Recast's links.
+    /// </summary>
     static bool OnTerrain(RcCompactHeightfield chf, HeightWindow? terrain, int x, int z, int i, int d, int j)
     {
         if (terrain is null) return false;
 
-        int nx = x + RcRecast.GetDirOffsetX(d), nz = z + RcRecast.GetDirOffsetY(d);
+        int nx = x + RcRecast.GetDirOffsetX(d);
+        int nz = z + RcRecast.GetDirOffsetY(d);
         return NearTerrain(chf, terrain, x, z, i) || NearTerrain(chf, terrain, nx, nz, j);
     }
 
     static bool NearTerrain(RcCompactHeightfield chf, HeightWindow terrain, int x, int z, int i)
     {
-        if (!terrain.TryHeightAt(chf.bmin.X + (x + 0.5f) * chf.cs, chf.bmin.Z + (z + 0.5f) * chf.cs, out float ground)) return false;
+        if (!terrain.TryHeightAt(chf.bmin.X + (x + 0.5f) * chf.cs, chf.bmin.Z + (z + 0.5f) * chf.cs, out float ground))
+            return false;
+
         return MathF.Abs(chf.bmin.Y + chf.spans[i].y * chf.ch - ground) <= TerrainSlack;
     }
 
@@ -187,7 +215,8 @@ internal static partial class ZoneNavMeshBuilder
         int con = RcRecast.GetCon(chf.spans[i], d);
         if (con == RcRecast.RC_NOT_CONNECTED) return null;
 
-        int nx = x + RcRecast.GetDirOffsetX(d), nz = z + RcRecast.GetDirOffsetY(d);
+        int nx = x + RcRecast.GetDirOffsetX(d);
+        int nz = z + RcRecast.GetDirOffsetY(d);
         return chf.cells[nx + nz * chf.width].index + con;
     }
 }

@@ -5,56 +5,77 @@ using Meitou.Threading;
 
 namespace Meitou.Simulation.Navigation;
 
-/// <summary>Who is asking for a path: the footprint radius (a portal must leave the radius clear at each end on a wall) and what the ground costs them.</summary>
+/// <summary>
+/// Who is asking for a path: the footprint radius (a portal must leave the radius clear at each end on a wall) and what the ground costs them.
+/// </summary>
 public sealed record NavAgent
 {
-    /// <summary>RACE <c>pathfind footprint radius</c> × the size factor (humans 4, Garru 7, Leviathan 40).</summary>
+    /// <summary>
+    /// RACE <c>pathfind footprint radius</c> × the size factor (humans 4, Garru 7, Leviathan 40).
+    /// </summary>
     public float Radius { get; init; } = 4;
     /// <summary>
-    /// Cost multipliers of the water polygons by depth (<see cref="NavArea.WetState"/>): at least a + 1 for RACE <c>water avoidance</c> a ≥ 0, 1 / (1 − a) below, halved for the
-    /// player's faction, and more where the agent is that much slower than on land (docs/game/pathfinding.md, "Water costs"). 7 is a Greenlander (a = 6).
+    /// Cost multipliers of the water polygons by depth (<see cref="NavArea.WetState"/>): at least a + 1 for RACE <c>water avoidance</c> a ≥ 0, 1 /
+    /// (1 − a) below, halved for the player's faction, and more where the agent is that much slower than on land (docs/game/pathfinding.md, "Water
+    /// costs"). 7 is a Greenlander (a = 6).
     /// </summary>
     public WaterCost Water { get; init; } = WaterCost.Uniform(7);
-    /// <summary>FACTION <c>road preference</c>: a long route takes the roads by the original's rule (<see cref="RoadNetwork.Route"/>); 0 never.</summary>
+    /// <summary>
+    /// FACTION <c>road preference</c>: a long route takes the roads by the original's rule (<see cref="RoadNetwork.Route"/>); 0 never.
+    /// </summary>
     public float RoadPreference { get; init; }
-    /// <summary>Doors are blocked (closed, face data 5) when this is true; open doors cost <see cref="OpenDoorCost"/> extra.</summary>
+    /// <summary>
+    /// Doors are blocked (closed, face data 5) when this is true; open doors cost <see cref="OpenDoorCost"/> extra.
+    /// </summary>
     public bool DoorsClosed { get; init; }
     public static NavAgent Human { get; } = new();
 }
 
 /// <summary>
-/// Path queries over a <see cref="NavWorld"/>: A* over the polygons with a portal clearance of the radius per wall end, the water cost factor and the door
-/// rules, then string pulling with the portals pulled in by the radius (docs/game/pathfinding.md, "Path queries" and "What our builder needs").
+/// Path queries over a <see cref="NavWorld"/>: A* over the polygons with a portal clearance of the radius per wall end, the water cost factor and the
+/// door rules, then string pulling with the portals pulled in by the radius (docs/game/pathfinding.md, "Path queries" and "What our builder needs").
 /// </summary>
 public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
 {
-    /// <summary>Extra cost of an open door (the original's WaterCostModifier adds 5.0 to each cost component, Havok units).</summary>
+    /// <summary>
+    /// Extra cost of an open door (the original's WaterCostModifier adds 5.0 to each cost component, Havok units).
+    /// </summary>
     public const float OpenDoorCost = 50;
-    /// <summary>The original's iteration limit.</summary>
+    /// <summary>
+    /// The original's iteration limit.
+    /// </summary>
     public const int MaxIterations = 100000;
 
     static long s_searches, s_expanded, s_exhausted;
 
-    /// <summary>Corridor searches so far, the polygons they expanded and how many ran to <see cref="MaxIterations"/> (all threads; the exit log prints them).</summary>
-    public static (long Searches, long Expanded, long Exhausted) Stats => (Interlocked.Read(ref s_searches), Interlocked.Read(ref s_expanded), Interlocked.Read(ref s_exhausted));
     /// <summary>
-    /// How far (units) from the start / the goal a polygon may be and still count. Engine choice: the original looks for the start face within 500 Havok units
-    /// (5000 Kenshi units) and the goal face within about 30 (Observed, docs/game/pathfinding.md, "Path queries").
+    /// Corridor searches so far, the polygons they expanded and how many ran to <see cref="MaxIterations"/> (all threads; the exit log prints them).
+    /// </summary>
+    public static (long Searches, long Expanded, long Exhausted) Stats => (Interlocked.Read(ref s_searches), Interlocked.Read(ref s_expanded),
+            Interlocked.Read(ref s_exhausted));
+    /// <summary>
+    /// How far (units) from the start / the goal a polygon may be and still count. Engine choice: the original looks for the start face within 500
+    /// Havok units (5000 Kenshi units) and the goal face within about 30 (Observed, docs/game/pathfinding.md, "Path queries").
     /// </summary>
     public const float StartSnap = 60, GoalSnap = 30;
     /// <summary>
-    /// How near (units) a walker shut out of its goal must stand to its start polygon's point nearest the goal to have no way toward it (engine choice).
+    /// How near (units) a walker shut out of its goal must stand to its start polygon's point nearest the goal to have no way toward it (engine
+    /// choice).
     /// </summary>
     const float PartialStandStill = 1;
 
     public NavWorld World { get; } = world;
     public NavDoors? Doors { get; } = doors;
 
-    /// <summary>Whether the door a polygon belongs to has been closed at run time.</summary>
+    /// <summary>
+    /// Whether the door a polygon belongs to has been closed at run time.
+    /// </summary>
     bool IsDoorClosed(ZoneNavMesh mesh, int polygon) =>
         Doors is not null && mesh.DoorOf is { } of && of[polygon] is var d and >= 0 && Doors.IsClosed(mesh.DoorIds![d]);
 
-    /// <summary>Result of the polygon search before string pulling.</summary>
+    /// <summary>
+    /// Result of the polygon search before string pulling.
+    /// </summary>
     public sealed record Corridor(List<NavRef> Polygons, Vector3 Start, Vector3 Goal, int Iterations);
 
     sealed class Node
@@ -66,20 +87,25 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         public bool Closed;
     }
 
-    /// <summary>A thread's A* state, reused by every search on it.</summary>
+    /// <summary>
+    /// A thread's A* state, reused by every search on it.
+    /// </summary>
     sealed class SearchScratch
     {
         public readonly Dictionary<long, Node> Nodes = [];
         public readonly PriorityQueue<Node, float> Open = new();
-        /// <summary>Whether the last search explored all it could reach without finding its goal (not cut short by <see cref="MaxIterations"/>).</summary>
+        /// <summary>
+        /// Whether the last search explored all it could reach without finding its goal (not cut short by <see cref="MaxIterations"/>).
+        /// </summary>
         public bool Exhaustive;
         readonly List<Node> _made = [];
         int _used;
 
         public void Reset()
         {
-            // Kept whatever a search grew it to (MaxIterations bounds it: tens of MB a path thread). Dropping it after a long search made every search that ran
-            // to the limit (an unreachable goal) rebuild it on the large object heap, ~280 MB/s of garbage in a town (issue #124, docs/bench.md).
+            // Kept whatever a search grew it to (MaxIterations bounds it: tens of MB a path thread). Dropping it after a long search made every
+            // search that ran to the limit (an unreachable goal) rebuild it on the large object heap, ~280 MB/s of garbage in a town (issue #124,
+            // docs/bench.md).
             Nodes.Clear();
             Open.Clear();
             _used = 0;
@@ -99,12 +125,16 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     public PathResult FindPath(Vector3 from, Vector3 to, NavAgent? agent = null) => FindPath(from, to, agent ?? NavAgent.Human, null, out _);
 
     /// <summary>
-    /// As <see cref="FindPath(Vector3, Vector3, NavAgent?)"/>, from the nearest start polygon <paramref name="skipStart"/> does not rule out; <paramref name="start"/> is the
-    /// one taken (Zone −1 when none was found).
+    /// As <see cref="FindPath(Vector3, Vector3, NavAgent?)"/>, from the nearest start polygon <paramref name="skipStart"/> does not rule out;
+    /// <paramref name="start"/> is the one taken (Zone −1 when none was found).
     /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to, NavAgent agent, Func<NavRef, bool>? skipStart, out NavRef start)
     {
-        if (!World.TryFindPolygon(from, StartSnap, out start, out var startPoint, skipStart)) { start = new NavRef(-1, -1); return PathResult.NotFound; }
+        if (!World.TryFindPolygon(from, StartSnap, out start, out var startPoint, skipStart))
+        {
+            start = new NavRef(-1, -1);
+            return PathResult.NotFound;
+        }
         if (s_searchScratch is { } last) last.Exhaustive = false;
         if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint)) return PathResult.NotFound;
         var corridor = FindCorridor(start, startPoint, goal, goalPoint, agent);
@@ -112,8 +142,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         return new PathResult(Pull(corridor, agent));
     }
 
-    /// <summary>When the last search on this thread failed after reaching all it could, adds the polygons it reached to <paramref name="into"/>
-    /// (<see cref="NavRef.Key"/>): a search from any of them fails too.</summary>
+    /// <summary>
+    /// When the last search on this thread failed after reaching all it could, adds the polygons it reached to <paramref name="into"/>
+    /// (<see cref="NavRef.Key"/>): a search from any of them fails too.
+    /// </summary>
     public static void AddReachedByFailed(HashSet<long> into)
     {
         if (s_searchScratch is { Exhaustive: true } s)
@@ -122,14 +154,15 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     }
 
     /// <summary>
-    /// A path to <paramref name="to"/>, or, when the goal cannot be reached (or is off the mesh), to the reachable point nearest it: the
-    /// first part of a long route, whose end is then left to the next query (docs/game/pathfinding.md, "Long routes").
+    /// A path to <paramref name="to"/>, or, when the goal cannot be reached (or is off the mesh), to the reachable point nearest it: the first part
+    /// of a long route, whose end is then left to the next query (docs/game/pathfinding.md, "Long routes").
     /// </summary>
     public PathResult FindPathToward(Vector3 from, Vector3 to, NavAgent? agent = null)
     {
         agent ??= NavAgent.Human;
         if (!World.TryFindPolygon(from, StartSnap, out var start, out var startPoint)) return PathResult.NotFound;
-        if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint)) (goal, goalPoint) = (new NavRef(-1, -1), to);
+        if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint))
+            (goal, goalPoint) = (new NavRef(-1, -1), to);
         var corridor = FindCorridor(start, startPoint, goal, goalPoint, agent, partial: true);
         return corridor is null ? PathResult.NotFound : new PathResult(Pull(corridor, agent));
     }
@@ -140,7 +173,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     public Corridor? FindCorridor(NavRef start, Vector3 startPoint, NavRef goal, Vector3 goalPoint, NavAgent agent, bool partial = false)
     {
-        // The search's table, queue and nodes are the thread's, kept between searches: a fresh set per search was a tenth of the game's garbage (docs/bench.md "Play benchmark").
+        // The search's table, queue and nodes are the thread's, kept between searches: a fresh set per search was a tenth of the game's garbage
+        // (docs/bench.md "Play benchmark").
         var scratch = s_searchScratch ??= new SearchScratch();
         scratch.Reset();
         var nodes = scratch.Nodes;
@@ -152,8 +186,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         Node? last = null, nearest = first;
         float nearestDistance = float.MaxValue;
         float minFactor = Math.Min(1f, agent.Water.Min);
-        // A start polygon none of whose exits leaves the radius clear (a sliver by a stair or a wall the walker was pushed into) is left through the narrow ones:
-        // the walker stands in it already (docs/game/pathfinding.md, "Own builder").
+        // A start polygon none of whose exits leaves the radius clear (a sliver by a stair or a wall the walker was pushed into) is left through the
+        // narrow ones: the walker stands in it already (docs/game/pathfinding.md, "Own builder").
         bool squeezeOut = false;
 
         while (open.Count > 0 && iterations++ < MaxIterations)
@@ -162,12 +196,18 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             var node = open.Dequeue();
             if (node.Closed) continue;
             node.Closed = true;
-            if (node.Ref == goal) { last = node; break; }
+            if (node.Ref == goal)
+            {
+                last = node;
+                break;
+            }
 
             var mesh = World.Mesh(node.Ref.Zone);
             int p = node.Ref.Polygon;
-            // Nearest in 3D, not on the X/Z plane: for a goal on a wall top the ground beside the wall is nearer on the plane than the walkway it lies on.
-            if (partial && Vector3.Distance(NavWorld.ClosestPoint(mesh, p, goalPoint), goalPoint) is var d && d < nearestDistance) (nearest, nearestDistance) = (node, d);
+            // Nearest in 3D, not on the X/Z plane: for a goal on a wall top the ground beside the wall is nearer on the plane than the walkway it
+            // lies on.
+            if (partial && Vector3.Distance(NavWorld.ClosestPoint(mesh, p, goalPoint), goalPoint) is var d && d < nearestDistance)
+                (nearest, nearestDistance) = (node, d);
             float factor = Factor(mesh.Areas[p], agent);
             var poly = mesh.Polygons[p];
             for (int e = 0; e < poly.Length; e++)
@@ -176,7 +216,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
                 if (q >= 0) Relax(node, mesh, e, new NavRef(node.Ref.Zone, q), factor);
             }
             var tl = mesh.LinksOf(p);
-            for (int i = 0; i < tl.Length; i += 2) Relax(node, mesh, tl[i], new NavRef(node.Ref.Zone, tl[i + 1]), factor);
+            for (int i = 0; i < tl.Length; i += 2)
+                Relax(node, mesh, tl[i], new NavRef(node.Ref.Zone, tl[i + 1]), factor);
             foreach (var link in World.LinksOf(node.Ref))
                 Relax(node, mesh, link.Edge, link.To, factor);
             if (node == first && open.Count == 0 && last is null && !squeezeOut)
@@ -190,8 +231,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         Interlocked.Add(ref s_expanded, iterations);
         if (iterations > MaxIterations) Interlocked.Increment(ref s_exhausted);
         scratch.Exhaustive = last is null && iterations <= MaxIterations;
-        // The start polygon itself can be the nearest: a large one runs up to the wall between the walker and the goal, so it walks across it unless it
-        // stands there already.
+        // The start polygon itself can be the nearest: a large one runs up to the wall between the walker and the goal, so it walks across it unless
+        // it stands there already.
         if (last is null && partial && NavWorld.ClosestPoint(World.Mesh(nearest.Ref.Zone), nearest.Ref.Polygon, goalPoint) is var near
             && (nearest != first || Vector3.Distance(near, startPoint) > PartialStandStill))
         {
@@ -216,9 +257,11 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             byte area = target.Areas[to.Polygon];
             if (area == NavArea.Door && (agent.DoorsClosed || IsDoorClosed(target, to.Polygon))) return;
             if (!Portal(from.Ref, edge, to, out var left, out var right, out bool leftWall, out bool rightWall)) return;
-            // Only an end on a wall takes the radius off the portal (as Pull insets it); a tile-border, seam or area-change end has walkable ground beyond.
+            // Only an end on a wall takes the radius off the portal (as Pull insets it); a tile-border, seam or area-change end has walkable ground
+            // beyond.
             float width = Vector2.Distance(new(left.X, left.Z), new(right.X, right.Z));
-            if (width < ((leftWall ? 1 : 0) + (rightWall ? 1 : 0)) * agent.Radius && !(squeezeOut && from == first)) return;
+            if (width < ((leftWall ? 1 : 0) + (rightWall ? 1 : 0)) * agent.Radius && !(squeezeOut && from == first))
+                return;
             var mid = BestCrossing(from.Position, left, right, goalPoint);
             float g = from.G + Vector3.Distance(from.Position, mid) * factor;
             if (area == NavArea.Door) g += OpenDoorCost;
@@ -236,11 +279,15 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         }
     }
 
-    /// <summary>The point of the portal that makes the way from <paramref name="prev"/> through it to the goal shortest (the portal's ends clamp it), so the search sees near-straight legs even through thin polygons.</summary>
+    /// <summary>
+    /// The point of the portal that makes the way from <paramref name="prev"/> through it to the goal shortest (the portal's ends clamp it), so the
+    /// search sees near-straight legs even through thin polygons.
+    /// </summary>
     static Vector3 BestCrossing(Vector3 prev, Vector3 left, Vector3 right, Vector3 goal)
     {
-        // Golden-section search (the detour is convex along the portal): each step keeps one of its two probes, so 12 steps cost 14 detours and narrow the
-        // interval to 0.3 % as the 14 ternary steps (28 detours) before did; the A* spends most of its time here (docs/game/pathfinding.md "Search cost").
+        // Golden-section search (the detour is convex along the portal): each step keeps one of its two probes, so 12 steps cost 14 detours and
+        // narrow the interval to 0.3 % as the 14 ternary steps (28 detours) before did; the A* spends most of its time here (docs/game/pathfinding.md
+        // "Search cost").
         const float invPhi = 0.618034f;
         float lo = 0, hi = 1;
         float a = hi - invPhi * (hi - lo), b = lo + invPhi * (hi - lo);
@@ -269,7 +316,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
 
     /// <summary>
     /// The shared segment between a polygon's edge and the polygon behind it: the overlap of the two collinear edges. Left and right are as seen when
-    /// walking from <paramref name="from"/> into <paramref name="to"/> (polygons are counter-clockwise on the X/Z plane, so the edge's end is on the left).
+    /// walking from <paramref name="from"/> into <paramref name="to"/> (polygons are counter-clockwise on the X/Z plane, so the edge's end is on the
+    /// left).
     /// </summary>
     bool Portal(NavRef from, int edge, NavRef to, out Vector3 left, out Vector3 right) => Portal(from, edge, to, out left, out right, out _, out _);
 
@@ -304,17 +352,23 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             float lo = Math.Max(0, t1), hi = Math.Min(1, t0);
             if (hi - lo < 1e-4f) continue;
             float score = Vector3.Distance(mid, (b0 + b1) * 0.5f);
-            if (score < bestDistance) { bestDistance = score; bestEdge = k; }
+            if (score < bestDistance)
+            {
+                bestDistance = score;
+                bestEdge = k;
+            }
         }
         if (bestEdge < 0)
         {
-            // A near-miss seam (docs/game/pathfinding.md, "Inner seams") or a door join: the facing edge strays off the line, so take the overlap with
-            // a looser gap, as loose as the join's (a tighter one cuts a slanted door edge down to a sliver no one fits through).
+            // A near-miss seam (docs/game/pathfinding.md, "Inner seams") or a door join: the facing edge strays off the line, so take the overlap
+            // with a looser gap, as loose as the join's (a tighter one cuts a slanted door edge down to a sliver no one fits through).
             for (int k = 0; k < pb.Length; k++)
             {
                 var b0 = mb.Vertices[pb[k]];
                 var b1 = mb.Vertices[pb[(k + 1) % pb.Length]];
-                if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, Math.Max(NavGeometry.NearMissGap + 0.5f, NavInteriors.JoinDistance), out float lo, out float hi, out _, out _)) continue;
+                if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, Math.Max(NavGeometry.NearMissGap + 0.5f, NavInteriors.JoinDistance), out float lo,
+                        out float hi, out _, out _))
+                    continue;
                 float score = Vector3.Distance(mid, (b0 + b1) * 0.5f);
                 if (score >= bestDistance) continue;
                 bestDistance = score;
@@ -348,19 +402,25 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
 
     // ---- string pulling ----
 
-    /// <summary>The straight path through a corridor: the funnel over the portals, each pulled in by the agent's radius.</summary>
+    /// <summary>
+    /// The straight path through a corridor: the funnel over the portals, each pulled in by the agent's radius.
+    /// </summary>
     public List<Vector3> Pull(Corridor c, NavAgent agent)
     {
         var polys = c.Polygons;
         var portalsL = new List<Vector3>(polys.Count + 1);
         var portalsR = new List<Vector3>(polys.Count + 1);
-        portalsL.Add(c.Start); portalsR.Add(c.Start);
+        portalsL.Add(c.Start);
+        portalsR.Add(c.Start);
         for (int i = 0; i + 1 < polys.Count; i++)
         {
             var from = polys[i];
             var to = polys[i + 1];
             bool lw = true, rw = true;
-            if (!FindPortal(from, to, out var l, out var r, out lw, out rw)) { l = r = World.Mesh(to.Zone).Centre(to.Polygon); }
+            if (!FindPortal(from, to, out var l, out var r, out lw, out rw))
+            {
+                l = r = World.Mesh(to.Zone).Centre(to.Polygon);
+            }
             var d = r - l;
             float len = MathF.Sqrt(d.X * d.X + d.Z * d.Z);
             bool OnPortal(Vector3 p) => DistanceToLine(l, d, p) < 1e-3f && (p.X - l.X) * d.X + (p.Z - l.Z) * d.Z is var t && t >= 0 && t <= len * len;
@@ -377,9 +437,11 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
                 l += u * insetL;
                 r -= u * insetR;
             }
-            portalsL.Add(l); portalsR.Add(r);
+            portalsL.Add(l);
+            portalsR.Add(r);
         }
-        portalsL.Add(c.Goal); portalsR.Add(c.Goal);
+        portalsL.Add(c.Goal);
+        portalsR.Add(c.Goal);
 
         var path = new List<Vector3> { c.Start };
         var apex = c.Start;
@@ -393,12 +455,18 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             // Tighten the right side.
             if (Cross(apex, right, nr) >= 0)
             {
-                if (Same(apex, right) || Cross(apex, left, nr) < 0) { right = nr; rightIndex = i; }
+                if (Same(apex, right) || Cross(apex, left, nr) < 0)
+                {
+                    right = nr;
+                    rightIndex = i;
+                }
                 else
                 {
                     path.Add(left);
-                    apex = left; apexIndex = leftIndex;
-                    left = right = apex; leftIndex = rightIndex = apexIndex;
+                    apex = left;
+                    apexIndex = leftIndex;
+                    left = right = apex;
+                    leftIndex = rightIndex = apexIndex;
                     i = apexIndex;
                     continue;
                 }
@@ -406,19 +474,26 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             // Tighten the left side.
             if (Cross(apex, left, nl) <= 0)
             {
-                if (Same(apex, left) || Cross(apex, right, nl) > 0) { left = nl; leftIndex = i; }
+                if (Same(apex, left) || Cross(apex, right, nl) > 0)
+                {
+                    left = nl;
+                    leftIndex = i;
+                }
                 else
                 {
                     path.Add(right);
-                    apex = right; apexIndex = rightIndex;
-                    left = right = apex; leftIndex = rightIndex = apexIndex;
+                    apex = right;
+                    apexIndex = rightIndex;
+                    left = right = apex;
+                    leftIndex = rightIndex = apexIndex;
                     i = apexIndex;
                     continue;
                 }
             }
         }
         if (!Same(path[^1], c.Goal)) path.Add(c.Goal);
-        else path[^1] = c.Goal;
+        else
+            path[^1] = c.Goal;
 
         // Heights: the surface of the corridor polygon the point lies in.
         for (int i = 0; i < path.Count; i++) path[i] = OnSurface(path[i], polys);
@@ -426,8 +501,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     }
 
     /// <summary>
-    /// The point at the height of the corridor polygon it lies in; of stacked ones (a corridor through a ground floor and up onto the roof above it) the one nearest its own
-    /// height, so a goal on the roof is not put on the floor under it (Observed: the Bughouse roof beds at Squin).
+    /// The point at the height of the corridor polygon it lies in; of stacked ones (a corridor through a ground floor and up onto the roof above it)
+    /// the one nearest its own height, so a goal on the roof is not put on the floor under it (Observed: the Bughouse roof beds at Squin).
     /// </summary>
     Vector3 OnSurface(Vector3 p, List<NavRef> polys)
     {
@@ -438,17 +513,24 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             var m = World.Mesh(r.Zone);
             var onPoly = NavWorld.ClosestPoint(m, r.Polygon, p);
             float d = (onPoly.X - p.X) * (onPoly.X - p.X) + (onPoly.Z - p.Z) * (onPoly.Z - p.Z), rise = MathF.Abs(onPoly.Y - p.Y);
-            if (d < 1e-6f && best < 1e-6f ? rise < bestRise - StackedGap : d < best - 1e-6f) { (best, bestRise) = (d, rise); result = new Vector3(p.X, onPoly.Y, p.Z); }
+            if (d < 1e-6f
+                    && best < 1e-6f ? rise < bestRise - StackedGap : d < best - 1e-6f) { (best, bestRise) = (d, rise); result = new Vector3(p.X,
+                            onPoly.Y, p.Z); }
         }
         return result;
     }
 
-    /// <summary>How much nearer in height another polygon under a path point must be to count as the layer it stands on (engine choice: below a storey, as <see cref="NavmeshWalkability.StandRise"/>; overlapping stair polygons differ by ~1.3 at the Hub).</summary>
+    /// <summary>
+    /// How much nearer in height another polygon under a path point must be to count as the layer it stands on (engine choice: below a storey, as
+    /// <see cref="NavmeshWalkability.StandRise"/>; overlapping stair polygons differ by ~1.3 at the Hub).
+    /// </summary>
     const float StackedGap = 12;
 
     static bool Same(Vector3 a, Vector3 b) => (a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z) < 1e-6f;
 
-    /// <summary>Positive when c is to the left of the line a → b on the X/Z plane (X right, Z up).</summary>
+    /// <summary>
+    /// Positive when c is to the left of the line a → b on the X/Z plane (X right, Z up).
+    /// </summary>
     static float Cross(Vector3 a, Vector3 b, Vector3 c) => (b.X - a.X) * (c.Z - a.Z) - (b.Z - a.Z) * (c.X - a.X);
 
     bool FindPortal(NavRef from, NavRef to, out Vector3 left, out Vector3 right, out bool leftWall, out bool rightWall)
@@ -461,7 +543,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
                 if (nb[e] == to.Polygon) return Portal(from, e, to, out left, out right, out leftWall, out rightWall);
             var tl = m.LinksOf(from.Polygon);
             for (int i = 0; i < tl.Length; i += 2)
-                if (tl[i + 1] == to.Polygon) return Portal(from, tl[i], to, out left, out right, out leftWall, out rightWall);
+                if (tl[i + 1] == to.Polygon)
+                    return Portal(from, tl[i], to, out left, out right, out leftWall, out rightWall);
         }
         foreach (var link in World.LinksOf(from))
             if (link.To == to) return Portal(from, link.Edge, to, out left, out right, out leftWall, out rightWall);

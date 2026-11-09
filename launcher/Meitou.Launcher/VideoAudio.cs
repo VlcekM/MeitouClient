@@ -8,6 +8,8 @@ namespace Meitou.Launcher;
 /// </summary>
 sealed partial class VideoAudio : IDisposable
 {
+    const string Al = "openal";
+
     const int BlockFrames = 2048, Blocks = 4;
     const int AlFormatMono16 = 0x1101, AlFormatStereo16 = 0x1103, AlBuffersProcessed = 0x1016, AlSourceState = 0x1010, AlPlaying = 0x1012,
         AlSampleOffset = 0x1025;
@@ -23,7 +25,9 @@ sealed partial class VideoAudio : IDisposable
     readonly Lock _clock = new();
 
     public int SampleRate { get; }
-    /// <summary>The time in the video the sound starts at (its first frame at or after the time asked for).</summary>
+    /// <summary>
+    /// The time in the video the sound starts at (its first frame at or after the time asked for).
+    /// </summary>
     public TimeSpan StartTime { get; }
 
     VideoAudio(IntPtr device, IntPtr context, NVorbis.StreamDecoder decoder, TimeSpan start)
@@ -40,7 +44,9 @@ sealed partial class VideoAudio : IDisposable
         _thread = new Thread(Run) { Name = "News video sound", IsBackground = true };
     }
 
-    /// <summary>The Vorbis track's player from <paramref name="from"/>, not yet started; null (silent video) when OpenAL or the stream cannot be opened.</summary>
+    /// <summary>
+    /// The Vorbis track's player from <paramref name="from"/>, not yet started; null (silent video) when OpenAL or the stream cannot be opened.
+    /// </summary>
     public static VideoAudio? TryOpen(WebmFile file, TimeSpan from)
     {
         if (file.AudioCodec != "A_VORBIS" || file.AudioHeaders.Count != 3) return null;
@@ -52,7 +58,8 @@ sealed partial class VideoAudio : IDisposable
             device = AlcOpenDevice(null);
             if (device == 0) return null;
             context = alcCreateContext(device, 0);
-            if (context == 0 || !AlcMakeContextCurrent(context)) throw new InvalidOperationException("no OpenAL context");
+            if (context == 0 || !AlcMakeContextCurrent(context))
+                throw new InvalidOperationException("no OpenAL context");
             return new VideoAudio(device, context, Decoder(file, first), file.AudioFrames[first].Time);
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or InvalidDataException
@@ -64,12 +71,16 @@ sealed partial class VideoAudio : IDisposable
         }
     }
 
-    /// <summary>The Vorbis track as samples: its headers, then its frames from <paramref name="first"/> (Vorbis can start at any packet).</summary>
+    /// <summary>
+    /// The Vorbis track as samples: its headers, then its frames from <paramref name="first"/> (Vorbis can start at any packet).
+    /// </summary>
     internal static NVorbis.StreamDecoder Decoder(WebmFile file, int first = 0) => new(new VorbisPackets(file, first)) { ClipSamples = true };
 
     public void Start() => _thread.Start();
 
-    /// <summary>How far the sound has played: from OpenAL's position in the playing buffer, so it is smooth between blocks.</summary>
+    /// <summary>
+    /// How far the sound has played: from OpenAL's position in the playing buffer, so it is smooth between blocks.
+    /// </summary>
     public TimeSpan Position
     {
         get
@@ -82,7 +93,9 @@ sealed partial class VideoAudio : IDisposable
         }
     }
 
-    /// <summary>True once every sample has been played (or the stream ended early).</summary>
+    /// <summary>
+    /// True once every sample has been played (or the stream ended early).
+    /// </summary>
     public bool Finished { get; private set; }
 
     void Run()
@@ -93,42 +106,90 @@ sealed partial class VideoAudio : IDisposable
         bool ended = false;
         while (_running)
         {
-            lock (_clock)
-            {
-                AlGetSourcei(_source, AlBuffersProcessed, out int processed);
-                for (int i = 0; i < processed; i++)
-                {
-                    var done = new uint[1];
-                    AlSourceUnqueueBuffers(_source, 1, done);
-                    AlGetBufferi(done[0], 0x2004 /* AL_SIZE */, out int bytes);
-                    _playedFrames += bytes / (2 * _outChannels);
-                    free.Enqueue(done[0]);
-                }
-            }
+            UnqueueProcessed(free);
             while (!ended && free.Count > 0)
             {
-                int read;
-                try { read = _decoder.Read(samples, 0, samples.Length); }
-                catch (Exception e) when (e is InvalidDataException or IndexOutOfRangeException or ArgumentException) { read = 0; }
-                if (read <= 0) { ended = true; break; }
-                int frames = read / _channels;
-                for (int f = 0; f < frames; f++)
-                    for (int c = 0; c < _outChannels; c++)
-                        pcm[f * _outChannels + c] = (short)Math.Clamp(samples[f * _channels + c] * 32767f, -32768f, 32767f);
-                var buffer = free.Dequeue();
-                lock (_clock)
+                int read = ReadBlock(samples);
+                if (read <= 0)
                 {
-                    AlBufferData(buffer, _outChannels == 2 ? AlFormatStereo16 : AlFormatMono16, pcm, frames * _outChannels * 2, SampleRate);
-                    AlSourceQueueBuffers(_source, 1, [buffer]);
+                    ended = true;
+                    break;
                 }
+
+                int frames = read / _channels;
+                ConvertToPcm(samples, pcm, frames);
+                QueueBlock(free.Dequeue(), pcm, frames);
             }
+
             AlGetSourcei(_source, AlSourceState, out int state);
             if (state != AlPlaying)
             {
-                if (ended && free.Count == Blocks) { Finished = true; return; }
+                if (ended && free.Count == Blocks)
+                {
+                    Finished = true;
+                    return;
+                }
+
                 alSourcePlay(_source); // first start, or after running dry
             }
+
             Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>
+    /// Takes the buffers the source has played back to the free queue and counts their frames.
+    /// </summary>
+    void UnqueueProcessed(Queue<uint> free)
+    {
+        lock (_clock)
+        {
+            AlGetSourcei(_source, AlBuffersProcessed, out int processed);
+            for (int i = 0; i < processed; i++)
+            {
+                var done = new uint[1];
+                AlSourceUnqueueBuffers(_source, 1, done);
+                AlGetBufferi(done[0], 0x2004 /* AL_SIZE */, out int bytes);
+                _playedFrames += bytes / (2 * _outChannels);
+                free.Enqueue(done[0]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Decodes the next block of samples; a corrupt stream ends as if it had no more samples.
+    /// </summary>
+    int ReadBlock(float[] samples)
+    {
+        try
+        {
+            return _decoder.Read(samples, 0, samples.Length);
+        }
+        catch (Exception e) when (e is InvalidDataException or IndexOutOfRangeException or ArgumentException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Converts <paramref name="frames"/> frames of samples to 16-bit PCM in the output's channel layout.
+    /// </summary>
+    void ConvertToPcm(float[] samples, short[] pcm, int frames)
+    {
+        for (int f = 0; f < frames; f++)
+            for (int c = 0; c < _outChannels; c++)
+                pcm[f * _outChannels + c] = (short)Math.Clamp(samples[f * _channels + c] * 32767f, -32768f, 32767f);
+    }
+
+    /// <summary>
+    /// Fills a free buffer with <paramref name="frames"/> frames of PCM and queues it on the source.
+    /// </summary>
+    void QueueBlock(uint buffer, short[] pcm, int frames)
+    {
+        lock (_clock)
+        {
+            AlBufferData(buffer, _outChannels == 2 ? AlFormatStereo16 : AlFormatMono16, pcm, frames * _outChannels * 2, SampleRate);
+            AlSourceQueueBuffers(_source, 1, [buffer]);
         }
     }
 
@@ -145,7 +206,9 @@ sealed partial class VideoAudio : IDisposable
         _decoder.Dispose();
     }
 
-    /// <summary>The track's three headers, then its frames, as NVorbis packets.</summary>
+    /// <summary>
+    /// The track's three headers, then its frames, as NVorbis packets.
+    /// </summary>
     sealed class VorbisPackets(WebmFile file, int first) : NVorbis.Contracts.IPacketProvider
     {
         int _next;
@@ -156,7 +219,8 @@ sealed partial class VideoAudio : IDisposable
         public NVorbis.Contracts.IPacket? GetNextPacket() => _next < Count ? Packet(_next++) : null;
         public NVorbis.Contracts.IPacket? PeekNextPacket() => _next < Count ? Packet(_next) : null;
         public long GetGranuleCount() => (long)((file.AudioFrames.Count > 0 ? file.AudioFrames[^1].Time.TotalSeconds : 0) * file.SampleRate);
-        public long SeekTo(long granulePos, int preRoll, NVorbis.Contracts.GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        public long SeekTo(long granulePos, int preRoll, NVorbis.Contracts.GetPacketGranuleCount getPacketGranuleCount) =>
+            throw new NotSupportedException();
 
         Packet Packet(int index) =>
             new(index < 3 ? file.AudioHeaders[index] : file.AudioFrames[first + index - 3].Data) { IsEndOfStream = index == Count - 1 };
@@ -176,7 +240,6 @@ sealed partial class VideoAudio : IDisposable
     }
 
     // OpenAL 1.1, the few calls a streaming source needs.
-    const string Al = "openal";
     [LibraryImport(Al)] private static partial IntPtr AlcOpenDevice([MarshalAs(UnmanagedType.LPStr)] string? name);
     [LibraryImport(Al)] private static partial IntPtr alcCreateContext(IntPtr device, IntPtr attributes);
     [LibraryImport(Al)] [return: MarshalAs(UnmanagedType.U1)] private static partial bool AlcMakeContextCurrent(IntPtr context);

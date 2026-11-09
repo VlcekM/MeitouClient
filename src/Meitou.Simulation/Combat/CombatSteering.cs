@@ -4,42 +4,65 @@ using Meitou.Simulation.Movement;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// A fighter's fight steering (docs/game/combat.md "Fight steering"): the band its fight state asks for (set by the <see cref="PursuitSystem"/> every tick, as the original's
-/// states call <c>combatMovementOffensive</c>), the last check that it may steer at its target, and the velocity smoothing. Derived state: not saved; hashed while in use.
+/// A fighter's fight steering (docs/game/combat.md "Fight steering"): the band its fight state asks for (set by the <see cref="PursuitSystem"/> every
+/// tick, as the original's states call <c>combatMovementOffensive</c>), the last check that it may steer at its target, and the velocity smoothing.
+/// Derived state: not saved; hashed while in use.
 /// </summary>
 public sealed class SteerState
 {
-    /// <summary>Steering this tick (else the fighter walks paths or stands), at the target in <see cref="Target"/>.</summary>
+    /// <summary>
+    /// Steering this tick (else the fighter walks paths or stands), at the target in <see cref="Target"/>.
+    /// </summary>
     public bool Active;
     public int Target = -1;
+
     /// <summary>
-    /// Whom it faces (the original's look-at hand, <c>FUN_1402ae2e0</c>; -1: none, it faces <see cref="Target"/>): set by the attack start and the swing (its target), the defence update (the
-    /// swing it follows, not during a rear block) and state 5 (its target); nothing clears it, so the waiting state 6 keeps the last one.
+    /// Whom it faces (the original's look-at hand, <c>FUN_1402ae2e0</c>; -1: none, it faces <see cref="Target"/>): set by the attack start and the
+    /// swing (its target), the defence update (the swing it follows, not during a rear block) and state 5 (its target); nothing clears it, so the
+    /// waiting state 6 keeps the last one.
     /// </summary>
     public int Face = -1;
-    /// <summary>The band of the centre distance beyond the two radii it keeps (min and max of <see cref="CombatSteering.Band"/>), the speed limit, and <c>powerThrough</c>.</summary>
+
+    /// <summary>
+    /// The band of the centre distance beyond the two radii it keeps (min and max of <see cref="CombatSteering.Band"/>), the speed limit, and
+    /// <c>powerThrough</c>.
+    /// </summary>
     public float Min = 10, Max = 20, Limit = 200;
     public bool PowerThrough;
-    /// <summary>The tick of the next same-place and clear-line check, and its answer.</summary>
+
+    /// <summary>
+    /// The tick of the next same-place and clear-line check, and its answer.
+    /// </summary>
     public long LineTick;
     public bool LineClear;
+
     /// <summary>
-    /// The target of the path chase the fighter is on (-1: none) and the tick it may end at the earliest: a blocked line met at a new pick or in the footwork keeps it on its path for
-    /// <see cref="PursuitSystem.PathChaseSeconds"/> even when the line clears (<c>FUN_14060c8b0</c>, <c>FUN_14060d6a0</c>). Hashed while chasing.
+    /// The target of the path chase the fighter is on (-1: none) and the tick it may end at the earliest: a blocked line met at a new pick or in the
+    /// footwork keeps it on its path for <see cref="PursuitSystem.PathChaseSeconds"/> even when the line clears (<c>FUN_14060c8b0</c>,
+    /// <c>FUN_14060d6a0</c>). Hashed while chasing.
     /// </summary>
     public int ChaseTarget = -1;
     public long PathUntil;
-    /// <summary>The smoothing's last samples, newest first (<see cref="CombatSteering.FilterLength"/>).</summary>
+
+    /// <summary>
+    /// The smoothing's last samples, newest first (<see cref="CombatSteering.FilterLength"/>).
+    /// </summary>
     internal readonly float[] HistX = new float[CombatSteering.FilterLength], HistZ = new float[CombatSteering.FilterLength];
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x53746572);
         h.Add(Active); h.Add(Target); h.Add(Face); h.Add(Min); h.Add(Max); h.Add(Limit); h.Add(PowerThrough); h.Add(LineTick); h.Add(LineClear);
-        for (int k = 0; k < CombatSteering.FilterLength; k++) { h.Add(HistX[k]); h.Add(HistZ[k]); }
+        for (int k = 0; k < CombatSteering.FilterLength; k++)
+        {
+            h.Add(HistX[k]);
+            h.Add(HistZ[k]);
+        }
     }
 
-    /// <summary>Back to a standing start: the smoothing forgets (engine choice: the original's filters keep what they had from its last fight).</summary>
+    /// <summary>
+    /// Back to a standing start: the smoothing forgets (engine choice: the original's filters keep what they had from its last fight).
+    /// </summary>
     internal void Reset()
     {
         Array.Clear(HistX);
@@ -48,33 +71,58 @@ public sealed class SteerState
 }
 
 /// <summary>
-/// The original's fight steering (<c>CombatMovementController::combatMovementUpdate</c>, <b>Observed</b>, docs/game/combat.md "Fight steering"): a velocity built from
-/// forces each tick, a seek along the facing to keep the band, repulsion from the bodies round it (enemies and, twice as strong, the rest), a dead zone, the side-step
-/// snap, the footwork speed caps and a smoothing filter. Running fighters (gap over 90) and those with no clear line to the target walk paths instead (<see cref="PursuitSystem"/>).
+/// The original's fight steering (<c>CombatMovementController::combatMovementUpdate</c>, <b>Observed</b>, docs/game/combat.md "Fight steering"): a
+/// velocity built from forces each tick, a seek along the facing to keep the band, repulsion from the bodies round it (enemies and, twice as strong,
+/// the rest), a dead zone, the side-step snap, the footwork speed caps and a smoothing filter. Running fighters (gap over 90) and those with no clear
+/// line to the target walk paths instead (<see cref="PursuitSystem"/>).
 /// </summary>
 public static class CombatSteering
 {
-    /// <summary>The share of the repulsion kept (TOTALREPULSION_DAMPING) and of the off-axis part of the velocity (STRAFE_STATE_DAMPING).</summary>
+    /// <summary>
+    /// The share of the repulsion kept (TOTALREPULSION_DAMPING) and of the off-axis part of the velocity (STRAFE_STATE_DAMPING).
+    /// </summary>
     public const float RepulsionDamping = 0.105f, StrafeDamping = 0.105f;
-    /// <summary>The weight of the non-enemies' repulsion against the enemies'.</summary>
+
+    /// <summary>
+    /// The weight of the non-enemies' repulsion against the enemies'.
+    /// </summary>
     public const float AllyWeight = 2;
-    /// <summary>The most bodies one repulsion sum takes, enemies and the rest together (engine choice: the nearest, docs/game/combat.md "Fight steering").</summary>
+
+    /// <summary>
+    /// The most bodies one repulsion sum takes, enemies and the rest together (engine choice: the nearest, docs/game/combat.md "Fight steering").
+    /// </summary>
     public const int MaxRepulsions = 26;
-    /// <summary>The nearest bodies the repulsion first gathers by distance alone, so a few out of the flocking list among them still leave it its 26 (engine choice).</summary>
+
+    /// <summary>
+    /// The nearest bodies the repulsion first gathers by distance alone, so a few out of the flocking list among them still leave it its 26 (engine
+    /// choice).
+    /// </summary>
     const int Gathered = 32;
-    /// <summary>The radius the gathering looks in first (engine choice: in a crowd the nearest 32 stand within it; <see cref="Nearest"/>).</summary>
+
+    /// <summary>
+    /// The radius the gathering looks in first (engine choice: in a crowd the nearest 32 stand within it; <see cref="Nearest"/>).
+    /// </summary>
     const float NearFirst = 20;
-    /// <summary>The flocking list's reach beyond the two radii and its height limit (<c>FUN_14085a070</c>).</summary>
+
+    /// <summary>
+    /// The flocking list's reach beyond the two radii and its height limit (<c>FUN_14085a070</c>).
+    /// </summary>
     public const float FlockReach = 40, FlockHeight = 20;
-    /// <summary>Speed caps in the footwork: sideways, backing off, and in all (not running).</summary>
+
+    /// <summary>
+    /// Speed caps in the footwork: sideways, backing off, and in all (not running).
+    /// </summary>
     public const float SideSpeed = 18, BackSpeed = 16, FootworkCap = 18;
-    /// <summary>The smoothing: samples and the weight ratio per 60 fps frame (<c>MotionFilter</c>, 10 and 0.8).</summary>
+
+    /// <summary>
+    /// The smoothing: samples and the weight ratio per 60 fps frame (<c>MotionFilter</c>, 10 and 0.8).
+    /// </summary>
     public const int FilterLength = 10;
     public const float FilterDecay = 0.8f;
 
     /// <summary>
-    /// The band from a state's near and far (<c>combatMovementOffensive</c>): with m = 1.4 x the raw footprint, min = clamp(near - m, 1, far'), max = max(far', min + 5),
-    /// far' = clamp(far - m, 0, 9999).
+    /// The band from a state's near and far (<c>combatMovementOffensive</c>): with m = 1.4 x the raw footprint, min = clamp(near - m, 1, far'), max =
+    /// max(far', min + 5), far' = clamp(far - m, 0, 9999).
     /// </summary>
     public static (float Min, float Max) Band(float near, float far, float footprint)
     {
@@ -85,16 +133,21 @@ public static class CombatSteering
     }
 
     /// <summary>
-    /// Left out of the flocking list (<c>FUN_14085a070</c>, docs/game/combat.md "Attack slots and circling"): down, in a cage or a bed, or sitting on a chair or throne (<c>isSitting</c>;
-    /// Meitou: resting on a seat). Engine reading: a carried body too.
+    /// Left out of the flocking list (<c>FUN_14085a070</c>, docs/game/combat.md "Attack slots and circling"): down, in a cage or a bed, or sitting on
+    /// a chair or throne (<c>isSitting</c>; Meitou: resting on a seat). Engine reading: a carried body too.
     /// </summary>
-    internal static bool OutOfFlock(in CharacterHot h, CharacterCold c) => c.Medical is { Incapacitated: true } || c.IsImprisoned || c.InSomething == Locks.HeldState.Bed
+    internal static bool OutOfFlock(in CharacterHot h, CharacterCold c) =>
+        c.Medical is { Incapacitated: true } || c.IsImprisoned || c.InSomething == Locks.HeldState.Bed
         || !c.CarriedBy.IsNone || h.Task == (byte)CharacterTask.Rest && c.Ai?.SitClip is not null;
 
-    /// <summary>A character's steering radius (<c>getRadius</c>): its footprint x its size.</summary>
+    /// <summary>
+    /// A character's steering radius (<c>getRadius</c>): its footprint x its size.
+    /// </summary>
     public static float Radius(CharacterCold? c) => CombatTuning.Footprint(c) * (c?.Medical?.ScaleK ?? 1);
 
-    /// <summary>The fighter's own draws (<c>setupCombatMovementVariables</c>): ENEMY_DIST 15 + 30u, ALLY_DIST 1.4r + 30u, and the dead zone's STOP and START.</summary>
+    /// <summary>
+    /// The fighter's own draws (<c>setupCombatMovementVariables</c>): ENEMY_DIST 15 + 30u, ALLY_DIST 1.4r + 30u, and the dead zone's STOP and START.
+    /// </summary>
     public static (float Enemy, float Ally, float Stop, float Start) Draws(ulong seed, ulong key, CharacterCold cold)
     {
         float r = CombatTuning.Footprint(cold) * (cold.Medical?.ScaleK ?? 1);
@@ -112,9 +165,9 @@ public static class CombatSteering
     }
 
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearSlots { int slot; }
+    struct NearSlots { int _slot; }
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearDistances { float distance; }
+    struct NearDistances { float _distance; }
 
     struct Push
     {
@@ -125,9 +178,15 @@ public static class CombatSteering
         public float Radius, Own, EnemyReach, AllyReach, Reach;
         public Vector2 Face;
         public bool Turn;
-        /// <summary>Only bodies that push go in (the second, full pass), else every body near enough by distance alone.</summary>
+
+        /// <summary>
+        /// Only bodies that push go in (the second, full pass), else every body near enough by distance alone.
+        /// </summary>
         public bool Pushers;
-        /// <summary>The nearest bodies so far, by squared distance, ascending (ties: the first seen first); <see cref="Overflow"/> once one was left out.</summary>
+
+        /// <summary>
+        /// The nearest bodies so far, by squared distance, ascending (ties: the first seen first); <see cref="Overflow"/> once one was left out.
+        /// </summary>
         public NearSlots Slots;
         public NearDistances Distances;
         public int Count, Capacity;
@@ -135,16 +194,31 @@ public static class CombatSteering
 
         public void Add(int c, float distance)
         {
-            if (Count == Capacity && distance >= Distances[Count - 1]) { Overflow = true; return; }
-            if (Count == Capacity) { Overflow = true; Count--; }
+            if (Count == Capacity && distance >= Distances[Count - 1])
+            {
+                Overflow = true;
+                return;
+            }
+            if (Count == Capacity)
+            {
+                Overflow = true;
+                Count--;
+            }
             int k = Count++;
-            for (; k > 0 && Distances[k - 1] > distance; k--) { Slots[k] = Slots[k - 1]; Distances[k] = Distances[k - 1]; }
+            for (; k > 0 && Distances[k - 1] > distance; k--)
+            {
+                Slots[k] = Slots[k - 1];
+                Distances[k] = Distances[k - 1];
+            }
             Slots[k] = c;
             Distances[k] = distance;
         }
     }
 
-    /// <summary>The push of body <paramref name="c"/> on the fighter (<c>getRepulsionVector</c>), false when it is out of the flocking list or too far to push.</summary>
+    /// <summary>
+    /// The push of body <paramref name="c"/> on the fighter (<c>getRepulsionVector</c>), false when it is out of the flocking list or too far to
+    /// push.
+    /// </summary>
     static bool Repulsion(ref Push p, int c, out Vector2 v, out bool enemy)
     {
         (v, enemy) = (Vector2.Zero, false);
@@ -160,6 +234,7 @@ public static class CombatSteering
         float magnitude = (1 - d / (rc + (enemy ? p.EnemyReach : p.AllyReach))) * 100;
         if (!(magnitude > 0) || flatDistance < 1e-4f) return false;
         v = away / flatDistance * magnitude;
+
         // powerThrough: the push is turned to the side of the facing it is on, its length kept (FUN_1402e9530).
         if (p.Turn)
         {
@@ -188,9 +263,10 @@ public static class CombatSteering
     }
 
     /// <summary>
-    /// The nearest bodies <see cref="Gather"/> takes within <paramref name="reach"/> of <paramref name="me"/>: those of a circle of <see cref="NearFirst"/>, twice as wide while
-    /// it does not hold <see cref="Push.Capacity"/> of them nearer than its radius (none outside it is nearer), the whole reach last. Those beyond the circle count as left out
-    /// (when only these are in reach, the pushers' pass finds the same ones).
+    /// The nearest bodies <see cref="Gather"/> takes within <paramref name="reach"/> of <paramref name="me"/>: those of a circle of
+    /// <see cref="NearFirst"/>, twice as wide while it does not hold <see cref="Push.Capacity"/> of them nearer than its radius (none outside it is
+    /// nearer), the whole reach last. Those beyond the circle count as left out (when only these are in reach, the pushers' pass finds the same
+    /// ones).
     /// </summary>
     static void Nearest(World world, Vector3 me, float reach, ref Push q)
     {
@@ -199,18 +275,25 @@ public static class CombatSteering
             (q.Count, q.Overflow, q.Reach) = (0, false, MathF.Min(r, reach));
             world.Grid.Query(me.X, me.Z, q.Reach, ref q, Gather);
             if (r >= reach) break;
-            if (q.Count == q.Capacity && q.Distances[q.Capacity - 1] < r * r) { q.Overflow = true; break; }
+            if (q.Count == q.Capacity && q.Distances[q.Capacity - 1] < r * r)
+            {
+                q.Overflow = true;
+                break;
+            }
         }
         q.Reach = reach;
     }
 
     /// <summary>
-    /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector to whom it faces
-    /// (<see cref="SteerState.Face"/>, else its band target); zero when the band target is gone. The seek and the power-through cone go along the line to the band target, the
-    /// side-step snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref name="moving"/> whether it moved last tick (the dead
-    /// zone's STOP or START). Reads the last tick's places only; partition-safe (writes the fighter's own smoothing).
+    /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector
+    /// to whom it faces (<see cref="SteerState.Face"/>, else its band target); zero when the band target is gone. The seek and the power-through cone
+    /// go along the line to the band target, the side-step snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction
+    /// with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick);
+    /// <paramref name="moving"/> whether it moved last tick (the dead zone's STOP or START). Reads the last tick's places only; partition-safe
+    /// (writes the fighter's own smoothing).
     /// </summary>
-    public static Vector2 Velocity(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, float maxSpeed, bool strafing, bool moving, out Vector2 face)
+    public static Vector2 Velocity(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, float maxSpeed, bool strafing,
+        bool moving, out Vector2 face)
     {
         face = Vector2.Zero;
         var prev = world.Characters.Previous;
@@ -246,9 +329,11 @@ public static class CombatSteering
             EnemyReach = rs + enemyDist,
             AllyReach = rs + allyDist,
         };
-        // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's reach and its own
-        // reach, so nothing farther than the nearer of the two (plus a large body's radius) is looked at. First the nearest by distance alone, the flocking list's
-        // tests only for those; when too many of them are out of it to leave 26, again with the tests on every body (a crowd of the fallen).
+
+        // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's
+        // reach and its own reach, so nothing farther than the nearer of the two (plus a large body's radius) is looked at. First the nearest by
+        // distance alone, the flocking list's tests only for those; when too many of them are out of it to leave 26, again with the tests on every
+        // body (a crowd of the fallen).
         float reach = MathF.Min(radius + FlockReach, MathF.Max(q.EnemyReach, q.AllyReach)) + CombatTuning.DefaultFootprint * 4;
         q.Capacity = Gathered;
         Nearest(world, me, reach, ref q);
@@ -288,7 +373,9 @@ public static class CombatSteering
         return vel * mult;
     }
 
-    /// <summary>The flat unit vector to the character it faces, or <paramref name="line"/> (to the band target) when that one is unset, gone or on its spot.</summary>
+    /// <summary>
+    /// The flat unit vector to the character it faces, or <paramref name="line"/> (to the band target) when that one is unset, gone or on its spot.
+    /// </summary>
     static Vector2 Facing(ReadOnlySpan<CharacterHot> prev, int i, SteerState s, Vector2 line)
     {
         int f = s.Face;
@@ -298,8 +385,9 @@ public static class CombatSteering
     }
 
     /// <summary>
-    /// The smoothing of one axis (<c>MotionFilter::Apply</c>): the newest sample first, the weighted mean with weights decaying 0.8 per 60 fps frame, over the samples of
-    /// <see cref="FilterLength"/> frames (engine reading for ticks longer than a frame: fewer samples, each weight ratio 0.8^(60 dt)).
+    /// The smoothing of one axis (<c>MotionFilter::Apply</c>): the newest sample first, the weighted mean with weights decaying 0.8 per 60 fps frame,
+    /// over the samples of <see cref="FilterLength"/> frames (engine reading for ticks longer than a frame: fewer samples, each weight ratio 0.8^(60
+    /// dt)).
     /// </summary>
     internal static float Filter(float[] history, float sample, float dt)
     {

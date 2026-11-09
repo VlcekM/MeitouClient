@@ -16,9 +16,9 @@ using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 namespace Meitou.ModelViewer;
 
 /// <summary>
-/// <c>--impostor-preview &lt;mesh&gt;</c> and <c>--impostor-bake-all</c> (docs/impostors.md, "Preview"): bake (or load from the cache) a foliage mesh's
-/// impostor atlas and draw the mesh and its impostor side by side, offscreen, into PNGs; or bake every eligible foliage mesh of the loaded game
-/// and print the times and sizes.
+/// <c>--impostor-preview &lt;mesh&gt;</c> and <c>--impostor-bake-all</c> (docs/impostors.md, "Preview"): bake (or load from the cache) a foliage
+/// mesh's impostor atlas and draw the mesh and its impostor side by side, offscreen, into PNGs; or bake every eligible foliage mesh of the loaded
+/// game and print the times and sizes.
 /// </summary>
 static class ImpostorApp
 {
@@ -128,27 +128,51 @@ static class ImpostorApp
         }
     }
 
-    static (ImpostorAtlas Atlas, bool Hit) Obtain(Frames frames, ImpostorBaker baker, ImpostorCache cache, ImpostorSource source, ImpostorMeshes meshes, ImpostorClass size, Options o)
+    static (ImpostorAtlas Atlas, bool Hit) Obtain(Frames frames, ImpostorBaker baker, ImpostorCache cache, ImpostorSource source,
+            ImpostorMeshes meshes, ImpostorClass size, Options o)
     {
-        if (!o.Rebake && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid) return (cached, true);
+        if (!o.Rebake && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid)
+            return (cached, true);
+
         frames.Open();
         var atlas = baker.Bake(source, meshes, size, frames.Next);
         cache.Save(source, atlas);
         return (atlas, false);
     }
 
-    static int BakeAll(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
+    /// <summary>
+    /// One source per distinct (mesh, material, scale); the records that are not impostor material are counted.
+    /// </summary>
+    static (List<(FoliageMesh Mesh, ImpostorSource Source)> Sources, int Ineligible, int Missing) CollectSources(
+        FoliageCatalog catalog, AssetLocator assets)
     {
         var seen = new HashSet<string>();
         var sources = new List<(FoliageMesh Mesh, ImpostorSource Source)>();
         int ineligible = 0, missing = 0;
         foreach (var mesh in catalog.Meshes.Values.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
-            if (ImpostorSource.Ineligible(mesh) is not null) { ineligible++; continue; }
+            if (ImpostorSource.Ineligible(mesh) is not null)
+            {
+                ineligible++;
+                continue;
+            }
+
             var source = ImpostorSource.From(mesh, assets);
-            if (source is null) { missing++; continue; }
+            if (source is null)
+            {
+                missing++;
+                continue;
+            }
+
             if (seen.Add(source.Key)) sources.Add((mesh, source));
         }
+
+        return (sources, ineligible, missing);
+    }
+
+    static int BakeAll(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
+    {
+        var (sources, ineligible, missing) = CollectSources(catalog, assets);
         Console.WriteLine($"sources   {sources.Count} distinct (mesh, material, scale); {ineligible} records TERRAIN/EMISSIVE, {missing} without a mesh file");
         // Decode on the worker threads, bake in order on this one.
         var decoded = sources.Select(s => Task.Run(() => ImpostorMeshes.Load(s.Source))).ToList();
@@ -163,7 +187,12 @@ static class ImpostorApp
         {
             var (mesh, source) = sources[i];
             var meshes = decoded[i].Result;
-            if (meshes is null) { missing++; continue; }
+            if (meshes is null)
+            {
+                missing++;
+                continue;
+            }
+
             float worldRadius = meshes.Radius * mesh.MaxScale;
             if (ImpostorClass.For(worldRadius, meshes.Triangles) is not { } size)
             {
@@ -181,7 +210,9 @@ static class ImpostorApp
             byClass.TryGetValue(size.Name, out var sum);
             byClass[size.Name] = (sum.Count + 1, sum.Bytes + atlas.Bytes);
             var t = baker.LastTimes;
-            string steps = hit ? "" : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
+            string steps = hit
+                ? ""
+                : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"{(hit ? "cached" : "baked "),-7} {size.Name,-6} r {worldRadius,6:0} {atlas.AtlasPixels,5}² {atlas.Bytes / 1048576.0,6:0.0} MB GPU {file / 1048576.0,6:0.0} MB file {ms,7:0} ms{steps}  {source.Name}"));
         }
@@ -195,44 +226,90 @@ static class ImpostorApp
     static FoliageMesh? Find(FoliageCatalog catalog, string name)
     {
         var all = catalog.Meshes.Values.ToList();
+        string file = name.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase) ? name : name + ".mesh";
         return all.FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? all.FirstOrDefault(m => m.StringId.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(m => Path.GetFileName(m.MeshPath.Replace('\\', '/')).Equals(name.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase) ? name : name + ".mesh", StringComparison.OrdinalIgnoreCase));
+            ?? all.FirstOrDefault(m => Path.GetFileName(m.MeshPath.Replace('\\', '/')).Equals(file, StringComparison.OrdinalIgnoreCase));
     }
 
     static int Preview(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
     {
         var mesh = Find(catalog, o.Mesh!);
-        if (mesh is null) { Console.Error.WriteLine($"no foliage mesh '{o.Mesh}'"); return 1; }
+        if (mesh is null)
+        {
+            Console.Error.WriteLine($"no foliage mesh '{o.Mesh}'");
+            return 1;
+        }
+
         if (ImpostorSource.Ineligible(mesh) is { } why) Console.WriteLine($"note      {mesh.Name}: {why}; previewed anyway");
         var source = ImpostorSource.From(mesh, assets);
         var meshes = source is null ? null : ImpostorMeshes.Load(source);
-        if (source is null || meshes is null) { Console.Error.WriteLine($"mesh not found or unreadable: {mesh.MeshPath}"); return 1; }
+        if (source is null || meshes is null)
+        {
+            Console.Error.WriteLine($"mesh not found or unreadable: {mesh.MeshPath}");
+            return 1;
+        }
+
         float worldRadius = meshes.Radius * mesh.MaxScale;
         var size = o.Class switch
         {
             "medium" => ImpostorClass.Medium,
             "large" => ImpostorClass.Large,
-            "small" => new ImpostorClass("small", ImpostorClass.SmallFrame, ImpostorClass.SmallGrid, ImpostorClass.ReferenceDistance * worldRadius / ImpostorClass.MinimumRadius),
+            "small" => new ImpostorClass("small", ImpostorClass.SmallFrame, ImpostorClass.SmallGrid,
+                    ImpostorClass.ReferenceDistance * worldRadius / ImpostorClass.MinimumRadius),
             _ => ImpostorClass.For(worldRadius, meshes.Triangles) ?? ImpostorClass.Medium,
         };
+        string files = Path.GetFileName(source.MeshPath) + (source.LeavesPath is null ? "" : " + " + Path.GetFileName(source.LeavesPath));
+        string shape = string.Create(CultureInfo.InvariantCulture, $"{size.Name} ({size.Grid}x{size.Grid} frames of {size.FramePixels})");
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"mesh      {mesh.Name} ({Path.GetFileName(source.MeshPath)}{(source.LeavesPath is null ? "" : " + " + Path.GetFileName(source.LeavesPath))}): radius {meshes.Radius:0.0}, scale {mesh.MinScale:0.##}..{mesh.MaxScale:0.##}, class {size.Name} ({size.Grid}x{size.Grid} frames of {size.FramePixels})"));
+            $"mesh      {mesh.Name} ({files}): radius {meshes.Radius:0.0}, scale {mesh.MinScale:0.##}..{mesh.MaxScale:0.##}, class {shape}"));
         frames.Open();
         using var baker = new ImpostorBaker(frames.Gpu, assets);
         var watch = Stopwatch.StartNew();
         var (atlas, hit) = Obtain(frames, baker, cache, source, meshes, size, o);
         var t = baker.LastTimes;
+        string how = hit
+            ? "from the cache"
+            : string.Create(CultureInfo.InvariantCulture,
+                $"baked in {watch.ElapsedMilliseconds} ms (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"atlas     {(hit ? "from the cache" : $"baked in {watch.ElapsedMilliseconds} ms (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})")}: " +
+            $"atlas     {how}: " +
             $"{atlas.AtlasPixels}² x 2 maps, {atlas.Levels} levels, {atlas.Bytes / 1048576.0:0.0} MB"));
         foreach (var h in new[] { 900, 1080, 2160 })
-            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"distance  {h}p: transition at {ImpostorLayout.TransitionDistance(meshes.Radius * mesh.MinScale, atlas.FramePixels, h, 50 * MathF.PI / 180, 0):0} (smallest instance) .. {ImpostorLayout.TransitionDistance(worldRadius, atlas.FramePixels, h, 50 * MathF.PI / 180, 0):0} (largest)"));
+            PrintDistances(meshes, mesh, atlas, worldRadius, h);
         foreach (var m in baker.Messages) Console.WriteLine($"warning   {m}");
 
         Directory.CreateDirectory(o.Out);
         string stem = Path.Combine(o.Out, Safe(mesh.Name));
+        WriteAtlasPngs(atlas, stem);
+        frames.Open();
+        using var preview = new ImpostorPreview(frames.Gpu, assets) { Debug = o.Debug };
+        preview.SetMesh(source, meshes);
+        preview.SetAtlas(atlas);
+        WriteSheets(frames, preview, meshes, atlas, stem);
+        float scale = size.Transition(worldRadius, ImpostorClass.ReferenceDistance) / ImpostorClass.ReferenceDistance;   // the small class is seen from nearer
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"scale     transition {size.Transition(worldRadius, ImpostorClass.ReferenceDistance):0} units, pictures scaled by {scale:0.###}"));
+        var sun = Vector3.Normalize(new Vector3(0.45f, 0.8f, 0.4f));
+        Field(frames, preview, meshes, mesh, $"{stem}-field", o, sun, 1500 * scale, 4000 * scale, 160, scale);
+        Field(frames, preview, meshes, mesh, $"{stem}-near", o, sun, 1500 * scale, 2000 * scale, 40, scale);
+
+        // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance): where mesh and impostor should look alike.
+        Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, sun, 3500 * scale, 4500 * scale, 120, scale);
+        Console.WriteLine($"saved     {stem}-*.png");
+        return 0;
+    }
+
+    static void PrintDistances(ImpostorMeshes meshes, FoliageMesh mesh, ImpostorAtlas atlas, float worldRadius, int h)
+    {
+        var smallest = ImpostorLayout.TransitionDistance(meshes.Radius * mesh.MinScale, atlas.FramePixels, h, 50 * MathF.PI / 180, 0);
+        var largest = ImpostorLayout.TransitionDistance(worldRadius, atlas.FramePixels, h, 50 * MathF.PI / 180, 0);
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"distance  {h}p: transition at {smallest:0} (smallest instance) .. {largest:0} (largest)"));
+    }
+
+    static void WriteAtlasPngs(ImpostorAtlas atlas, string stem)
+    {
         foreach (var map in new[] { ImpostorMap.Albedo, ImpostorMap.Normal })
         {
             var texture = atlas[map]!;
@@ -245,32 +322,27 @@ static class ImpostorApp
                     for (int c = 0; c < 3; c++) rgba[i + c] = (byte)(rgba[i + c] * a + 96 * (1 - a));
                     rgba[i + 3] = 255;
                 }
+
             PngWriter.Write($"{stem}-atlas-{map.ToString().ToLowerInvariant()}.png", px, px, Flip(rgba, px, px));
         }
+    }
 
-        frames.Open();
-        using var preview = new ImpostorPreview(frames.Gpu, assets) { Debug = o.Debug };
-        preview.SetMesh(source, meshes);
-        preview.SetAtlas(atlas);
+    static void WriteSheets(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, ImpostorAtlas atlas, string stem)
+    {
         var suns = new (string Name, Vector3 Direction)[]
         {
             ("high", Vector3.Normalize(new Vector3(0.45f, 0.8f, 0.4f))),
             ("low", Vector3.Normalize(new Vector3(-0.95f, 0.22f, 0.15f))),
             ("back", Vector3.Normalize(new Vector3(-0.25f, 0.45f, -0.85f))),
         };
-        foreach (var (name, sun) in suns) Sheet(frames, preview, meshes, $"{stem}-sheet-{name}.png", sun, (row, col) => Direction(Elevations[row], Azimuths[col]));
+        foreach (var (name, sun) in suns)
+            Sheet(frames, preview, meshes, $"{stem}-sheet-{name}.png", sun, (row, col) => Direction(Elevations[row], Azimuths[col]));
+
         // Cameras on baked frame directions: one frame is sampled alone (the bake and the projection, without the blend).
         int g = atlas.Grid;
-        Sheet(frames, preview, meshes, $"{stem}-frames.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col * (g - 1) / 3, Math.Min(row, g - 1), g));
+        Sheet(frames, preview, meshes, $"{stem}-frames.png", suns[0].Direction,
+            (row, col) => ImpostorLayout.FrameDirection(col * (g - 1) / 3, Math.Min(row, g - 1), g));
         Sheet(frames, preview, meshes, $"{stem}-frames2.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col, row, g));
-        float scale = size.Transition(worldRadius, ImpostorClass.ReferenceDistance) / ImpostorClass.ReferenceDistance;   // the small class is seen from nearer
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"scale     transition {size.Transition(worldRadius, ImpostorClass.ReferenceDistance):0} units, pictures scaled by {scale:0.###}"));
-        Field(frames, preview, meshes, mesh, $"{stem}-field", o, suns[0].Direction, 1500 * scale, 4000 * scale, 160, scale);
-        Field(frames, preview, meshes, mesh, $"{stem}-near", o, suns[0].Direction, 1500 * scale, 2000 * scale, 40, scale);
-        // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance): where mesh and impostor should look alike.
-        Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, suns[0].Direction, 3500 * scale, 4500 * scale, 120, scale);
-        Console.WriteLine($"saved     {stem}-*.png");
-        return 0;
     }
 
     static string Safe(string name) => new(name.Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
@@ -294,9 +366,12 @@ static class ImpostorApp
         frames.Open();
         var cmd = gpu.Frame.PreFrame;
         var pre = cmd.Handle;
-        using var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Samples: 4, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "impostor preview target"), pre);
-        using var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Samples: 4, Use: TextureUse.DepthTarget, Name: "impostor preview target"), pre);
-        using var resolved = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor preview target"), pre);
+        using var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Samples: 4,
+                Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "impostor preview target"), pre);
+        using var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Samples: 4, Use: TextureUse.DepthTarget,
+                Name: "impostor preview target"), pre);
+        using var resolved = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.TransferDst | TextureUse.TransferSrc,
+                Name: "impostor preview target"), pre);
         var formats = new AttachmentFormats(colour.Desc.Format, depth.Desc.Format, 4);
         cmd.Order();
         cmd.BeginRendering(new RenderingDesc(
@@ -324,7 +399,9 @@ static class ImpostorApp
         return m;
     }
 
-    /// <summary>One row per elevation, mesh and impostor side by side per azimuth, each seen from 1500 units with the view just fitting the sphere.</summary>
+    /// <summary>
+    /// One row per elevation, mesh and impostor side by side per azimuth, each seen from 1500 units with the view just fitting the sphere.
+    /// </summary>
     static Vector3 Direction(float elevation, float azimuth)
     {
         float e = elevation * MathF.PI / 180, a = azimuth * MathF.PI / 180;
@@ -334,8 +411,11 @@ static class ImpostorApp
     static readonly float[] Elevations = [-8, 0, 12, 25, 40, 60, 85];
     static readonly float[] Azimuths = [20, 75, 160, 250];
 
-    /// <summary>Rows of view directions, pairs of mesh and impostor per direction.</summary>
-    static void Sheet(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, string path, Vector3 sun, Func<int, int, Vector3> direction, int rows = 7, int columns = 4)
+    /// <summary>
+    /// Rows of view directions, pairs of mesh and impostor per direction.
+    /// </summary>
+    static void Sheet(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, string path, Vector3 sun, Func<int, int, Vector3> direction,
+            int rows = 7, int columns = 4)
     {
         const int cell = 224;
         int w = cell * columns * 2, h = cell * rows;
@@ -357,14 +437,20 @@ static class ImpostorApp
                     var right = Vector3.Normalize(Vector3.Cross(forward, worldUp));
                     var cameraUp = Vector3.Cross(right, forward);
                     int y = (rows - 1 - row) * cell;
-                    preview.DrawMeshes(cmd, formats, new PixelViewport(col * 2 * cell, y, cell, cell, 0, 1), view * projection, eye, sun, one, coverage: false);
-                    preview.DrawImpostors(cmd, formats, new PixelViewport((col * 2 + 1) * cell, y, cell, cell, 0, 1), view * projection, eye, cameraUp, sun, one, coverage: false);
+                    preview.DrawMeshes(cmd, formats, new PixelViewport(col * 2 * cell, y, cell, cell, 0, 1), view * projection, eye, sun, one,
+                            coverage: false);
+                    preview.DrawImpostors(cmd, formats, new PixelViewport((col * 2 + 1) * cell, y, cell, cell, 0, 1), view * projection, eye,
+                            cameraUp, sun, one, coverage: false);
                 }
         });
     }
 
-    /// <summary>Random instances (yaw, scale in the record's range) between <paramref name="near"/> and <paramref name="far"/> units, drawn once as meshes and once as impostors.</summary>
-    static void Field(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, FoliageMesh mesh, string stem, Options o, Vector3 sun, float near, float far, int count, float fieldScale = 1)
+    /// <summary>
+    /// Random instances (yaw, scale in the record's range) between <paramref name="near"/> and <paramref name="far"/> units, drawn once as meshes and
+    /// once as impostors.
+    /// </summary>
+    static void Field(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, FoliageMesh mesh, string stem, Options o, Vector3 sun,
+            float near, float far, int count, float fieldScale = 1)
     {
         var random = new Random(1234);
         float fov = 50 * MathF.PI / 180, aspect = o.Width / (float)o.Height;
@@ -386,7 +472,9 @@ static class ImpostorApp
         var forward = Vector3.Normalize(target - eye);
         var cameraUp = Vector3.Cross(Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY)), forward);
         var all = new PixelViewport(0, 0, o.Width, o.Height, 0, 1);
-        Offscreen(frames, o.Width, o.Height, stem + "-mesh.png", (cmd, formats) => preview.DrawMeshes(cmd, formats, all, view * projection, eye, sun, ordered, coverage: false));
-        Offscreen(frames, o.Width, o.Height, stem + "-impostor.png", (cmd, formats) => preview.DrawImpostors(cmd, formats, all, view * projection, eye, cameraUp, sun, ordered, coverage: false));
+        Offscreen(frames, o.Width, o.Height, stem + "-mesh.png",
+                (cmd, formats) => preview.DrawMeshes(cmd, formats, all, view * projection, eye, sun, ordered, coverage: false));
+        Offscreen(frames, o.Width, o.Height, stem + "-impostor.png",
+                (cmd, formats) => preview.DrawImpostors(cmd, formats, all, view * projection, eye, cameraUp, sun, ordered, coverage: false));
     }
 }

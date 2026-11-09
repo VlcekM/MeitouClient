@@ -13,7 +13,9 @@ public static class SaveSurfaceDecals
 {
     const string Centre = "meitou sd", Shape = "meitou sdS", Kind = "meitou sdK", Colour = "meitou sdC";
 
-    /// <summary>The marks of <paramref name="record"/>; one whose type is not a decal type is skipped.</summary>
+    /// <summary>
+    /// The marks of <paramref name="record"/>; one whose type is not a decal type is skipped.
+    /// </summary>
     public static List<SurfaceBloodDecal> Read(FcsRecord record)
     {
         var decals = new List<SurfaceBloodDecal>();
@@ -28,7 +30,9 @@ public static class SaveSurfaceDecals
         return decals;
     }
 
-    /// <summary>Replaces the marks in <paramref name="record"/> with <paramref name="decals"/>.</summary>
+    /// <summary>
+    /// Replaces the marks in <paramref name="record"/> with <paramref name="decals"/>.
+    /// </summary>
     public static void Write(FcsRecord record, IEnumerable<SurfaceBloodDecal> decals)
     {
         foreach (var key in record.Vector3S.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Vector3S.Remove(key);

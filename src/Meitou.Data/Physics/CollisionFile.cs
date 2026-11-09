@@ -4,7 +4,10 @@ using System.Xml.Linq;
 
 namespace Meitou.Data.Physics;
 
-/// <summary>A rigid transform <c>R · p + T</c> with the 3 × 3 rotation stored by rows, as the NxuStream files write it (docs/formats/collision.md, "File format").</summary>
+/// <summary>
+/// A rigid transform <c>R · p + T</c> with the 3 × 3 rotation stored by rows, as the NxuStream files write it (docs/formats/collision.md, "File
+/// format").
+/// </summary>
 public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vector3 Translation)
 {
     public static readonly Pose Identity = new(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, Vector3.Zero);
@@ -12,10 +15,14 @@ public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vec
     public Vector3 Apply(Vector3 p) =>
         new(Vector3.Dot(Row0, p) + Translation.X, Vector3.Dot(Row1, p) + Translation.Y, Vector3.Dot(Row2, p) + Translation.Z);
 
-    /// <summary>Rotation only (a direction).</summary>
+    /// <summary>
+    /// Rotation only (a direction).
+    /// </summary>
     public Vector3 Rotate(Vector3 d) => new(Vector3.Dot(Row0, d), Vector3.Dot(Row1, d), Vector3.Dot(Row2, d));
 
-    /// <summary>The pose that applies <paramref name="inner"/> first, then this one: <c>this(inner(p))</c>.</summary>
+    /// <summary>
+    /// The pose that applies <paramref name="inner"/> first, then this one: <c>this(inner(p))</c>.
+    /// </summary>
     public Pose Compose(Pose inner)
     {
         // Columns of inner's rotation, each rotated by this.
@@ -25,7 +32,9 @@ public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vec
         return new Pose(new Vector3(c0.X, c1.X, c2.X), new Vector3(c0.Y, c1.Y, c2.Y), new Vector3(c0.Z, c1.Z, c2.Z), Apply(inner.Translation));
     }
 
-    /// <summary>Reads the 12 numbers of a <c>globalPose</c> / <c>localPose</c> element: three rotation rows, then the translation.</summary>
+    /// <summary>
+    /// Reads the 12 numbers of a <c>globalPose</c> / <c>localPose</c> element: three rotation rows, then the translation.
+    /// </summary>
     public static Pose Parse(string text)
     {
         Span<float> v = stackalloc float[12];
@@ -35,41 +44,57 @@ public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vec
             if (n == 12) throw new InvalidDataException($"Pose has more than 12 numbers: '{text}'");
             v[n++] = float.Parse(part, CultureInfo.InvariantCulture);
         }
+
         if (n != 12) throw new InvalidDataException($"Pose needs 12 numbers, got {n}: '{text}'");
         return new Pose(new(v[0], v[1], v[2]), new(v[3], v[4], v[5]), new(v[6], v[7], v[8]), new(v[9], v[10], v[11]));
     }
 }
 
-/// <summary>PhysX 2.8 shape types as the game's triangulation knows them (docs/formats/collision.md).</summary>
+/// <summary>
+/// PhysX 2.8 shape types as the game's triangulation knows them (docs/formats/collision.md).
+/// </summary>
 public enum CollisionShapeKind { Plane, Sphere, Box, Capsule, Convex, TriangleMesh }
 
-/// <summary>A decoded cooked mesh: convex hull vertices (no indices) or triangle mesh vertices and indices.</summary>
+/// <summary>
+/// A decoded cooked mesh: convex hull vertices (no indices) or triangle mesh vertices and indices.
+/// </summary>
 public sealed class CookedMesh(Vector3[] vertices, int[] indices)
 {
     public Vector3[] Vertices { get; } = vertices;
-    /// <summary>Three indices per triangle; empty for a convex mesh (its hull is built from the vertices).</summary>
+
+    /// <summary>
+    /// Three indices per triangle; empty for a convex mesh (its hull is built from the vertices).
+    /// </summary>
     public int[] Indices { get; } = indices;
 }
 
-/// <summary>One shape of an NxuStream file. <see cref="Pose"/> is <c>globalPose × localPose</c>, in the exporter's space (Z up).</summary>
+/// <summary>
+/// One shape of an NxuStream file. <see cref="Pose"/> is <c>globalPose × localPose</c>, in the exporter's space (Z up).
+/// </summary>
 public sealed class CollisionShape
 {
     public required CollisionShapeKind Kind { get; init; }
     public required Pose Pose { get; init; }
     public Vector3 HalfExtents { get; init; }
     public float Radius { get; init; }
-    /// <summary>Capsule: distance between the two sphere centres, along the local Y axis.</summary>
+
+    /// <summary>
+    /// Capsule: distance between the two sphere centres, along the local Y axis.
+    /// </summary>
     public float Height { get; init; }
     public CookedMesh? Mesh { get; init; }
     public string Name { get; init; } = "";
-    /// <summary>The file's own PhysX group of the shape (the game assigns its own per placed object).</summary>
+
+    /// <summary>
+    /// The file's own PhysX group of the shape (the game assigns its own per placed object).
+    /// </summary>
     public int Group { get; init; }
     public bool ActorHasBody { get; init; }
 }
 
 /// <summary>
-/// A PhysX 2.8 NxuStream2 XML collision file (<c>xml collision</c> of BUILDING_PART, <c>collision</c> of FOLIAGE_MESH): the shapes of
-/// all its actors with poses, and the cooked convex / triangle meshes decoded (docs/formats/collision.md).
+/// A PhysX 2.8 NxuStream2 XML collision file (<c>xml collision</c> of BUILDING_PART, <c>collision</c> of FOLIAGE_MESH): the shapes of all its actors
+/// with poses, and the cooked convex / triangle meshes decoded (docs/formats/collision.md).
 /// </summary>
 public sealed partial class CollisionFile
 {
@@ -89,19 +114,38 @@ public sealed partial class CollisionFile
         var text = BareAmpersand().Replace(new StreamReader(stream).ReadToEnd(), "&amp;");
         var doc = XDocument.Parse(text);
         var root = doc.Root ?? throw new InvalidDataException("Empty XML");
-        if (root.Name.LocalName != "NXUSTREAM2") throw new InvalidDataException($"Not an NxuStream2 file: <{root.Name.LocalName}>");
+        if (root.Name.LocalName != "NXUSTREAM2")
+            throw new InvalidDataException($"Not an NxuStream2 file: <{root.Name.LocalName}>");
+
         var collection = root.Element("NxuPhysicsCollection") ?? throw new InvalidDataException("No NxuPhysicsCollection");
         var file = new CollisionFile();
-
         var convex = new Dictionary<string, CookedMesh>(StringComparer.Ordinal);
         var triangle = new Dictionary<string, CookedMesh>(StringComparer.Ordinal);
-        foreach (var e in collection.Elements("NxConvexMeshDesc"))
-            convex[(string?)e.Attribute("id") ?? ""] = Mesh(e, hull: true);
-        foreach (var e in collection.Elements("NxTriangleMeshDesc"))
-            triangle[(string?)e.Attribute("id") ?? ""] = Mesh(e, hull: false);
+        ReadMeshes(collection, convex, triangle);
         file.ConvexMeshCount = convex.Count;
         file.TriangleMeshCount = triangle.Count;
+        AddActors(file, collection, convex, triangle);
+        return file;
+    }
 
+    /// <summary>
+    /// The convex and triangle mesh descriptions of the collection, by id.
+    /// </summary>
+    static void ReadMeshes(XElement collection, Dictionary<string, CookedMesh> convex, Dictionary<string, CookedMesh> triangle)
+    {
+        foreach (var e in collection.Elements("NxConvexMeshDesc"))
+            convex[(string?)e.Attribute("id") ?? ""] = Mesh(e, hull: true);
+
+        foreach (var e in collection.Elements("NxTriangleMeshDesc"))
+            triangle[(string?)e.Attribute("id") ?? ""] = Mesh(e, hull: false);
+    }
+
+    /// <summary>
+    /// Adds the shapes of every actor of every scene, each with its pose.
+    /// </summary>
+    static void AddActors(
+        CollisionFile file, XElement collection, Dictionary<string, CookedMesh> convex, Dictionary<string, CookedMesh> triangle)
+    {
         foreach (var scene in collection.Elements("NxSceneDesc"))
             foreach (var actor in scene.Elements("NxActorDesc"))
             {
@@ -120,6 +164,7 @@ public sealed partial class CollisionFile
                         _ => (CollisionShapeKind?)null,
                     };
                     if (kind is null) continue;
+
                     // A few hand-made files (tents) carry bare shapes with no NxShapeDesc: identity local pose, group 0.
                     var desc = el.Element("NxShapeDesc") ?? new XElement("NxShapeDesc");
                     var local = Pose.Parse(desc.Element("localPose")?.Value ?? "1 0 0 0 1 0 0 0 1 0 0 0");
@@ -130,6 +175,7 @@ public sealed partial class CollisionFile
                         var table = kind == CollisionShapeKind.Convex ? convex : triangle;
                         mesh = table.GetValueOrDefault(id) ?? throw new InvalidDataException($"Shape refers to unknown mesh '{id}'");
                     }
+
                     file.Shapes.Add(new CollisionShape
                     {
                         Kind = kind.Value,
@@ -144,7 +190,6 @@ public sealed partial class CollisionFile
                     });
                 }
             }
-        return file;
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"&(?!(amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")]
@@ -156,7 +201,11 @@ public sealed partial class CollisionFile
     {
         var parts = (text ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3) throw new InvalidDataException($"Vector needs 3 numbers: '{text}'");
-        return new Vector3(float.Parse(parts[0], CultureInfo.InvariantCulture), float.Parse(parts[1], CultureInfo.InvariantCulture), float.Parse(parts[2], CultureInfo.InvariantCulture));
+
+        return new Vector3(
+            float.Parse(parts[0], CultureInfo.InvariantCulture),
+            float.Parse(parts[1], CultureInfo.InvariantCulture),
+            float.Parse(parts[2], CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -165,48 +214,69 @@ public sealed partial class CollisionFile
     /// </summary>
     static CookedMesh Mesh(XElement desc, bool hull)
     {
-        if (string.IsNullOrWhiteSpace(desc.Element("cookedData")?.Value) && desc.Element("NxSimpleTriangleMesh") is { } plain) return Plain(plain, hull);
+        if (string.IsNullOrWhiteSpace(desc.Element("cookedData")?.Value) && desc.Element("NxSimpleTriangleMesh") is { } plain)
+            return Plain(plain, hull);
+
         return hull ? CookedMeshReader.ReadConvex(Cooked(desc)) : CookedMeshReader.ReadTriangleMesh(Cooked(desc));
     }
 
     /// <summary>
-    /// A mesh given as plain <c>points</c> (x y z each) and <c>triangles</c> (three indices each) in an <c>NxSimpleTriangleMesh</c> instead of cooked data, as the files of some mods
-    /// are (Building Collision Fix: the Longhouse); the game cooks it itself when it loads. A convex hull keeps the points only.
+    /// A mesh given as plain <c>points</c> (x y z each) and <c>triangles</c> (three indices each) in an <c>NxSimpleTriangleMesh</c> instead of cooked
+    /// data, as the files of some mods are (Building Collision Fix: the Longhouse); the game cooks it itself when it loads. A convex hull keeps the
+    /// points only.
     /// </summary>
     static CookedMesh Plain(XElement simple, bool hull)
     {
         static string[] Words(string? text) => (text ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
         var numbers = Words(simple.Element("points")?.Value);
-        if (numbers.Length % 3 != 0) throw new InvalidDataException($"points: {numbers.Length} numbers, not a multiple of 3");
+        if (numbers.Length % 3 != 0)
+            throw new InvalidDataException($"points: {numbers.Length} numbers, not a multiple of 3");
         if (numbers.Length == 0) throw new InvalidDataException("Mesh has neither cooked data nor points");
+
         // The cooked readers' limits.
-        if (numbers.Length / 3 > (hull ? 1 << 16 : 1 << 20)) throw new InvalidDataException("Implausible mesh vertex count");
+        if (numbers.Length / 3 > (hull ? 1 << 16 : 1 << 20))
+            throw new InvalidDataException("Implausible mesh vertex count");
+
         var vertices = new Vector3[numbers.Length / 3];
         for (int i = 0; i < vertices.Length; i++)
         {
-            var v = vertices[i] = new(float.Parse(numbers[3 * i], CultureInfo.InvariantCulture), float.Parse(numbers[3 * i + 1], CultureInfo.InvariantCulture), float.Parse(numbers[3 * i + 2], CultureInfo.InvariantCulture));
-            if (!float.IsFinite(v.X) || !float.IsFinite(v.Y) || !float.IsFinite(v.Z)) throw new InvalidDataException("Non-finite mesh vertex");
+            var v = vertices[i] = new(
+                float.Parse(numbers[3 * i], CultureInfo.InvariantCulture),
+                float.Parse(numbers[3 * i + 1], CultureInfo.InvariantCulture),
+                float.Parse(numbers[3 * i + 2], CultureInfo.InvariantCulture));
+            if (!float.IsFinite(v.X) || !float.IsFinite(v.Y) || !float.IsFinite(v.Z))
+                throw new InvalidDataException("Non-finite mesh vertex");
         }
+
         if (hull) return new CookedMesh(vertices, []);
+
         var corners = Words(simple.Element("triangles")?.Value);
-        if (corners.Length % 3 != 0) throw new InvalidDataException($"triangles: {corners.Length} indices, not a multiple of 3");
+        if (corners.Length % 3 != 0)
+            throw new InvalidDataException($"triangles: {corners.Length} indices, not a multiple of 3");
         if (corners.Length / 3 > 1 << 20) throw new InvalidDataException("Implausible mesh triangle count");
+
         var indices = new int[corners.Length];
         for (int i = 0; i < indices.Length; i++)
         {
             indices[i] = int.Parse(corners[i], CultureInfo.InvariantCulture);
-            if ((uint)indices[i] >= (uint)vertices.Length) throw new InvalidDataException($"triangle index {indices[i]} of {vertices.Length} points");
+            if ((uint)indices[i] >= (uint)vertices.Length)
+                throw new InvalidDataException($"triangle index {indices[i]} of {vertices.Length} points");
         }
+
         return new CookedMesh(vertices, indices);
     }
 
-    /// <summary>The <c>cookedData</c> hex blob of a mesh description (whitespace between the lines ignored), checked against <c>cookedDataSize</c>.</summary>
+    /// <summary>
+    /// The <c>cookedData</c> hex blob of a mesh description (whitespace between the lines ignored), checked against <c>cookedDataSize</c>.
+    /// </summary>
     static byte[] Cooked(XElement mesh)
     {
         var hex = string.Concat((mesh.Element("cookedData")?.Value ?? "").Where(c => !char.IsWhiteSpace(c)));
         var bytes = Convert.FromHexString(hex);
         if (int.TryParse(mesh.Element("cookedDataSize")?.Value, CultureInfo.InvariantCulture, out var size) && size != bytes.Length)
             throw new InvalidDataException($"cookedDataSize {size} but {bytes.Length} bytes");
+
         return bytes;
     }
 }

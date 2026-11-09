@@ -6,14 +6,16 @@ using static Meitou.Game.Rendering.Upscalers.SlTypes;
 namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
-/// NVIDIA DLSS frame generation (DLSS-G) through <see cref="Streamline"/>: Streamline owns the real swapchain (<see cref="Streamline.SwapchainHooks"/>) and, at
-/// each present, shows one frame interpolated from the last two before the rendered one. Per frame, on <see cref="Streamline.FrameGenerationViewport"/>: the
-/// camera constants, depth and motion (<see cref="Prepare"/>), the picture without the interface and the interface itself (<see cref="Finish"/>), all tagged
-/// valid until the present, and the mode (on, or off under the loading screen and for screenshots).
+/// NVIDIA DLSS frame generation (DLSS-G) through <see cref="Streamline"/>: Streamline owns the real swapchain (<see
+/// cref="Streamline.SwapchainHooks"/>) and, at each present, shows one frame interpolated from the last two before the rendered one. Per frame, on
+/// <see cref="Streamline.FrameGenerationViewport"/>: the camera constants, depth and motion (<see cref="Prepare"/>), the picture without the
+/// interface and the interface itself (<see cref="Finish"/>), all tagged valid until the present, and the mode (on, or off under the loading screen
+/// and for screenshots).
 /// <para>
-/// Conventions (docs/render-post.md "Frame generation"): the swapchain's picture is top-down, so everything DLSS-G reads is copied flipped into targets of its
-/// own: depth and motion at the render size (constants without the y flip, motion scaled −1, +1), the world at the display size (the backbuffer before the
-/// interface) and the interface layer (premultiplied RGBA8, which is what DLSS-G's UI colour and alpha buffer asks for). The window shows the finished picture.
+/// Conventions (docs/render-post.md "Frame generation"): the swapchain's picture is top-down, so everything DLSS-G reads is copied flipped into
+/// targets of its own: depth and motion at the render size (constants without the y flip, motion scaled −1, +1), the world at the display size (the
+/// backbuffer before the interface) and the interface layer (premultiplied RGBA8, which is what DLSS-G's UI colour and alpha buffer asks for). The
+/// window shows the finished picture.
 /// </para>
 /// </summary>
 public sealed unsafe class DlssFrameGeneration : IFrameGenerator
@@ -33,9 +35,13 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     public bool Wanted { get; private set; }
     public bool Prepared { get; private set; }
     public bool Enabled { get; private set; }
-    /// <summary>The window shows the finished picture; DLSS-G is told which part is interface.</summary>
+    /// <summary>
+    /// The window shows the finished picture; DLSS-G is told which part is interface.
+    /// </summary>
     public bool PresentsWorldAlone => false;
-    /// <summary>Frames Streamline presented for the last rendered one (1: none generated, 2: one), at the last state read about once a second; 0 before it.</summary>
+    /// <summary>
+    /// Frames Streamline presented for the last rendered one (1: none generated, 2: one), at the last state read about once a second; 0 before it.
+    /// </summary>
     public uint PresentedPerRendered { get; private set; }
 
     DlssFrameGeneration(GpuContext ctx, Streamline sl)
@@ -46,10 +52,17 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         *_viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.FrameGenerationViewport };
     }
 
-    /// <summary>The generator on <paramref name="sl"/>, or null with the reason (DLSS frame generation not supported or not loaded).</summary>
+    /// <summary>
+    /// The generator on <paramref name="sl"/>, or null with the reason (DLSS frame generation not supported or not loaded).
+    /// </summary>
     public static DlssFrameGeneration? TryCreate(GpuContext ctx, Streamline? sl, out string? reason)
     {
-        if (sl is not { FrameGenerationSupported: true }) { reason = "DLSS frame generation is not supported here (see the frame generation lines above)"; return null; }
+        if (sl is not { FrameGenerationSupported: true })
+        {
+            reason = "DLSS frame generation is not supported here (see the frame generation lines above)";
+            return null;
+        }
+
         reason = null;
         return new DlssFrameGeneration(ctx, sl);
     }
@@ -61,7 +74,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         Wanted = wanted && !_failed;
     }
 
-    /// <summary>Copies depth and motion flipped, sets this frame's constants (top-down) and tags them, valid until the present.</summary>
+    /// <summary>
+    /// Copies depth and motion flipped, sets this frame's constants (top-down) and tags them, valid until the present.
+    /// </summary>
     public bool Prepare(FrameGenInputs i)
     {
         if (!Wanted) return false;
@@ -77,8 +92,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         var list = (CommandList)_ctx.BeginNative("dlss-g depth and motion");
         try
         {
-            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(i.Depth), _ctx.Device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
-            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(i.Motion), _ctx.Device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
+            var vk = _ctx.Device.Vk;
+            FrameGeneration.Flip(vk, list.Handle, _ctx.Device.NativeImage(i.Depth), _ctx.Device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
+            FrameGeneration.Flip(vk, list.Handle, _ctx.Device.NativeImage(i.Motion), _ctx.Device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
             Barrier(list);
             rc = TagPair(token, list.Handle.Handle, depth, BufferDepth, motion, BufferMotionVectors);
         }
@@ -91,14 +107,17 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return true;
     }
 
-    /// <summary>Copies the world and the interface flipped and tags them, then sets the mode for this frame's present.</summary>
+    /// <summary>
+    /// Copies the world and the interface flipped and tags them, then sets the mode for this frame's present.
+    /// </summary>
     public bool Finish(GpuTexture world, GpuTexture? ui)
     {
         Enabled = Wanted && Prepared && ui is not null;
         if (Wanted && !Prepared && !_loggedUnprepared)
         {
             _loggedUnprepared = true;
-            Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds");
+            Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): "
+                + "no frame is generated while that holds");
         }
         if (Enabled && !TagPicture(world, ui!)) Enabled = false;
         SetMode(Enabled);
@@ -121,8 +140,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         int rc;
         try
         {
-            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(world), _ctx.Device.NativeImage(picture), _displayWidth, _displayHeight);
-            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(ui), _ctx.Device.NativeImage(overlay), _displayWidth, _displayHeight);
+            var vk = _ctx.Device.Vk;
+            FrameGeneration.Flip(vk, list.Handle, _ctx.Device.NativeImage(world), _ctx.Device.NativeImage(picture), _displayWidth, _displayHeight);
+            FrameGeneration.Flip(vk, list.Handle, _ctx.Device.NativeImage(ui), _ctx.Device.NativeImage(overlay), _displayWidth, _displayHeight);
             Barrier(list);
             rc = TagPair(token, list.Handle.Handle, picture, BufferHudlessColor, overlay, BufferUiColorAndAlpha);
         }
@@ -133,7 +153,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return rc == 0 || Fail($"slSetTagForFrame (world, interface) failed ({rc})");
     }
 
-    /// <summary>The copies done before anything reads them (Streamline's work is recorded later in the frame or at the present).</summary>
+    /// <summary>
+    /// The copies done before anything reads them (Streamline's work is recorded later in the frame or at the present).
+    /// </summary>
     void Barrier(CommandList list)
     {
         var b = new Silk.NET.Vulkan.MemoryBarrier2
@@ -158,7 +180,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return _sl.SetTagForFrame(token, _viewport, tags, 2, cb);
     }
 
-    /// <summary>Turns interpolation on or off for the next present (resources kept while off, so turning it back on does not stutter).</summary>
+    /// <summary>
+    /// Turns interpolation on or off for the next present (resources kept while off, so turning it back on does not stutter).
+    /// </summary>
     void SetMode(bool on)
     {
         if (_modeSet && _modeOn == on) return;
@@ -173,11 +197,18 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
             EnableUserInterfaceRecomposition = SlTrue,
         };
         int rc = _sl.DlssgSetOptions(_viewport, &options);
-        if (rc != 0) { Fail($"slDLSSGSetOptions failed ({rc})"); return; }
+        if (rc != 0)
+        {
+            Fail($"slDLSSGSetOptions failed ({rc})");
+            return;
+        }
+
         (_modeOn, _modeSet) = (on, true);
     }
 
-    /// <summary>About once a second: DLSS-G's state, its failures logged when they change (sl_dlss_g.h DLSSGStatus).</summary>
+    /// <summary>
+    /// About once a second: DLSS-G's state, its failures logged when they change (sl_dlss_g.h DLSSGStatus).
+    /// </summary>
     void ReadState()
     {
         long now = Stopwatch.GetTimestamp();
@@ -196,7 +227,11 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     static string StatusText(uint status)
     {
         if (status == 0) return "ok";
-        string[] names = ["resolution too low", "Reflex not detected", "HDR format not supported", "common constants invalid", "GetCurrentBackBufferIndex not called"];
+        string[] names =
+        [
+            "resolution too low", "Reflex not detected", "HDR format not supported", "common constants invalid",
+            "GetCurrentBackBufferIndex not called",
+        ];
         return string.Join(", ", names.Where((_, bit) => (status & (1u << bit)) != 0));
     }
 

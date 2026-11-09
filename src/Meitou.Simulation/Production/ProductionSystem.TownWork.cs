@@ -12,18 +12,26 @@ namespace Meitou.Simulation.Production;
 // decision step keeps AiMind.WorkOperate (Task_OperateMachine, row 87) or AiMind.CollectFrom (Task_EmptyMachine, row 92) while they are at the building, and this system applies them.
 public sealed partial class ProductionSystem
 {
-    /// <summary>The prefix of a town building's machine site id (followed by the building's run-time key).</summary>
+    /// <summary>
+    /// The prefix of a town building's machine site id (followed by the building's run-time key).
+    /// </summary>
     public const string TownWorkPrefix = "townwork:";
 
     readonly Dictionary<string, BuildSite> _townWorkSites = new(StringComparer.Ordinal);
 
-    /// <summary>The site id of a town building's machine.</summary>
+    /// <summary>
+    /// The site id of a town building's machine.
+    /// </summary>
     public static string TownWorkId(TownBuilding building) => TownWorkPrefix + building.Key;
 
-    /// <summary>Whether a site id names a town building's machine (<see cref="TownWorkId"/>).</summary>
+    /// <summary>
+    /// Whether a site id names a town building's machine (<see cref="TownWorkId"/>).
+    /// </summary>
     public static bool IsTownWork(string id) => id.StartsWith(TownWorkPrefix, StringComparison.Ordinal);
 
-    /// <summary>The virtual site of a town building made by <see cref="TownWork"/>, else null.</summary>
+    /// <summary>
+    /// The virtual site of a town building made by <see cref="TownWork"/>, else null.
+    /// </summary>
     BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
 
     /// <summary>
@@ -55,7 +63,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     public static bool CarriesOutputOf(CharacterCold cold, Machine m) => m.Output is { } o && Carries(cold, o.Recipe.Item);
 
-    /// <summary>State 67 <c>haveSomeResourcesFor</c> (<c>FUN_1405a45f0</c>, <b>Observed</b>): the character carries an item one of the machine's inputs takes.</summary>
+    /// <summary>
+    /// State 67 <c>haveSomeResourcesFor</c> (<c>FUN_1405a45f0</c>, <b>Observed</b>): the character carries an item one of the machine's inputs takes.
+    /// </summary>
     public static bool CarriesInputOf(CharacterCold cold, Machine m) => m.Inputs.Any(input => input.Rate > 0 && Carries(cold, input.Item));
 
     static bool Carries(CharacterCold cold, string item) => cold.Inventory is { } inv && (inv.All().Any(i => i.Record == item) || inv.Backpack?.Contents?.All().Any(i => i.Record == item) == true);
@@ -105,7 +115,9 @@ public sealed partial class ProductionSystem
         }
         if (moved) world.Machines.Touch();
     }
-    /// <summary>The machine a town building has made, null before a worker came.</summary>
+    /// <summary>
+    /// The machine a town building has made, null before a worker came.
+    /// </summary>
     public static Machine? TownWorkOf(World world, TownBuilding building) => world.Machines.Find(TownWorkId(building));
 
     /// <summary>
@@ -133,7 +145,10 @@ public sealed partial class ProductionSystem
     static bool AtTownWork(in CharacterHot n, TownBuilding building, float reach) =>
         Ai.AiSystem.AtWork(in n, building.Position, reach) && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
 
-    /// <summary>One worker's frame at a town producer: <see cref="ProduceStep"/> at the worker's skill, and the operating XP (the same lines as a player's operator).</summary>
+    /// <summary>
+    /// One worker's frame at a town producer: <see cref="ProduceStep"/> at the worker's skill, and the operating XP (the same lines as a player's
+    /// operator).
+    /// </summary>
     void TownOperate(World world, int slot, CharacterCold cold, Machine m, float dt)
     {
         if (!m.Data.IsProducer || m.Data.IsResearch || m.Data.IsCrafting || m.Farm is not null || m.Output is null) return;

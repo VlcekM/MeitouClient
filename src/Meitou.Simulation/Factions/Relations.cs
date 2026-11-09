@@ -4,7 +4,8 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Factions;
 
 /// <summary>
-/// Relation changes with the game's messages (docs/game/factions-squads-towns.md sections 3.3 to 3.5). Serial phases only: the table is shared world state.
+/// Relation changes with the game's messages (docs/game/factions-squads-towns.md sections 3.3 to 3.5). Serial phases only: the table is shared world
+/// state.
 /// </summary>
 public static class PlayerRelations
 {
@@ -21,8 +22,9 @@ public static class PlayerRelations
     }
 
     /// <summary>
-    /// Slot 5 of <paramref name="a"/>'s table about <paramref name="b"/> (<see cref="FactionRelations.Event"/>); when <paramref name="b"/> is the player's faction the threshold message of
-    /// the change is posted, as the game's slot does (<c>FUN_1406b2d20</c> tests the other faction's player flag).
+    /// Slot 5 of <paramref name="a"/>'s table about <paramref name="b"/> (<see cref="FactionRelations.Event"/>); when <paramref name="b"/> is the
+    /// player's faction the threshold message of the change is posted, as the game's slot does (<c>FUN_1406b2d20</c> tests the other faction's player
+    /// flag).
     /// </summary>
     public static void Event(World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x)
     {
@@ -30,7 +32,9 @@ public static class PlayerRelations
         if (before != after) Posted(world, relations, a, b, before, after);
     }
 
-    /// <summary>Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side.</summary>
+    /// <summary>
+    /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side.
+    /// </summary>
     public static void Add(World world, FactionRelations relations, int a, int b, float delta)
     {
         var (before, after) = relations.Add(a, b, delta);
@@ -38,8 +42,9 @@ public static class PlayerRelations
     }
 
     /// <summary>
-    /// Faction <paramref name="a"/> declares war on <paramref name="b"/> (<see cref="FactionRelations.DeclareWar"/>, the dialogue's DECLARE_WAR): "War breaks out between {1} and {2}" when the
-    /// war flag was clear, and the threshold message when <paramref name="b"/> is the player's faction. Nothing when <paramref name="a"/> is already hostile.
+    /// Faction <paramref name="a"/> declares war on <paramref name="b"/> (<see cref="FactionRelations.DeclareWar"/>, the dialogue's DECLARE_WAR):
+    /// "War breaks out between {1} and {2}" when the war flag was clear, and the threshold message when <paramref name="b"/> is the player's faction.
+    /// Nothing when <paramref name="a"/> is already hostile.
     /// </summary>
     public static void DeclareWar(World world, FactionRelations relations, int a, int b)
     {
@@ -48,7 +53,10 @@ public static class PlayerRelations
         if (before != after) Posted(world, relations, a, b, before, after);
     }
 
-    /// <summary>Faction <paramref name="a"/> ends its war with <paramref name="b"/> (<see cref="FactionRelations.EndWar"/>, the dialogue's END_WAR), with the threshold message as above.</summary>
+    /// <summary>
+    /// Faction <paramref name="a"/> ends its war with <paramref name="b"/> (<see cref="FactionRelations.EndWar"/>, the dialogue's END_WAR), with the
+    /// threshold message as above.
+    /// </summary>
     public static void EndWar(World world, FactionRelations relations, int a, int b)
     {
         var (before, after) = relations.EndWar(a, b);
@@ -78,23 +86,26 @@ public static class PlayerRelations
 }
 
 /// <summary>
-/// The deeds that move faction relations (docs/game/factions-squads-towns.md section 3.5, <b>Observed</b>): every one is an event of the victim's faction's table about the doer's
-/// faction, of the victim's <see cref="Weight"/>, for any two factions (the player's or not). Shared by the systems that see the deeds (combat, first aid, the cagings); serial phases only.
+/// The deeds that move faction relations (docs/game/factions-squads-towns.md section 3.5, <b>Observed</b>): every one is an event of the victim's
+/// faction's table about the doer's faction, of the victim's <see cref="Weight"/>, for any two factions (the player's or not). Shared by the systems
+/// that see the deeds (combat, first aid, the cagings); serial phases only.
 /// </summary>
 public sealed class FactionDeeds(FactionRelations relations, PopulationData? data = null)
 {
     public FactionRelations Relations { get; } = relations;
 
     /// <summary>
-    /// The doer's threat rating (the character status float <c>+0xac</c> the game compares with 0.1 and 0.15; what sets it is <b>Unknown</b>). Engine choice: every doer rates above
-    /// both, so a landed blow is a <see cref="RelationEventKind.Hit"/> and a downing blow a <see cref="RelationEventKind.Knockout"/>.
+    /// The doer's threat rating (the character status float <c>+0xac</c> the game compares with 0.1 and 0.15; what sets it is <b>Unknown</b>). Engine
+    /// choice: every doer rates above both, so a landed blow is a <see cref="RelationEventKind.Hit"/> and a downing blow a
+    /// <see cref="RelationEventKind.Knockout"/>.
     /// </summary>
     public const float DoerRating = 1;
 
     /// <summary>
-    /// The amount of a deed against <paramref name="victim"/> (<c>FUN_140796020</c>, <b>Observed</b>): its CHARACTER <c>faction importance</c> times 1 inside its own squad's town, 0.6 inside
-    /// a town whose faction is allied with (or is) the victim's, else 0.025 (outside every town too). The town is the one the victim stands in (the status object's <c>+0x88</c>, read here as
-    /// <see cref="PopulationData.TownAt"/>); its own town is its squad's (the game's ownership object's <c>+0x30</c>, <b>Unknown</b> beyond that).
+    /// The amount of a deed against <paramref name="victim"/> (<c>FUN_140796020</c>, <b>Observed</b>): its CHARACTER <c>faction importance</c> times
+    /// 1 inside its own squad's town, 0.6 inside a town whose faction is allied with (or is) the victim's, else 0.025 (outside every town too). The
+    /// town is the one the victim stands in (the status object's <c>+0x88</c>, read here as <see cref="PopulationData.TownAt"/>); its own town is its
+    /// squad's (the game's ownership object's <c>+0x30</c>, <b>Unknown</b> beyond that).
     /// </summary>
     public float Weight(World world, int victim)
     {
@@ -117,11 +128,13 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     }
 
     /// <summary>
-    /// A blow that landed on <paramref name="victim"/> (the melee hit <c>FUN_1404394f0</c> and the bolt hit <c>FUN_140439c90</c>, through <c>FUN_140999f00</c> / <c>FUN_140999d50</c>):
-    /// in this order: <see cref="RelationEventKind.Killed"/> when the blow killed (the death function runs inside the damage, <c>FUN_1407a6200</c>, crediting the killer);
-    /// <see cref="RelationEventKind.Hit"/> when the striker rates above 0.1 (<see cref="DoerRating"/>); when the victim is now down, <see cref="RelationEventKind.Knockout"/>
-    /// (<see cref="RelationEventKind.KnockoutMinor"/> for a striker rated 0.15 or less, 0.1 or less for a bolt, and for a bolt not aimed at the victim) and, dead,
-    /// <see cref="RelationEventKind.KillingBlow"/>. A stray bolt never counts as a hit. The test is the victim's state after the blow, so a blow on one already down counts again.
+    /// A blow that landed on <paramref name="victim"/> (the melee hit <c>FUN_1404394f0</c> and the bolt hit <c>FUN_140439c90</c>, through
+    /// <c>FUN_140999f00</c> / <c>FUN_140999d50</c>): in this order: <see cref="RelationEventKind.Killed"/> when the blow killed (the death function
+    /// runs inside the damage, <c>FUN_1407a6200</c>, crediting the killer); <see cref="RelationEventKind.Hit"/> when the striker rates above 0.1
+    /// (<see cref="DoerRating"/>); when the victim is now down, <see cref="RelationEventKind.Knockout"/>
+    /// (<see cref="RelationEventKind.KnockoutMinor"/> for a striker rated 0.15 or less, 0.1 or less for a bolt, and for a bolt not aimed at the
+    /// victim) and, dead, <see cref="RelationEventKind.KillingBlow"/>. A stray bolt never counts as a hit. The test is the victim's state after the
+    /// blow, so a blow on one already down counts again.
     /// </summary>
     public void Blow(World world, int striker, int victim, bool down, bool dead, bool bolt = false, bool aimed = true)
     {
@@ -137,22 +150,26 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     }
 
     /// <summary>
-    /// <paramref name="captor"/> put <paramref name="captive"/> in a cage (<c>Task_PutInSomething</c> made for the cage, <c>FUN_140358670</c>, whose kind is 12; the bed put-in's 9 has no
-    /// row): <see cref="RelationEventKind.Caged"/>.
+    /// <paramref name="captor"/> put <paramref name="captive"/> in a cage (<c>Task_PutInSomething</c> made for the cage, <c>FUN_140358670</c>, whose
+    /// kind is 12; the bed put-in's 9 has no row): <see cref="RelationEventKind.Caged"/>.
     /// </summary>
     public void Caged(World world, int captor, int captive)
     {
-        // The same task makes the captive's squad remember the captor (long-term tag 5 MY_CAPTOR, FUN_140673a20 in FUN_140358670, Observed): the dialogue system's memory.
+        // The same task makes the captive's squad remember the captor (long-term tag 5 MY_CAPTOR, FUN_140673a20 in FUN_140358670, Observed): the
+        // dialogue system's memory.
         CagedHook?.Invoke(world, captor, captive);
         Apply(world, captor, captive, RelationEventKind.Caged, Weight(world, captive));
     }
 
-    /// <summary>The squads' memories the deeds write (the dialogue system's; null: none are written).</summary>
+    /// <summary>
+    /// The squads' memories the deeds write (the dialogue system's; null: none are written).
+    /// </summary>
     public Dialogue.SquadMemory? Memory { get; set; }
 
     /// <summary>
-    /// The long-term tags of a downing or killing blow (<c>FUN_140673a20</c>, docs/game/factions-squads-towns.md 3.5, <b>Observed</b>): a death makes the victim's squad tag the striker
-    /// 9 KILLED_MY_FRIEND; when the victim's whole squad is now down (<c>FUN_140793160</c>), its squad tags the striker 7 DEFEATED_MY_SQUAD and the striker's squad tags the victim 8.
+    /// The long-term tags of a downing or killing blow (<c>FUN_140673a20</c>, docs/game/factions-squads-towns.md 3.5, <b>Observed</b>): a death makes
+    /// the victim's squad tag the striker 9 KILLED_MY_FRIEND; when the victim's whole squad is now down (<c>FUN_140793160</c>), its squad tags the
+    /// striker 7 DEFEATED_MY_SQUAD and the striker's squad tags the victim 8.
     /// </summary>
     void Remember(World world, int striker, int victim, bool dead)
     {
@@ -167,11 +184,15 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
         if (s.SquadId >= 0) memory.Remember(world, s.SquadId, table.IdOf(victim), Dialogue.MemoryTag.SquadLostToMe);
     }
 
-    /// <summary>Called with the captor's and the captive's slots at every <see cref="Caged"/>, before the relation event (the dialogue system's squad memory: <c>MY_CAPTOR</c>).</summary>
+    /// <summary>
+    /// Called with the captor's and the captive's slots at every <see cref="Caged"/>, before the relation event (the dialogue system's squad memory:
+    /// <c>MY_CAPTOR</c>).
+    /// </summary>
     public Action<World, int, int>? CagedHook { get; set; }
 
     /// <summary>
-    /// One first-aid update of <paramref name="seconds"/> by <paramref name="medic"/> on an unconscious or leg-collapsed (<see cref="Bodies.MedicalState.Crawling"/>, medical <c>+0x160</c>) <paramref name="patient"/> (<c>FUN_140649a00</c> / <c>FUN_14064d800</c>):
+    /// One first-aid update of <paramref name="seconds"/> by <paramref name="medic"/> on an unconscious or leg-collapsed
+    /// (<see cref="Bodies.MedicalState.Crawling"/>, medical <c>+0x160</c>) <paramref name="patient"/> (<c>FUN_140649a00</c> / <c>FUN_14064d800</c>):
     /// <see cref="RelationEventKind.FirstAid"/>, +0.15 x per second up to +5.
     /// </summary>
     public void FirstAid(World world, int medic, int patient, float seconds)

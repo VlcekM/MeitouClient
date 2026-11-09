@@ -3,13 +3,18 @@ using Meitou.Data.Fcs;
 
 namespace Meitou.Data.World;
 
-/// <summary>One object of a building layout: a BUILDING placed relative to the building the layout is used on.</summary>
+/// <summary>
+/// One object of a building layout: a BUILDING placed relative to the building the layout is used on.
+/// </summary>
 /// <param name="InstanceId">The instance id inside the layout's INSTANCE_COLLECTION.</param>
 /// <param name="Position">Position in the parent building's frame (its position and rotation, no scale).</param>
 /// <param name="Rotation">Rotation relative to the parent building.</param>
 public sealed record LayoutItem(string InstanceId, GameRecord Building, Vector3 Position, Quaternion Rotation)
 {
-    /// <summary>The floor the object stands on: its state's <c>floornum</c> (0 when it has none); in the interior view an object above the viewed floor is hidden.</summary>
+    /// <summary>
+    /// The floor the object stands on: its state's <c>floornum</c> (0 when it has none); in the interior view an object above the viewed floor is
+    /// hidden.
+    /// </summary>
     public int Floor { get; init; }
 
     /// <summary>
@@ -47,7 +52,9 @@ public sealed class BuildingLayouts
         }
     }
 
-    /// <summary>Layout records indexed, exterior and interior.</summary>
+    /// <summary>
+    /// Layout records indexed, exterior and interior.
+    /// </summary>
     public int Count => _byBuilding.Values.Sum(l => l.Count);
 
     /// <summary>
@@ -67,7 +74,10 @@ public sealed class BuildingLayouts
         return null;
     }
 
-    /// <summary>The names of the layouts <see cref="Find"/> can return for <paramref name="building"/> (its own and those of the buildings it shares interiors with).</summary>
+    /// <summary>
+    /// The names of the layouts <see cref="Find"/> can return for <paramref name="building"/> (its own and those of the buildings it shares interiors
+    /// with).
+    /// </summary>
     public IEnumerable<string> Names(GameRecord building, bool exterior)
     {
         foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
@@ -75,13 +85,18 @@ public sealed class BuildingLayouts
                 foreach (var r in list) yield return r.Name;
     }
 
-    /// <summary>The layout's objects whose target is a BUILDING of the game data, in instance id order.</summary>
+    /// <summary>
+    /// The layout's objects whose target is a BUILDING of the game data, in instance id order.
+    /// </summary>
     public IEnumerable<LayoutItem> Items(GameRecord layout) => Placed(layout, FcsRecordType.Building);
 
     Gameplay.BuildingSwaps? _swaps;
     IReadOnlyDictionary<string, string>? _swapOwners;
 
-    /// <summary>Turns on the factions' building swaps for the furniture of <see cref="Items(GameRecord, BuildingPlacement)"/>: <paramref name="owners"/> is the owner faction of each placement by key (<see cref="BuildingSwapPass"/>).</summary>
+    /// <summary>
+    /// Turns on the factions' building swaps for the furniture of <see cref="Items(GameRecord, BuildingPlacement)"/>: <paramref name="owners"/> is
+    /// the owner faction of each placement by key (<see cref="BuildingSwapPass"/>).
+    /// </summary>
     public void UseSwaps(Gameplay.BuildingSwaps swaps, IReadOnlyDictionary<string, string> owners) => (this._swaps, _swapOwners) = (swaps, owners);
 
     /// <summary>
@@ -143,7 +158,9 @@ public sealed class BuildingLayouts
         return (world.Translation, Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(world)));
     }
 
-    /// <summary>A building state's outside flag: <c>flags</c> bit 0, or the older bool <c>is outside</c> without it (docs/formats/zones.md).</summary>
+    /// <summary>
+    /// A building state's outside flag: <c>flags</c> bit 0, or the older bool <c>is outside</c> without it (docs/formats/zones.md).
+    /// </summary>
     public static bool IsOutside(GameRecord state) => state.Ints.TryGetValue("flags", out int flags) ? (flags & 1) != 0 : state.GetBool("is outside");
 
     static Quaternion Normalized(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);

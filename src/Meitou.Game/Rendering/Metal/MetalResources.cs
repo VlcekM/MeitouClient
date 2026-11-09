@@ -12,22 +12,32 @@ internal sealed class MetalTexture
 {
     public required MTLTexture Image { get; init; }
     public required TextureDesc Desc { get; init; }
-    /// <summary>The views cut on this texture (freed with it).</summary>
+    /// <summary>
+    /// The views cut on this texture (freed with it).
+    /// </summary>
     public readonly List<MetalTextureView> Views = [];
-    /// <summary>The same view is bound every frame; cut it once and share the handle (docs/metal-backend.md, views).</summary>
+    /// <summary>
+    /// The same view is bound every frame; cut it once and share the handle (docs/metal-backend.md, views).
+    /// </summary>
     public readonly Dictionary<MetalViewKey, MetalTextureView> ViewCache = [];
 
     public void Release() => Image.Dispose();
 }
 
-/// <summary>A view of a texture's level and layer range (Metal: a texture view; the backend cuts it at <c>IGpuContext.View</c>).</summary>
+/// <summary>
+/// A view of a texture's level and layer range (Metal: a texture view; the backend cuts it at <c>IGpuContext.View</c>).
+/// </summary>
 internal sealed class MetalTextureView
 {
     public required MTLTexture Image { get; init; }
     public required MetalTexture Of { get; init; }
-    /// <summary>Its index in the context's view table (the <c>GpuView</c> handle).</summary>
+    /// <summary>
+    /// Its index in the context's view table (the <c>GpuView</c> handle).
+    /// </summary>
     public required int ViewIndex { get; init; }
-    /// <summary>False for the texture's own image (the full-range, identity view), which the parent releases.</summary>
+    /// <summary>
+    /// False for the texture's own image (the full-range, identity view), which the parent releases.
+    /// </summary>
     public bool OwnsImage { get; init; } = true;
 }
 

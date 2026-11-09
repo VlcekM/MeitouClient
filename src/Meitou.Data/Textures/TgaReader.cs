@@ -41,8 +41,10 @@ public static class TgaReader
         return new RgbaImage(width, height, pixels);
     }
 
-    /// <summary>The <paramref name="count"/> pixels of run-length packets: a header byte whose top bit marks a run of one pixel repeated, or else
-    /// raw pixels, (low 7 bits + 1) of them.</summary>
+    /// <summary>
+    /// The <paramref name="count"/> pixels of run-length packets: a header byte whose top bit marks a run of one pixel repeated, or else raw pixels,
+    /// (low 7 bits + 1) of them.
+    /// </summary>
     static byte[] Unpack(ReadOnlySpan<byte> packed, int count, int bytesPerPixel)
     {
         var pixels = new byte[count * bytesPerPixel];

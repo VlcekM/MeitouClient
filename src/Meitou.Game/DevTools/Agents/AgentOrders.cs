@@ -15,23 +15,32 @@ using Meitou.Simulation.Trading;
 
 namespace Meitou.Game.DevTools.Agents;
 
-/// <summary>The interface's side of the agent control channel (docs/procedures/agent-play-api.md): the world and the selection as JSON, picking by entity id, and the orders an agent plays with.</summary>
+/// <summary>
+/// The interface's side of the agent control channel (docs/procedures/agent-play-api.md): the world and the selection as JSON, picking by entity id,
+/// and the orders an agent plays with.
+/// </summary>
 sealed class AgentOrders(PlayerInterface player)
 {
     // The agent control channel's view of the world (docs/procedures/todo-faster-ingame-agent-tests.md; AgentWorld has the commands): entity lists, screen positions, picking and the selection and order calls.
     // Everything reads the published snapshot and the picking code the pointer uses; orders go out as the same SimCommands the player's input gives. Entity ids: <c>c:&lt;slot&gt;.&lt;generation&gt;</c> for a character,
     // <c>b:&lt;instance key&gt;</c> for a building (a site of the player's or a level-data building).
-    /// <summary>A building seen by the control channel, kept by id so a later command can find it again (level buildings have no lookup by key).</summary>
+    /// <summary>
+    /// A building seen by the control channel, kept by id so a later command can find it again (level buildings have no lookup by key).
+    /// </summary>
     sealed record ControlBuilding(string Id, string Name, string? Record, Vector3 Position, Vector2[]? Hull);
 
     readonly Dictionary<string, ControlBuilding> _controlBuildings = [];
-    /// <summary>The ids of the last select command, until the world applies it (an order given in the same breath still counts them).</summary>
+    /// <summary>
+    /// The ids of the last select command, until the world applies it (an order given in the same breath still counts them).
+    /// </summary>
     IReadOnlyList<CharacterId> _controlSelectIssued = [];
     long _controlSelectTick = -1;
 
     static string CharacterKey(CharacterId id) => $"c:{id.Slot}.{id.Generation}";
 
-    /// <summary>Parses <c>c:3.1</c> (or <c>3.1</c>) into a character id; false for anything else.</summary>
+    /// <summary>
+    /// Parses <c>c:3.1</c> (or <c>3.1</c>) into a character id; false for anything else.
+    /// </summary>
     public static bool TryParseCharacter(string text, out CharacterId id)
     {
         id = CharacterId.None;
@@ -44,7 +53,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     CharacterSnapshot? ControlCharacter(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
 
-    /// <summary>Where an entity id stands (a character as drawn, a building at its position); null when the id names nothing known.</summary>
+    /// <summary>
+    /// Where an entity id stands (a character as drawn, a building at its position); null when the id names nothing known.
+    /// </summary>
     public Vector3? ControlPosition(string id)
     {
         if (id.StartsWith("b:", StringComparison.OrdinalIgnoreCase))
@@ -56,7 +67,9 @@ sealed class AgentOrders(PlayerInterface player)
         return TryParseCharacter(id, out var cid) && ControlCharacter(cid) is { } c ? player.Where(c) : null;
     }
 
-    /// <summary>The first selected character's drawn position (waits and the state use it).</summary>
+    /// <summary>
+    /// The first selected character's drawn position (waits and the state use it).
+    /// </summary>
     public Vector3? ControlLeadPosition() => player.Selected().FirstOrDefault() is { } lead ? player.Where(lead) : null;
 
     bool OnScreen(Vector2 s) => s.X >= 0 && s.X <= player.Width && s.Y >= 0 && s.Y <= player.Height;
@@ -136,7 +149,10 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndObject();
     }
 
-    /// <summary>The entities within <paramref name="radius"/> of <paramref name="near"/> (X, Z), nearest first, as a JSON array; <paramref name="kind"/> is character, building or all.</summary>
+    /// <summary>
+    /// The entities within <paramref name="radius"/> of <paramref name="near"/> (X, Z), nearest first, as a JSON array; <paramref name="kind"/> is
+    /// character, building or all.
+    /// </summary>
     public string ControlWorldJson(Vector3 near, float radius, string kind, int limit)
     {
         var items = new List<(float D, Action<Utf8JsonWriter> Write)>();
@@ -182,7 +198,10 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>What a click at the pixel would hit: a character first (the nearest the pointer would take, one hidden behind a closed building excepted), else a building, else the ground or floor; JSON object.</summary>
+    /// <summary>
+    /// What a click at the pixel would hit: a character first (the nearest the pointer would take, one hidden behind a closed building excepted),
+    /// else a building, else the ground or floor; JSON object.
+    /// </summary>
     public string ControlPickJson(Vector2 pixel)
     {
         using var stream = new MemoryStream();
@@ -225,7 +244,10 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>The on-screen rectangle of an entity (JSON), or <c>offscreen</c>; null when the id names nothing. A character reports whether the nearest thing under its centre is something else.</summary>
+    /// <summary>
+    /// The on-screen rectangle of an entity (JSON), or <c>offscreen</c>; null when the id names nothing. A character reports whether the nearest
+    /// thing under its centre is something else.
+    /// </summary>
     public string? ControlEntityScreenJson(string id)
     {
         Vector3[] corners;
@@ -294,7 +316,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     // ---- selection and orders
 
-    /// <summary>Selects characters like a click or box select would; false (with the reason) when an id names none.</summary>
+    /// <summary>
+    /// Selects characters like a click or box select would; false (with the reason) when an id names none.
+    /// </summary>
     public bool ControlSelect(IReadOnlyList<CharacterId> ids, bool additive, out string message)
     {
         foreach (var id in ids)
@@ -308,7 +332,10 @@ sealed class AgentOrders(PlayerInterface player)
 
     public IReadOnlyList<CharacterId> ControlSquad() => player.ActiveSquadMembers();
 
-    /// <summary>Console Tab completion: character ids (c:slot.gen), the squad first, then the nearest others (at most <paramref name="limit"/> in all), from the live world; empty when none is loaded.</summary>
+    /// <summary>
+    /// Console Tab completion: character ids (c:slot.gen), the squad first, then the nearest others (at most <paramref name="limit"/> in all), from
+    /// the live world; empty when none is loaded.
+    /// </summary>
     public List<string> ControlCharacterKeys(int limit = 40)
     {
         var snap = player.Session.CurrentSnapshot;
@@ -320,7 +347,9 @@ sealed class AgentOrders(PlayerInterface player)
         return [.. keys.Take(limit)];
     }
 
-    /// <summary>Console Tab completion: the item names the first selected (else lead) character carries, once each.</summary>
+    /// <summary>
+    /// Console Tab completion: the item names the first selected (else lead) character carries, once each.
+    /// </summary>
     public List<string> ControlCarriedItemNames()
     {
         var who = ControlOrderers();
@@ -328,7 +357,9 @@ sealed class AgentOrders(PlayerInterface player)
         return ControlCharacter(id)?.ItemGrid is { } grid ? [.. grid.Items.Select(i => i.Name).Where(n => n.Length > 0).Distinct()] : [];
     }
 
-    /// <summary>Console Tab completion for pickup: <c>nearest</c> and the ids of the loose items nearest to the lead (at most 20).</summary>
+    /// <summary>
+    /// Console Tab completion for pickup: <c>nearest</c> and the ids of the loose items nearest to the lead (at most 20).
+    /// </summary>
     public List<string> ControlGroundItemKeys()
     {
         var lead = player.Selected().FirstOrDefault() ?? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer);
@@ -338,14 +369,19 @@ sealed class AgentOrders(PlayerInterface player)
         return keys;
     }
 
-    /// <summary>The characters an order would go to: the world's selection, else what the last select command asked for.</summary>
+    /// <summary>
+    /// The characters an order would go to: the world's selection, else what the last select command asked for.
+    /// </summary>
     internal IReadOnlyList<CharacterId> ControlOrderers()
     {
         if (_controlSelectTick == player.Session.World.Tick) return _controlSelectIssued;   // the world has not run a tick since the select: its selection is still the old one
         return player.Session.World.Player.Selection.ToArray();
     }
 
-    /// <summary>A move order to the selection at (x, z) on the terrain (the same <see cref="MoveOrder"/> a right click gives); false with the reason when nothing is selected.</summary>
+    /// <summary>
+    /// A move order to the selection at (x, z) on the terrain (the same <see cref="MoveOrder"/> a right click gives); false with the reason when
+    /// nothing is selected.
+    /// </summary>
     public bool ControlMove(float x, float z, bool queued, out string message)
     {
         var who = ControlOrderers();
@@ -356,7 +392,10 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>An attack order on a character (the quick right click's <see cref="Meitou.Simulation.Combat.AttackOrder"/>); false with the reason when it cannot be given.</summary>
+    /// <summary>
+    /// An attack order on a character (the quick right click's <see cref="Meitou.Simulation.Combat.AttackOrder"/>); false with the reason when it
+    /// cannot be given.
+    /// </summary>
     public bool ControlAttack(CharacterId target, out string message)
     {
         var who = ControlOrderers();
@@ -370,7 +409,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>Centres the strategy camera on an entity and follows it when it is a character.</summary>
+    /// <summary>
+    /// Centres the strategy camera on an entity and follows it when it is a character.
+    /// </summary>
     public void ControlFocusCharacter(CharacterId id) => player.CentreOn(id);
 
     // The agent-play combat check (<c>combat-status</c>, <c>observe --brief</c> field <c>combat</c>): stance flags, target, what the character is doing, damage dealt and taken over the last 5 s and 30 s, and the blow counters.
@@ -388,7 +429,9 @@ sealed class AgentOrders(PlayerInterface player)
     World? _combatWorld;
     long _combatSampleTick = -1;
 
-    /// <summary>One sample of everyone's hp and the squad's blow counters; called every control poll.</summary>
+    /// <summary>
+    /// One sample of everyone's hp and the squad's blow counters; called every control poll.
+    /// </summary>
     public void ControlCombatSample()
     {
         var world = player.Session.World;
@@ -475,10 +518,14 @@ sealed class AgentOrders(PlayerInterface player)
         return new CombatReport(c, status, stance, target, tName, tDist, hostile, hd, Sum(t?.Dealt, 5), dealt30, Sum(t?.Taken, 5), Sum(t?.Taken, 30), blows, span, warn);
     }
 
-    /// <summary>The one-line summary for <c>observe --brief</c>.</summary>
+    /// <summary>
+    /// The one-line summary for <c>observe --brief</c>.
+    /// </summary>
     string ControlCombatLine(CharacterSnapshot lead) => CombatFor(lead)?.Line ?? "n/a";
 
-    /// <summary><c>combat-status</c>: JSON for one character (null id: the selected, else the first squad member).</summary>
+    /// <summary>
+    /// <c>combat-status</c>: JSON for one character (null id: the selected, else the first squad member).
+    /// </summary>
     public string? ControlCombatStatusJson(CharacterId? id, out string error)
     {
         error = "";
@@ -523,7 +570,9 @@ sealed class AgentOrders(PlayerInterface player)
     static double R1(double v) => Math.Round(v, 1);
     static double R2(double v) => Math.Round(v, 2);
 
-    /// <summary>Gives the order made by <paramref name="make"/> to the selection; false (with the reason) when nobody is selected.</summary>
+    /// <summary>
+    /// Gives the order made by <paramref name="make"/> to the selection; false (with the reason) when nobody is selected.
+    /// </summary>
     bool ControlOrder(Func<IReadOnlyList<CharacterId>, SimCommand> make, string what, out string message)
     {
         var who = ControlOrderers();
@@ -548,7 +597,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     public static IReadOnlyList<string> StanceWords => [.. StanceNames.Select(s => s.Name)];
 
-    /// <summary>The stance toggles on: <c>on</c> true/false sets, null flips (the orders panel's click).</summary>
+    /// <summary>
+    /// The stance toggles on: <c>on</c> true/false sets, null flips (the orders panel's click).
+    /// </summary>
     public bool ControlStance(string name, bool? on, out string message)
     {
         var found = StanceNames.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -556,7 +607,9 @@ sealed class AgentOrders(PlayerInterface player)
         return ControlOrder(w => new OrdersCommand(w, found.Order, on) { Tick = player.Session.World.Tick }, $"stance {found.Name} {(on is null ? "toggle" : on.Value ? "on" : "off")}", out message);
     }
 
-    /// <summary>The ground item to pick up: an id from observe / ground-items, or the nearest to the lead character.</summary>
+    /// <summary>
+    /// The ground item to pick up: an id from observe / ground-items, or the nearest to the lead character.
+    /// </summary>
     public bool ControlPickup(string which, out string message)
     {
         var items = player.Session.CurrentSnapshot.GroundItems;
@@ -585,7 +638,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>Loot a downed or dead character (everything that fits goes to the looter).</summary>
+    /// <summary>
+    /// Loot a downed or dead character (everything that fits goes to the looter).
+    /// </summary>
     public bool ControlLoot(CharacterId target, out string message)
     {
         if (ControlCharacter(target) is not { } t) { message = $"refused: no character {CharacterKey(target)}"; return false; }
@@ -622,7 +677,9 @@ sealed class AgentOrders(PlayerInterface player)
         return null;
     }
 
-    /// <summary>The buildings the player may place now (or all with <paramref name="all"/>), with their material costs, as a JSON object.</summary>
+    /// <summary>
+    /// The buildings the player may place now (or all with <paramref name="all"/>), with their material costs, as a JSON object.
+    /// </summary>
     public string ControlBuildListJson(string text, bool all, int limit)
     {
         if (player.Build.Services is not { } host) return "{\"types\":[],\"total\":0}";
@@ -661,7 +718,9 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>What the selection holds of an item record (null when a selected character's grid is not published yet).</summary>
+    /// <summary>
+    /// What the selection holds of an item record (null when a selected character's grid is not published yet).
+    /// </summary>
     int? ControlHolds(IReadOnlyList<CharacterId> who, string record)
     {
         int sum = 0;
@@ -674,9 +733,10 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     /// <summary>
-    /// Build mode's confirm without the pointer: the ghost is judged by the same <see cref="PlacementCheck"/> the build ghost uses, then <see cref="PlaceBuildings"/> goes out (which also sends the selection to build it).
-    /// Refused with the reason when the type is unknown or locked, the spot fails the placement rules, or the selection does not hold the materials (unless <paramref name="anyway"/>: a base store may supply them).
-    /// <paramref name="json"/> is the structured reply.
+    /// Build mode's confirm without the pointer: the ghost is judged by the same <see cref="PlacementCheck"/> the build ghost uses, then
+    /// <see cref="PlaceBuildings"/> goes out (which also sends the selection to build it). Refused with the reason when the type is unknown or
+    /// locked, the spot fails the placement rules, or the selection does not hold the materials (unless <paramref name="anyway"/>: a base store may
+    /// supply them). <paramref name="json"/> is the structured reply.
     /// </summary>
     public bool ControlBuild(string type, float x, float z, float yawDegrees, bool anyway, out string message, out string json)
     {
@@ -847,7 +907,10 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndArray();
     }
 
-    /// <summary>One squad member for observe: everything the snapshot holds, which is more for a selected character (limbs, inventory, skills) than for the others.</summary>
+    /// <summary>
+    /// One squad member for observe: everything the snapshot holds, which is more for a selected character (limbs, inventory, skills) than for the
+    /// others.
+    /// </summary>
     void WriteSquadMember(Utf8JsonWriter w, CharacterSnapshot c, bool full)
     {
         var at = player.Where(c);
@@ -956,12 +1019,15 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndObject();
     }
 
-    /// <summary>The values of the last <c>observe --brief</c> (raw JSON per field), for <c>--changed</c>.</summary>
+    /// <summary>
+    /// The values of the last <c>observe --brief</c> (raw JSON per field), for <c>--changed</c>.
+    /// </summary>
     Dictionary<string, string>? _lastBrief;
 
     /// <summary>
-    /// The terse state for polling (<c>observe --brief</c>, about 200 bytes): tick, clock, paused, speed, the lead's id, name, position [x,z], state, hp fraction, task, order, the squad as "alive/total",
-    /// the nearest hostile's distance (null: none) and money. With <paramref name="changedOnly"/> only the fields that differ from the last brief call (always <c>tick</c>); the first call gives all.
+    /// The terse state for polling (<c>observe --brief</c>, about 200 bytes): tick, clock, paused, speed, the lead's id, name, position [x,z], state,
+    /// hp fraction, task, order, the squad as "alive/total", the nearest hostile's distance (null: none) and money. With
+    /// <paramref name="changedOnly"/> only the fields that differ from the last brief call (always <c>tick</c>); the first call gives all.
     /// </summary>
     public string ControlBriefJson(bool changedOnly)
     {
@@ -1019,8 +1085,9 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     /// <summary>
-    /// The one JSON for a decision (docs/procedures/agent-play-api.md): time, speed, the squad, what is near (threats, allies, neutrals, animals, traders, bodies), loose items, buildings, containers, machines, research,
-    /// resources (null: no cheap listing exists) and a score object. Lists are cut at a fixed length with the full count beside them.
+    /// The one JSON for a decision (docs/procedures/agent-play-api.md): time, speed, the squad, what is near (threats, allies, neutrals, animals,
+    /// traders, bodies), loose items, buildings, containers, machines, research, resources (null: no cheap listing exists) and a score object. Lists
+    /// are cut at a fixed length with the full count beside them.
     /// </summary>
     public string ControlObserveJson(float radius, bool full)
     {
@@ -1229,7 +1296,10 @@ sealed class AgentOrders(PlayerInterface player)
     // Same rules as the rest of the play API: the game's own commands, to the selection, refused with a reason.
     // ---- work on a site
 
-    /// <summary>A <see cref="Meitou.Simulation.Construction.BuildOrder"/> on a site of yours (build it, or repair it when it is complete and damaged) for the selection.</summary>
+    /// <summary>
+    /// A <see cref="Meitou.Simulation.Construction.BuildOrder"/> on a site of yours (build it, or repair it when it is complete and damaged) for the
+    /// selection.
+    /// </summary>
     public bool ControlWork(string site, out string message)
     {
         string id = site.StartsWith("b:", StringComparison.OrdinalIgnoreCase) ? site[2..] : site;
@@ -1243,7 +1313,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     // ---- prospecting
 
-    /// <summary>ProspectOrder for the first selected character (the HUD's Prospect button); the result is in observe.resources after about a game second.</summary>
+    /// <summary>
+    /// ProspectOrder for the first selected character (the HUD's Prospect button); the result is in observe.resources after about a game second.
+    /// </summary>
     public bool ControlProspect(out string message)
     {
         var who = ControlOrderers();
@@ -1254,7 +1326,10 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>The newest prospecting of this world as JSON (spot, zone, coverages, the iron and copper rocks nearest the spot with their yields); null when none was made.</summary>
+    /// <summary>
+    /// The newest prospecting of this world as JSON (spot, zone, coverages, the iron and copper rocks nearest the spot with their yields); null when
+    /// none was made.
+    /// </summary>
     string? ControlResourcesJson(Vector2 near)
     {
         if (player.Session.World.Prospected is not { } r) return null;
@@ -1295,7 +1370,10 @@ sealed class AgentOrders(PlayerInterface player)
 
     // ---- equip, carry
 
-    /// <summary>The right click on an item of the first selected character (<see cref="QuickMoveItem"/>): the item goes to the slot that takes it, a worn one back to the grid.</summary>
+    /// <summary>
+    /// The right click on an item of the first selected character (<see cref="QuickMoveItem"/>): the item goes to the slot that takes it, a worn one
+    /// back to the grid.
+    /// </summary>
     public bool ControlEquip(string what, out string message)
     {
         var who = ControlOrderers();
@@ -1310,7 +1388,10 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>Takes a worn item off: <paramref name="what"/> is a slot (head, shirt, armour, legs, boots, back, hip, belt) or an item name; the right click of a worn item sends it to the grids (the reply cannot know if they had room: observe.squad[].inventory shows).</summary>
+    /// <summary>
+    /// Takes a worn item off: <paramref name="what"/> is a slot (head, shirt, armour, legs, boots, back, hip, belt) or an item name; the right click
+    /// of a worn item sends it to the grids (the reply cannot know if they had room: observe.squad[].inventory shows).
+    /// </summary>
     public bool ControlUnequip(string what, out string message)
     {
         var who = ControlOrderers();
@@ -1324,7 +1405,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>PickUpOrder: the selection lifts a downed character (carry them, or kidnap a stranger).</summary>
+    /// <summary>
+    /// PickUpOrder: the selection lifts a downed character (carry them, or kidnap a stranger).
+    /// </summary>
     public bool ControlCarry(CharacterId target, out string message)
     {
         if (ControlCharacter(target) is not { } t) { message = $"refused: no character {CharacterKey(target)}"; return false; }
@@ -1336,7 +1419,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     // ---- trade
 
-    /// <summary>OpenTrade: the first selected character walks to the trader; the window opens in reach (then <c>trade</c> shows it).</summary>
+    /// <summary>
+    /// OpenTrade: the first selected character walks to the trader; the window opens in reach (then <c>trade</c> shows it).
+    /// </summary>
     public bool ControlTradeOpen(CharacterId trader, out string message)
     {
         var who = ControlOrderers();
@@ -1356,7 +1441,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>The open trade (stock the shop sells, goods of the customer it would buy, both with prices) as JSON; false when none is open.</summary>
+    /// <summary>
+    /// The open trade (stock the shop sells, goods of the customer it would buy, both with prices) as JSON; false when none is open.
+    /// </summary>
     public bool ControlTradeJson(out string json)
     {
         json = "";
@@ -1395,7 +1482,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>Buys (<paramref name="buy"/>) or sells <paramref name="count"/> units of the item named <paramref name="what"/> in the open trade.</summary>
+    /// <summary>
+    /// Buys (<paramref name="buy"/>) or sells <paramref name="count"/> units of the item named <paramref name="what"/> in the open trade.
+    /// </summary>
     public bool ControlTradeDeal(bool buy, string what, int count, out string message)
     {
         if (player.Session.CurrentSnapshot.Trade is not { } t) { message = "refused: no trade is open (trade open <trader>, step, then trade)"; return false; }
@@ -1414,7 +1503,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    /// <summary>One character as observe.nearby lists it (id, name, faction, dist from the lead, pos, state), as JSON; null when it is not in the snapshot.</summary>
+    /// <summary>
+    /// One character as observe.nearby lists it (id, name, faction, dist from the lead, pos, state), as JSON; null when it is not in the snapshot.
+    /// </summary>
     public string? ControlCharacterJson(CharacterId id)
     {
         if (ControlCharacter(id) is not { } c) return null;
@@ -1424,7 +1515,10 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>Character ids in the snapshot with how far each is from (x, z), and whether it is down (dead, knocked out or carried): the spawn command's lookup.</summary>
+    /// <summary>
+    /// Character ids in the snapshot with how far each is from (x, z), and whether it is down (dead, knocked out or carried): the spawn command's
+    /// lookup.
+    /// </summary>
     public IEnumerable<(CharacterId Id, float Dist, bool Down, bool Player)> ControlCharactersNear(float x, float z) =>
         player.Session.CurrentSnapshot.Characters.Select(c => (c.Id, Vector2.Distance(new Vector2(player.Where(c).X, player.Where(c).Z), new Vector2(x, z)), c.Body is { Dead: true } or { Unconscious: true }, c.IsPlayer));
 
@@ -1433,7 +1527,10 @@ sealed class AgentOrders(PlayerInterface player)
     object? _killsWorld;
     readonly HashSet<CharacterId> _hostileSeen = [], _hostileDead = [];
 
-    /// <summary>Notes the hostile (non-player, non-animal, hostile to the player or fighting it) characters that are dead; a set of ids, reset when another world is loaded.</summary>
+    /// <summary>
+    /// Notes the hostile (non-player, non-animal, hostile to the player or fighting it) characters that are dead; a set of ids, reset when another
+    /// world is loaded.
+    /// </summary>
     public int ControlKills()
     {
         if (!ReferenceEquals(_killsWorld, player.Session.World)) { _killsWorld = player.Session.World; _hostileSeen.Clear(); _hostileDead.Clear(); }

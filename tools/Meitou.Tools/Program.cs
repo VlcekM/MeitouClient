@@ -151,7 +151,8 @@ static int Armour(GameInstall install, string name)
         string platoons = Path.Combine(install.Root, "save", "quicksave", "platoon");
         if (!Directory.Exists(platoons)) continue;
         foreach (string file in Directory.EnumerateFiles(platoons, "*.platoon"))
-            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.InventoryItemState && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
+            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.InventoryItemState
+                    && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
                 Console.WriteLine($"  SAVED {Path.GetFileName(file)} quality {s.Floats.GetValueOrDefault("quality")} level {s.Ints.GetValueOrDefault("level")} section {s.Strings.GetValueOrDefault("section")} material {s.Strings.GetValueOrDefault("material sid")}");
     }
     return 0;

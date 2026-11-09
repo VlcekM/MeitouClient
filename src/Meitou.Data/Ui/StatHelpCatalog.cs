@@ -2,7 +2,10 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the paragraph.</summary>
+/// <summary>
+/// Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the
+/// paragraph.
+/// </summary>
 public sealed class StatHelpCatalog
 {
     sealed record Entry(int[] Lines, string Text, int EnglishLength);

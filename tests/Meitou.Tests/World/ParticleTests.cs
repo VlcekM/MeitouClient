@@ -6,7 +6,9 @@ using EffectType = Meitou.Data.Particles.EffectType;
 
 namespace Meitou.Tests.World;
 
-/// <summary>ParticleUniverse scripts and their CPU simulation (docs/formats/particle-universe.md).</summary>
+/// <summary>
+/// ParticleUniverse scripts and their CPU simulation (docs/formats/particle-universe.md).
+/// </summary>
 public class ParticleTests
 {
     const string Rain = """
@@ -187,7 +189,9 @@ public class ParticleTests
         Assert.False(material.DepthWrite);
         Assert.True(material.Ambient);
         Assert.Equal("Kenshi_Rain_Basic.png", material.Texture);
-        Assert.All(library.Systems.Values.SelectMany(s => s.Techniques), tech => Assert.True(tech.Material.Length == 0 || library.FindMaterial(tech.Material) is not null || tech.Material == "SandBlown_Streaks", tech.Material));
+        Assert.All(library.Systems.Values.SelectMany(s => s.Techniques),
+                tech => Assert.True(tech.Material.Length == 0 || library.FindMaterial(tech.Material) is not null
+                        || tech.Material == "SandBlown_Streaks", tech.Material));
     }
 
     [Fact]
@@ -212,8 +216,10 @@ public class ParticleTests
         var group = (CameraEffectGroup)EffectGroups.Create(rain.Effects[0], library, 1)!;
         var camera = new EffectCamera(new Vector3(0, 100, 0), -Vector3.UnitZ);
         group.Prewarm(2, camera, rain);
-        Assert.InRange(group.Simulation.ParticleCount, 500, 5000);   // 6400 a second and a life of 0.3..1 s: about 4000 (the observer plane, world y -5.85, is far below the eye)
-        // The cube: its edge 120 (2d / 1.5 for d = 0.75 x 120 = 90), centred 90 ahead of the eye; the simulation's coordinates are relative to the group's anchor.
+        Assert.InRange(group.Simulation.ParticleCount, 500,
+                5000);   // 6400 a second and a life of 0.3..1 s: about 4000 (the observer plane, world y -5.85, is far below the eye)
+        // The cube: its edge 120 (2d / 1.5 for d = 0.75 x 120 = 90), centred 90 ahead of the eye; the simulation's coordinates are relative to the
+        // group's anchor.
         var (x, y, z) = group.Simulation.Positions(0);
         Assert.Equal(new Vector3(0, 100, 0), group.Anchor);
         Assert.All(x, v => Assert.InRange(v + group.Anchor.X, -60f, 60f));

@@ -4,19 +4,28 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The fog cull (docs/formats/fogfeatures.md "In Meitou"): a box inside the block the eye is in, far enough, is hidden; anything else is not.</summary>
+/// <summary>
+/// The fog cull (docs/formats/fogfeatures.md "In Meitou"): a box inside the block the eye is in, far enough, is hidden; anything else is not.
+/// </summary>
 public class FogCullTests
 {
-    /// <summary>A wide low block: x and z within 50000, floor at -2000, ceiling at 3000; density distance 4500, edge 800.</summary>
-    internal static FogFeature Block() => new("wide", FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero, 0,
+    /// <summary>
+    /// A wide low block: x and z within 50000, floor at -2000, ceiling at 3000; density distance 4500, edge 800.
+    /// </summary>
+    internal static FogFeature Block() => new("wide", FogFeatureType.Block, new Vector3(0.6f, 0.55f, 0.5f), 1, 4500, 800, Vector3.Zero, Vector3.Zero,
+            0,
     [
-        new Vector4(0, 1, 0, 3000), new Vector4(1, 0, 0, 50000), new Vector4(-1, 0, 0, 50000), new Vector4(0, 0, 1, 50000), new Vector4(0, 0, -1, 50000),
+        new Vector4(0, 1, 0, 3000), new Vector4(1, 0, 0, 50000), new Vector4(-1, 0, 0, 50000), new Vector4(0, 0, 1, 50000), new Vector4(0, 0, -1,
+                50000),
         new Vector4(0.0f, 0.1f, 0.995f, 60000), new Vector4(0, -1, 0, 2000),
     ]);
 
     static Vector3 B(float x, float y, float z) => new(x, y, z);
 
-    /// <summary>The shader's <c>fogVolumeBlock</c> alpha for an eye inside (near = 0), along unit ray <paramref name="d"/> to a fragment <paramref name="dist"/> away.</summary>
+    /// <summary>
+    /// The shader's <c>fogVolumeBlock</c> alpha for an eye inside (near = 0), along unit ray <paramref name="d"/> to a fragment
+    /// <paramref name="dist"/> away.
+    /// </summary>
     internal static float Alpha(FogFeature f, Vector3 eye, Vector3 d, float dist)
     {
         float far = dist;

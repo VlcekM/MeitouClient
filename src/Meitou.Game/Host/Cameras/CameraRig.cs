@@ -16,22 +16,29 @@ namespace Meitou.Game.Host.Cameras;
 /// </summary>
 public sealed class CameraRig
 {
-    /// <summary>How far the view is followed to find the ground when leaving free flight (engine choice).</summary>
+    /// <summary>
+    /// How far the view is followed to find the ground when leaving free flight (engine choice).
+    /// </summary>
     public const float LookRange = 20000;
 
     readonly Interpolated<CameraState> _states;
     readonly Func<float, float, float> _ground;
 
     /// <summary>
-    /// The height the strategy camera's pivot keeps above: the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the game's pivot ray also hits
-    /// buildings' floors; the eye keeps above the ground and the sea only, docs/formats/camera.md "Height").
+    /// The height the strategy camera's pivot keeps above: the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the game's
+    /// pivot ray also hits buildings' floors; the eye keeps above the ground and the sea only, docs/formats/camera.md "Height").
     /// </summary>
     public float GroundAt(float x, float z) => Floors?.Invoke(x, z) is { } floor ? MathF.Max(_ground(x, z), floor) : _ground(x, z);
 
-    /// <summary>The height the strategy camera's eye keeps above: the ground or the sea, whichever is higher.</summary>
+    /// <summary>
+    /// The height the strategy camera's eye keeps above: the ground or the sea, whichever is higher.
+    /// </summary>
     public float EyeGroundAt(float x, float z) => _ground(x, z);
 
-    /// <summary>The highest building floor at a point that the strategy camera's pivot rides on, or null (set by the host; the free camera keeps to the ground).</summary>
+    /// <summary>
+    /// The highest building floor at a point that the strategy camera's pivot rides on, or null (set by the host; the free camera keeps to the
+    /// ground).
+    /// </summary>
     public Func<float, float, float?>? Floors { get; set; }
 
     public CameraRig(Func<float, float, float> ground, CameraSettings? settings = null)
@@ -48,15 +55,23 @@ public sealed class CameraRig
     public FreeCamera Free { get; }
     public bool IsFree { get; private set; }
 
-    /// <summary>The camera as of the previous tick.</summary>
+    /// <summary>
+    /// The camera as of the previous tick.
+    /// </summary>
     public CameraState Previous => _states.Previous;
-    /// <summary>The camera as of the latest tick.</summary>
+    /// <summary>
+    /// The camera as of the latest tick.
+    /// </summary>
     public CameraState Current => _states.Current;
 
-    /// <summary>The camera drawn between the previous (0) and the current (1) tick.</summary>
+    /// <summary>
+    /// The camera drawn between the previous (0) and the current (1) tick.
+    /// </summary>
     public CameraState At(float alpha) => _states.At(alpha);
 
-    /// <summary>Moves the strategy camera (leaving free flight if on) and cuts to it: no blend from the old position.</summary>
+    /// <summary>
+    /// Moves the strategy camera (leaving free flight if on) and cuts to it: no blend from the old position.
+    /// </summary>
     public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
     {
         IsFree = false;
@@ -77,10 +92,15 @@ public sealed class CameraRig
         _states.Snap(IsFree ? Free.State : Strategy.State);
     }
 
-    /// <summary>Moves the strategy pivot without a cut: the view keeps its own yaw, pitch and boom, and the next tick blends from where it was (a camera that follows).</summary>
+    /// <summary>
+    /// Moves the strategy pivot without a cut: the view keeps its own yaw, pitch and boom, and the next tick blends from where it was (a camera that
+    /// follows).
+    /// </summary>
     public void MovePivot(Vector2 pivotXz) => Strategy.Place(pivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance);
 
-    /// <summary>One simulation tick of <paramref name="dt"/> seconds.</summary>
+    /// <summary>
+    /// One simulation tick of <paramref name="dt"/> seconds.
+    /// </summary>
     public void Update(float dt, ActionState actions)
     {
         bool cut = false;

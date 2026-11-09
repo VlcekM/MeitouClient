@@ -6,19 +6,23 @@ using SharpMetal.ObjectiveCCore;
 
 namespace Meitou.Tests.MetalBackend;
 
-/// <summary>The Metal tests use one device at a time; the test GPU is real, but everything is offscreen.</summary>
+/// <summary>
+/// The Metal tests use one device at a time; the test GPU is real, but everything is offscreen.
+/// </summary>
 [CollectionDefinition("Metal GPU", DisableParallelization = true)]
 public sealed class MetalGpuCollection;
 
-/// <summary>A windowless Metal context for the deterministic upload and lifetime tests.</summary>
+/// <summary>
+/// A windowless Metal context for the deterministic upload and lifetime tests.
+/// </summary>
 sealed class MetalTestGpu : IDisposable
 {
-    readonly MTLCommandQueue queue;
+    readonly MTLCommandQueue _queue;
 
     MetalTestGpu(MetalContext context, MTLCommandQueue queue)
     {
         Context = context;
-        this.queue = queue;
+        _queue = queue;
     }
 
     public MetalContext Context { get; }
@@ -41,7 +45,7 @@ sealed class MetalTestGpu : IDisposable
     public void Dispose()
     {
         Context.Dispose();
-        queue.Dispose();
+        _queue.Dispose();
     }
 }
 

@@ -11,7 +11,10 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class MeitouClouds
 {
-    /// <summary>Density taps along the key light's direction across the layer, and their spacing in texture units (<c>Clouds.dds</c> repeats every 1; its blobs are about 0.05..0.1 across).</summary>
+    /// <summary>
+    /// Density taps along the key light's direction across the layer, and their spacing in texture units (<c>Clouds.dds</c> repeats every 1; its
+    /// blobs are about 0.05..0.1 across).
+    /// </summary>
     public const int LightSteps = 4;
     public const float LightStep = 0.015f;
 
@@ -27,13 +30,20 @@ public static class MeitouClouds
     /// </summary>
     public const float MultipleShare = 0.5f, MultipleExtinction = 0.15f;
 
-    /// <summary>Two Henyey-Greenstein lobes, forward (the silver lining towards the light) and a weak backward one, mixed by <see cref="ForwardShare"/>.</summary>
+    /// <summary>
+    /// Two Henyey-Greenstein lobes, forward (the silver lining towards the light) and a weak backward one, mixed by <see cref="ForwardShare"/>.
+    /// </summary>
     public const float ForwardG = 0.6f, BackwardG = -0.25f, ForwardShare = 0.55f;
 
-    /// <summary>The key light's gain on the lit colour, and the ambient's (the sky's light on the cloud).</summary>
+    /// <summary>
+    /// The key light's gain on the lit colour, and the ambient's (the sky's light on the cloud).
+    /// </summary>
     public const float KeyGain = 1.6f, AmbientGain = 1.0f;
 
-    /// <summary>How much of the ambient is the pixel's own sky colour behind the cloud (the rest the sky's mean, <see cref="Ambient"/>): the gradient across the sky at sunset.</summary>
+    /// <summary>
+    /// How much of the ambient is the pixel's own sky colour behind the cloud (the rest the sky's mean, <see cref="Ambient"/>): the gradient across
+    /// the sky at sunset.
+    /// </summary>
     public const float AmbientFromSky = 0.2f;
 
     /// <summary>
@@ -43,13 +53,21 @@ public static class MeitouClouds
     public const float AmbientGrey = 0.45f;
     public static float AmbientGreyAt(float c) => AmbientGrey + (1 - AmbientGrey) * Math.Clamp(c, 0, 1);
 
-    /// <summary>The ambient on a cloud's underside falls by up to this much with its density (thick bases are darker: less of the sky above reaches them).</summary>
+    /// <summary>
+    /// The ambient on a cloud's underside falls by up to this much with its density (thick bases are darker: less of the sky above reaches them).
+    /// </summary>
     public const float BaseDarkening = 0.4f;
 
-    /// <summary>The share of the weather's <c>Darkness</c> (CloudLayer.Darkness) the lit clouds take: their depth already darkens thick cloud, the full darkness on top made overcast skies near black.</summary>
+    /// <summary>
+    /// The share of the weather's <c>Darkness</c> (CloudLayer.Darkness) the lit clouds take: their depth already darkens thick cloud, the full
+    /// darkness on top made overcast skies near black.
+    /// </summary>
     public const float DarknessShare = 0.5f;
 
-    /// <summary>The planet's light on the clouds against the land's (the land's is boosted <c>×60</c>, Enhancements.MeitouPlanetshineStrength; clouds lit as bright would glow).</summary>
+    /// <summary>
+    /// The planet's light on the clouds against the land's (the land's is boosted <c>×60</c>, Enhancements.MeitouPlanetshineStrength; clouds lit as
+    /// bright would glow).
+    /// </summary>
     public const float PlanetShare = 0.5f;
 
     /// <summary>
@@ -59,11 +77,15 @@ public static class MeitouClouds
     public static float HenyeyGreenstein(float cosTheta, float g) =>
         (1 - g * g) / MathF.Pow(MathF.Max(1 + g * g - 2 * g * cosTheta, 1e-6f), 1.5f);
 
-    /// <summary>The two lobes mixed (<see cref="ForwardG"/>, <see cref="BackwardG"/>, <see cref="ForwardShare"/>); its mean over the sphere is 1.</summary>
+    /// <summary>
+    /// The two lobes mixed (<see cref="ForwardG"/>, <see cref="BackwardG"/>, <see cref="ForwardShare"/>); its mean over the sphere is 1.
+    /// </summary>
     public static float Phase(float cosTheta) =>
         ForwardShare * HenyeyGreenstein(cosTheta, ForwardG) + (1 - ForwardShare) * HenyeyGreenstein(cosTheta, BackwardG);
 
-    /// <summary>The light that gets through <paramref name="depth"/> of cloud: the single-scattered share and the multiple-scattered share.</summary>
+    /// <summary>
+    /// The light that gets through <paramref name="depth"/> of cloud: the single-scattered share and the multiple-scattered share.
+    /// </summary>
     public static float Transmittance(float depth) =>
         (1 - MultipleShare) * MathF.Exp(-Extinction * depth) + MultipleShare * MathF.Exp(-Extinction * MultipleExtinction * depth);
 
@@ -102,17 +124,27 @@ public static class MeitouClouds
     /// </summary>
     public const float PlaneHeight = 12000;
 
-    /// <summary>How much of the sun a full cloud takes away (its alpha × this; the rest is light through and round it).</summary>
+    /// <summary>
+    /// How much of the sun a full cloud takes away (its alpha × this; the rest is light through and round it).
+    /// </summary>
     public const float ShadowStrength = 0.7f;
 
-    /// <summary>The mip level the shadow reads <c>Clouds.dds</c> at: a texel is 12 m at the plane, the sun's penumbra from 1.2 km about 10 m, so about one texel of blur.</summary>
+    /// <summary>
+    /// The mip level the shadow reads <c>Clouds.dds</c> at: a texel is 12 m at the plane, the sun's penumbra from 1.2 km about 10 m, so about one
+    /// texel of blur.
+    /// </summary>
     public const float ShadowLod = 0.5f;
 
-    /// <summary>The sun's height (its direction's y) over which the shadows fade in: none at <see cref="ShadowFadeLow"/> (the hit point runs off far
-    /// away), full from <see cref="ShadowFadeHigh"/>.</summary>
+    /// <summary>
+    /// The sun's height (its direction's y) over which the shadows fade in: none at <see cref="ShadowFadeLow"/> (the hit point runs off far away),
+    /// full from <see cref="ShadowFadeHigh"/>.
+    /// </summary>
     public const float ShadowFadeLow = 0.03f, ShadowFadeHigh = 0.12f;
 
-    /// <summary>How strong the shadows are at the sun's height <paramref name="sunY"/>: <see cref="ShadowStrength"/> × a smoothstep from <see cref="ShadowFadeLow"/> to <see cref="ShadowFadeHigh"/>.</summary>
+    /// <summary>
+    /// How strong the shadows are at the sun's height <paramref name="sunY"/>: <see cref="ShadowStrength"/> × a smoothstep from
+    /// <see cref="ShadowFadeLow"/> to <see cref="ShadowFadeHigh"/>.
+    /// </summary>
     public static float ShadowAt(float sunY)
     {
         float t = Math.Clamp((sunY - ShadowFadeLow) / (ShadowFadeHigh - ShadowFadeLow), 0, 1);
@@ -180,7 +212,10 @@ public static class MeitouClouds
     /// </summary>
     public const float DayKeySaturation = 0.4f, KeyDesaturateFrom = 0.35f, KeyDesaturateTo = 0.1f;
 
-    /// <summary>The key light's colour <paramref name="colour"/> with its saturation cut by day (<see cref="DayKeySaturation"/>), at the sun's height <paramref name="sunY"/>.</summary>
+    /// <summary>
+    /// The key light's colour <paramref name="colour"/> with its saturation cut by day (<see cref="DayKeySaturation"/>), at the sun's height
+    /// <paramref name="sunY"/>.
+    /// </summary>
     public static Vector3 DayKey(Vector3 colour, float sunY)
     {
         float t = Math.Clamp((sunY - KeyDesaturateTo) / (KeyDesaturateFrom - KeyDesaturateTo), 0, 1);

@@ -15,19 +15,27 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed unsafe class MetalDisplay : IDisposable
 {
-    /// <summary>The window the game draws into.</summary>
+    /// <summary>
+    /// The window the game draws into.
+    /// </summary>
     public IWindow Window { get; }
 
-    /// <summary>The Metal device.</summary>
+    /// <summary>
+    /// The Metal device.
+    /// </summary>
     public MTLDevice Device { get; }
 
-    /// <summary>The queue the frames are committed to.</summary>
+    /// <summary>
+    /// The queue the frames are committed to.
+    /// </summary>
     public MTLCommandQueue Queue { get; }
 
-    CAMetalLayer layer;
+    CAMetalLayer _layer;
 
-    /// <summary>The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).</summary>
-    public CAMetalLayer Layer => layer;
+    /// <summary>
+    /// The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).
+    /// </summary>
+    public CAMetalLayer Layer => _layer;
 
     public MetalDisplay(WindowOptions options, bool vsync = true)
     {
@@ -42,12 +50,12 @@ public sealed unsafe class MetalDisplay : IDisposable
         var glfw = NativeLibrary.Load("libglfw.3.dylib");
         var getCocoaWindow = (delegate* unmanaged<WindowHandle*, IntPtr>)NativeLibrary.GetExport(glfw, "glfwGetCocoaWindow");
         var nsWindow = getCocoaWindow((WindowHandle*)Window.Native!.Glfw!.Value);
-        this.nsWindow = nsWindow;
+        this._nsWindow = nsWindow;
 
         // The layer has to fill the view (NSViewWidthSizable | NSViewHeightSizable) or the drawable covers only part of
         // the window; its drawable size then follows the view's bounds times the scale factor, retina included.
         var contentView = ObjectiveC.IntPtr_objc_msgSend(nsWindow, "contentView");
-        this.contentView = contentView;
+        this._contentView = contentView;
         ObjectiveC.objc_msgSend(nsWindow, "setPreservesContentDuringLiveResize:", true);
         ObjectiveC.objc_msgSend(contentView, "setWantsLayer:", true);
         var layerPtr = new ObjectiveCClass(ObjectiveC.objc_getClass("CAMetalLayer")).AllocInit();
@@ -57,46 +65,51 @@ public sealed unsafe class MetalDisplay : IDisposable
         layer.Device = Device;
         layer.PixelFormat = MTLPixelFormat.BGRA8Unorm;
         layer.FramebufferOnly = true;
+
         // Three drawables, matching MetalContext.FrameRingDepth: a fourth would let the CPU run further ahead than the
         // constants ring can safely retain, and a smaller ring (the layer's old default is also three) serialises present.
         layer.MaximumDrawableCount = MetalContext.FrameRingDepth;
+
         // The Metal path had no vsync switch of its own; it was always on. Follow the game's setting like VulkanDisplay.
         layer.DisplaySyncEnabled = vsync;
         layer.AllowsNextDrawableTimeout = true;
-        this.layer = layer;
+        this._layer = layer;
         Window.Resize += size => Console.WriteLine($"metal     window resize event {size.X}x{size.Y} points");
         Window.FramebufferResize += size => Console.WriteLine($"metal     framebuffer resize event {size.X}x{size.Y} pixels");
         SyncLayer();
     }
 
-    int layerWidth, layerHeight, layerPixelWidth, layerPixelHeight;
-    readonly IntPtr nsWindow;
-    IntPtr contentView;
+    int _layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight;
+    readonly IntPtr _nsWindow;
+    IntPtr _contentView;
 
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern IntPtr MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
 
     static readonly Selector ValueForKey = new("valueForKey:");
 
-    /// <summary>What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW
-    /// reporting a framebuffer size.</summary>
+    /// <summary>
+    /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW reporting a framebuffer size.
+    /// </summary>
     public string NativeWindowState()
     {
-        var view = ObjectiveC.IntPtr_objc_msgSend(nsWindow, "contentView");
+        var view = ObjectiveC.IntPtr_objc_msgSend(_nsWindow, "contentView");
         var layer = view == IntPtr.Zero ? IntPtr.Zero : ObjectiveC.IntPtr_objc_msgSend(view, "layer");
         var key = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSString"), "stringWithUTF8String:", "frame");
         var value = view == IntPtr.Zero ? IntPtr.Zero : MsgSendPtr(view, ValueForKey.SelPtr, key);
         var description = value == IntPtr.Zero ? IntPtr.Zero : ObjectiveC.IntPtr_objc_msgSend(value, "description");
         string frame = description == IntPtr.Zero ? "nil" : Marshal.PtrToStringUTF8(ObjectiveC.IntPtr_objc_msgSend(description, "UTF8String")) ?? "nil";
-        bool zoomed = ObjectiveC.bool_objc_msgSend(nsWindow, "isZoomed");
-        bool visible = ObjectiveC.bool_objc_msgSend(nsWindow, "isVisible");
-        ulong style = ObjectiveC.ulong_objc_msgSend(nsWindow, "styleMask");
-        return $"view {(view == contentView ? "same" : "CHANGED")}, layer {(layer == Layer.NativePtr ? "same" : "CHANGED")}, " +
+        bool zoomed = ObjectiveC.bool_objc_msgSend(_nsWindow, "isZoomed");
+        bool visible = ObjectiveC.bool_objc_msgSend(_nsWindow, "isVisible");
+        ulong style = ObjectiveC.ulong_objc_msgSend(_nsWindow, "styleMask");
+        return $"view {(view == _contentView ? "same" : "CHANGED")}, layer {(layer == Layer.NativePtr ? "same" : "CHANGED")}, " +
             $"frame {frame}, zoomed {zoomed}, visible {visible}, style 0x{style:X}";
     }
 
-    /// <summary>CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
-    /// setter is called directly with the two doubles the ABI passes for the struct.</summary>
+    /// <summary>
+    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
+    /// setter is called directly with the two doubles the ABI passes for the struct.
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
 
@@ -111,11 +124,11 @@ public sealed unsafe class MetalDisplay : IDisposable
     {
         // A title-bar zoom (and native fullscreen) can replace the content view's layer without changing the window's
         // size; reattach ours before looking at the size, or the game keeps presenting into a detached layer.
-        var view = ObjectiveC.IntPtr_objc_msgSend(nsWindow, "contentView");
+        var view = ObjectiveC.IntPtr_objc_msgSend(_nsWindow, "contentView");
         bool reattached = false;
-        if (view != IntPtr.Zero && (view != contentView || ObjectiveC.IntPtr_objc_msgSend(view, "layer") != Layer.NativePtr))
+        if (view != IntPtr.Zero && (view != _contentView || ObjectiveC.IntPtr_objc_msgSend(view, "layer") != Layer.NativePtr))
         {
-            contentView = view;
+            _contentView = view;
             ObjectiveC.objc_msgSend(view, "setWantsLayer:", true);
             ObjectiveC.objc_msgSend(Layer.NativePtr, "setAutoresizingMask:", (byte)18);
             ObjectiveC.objc_msgSend(view, "setLayer:", Layer.NativePtr);
@@ -124,21 +137,25 @@ public sealed unsafe class MetalDisplay : IDisposable
         }
         var size = Window.Size;
         var pixels = Window.FramebufferSize;
-        if (!reattached && size.X == layerWidth && size.Y == layerHeight && pixels.X == layerPixelWidth && pixels.Y == layerPixelHeight) return;
-        (layerWidth, layerHeight, layerPixelWidth, layerPixelHeight) = (size.X, size.Y, pixels.X, pixels.Y);
+        if (!reattached && size.X == _layerWidth && size.Y == _layerHeight && pixels.X == _layerPixelWidth && pixels.Y == _layerPixelHeight) return;
+        (_layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight) = (size.X, size.Y, pixels.X, pixels.Y);
         if (size.X <= 0 || size.Y <= 0) return;
+
         // CAMetalLayer's drawable is bounds * contentsScale, not frame * contentsScale: setting only the frame during a
         // resize leaves the drawable at its old pixel size (a black or stale window after the drag).
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setFrame:", new NSRect(0, 0, size.X, size.Y));
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setBounds:", new NSRect(0, 0, size.X, size.Y));
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setContentsScale:", pixels.X / (double)size.X);
+
         // CAMetalLayer keeps the drawableSize it first computed; setting bounds/contentsScale does not necessarily
         // recompute it, and a stale drawable is a black (or old-size) window after a drag.
         SetDrawableSize(Layer.NativePtr, DrawableSizeSelector.SelPtr, pixels.X, pixels.Y);
         Console.WriteLine($"metal     window {size.X}x{size.Y} points, {pixels.X}x{pixels.Y} pixels (scale {pixels.X / (double)size.X:0.##})");
     }
 
-    /// <summary>Brings the app to the front, so a screenshot of the screen shows the window.</summary>
+    /// <summary>
+    /// Brings the app to the front, so a screenshot of the screen shows the window.
+    /// </summary>
     public void Activate()
     {
         var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
@@ -152,6 +169,7 @@ public sealed unsafe class MetalDisplay : IDisposable
     public void SetFullScreenPresentation(bool fullScreen)
     {
         var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
+
         // NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar.
         SetPresentationOptions(app, PresentationOptionsSelector.SelPtr, fullScreen ? 10UL : 0UL);
     }
@@ -161,13 +179,17 @@ public sealed unsafe class MetalDisplay : IDisposable
 
     static readonly Selector PresentationOptionsSelector = new("setPresentationOptions:");
 
-    long noDrawableStamp;
+    long _noDrawableStamp;
 
-    /// <summary>How long the last <see cref="TryBeginFrame"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
-    /// separates this present/swapchain stall from the CPU time spent recording the frame.</summary>
+    /// <summary>
+    /// How long the last <see cref="TryBeginFrame"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
+    /// separates this present/swapchain stall from the CPU time spent recording the frame.
+    /// </summary>
     public double LastDrawableWaitMilliseconds { get; private set; }
 
-    /// <summary>Begins a frame: the drawable to draw into and the command buffer to record it in.</summary>
+    /// <summary>
+    /// Begins a frame: the drawable to draw into and the command buffer to record it in.
+    /// </summary>
     public bool TryBeginFrame(out MTLCommandBuffer command, out CAMetalDrawable drawable)
     {
         SyncLayer();
@@ -179,9 +201,9 @@ public sealed unsafe class MetalDisplay : IDisposable
         if (next.DrawableID == 0)
         {
             long now = Stopwatch.GetTimestamp();
-            if (now - noDrawableStamp > Stopwatch.Frequency)
+            if (now - _noDrawableStamp > Stopwatch.Frequency)
             {
-                noDrawableStamp = now;
+                _noDrawableStamp = now;
                 Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
             }
             return false;
@@ -191,18 +213,23 @@ public sealed unsafe class MetalDisplay : IDisposable
         return true;
     }
 
-    /// <summary>The layer's actual display-sync state (diagnostic and the game's settings).</summary>
+    /// <summary>
+    /// The layer's actual display-sync state (diagnostic and the game's settings).
+    /// </summary>
     public bool VSync
     {
-        get => layer.DisplaySyncEnabled;
-        set => layer.DisplaySyncEnabled = value;
+        get => _layer.DisplaySyncEnabled;
+        set => _layer.DisplaySyncEnabled = value;
     }
 
-    /// <summary>Opens the render pass for a frame: the drawable cleared to <paramref name="clear"/>.</summary>
+    /// <summary>
+    /// Opens the render pass for a frame: the drawable cleared to <paramref name="clear"/>.
+    /// </summary>
     public MTLRenderCommandEncoder BeginPass(MTLCommandBuffer command, CAMetalDrawable drawable, MTLClearColor clear)
     {
         var descriptor = new MTLRenderPassDescriptor(
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
+
         // The attachments come back as a struct copy, so a value-type property (the clear colour) has to be written back
         // into the array, or the pass clears to whatever the descriptor's memory held.
         var attachments = descriptor.ColorAttachments;
@@ -215,7 +242,9 @@ public sealed unsafe class MetalDisplay : IDisposable
         return command.RenderCommandEncoder(descriptor);
     }
 
-    /// <summary>Presents the frame and commits the command buffer.</summary>
+    /// <summary>
+    /// Presents the frame and commits the command buffer.
+    /// </summary>
     public void Present(MTLCommandBuffer command, CAMetalDrawable drawable)
     {
         command.PresentDrawable(drawable);

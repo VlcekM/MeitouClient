@@ -15,41 +15,70 @@ namespace Meitou.Game.Rendering.Display;
 /// </summary>
 public sealed unsafe class VulkanDisplay : IDisposable
 {
-    /// <summary>The window; null when headless.</summary>
+    /// <summary>
+    /// The window; null when headless.
+    /// </summary>
     public IWindow? Window { get; }
     public VulkanDevice Device { get; }
-    /// <summary>The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.</summary>
+    /// <summary>
+    /// The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.
+    /// </summary>
     public GpuContext Context { get; }
     readonly VulkanPresenter? _presenter;
 
-    /// <summary>With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.</summary>
+    /// <summary>
+    /// With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.
+    /// </summary>
     public GpuTexture? Backbuffer => _presenter?.Backbuffer;
-    /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).</summary>
+    /// <summary>
+    /// Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).
+    /// </summary>
     public long AcquireTicks => _presenter?.AcquireTicks ?? 0;
     public long PresentTicks => _presenter?.PresentTicks ?? 0;
-    /// <summary>The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.</summary>
+    /// <summary>
+    /// The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.
+    /// </summary>
     public bool VSync { get => _presenter?.VSync ?? false; set { if (_presenter is not null) _presenter.VSync = value; } }
 
-    /// <summary>True while the swapchain goes through AMD's frame-interpolation layer (the Frame generation setting, when it could be honoured; false after a fallback).</summary>
+    /// <summary>
+    /// True while the swapchain goes through AMD's frame-interpolation layer (the Frame generation setting, when it could be honoured; false after a
+    /// fallback).
+    /// </summary>
     public bool FrameGeneration => _presenter?.FrameGeneration is not null;
-    /// <summary>The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.</summary>
+    /// <summary>
+    /// The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.
+    /// </summary>
     public FfxSwapchain? FrameGenerationLayer => _presenter?.FrameGeneration;
 
-    /// <summary>True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).</summary>
+    /// <summary>
+    /// True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).
+    /// </summary>
     public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
 
-    /// <summary>Streamline (DLSS), when <c>dlss</c> asked for it and it loaded; shut down before the device.</summary>
+    /// <summary>
+    /// Streamline (DLSS), when <c>dlss</c> asked for it and it loaded; shut down before the device.
+    /// </summary>
     public Streamline? Streamline { get; }
-    /// <summary>NGX (DLSS on Linux, or on Windows with frame generation), when <c>dlss</c> asked for it and its client library and the DLSS model loaded; shut down before the device.</summary>
+    /// <summary>
+    /// NGX (DLSS on Linux, or on Windows with frame generation), when <c>dlss</c> asked for it and its client library and the DLSS model loaded; shut
+    /// down before the device.
+    /// </summary>
     public Ngx? Ngx { get; }
 
-    /// <summary>Set before creating the display: turns on the device features of the bench's triangle measurements (<see cref="VulkanDeviceOptions.TriangleMeasurements"/>; <c>--bench-tris</c>).</summary>
+    /// <summary>
+    /// Set before creating the display: turns on the device features of the bench's triangle measurements
+    /// (<see cref="VulkanDeviceOptions.TriangleMeasurements"/>; <c>--bench-tris</c>).
+    /// </summary>
     public static bool TriangleMeasurements { get; set; }
 
-    /// <summary>Set before creating the display: ray queries for the global illumination (<see cref="VulkanDeviceOptions.RayTracing"/>; <c>--gi-debug</c>).</summary>
+    /// <summary>
+    /// Set before creating the display: ray queries for the global illumination (<see cref="VulkanDeviceOptions.RayTracing"/>; <c>--gi-debug</c>).
+    /// </summary>
     public static bool RayTracing { get; set; }
 
-    /// <summary>A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.</summary>
+    /// <summary>
+    /// A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.
+    /// </summary>
     public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, FrameGenerationMethod frameGeneration = FrameGenerationMethod.Off)
     {
         var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
@@ -63,6 +92,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
             TriangleMeasurements = TriangleMeasurements,
             RayTracing = RayTracing,
         };
+
         // DLSS frame generation goes through Streamline (Windows, a window); FSR 3's needs AMD's library, checked first, so DLSS leaves Streamline for NGX only
         // when the layer can be used.
         bool dlssFrameGeneration = frameGeneration == FrameGenerationMethod.Dlss && options is not null && OperatingSystem.IsWindows();
@@ -94,13 +124,16 @@ public sealed unsafe class VulkanDisplay : IDisposable
             if (Ngx is null) Console.WriteLine($"upscaler  {why}");
             else Ngx.Apply(deviceOptions);
         }
-        // Frame generation (FSR 3): the swapchain goes through AMD's layer, which needs more graphics queues (FfxSwapchain). Windows, Proton and Linux.
+
+        // Frame generation (FSR 3): the swapchain goes through AMD's layer, which needs more graphics queues (FfxSwapchain). Windows, Proton and
+        // Linux.
         bool wantLayer = false;
         if (fsrFrameGeneration && options is not null)
         {
             string? why = layerWhy;
             if (!layerLoads) { }
-            else if (Streamline is { DlssSupported: true }) why = "Streamline (DLSS) owns the present (NGX did not load, see the upscaler line above)";
+            else if (Streamline is { DlssSupported: true })
+                why = "Streamline (DLSS) owns the present (NGX did not load, see the upscaler line above)";
             else wantLayer = true;
             if (!wantLayer) Console.WriteLine($"frame generation  unavailable: {why}");
             else deviceOptions.ExtraGraphicsQueues = FfxSwapchain.WantedExtraQueues;
@@ -116,10 +149,14 @@ public sealed unsafe class VulkanDisplay : IDisposable
             for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
             deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
             deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
-            // DLSS frame generation looks the window up by its surface: once the device is handed over, the surface is made again through the interposer.
-            if (Streamline is { FrameGenerationLoaded: true } sl && Window.Native?.Win32 is { } win32) sl.UseWindow(win32.Hwnd, win32.HInstance);
+
+            // DLSS frame generation looks the window up by its surface: once the device is handed over, the surface is made again through the
+            // interposer.
+            if (Streamline is { FrameGenerationLoaded: true } sl && Window.Native?.Win32 is { } win32)
+                sl.UseWindow(win32.Hwnd, win32.HInstance);
         }
         Device = VulkanDevice.Create(deviceOptions);
+
         // The validation mode in log.txt: a report then shows whether MEITOU_VK_VALIDATION=sync took effect.
         string validationMode = !Device.ValidationEnabled ? "" : Device.SyncValidationEnabled ? ", validation on (sync)" : ", validation on";
         Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
@@ -148,7 +185,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
         }
     }
 
-    /// <summary>The two moons as the window's icon (the embedded 256 x 256 RGBA); a window system that refuses it keeps the default.</summary>
+    /// <summary>
+    /// The two moons as the window's icon (the embedded 256 x 256 RGBA); a window system that refuses it keeps the default.
+    /// </summary>
     static void SetWindowIcon(IWindow window)
     {
         try
@@ -163,11 +202,15 @@ public sealed unsafe class VulkanDisplay : IDisposable
         catch (Exception e) { Console.WriteLine($"window icon  {e.Message}"); }
     }
 
-    /// <summary>Opens a rendered frame for Reflex (DLSS frame generation): its frame token, Reflex's sleep, the simulation start marker. Call before the world
-    /// advances; does nothing without DLSS frame generation.</summary>
+    /// <summary>
+    /// Opens a rendered frame for Reflex (DLSS frame generation): its frame token, Reflex's sleep, the simulation start marker. Call before the world
+    /// advances; does nothing without DLSS frame generation.
+    /// </summary>
     public void BeginLatencyFrame() => Streamline?.BeginFrame();
 
-    /// <summary>Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.</summary>
+    /// <summary>
+    /// Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.
+    /// </summary>
     public bool BeginFrame(int width, int height)
     {
         Streamline?.Marker(PclMarker.SimulationEnd);
@@ -175,8 +218,10 @@ public sealed unsafe class VulkanDisplay : IDisposable
         return _presenter?.BeginFrame(width, height) ?? width > 0 && height > 0;
     }
 
-    /// <summary>Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this.
-    /// With <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.</summary>
+    /// <summary>
+    /// Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this. With
+    /// <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.
+    /// </summary>
     public void Present(GpuTexture? topDown = null)
     {
         Streamline?.Marker(PclMarker.RenderSubmitEnd);
@@ -187,7 +232,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Streamline?.EndFrame();
     }
 
-    /// <summary>Headless: ends the frame (submits it).</summary>
+    /// <summary>
+    /// Headless: ends the frame (submits it).
+    /// </summary>
     public void EndFrame() => Context.EndFrame();
 
     public void Dispose()

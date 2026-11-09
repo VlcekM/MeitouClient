@@ -1,6 +1,6 @@
 # Birds
 
-Flocks of birds in the sky (a3-k021). Meitou: `BirdFlockData` (data), `BirdFlocks` (flight, `Meitou.Game`), drawn as loose meshes by `DebrisRenderer` (`GameHost.UpdateBirds`, `WorldFrame.BirdPieces`).
+Flocks of birds in the sky (a3-k021). Meitou: `BirdFlockData` (data), `BirdFlocks` (flight, `Meitou.Game`), drawn as loose meshes by `DebrisRenderer` (`Birds.UpdateBirds`, `WorldFrame.BirdPieces`).
 
 ## Original (decompile of kenshi_x64.exe)
 
@@ -20,7 +20,7 @@ Flocks of birds in the sky (a3-k021). Meitou: `BirdFlockData` (data), `BirdFlock
 
 ## Meitou
 
-- `BirdFlocks` (`Meitou.Game`) is the step above, run by `GameHost.UpdateBirds` on the display's real time (the original's thread takes the real dt too), so birds do not stop with the game paused and are not part of the simulation or the saves. The terrain normal comes from finite differences of the height 16 units apart (the original asks Ogre's terrain plugin).
-- Attractors (`UpdateBirdAttractors`): the player's completed buildings (snapshot), the level's buildings (not flagged incomplete by their state; destroyed ones count, **Unknown** whether the original skips them), the furniture of their layouts and every map feature (`WorldObjects.BirdAttractorSources`, read once per world off the main thread), and every animal (`CharacterSnapshot.RecordId`; the position follows it each frame, as the original reads its object's position every step). Meitou registers the whole level at once; the original only the loaded zones (**Unknown** how far; the pull falls with distance squared, so only matters for a camera far from the squads).
+- `BirdFlocks` (`Meitou.Game`) is the step above, run by `Birds.UpdateBirds` on the display's real time (the original's thread takes the real dt too), so birds do not stop with the game paused and are not part of the simulation or the saves. The terrain normal comes from finite differences of the height 16 units apart (the original asks Ogre's terrain plugin).
+- Attractors (`Birds.UpdateAttractors`): the player's completed buildings (snapshot), the level's buildings (not flagged incomplete by their state; destroyed ones count, **Unknown** whether the original skips them), the furniture of their layouts and every map feature (`WorldObjects.BirdAttractorSources`, read once per world off the main thread), and every animal (`CharacterSnapshot.RecordId`; the position follows it each frame, as the original reads its object's position every step). Meitou registers the whole level at once; the original only the loaded zones (**Unknown** how far; the pull falls with distance squared, so only matters for a camera far from the squads).
 - The frustum is the view-projection of the game camera, planes normalised.
 - Thread (engine choice, as the original's own "Birds" thread): in the interactive game `BirdThread` runs the step beside the frame (stills and duels run it inline); the host starts a step when the last one is done, shows its flocks one frame late and gives the step the terrain heights through `TerrainHeights` (a snapshot taken on the render thread). The host's share is the `birds` profiler lap (about 0.05 ms with 857 birds; the step itself about 0.5 ms, off the render thread). Each kind keeps a per-cell amount table and summed-area tables, so the spawn test is O(1).

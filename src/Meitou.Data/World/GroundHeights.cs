@@ -23,7 +23,9 @@ public sealed class GroundHeights
         this._coarseStep = coarseStep;
     }
 
-    /// <summary>World height at X/Z, in world units.</summary>
+    /// <summary>
+    /// World height at X/Z, in world units.
+    /// </summary>
     public float HeightAt(float x, float z)
     {
         double step = _window.Step;
@@ -50,7 +52,9 @@ public sealed class GroundHeights
         return (float)(h * (WorldLayout.MaxHeight / ushort.MaxValue));
     }
 
-    /// <summary>Whether X/Z lies inside the full-resolution window.</summary>
+    /// <summary>
+    /// Whether X/Z lies inside the full-resolution window.
+    /// </summary>
     public bool InsideWindow(float x, float z)
     {
         var (col, row) = WorldLayout.ToSample(x, z);

@@ -2,7 +2,9 @@ using Meitou.Data.Audio;
 
 namespace Meitou.Game.Audio;
 
-/// <summary>Evaluates Wwise curves (RTPC and layer crossfade curves; docs/formats/wwise-bnk.md#shared-pieces).</summary>
+/// <summary>
+/// Evaluates Wwise curves (RTPC and layer crossfade curves; docs/formats/wwise-bnk.md#shared-pieces).
+/// </summary>
 static class WwiseCurves
 {
     /// <summary>

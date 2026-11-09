@@ -5,8 +5,10 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The bindless table (docs/renderer-native.md 2.6): the integer arrays, and indices usable in the frame they are registered or
-/// updated in. Synchronisation validation on.</summary>
+/// <summary>
+/// The bindless table (docs/renderer-native.md 2.6): the integer arrays, and indices usable in the frame they are registered or updated in.
+/// Synchronisation validation on.
+/// </summary>
 public class BindlessTests
 {
     static VulkanDevice? TryCreate()
@@ -66,7 +68,8 @@ public class BindlessTests
     }
 
     static GpuSampler Nearest(GpuContext ctx, bool integer) =>
-        ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+        ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, integer, 0));
 
     static void Draw(GpuContext ctx, GpuProgram program, InternalFormat format, GpuTexture target, ReadOnlySpan<uint> push)
@@ -78,7 +81,8 @@ public class BindlessTests
             ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A, PolygonKind.Fill, false, false, program.Name));
         using (new GpuPass(frame, cmd, program.Name, [new PassUse(target, Access.ColourTarget)]))
         {
-            cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.DontCare, default), default, target.Desc.Width, target.Desc.Height));
+            cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.DontCare, default), default, target.Desc.Width,
+                    target.Desc.Height));
             cmd.BindPipeline(pipeline);
             FullTargetState(cmd, target.Desc.Width, target.Desc.Height);
             cmd.BindBindlessTable(program, 0);
@@ -103,13 +107,16 @@ public class BindlessTests
             using var cells = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, 2, 1, Name: "cells"));
             using var wide = ctx.CreateTexture(new TextureDesc(InternalFormat.R16Ui, 2, 1, Name: "wide"));
             using var signed = ctx.CreateTexture(new TextureDesc(InternalFormat.R16I, 2, 1, Name: "signed"));
-            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32Ui, 2, 1, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "integer target"));
+            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32Ui, 2, 1, Use: TextureUse.ColourTarget | TextureUse.TransferSrc,
+                    Name: "integer target"));
             var program = ctx.Shaders.Native(FullScreen, IntegerFragment, "bindless integer", [GpuSetLayout.Bindless], 12);
 
             // Reflection sees the runtime arrays the shader reads, with their element types.
             var used = program.FragmentReflection!.Samplers.ToDictionary(s => s.Name);
-            Assert.Equal((0, 4, ScalarKind.UInt, -1), (used["utextures2D"].Set, used["utextures2D"].Binding, used["utextures2D"].SampledKind, used["utextures2D"].ArrayLength));
-            Assert.Equal((0, 5, ScalarKind.Int, -1), (used["itextures2D"].Set, used["itextures2D"].Binding, used["itextures2D"].SampledKind, used["itextures2D"].ArrayLength));
+            Assert.Equal((0, 4, ScalarKind.UInt, -1),
+                    (used["utextures2D"].Set, used["utextures2D"].Binding, used["utextures2D"].SampledKind, used["utextures2D"].ArrayLength));
+            Assert.Equal((0, 5, ScalarKind.Int, -1),
+                    (used["itextures2D"].Set, used["itextures2D"].Binding, used["itextures2D"].SampledKind, used["itextures2D"].ArrayLength));
 
             ctx.BeginFrame();
             // Registered inside the open frame: usable in it.

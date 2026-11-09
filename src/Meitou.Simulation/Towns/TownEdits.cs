@@ -4,9 +4,10 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Towns;
 
 /// <summary>
-/// Town buildings added and taken away while the world runs (the level editor, docs/game/level-editor.md "Simulation side"), on the simulation thread at a tick boundary
-/// (<see cref="DebugPlaceBuilding"/>, <see cref="DebugClearBuilding"/>). The town's list in <see cref="PopulationData"/> is replaced by a changed copy; a town the registries already
-/// hold (<see cref="Locks.FixtureRegistry.IsRegistered"/>) gets the building registered or removed at once, any other when it is first registered, from the list.
+/// Town buildings added and taken away while the world runs (the level editor, docs/game/level-editor.md "Simulation side"), on the simulation thread
+/// at a tick boundary (<see cref="DebugPlaceBuilding"/>, <see cref="DebugClearBuilding"/>). The town's list in <see cref="PopulationData"/> is
+/// replaced by a changed copy; a town the registries already hold (<see cref="Locks.FixtureRegistry.IsRegistered"/>) gets the building registered or
+/// removed at once, any other when it is first registered, from the list.
 /// </summary>
 static class TownEdits
 {

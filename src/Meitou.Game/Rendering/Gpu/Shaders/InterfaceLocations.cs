@@ -32,6 +32,11 @@ static partial class InterfaceLocations
         public bool HasExplicit;
     }
 
+    #region Linking
+
+    /// <summary>
+    /// Adds the explicit locations to both sources: varyings first, then the fragment outputs.
+    /// </summary>
     public static (string Vertex, string Fragment) Apply(string vertex, string fragment)
     {
         var vs = Scan(vertex, "vertex");
@@ -39,8 +44,16 @@ static partial class InterfaceLocations
         var vOuts = vs.Where(s => s.IsOut).ToList();
         var fIns = fs.Where(s => !s.IsOut).ToList();
         var fOuts = fs.Where(s => s.IsOut).ToList();
+        AssignVaryings(vOuts, fIns);
+        AssignOutputs(fOuts);
+        return (Rewrite(vertex, vOuts), Rewrite(fragment, fIns.Concat(fOuts).ToList()));
+    }
 
-        // varyings: one location per name, shared by both stages
+    /// <summary>
+    /// Varyings: one location per name, shared by both stages.
+    /// </summary>
+    static void AssignVaryings(List<Statement> vOuts, List<Statement> fIns)
+    {
         var byName = new Dictionary<string, (int Location, int Slots)>();
         var used = new HashSet<int>();
         foreach (var d in vOuts.Concat(fIns).SelectMany(s => s.Declarators))
@@ -49,7 +62,10 @@ static partial class InterfaceLocations
             if (byName.TryGetValue(d.Name, out var have))
             {
                 if (have.Location != loc || have.Slots != d.Slots)
-                    throw new ShaderCompileException($"Varying '{d.Name}' is declared with different locations or sizes in the two stages.", "link", "");
+                {
+                    throw new ShaderCompileException(
+                        $"Varying '{d.Name}' is declared with different locations or sizes in the two stages.", "link", "");
+                }
             }
             else
             {
@@ -57,6 +73,7 @@ static partial class InterfaceLocations
                 for (int i = 0; i < d.Slots; i++) used.Add(loc + i);
             }
         }
+
         foreach (var d in vOuts.Concat(fIns).SelectMany(s => s.Declarators))
         {
             if (d.Location is not null) continue;
@@ -67,14 +84,28 @@ static partial class InterfaceLocations
                 have = byName[d.Name] = (loc, d.Slots);
             }
             else if (have.Slots != d.Slots)
+            {
                 throw new ShaderCompileException($"Varying '{d.Name}' has a different size in the two stages.", "link", "");
+            }
+
             d.Location = have.Location;
         }
+    }
 
-        // fragment outputs: 0, 1, 2... in order
+    /// <summary>
+    /// Fragment outputs: 0, 1, 2... in order.
+    /// </summary>
+    static void AssignOutputs(List<Statement> fOuts)
+    {
         var usedOut = new HashSet<int>();
         foreach (var d in fOuts.SelectMany(s => s.Declarators))
-            if (d.Location is { } l) for (int i = 0; i < d.Slots; i++) usedOut.Add(l + i);
+        {
+            if (d.Location is { } l)
+            {
+                for (int i = 0; i < d.Slots; i++) usedOut.Add(l + i);
+            }
+        }
+
         foreach (var d in fOuts.SelectMany(s => s.Declarators))
         {
             if (d.Location is not null) continue;
@@ -82,8 +113,6 @@ static partial class InterfaceLocations
             for (int i = 0; i < d.Slots; i++) usedOut.Add(loc + i);
             d.Location = loc;
         }
-
-        return (Rewrite(vertex, vOuts), Rewrite(fragment, fIns.Concat(fOuts).ToList()));
     }
 
     static int Free(HashSet<int> used, int slots)
@@ -113,7 +142,8 @@ static partial class InterfaceLocations
 
             // out vec2 a, b;  ->  one declaration per name
             string prefix = source[s.Start..s.PrefixEnd];
-            if (s.LayoutStart is { } ls && s.LayoutEnd is { } le) prefix = source[s.Start..ls] + source[le..s.PrefixEnd];
+            if (s.LayoutStart is { } ls && s.LayoutEnd is { } le)
+                prefix = source[s.Start..ls] + source[le..s.PrefixEnd];
             var sb = new StringBuilder();
             foreach (var d in s.Declarators)
                 sb.Append($"layout(location = {d.Location}) {prefix.Trim()} {d.Name}{d.Suffix}; ");
@@ -128,9 +158,12 @@ static partial class InterfaceLocations
         return result.ToString();
     }
 
-    // ---- scanning ----
+    #endregion
 
-    static readonly HashSet<string> Qualifiers = ["flat", "smooth", "noperspective", "centroid", "sample", "invariant", "precise", "highp", "mediump", "lowp"];
+    #region Scanning
+
+    static readonly HashSet<string> Qualifiers =
+        ["flat", "smooth", "noperspective", "centroid", "sample", "invariant", "precise", "highp", "mediump", "lowp"];
 
     static List<Statement> Scan(string source, string stage)
     {
@@ -145,7 +178,12 @@ static partial class InterfaceLocations
         for (int i = 0; i < m.Length; i++)
         {
             char ch = m[i];
-            if (ch == '\n') { lineStart = true; continue; }
+            if (ch == '\n')
+            {
+                lineStart = true;
+                continue;
+            }
+
             if (char.IsWhiteSpace(ch)) continue;
             if (ch == '#' && lineStart && depth == 0 && IsBlank(m, start, i))
             {
@@ -163,14 +201,20 @@ static partial class InterfaceLocations
             lineStart = false;
             switch (ch)
             {
-                case '{': depth++; break;
-                case '}': depth--; if (depth == 0) start = i + 1; break;
+                case '{':
+                    depth++;
+                    break;
+                case '}':
+                    depth--;
+                    if (depth == 0) start = i + 1;
+                    break;
                 case ';':
                     if (depth == 0)
                     {
                         if (Parse(source, m, start, i, consts, stage) is { } st) result.Add(st);
                         start = i + 1;
                     }
+
                     break;
             }
         }
@@ -207,7 +251,7 @@ static partial class InterfaceLocations
                 string inner = m[(p + 1)..close];
                 var loc = LocationRegex().Match(inner);
                 if (loc.Success) explicitLoc = int.Parse(loc.Groups[1].Value, CultureInfo.InvariantCulture);
-                else { layoutOpen = p + 1; }
+                else layoutOpen = p + 1;
                 layoutStart = ls;
                 layoutEnd = close + 1;
                 p = close + 1;
@@ -239,7 +283,16 @@ static partial class InterfaceLocations
             SkipWs(m, ref p, semi);
         }
 
-        var st = new Statement { IsOut = isOut.Value, Start = start, End = semi, LayoutOpen = layoutOpen, LayoutStart = layoutStart, LayoutEnd = layoutEnd, HasExplicit = explicitLoc is not null };
+        var st = new Statement
+        {
+            IsOut = isOut.Value,
+            Start = start,
+            End = semi,
+            LayoutOpen = layoutOpen,
+            LayoutStart = layoutStart,
+            LayoutEnd = layoutEnd,
+            HasExplicit = explicitLoc is not null,
+        };
         st.PrefixEnd = p;
         while (p < semi)
         {
@@ -263,7 +316,13 @@ static partial class InterfaceLocations
                 explicitLoc = e + d.Slots;
             }
             st.Declarators.Add(d);
-            if (p < semi && m[p] == ',') { p++; SkipWs(m, ref p, semi); continue; }
+            if (p < semi && m[p] == ',')
+            {
+                p++;
+                SkipWs(m, ref p, semi);
+                continue;
+            }
+
             break;
         }
         if (st.Declarators.Count > 0) st.PrefixEnd = st.Declarators[0].NameStart;
@@ -318,7 +377,9 @@ static partial class InterfaceLocations
         return -1;
     }
 
-    /// <summary>Comments replaced by spaces (newlines kept), so offsets and line numbers match the source.</summary>
+    /// <summary>
+    /// Comments replaced by spaces (newlines kept), so offsets and line numbers match the source.
+    /// </summary>
     static string MaskComments(string s)
     {
         var sb = new StringBuilder(s);
@@ -332,16 +393,24 @@ static partial class InterfaceLocations
             else if (s[i] == '/' && i + 1 < s.Length && s[i + 1] == '*')
             {
                 int j = i;
-                sb[j++] = ' '; sb[j++] = ' ';
+                sb[j++] = ' ';
+                sb[j++] = ' ';
                 while (j < s.Length && !(s[j] == '*' && j + 1 < s.Length && s[j + 1] == '/'))
                 {
                     if (s[j] != '\n') sb[j] = ' ';
                     j++;
                 }
-                if (j < s.Length) { sb[j] = ' '; if (j + 1 < s.Length) sb[j + 1] = ' '; }
+
+                if (j < s.Length)
+                {
+                    sb[j] = ' ';
+                    if (j + 1 < s.Length) sb[j + 1] = ' ';
+                }
+
                 i = j + 1;
             }
         }
+
         return sb.ToString();
     }
 
@@ -356,4 +425,6 @@ static partial class InterfaceLocations
 
     [GeneratedRegex(@"^d?mat([234])(?:x[234])?$")]
     private static partial Regex MatrixRegex();
+
+    #endregion
 }

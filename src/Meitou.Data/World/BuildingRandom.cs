@@ -9,10 +9,14 @@ public sealed class BuildingRandom(uint seed)
 {
     uint _state = seed;
 
-    /// <summary>Number of results drawn so far.</summary>
+    /// <summary>
+    /// Number of results drawn so far.
+    /// </summary>
     public int Count { get; private set; }
 
-    /// <summary>MSVCR100 <c>rand()</c>: 0..32767.</summary>
+    /// <summary>
+    /// MSVCR100 <c>rand()</c>: 0..32767.
+    /// </summary>
     public int Next()
     {
         Count++;
@@ -20,7 +24,9 @@ public sealed class BuildingRandom(uint seed)
         return (int)((_state >> 16) & 0x7FFF);
     }
 
-    /// <summary>The game's int range helper: <c>min + trunc(rand / 32768 × (max − min + 1))</c> in single precision, clamped to [min, max].</summary>
+    /// <summary>
+    /// The game's int range helper: <c>min + trunc(rand / 32768 × (max − min + 1))</c> in single precision, clamped to [min, max].
+    /// </summary>
     public int NextInt(int min, int max)
     {
         float f = (float)(Next() * (-1.0 / 32768));
@@ -29,7 +35,9 @@ public sealed class BuildingRandom(uint seed)
         return Math.Clamp(v, min, max);
     }
 
-    /// <summary>The game's float range helper: <c>rand / 32768 × (max − min) + min</c> in single precision, in [min, max).</summary>
+    /// <summary>
+    /// The game's float range helper: <c>rand / 32768 × (max − min) + min</c> in single precision, in [min, max).
+    /// </summary>
     public float NextFloat(float min, float max) => (float)(Next() * (1.0 / 32768)) * (max - min) + min;
 
     /// <summary>

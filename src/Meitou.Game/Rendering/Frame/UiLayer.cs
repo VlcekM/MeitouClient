@@ -46,19 +46,27 @@ public sealed class UiLayer : IDisposable
             TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), default);
     }
 
-    /// <summary>What the overlays draw into: valid after <see cref="Clear"/> of the frame.</summary>
+    /// <summary>
+    /// What the overlays draw into: valid after <see cref="Clear"/> of the frame.
+    /// </summary>
     public GpuTexture? Texture => _texture;
 
-    /// <summary>The finished picture (world and interface), top-down: valid after <see cref="Composite"/>. What the present shows and a screenshot reads.</summary>
+    /// <summary>
+    /// The finished picture (world and interface), top-down: valid after <see cref="Composite"/>. What the present shows and a screenshot reads.
+    /// </summary>
     public GpuTexture? Final => _final;
 
-    /// <summary>Makes the texture again when the size changed, and clears it to transparent (the first thing of a frame, before any overlay draws).</summary>
+    /// <summary>
+    /// Makes the texture again when the size changed, and clears it to transparent (the first thing of a frame, before any overlay draws).
+    /// </summary>
     public GpuTexture Clear(int width, int height)
     {
         if (_texture is null || _texture.Desc.Width != width || _texture.Desc.Height != height)
         {
             _texture?.Dispose();   // released after the frames in flight
-            _texture = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "ui layer"));
+            var desc = new TextureDesc(InternalFormat.Rgba8, width, height,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "ui layer");
+            _texture = _gpu.CreateTexture(desc);
         }
         var cmd = _gpu.BeginNative("ui layer clear");
         cmd.BeginRendering(new RenderingDesc(new RenderTarget(_texture.Attachment(), LoadOp.Clear, default), default, width, height));
@@ -67,7 +75,9 @@ public sealed class UiLayer : IDisposable
         return _texture;
     }
 
-    /// <summary>Draws the layer over <paramref name="world"/> (the same size) into <see cref="Final"/>, flipped to top-down: <c>ui + world * (1 - ui.a)</c>.</summary>
+    /// <summary>
+    /// Draws the layer over <paramref name="world"/> (the same size) into <see cref="Final"/>, flipped to top-down: <c>ui + world * (1 - ui.a)</c>.
+    /// </summary>
     public GpuTexture? Composite(GpuTexture world)
     {
         if (_texture is null) return null;
@@ -83,7 +93,8 @@ public sealed class UiLayer : IDisposable
         cmd.BeginRendering(t.Rendering);
         var state = DrawState.For(t.Formats, _gpu.DepthClamp);
         state.Record(cmd, t);
-        cmd.BindPipeline(_gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite")));
+        var pipeline = state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite");
+        cmd.BindPipeline(_gpu.Pipelines.Get(pipeline));
         _program.Bind(_samplerUi, _pointSampler with { View = _texture.View() });
         _program.Bind(_samplerBack, _pointSampler with { View = world.View() });
         _program.Flush(cmd);
@@ -93,5 +104,9 @@ public sealed class UiLayer : IDisposable
         return _final;
     }
 
-    public void Dispose() { _texture?.Dispose(); _final?.Dispose(); }
+    public void Dispose()
+    {
+        _texture?.Dispose();
+        _final?.Dispose();
+    }
 }

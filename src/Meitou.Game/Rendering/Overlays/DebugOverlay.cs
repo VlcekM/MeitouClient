@@ -17,7 +17,11 @@ namespace Meitou.Game.Rendering.Overlays;
 /// </summary>
 public sealed unsafe class DebugOverlay : IDisposable
 {
-    /// <summary>The baked characters: printable ASCII and Latin-1 up to the middle dot (U+00B7), which the Meitou UI joins details with.</summary>
+    #region Setup
+
+    /// <summary>
+    /// The baked characters: printable ASCII and Latin-1 up to the middle dot (U+00B7), which the Meitou UI joins details with.
+    /// </summary>
     const int FirstChar = 32, CharCount = 0xB8 - FirstChar;
     // The size the glyphs are baked at (16 px; a display face is baked larger so it stays sharp drawn big) and the atlas side that holds them.
     readonly float _pixelHeight = 16;
@@ -28,7 +32,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         @"C:\Windows\Fonts\consola.ttf", @"C:\Windows\Fonts\CascadiaMono.ttf", @"C:\Windows\Fonts\cour.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", "/usr/share/fonts/liberation/LiberationMono-Regular.ttf",
-        "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", "/usr/share/fonts/noto/NotoSansMono[wdth,wght].ttf",   // Arch (newer noto-fonts ships the variable file)
+        // Arch (newer noto-fonts ships the variable file)
+        "/usr/share/fonts/noto/NotoSansMono-Regular.ttf", "/usr/share/fonts/noto/NotoSansMono[wdth,wght].ttf",
         "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf", "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",   // Fedora
         // stb_truetype cannot bake from .ttc collections without an index, so macOS needs a plain .ttf (Menlo is a .ttc here).
         "/System/Library/Fonts/Supplemental/Courier New.ttf", "/System/Library/Fonts/SFNS.ttf",
@@ -66,7 +71,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         }
         """;
 
-    /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8).</summary>
+    /// <summary>
+    /// The native GPU API (docs/renderer-native.md 7.1 step 8).
+    /// </summary>
     public IGpuContext Gpu { get; }
     readonly GpuTexture? _atlas;
     readonly SampledTexture _atlasSampled;
@@ -78,13 +85,19 @@ public sealed unsafe class DebugOverlay : IDisposable
     readonly StbTrueType.stbtt_bakedchar[] _glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
     readonly List<float> _batch = [];
     const int Stride = 8;
-    /// <summary>Queued text geometry by caption, position, scale and colour; for a UI font valid for one <see cref="UiFont.Generation"/> of its atlas.</summary>
+    /// <summary>
+    /// Queued text geometry by caption, position, scale and colour; for a UI font valid for one <see cref="UiFont.Generation"/> of its atlas.
+    /// </summary>
     readonly Dictionary<(string Text, float X, float Top, float Scale, Vector4 Colour), (float[] Vertices, float Width)> _textGeometry = [];
     int _cachedTextFloats;
-    /// <summary>The glyph-cache font this overlay draws and measures with (null: the stb_truetype faces).</summary>
+    /// <summary>
+    /// The glyph-cache font this overlay draws and measures with (null: the stb_truetype faces).
+    /// </summary>
     readonly UiFont? _uiFont;
     int _cacheGeneration;
-    /// <summary>Where, in <see cref="_batch"/>, the quads of each atlas texture begin (a UI font's atlas can be replaced while quads are queued).</summary>
+    /// <summary>
+    /// Where, in <see cref="_batch"/>, the quads of each atlas texture begin (a UI font's atlas can be replaced while quads are queued).
+    /// </summary>
     readonly List<(int Start, SampledTexture Texture)> _atlasRuns = [];
 
     public float LineHeight { get; }
@@ -92,13 +105,16 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     public bool Visible { get; set; }
 
-    /// <summary>What <see cref="Flush"/> draws into: the frame's final picture (the window's backbuffer, or an offscreen texture). Set by the host.</summary>
+    /// <summary>
+    /// What <see cref="Flush"/> draws into: the frame's final picture (the window's backbuffer, or an offscreen texture). Set by the host.
+    /// </summary>
     public GpuTexture? Target { get; set; }
 
     DebugOverlay(IGpuContext gpu, byte[] font, float pixelHeight = 16)
     {
         Gpu = gpu;
         _pixelHeight = pixelHeight;
+
         // The smallest square the glyphs fit in (the baker says how many rows it used, negative when they did not fit), at most 2048.
         byte[] pixels;
         for (_atlasSize = 256; ; _atlasSize *= 2)
@@ -117,11 +133,13 @@ public sealed unsafe class DebugOverlay : IDisposable
         // The glyphs (R8), sampled as the GL texture was: linear, repeating, no mips.
         using (var upload = gpu.Uploads.Begin())
         {
-            _atlas = upload.Create(new TextureDesc(InternalFormat.R8, _atlasSize, _atlasSize, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "debug overlay font"));
+            _atlas = upload.Create(new TextureDesc(InternalFormat.R8, _atlasSize, _atlasSize, Use: TextureUse.Sampled | TextureUse.TransferDst,
+                Name: "debug overlay font"));
             upload.Write(_atlas, 0, 0, new PixelRect(0, 0, (uint)_atlasSize, (uint)_atlasSize), pixels);
         }
-        _atlasSampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat,
-            TextureWrapMode.Repeat, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), _atlas!.View());
+        _atlasSampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
+            TextureWrapMode.Repeat, TextureWrapMode.Repeat, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)),
+            _atlas!.View());
 
         _program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
         _uScreen = _program.Uniform("uScreen");
@@ -129,7 +147,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         _samplerAtlas = _program.Sampler("uAtlas");
     }
 
-    /// <summary>An overlay that draws and measures with the glyph-cache font <paramref name="font"/> (owned from here on).</summary>
+    /// <summary>
+    /// An overlay that draws and measures with the glyph-cache font <paramref name="font"/> (owned from here on).
+    /// </summary>
     DebugOverlay(IGpuContext gpu, UiFont font)
     {
         Gpu = gpu;
@@ -162,7 +182,14 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// </summary>
     internal static DebugOverlay FromUiFont(IGpuContext gpu, UiFont font) => new(gpu, font);
 
-    /// <summary>The advance of one code point (kerned against <paramref name="previous"/>, -1: none), which becomes the new previous. The stb faces have the baked range only: '?' for the rest.</summary>
+    #endregion
+
+    #region Measuring text
+
+    /// <summary>
+    /// The advance of one code point (kerned against <paramref name="previous"/>, -1: none), which becomes the new previous. The stb faces have the
+    /// baked range only: '?' for the rest.
+    /// </summary>
     float Step(int codePoint, ref int previous, float scale)
     {
         float advance;
@@ -205,7 +232,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         return text[..count] + suffix;
     }
 
-    /// <summary>Lines of at most <paramref name="width"/>, broken at spaces and, in scripts written without them (CJK), between characters.</summary>
+    /// <summary>
+    /// Lines of at most <paramref name="width"/>, broken at spaces and, in scripts written without them (CJK), between characters.
+    /// </summary>
     public IReadOnlyList<string> WrapText(string text, float width, float scale = 1)
     {
         var result = new List<string>();
@@ -218,7 +247,11 @@ public sealed unsafe class DebugOverlay : IDisposable
                 foreach (string piece in Pieces(word))
                 {
                     string next = line.Length == 0 ? piece : glued ? line + piece : line + " " + piece;
-                    if (line.Length > 0 && MeasureText(next, scale) > width) { result.Add(FitText(line, width, scale)); line = piece; }
+                    if (line.Length > 0 && MeasureText(next, scale) > width)
+                    {
+                        result.Add(FitText(line, width, scale));
+                        line = piece;
+                    }
                     else line = next;
                     glued = true;
                 }
@@ -229,15 +262,27 @@ public sealed unsafe class DebugOverlay : IDisposable
     }
 
     /// <summary>
-    /// A word as the pieces a line may break between: the word itself, but each ideograph, kana, hangul syllable or full-width form on its own, except that closing
-    /// punctuation and small kana stay with the character before them and an opening bracket with the one after it (the CJK rule that a line starts or ends without them).
+    /// A word as the pieces a line may break between: the word itself, but each ideograph, kana, hangul syllable or full-width form on its own,
+    /// except that closing punctuation and small kana stay with the character before them and an opening bracket with the one after it (the CJK rule
+    /// that a line starts or ends without them).
     /// </summary>
     static IEnumerable<string> Pieces(string word)
     {
         bool wide = false;
         foreach (var rune in word.EnumerateRunes())
-            if (IsBreakable(rune.Value)) { wide = true; break; }
-        if (!wide) { yield return word; yield break; }
+        {
+            if (IsBreakable(rune.Value))
+            {
+                wide = true;
+                break;
+            }
+        }
+
+        if (!wide)
+        {
+            yield return word;
+            yield break;
+        }
         int start = 0, previous = -1;
         for (int i = 0; i < word.Length;)
         {
@@ -256,12 +301,19 @@ public sealed unsafe class DebugOverlay : IDisposable
     static bool BreaksBetween(int before, int after) =>
         (IsBreakable(before) || IsBreakable(after)) && !Listed(NoLineStart, after) && !Listed(NoLineEnd, before);
 
-    const string NoLineStart = "、。，．,.：:；;？?！!）)」』】〕〉》］]｝}ー・…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ";
+    const string NoLineStart = "、。，．,.：:；;？?！!）)」』】〕〉》］]｝}" +
+        "ー・…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ";
     const string NoLineEnd = "（(「『【〔〈《［[｛{";
 
     static bool Listed(string set, int codePoint) => codePoint < 0x10000 && set.Contains((char)codePoint);
 
-    static bool IsBreakable(int cp) => cp is >= 0x2E80 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF or >= 0xFF00 and <= 0xFFEF or >= 0x20000 and <= 0x3FFFF;
+    static bool IsBreakable(int cp) =>
+        cp is >= 0x2E80 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF
+            or >= 0xFF00 and <= 0xFFEF or >= 0x20000 and <= 0x3FFFF;
+
+    #endregion
+
+    #region Usage text
 
     /// <summary>
     /// The items of a usage text's <c>Keys:</c> section, one per line ("T textures", "Esc quit"...): split at commas and
@@ -277,6 +329,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         for (int i = 0; i <= keys.Length; i++)
         {
             char c = i < keys.Length ? keys[i] : ',';
+
             // "Esc quit. F1 post off": a full stop before the next line's first key ends an item too.
             if (c == '.' && i + 2 < keys.Length && keys[i + 1] == ' ' && char.IsUpper(keys[i + 2])) c = ',';
             if (c == '(') depth++;
@@ -293,9 +346,15 @@ public sealed unsafe class DebugOverlay : IDisposable
         return items;
     }
 
+    #endregion
+
+    #region Panels
+
     public static readonly Vector4 PanelColour = new(0.05f, 0.05f, 0.06f, 0.78f), TextColour = new(0.92f, 0.92f, 0.88f, 1f);
 
-    /// <summary>Draws a titled panel listing <paramref name="lines"/> when <see cref="Visible"/>; see <see cref="Panel"/>.</summary>
+    /// <summary>
+    /// Draws a titled panel listing <paramref name="lines"/> when <see cref="Visible"/>; see <see cref="Panel"/>.
+    /// </summary>
     public float Draw(int width, int height, string title, IReadOnlyList<string> lines, float top = 0) =>
         Visible ? Panel(width, height, title, lines, top) : top;
 
@@ -312,6 +371,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         float lineHeight = LineHeight * scale, charWidth = CharWidth * scale;
         float y = top + margin;
         int rowsFit = Math.Max((int)((height - y - margin - 2 * pad - lineHeight * 1.5f) / lineHeight), 1);
+
         // Lines wider than the window wrap (the resident memory lines run long); with more than one column, to the column's share of it.
         float usable = width - 2 * margin - 2 * pad;
         var source = lines;
@@ -357,7 +417,12 @@ public sealed unsafe class DebugOverlay : IDisposable
             while (true)
             {
                 string piece = first ? rest : indent + rest;
-                if (piece.Length <= maxChars) { result.Add(piece); break; }
+                if (piece.Length <= maxChars)
+                {
+                    result.Add(piece);
+                    break;
+                }
+
                 int cut = piece.LastIndexOf(' ', maxChars);
                 if (cut <= maxChars / 2) cut = maxChars;
                 result.Add(piece[..cut].TrimEnd());
@@ -368,10 +433,18 @@ public sealed unsafe class DebugOverlay : IDisposable
         return result;
     }
 
-    /// <summary>Queues a solid rectangle (pixels, top-left origin) for the next <see cref="Flush"/>.</summary>
+    #endregion
+
+    #region Text and shapes
+
+    /// <summary>
+    /// Queues a solid rectangle (pixels, top-left origin) for the next <see cref="Flush"/>.
+    /// </summary>
     public void Rect(float x0, float y0, float x1, float y1, Vector4 colour) => Quad(x0, y0, x1, y1, -1, 0, -1, 0, colour);
 
-    /// <summary>Queues a line of text whose top is at <paramref name="top"/>; returns its width in pixels.</summary>
+    /// <summary>
+    /// Queues a line of text whose top is at <paramref name="top"/>; returns its width in pixels.
+    /// </summary>
     public float Text(string s, float x, float top, Vector4 colour) => TextScaled(s, x, top, colour, 1);
 
     public float TextScaled(string s, float x, float top, Vector4 colour, float scale)
@@ -392,6 +465,7 @@ public sealed unsafe class DebugOverlay : IDisposable
             if (ui.Generation != _cacheGeneration) DropCachedGeometry(ui.Generation);
             return UiText(ui, key);
         }
+
         // The stb faces are immutable. Bound the cache even for scrolling text and continuously changing counters.
         if (_textGeometry.TryGetValue(key, out var cached))
         {
@@ -414,7 +488,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         return x - start;
     }
 
-    /// <summary>Caches the quads queued since <paramref name="first"/> as the geometry of <paramref name="key"/> (bounded in entries and floats).</summary>
+    /// <summary>
+    /// Caches the quads queued since <paramref name="first"/> as the geometry of <paramref name="key"/> (bounded in entries and floats).
+    /// </summary>
     void Remember((string Text, float X, float Top, float Scale, Vector4 Colour) key, int first, float width)
     {
         int added = _batch.Count - first;
@@ -435,14 +511,18 @@ public sealed unsafe class DebugOverlay : IDisposable
         _cacheGeneration = generation;
     }
 
-    /// <summary>Starts a run of quads for the UI font's current atlas texture when the last quads were queued against another one.</summary>
+    /// <summary>
+    /// Starts a run of quads for the UI font's current atlas texture when the last quads were queued against another one.
+    /// </summary>
     void NoteAtlas(UiFont ui)
     {
         var texture = ui.Sampled;
         if (_atlasRuns.Count == 0 || _atlasRuns[^1].Texture != texture) _atlasRuns.Add((_batch.Count, texture));
     }
 
-    /// <summary>Queues the glyph quads of a UI-font line (every glyph exists: <see cref="UiFont.Ensure"/> ran) and caches them.</summary>
+    /// <summary>
+    /// Queues the glyph quads of a UI-font line (every glyph exists: <see cref="UiFont.Ensure"/> ran) and caches them.
+    /// </summary>
     float UiText(UiFont ui, (string Text, float X, float Top, float Scale, Vector4 Colour) key)
     {
         var (s, x, top, scale, colour) = key;
@@ -458,6 +538,7 @@ public sealed unsafe class DebugOverlay : IDisposable
             if (g.PixelWidth > 0)
             {
                 NoteAtlas(ui);
+
                 // The atlas can have been replaced by the lookup of a glyph the line needed after all (it was too full): the side is read again.
                 side = ui.Side;
                 float gx = ui.Snapped ? MathF.Round(x) : x, gy = ui.Snapped ? MathF.Round(baseline) : baseline;
@@ -467,21 +548,31 @@ public sealed unsafe class DebugOverlay : IDisposable
             x += g.Advance * scale;
         }
         float width = x - start;
+
         // A line that moved the atlas partway holds quads for two textures: not worth remembering.
         if (ui.Generation == generation) Remember(key, first, width);
         return width;
     }
 
-    /// <summary>Draws everything queued since the last flush over <see cref="Target"/> (viewport <paramref name="width"/> × <paramref name="height"/>).</summary>
+    #endregion
+
+    #region Flushing
+
+    /// <summary>
+    /// Draws everything queued since the last flush over <see cref="Target"/> (viewport <paramref name="width"/> × <paramref name="height"/>).
+    /// </summary>
     public void Flush(int width, int height, Meitou.Data.Ui.UiRect? clip = null)
         => Flush(width, height, clip, null);
 
-    /// <summary>A pass that collects several overlays (the HUD, the debug text, the loading screen) into one render encoder; dispose it to draw them.</summary>
+    /// <summary>
+    /// A pass that collects several overlays (the HUD, the debug text, the loading screen) into one render encoder; dispose it to draw them.
+    /// </summary>
     public OverlayPass BeginPass(int width, int height) => new(Gpu, width, height);
 
     /// <summary>
-    /// The scissor of a flush: the whole target without a clip (as <see cref="PassTargets.At"/> gives), else the clip in the target's pixels. Vulkan's target
-    /// is bottom-up, so its scissor is measured from the bottom; Metal's has the UI rectangles' top-left origin (a missing flip shifts every clipped widget down).
+    /// The scissor of a flush: the whole target without a clip (as <see cref="PassTargets.At"/> gives), else the clip in the target's pixels.
+    /// Vulkan's target is bottom-up, so its scissor is measured from the bottom; Metal's has the UI rectangles' top-left origin (a missing flip
+    /// shifts every clipped widget down).
     /// </summary>
     PixelRect Scissor(GpuTexture target, int width, int height, Meitou.Data.Ui.UiRect? clip)
     {
@@ -493,34 +584,72 @@ public sealed unsafe class DebugOverlay : IDisposable
         return new PixelRect(left, scissorTop, (uint)(right - left), (uint)(bottom - top));
     }
 
-    /// <summary>Widget and font batches share one rendering; scissors and draw order still change per flush.</summary>
+    /// <summary>
+    /// Widget and font batches share one rendering; scissors and draw order still change per flush.
+    /// </summary>
     public void Flush(int width, int height, Meitou.Data.Ui.UiRect? clip, OverlayPass? pass)
     {
-        if (_batch.Count == 0 || width <= 0 || height <= 0 || Target is null) { _batch.Clear(); _imageBatch = null; _atlasRuns.Clear(); return; }
-        var scissor = Scissor(Target, width, height, clip);
-        // The atlas texture of run `run` of the batch: a UI font's (it can change within a batch), else the baked one.
-        SampledTexture AtlasAt(int run) => _atlasRuns.Count > 0 ? _atlasRuns[run].Texture : _uiFont is { } ui ? ui.Sampled : _atlasSampled;
-        if (pass is not null)
+        if (_batch.Count == 0 || width <= 0 || height <= 0 || Target is null)
         {
-            // Only the scissor goes to the pass (the whole target without a clip, as PassTargets.At gives).
-            var all = CollectionsMarshal.AsSpan(_batch);
-            if (_atlasRuns.Count <= 1) pass.Add(this, all, _imageBatch, scissor, _imageBatch is null ? AtlasAt(0) : null);
-            else
-                for (int run = 0; run < _atlasRuns.Count; run++)
-                {
-                    int from = run == 0 ? 0 : _atlasRuns[run].Start, to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : all.Length;
-                    pass.Add(this, all[from..to], null, scissor, _atlasRuns[run].Texture);
-                }
-            _batch.Clear();
-            _atlasRuns.Clear();
-            _imageBatch = null;
+            ClearBatch();
             return;
         }
-        // A native segment of its own. It is begun first: the overlay is also drawn after a frame ended (a screenshot's key list), and the
-        // segment opens the frame whose constants hold the vertices.
 
-        // The pass's targets only here, for a segment of its own: a pass needs only the scissor (PassTargets is a class, made per flush it was garbage).
-        var t = PassTargets.Of(Target, null).At(new PixelViewport(0, 0, width, height, 0, 1)) with { Scissor = scissor };
+        var scissor = Scissor(Target, width, height, clip);
+        if (pass is not null)
+        {
+            FlushToPass(pass, scissor);
+            return;
+        }
+
+        DrawSegment(Target, width, height, scissor);
+    }
+
+    /// <summary>
+    /// The atlas texture of run <paramref name="run"/> of the batch: a UI font's (it can change within a batch), else the baked one.
+    /// </summary>
+    SampledTexture AtlasAt(int run) => _atlasRuns.Count > 0 ? _atlasRuns[run].Texture : _uiFont is { } ui ? ui.Sampled : _atlasSampled;
+
+    void ClearBatch()
+    {
+        _batch.Clear();
+        _imageBatch = null;
+        _atlasRuns.Clear();
+    }
+
+    /// <summary>
+    /// Hands the batch to <paramref name="pass"/>, which draws it with the other overlays in one render encoder.
+    /// </summary>
+    void FlushToPass(OverlayPass pass, PixelRect scissor)
+    {
+        // Only the scissor goes to the pass (the whole target without a clip, as PassTargets.At gives).
+        var all = CollectionsMarshal.AsSpan(_batch);
+        if (_atlasRuns.Count <= 1)
+        {
+            pass.Add(this, all, _imageBatch, scissor, _imageBatch is null ? AtlasAt(0) : null);
+        }
+        else
+        {
+            for (int run = 0; run < _atlasRuns.Count; run++)
+            {
+                int from = run == 0 ? 0 : _atlasRuns[run].Start;
+                int to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : all.Length;
+                pass.Add(this, all[from..to], null, scissor, _atlasRuns[run].Texture);
+            }
+        }
+
+        ClearBatch();
+    }
+
+    /// <summary>
+    /// Draws the batch in a native segment of its own over <paramref name="target"/>. It is begun first: the overlay is also drawn after a frame
+    /// ended (a screenshot's key list), and the segment opens the frame whose constants hold the vertices.
+    /// </summary>
+    void DrawSegment(GpuTexture target, int width, int height, PixelRect scissor)
+    {
+        // The pass's targets only here, for a segment of its own: a pass needs only the scissor (PassTargets is a class, made per flush it was
+        // garbage).
+        var t = PassTargets.Of(target, null).At(new PixelViewport(0, 0, width, height, 0, 1)) with { Scissor = scissor };
         var cmd = Gpu.BeginNative("debug overlay");
         cmd.BeginRendering(t.Rendering);
         _program.Set(_uScreen, (float)width, height);
@@ -528,9 +657,12 @@ public sealed unsafe class DebugOverlay : IDisposable
         var floats = CollectionsMarshal.AsSpan(_batch);
         var vertices = Gpu.Frame.AllocateConstants((ulong)(floats.Length * 4), 16);
         MemoryMarshal.AsBytes(floats).CopyTo(new Span<byte>(vertices.Pointer, floats.Length * 4));
-        // As the GL version drew: no depth test or culling, blended over by alpha. The alpha channel accumulates as "over" does, so a transparent target
-        // (the UI layer) ends up premultiplied: colour a * c, alpha a.
-        var state = DrawState.For(t.Formats, Gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One, AlphaDst: BlendingFactor.OneMinusSrcAlpha));
+
+        // As the GL version drew: no depth test or culling, blended over by alpha. The alpha channel accumulates as "over" does, so a transparent
+        // target (the UI layer) ends up premultiplied: colour a * c, alpha a.
+        var state = DrawState.For(t.Formats, Gpu.DepthClamp,
+            blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
+            AlphaDst: BlendingFactor.OneMinusSrcAlpha));
         state.Record(cmd, t);
         Span<LegacyProgram.Attribute?> attributes =
         [
@@ -538,32 +670,47 @@ public sealed unsafe class DebugOverlay : IDisposable
             new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rg32F, Stride * 4, false),
             new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 16), InternalFormat.Rgba32F, Stride * 4, false),
         ];
-        var pipeline = Gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout(attributes), PrimitiveType.Triangles, t.Formats, "debug overlay"));
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout(attributes), PrimitiveType.Triangles,
+            t.Formats, "debug overlay"));
         cmd.BindPipeline(pipeline);
         Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
         cmd.BindVertexBuffers(0, buffers);
+        DrawAtlasRuns(cmd, floats.Length);
+        cmd.EndRendering();
+        Gpu.EndNative(cmd);
+        ClearBatch();
+    }
+
+    /// <summary>
+    /// Draws the batch's first <paramref name="count"/> floats: one draw when one atlas texture serves them all, else one draw per atlas run.
+    /// </summary>
+    void DrawAtlasRuns(IGpuCommandList cmd, int count)
+    {
         if (_imageBatch is not null || _atlasRuns.Count <= 1)
         {
             _program.Bind(_samplerAtlas, _imageBatch ?? AtlasAt(0));
             _program.Flush(cmd);
-            cmd.Draw((uint)(floats.Length / Stride));
+            cmd.Draw((uint)(count / Stride));
+            return;
         }
-        else
-            for (int run = 0; run < _atlasRuns.Count; run++)
-            {
-                int from = run == 0 ? 0 : _atlasRuns[run].Start, to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : floats.Length;
-                _program.Bind(_samplerAtlas, _atlasRuns[run].Texture);
-                _program.Flush(cmd);
-                cmd.Draw((uint)((to - from) / Stride), firstVertex: (uint)(from / Stride));
-            }
-        cmd.EndRendering();
-        Gpu.EndNative(cmd);
-        _batch.Clear();
-        _atlasRuns.Clear();
-        _imageBatch = null;
+
+        for (int run = 0; run < _atlasRuns.Count; run++)
+        {
+            int from = run == 0 ? 0 : _atlasRuns[run].Start;
+            int to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : count;
+            _program.Bind(_samplerAtlas, _atlasRuns[run].Texture);
+            _program.Flush(cmd);
+            cmd.Draw((uint)((to - from) / Stride), firstVertex: (uint)(from / Stride));
+        }
     }
 
-    /// <summary>Collects painter-ordered batches, coalescing adjacent compatible draws into one upload and rendering.</summary>
+    #endregion
+
+    #region Overlay pass
+
+    /// <summary>
+    /// Collects painter-ordered batches, coalescing adjacent compatible draws into one upload and rendering.
+    /// </summary>
     public sealed class OverlayPass(IGpuContext gpu, int width, int height) : IDisposable
     {
         readonly List<float> _vertices = [];
@@ -572,18 +719,25 @@ public sealed unsafe class DebugOverlay : IDisposable
         GpuTexture? _target;
         readonly record struct Run(SampledTexture Texture, bool Image, PixelRect Scissor, int First, int Count);
 
-        /// <summary>One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.</summary>
-        public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First, int Count);
+        /// <summary>
+        /// One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.
+        /// </summary>
+        public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First,
+            int Count);
 
         List<Recorded>? _recording;
         List<float>? _recordedFloats;
 
-        /// <summary>Until <see cref="EndRecording"/>, every <see cref="Add"/> is also written to <paramref name="adds"/> and <paramref name="floats"/>.</summary>
+        /// <summary>
+        /// Until <see cref="EndRecording"/>, every <see cref="Add"/> is also written to <paramref name="adds"/> and <paramref name="floats"/>.
+        /// </summary>
         public void BeginRecording(List<Recorded> adds, List<float> floats) => (_recording, _recordedFloats) = (adds, floats);
 
         public void EndRecording() => (_recording, _recordedFloats) = (null, null);
 
-        /// <summary>Adds again what was recorded.</summary>
+        /// <summary>
+        /// Adds again what was recorded.
+        /// </summary>
         public void Replay(float[] floats, Recorded[] adds)
         {
             foreach (var r in adds) Add(r.Owner, floats.AsSpan(r.First, r.Count), r.Image, r.Clip, r.Atlas);
@@ -591,12 +745,17 @@ public sealed unsafe class DebugOverlay : IDisposable
 
         public OverlayPass Reset(int newWidth, int newHeight)
         {
-            width = newWidth; height = newHeight;
-            _vertices.Clear(); _runs.Clear(); _renderer = null; _target = null;
+            width = newWidth;
+            height = newHeight;
+            _vertices.Clear();
+            _runs.Clear();
+            _renderer = null;
+            _target = null;
             return this;
         }
 
-        /// <param name="atlas">The font atlas texture the glyph quads of <paramref name="data"/> sample (a UI font's can change between runs); null: the owner's baked one.</param>
+        /// <param name="atlas">The font atlas texture the glyph quads of <paramref name="data"/> sample (a UI font's can change between runs); null:
+        /// the owner's baked one.</param>
         public void Add(DebugOverlay owner, ReadOnlySpan<float> data, SampledTexture? image, PixelRect clip, SampledTexture? atlas = null)
         {
             if (owner.Gpu != gpu || _target is not null && _target != owner.Target)
@@ -608,6 +767,7 @@ public sealed unsafe class DebugOverlay : IDisposable
                 _recording.Add(new(owner, image, clip, atlas, _recordedFloats.Count, data.Length));
                 _recordedFloats.AddRange(data);
             }
+
             // If no geometry reaches outside this scissor, the full viewport clips it identically.
             // Different widget clips can then share a draw without changing their pixels.
             bool contained = true, solid = true;
@@ -646,7 +806,9 @@ public sealed unsafe class DebugOverlay : IDisposable
             cmd.BeginRendering(targets.Rendering);
             try
             {
-                var state = DrawState.For(targets.Formats, gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One, AlphaDst: BlendingFactor.OneMinusSrcAlpha));
+                var state = DrawState.For(targets.Formats, gpu.DepthClamp,
+                    blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
+                    AlphaDst: BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, targets);
                 var data = CollectionsMarshal.AsSpan(_vertices);
                 var upload = gpu.Frame.AllocateConstants((ulong)(data.Length * 4), 16);
@@ -658,7 +820,8 @@ public sealed unsafe class DebugOverlay : IDisposable
                     new(new GpuBufferBinding(upload.Handle, upload.Offset + 16), InternalFormat.Rgba32F, Stride * 4, false),
                 ];
                 var program = painter._program;
-                var pipeline = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveType.Triangles, targets.Formats, "UI overlay"));
+                var pipeline = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveType.Triangles,
+                    targets.Formats, "UI overlay"));
                 cmd.BindPipeline(pipeline);
                 Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
                 cmd.BindVertexBuffers(0, buffers);
@@ -666,7 +829,12 @@ public sealed unsafe class DebugOverlay : IDisposable
                 var scissor = targets.Scissor;
                 foreach (var run in _runs)
                 {
-                    if (!SameClip(scissor, run.Scissor)) { cmd.SetScissor(run.Scissor); scissor = run.Scissor; }
+                    if (!SameClip(scissor, run.Scissor))
+                    {
+                        cmd.SetScissor(run.Scissor);
+                        scissor = run.Scissor;
+                    }
+
                     program.Set(painter._uImage, run.Image ? 1 : 0);
                     program.Bind(painter._samplerAtlas, run.Texture);
                     program.Flush(cmd);
@@ -677,11 +845,21 @@ public sealed unsafe class DebugOverlay : IDisposable
             {
                 cmd.EndRendering();
                 gpu.EndNative(cmd);
-                _vertices.Clear(); _runs.Clear(); _renderer = null; _target = null;
+                _vertices.Clear();
+                _runs.Clear();
+                _renderer = null;
+                _target = null;
             }
         }
     }
-    /// <summary>Queues a texture rectangle. Flush before switching between image and font batches.</summary>
+
+    #endregion
+
+    #region Images and shapes
+
+    /// <summary>
+    /// Queues a texture rectangle. Flush before switching between image and font batches.
+    /// </summary>
     public void Image(SampledTexture texture, Vector4 destination, Vector4 uv, Vector4 colour)
     {
         if (_batch.Count > 0 && (_imageBatch is null || _imageBatch.Value != texture))
@@ -690,7 +868,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         Quad(destination.X, destination.Y, destination.Z, destination.W, uv.X, uv.Y, uv.Z, uv.W, colour);
     }
 
-    /// <summary>Queues a texture rectangle turned by <paramref name="angle"/> radians (clockwise on screen) about its centre.</summary>
+    /// <summary>
+    /// Queues a texture rectangle turned by <paramref name="angle"/> radians (clockwise on screen) about its centre.
+    /// </summary>
     public void ImageRotated(SampledTexture texture, Vector4 destination, Vector4 uv, Vector4 colour, float angle)
     {
         if (_batch.Count > 0 && (_imageBatch is null || _imageBatch.Value != texture))
@@ -701,11 +881,17 @@ public sealed unsafe class DebugOverlay : IDisposable
         var (sin, cos) = MathF.SinCos(angle);
         Vector2 Corner(float sx, float sy) => centre + new Vector2(sx * half.X * cos - sy * half.Y * sin, sx * half.X * sin + sy * half.Y * cos);
         var (a, b, c, d) = (Corner(-1, -1), Corner(1, -1), Corner(1, 1), Corner(-1, 1));
-        Emit(a.X, a.Y, uv.X, uv.Y, colour); Emit(b.X, b.Y, uv.Z, uv.Y, colour); Emit(c.X, c.Y, uv.Z, uv.W, colour);
-        Emit(a.X, a.Y, uv.X, uv.Y, colour); Emit(c.X, c.Y, uv.Z, uv.W, colour); Emit(d.X, d.Y, uv.X, uv.W, colour);
+        Emit(a.X, a.Y, uv.X, uv.Y, colour);
+        Emit(b.X, b.Y, uv.Z, uv.Y, colour);
+        Emit(c.X, c.Y, uv.Z, uv.W, colour);
+        Emit(a.X, a.Y, uv.X, uv.Y, colour);
+        Emit(c.X, c.Y, uv.Z, uv.W, colour);
+        Emit(d.X, d.Y, uv.X, uv.W, colour);
     }
 
-    /// <summary>Queues a solid triangle (pixels, top-left origin).</summary>
+    /// <summary>
+    /// Queues a solid triangle (pixels, top-left origin).
+    /// </summary>
     public void Triangle(Vector2 a, Vector2 b, Vector2 c, Vector4 colour)
     {
         var vertices = Reserve(3);
@@ -714,7 +900,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         vertices[2] = new(new(c.X, c.Y, -1, 0), colour);
     }
 
-    /// <summary>Queues a solid line segment <paramref name="thickness"/> pixels wide.</summary>
+    /// <summary>
+    /// Queues a solid line segment <paramref name="thickness"/> pixels wide.
+    /// </summary>
     public void Line(float x0, float y0, float x1, float y1, float thickness, Vector4 colour)
     {
         var d = new Vector2(x1 - x0, y1 - y0);
@@ -724,8 +912,12 @@ public sealed unsafe class DebugOverlay : IDisposable
         OverlayVertex a = new(new(x0 + n.X, y0 + n.Y, -1, 0), colour), b = new(new(x1 + n.X, y1 + n.Y, -1, 0), colour);
         OverlayVertex c = new(new(x1 - n.X, y1 - n.Y, -1, 0), colour), e = new(new(x0 - n.X, y0 - n.Y, -1, 0), colour);
         var vertices = Reserve(6);
-        vertices[0] = a; vertices[1] = b; vertices[2] = c;
-        vertices[3] = a; vertices[4] = c; vertices[5] = e;
+        vertices[0] = a;
+        vertices[1] = b;
+        vertices[2] = c;
+        vertices[3] = a;
+        vertices[4] = c;
+        vertices[5] = e;
     }
 
     void Quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, Vector4 c)
@@ -733,8 +925,12 @@ public sealed unsafe class DebugOverlay : IDisposable
         OverlayVertex a = new(new(x0, y0, u0, v0), c), b = new(new(x1, y0, u1, v0), c);
         OverlayVertex d = new(new(x1, y1, u1, v1), c), e = new(new(x0, y1, u0, v1), c);
         var vertices = Reserve(6);
-        vertices[0] = a; vertices[1] = b; vertices[2] = d;
-        vertices[3] = a; vertices[4] = d; vertices[5] = e;
+        vertices[0] = a;
+        vertices[1] = b;
+        vertices[2] = d;
+        vertices[3] = a;
+        vertices[4] = d;
+        vertices[5] = e;
     }
 
     void Emit(float x, float y, float u, float v, Vector4 c)
@@ -753,6 +949,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         CollectionsMarshal.SetCount(_batch, start + added);
         return MemoryMarshal.Cast<float, OverlayVertex>(CollectionsMarshal.AsSpan(_batch).Slice(start, added));
     }
+
+    #endregion
 
     public void Dispose()
     {

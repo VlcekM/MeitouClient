@@ -8,21 +8,29 @@ namespace Meitou.Game.Rendering.Shadows;
 /// <summary>
 /// GLSL of the Meitou shadows (the <c>shadows</c> enhancement; docs/formats/shadows.md, "Meitou shadows"): the receiver
 /// <c>kenshiShadowMeitou</c> that <see cref="ShadowShaders.Functions"/> dispatches to when the receiver block's mode is 1, the terrain
-/// shadow sweep and the blocker map pass. The cascade matrices are the faithful block's (<see cref="ShadowShaders.ReceiverBlock"/>, the
-/// same layout); what only Meitou needs is in its own block (<see cref="Block"/>, binding <see cref="Binding"/>).
+/// shadow sweep and the blocker map pass. The cascade matrices are the faithful block's (<see cref="ShadowShaders.ReceiverBlock"/>, the same layout);
+/// what only Meitou needs is in its own block (<see cref="Block"/>, binding <see cref="Binding"/>).
 /// </summary>
 static class MeitouShadowShaders
 {
     public const uint Binding = 8;
     public const string Block = "MeitouShadowReceiver";
-    /// <summary>Size of <see cref="Block"/> (std140): two vec4 arrays of <see cref="ShadowSettings.MaxCascades"/>, four vec4, a mat4 and a vec4.</summary>
+    /// <summary>
+    /// Size of <see cref="Block"/> (std140): two vec4 arrays of <see cref="ShadowSettings.MaxCascades"/>, four vec4, a mat4 and a vec4.
+    /// </summary>
     public const int BlockBytes = 2 * ShadowSettings.MaxCascades * 16 + 4 * 16 + 64 + 16;
-    /// <summary>Float offsets in <see cref="Block"/> of the members after the two per-cascade arrays (<c>uMsParams</c> and on).</summary>
+    /// <summary>
+    /// Float offsets in <see cref="Block"/> of the members after the two per-cascade arrays (<c>uMsParams</c> and on).
+    /// </summary>
     public const int ParamsOffset = 2 * ShadowSettings.MaxCascades * 4;
-    /// <summary>Taps of the filter and of the blocker search.</summary>
+    /// <summary>
+    /// Taps of the filter and of the blocker search.
+    /// </summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
-    /// <summary>The sunflower disk of <paramref name="n"/> points as GLSL vec2 constants (radius sqrt((k + 0.5) / n), angle k times the golden angle).</summary>
+    /// <summary>
+    /// The sunflower disk of <paramref name="n"/> points as GLSL vec2 constants (radius sqrt((k + 0.5) / n), angle k times the golden angle).
+    /// </summary>
     static string Disk(int n) => string.Join(", ", Enumerable.Range(0, n).Select(k =>
     {
         double r = Math.Sqrt((k + 0.5) / n), a = k * 2.3999632;
@@ -213,9 +221,9 @@ static class MeitouShadowShaders
         """;
 
     /// <summary>
-    /// One pass of the terrain shadow sweep over the world height grid (<see cref="TerrainShadowMap"/>): each sample takes the higher of
-    /// its own shadow top and that of the sample <c>uStep</c> towards the sun, lowered by the sun's slope over that distance. The first
-    /// pass reads the raw heights (the land one sample towards the sun); after n passes every sample has seen 2^n samples.
+    /// One pass of the terrain shadow sweep over the world height grid (<see cref="TerrainShadowMap"/>): each sample takes the higher of its own
+    /// shadow top and that of the sample <c>uStep</c> towards the sun, lowered by the sun's slope over that distance. The first pass reads the raw
+    /// heights (the land one sample towards the sun); after n passes every sample has seen 2^n samples.
     /// </summary>
     public const string SweepFragment = """
         #version 330 core
@@ -247,7 +255,9 @@ static class MeitouShadowShaders
         }
         """;
 
-    /// <summary>The blocker map's layer <c>uLayer</c>: that cascade's raw depth (comparison off while it runs), the nearest of each 2 × 2 texels.</summary>
+    /// <summary>
+    /// The blocker map's layer <c>uLayer</c>: that cascade's raw depth (comparison off while it runs), the nearest of each 2 × 2 texels.
+    /// </summary>
     public const string BlockerFragment = """
         #version 330 core
         uniform sampler2DArray uAtlas;

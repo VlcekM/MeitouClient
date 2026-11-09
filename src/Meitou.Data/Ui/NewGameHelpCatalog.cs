@@ -1,6 +1,8 @@
 namespace Meitou.Data.Ui;
 
-/// <summary>Original option descriptions from installed gettext source references; no game prose is embedded.</summary>
+/// <summary>
+/// Original option descriptions from installed gettext source references; no game prose is embedded.
+/// </summary>
 public sealed class NewGameHelpCatalog
 {
     readonly Dictionary<int, string> _descriptions = [];

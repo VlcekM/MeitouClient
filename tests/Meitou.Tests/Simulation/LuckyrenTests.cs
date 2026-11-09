@@ -11,13 +11,16 @@ namespace Meitou.Tests.Simulation;
 
 public class LuckyrenTests
 {
-    /// <summary>A started player squad whose second member bursts at tick 2 carrying two items (one worn); the world after the burst's tick.</summary>
+    /// <summary>
+    /// A started player squad whose second member bursts at tick 2 carrying two items (one worn); the world after the burst's tick.
+    /// </summary>
     static (SimWorld World, CharacterId Victim, Vector3 At, ConcurrentQueue<BloodMark> Marks) Burst(int threads)
     {
         var db = SyntheticTown.Database();
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Body,
+        var systems = SyntheticTown.Standard(data, walk,
+                StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Body,
             new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
         var world = new SimWorld(new WorldSettings { Seed = 4, Threads = threads, PublishSnapshots = false }, walk, systems.Systems);
         var squad = systems.Population!.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
@@ -37,7 +40,9 @@ public class LuckyrenTests
         return (world, victim, at, marks);
     }
 
-    /// <summary>The state after the burst's tick, pinned in <see cref="GoldenHashTests"/>.</summary>
+    /// <summary>
+    /// The state after the burst's tick, pinned in <see cref="GoldenHashTests"/>.
+    /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
         var (world, _, _, _) = Burst(threads);
@@ -49,14 +54,17 @@ public class LuckyrenTests
     {
         var (world, victim, at, marks) = Burst(1);
         using var _ = world;
+
         Assert.False(world.Characters.IsAlive(victim));
         Assert.Equal(["carried", "worn"], world.GroundItems.All.Select(g => g.Item.Record).Order());
         Assert.All(world.GroundItems.All, g =>
+
         {
             Assert.Equal("main", g.Item.Section);
             Assert.InRange(Vector2.Distance(new(g.Position.X, g.Position.Z), new(at.X, at.Z)), 0, BodySystem.BurstSpread);
         });
         var mark = Assert.Single(marks);
+
         Assert.Equal(BloodMarkKind.Explosion, mark.Kind);
         Assert.Equal(victim, mark.Who);
         Assert.NotNull(mark.Race);

@@ -8,13 +8,18 @@ namespace Meitou.Data.Ui;
 /// </summary>
 public sealed record MyGuiPointer(string Name, float PointX, float PointY, float Width, float Height, MyGuiImage Image)
 {
-    /// <summary>Where the pointer is drawn for the mouse at (<paramref name="x"/>, <paramref name="y"/>).</summary>
+    /// <summary>
+    /// Where the pointer is drawn for the mouse at (<paramref name="x"/>, <paramref name="y"/>).
+    /// </summary>
     public UiRect At(float x, float y) => new(x - PointX, y - PointY, Width, Height);
 }
 
 public static class MyGuiPointers
 {
-    /// <summary>The pointer named <paramref name="name"/> with its image resolved, or null when it or its image set is missing (the original's empty-named entry has neither).</summary>
+    /// <summary>
+    /// The pointer named <paramref name="name"/> with its image resolved, or null when it or its image set is missing (the original's empty-named
+    /// entry has neither).
+    /// </summary>
     public static MyGuiPointer? Resolve(MyGuiResources resources, string name)
     {
         if (name.Length == 0 || !resources.Resources.TryGetValue(name, out var resource) || MyGuiReader.Attribute(resource, "type") != "ResourceImageSetPointer") return null;

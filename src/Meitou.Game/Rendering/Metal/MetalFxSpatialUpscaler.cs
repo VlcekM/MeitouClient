@@ -11,36 +11,36 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalFxSpatialUpscaler : IUpscaler
 {
-    readonly MetalContext ctx;
-    MTLFXSpatialScaler scaler;
-    int inputWidth, inputHeight, outputWidth, outputHeight;
-    bool failed;
+    readonly MetalContext _ctx;
+    MTLFXSpatialScaler _scaler;
+    int _inputWidth, _inputHeight, _outputWidth, _outputHeight;
+    bool _failed;
 
-    MetalFxSpatialUpscaler(MetalContext ctx) => this.ctx = ctx;
+    MetalFxSpatialUpscaler(MetalContext ctx) => this._ctx = ctx;
 
     public UpscalerKind Kind => UpscalerKind.MetalFx;
-    public string Name => inputWidth == 0 ? "metalfx spatial" : $"metalfx spatial {inputWidth}x{inputHeight} -> {outputWidth}x{outputHeight}";
+    public string Name => _inputWidth == 0 ? "metalfx spatial" : $"metalfx spatial {_inputWidth}x{_inputHeight} -> {_outputWidth}x{_outputHeight}";
 
     public static MetalFxSpatialUpscaler? TryCreate(MetalContext ctx) =>
         MetalFxRuntime.Available ? new MetalFxSpatialUpscaler(ctx) : null;
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed) return false;
+        if (_failed) return false;
         if (i.RenderWidth <= 0 || i.RenderHeight <= 0 || i.DisplayWidth <= 0 || i.DisplayHeight <= 0) return false;
         if (!EnsureScaler(i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight)) return false;
-        var s = scaler;
-        s.ColorTexture = ctx.TextureAt(i.Colour);
-        s.OutputTexture = ctx.TextureAt(i.Output);
+        var s = _scaler;
+        s.ColorTexture = _ctx.TextureAt(i.Colour);
+        s.OutputTexture = _ctx.TextureAt(i.Output);
         try
         {
             // PostTaa is already inside its native segment; the spatial scaler has no history or reset state.
-            s.EncodeToCommandBuffer(ctx.Frame.Command);
+            s.EncodeToCommandBuffer(_ctx.Frame.Command);
         }
         catch (Exception e)
         {
             Console.WriteLine($"metal     MetalFX spatial encode failed: {e.Message}");
-            failed = true;
+            _failed = true;
             return false;
         }
         return true;
@@ -48,14 +48,15 @@ public sealed class MetalFxSpatialUpscaler : IUpscaler
 
     bool EnsureScaler(int width, int height, int displayWidth, int displayHeight)
     {
-        if (scaler.NativePtr != IntPtr.Zero && inputWidth == width && inputHeight == height &&
-            outputWidth == displayWidth && outputHeight == displayHeight) return true;
+        if (_scaler.NativePtr != IntPtr.Zero && _inputWidth == width && _inputHeight == height &&
+            _outputWidth == displayWidth && _outputHeight == displayHeight) return true;
+
         // A resize replaces the scaler while the previous frame ring may still name it. Disposing it here can
         // fault the GPU and make every following submission fail; hold it until the ring has passed.
-        if (scaler.NativePtr != IntPtr.Zero)
+        if (_scaler.NativePtr != IntPtr.Zero)
         {
-            var previous = scaler;
-            ctx.DeferDelete(() => previous.Dispose());
+            var previous = _scaler;
+            _ctx.DeferDelete(() => previous.Dispose());
         }
         var d = new MTLFXSpatialScalerDescriptor
         {
@@ -69,33 +70,33 @@ public sealed class MetalFxSpatialUpscaler : IUpscaler
         };
         try
         {
-            scaler = d.NewSpatialScaler(ctx.Device);
+            _scaler = d.NewSpatialScaler(_ctx.Device);
         }
         catch (Exception e)
         {
             Console.WriteLine($"metal     MetalFX spatial create failed: {e.Message}");
-            failed = true;
+            _failed = true;
             return false;
         }
-        if (scaler.NativePtr == IntPtr.Zero)
+        if (_scaler.NativePtr == IntPtr.Zero)
         {
             Console.WriteLine("metal     MetalFX spatial is unavailable on this device");
-            failed = true;
+            _failed = true;
             return false;
         }
-        scaler.InputContentWidth = (ulong)width;
-        scaler.InputContentHeight = (ulong)height;
-        inputWidth = width;
-        inputHeight = height;
-        outputWidth = displayWidth;
-        outputHeight = displayHeight;
+        _scaler.InputContentWidth = (ulong)width;
+        _scaler.InputContentHeight = (ulong)height;
+        _inputWidth = width;
+        _inputHeight = height;
+        _outputWidth = displayWidth;
+        _outputHeight = displayHeight;
         Console.WriteLine($"metal     MetalFX spatial {width}x{height} -> {displayWidth}x{displayHeight}");
         return true;
     }
 
     public void Dispose()
     {
-        if (scaler.NativePtr != IntPtr.Zero) scaler.Dispose();
-        scaler = default;
+        if (_scaler.NativePtr != IntPtr.Zero) _scaler.Dispose();
+        _scaler = default;
     }
 }

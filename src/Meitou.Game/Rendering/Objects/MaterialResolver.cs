@@ -5,42 +5,66 @@ using Meitou.Data.Ogre;
 
 namespace Meitou.Game.Rendering.Objects;
 
-/// <summary>Where a surface's alpha comes from. Values follow the fcs.def descriptions (docs/viewer.md).</summary>
+/// <summary>
+/// Where a surface's alpha comes from. Values follow the fcs.def descriptions (docs/viewer.md).
+/// </summary>
 public enum AlphaSource { None, DiffuseAlpha, NormalAlpha, DiffuseChannel }
 
-/// <summary>How the viewer shades one submesh: texture files plus the few material switches Kenshi's records carry.</summary>
+/// <summary>
+/// How the viewer shades one submesh: texture files plus the few material switches Kenshi's records carry.
+/// </summary>
 public sealed record SurfaceMaterial
 {
-    /// <summary>Where this came from, e.g. <c>MATERIAL_SPEC 'wallbasic01' via BUILDING_PART 'basic wall gate A'</c>.</summary>
+    /// <summary>
+    /// Where this came from, e.g. <c>MATERIAL_SPEC 'wallbasic01' via BUILDING_PART 'basic wall gate A'</c>.
+    /// </summary>
     public required string Description { get; init; }
     public string? Diffuse { get; init; }
     public string? Normal { get; init; }
-    /// <summary>Second texture set, blended in by vertex alpha (BuildingShader.DUAL, MapFeatureMode.DUAL_*).</summary>
+    /// <summary>
+    /// Second texture set, blended in by vertex alpha (BuildingShader.DUAL, MapFeatureMode.DUAL_*).
+    /// </summary>
     public string? Diffuse2 { get; init; }
     public string? Normal2 { get; init; }
     public AlphaSource Alpha { get; init; }
-    /// <summary>Alpha test threshold 0–1 (0 = no test).</summary>
+    /// <summary>
+    /// Alpha test threshold 0–1 (0 = no test).
+    /// </summary>
     public float AlphaThreshold { get; init; }
-    /// <summary>For <see cref="AlphaSource.DiffuseChannel"/> and channel-packed hair: channel indices 0–3 (R, G, B, A).</summary>
+    /// <summary>
+    /// For <see cref="AlphaSource.DiffuseChannel"/> and channel-packed hair: channel indices 0–3 (R, G, B, A).
+    /// </summary>
     public int AlphaChannel { get; init; } = 3;
     public int GreyChannel { get; init; } = -1;
     public Vector3 Tint { get; init; } = Vector3.One;
     public bool DoubleSided { get; init; }
     public bool Emissive { get; init; }
-    /// <summary>World-space planar projection instead of UVs (MapFeatureMode.TRIPLANAR / DUAL_TRIPLANAR).</summary>
+    /// <summary>
+    /// World-space planar projection instead of UVs (MapFeatureMode.TRIPLANAR / DUAL_TRIPLANAR).
+    /// </summary>
     public bool Triplanar { get; init; }
-    /// <summary>The DUST define: the weather's dust covers the material (building parts; triplanar map features, docs/formats/weather.md "Dust").</summary>
+    /// <summary>
+    /// The DUST define: the weather's dust covers the material (building parts; triplanar map features, docs/formats/weather.md "Dust").
+    /// </summary>
     public bool Dust { get; init; }
-    /// <summary>The foliage shader (FOLIAGE map features, leaves): wetness with a fixed absorbance.</summary>
+    /// <summary>
+    /// The foliage shader (FOLIAGE map features, leaves): wetness with a fixed absorbance.
+    /// </summary>
     public bool Foliage { get; init; }
     public Vector2 Tile { get; init; } = Vector2.One;
     public float SpecularMult { get; init; } = 1;
-    /// <summary>Multiply the diffuse by the vertex colour when the mesh has one (the COLOURING define; docs/formats/runtime-materials.md).</summary>
+    /// <summary>
+    /// Multiply the diffuse by the vertex colour when the mesh has one (the COLOURING define; docs/formats/runtime-materials.md).
+    /// </summary>
     public bool VertexColours { get; init; }
-    /// <summary>Character head textures, sampled at uv + (0, 1): the body mesh keeps head UVs in v -1..0 (Kenshi character.hlsl).</summary>
+    /// <summary>
+    /// Character head textures, sampled at uv + (0, 1): the body mesh keeps head UVs in v -1..0 (Kenshi character.hlsl).
+    /// </summary>
     public string? HeadDiffuse { get; init; }
     public string? HeadNormal { get; init; }
-    /// <summary>Clamp to a transparent black border instead of repeating (Kenshi's Character material units).</summary>
+    /// <summary>
+    /// Clamp to a transparent black border instead of repeating (Kenshi's Character material units).
+    /// </summary>
     public bool BorderAddressing { get; init; }
 }
 
@@ -57,7 +81,9 @@ public sealed class MaterialResolver
     readonly Dictionary<string, List<(GameRecord Record, string Field)>> _meshUsers = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, List<GameRecord>> _referencedBy = new(StringComparer.Ordinal);
 
-    /// <summary>Placeholder textures the script materials name for units Kenshi fills at run time.</summary>
+    /// <summary>
+    /// Placeholder textures the script materials name for units Kenshi fills at run time.
+    /// </summary>
     public static readonly HashSet<string> Placeholders = new(StringComparer.OrdinalIgnoreCase)
     {
         "black.dds", "flat.dds", "white.dds", "grey.dds", "gray.dds", "blank.dds", "blask.dds",
@@ -94,7 +120,9 @@ public sealed class MaterialResolver
         return list;
     }
 
-    /// <summary>FCS records whose filename fields name <paramref name="meshFile"/> (bare name, case-insensitive).</summary>
+    /// <summary>
+    /// FCS records whose filename fields name <paramref name="meshFile"/> (bare name, case-insensitive).
+    /// </summary>
     public IReadOnlyList<(GameRecord Record, string Field)> RecordsUsing(string meshFile) =>
         _meshUsers.TryGetValue(Path.GetFileName(meshFile.Replace('\\', '/')), out var list) ? list : [];
 
@@ -245,6 +273,7 @@ public sealed class MaterialResolver
     IEnumerable<SurfaceMaterial> Expand(IReadOnlyList<GameReference> refs, int depth)
     {
         if (_db is null || depth > 4) yield break;
+
         // Collections pick at random with val1 as probability (fcs.def); list the likeliest first.
         foreach (var r in refs.OrderByDescending(r => r.Values.Value1 == 0 ? 100 : r.Values.Value1))
             if (_db.Find(r.TargetStringId) is { } target)
@@ -298,7 +327,8 @@ public sealed class MaterialResolver
                         AlphaThreshold = type == 1 ? 0.5f : 0,
                         DoubleSided = type is 1 or 2,
                         SpecularMult = spec.GetFloat("specular mult", 1),
-                        // A ground item takes COLOURING when its mesh has vertex colours (docs/formats/runtime-materials.md "Callers"); worn items never read this.
+                        // A ground item takes COLOURING when its mesh has vertex colours (docs/formats/runtime-materials.md "Callers"); worn items
+                        // never read this.
                         VertexColours = true,
                     };
                     break;
@@ -315,7 +345,9 @@ public sealed class MaterialResolver
         }
     }
 
-    /// <summary>A script material's first pass, if it names a real texture (not a placeholder Kenshi replaces).</summary>
+    /// <summary>
+    /// A script material's first pass, if it names a real texture (not a placeholder Kenshi replaces).
+    /// </summary>
     SurfaceMaterial? FromScript(string materialName)
     {
         if (_materials?.Find(materialName) is not { } material) return null;
@@ -333,7 +365,8 @@ public sealed class MaterialResolver
             Diffuse = diffuse.Texture,
             Normal = normal?.Texture,
             Alpha = pass.AlphaRejection.Function != OgreCompareFunction.AlwaysPass || !blend.IsOpaque ? AlphaSource.DiffuseAlpha : AlphaSource.None,
-            AlphaThreshold = pass.AlphaRejection.Function != OgreCompareFunction.AlwaysPass ? Math.Max(pass.AlphaRejection.Value, (byte)1) / 255f : !blend.IsOpaque ? 0.5f : 0,
+            AlphaThreshold = pass.AlphaRejection.Function != OgreCompareFunction.AlwaysPass ? Math.Max(pass.AlphaRejection.Value,
+                    (byte)1) / 255f : !blend.IsOpaque ? 0.5f : 0,
             DoubleSided = pass.CullHardware == OgreCullHardware.None,
         };
     }

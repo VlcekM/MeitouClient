@@ -8,8 +8,9 @@ using Meitou.Simulation.Population;
 namespace Meitou.Modding;
 
 /// <summary>
-/// What a mod gets in <see cref="IMod.Initialize"/> (docs/modding.md "Lifecycle"): the merged data, its folder, a log, its random purpose, its Harmony instance, the
-/// command queue, and the registration surface. Registering is only allowed during <see cref="IMod.Initialize"/>; the registrations take effect when it returns.
+/// What a mod gets in <see cref="IMod.Initialize"/> (docs/modding.md "Lifecycle"): the merged data, its folder, a log, its random purpose, its
+/// Harmony instance, the command queue, and the registration surface. Registering is only allowed during <see cref="IMod.Initialize"/>; the
+/// registrations take effect when it returns.
 /// </summary>
 public sealed class ModContext
 {
@@ -34,25 +35,38 @@ public sealed class ModContext
     internal ModRegistrations Pending { get; } = new();
     internal bool Open { get; set; } = true;
 
-    /// <summary>The manifest id: keys the mod's save data, its Harmony instance and its log lines.</summary>
+    /// <summary>
+    /// The manifest id: keys the mod's save data, its Harmony instance and its log lines.
+    /// </summary>
     public string Id => Mod.Manifest.Id;
 
-    /// <summary>The mod's name (its <c>.mod</c> file's stem), as <c>mods.cfg</c> lists it.</summary>
+    /// <summary>
+    /// The mod's name (its <c>.mod</c> file's stem), as <c>mods.cfg</c> lists it.
+    /// </summary>
     public string Name => Mod.Info.Name;
 
     public string Folder => Mod.Info.Folder;
     public CodeModManifest Manifest => Mod.Manifest;
 
-    /// <summary>The game data with every enabled mod merged in.</summary>
+    /// <summary>
+    /// The game data with every enabled mod merged in.
+    /// </summary>
     public GameDatabase Data { get; }
 
-    /// <summary>The simulation's view of the data (factions, relations, bodies, items...), shared by every world.</summary>
+    /// <summary>
+    /// The simulation's view of the data (factions, relations, bodies, items...), shared by every world.
+    /// </summary>
     public PopulationData Population { get; }
 
-    /// <summary>The mod's own purpose for <see cref="Rng.Hash"/>: derived from the manifest id, never one of the vanilla purposes, so its rolls never share a stream.</summary>
+    /// <summary>
+    /// The mod's own purpose for <see cref="Rng.Hash"/>: derived from the manifest id, never one of the vanilla purposes, so its rolls never share a
+    /// stream.
+    /// </summary>
     public RngPurpose RngPurpose { get; }
 
-    /// <summary>The mod's Harmony instance (id: the manifest id) on the game's one copy of Harmony.</summary>
+    /// <summary>
+    /// The mod's Harmony instance (id: the manifest id) on the game's one copy of Harmony.
+    /// </summary>
     public Harmony Harmony => _harmony ??= new Harmony(Id);
 
     internal bool HasHarmony => _harmony is not null;
@@ -79,10 +93,15 @@ public sealed class ModContext
     /// </summary>
     public bool HasDependency(string id) => Mod.Dependencies.Any(m => m.Manifest.Id == id);
 
-    /// <summary>The running world's tick, for a command's <see cref="SimCommand.Tick"/>; 0 before the first world.</summary>
+    /// <summary>
+    /// The running world's tick, for a command's <see cref="SimCommand.Tick"/>; 0 before the first world.
+    /// </summary>
     public long Tick => _world()?.Tick ?? 0;
 
-    /// <summary>Queues a command for the running world (any thread); its <see cref="SimCommand.Tick"/> says when it applies. Dropped (and logged) before the first world.</summary>
+    /// <summary>
+    /// Queues a command for the running world (any thread); its <see cref="SimCommand.Tick"/> says when it applies. Dropped (and logged) before the
+    /// first world.
+    /// </summary>
     public void Enqueue(SimCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -90,16 +109,20 @@ public sealed class ModContext
         else Log($"no world yet: dropped {command.GetType().Name}");
     }
 
-    /// <summary>A line in the game's log (log.txt), prefixed with the mod id.</summary>
+    /// <summary>
+    /// A line in the game's log (log.txt), prefixed with the mod id.
+    /// </summary>
     public void Log(string message) => Console.WriteLine($"mod       {Id}: {message}");
 
-    /// <summary>A line in the game's error output, prefixed with the mod id.</summary>
+    /// <summary>
+    /// A line in the game's error output, prefixed with the mod id.
+    /// </summary>
     public void LogError(string message) => Console.Error.WriteLine($"mod       {Id}: {message}");
 
     /// <summary>
-    /// A system made for every world (each new game and load builds its systems afresh) and placed at <paramref name="anchor"/> in the tick order. It follows the
-    /// threading rules of docs/simulation.md "Threading"; with <see cref="IStateHashed"/> its state goes into the world's state hash, with <see cref="IModSaveData"/> into
-    /// saves. <paramref name="name"/> is unique within the mod and keys the system's save data.
+    /// A system made for every world (each new game and load builds its systems afresh) and placed at <paramref name="anchor"/> in the tick order. It
+    /// follows the threading rules of docs/simulation.md "Threading"; with <see cref="IStateHashed"/> its state goes into the world's state hash,
+    /// with <see cref="IModSaveData"/> into saves. <paramref name="name"/> is unique within the mod and keys the system's save data.
     /// </summary>
     public void AddSystem(string name, Func<SystemBuildContext, ITickSystem> factory, SystemAnchor anchor)
     {
@@ -110,7 +133,10 @@ public sealed class ModContext
         Pending.Systems.Add(new SystemFactory(Id, name, anchor, factory));
     }
 
-    /// <summary>A dialogue condition code (<see cref="SimulationExtensions.FirstModCode"/> and up) that FCS data names in a DIALOG_ACTION's <c>condition name</c>.</summary>
+    /// <summary>
+    /// A dialogue condition code (<see cref="SimulationExtensions.FirstModCode"/> and up) that FCS data names in a DIALOG_ACTION's <c>condition
+    /// name</c>.
+    /// </summary>
     public void AddDialogueCondition(int code, DialogueConditionHandler handler)
     {
         CheckOpen();
@@ -119,7 +145,9 @@ public sealed class ModContext
         Pending.Conditions[code] = handler;
     }
 
-    /// <summary>A dialogue effect code (<see cref="SimulationExtensions.FirstModCode"/> and up) that FCS data names in a DIALOG_ACTION's <c>action name</c>.</summary>
+    /// <summary>
+    /// A dialogue effect code (<see cref="SimulationExtensions.FirstModCode"/> and up) that FCS data names in a DIALOG_ACTION's <c>action name</c>.
+    /// </summary>
     public void AddDialogueEffect(int code, DialogueEffectHandler handler)
     {
         CheckOpen();
@@ -129,8 +157,8 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// Claims a record type number (<see cref="SimulationExtensions.FirstModCode"/> and up, not a vanilla <c>itemType</c>) for the mod's own FCS records, so two mods
-    /// never read each other's. The records load and merge like any other; read them with <see cref="Records"/>.
+    /// Claims a record type number (<see cref="SimulationExtensions.FirstModCode"/> and up, not a vanilla <c>itemType</c>) for the mod's own FCS
+    /// records, so two mods never read each other's. The records load and merge like any other; read them with <see cref="Records"/>.
     /// </summary>
     public void AddRecordType(int type, string name)
     {
@@ -141,11 +169,16 @@ public sealed class ModContext
         Pending.RecordTypes[type] = name;
     }
 
-    /// <summary>The merged records of a type, in string id order.</summary>
+    /// <summary>
+    /// The merged records of a type, in string id order.
+    /// </summary>
     public IEnumerable<GameRecord> Records(int type) =>
         Data.Records.Values.Where(r => (int)r.Type == type).OrderBy(r => r.StringId, StringComparer.Ordinal);
 
-    /// <summary>Interface contributions (styles, controls, actions, slot contributions; docs/modding.md "Registration surface"), registered when the interface is made.</summary>
+    /// <summary>
+    /// Interface contributions (styles, controls, actions, slot contributions; docs/modding.md "Registration surface"), registered when the interface
+    /// is made.
+    /// </summary>
     public void AddUi(IUiExtension extension)
     {
         CheckOpen();
@@ -154,9 +187,9 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// The resolved combat hits for display (docs/modding.md "Hit feed"): once a frame on the host's thread, the hits of the ticks since the last frame,
-    /// oldest first; not called for a frame without any. A tick may be in flight, so <paramref name="view"/> must not touch the world, and the list is
-    /// reused: copy what you keep. A throw is logged and the feed gets no more hits.
+    /// The resolved combat hits for display (docs/modding.md "Hit feed"): once a frame on the host's thread, the hits of the ticks since the last
+    /// frame, oldest first; not called for a frame without any. A tick may be in flight, so <paramref name="view"/> must not touch the world, and the
+    /// list is reused: copy what you keep. A throw is logged and the feed gets no more hits.
     /// </summary>
     public void AddCombatHitFeed(Action<IReadOnlyList<Simulation.Combat.CombatHit>> view)
     {
@@ -166,21 +199,22 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// A row of the debug menu (F10), after the vanilla rows. <paramref name="run"/> runs on the host's thread while a tick may be in flight: it must not touch the
-    /// world, only read the context and queue commands; its return is the status line.
+    /// A row of the debug menu (F10), after the vanilla rows. <paramref name="run"/> runs on the host's thread while a tick may be in flight: it must
+    /// not touch the world, only read the context and queue commands; its return is the status line.
     /// </summary>
     public void AddDebugCommand(string label, Func<DebugCommandContext, string> run, bool hasField = false)
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(run);
-        if (string.IsNullOrWhiteSpace(label)) throw new ArgumentException("A debug command needs a label.", nameof(label));
+        if (string.IsNullOrWhiteSpace(label))
+            throw new ArgumentException("A debug command needs a label.", nameof(label));
         Pending.DebugCommands.Add(new ModDebugCommand(Id, label, hasField, run));
     }
 
     /// <summary>
-    /// The mod's settings (docs/modding.md "Settings"): the public properties of <paramref name="settings"/> marked
-    /// <see cref="SettingAttribute"/>, one group under the mod on the Settings screen's Mods page. The player's saved values are set on the object before
-    /// this returns; the values it has now are the defaults. Once per mod.
+    /// The mod's settings (docs/modding.md "Settings"): the public properties of <paramref name="settings"/> marked <see cref="SettingAttribute"/>,
+    /// one group under the mod on the Settings screen's Mods page. The player's saved values are set on the object before this returns; the values it
+    /// has now are the defaults. Once per mod.
     /// </summary>
     public ModSettingsGroup AddSettings(object settings)
     {
@@ -202,9 +236,13 @@ public sealed class ModContext
     }
 }
 
-/// <summary>What a mod's debug command gets: the row's typed text, the selected characters, the camera target, the tick, and the command queue.</summary>
+/// <summary>
+/// What a mod's debug command gets: the row's typed text, the selected characters, the camera target, the tick, and the command queue.
+/// </summary>
 public sealed record DebugCommandContext(
     string Field, IReadOnlyList<CharacterId> Selected, System.Numerics.Vector3 Target, long Tick, Action<SimCommand> Enqueue);
 
-/// <summary>A debug menu row a mod added.</summary>
+/// <summary>
+/// A debug menu row a mod added.
+/// </summary>
 public sealed record ModDebugCommand(string Owner, string Label, bool HasField, Func<DebugCommandContext, string> Run);

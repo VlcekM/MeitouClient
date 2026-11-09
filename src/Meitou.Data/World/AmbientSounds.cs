@@ -14,10 +14,14 @@ namespace Meitou.Data.World;
 /// <param name="NeedsPower">The emitter is off until its building runs.</param>
 public sealed record AmbientSound(string Id, string Emitter, float Chance, float Cutoff, float Intensity, float EfficiencyMultiplier, bool NeedsPower)
 {
-    /// <summary>Units per cutoff meter: the game compares the squared distance with <c>cutoff² × 100</c>.</summary>
+    /// <summary>
+    /// Units per cutoff meter: the game compares the squared distance with <c>cutoff² × 100</c>.
+    /// </summary>
     public const float UnitsPerCutoff = 10;
 
-    /// <summary>The distance in world units beyond which the emitter is stopped.</summary>
+    /// <summary>
+    /// The distance in world units beyond which the emitter is stopped.
+    /// </summary>
     public float Range => Cutoff * UnitsPerCutoff;
 
     public static AmbientSound? From(GameRecord record) => record.Type != FcsRecordType.AmbientSound ? null : new(
@@ -32,10 +36,15 @@ public sealed record AmbientSound(string Id, string Emitter, float Chance, float
         holder.GetReferences(field) is { Count: > 0 } list && db.Find(list[0].TargetStringId) is { } record && From(record) is { Emitter.Length: > 0 } sound ? sound : null;
 }
 
-/// <summary>A building's sound emitter in the world: the record, where it sounds and the id of the building it belongs to; <paramref name="Building"/> is the BUILDING record that made it and <paramref name="Origin"/> the building's own position (the emitter sits at an offset from it).</summary>
+/// <summary>
+/// A building's sound emitter in the world: the record, where it sounds and the id of the building it belongs to; <paramref name="Building"/> is the
+/// BUILDING record that made it and <paramref name="Origin"/> the building's own position (the emitter sits at an offset from it).
+/// </summary>
 public readonly record struct PlacedEmitter(string Key, AmbientSound Sound, Vector3 Position, string Building = "", Vector3 Origin = default);
 
-/// <summary>The emitters of buildings (docs/audio.md "Point emitters", the exe's building audio set-up <c>FUN_14055c240</c>).</summary>
+/// <summary>
+/// The emitters of buildings (docs/audio.md "Point emitters", the exe's building audio set-up <c>FUN_14055c240</c>).
+/// </summary>
 public static class BuildingEmitters
 {
     /// <summary>
@@ -54,7 +63,9 @@ public static class BuildingEmitters
         return new PlacedEmitter(instanceId, sound, position + Vector3.Transform(offset, q), building.StringId, position);
     }
 
-    /// <summary>A number in [0, 1) that depends only on the placement id (FNV-1a).</summary>
+    /// <summary>
+    /// A number in [0, 1) that depends only on the placement id (FNV-1a).
+    /// </summary>
     static float Roll(string id)
     {
         uint h = 2166136261;

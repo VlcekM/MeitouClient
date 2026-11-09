@@ -12,11 +12,11 @@ namespace Meitou.Game.Rendering.Characters;
 internal static class MeshSimplifier
 {
     /// <summary>
-    /// The triangle lists after reducing to each of <paramref name="fractions"/> of the input triangles (descending), in one run: a list
-    /// is a snapshot, so each is the previous one reduced further. Stops early at <paramref name="floor"/> triangles (the remaining
-    /// lists then repeat the last). With <paramref name="uvPerWorld"/> above 0 (texture-coordinate units per world unit of the part's surface, <see cref="UvPerWorld"/>) a collapse
-    /// is refused when a corner it moves has no vertex at the new point whose texture coordinate is about as far from its own as the move is long: that is a jump to
-    /// another UV island, which a texture would show as a smear.
+    /// The triangle lists after reducing to each of <paramref name="fractions"/> of the input triangles (descending), in one run: a list is a
+    /// snapshot, so each is the previous one reduced further. Stops early at <paramref name="floor"/> triangles (the remaining lists then repeat the
+    /// last). With <paramref name="uvPerWorld"/> above 0 (texture-coordinate units per world unit of the part's surface, <see cref="UvPerWorld"/>) a
+    /// collapse is refused when a corner it moves has no vertex at the new point whose texture coordinate is about as far from its own as the move is
+    /// long: that is a jump to another UV island, which a texture would show as a smear.
     /// </summary>
     public static uint[][] Chain(Vertex[] vertices, uint[] indices, float[] fractions, int floor, float uvPerWorld = 0)
     {
@@ -30,7 +30,8 @@ internal static class MeshSimplifier
         var groupVertices = new List<List<int>>();
         for (int v = 0; v < vertices.Length; v++)
         {
-            if (!points.TryGetValue(vertices[v].Position, out int g)) { points[vertices[v].Position] = g = groupVertices.Count; groupVertices.Add([]); }
+            if (!points.TryGetValue(vertices[v].Position,
+                    out int g)) { points[vertices[v].Position] = g = groupVertices.Count; groupVertices.Add([]); }
             groupOf[v] = g;
             groupVertices[g].Add(v);
         }
@@ -108,6 +109,7 @@ internal static class MeshSimplifier
             var sum = q[from];
             sum.Add(q[to]);
             double cost = sum.Evaluate(position[to]);
+
             // A collapse across different skinning weights stretches the surface once posed: charged like a displacement of that size.
             float stretch = SkinDifference(vertices[groupVertices[from][0]], vertices[groupVertices[to][0]]);
             return cost + stretch * (position[from] - position[to]).LengthSquared() * 0.5;
@@ -158,7 +160,8 @@ internal static class MeshSimplifier
             return true;
         }
 
-        // With the texture guard (buildings: front and back of a sheet sit on one point with the same UV and opposite normals) the normal counts as much as the UV.
+        // With the texture guard (buildings: front and back of a sheet sit on one point with the same UV and opposite normals) the normal counts as
+        // much as the UV.
         float normalWeight = uvPerWorld > 0 ? 1f : 0.05f;
         int Nearest(in Vertex like, List<int> candidates)
         {
@@ -166,7 +169,8 @@ internal static class MeshSimplifier
             float bestScore = float.MaxValue;
             foreach (int c in candidates)
             {
-                float score = Vector2.DistanceSquared(vertices[c].Uv, like.Uv) + normalWeight * Vector3.DistanceSquared(vertices[c].Normal, like.Normal);
+                float score = Vector2.DistanceSquared(vertices[c].Uv, like.Uv) + normalWeight * Vector3.DistanceSquared(vertices[c].Normal,
+                    like.Normal);
                 if (score < bestScore) { bestScore = score; best = c; }
             }
             return best;
@@ -185,13 +189,16 @@ internal static class MeshSimplifier
                     int g = tg[t * 3 + k], v = tv[t * 3 + k];
                     if (groupOf[v] != g)
                     {
-                        if (!pick.TryGetValue((v, g), out int chosen)) pick[(v, g)] = chosen = Nearest(vertices[v], groupVertices[g]);
+                        if (!pick.TryGetValue((v, g), out int chosen))
+                            pick[(v, g)] = chosen = Nearest(vertices[v], groupVertices[g]);
                         v = chosen;
                     }
                     if (k == 0) c0 = v; else if (k == 1) c1 = v; else c2 = v;
                 }
                 if (c0 == c1 || c1 == c2 || c0 == c2) continue;
-                list.Add((uint)c0); list.Add((uint)c1); list.Add((uint)c2);
+                list.Add((uint)c0);
+                list.Add((uint)c1);
+                list.Add((uint)c2);
             }
             return [.. list];
         }
@@ -240,7 +247,10 @@ internal static class MeshSimplifier
         return result;
     }
 
-    /// <summary>Texture-coordinate units per world unit over a triangle list: the square root of the summed texture-space area over the summed surface area; 0 for a list without either.</summary>
+    /// <summary>
+    /// Texture-coordinate units per world unit over a triangle list: the square root of the summed texture-space area over the summed surface area; 0
+    /// for a list without either.
+    /// </summary>
     public static float UvPerWorld(Vertex[] vertices, uint[] indices)
     {
         double uv = 0, world = 0;
@@ -257,7 +267,9 @@ internal static class MeshSimplifier
         return world > 1e-12 && uv > 0 ? (float)Math.Sqrt(uv / world) : 0;
     }
 
-    /// <summary>How different two vertices' skinning is, 0 (same bones and weights) to 2.</summary>
+    /// <summary>
+    /// How different two vertices' skinning is, 0 (same bones and weights) to 2.
+    /// </summary>
     static float SkinDifference(in Vertex a, in Vertex b)
     {
         float diff = 0;
@@ -273,7 +285,9 @@ internal static class MeshSimplifier
 
     static float Weight(Vector4 w, int i) => i switch { 0 => w.X, 1 => w.Y, 2 => w.Z, _ => w.W };
 
-    /// <summary>The symmetric 4x4 error matrix of a set of weighted planes.</summary>
+    /// <summary>
+    /// The symmetric 4x4 error matrix of a set of weighted planes.
+    /// </summary>
     struct Quadric
     {
         double _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
@@ -281,12 +295,22 @@ internal static class MeshSimplifier
         public static Quadric Plane(Vector3 n, float offset, float weight)
         {
             double x = n.X, y = n.Y, z = n.Z, o = offset, w = weight;
-            return new Quadric { _a = w * x * x, _b = w * x * y, _c = w * x * z, _d = w * x * o, _e = w * y * y, _f = w * y * z, _g = w * y * o, _h = w * z * z, _i = w * z * o, _j = w * o * o };
+            return new Quadric { _a = w * x * x, _b = w * x * y, _c = w * x * z, _d = w * x * o, _e = w * y * y, _f = w * y * z, _g = w * y * o,
+                _h = w * z * z, _i = w * z * o, _j = w * o * o };
         }
 
         public void Add(in Quadric o)
         {
-            _a += o._a; _b += o._b; _c += o._c; _d += o._d; _e += o._e; _f += o._f; _g += o._g; _h += o._h; _i += o._i; _j += o._j;
+            _a += o._a;
+            _b += o._b;
+            _c += o._c;
+            _d += o._d;
+            _e += o._e;
+            _f += o._f;
+            _g += o._g;
+            _h += o._h;
+            _i += o._i;
+            _j += o._j;
         }
 
         public readonly double Evaluate(Vector3 p)

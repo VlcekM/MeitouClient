@@ -38,9 +38,15 @@ static class MarkdownView
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.AbsolutePath.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
             return VideoView.Create(url, feed, fullVideo);
-        var image = new Image { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left };
+        var image = new Image
+        {
+            Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left,
+        };
         RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.HighQuality);
-        var frame = new Border { CornerRadius = new CornerRadius(6), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left, Child = image, IsVisible = false };
+        var frame = new Border
+        {
+            CornerRadius = new CornerRadius(6), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left, Child = image, IsVisible = false,
+        };
         _ = Task.Run(async () =>
         {
             var bytes = await feed.ImageAsync(url);
@@ -52,7 +58,10 @@ static class MarkdownView
                     image.Source = new Bitmap(new MemoryStream(bytes));
                     frame.IsVisible = true;
                 }
-                catch (Exception) { } // not an image the decoder knows: leave it out
+                catch (Exception)
+                {
+                    // not an image the decoder knows: leave it out
+                }
             });
         });
         return frame;
@@ -63,54 +72,108 @@ static class MarkdownView
         switch (block)
         {
             case HeadingBlock heading:
-                var title = Text(heading.Inline, post, open);
-                title.FontSize = heading.Level <= 1 ? 20 : heading.Level == 2 ? 18 : 16;
-                title.Margin = new Thickness(0, 6, 0, 0);
-                return title;
+                return Heading(heading, post, open);
             case ParagraphBlock paragraph:
-                // A paragraph of only images shows them as pictures.
-                var inlines = paragraph.Inline?.ToList() ?? [];
-                if (inlines.Count > 0 && inlines.All(i => i is LinkInline { IsImage: true } or LineBreakInline || i is LiteralInline l && string.IsNullOrWhiteSpace(l.Content.ToString())))
-                {
-                    var images = new StackPanel { Spacing = 8 };
-                    foreach (var link in inlines.OfType<LinkInline>())
-                        images.Children.Add(Image(NewsFeed.Resolve(post, link.Url ?? ""), feed));
-                    return images;
-                }
-                return Text(paragraph.Inline, post, open);
+                return Paragraph(paragraph, post, feed, open);
             case ListBlock list:
-                var items = new StackPanel { Spacing = 4 };
-                int number = int.TryParse(list.OrderedStart, out var start) ? start : 1;
-                foreach (var item in list.OfType<ListItemBlock>())
-                {
-                    var row = new DockPanel();
-                    var marker = new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", Width = 22, Foreground = Brush("BrassLight") };
-                    DockPanel.SetDock(marker, Dock.Left);
-                    row.Children.Add(marker);
-                    var body = new StackPanel { Spacing = 4 };
-                    foreach (var child in item)
-                        if (Block(child, post, feed, open) is { } control) body.Children.Add(control);
-                    row.Children.Add(body);
-                    items.Children.Add(row);
-                }
-                return items;
+                return ListOf(list, post, feed, open);
             case QuoteBlock quote:
-                var quoted = new StackPanel { Spacing = 6 };
-                foreach (var child in quote)
-                    if (Block(child, post, feed, open) is { } control) quoted.Children.Add(control);
-                return new Border { BorderBrush = Brush("Brass"), BorderThickness = new Thickness(3, 0, 0, 0), Padding = new Thickness(12, 2, 0, 2), Child = quoted };
+                return QuoteOf(quote, post, feed, open);
             case CodeBlock code:
-                return new Border
-                {
-                    Background = Brush("Field"), CornerRadius = new CornerRadius(4), Padding = new Thickness(12, 8),
-                    Child = new SelectableTextBlock { Text = code.Lines.ToString().TrimEnd(), FontFamily = Mono, FontSize = 12.5, FontWeight = FontWeight.Normal, TextWrapping = TextWrapping.Wrap },
-                };
+                return CodeOf(code);
             case ThematicBreakBlock:
                 return new Border { Height = 1, Background = Brush("PlateRim"), Margin = new Thickness(0, 4) };
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// A heading: a larger text, the larger the higher its level.
+    /// </summary>
+    static TextBlock Heading(HeadingBlock heading, NewsPost post, Action<string> open)
+    {
+        var title = Text(heading.Inline, post, open);
+        title.FontSize = heading.Level <= 1 ? 20 : heading.Level == 2 ? 18 : 16;
+        title.Margin = new Thickness(0, 6, 0, 0);
+        return title;
+    }
+
+    /// <summary>
+    /// A paragraph; one of only images shows them as pictures.
+    /// </summary>
+    static Control? Paragraph(ParagraphBlock paragraph, NewsPost post, NewsFeed feed, Action<string> open)
+    {
+        // A paragraph of only images shows them as pictures.
+        var inlines = paragraph.Inline?.ToList() ?? [];
+        if (inlines.Count > 0 && inlines.All(IsPictureInline))
+        {
+            var images = new StackPanel { Spacing = 8 };
+            foreach (var link in inlines.OfType<LinkInline>())
+                images.Children.Add(Image(NewsFeed.Resolve(post, link.Url ?? ""), feed));
+            return images;
+        }
+
+        return Text(paragraph.Inline, post, open);
+    }
+
+    /// <summary>
+    /// Whether an inline belongs in a picture paragraph: an image, a line break or blank text.
+    /// </summary>
+    static bool IsPictureInline(Markdig.Syntax.Inlines.Inline inline) =>
+        inline is LinkInline { IsImage: true } or LineBreakInline || inline is LiteralInline l && string.IsNullOrWhiteSpace(l.Content.ToString());
+
+    /// <summary>
+    /// A bulleted or numbered list: each item a marker beside its blocks.
+    /// </summary>
+    static StackPanel ListOf(ListBlock list, NewsPost post, NewsFeed feed, Action<string> open)
+    {
+        var items = new StackPanel { Spacing = 4 };
+        int number = int.TryParse(list.OrderedStart, out var start) ? start : 1;
+        foreach (var item in list.OfType<ListItemBlock>())
+        {
+            var row = new DockPanel();
+            var marker = new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", Width = 22, Foreground = Brush("BrassLight") };
+            DockPanel.SetDock(marker, Dock.Left);
+            row.Children.Add(marker);
+            var body = new StackPanel { Spacing = 4 };
+            foreach (var child in item)
+                if (Block(child, post, feed, open) is { } control) body.Children.Add(control);
+            row.Children.Add(body);
+            items.Children.Add(row);
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// A quote: its blocks beside a brass rule.
+    /// </summary>
+    static Border QuoteOf(QuoteBlock quote, NewsPost post, NewsFeed feed, Action<string> open)
+    {
+        var quoted = new StackPanel { Spacing = 6 };
+        foreach (var child in quote)
+            if (Block(child, post, feed, open) is { } control) quoted.Children.Add(control);
+        return new Border
+        {
+            BorderBrush = Brush("Brass"), BorderThickness = new Thickness(3, 0, 0, 0), Padding = new Thickness(12, 2, 0, 2),
+            Child = quoted,
+        };
+    }
+
+    /// <summary>
+    /// A code block: its lines in the monospace font.
+    /// </summary>
+    static Border CodeOf(CodeBlock code) =>
+        new()
+        {
+            Background = Brush("Field"), CornerRadius = new CornerRadius(4), Padding = new Thickness(12, 8),
+            Child = new SelectableTextBlock
+            {
+                Text = code.Lines.ToString().TrimEnd(), FontFamily = Mono, FontSize = 12.5, FontWeight = FontWeight.Normal,
+                TextWrapping = TextWrapping.Wrap,
+            },
+        };
 
     static TextBlock Text(ContainerInline? container, NewsPost post, Action<string> open)
     {
@@ -170,13 +233,15 @@ static class MarkdownView
                 target.Add(span);
                 break;
             case CodeInline code:
-                target.Add(new Run(code.Content) { FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13, Foreground = Brush("PaperLight") });
+                var run = new Run(code.Content) { FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13, Foreground = Brush("PaperLight") };
+                target.Add(run);
                 break;
             case LineBreakInline lineBreak:
                 target.Add(new Run(lineBreak.IsHard ? "\n" : " ")); // a Run, so text positions are plain character counts
                 break;
             case LinkInline { IsImage: false } link:
-                target.Add(Link(string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString())), NewsFeed.Resolve(post, link.Url ?? "")));
+                string text = string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString()));
+                target.Add(Link(text, NewsFeed.Resolve(post, link.Url ?? "")));
                 break;
             case AutolinkInline auto:
                 target.Add(Link(auto.Url, auto.Url));

@@ -5,37 +5,46 @@ using Meitou.Game.Rendering.Profiling;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// GLSL of the placed fog volumes (docs/formats/fogfeatures.md "How the game draws them"): the game's <c>fog_planes_fs</c>, <c>fog_sphere_fs</c>
-/// and <c>fog_beam_fs</c> (post/fog.hlsl). The game draws each volume's hull once after the opaque scene, the water and the haze, reading the
-/// G-buffer depth; Meitou does the same in one full-screen pass (<see cref="PostProcessShaders.FogVolumes"/>, run by <c>PostProcess.RunFogVolumes</c>)
+/// GLSL of the placed fog volumes (docs/formats/fogfeatures.md "How the game draws them"): the game's <c>fog_planes_fs</c>, <c>fog_sphere_fs</c> and
+/// <c>fog_beam_fs</c> (post/fog.hlsl). The game draws each volume's hull once after the opaque scene, the water and the haze, reading the G-buffer
+/// depth; Meitou does the same in one full-screen pass (<see cref="PostProcessShaders.FogVolumes"/>, run by
+/// <c>PostProcess.RunFogVolumes</c>)
 /// that rebuilds each pixel's distance from the depth (the haze's far distance D for the sky, the water plane where it covers the pixel), and in
-/// SSAO's air visibility. Not in the world shaders. This text uses <c>hazeTarget</c> (the haze colour plus the night air) and the atmosphere's uniforms (so follows
+/// SSAO's air visibility. Not in the world shaders. This text uses <c>hazeTarget</c> (the haze colour plus the night air) and the atmosphere's
+/// uniforms (so follows
 /// <see cref="AtmosphereShaders.Functions"/>). The data come from <see cref="FogVolumes"/>: every volume in view, packed into <c>uFogVolumeData</c>
 /// farthest first, each starting with a vec4 whose w is its type.
 /// </summary>
 static class FogVolumeShaders
 {
-    /// <summary>The vec4s of <c>uFogVolumeData</c> (the frame block's array; its GLSL size is written out in <see cref="NativeShaders.FrameBlock"/>
-    /// and <see cref="Functions"/>).</summary>
+    /// <summary>
+    /// The vec4s of <c>uFogVolumeData</c> (the frame block's array; its GLSL size is written out in <see cref="NativeShaders.FrameBlock"/> and
+    /// <see cref="Functions"/>).
+    /// </summary>
     public const int MaxData = 512;
 
-    /// <summary>Type tags (the first vec4's w) and the vec4s each type takes.</summary>
+    /// <summary>
+    /// Type tags (the first vec4's w) and the vec4s each type takes.
+    /// </summary>
     public const int BlockType = 1, SphereType = 2, BeamType = 3;
     public const int BlockLength = 10, SphereLength = 3, BeamLength = 4;
 
     public static int Length(int type) => type switch { BlockType => BlockLength, SphereType => SphereLength, BeamType => BeamLength, _ => throw new ArgumentOutOfRangeException(nameof(type)) };
 
-    /// <summary>The shader's sphere radius over the stored one: the hull is <c>unit_sphere.mesh</c> (radius 0.5) scaled by 2r, and
-    /// <c>fog_sphere_vs</c> measures 0.48 of the unscaled mesh (0.48 × 2r).</summary>
+    /// <summary>
+    /// The shader's sphere radius over the stored one: the hull is <c>unit_sphere.mesh</c> (radius 0.5) scaled by 2r, and
+    /// <c>fog_sphere_vs</c> measures 0.48 of the unscaled mesh (0.48 × 2r).
+    /// </summary>
     public const float SphereShaderRadius = 0.96f;
-    /// <summary>The shader's beam radius over the stored one: <c>cylinder.mesh</c> scaled by 2r across, <c>fog_beam_vs</c> measures 0.4 of it.</summary>
+    /// <summary>
+    /// The shader's beam radius over the stored one: <c>cylinder.mesh</c> scaled by 2r across, <c>fog_beam_vs</c> measures 0.4 of it.
+    /// </summary>
     public const float BeamShaderRadius = 0.8f;
 
     /// <summary>
-    /// The packed layout (vec4s):
-    /// block  (type 1): (box min, 1), (box max, edgeBlur), (colour, density), the seven planes (normal, w);
-    /// sphere (type 2): (centre, 2), (shader radius, hull radius, alpha, additive), (colour, density);
-    /// beam   (type 3): (start, 3), (unit axis, length), (shader radius, edgeBlur, alpha, additive), (colour, density).
+    /// The packed layout (vec4s): block (type 1): (box min, 1), (box max, edgeBlur), (colour, density), the seven planes (normal, w); sphere (type
+    /// 2): (centre, 2), (shader radius, hull radius, alpha, additive), (colour, density); beam (type 3): (start, 3), (unit axis, length), (shader
+    /// radius, edgeBlur, alpha, additive), (colour, density).
     /// </summary>
     public const string Functions = """
 

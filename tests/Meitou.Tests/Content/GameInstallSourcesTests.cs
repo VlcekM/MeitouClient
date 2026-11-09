@@ -6,7 +6,10 @@ public sealed class GameInstallSourcesTests : IDisposable
 {
     readonly string _home = Path.Combine(Path.GetTempPath(), "meitou-installs-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose() { if (Directory.Exists(_home)) Directory.Delete(_home, recursive: true); }
+    public void Dispose()
+    {
+        if (Directory.Exists(_home)) Directory.Delete(_home, recursive: true);
+    }
 
     string MakeInstall(params string[] parts)
     {

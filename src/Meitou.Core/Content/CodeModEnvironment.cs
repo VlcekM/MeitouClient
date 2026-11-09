@@ -2,7 +2,9 @@ using System.Text.Json;
 
 namespace Meitou.Content;
 
-/// <summary>One code mod a save was made with: its manifest id, its <c>version</c> (null when it declares none) and its mod (folder) name.</summary>
+/// <summary>
+/// One code mod a save was made with: its manifest id, its <c>version</c> (null when it declares none) and its mod (folder) name.
+/// </summary>
 public sealed record CodeModEnvironmentEntry(string Id, string? Version, string Name);
 
 /// <summary>
@@ -13,7 +15,9 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
 {
     public const int FormatVersion = 1;
 
-    /// <summary><c>{ "format": 1, "gameVersion": "v0.16.1", "mods": [{ "id", "version", "name" }] }</c>, mods in load order.</summary>
+    /// <summary>
+    /// <c>{ "format": 1, "gameVersion": "v0.16.1", "mods": [{ "id", "version", "name" }] }</c>, mods in load order.
+    /// </summary>
     public byte[] ToJson()
     {
         using var stream = new MemoryStream();
@@ -53,7 +57,8 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
             if (Text(root, "gameVersion") is not { } game) return null;
             if (!root.TryGetProperty("mods", out var list) || list.ValueKind != JsonValueKind.Array) return null;
             var mods = list.EnumerateArray().Select(ReadMod).ToList();
-            if (mods.Contains(null) || mods.DistinctBy(m => m!.Id, StringComparer.Ordinal).Count() != mods.Count) return null;   // damaged
+            if (mods.Contains(null) || mods.DistinctBy(m => m!.Id, StringComparer.Ordinal).Count() != mods.Count)
+                return null;   // damaged
             return new CodeModEnvironment(game, mods!);
         }
         catch (JsonException)
@@ -64,7 +69,8 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
 
     static CodeModEnvironmentEntry? ReadMod(JsonElement item)
     {
-        if (item.ValueKind != JsonValueKind.Object || Text(item, "id") is not { } id || Text(item, "name") is not { } name) return null;
+        if (item.ValueKind != JsonValueKind.Object || Text(item, "id") is not { } id || Text(item, "name") is not { } name)
+            return null;
         return new CodeModEnvironmentEntry(id, Text(item, "version"), name);
     }
 

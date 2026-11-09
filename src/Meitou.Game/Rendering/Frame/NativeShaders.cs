@@ -24,7 +24,8 @@ namespace Meitou.Game.Rendering.Frame;
 /// <remarks>
 /// The layout (steward, wave 3b): set 0 one push-descriptor set per native segment (<see cref="NativeFrame"/>) with <see cref="FrameConstants"/>
 /// (binding 0), the three shadow blocks as the GL code binds them (1 receiver, 2 caster, 3 Meitou: they are GL buffers VkGl renames, and
-/// the caster block changes between cascades, so they are taken per segment, not per frame), <see cref="ViewConstants"/> (4) and the skinning matrices (5); push constants of up to <see cref="PushBytes"/>
+/// the caster block changes between cascades, so they are taken per segment, not per frame), <see cref="ViewConstants"/> (4) and the skinning
+/// matrices (5); push constants of up to <see cref="PushBytes"/>
 /// bytes, the same range in every native program so all native pipeline layouts are compatible and the sets are bound once per segment;
 /// set 1 the bindless table (<see cref="BindlessTable.Declarations"/>).
 /// <para>
@@ -39,11 +40,16 @@ static partial class NativeShaders
 {
     public const int BindlessSet = 1, FrameSet = 0;
     public const uint FrameBinding = 0, ReceiverBinding = 1, CasterBinding = 2, MeitouBinding = 3, ViewBinding = 4, BonesBinding = 5;
-    /// <summary>The push-constant range of every native program (the guaranteed minimum).</summary>
+
+    /// <summary>
+    /// The push-constant range of every native program (the guaranteed minimum).
+    /// </summary>
     public const uint PushBytes = 128;
 
-    /// <summary>Set 0, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's
-    /// shared textures. Layout std140; <see cref="FrameConstants"/> is the C# side.</summary>
+    /// <summary>
+    /// Set 0, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's shared textures.
+    /// Layout std140; <see cref="FrameConstants"/> is the C# side.
+    /// </summary>
     public const string FrameBlock = """
         layout(std140, set = 0, binding = 0) uniform FrameConstants
         {
@@ -93,7 +99,9 @@ static partial class NativeShaders
 
         """;
 
-    /// <summary>Set 0, binding 4: what one view (a native segment's camera) shares. Layout std140; <see cref="ViewConstants"/> is the C# side.</summary>
+    /// <summary>
+    /// Set 0, binding 4: what one view (a native segment's camera) shares. Layout std140; <see cref="ViewConstants"/> is the C# side.
+    /// </summary>
     public const string ViewBlock = """
         layout(std140, set = 0, binding = 4) uniform ViewConstants
         {
@@ -117,7 +125,9 @@ static partial class NativeShaders
 
         """;
 
-    /// <summary>Set 0, binding 5: the shared mesh shader's skinning matrices (<c>uBones</c>).</summary>
+    /// <summary>
+    /// Set 0, binding 5: the shared mesh shader's skinning matrices (<c>uBones</c>).
+    /// </summary>
     public const string BonesBlock = """
         layout(std140, set = 0, binding = 5) uniform MeshBones
         {
@@ -126,7 +136,9 @@ static partial class NativeShaders
 
         """;
 
-    /// <summary>The members of the shared mesh shaders' push constants (<see cref="MeshPush"/> is the C# side; std430, 128 bytes).</summary>
+    /// <summary>
+    /// The members of the shared mesh shaders' push constants (<see cref="MeshPush"/> is the C# side; std430, 128 bytes).
+    /// </summary>
     public const string MeshPushMembers = """
             vec3 tint;
             float triplanarScale;
@@ -157,7 +169,9 @@ static partial class NativeShaders
             uint spare;
         """;
 
-    /// <summary>The push-constant block (instance <c>pc</c>) with <paramref name="members"/>.</summary>
+    /// <summary>
+    /// The push-constant block (instance <c>pc</c>) with <paramref name="members"/>.
+    /// </summary>
     public static string PushBlock(string members) => $"layout(push_constant) uniform Push\n{{\n{members}\n}} pc;\n";
 
     /// <summary>
@@ -166,10 +180,14 @@ static partial class NativeShaders
     /// draws start at vertex 0).
     /// </summary>
     public static string Prelude(string pushMembers) =>
-        BindlessTable.Declarations(BindlessSet) + FrameBlock + ViewBlock + BonesBlock + PushBlock(pushMembers) + "#define gl_VertexID gl_VertexIndex\n";
+        BindlessTable.Declarations(BindlessSet) + FrameBlock + ViewBlock + BonesBlock + PushBlock(pushMembers)
+        + "#define gl_VertexID gl_VertexIndex\n";
 
-    /// <summary>The atmosphere's and the shadows' uniforms (<see cref="AtmosphereShaders"/>, <see cref="ShadowShaders"/>, <see cref="MeitouShadowShaders"/>):
-    /// <see cref="FrameConstants"/> members and the bindless arrays they index.</summary>
+    /// <summary>
+    /// The atmosphere's and the shadows' uniforms (<see cref="AtmosphereShaders"/>, <see cref="ShadowShaders"/>, see
+    /// cref="MeitouShadowShaders"/>):
+    /// <see cref="FrameConstants"/> members and the bindless arrays they index.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> FrameMap = new Dictionary<string, string>
     {
         ["uAtmoSun"] = "frame.atmoSun",
@@ -216,7 +234,9 @@ static partial class NativeShaders
         ["uLightData"] = "textures2D[frame.lightData]",
     };
 
-    /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
+    /// <summary>
+    /// The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> ViewMap = new Dictionary<string, string>
     {
         ["uViewProjection"] = "view.viewProjection",
@@ -234,9 +254,11 @@ static partial class NativeShaders
         ["uInteriorCut"] = "(view.interiorCut != 0u)",
     };
 
-    /// <summary>The shared mesh shaders' own uniforms (<see cref="Shaders.MeshVertex"/>, <see cref="Shaders.MeshFragment"/>,
+    /// <summary>
+    /// The shared mesh shaders' own uniforms (<see cref="Shaders.MeshVertex"/>, <see cref="Shaders.MeshFragment"/>,
     /// <see cref="ShadowShaders.MeshDepthFragment"/>; foliage's <c>uCoverage</c>): <see cref="MeshPush"/> members, the textures by their
-    /// bindless index. <c>uModel</c> is not here: each consumer supplies its own (foliage: per-instance rows).</summary>
+    /// bindless index. <c>uModel</c> is not here: each consumer supplies its own (foliage: per-instance rows).
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> MeshMap = new Dictionary<string, string>
     {
         ["uSkinned"] = "pc.skinned",
@@ -269,7 +291,9 @@ static partial class NativeShaders
         ["uCoverage"] = "pc.coverage",
     };
 
-    /// <summary>The shadow blocks' bindings in set 0.</summary>
+    /// <summary>
+    /// The shadow blocks' bindings in set 0.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, uint> BlockBindings = new Dictionary<string, uint>
     {
         [ShadowShaders.ReceiverBlock] = ReceiverBinding,
@@ -277,7 +301,9 @@ static partial class NativeShaders
         [MeitouShadowShaders.Block] = MeitouBinding,
     };
 
-    /// <summary>The standard maps merged: frame, view and mesh (later ones win, then <paramref name="own"/>).</summary>
+    /// <summary>
+    /// The standard maps merged: frame, view and mesh (later ones win, then <paramref name="own"/>).
+    /// </summary>
     public static Dictionary<string, string> Map(IReadOnlyDictionary<string, string>? own = null)
     {
         var map = new Dictionary<string, string>(FrameMap);
@@ -291,8 +317,8 @@ static partial class NativeShaders
     /// The native variant of a legacy GLSL text: <c>#version 330 core</c> becomes <c>#version 450</c> and the prelude (with the push block of
     /// <paramref name="pushMembers"/>; a text without a version line, such as <see cref="AtmosphereShaders.Functions"/>, gets none), each
     /// loose <c>uniform T a, b;</c> becomes <c>#define a ...</c> lines from <paramref name="map"/> (default: <see cref="Map"/>), and each
-    /// <c>layout(std140) uniform Block</c> gets set <see cref="FrameSet"/> and its binding from <see cref="BlockBindings"/>. Nothing else is touched. Throws when a
-    /// uniform or a block is not mapped.
+    /// <c>layout(std140) uniform Block</c> gets set <see cref="FrameSet"/> and its binding from <see cref="BlockBindings"/>. Nothing else is touched.
+    /// Throws when a uniform or a block is not mapped.
     /// </summary>
     public static string Port(string legacy, IReadOnlyDictionary<string, string>? map = null, string pushMembers = MeshPushMembers)
     {
@@ -334,24 +360,46 @@ static partial class NativeShaders
 
     // ---- the native variants of the shared text (docs/renderer-native.md 3.3) ----
 
-    /// <summary><see cref="Shaders.MeshVertex"/> with <paramref name="own"/> mapping <c>uModel</c> (and anything else the consumer adds).</summary>
+    /// <summary>
+    /// <see cref="Shaders.MeshVertex"/> with <paramref name="own"/> mapping <c>uModel</c> (and anything else the consumer adds).
+    /// </summary>
     public static string MeshVertex(IReadOnlyDictionary<string, string> own) => Port(Shaders.MeshVertex, Map(own));
-    /// <summary><see cref="Shaders.MeshFragment"/> (embeds <see cref="AtmosphereShaders.Functions"/> and the shadow receivers).</summary>
+
+    /// <summary>
+    /// <see cref="Shaders.MeshFragment"/> (embeds <see cref="AtmosphereShaders.Functions"/> and the shadow receivers).
+    /// </summary>
     public static string MeshFragment(IReadOnlyDictionary<string, string>? own = null) => Port(Shaders.MeshFragment, Map(own));
-    /// <summary><see cref="AtmosphereShaders.Functions"/> (embeds <see cref="ShadowShaders.Functions"/> and <see cref="MeitouShadowShaders.Functions"/>);
-    /// for a native text that already has the prelude.</summary>
+
+    /// <summary>
+    /// <see cref="AtmosphereShaders.Functions"/> (embeds <see cref="ShadowShaders.Functions"/> and <see cref="MeitouShadowShaders.Functions"/>); for
+    /// a native text that already has the prelude.
+    /// </summary>
     public static string AtmosphereFunctions => Port(AtmosphereShaders.Functions, Map());
-    /// <summary><see cref="ShadowShaders.Functions"/> alone (the shadow receivers).</summary>
+
+    /// <summary>
+    /// <see cref="ShadowShaders.Functions"/> alone (the shadow receivers).
+    /// </summary>
     public static string ShadowFunctions => Port(ShadowShaders.Functions, Map());
-    /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2).</summary>
+
+    /// <summary>
+    /// <see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2).
+    /// </summary>
     public static string DepthFragment => Port(ShadowShaders.DepthFragment, Map());
-    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/>: the mesh shaders' cut-out on <see cref="MeshPush"/>.</summary>
+
+    /// <summary>
+    /// <see cref="ShadowShaders.MeshDepthFragment"/>: the mesh shaders' cut-out on <see cref="MeshPush"/>.
+    /// </summary>
     public static string MeshDepthFragment(IReadOnlyDictionary<string, string>? own = null) => Port(ShadowShaders.MeshDepthFragment, Map(own));
-    /// <summary><see cref="PostProcessShaders.Vertex"/> (the full-screen triangle).</summary>
+
+    /// <summary>
+    /// <see cref="PostProcessShaders.Vertex"/> (the full-screen triangle).
+    /// </summary>
     public static string PostProcessVertex => Port(PostProcessShaders.Vertex, Map());
 }
 
-/// <summary>The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).</summary>
+/// <summary>
+/// The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 8704)]
 unsafe struct FrameConstants
 {
@@ -382,28 +430,41 @@ unsafe struct FrameConstants
     [FieldOffset(276)] public uint WeatherDustNoise;
     [FieldOffset(288)] public Vector4 FogVolumeEye;
     [FieldOffset(304)] public Vector4 FogVolumeInfo;
-    /// <summary>The placed fog volumes in view, packed (<see cref="FogVolumeShaders"/>): <see cref="FogVolumeShaders.MaxData"/> vec4s.</summary>
+    /// <summary>
+    /// The placed fog volumes in view, packed (<see cref="FogVolumeShaders"/>): <see cref="FogVolumeShaders.MaxData"/> vec4s.
+    /// </summary>
     [FieldOffset(320)] public fixed float FogVolumeData[FogVolumeShaders.MaxData * 4];
-    /// <summary>The probe GI (docs/render-gi.md): <c>uGiParams</c>, <c>uGiGrid[4]</c> and its three textures.</summary>
+    /// <summary>
+    /// The probe GI (docs/render-gi.md): <c>uGiParams</c>, <c>uGiGrid[4]</c> and its three textures.
+    /// </summary>
     [FieldOffset(8512)] public Vector4 GiParams;
     [FieldOffset(8528)] public fixed float GiGrid[16];
     [FieldOffset(8592)] public uint GiIrradiance;
     [FieldOffset(8596)] public uint GiDistance;
     [FieldOffset(8600)] public uint GiBase;
-    /// <summary>The lamps (docs/render-lights.md): <c>uLightGrid</c> and its three textures.</summary>
+    /// <summary>
+    /// The lamps (docs/render-lights.md): <c>uLightGrid</c> and its three textures.
+    /// </summary>
     [FieldOffset(8608)] public Vector4 LightGrid;
     [FieldOffset(8624)] public uint LightCells;
     [FieldOffset(8628)] public uint LightIndex;
     [FieldOffset(8632)] public uint LightData;
-    /// <summary>Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.</summary>
+    /// <summary>
+    /// Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.
+    /// </summary>
     [FieldOffset(8640)] public Vector4 AtmoNight;
-    /// <summary>Meitou cloud shadows (<c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, docs/formats/clouds.md "Meitou cloud shadows"): the layer's numbers, the wind shift, and its two textures.</summary>
+    /// <summary>
+    /// Meitou cloud shadows (<c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, docs/formats/clouds.md "Meitou cloud shadows"): the layer's numbers, the wind
+    /// shift, and its two textures.
+    /// </summary>
     [FieldOffset(8656)] public Vector4 AtmoCloud;
     [FieldOffset(8672)] public Vector4 AtmoCloudWind;
     [FieldOffset(8688)] public uint AtmoClouds;
     [FieldOffset(8692)] public uint AtmoCloudsTile;
 
-    /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
+    /// <summary>
+    /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
+    /// </summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
     [
         ("uAtmoSun", 0, 16), ("uAtmoLight", 16, 16), ("uAtmoSunLight", 32, 12), ("uAtmoParams", 48, 16), ("uAtmoTau", 64, 16),
@@ -414,7 +475,9 @@ unsafe struct FrameConstants
         ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16),
     ];
 
-    /// <summary>The frame-global textures, the array each is registered in and the member that holds its index.</summary>
+    /// <summary>
+    /// The frame-global textures, the array each is registered in and the member that holds its index.
+    /// </summary>
     public static readonly (string Name, BindlessKind Kind, int Offset)[] Textures =
     [
         ("uAtmoIrradiance", BindlessKind.Cube, 208), ("uAtmoSpecular", BindlessKind.Cube, 212), ("uAtmoAmbientMap", BindlessKind.Texture2D, 216),
@@ -427,7 +490,9 @@ unsafe struct FrameConstants
     ];
 }
 
-/// <summary>The C# side of <see cref="NativeShaders.ViewBlock"/> (std140). Matrices as <c>WorldGl.Matrix</c> passes them (System.Numerics memory).</summary>
+/// <summary>
+/// The C# side of <see cref="NativeShaders.ViewBlock"/> (std140). Matrices as <c>WorldGl.Matrix</c> passes them (System.Numerics memory).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 784)]
 struct ViewConstants
 {
@@ -450,12 +515,14 @@ struct ViewConstants
 }
 
 [System.Runtime.CompilerServices.InlineArray(4)]
-struct CutVolumeArray { Vector4 first; }
+struct CutVolumeArray { Vector4 _first; }
 
 [System.Runtime.CompilerServices.InlineArray(32)]
-struct CutPlaneArray { Vector4 first; }
+struct CutPlaneArray { Vector4 _first; }
 
-/// <summary>The C# side of <see cref="NativeShaders.MeshPushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="NativeShaders.MeshPushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 128)]
 struct MeshPush
 {

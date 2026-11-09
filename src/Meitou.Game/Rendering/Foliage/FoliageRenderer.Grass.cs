@@ -20,28 +20,42 @@ namespace Meitou.Game.Rendering.Foliage;
 public sealed unsafe partial class FoliageRenderer
 {
     FoliageGrassGpu _grassStore = null!;
-    /// <summary>The native frame of the GPU blade programs (set 0 with the patch table as an extra storage binding).</summary>
+    /// <summary>
+    /// The native frame of the GPU blade programs (set 0 with the patch table as an extra storage binding).
+    /// </summary>
     NativeFrame? _grassFrame;
     NativeProg? _grassGpuProgram, _grassMotionGpuProgram;
-    /// <summary>The blade programs' vertex layout over the arena (instance rate: vec4 at 0, float at 16, stride 20), and their pipelines per segment.</summary>
+    /// <summary>
+    /// The blade programs' vertex layout over the arena (instance rate: vec4 at 0, float at 16, stride 20), and their pipelines per segment.
+    /// </summary>
     NativeMesh _grassMeshCpu, _grassMeshMotionCpu, _grassMeshGpu, _grassMeshMotionGpu;
 
     /// <summary>
-    /// The grass drawn by the GPU (docs/renderer-native.md 5.6.2; where the device allows it): per view two compute kernels choose the
-    /// pages in view, the blades each shows and the order, and one indirect draw records them all. Off is the CPU path (the reference): the CPU walks the pages, frustum-tests and sorts them.
+    /// The grass drawn by the GPU (docs/renderer-native.md 5.6.2; where the device allows it): per view two compute kernels choose the pages in view,
+    /// the blades each shows and the order, and one indirect draw records them all. Off is the CPU path (the reference): the CPU walks the pages,
+    /// frustum-tests and sorts them.
     /// </summary>
     public bool GpuGrass { get; set; } = true;
 
     bool GpuGrassActive => GpuGrass && _grassGpuProgram is not null;
 
-    /// <summary>Bytes of the blade arena (160 MB) and slots of the cull table at the default grass distance; <see cref="GrassStoreScale"/> times them for a longer one.</summary>
+    /// <summary>
+    /// Bytes of the blade arena (160 MB) and slots of the cull table at the default grass distance; <see cref="GrassStoreScale"/> times them for a
+    /// longer one.
+    /// </summary>
     const ulong GrassArenaBytes = 160ul << 20;
     const int GrassSlotCapacity = 32768;
-    /// <summary>The largest <see cref="GrassStoreScale"/>: 1.28 GB of blades, a grass distance of about 2.8 times the default.</summary>
+    /// <summary>
+    /// The largest <see cref="GrassStoreScale"/>: 1.28 GB of blades, a grass distance of about 2.8 times the default.
+    /// </summary>
     const int MaxGrassStoreScale = 8;
-    /// <summary>The share of the device's memory budget a larger store may take (an 11 GB card fits the largest, an 8 GB one 6 times the default).</summary>
+    /// <summary>
+    /// The share of the device's memory budget a larger store may take (an 11 GB card fits the largest, an 8 GB one 6 times the default).
+    /// </summary>
     const ulong GrassStoreBudgetShare = 8;
-    /// <summary>The scale the store has, and the last one <see cref="VramGuard.Allows"/> refused (not asked again until the setting wants more).</summary>
+    /// <summary>
+    /// The scale the store has, and the last one <see cref="VramGuard.Allows"/> refused (not asked again until the setting wants more).
+    /// </summary>
     int _grassStoreScale, _grassStoreRefused;
 
     /// <summary>
@@ -52,8 +66,10 @@ public sealed unsafe partial class FoliageRenderer
     int GrassStoreScale(float grassRange, ulong budget)
     {
         int fits = budget > 0 ? (int)Math.Clamp(budget / GrassStoreBudgetShare / GrassArenaBytes, 1, MaxGrassStoreScale) : MaxGrassStoreScale;
+
         // Each place kept loaded besides the eye's (Areas) holds its own pages: the store is that many times larger, within the same caps.
-        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * _areas, 1, MaxGrassStoreScale)), fits);
+        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * _areas, 1,
+            MaxGrassStoreScale)), fits);
     }
 
     void InitGrassStore(IGpuContext gpu)
@@ -64,22 +80,26 @@ public sealed unsafe partial class FoliageRenderer
         _grassMeshMotionCpu = ArenaMesh(_grassMotionProgram);
         if (!_grassStore.Kernels) return;
         _grassFrame = new NativeFrame(gpu, extraStorage: 1);
-        _grassGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(), "foliage grass gpu");
-        _grassMotionGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassMotionVertexGpu(), FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
+        _grassGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(),
+            "foliage grass gpu");
+        _grassMotionGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassMotionVertexGpu(),
+            FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
         _grassMeshGpu = ArenaMesh(_grassGpuProgram);
         _grassMeshMotionGpu = ArenaMesh(_grassMotionGpuProgram);
     }
 
     /// <summary>
-    /// A grass distance raised past what the store holds (<see cref="GrassStoreScale"/>) replaces it with a larger one: every page is dropped and made
-    /// again, nearest first. The store never shrinks while running (a lowered setting keeps it), so a slider drag rebuilds it at most a few times.
-    /// The old store is disposed once the frames in flight are done with it; its pages' ranges are not given back to it (<see cref="GrassBuffer.Store"/>).
-    /// The guard (<see cref="VramGuard.Allows"/>) is asked for the new store while the old one is still held; refused, the store stays as it is.
+    /// A grass distance raised past what the store holds (<see cref="GrassStoreScale"/>) replaces it with a larger one: every page is dropped and
+    /// made again, nearest first. The store never shrinks while running (a lowered setting keeps it), so a slider drag rebuilds it at most a few
+    /// times. The old store is disposed once the frames in flight are done with it; its pages' ranges are not given back to it
+    /// (<see cref="GrassBuffer.Store"/>). The guard (<see cref="VramGuard.Allows"/>) is asked for the new store while the old one is still held;
+    /// refused, the store stays as it is.
     /// </summary>
     void GrowGrassStore()
     {
         if (GpuContext.DiagNoGrow) return;
-        if (GrassStoreScale(GrassRangeSetting, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused)) return;
+        if (GrassStoreScale(GrassRangeSetting, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused))
+            return;
         int scale = GrassStoreScale(GrassRangeSetting, _guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : Gpu.VideoMemoryBudget);
         if (scale <= _grassStoreScale) { _grassStoreRefused = wanted; return; }   // the budget caps it where it is
         if (_guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
@@ -125,7 +145,9 @@ public sealed unsafe partial class FoliageRenderer
         _grassStore.Dispose();
     }
 
-    /// <summary>A blade program's inputs over the arena: location 0 the position and scale (a vec4), location 1 the yaw, both per instance.</summary>
+    /// <summary>
+    /// A blade program's inputs over the arena: location 0 the position and scale (a vec4), location 1 the yaw, both per instance.
+    /// </summary>
     NativeMesh ArenaMesh(NativeProg p)
     {
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
@@ -150,7 +172,9 @@ public sealed unsafe partial class FoliageRenderer
         state.GrassZone = -1;
     }
 
-    /// <summary>The store had no room for the last page tried (<see cref="TryQueuePage"/>), and whether a page was tried while it was full this frame.</summary>
+    /// <summary>
+    /// The store had no room for the last page tried (<see cref="TryQueuePage"/>), and whether a page was tried while it was full this frame.
+    /// </summary>
     bool _grassFull, _grassTriedFull;
 
     /// <summary>
@@ -214,7 +238,8 @@ public sealed unsafe partial class FoliageRenderer
                 int start = at, length = Math.Min(SlabBytes, bytes - at);
                 _uploads.Enqueue(() =>
                 {
-                    if (!page.Dropped) store.WriteBlades(b.Range, start, MemoryMarshal.AsBytes(data.AsSpan()).Slice(start, length));
+                    if (!page.Dropped)
+                        store.WriteBlades(b.Range, start, MemoryMarshal.AsBytes(data.AsSpan()).Slice(start, length));
                 });
             }
         }
@@ -231,7 +256,8 @@ public sealed unsafe partial class FoliageRenderer
             {
                 var b = buffers[i];
                 if (b.Slot < 0) continue;
-                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone, Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
+                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone,
+                    Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
             _grassVersion++;
@@ -245,15 +271,16 @@ public sealed unsafe partial class FoliageRenderer
     GrassZoneRow[] _grassZoneRows = new GrassZoneRow[16];
 
     /// <summary>
-    /// The view's zone and patch tables: for every zone with pages in the store, its patches' rows (a zone's patches can change when it is laid
-    /// out again, so the rows are written per view), as <see cref="PrepareGrass"/> and <see cref="PrepareMotion"/> read them: the range at the
-    /// current grass range setting, the sprite's readiness, the push values of <see cref="GrassPush"/>. Textures are GL ids here (see <see cref="BindRows"/>).
-    /// Returns the number of patches that can draw.
+    /// The view's zone and patch tables: for every zone with pages in the store, its patches' rows (a zone's patches can change when it is laid out
+    /// again, so the rows are written per view), as <see cref="PrepareGrass"/> and <see cref="PrepareMotion"/> read them: the range at the current
+    /// grass range setting, the sprite's readiness, the push values of <see cref="GrassPush"/>. Textures are GL ids here (see
+    /// <see cref="BindRows"/>). Returns the number of patches that can draw.
     /// </summary>
     int BuildGrassRows(bool motion, WorldRenderOptions options, bool coverage)
     {
         _grassPatchRows.Clear();
-        if (_grassZoneRows.Length < _grassZoneHigh) _grassZoneRows = new GrassZoneRow[Math.Max(_grassZoneHigh, _grassZoneRows.Length * 2)];
+        if (_grassZoneRows.Length < _grassZoneHigh)
+            _grassZoneRows = new GrassZoneRow[Math.Max(_grassZoneHigh, _grassZoneRows.Length * 2)];
         else Array.Clear(_grassZoneRows);
         int active = 0;
         foreach (var state in _zones.Values)
@@ -265,6 +292,7 @@ public sealed unsafe partial class FoliageRenderer
                 var patch = state.Patches[i];
                 var g = patch.Grass;
                 var (sprite, colour) = state.PatchTextures[i];
+
                 // As Patch does on each call: counts as use, and brings an unloaded texture back.
                 uint spriteId = sprite?.Key ?? 0, colourId = colour?.Key ?? 0;
                 bool wind = patch.Layer.Wind;
@@ -291,7 +319,10 @@ public sealed unsafe partial class FoliageRenderer
         return active;
     }
 
-    /// <summary>The rows' texture keys as bindless indices (inside the segment, as the CPU path's <see cref="Texture"/> calls are), and the tables into the frame's constants.</summary>
+    /// <summary>
+    /// The rows' texture keys as bindless indices (inside the segment, as the CPU path's <see cref="Texture"/> calls are), and the tables into the
+    /// frame's constants.
+    /// </summary>
     GrassTables BindRows(uint nearDepth)
     {
         var rows = CollectionsMarshal.AsSpan(_grassPatchRows);
@@ -305,13 +336,18 @@ public sealed unsafe partial class FoliageRenderer
         return _grassStore.Prepare(_grassZoneRows.AsSpan(0, Math.Max(_grassZoneHigh, 1)), rows);
     }
 
-    /// <summary>One view's grass on the GPU: the cull into <see cref="GpuFrame.PreFrame"/>, then one indirect draw in a native segment. False when nothing can draw.</summary>
-    bool DrawGrassGpu(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
+    /// <summary>
+    /// One view's grass on the GPU: the cull into <see cref="GpuFrame.PreFrame"/>, then one indirect draw in a native segment. False when nothing can
+    /// draw.
+    /// </summary>
+    bool DrawGrassGpu(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour,
+        float fogDistance, bool coverage)
     {
         if (_grassStore.SlotHigh == 0 || frustum.Length > 8) return false;
         if (BuildGrassRows(false, options, coverage) == 0) return false;
         var gp = _grassGpuProgram!;
         var p = gp.P;
+
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
@@ -320,7 +356,8 @@ public sealed unsafe partial class FoliageRenderer
         var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = _grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
+        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance,
+            Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, state, p);
@@ -335,7 +372,9 @@ public sealed unsafe partial class FoliageRenderer
 
     readonly JobPool<GrassGpuJob> _grassGpuJobs = new();
 
-    /// <summary>One view's GPU grass as prepared (<see cref="DrawGrassGpu"/>): recorded on any thread, the same commands as before wave 4.</summary>
+    /// <summary>
+    /// One view's GPU grass as prepared (<see cref="DrawGrassGpu"/>): recorded on any thread, the same commands as before wave 4.
+    /// </summary>
     sealed class GrassGpuJob : RecordJob
     {
         public FoliageRenderer Owner = null!;
@@ -372,7 +411,9 @@ public sealed unsafe partial class FoliageRenderer
         }
     }
 
-    /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the scene camera over the patches that sway, one indirect draw.</summary>
+    /// <summary>
+    /// <see cref="DrawGrassMotion"/> on the GPU: the same cull for the scene camera over the patches that sway, one indirect draw.
+    /// </summary>
     void DrawGrassMotionGpu(MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
         if (_grassStore.SlotHigh == 0 || _motionFrustum.Length > 8) return;

@@ -75,10 +75,14 @@ public static class BlockCompression
         return result;
     }
 
-    /// <summary>Encodes RGBA8 pixels as BC1 (alpha ignored, four-colour blocks).</summary>
+    /// <summary>
+    /// Encodes RGBA8 pixels as BC1 (alpha ignored, four-colour blocks).
+    /// </summary>
     public static byte[] EncodeBc1(ReadOnlySpan<byte> rgba, int width, int height) => Encode(rgba, width, height, alpha: false);
 
-    /// <summary>Encodes RGBA8 pixels as BC3.</summary>
+    /// <summary>
+    /// Encodes RGBA8 pixels as BC3.
+    /// </summary>
     public static byte[] EncodeBc3(ReadOnlySpan<byte> rgba, int width, int height) => Encode(rgba, width, height, alpha: true);
 
     static byte[] Encode(ReadOnlySpan<byte> rgbaSpan, int width, int height, bool alpha)
@@ -105,7 +109,9 @@ public static class BlockCompression
         return result;
     }
 
-    /// <summary>Endpoints from the colour bounding box (pulled in by 1/16 of its extent), indices to the nearest of the four palette colours.</summary>
+    /// <summary>
+    /// Endpoints from the colour bounding box (pulled in by 1/16 of its extent), indices to the nearest of the four palette colours.
+    /// </summary>
     static void EncodeColour(ReadOnlySpan<byte> px, Span<byte> dst)
     {
         Span<int> lo = [255, 255, 255], hi = [0, 0, 0];
@@ -148,7 +154,9 @@ public static class BlockCompression
         for (int i = 0; i < 4; i++) dst[4 + i] = (byte)(indices >> (8 * i));
     }
 
-    /// <summary>Alpha from the block's minimum and maximum (eight-value mode), indices to the nearest of the eight values.</summary>
+    /// <summary>
+    /// Alpha from the block's minimum and maximum (eight-value mode), indices to the nearest of the eight values.
+    /// </summary>
     static void EncodeAlpha(ReadOnlySpan<byte> px, Span<byte> dst)
     {
         int lo = 255, hi = 0;

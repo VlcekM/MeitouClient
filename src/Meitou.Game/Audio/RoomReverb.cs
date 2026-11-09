@@ -47,7 +47,9 @@ sealed class RoomReverb
         Configure(1, 5, 50, 100, 0);
     }
 
-    /// <summary>True when the tail has died away (several blocks of silence): with nothing going in, the caller may skip <see cref="Process"/>.</summary>
+    /// <summary>
+    /// True when the tail has died away (several blocks of silence): with nothing going in, the caller may skip <see cref="Process"/>.
+    /// </summary>
     public bool TailDead => _silentBlocks > 4;
 
     /// <summary>
@@ -79,7 +81,9 @@ sealed class RoomReverb
         foreach (var a in _allpassRight) a.Feedback = apGain;
     }
 
-    /// <summary>The effect is on (the input is let in) or bypassed (the input is shut and the tail rings out).</summary>
+    /// <summary>
+    /// The effect is on (the input is let in) or bypassed (the input is shut and the tail rings out).
+    /// </summary>
     public bool Enabled
     {
         get => _enableTarget > 0;
@@ -130,7 +134,9 @@ sealed class RoomReverb
         else _silentBlocks = 0;
     }
 
-    /// <summary>Forgets the tail.</summary>
+    /// <summary>
+    /// Forgets the tail.
+    /// </summary>
     public void Clear()
     {
         foreach (var c in _combsLeft) c.Clear();

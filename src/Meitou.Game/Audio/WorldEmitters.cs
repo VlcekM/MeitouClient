@@ -4,14 +4,17 @@ using Meitou.Data.World;
 namespace Meitou.Game.Audio;
 
 /// <summary>
-/// The game's point emitters (docs/audio.md "Point emitters", from the exe's emitter class <c>FUN_140259a80</c> and its update <c>FUN_140258cb0</c>): a looping sound attached to a
-/// building (an AMBIENT_SOUND record) that plays while the camera eye is within the sound's <see cref="AmbientSound.Range"/>. Each emitter is a game object of its own, placed
-/// at the emitter, with the <c>Emitters</c> switch set to its name and the <c>Intensity</c> parameter, started and stopped by <c>Start_Emitter</c> / <c>Stop_Emitter</c>.
-/// The game has no cap on how many play at once: the range is the only limit.
+/// The game's point emitters (docs/audio.md "Point emitters", from the exe's emitter class <c>FUN_140259a80</c> and its update <c>FUN_140258cb0</c>):
+/// a looping sound attached to a building (an AMBIENT_SOUND record) that plays while the camera eye is within the sound's
+/// <see cref="AmbientSound.Range"/>. Each emitter is a game object of its own, placed at the emitter, with the <c>Emitters</c> switch set to its name
+/// and the <c>Intensity</c> parameter, started and stopped by <c>Start_Emitter</c> / <c>Stop_Emitter</c>. The game has no cap on how many play at
+/// once: the range is the only limit.
 /// </summary>
 public sealed class WorldEmitters(WwisePlayer player)
 {
-    /// <summary>The first game object id of the emitters (the exe counts up from 0xFFFFF; Meitou's other sound sources keep below this one).</summary>
+    /// <summary>
+    /// The first game object id of the emitters (the exe counts up from 0xFFFFF; Meitou's other sound sources keep below this one).
+    /// </summary>
     public const ulong FirstObject = 1UL << 32;
 
     sealed class Emitter(string key, AmbientSound sound, Vector3 position)
@@ -19,33 +22,46 @@ public sealed class WorldEmitters(WwisePlayer player)
         public readonly string Key = key;
         public readonly AmbientSound Sound = sound;
         public Vector3 Position = position;
-        /// <summary>The game object; 0 until the first start registers it (the game registers lazily).</summary>
+        /// <summary>
+        /// The game object; 0 until the first start registers it (the game registers lazily).
+        /// </summary>
         public ulong Object;
         public bool Started;
-        /// <summary>The eye is beyond the range (the game starts every emitter far away, then updates it once on creation).</summary>
+        /// <summary>
+        /// The eye is beyond the range (the game starts every emitter far away, then updates it once on creation).
+        /// </summary>
         public bool Far = true;
         public bool Powered;
-        /// <summary>The last <c>Intensity</c> the game decided on (the base intensity at first, sent or not).</summary>
+        /// <summary>
+        /// The last <c>Intensity</c> the game decided on (the base intensity at first, sent or not).
+        /// </summary>
         public float Level = sound.Intensity * 100;
     }
 
     readonly Dictionary<string, Emitter> _emitters = new(StringComparer.Ordinal);
     ulong _next = FirstObject;
 
-    /// <summary>Emitters that exist (their building is complete and standing).</summary>
+    /// <summary>
+    /// Emitters that exist (their building is complete and standing).
+    /// </summary>
     public int Count => _emitters.Count;
 
-    /// <summary>Emitters playing now.</summary>
+    /// <summary>
+    /// Emitters playing now.
+    /// </summary>
     public int Started { get; private set; }
 
-    /// <summary>The distance in units from the eye to the nearest emitter at the last <see cref="Update"/>, and its name (infinity and null with none).</summary>
+    /// <summary>
+    /// The distance in units from the eye to the nearest emitter at the last <see cref="Update"/>, and its name (infinity and null with none).
+    /// </summary>
     public float NearestDistance { get; private set; } = float.PositiveInfinity;
 
     public string? NearestName { get; private set; }
 
     /// <summary>
-    /// Adds the emitter (replacing the one with the same key). Nothing sounds until <see cref="Update"/> finds the eye in range. A <paramref name="powered"/> emitter starts out powered with
-    /// <paramref name="efficiency"/> in its <c>Intensity</c> (a building nothing calls <see cref="SetPower"/> for: the level's, which the simulation does not run).
+    /// Adds the emitter (replacing the one with the same key). Nothing sounds until <see cref="Update"/> finds the eye in range. A
+    /// <paramref name="powered"/> emitter starts out powered with <paramref name="efficiency"/> in its <c>Intensity</c> (a building nothing calls
+    /// <see cref="SetPower"/> for: the level's, which the simulation does not run).
     /// </summary>
     public void Add(PlacedEmitter placed, bool powered = false, float efficiency = 0)
     {
@@ -59,7 +75,10 @@ public sealed class WorldEmitters(WwisePlayer player)
         _emitters[placed.Key] = e;
     }
 
-    /// <summary>Removes the emitter: <c>Stop_Emitter</c> if it plays, then its object is unregistered at once, which cuts what is left of the sound (the game's <c>FUN_140258260</c>).</summary>
+    /// <summary>
+    /// Removes the emitter: <c>Stop_Emitter</c> if it plays, then its object is unregistered at once, which cuts what is left of the sound (the
+    /// game's <c>FUN_140258260</c>).
+    /// </summary>
     public void Remove(string key)
     {
         if (!_emitters.Remove(key, out var e)) return;
@@ -74,7 +93,10 @@ public sealed class WorldEmitters(WwisePlayer player)
 
     public bool Contains(string key) => _emitters.ContainsKey(key);
 
-    /// <summary>Moves an emitter that follows something (an effect's node, <c>FUN_140258120</c>): the next <see cref="Update"/> measures the range from the new place, and a registered object is placed there.</summary>
+    /// <summary>
+    /// Moves an emitter that follows something (an effect's node, <c>FUN_140258120</c>): the next <see cref="Update"/> measures the range from the
+    /// new place, and a registered object is placed there.
+    /// </summary>
     public void Move(string key, Vector3 position)
     {
         if (!_emitters.TryGetValue(key, out var e)) return;
@@ -88,8 +110,8 @@ public sealed class WorldEmitters(WwisePlayer player)
     }
 
     /// <summary>
-    /// Once a frame with the camera eye: an emitter whose squared distance is beyond its squared range stops; one within it starts if it is not running and either does not need
-    /// power or has been told it is powered (<see cref="SetPower"/>).
+    /// Once a frame with the camera eye: an emitter whose squared distance is beyond its squared range stops; one within it starts if it is not
+    /// running and either does not need power or has been told it is powered (<see cref="SetPower"/>).
     /// </summary>
     public void Update(Vector3 eye)
     {
@@ -116,9 +138,10 @@ public sealed class WorldEmitters(WwisePlayer player)
     }
 
     /// <summary>
-    /// A machine's state (the game's <c>FUN_140258c20</c>, called each frame by production buildings): <paramref name="powered"/> starts or stops an emitter that needs power,
-    /// and the <c>Intensity</c> becomes <c>efficiency × efficiency multiplier × 100 + intensity × 100</c> when it changed. Only for an emitter within range, as the game does.
-    /// The host calls it each frame for the machines of the player's buildings (docs/audio.md "Point emitters").
+    /// A machine's state (the game's <c>FUN_140258c20</c>, called each frame by production buildings): <paramref name="powered"/> starts or stops an
+    /// emitter that needs power, and the <c>Intensity</c> becomes <c>efficiency × efficiency multiplier × 100 + intensity × 100</c> when it changed.
+    /// Only for an emitter within range, as the game does. The host calls it each frame for the machines of the player's buildings (docs/audio.md
+    /// "Point emitters").
     /// </summary>
     public void SetPower(string key, float efficiency, bool powered)
     {
@@ -165,7 +188,8 @@ public sealed class WorldEmitters(WwisePlayer player)
         player.RegisterObject(e.Object);
         player.SetSwitch("Emitters", e.Sound.Emitter, e.Object);
         player.SetPosition(e.Object, e.Position);
-        // The game sends the base intensity only when it is not 0: an emitter with none hears the global Intensity (the wind's) until a machine sets its own.
+        // The game sends the base intensity only when it is not 0: an emitter with none hears the global Intensity (the wind's) until a machine sets
+        // its own.
         if (e.Level != 0) player.SetParameter("Intensity", e.Level, e.Object);
     }
 }

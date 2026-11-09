@@ -8,14 +8,20 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class TextureQuality
 {
-    /// <summary>The value when the key is missing (High).</summary>
+    /// <summary>
+    /// The value when the key is missing (High).
+    /// </summary>
     public const int Default = 1;
     public const int Maximum = 4;
 
-    /// <summary>The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). The tools and tests that do not set it keep 0: nothing dropped.</summary>
+    /// <summary>
+    /// The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). The tools and tests that do not set it keep 0: nothing dropped.
+    /// </summary>
     public static int Level { get; set; }
 
-    /// <summary>The options' labels, indexed by level.</summary>
+    /// <summary>
+    /// The options' labels, indexed by level.
+    /// </summary>
     public static readonly string[] Labels = ["Maximum", "High", "Medium", "Low", "Fugly"];
 
     /// <summary>
@@ -36,7 +42,9 @@ public static class TextureQuality
         return Math.Max(n, 0);
     }
 
-    /// <summary><see cref="LevelsToDrop(string, string, int)"/> at the current <see cref="Level"/>.</summary>
+    /// <summary>
+    /// <see cref="LevelsToDrop(string, string, int)"/> at the current <see cref="Level"/>.
+    /// </summary>
     public static int LevelsToDrop(string name, string group) => LevelsToDrop(name, group, Level);
 
     /// <summary>

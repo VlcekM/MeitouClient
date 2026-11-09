@@ -18,10 +18,14 @@ public sealed unsafe class MarkerRenderer : IDisposable
 {
     const float MarkerScale = 8, Contrast = 0.5f;
     static readonly Vector4 Visible = new(0.612f, 0.694f, 0.529f, 1), Hidden = new(0.306f, 0.347f, 0.2645f, 0.6f);
-    /// <summary>The alpha of an arrow's part behind the scene (the stealth call's second pass, <c>FUN_1409b7830</c>).</summary>
+    /// <summary>
+    /// The alpha of an arrow's part behind the scene (the stealth call's second pass, <c>FUN_1409b7830</c>).
+    /// </summary>
     const float ArrowHiddenAlpha = 0.2f;
 
-    /// <summary>A stealth arrow: its tail at <see cref="At"/>, pointing along the unit <see cref="Direction"/>, in <see cref="Colour"/>.</summary>
+    /// <summary>
+    /// A stealth arrow: its tail at <see cref="At"/>, pointing along the unit <see cref="Direction"/>, in <see cref="Colour"/>.
+    /// </summary>
     public readonly record struct Arrow(Vector3 At, Vector3 Direction, Vector3 Colour);
 
     const string Vertex = """
@@ -73,7 +77,10 @@ public sealed unsafe class MarkerRenderer : IDisposable
         void main() { fragColour = texelFetch(uMarker, ivec2(gl_FragCoord.xy), 0); }
         """;
 
-    /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows). 4, not 8: 8 took 127 MB at 1080p.</summary>
+    /// <summary>
+    /// Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows). 4, not 8: 8
+    /// took 127 MB at 1080p.
+    /// </summary>
     const int WantedSamples = 4;
 
     readonly IGpuContext _gpu;
@@ -90,21 +97,30 @@ public sealed unsafe class MarkerRenderer : IDisposable
     // The markers drawn multisampled with a depth of their own, at the picture's size, and resolved.
     GpuTexture? _msColour, _msDepth, _resolved;
     readonly int _samples;
-    /// <summary>Milliseconds without a marker before the targets are freed (about 70 MB multisampled at 1080p; markers show only for a while after an order).</summary>
+    /// <summary>
+    /// Milliseconds without a marker before the targets are freed (about 70 MB multisampled at 1080p; markers show only for a while after an order).
+    /// </summary>
     const long IdleReleaseMs = 10_000;
     long _idleSince;
     // The vertex ranges of the two meshes in the buffer (count 0: the mesh is missing).
     readonly (int First, int Count) _marker, _arrow, _ring;
 
-    /// <summary>Where the movement marker stands (the ground point of the move order).</summary>
+    /// <summary>
+    /// Where the movement marker stands (the ground point of the move order).
+    /// </summary>
     public Vector3 At { get; set; }
-    /// <summary>1 when the order is given, down to 0 (gone).</summary>
+    /// <summary>
+    /// 1 when the order is given, down to 0 (gone).
+    /// </summary>
     public float Strength { get; set; }
-    /// <summary>This frame's stealth arrows, replaced whole each frame (empty: none; ignored without <c>arrow.mesh</c>).</summary>
+    /// <summary>
+    /// This frame's stealth arrows, replaced whole each frame (empty: none; ignored without <c>arrow.mesh</c>).
+    /// </summary>
     public Arrow[] Arrows { get; set; } = [];
     /// <summary>
-    /// Whether the rotation marker (<c>rotate.mesh</c>, docs/game/ui-input.md) shows while the camera turns: flat, 1 unit over the pivot of the camera the frame is
-    /// drawn with, scaled max(3, 0.06 x its distance), so it keeps with the view (a followed character moves the pivot every frame, between the rig's ticks).
+    /// Whether the rotation marker (<c>rotate.mesh</c>, docs/game/ui-input.md) shows while the camera turns: flat, 1 unit over the pivot of the
+    /// camera the frame is drawn with, scaled max(3, 0.06 x its distance), so it keeps with the view (a followed character moves the pivot every
+    /// frame, between the rig's ticks).
     /// </summary>
     public bool Rotation { get; set; }
 
@@ -143,7 +159,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         ], default);
     }
 
-    /// <summary>The markers from <c>position.mesh</c> and <c>arrow.mesh</c> (null when neither is readable; a missing one is not drawn).</summary>
+    /// <summary>
+    /// The markers from <c>position.mesh</c> and <c>arrow.mesh</c> (null when neither is readable; a missing one is not drawn).
+    /// </summary>
     public static MarkerRenderer? Create(IGpuContext gpu, Func<string, string?> find)
     {
         var data = new List<float>();
@@ -153,7 +171,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         return data.Count == 0 ? null : new MarkerRenderer(gpu, [.. data], marker, arrow, ring);
     }
 
-    /// <summary>Appends a mesh's triangles (position and normal, scaled) to <paramref name="data"/>: its vertex range there.</summary>
+    /// <summary>
+    /// Appends a mesh's triangles (position and normal, scaled) to <paramref name="data"/>: its vertex range there.
+    /// </summary>
     static (int First, int Count) Append(List<float> data, Func<string, string?> find, string name, float scale)
     {
         int first = data.Count / 6;
@@ -169,7 +189,8 @@ public sealed unsafe class MarkerRenderer : IDisposable
                 for (int t = 0; t + 2 < indices.Length; t += 3)
                 {
                     // Without normals in the file, the face's own.
-                    var face = Vector3.Normalize(Vector3.Cross(positions[indices[t + 1]] - positions[indices[t]], positions[indices[t + 2]] - positions[indices[t]]));
+                    var face = Vector3.Normalize(Vector3.Cross(positions[indices[t + 1]] - positions[indices[t]],
+                        positions[indices[t + 2]] - positions[indices[t]]));
                     for (int k = 0; k < 3; k++)
                     {
                         uint i = indices[t + k];
@@ -188,14 +209,17 @@ public sealed unsafe class MarkerRenderer : IDisposable
         return (first, data.Count / 6 - first);
     }
 
-    /// <summary>Whether anything is to be drawn this frame.</summary>
+    /// <summary>
+    /// Whether anything is to be drawn this frame.
+    /// </summary>
     public bool Active => Strength > 0 && _marker.Count > 0 || Arrows.Length > 0 && _arrow.Count > 0 || Rotation && _ring.Count > 0;
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
     /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the scene's <paramref name="sceneDepthTexture"/>
     /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used). The markers are drawn multisampled into targets of their own
-    /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the far plane is drawn whole.
+    /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the far plane is drawn
+    /// whole.
     /// <paramref name="camera"/> is the view the scene was drawn from.
     /// </summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
@@ -233,7 +257,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
 
     static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
 
-    /// <summary>The multisampled targets and the resolved picture at <paramref name="width"/> × <paramref name="height"/>, made again when the size changes.</summary>
+    /// <summary>
+    /// The multisampled targets and the resolved picture at <paramref name="width"/> × <paramref name="height"/>, made again when the size changes.
+    /// </summary>
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_msColour), nameof(_msDepth), nameof(_resolved))]
     void EnsureTargets(int width, int height)
     {
@@ -241,12 +267,17 @@ public sealed unsafe class MarkerRenderer : IDisposable
             _msColour.Desc.Width == width && _msColour.Desc.Height == height) return;
         ReleaseTargets();
         var sampled = _samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
-        _msColour = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: _samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
-        _msDepth = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: _samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
-        _resolved = _samples > 1 ? _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : _msColour;
+        _msColour = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: _samples, Use: TextureUse.ColourTarget | sampled,
+            Name: "markers colour"));
+        _msDepth = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: _samples, Use: TextureUse.DepthTarget,
+            Name: "markers depth"));
+        _resolved = _samples > 1 ? _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+            Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : _msColour;
     }
 
-    /// <summary>One of the two passes: the parts in front of the scene, or (<paramref name="hidden"/>) those behind it.</summary>
+    /// <summary>
+    /// One of the two passes: the parts in front of the scene, or (<paramref name="hidden"/>) those behind it.
+    /// </summary>
     void RecordPass(IGpuCommandList cmd, PassTargets t, WorldCamera camera, Arrow[] arrows, bool hidden)
     {
         var eye = camera.Eye;
@@ -263,8 +294,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
             var c = hidden ? Hidden : Visible;
             Draw(cmd, _marker, At - eye, Matrix4x4.Identity, new Vector4(c.X, c.Y, c.Z, c.W * Strength));
         }
-        // The rotation marker's colour has alpha 0: only its opaque visible pass shows. It rides the drawn pivot, not the rig's last tick (FUN_1406b0f90's
-        // marker is a child of the camera's pivot node).
+
+        // The rotation marker's colour has alpha 0: only its opaque visible pass shows. It rides the drawn pivot, not the rig's last tick
+        // (FUN_1406b0f90's marker is a child of the camera's pivot node).
         if (!hidden && Rotation && _ring.Count > 0)
             Draw(cmd, _ring, camera.Target + Vector3.UnitY - eye, Matrix4x4.CreateScale(MathF.Max(3, camera.Distance * 0.06f)), Visible);
         if (_arrow.Count > 0)
@@ -272,7 +304,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
                 Draw(cmd, _arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
     }
 
-    /// <summary>The resolved markers blended over <paramref name="picture"/>.</summary>
+    /// <summary>
+    /// The resolved markers blended over <paramref name="picture"/>.
+    /// </summary>
     void Composite(IGpuCommandList cmd, GpuTexture picture, PixelViewport viewport)
     {
         var over = PassTargets.Of(picture, null).At(viewport);
@@ -296,12 +330,14 @@ public sealed unsafe class MarkerRenderer : IDisposable
     }
 
     /// <summary>
-    /// The sneak arrow's node scale in its own frame, before the turn: half as long (its X) and 0.35 as thick, about 5 units long with a head of ±0.42
-    /// (<c>FUN_1405dc7d0</c> <c>setScale(0.5, 0.35, 0.35)</c>; docs/game/perception.md).
+    /// The sneak arrow's node scale in its own frame, before the turn: half as long (its X) and 0.35 as thick, about 5 units long with a head of
+    /// ±0.42 (<c>FUN_1405dc7d0</c> <c>setScale(0.5, 0.35, 0.35)</c>; docs/game/perception.md).
     /// </summary>
     static readonly Matrix4x4 ArrowScale = Matrix4x4.CreateScale(0.5f, 0.35f, 0.35f);
 
-    /// <summary>The turn taking the arrow mesh's −X (its tip) onto <paramref name="direction"/> (Ogre's <c>getRotationTo</c>; opposite: half a turn about Y).</summary>
+    /// <summary>
+    /// The turn taking the arrow mesh's −X (its tip) onto <paramref name="direction"/> (Ogre's <c>getRotationTo</c>; opposite: half a turn about Y).
+    /// </summary>
     static Matrix4x4 PointAlong(Vector3 direction)
     {
         var from = -Vector3.UnitX;
@@ -314,7 +350,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
     GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
-    /// <summary>A frame that draws no marker: the targets are freed once none has been drawn for <see cref="IdleReleaseMs"/>.</summary>
+    /// <summary>
+    /// A frame that draws no marker: the targets are freed once none has been drawn for <see cref="IdleReleaseMs"/>.
+    /// </summary>
     public void Idle()
     {
         if (_msColour is null) return;

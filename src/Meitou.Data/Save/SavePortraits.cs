@@ -13,7 +13,9 @@ public static class SavePortraits
 
     static readonly Lazy<byte[]> BlankImage = new(MakeBlank);
 
-    /// <summary>A transparent atlas.</summary>
+    /// <summary>
+    /// A transparent atlas.
+    /// </summary>
     public static byte[] Blank() => (byte[])BlankImage.Value.Clone();
 
     static byte[] MakeBlank()

@@ -21,10 +21,14 @@ public readonly record struct CelestialFrame(Vector3 X, Vector3 Y, Vector3 Z)
 /// </summary>
 public static class CelestialSphere
 {
-    /// <summary>The turn of the sky at game hour 0 of any day, in radians (a viewer choice).</summary>
+    /// <summary>
+    /// The turn of the sky at game hour 0 of any day, in radians (a viewer choice).
+    /// </summary>
     public const double PhaseOffset = -Math.PI / 3;
 
-    /// <summary>The axis the sun's path turns about (unit): the sun turns right-handed about it. For the game's latitude (0, −sin lat, cos lat).</summary>
+    /// <summary>
+    /// The axis the sun's path turns about (unit): the sun turns right-handed about it. For the game's latitude (0, −sin lat, cos lat).
+    /// </summary>
     public static Vector3 SunAxis(SkyClock clock)
     {
         var rise = clock.SunDirection(clock.Sunrise);
@@ -32,14 +36,19 @@ public static class CelestialSphere
         return Vector3.Normalize(Vector3.Cross(rise, noon));
     }
 
-    /// <summary>The celestial pole: the visible end of the sun's axis (above the horizon in the northern hemisphere), (0, sin lat, −cos lat) at 54°.</summary>
+    /// <summary>
+    /// The celestial pole: the visible end of the sun's axis (above the horizon in the northern hemisphere), (0, sin lat, −cos lat) at 54°.
+    /// </summary>
     public static Vector3 Pole(SkyClock clock)
     {
         var n = SunAxis(clock);
         return n.Y > 0 ? n : -n;
     }
 
-    /// <summary>The turn after <paramref name="day"/> days and <paramref name="hour"/> hours: one turn per game day, plus <see cref="PhaseOffset"/>, in 0..2π + offset.</summary>
+    /// <summary>
+    /// The turn after <paramref name="day"/> days and <paramref name="hour"/> hours: one turn per game day, plus <see cref="PhaseOffset"/>, in 0..2π
+    /// + offset.
+    /// </summary>
     public static double Angle(int day, float hour)
     {
         double turns = (day * 24.0 + hour) / 24.0;
@@ -47,7 +56,10 @@ public static class CelestialSphere
         return turns * 2 * Math.PI + PhaseOffset;
     }
 
-    /// <summary>The celestial axes in world coordinates at <paramref name="day"/> and <paramref name="hour"/>: the fixed ones (equinox = the sun's rising direction, pole) turned about the sun's axis.</summary>
+    /// <summary>
+    /// The celestial axes in world coordinates at <paramref name="day"/> and <paramref name="hour"/>: the fixed ones (equinox = the sun's rising
+    /// direction, pole) turned about the sun's axis.
+    /// </summary>
     public static CelestialFrame Frame(SkyClock clock, int day, float hour)
     {
         var n = SunAxis(clock);
@@ -57,7 +69,9 @@ public static class CelestialSphere
         return new CelestialFrame(Vector3.Transform(x, q), Vector3.Transform(y, q), Vector3.Transform(Vector3.Cross(x, y), q));
     }
 
-    /// <summary>The altitude above the horizon of a world direction, in degrees.</summary>
+    /// <summary>
+    /// The altitude above the horizon of a world direction, in degrees.
+    /// </summary>
     public static float AltitudeDegrees(Vector3 world) => MathF.Asin(Math.Clamp(world.Y, -1f, 1f)) * 180 / MathF.PI;
 }
 
@@ -67,45 +81,66 @@ public static class CelestialSphere
 /// </summary>
 public static class NightAtmosphere
 {
-    /// <summary>Extinction per air mass beyond the zenith's, per colour channel (the V band loses about 0.2 magnitude per air mass, the blue 0.35, the red 0.1: e^−k).</summary>
+    /// <summary>
+    /// Extinction per air mass beyond the zenith's, per colour channel (the V band loses about 0.2 magnitude per air mass, the blue 0.35, the red
+    /// 0.1: e^−k).
+    /// </summary>
     public static readonly Vector3 ExtinctionPerAirMass = new(0.08f, 0.13f, 0.22f);
 
-    /// <summary>Below <see cref="HorizonLow"/> degrees nothing is seen, above <see cref="HorizonHigh"/> the horizon ramp is 1 (smoothstep between).</summary>
+    /// <summary>
+    /// Below <see cref="HorizonLow"/> degrees nothing is seen, above <see cref="HorizonHigh"/> the horizon ramp is 1 (smoothstep between).
+    /// </summary>
     public const float HorizonLow = 0.5f, HorizonHigh = 3.5f;
 
-    /// <summary>Stars twinkle only where the air mass is above <see cref="ScintillationFreeAirMass"/> (about 33° up); the amplitude grows to <see cref="ScintillationMax"/> at the horizon.</summary>
+    /// <summary>
+    /// Stars twinkle only where the air mass is above <see cref="ScintillationFreeAirMass"/> (about 33° up); the amplitude grows to
+    /// <see cref="ScintillationMax"/> at the horizon.
+    /// </summary>
     public const float ScintillationFreeAirMass = 1.8f, ScintillationMax = 0.5f, ScintillationRange = 10f;
 
-    /// <summary>Kasten and Young's (1989) air mass for an altitude in degrees (1 at the zenith, 38 at the horizon).</summary>
+    /// <summary>
+    /// Kasten and Young's (1989) air mass for an altitude in degrees (1 at the zenith, 38 at the horizon).
+    /// </summary>
     public static float AirMass(float altitudeDegrees)
     {
         float h = MathF.Max(altitudeDegrees, 0);
         return 1 / (MathF.Sin(h * MathF.PI / 180) + 0.50572f * MathF.Pow(h + 6.07995f, -1.6364f));
     }
 
-    /// <summary>The share of each channel's light that arrives (relative to the zenith's), times the ramp that takes it to 0 at the horizon.</summary>
+    /// <summary>
+    /// The share of each channel's light that arrives (relative to the zenith's), times the ramp that takes it to 0 at the horizon.
+    /// </summary>
     public static Vector3 Transmission(float altitudeDegrees)
     {
         float x = AirMass(altitudeDegrees) - 1;
         return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x)) * Horizon(altitudeDegrees);
     }
 
-    /// <summary>The ramp that makes stars vanish at the horizon: 0 at <see cref="HorizonLow"/> and below, 1 from <see cref="HorizonHigh"/>.</summary>
+    /// <summary>
+    /// The ramp that makes stars vanish at the horizon: 0 at <see cref="HorizonLow"/> and below, 1 from <see cref="HorizonHigh"/>.
+    /// </summary>
     public static float Horizon(float altitudeDegrees)
     {
         float t = Math.Clamp((altitudeDegrees - HorizonLow) / (HorizonHigh - HorizonLow), 0, 1);
         return t * t * (3 - 2 * t);
     }
 
-    /// <summary>The relative brightness swing of a faint star's twinkle: 0 above about 33°, rising to <see cref="ScintillationMax"/> at the horizon.</summary>
+    /// <summary>
+    /// The relative brightness swing of a faint star's twinkle: 0 above about 33°, rising to <see cref="ScintillationMax"/> at the horizon.
+    /// </summary>
     public static float Scintillation(float altitudeDegrees) =>
         Math.Clamp((AirMass(altitudeDegrees) - ScintillationFreeAirMass) / ScintillationRange, 0, 1) * ScintillationMax;
 }
 
-/// <summary>One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere between the magnitudes.</summary>
+/// <summary>
+/// One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere
+/// between the magnitudes.
+/// </summary>
 public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
 
-/// <summary>A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.</summary>
+/// <summary>
+/// A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.
+/// </summary>
 public readonly record struct StarCandidate(bool Present, Vector2 FaceUv, float Magnitude, float Brightness, int Colour, float Phase);
 
 /// <summary>
@@ -116,7 +151,9 @@ public readonly record struct StarCandidate(bool Present, Vector2 FaceUv, float 
 /// </summary>
 public static class StarField
 {
-    /// <summary>Slope of log₁₀ N(&lt;m) against magnitude (the real sky's is about 0.5: 3.16 times more stars per magnitude).</summary>
+    /// <summary>
+    /// Slope of log₁₀ N(&lt;m) against magnitude (the real sky's is about 0.5: 3.16 times more stars per magnitude).
+    /// </summary>
     public const float MagnitudeSlope = 0.5f;
     /// <summary>
     /// A star's displayed brightness is <c>10^(−0.4 · γ · m)</c>: γ &lt; 1 compresses the real sky's range (a magnitude-1 star is 100 times a
@@ -136,24 +173,34 @@ public static class StarField
         new(160, 45000, 6.5f, 8.2f),
     ];
 
-    /// <summary>How many of <see cref="Layers"/> an integrated GPU draws (the first two: the faint background is sub-pixel anyway).</summary>
+    /// <summary>
+    /// How many of <see cref="Layers"/> an integrated GPU draws (the first two: the faint background is sub-pixel anyway).
+    /// </summary>
     public const int IntegratedLayers = 2;
 
-    /// <summary>The share of the sphere's stars a cell holds on average: <c>count / 4π</c> per steradian times the cell's solid angle (a cube face cell shrinks towards the corners).</summary>
+    /// <summary>
+    /// The share of the sphere's stars a cell holds on average: <c>count / 4π</c> per steradian times the cell's solid angle (a cube face cell
+    /// shrinks towards the corners).
+    /// </summary>
     public static float CellChance(StarLayer layer, Vector2 centre)
     {
         float omega = 4f / (layer.Cells * layer.Cells) * MathF.Pow(1 + centre.X * centre.X + centre.Y * centre.Y, -1.5f);
         return layer.Count / (4 * MathF.PI) * omega;
     }
 
-    /// <summary>Unnormalised direction of a point of a cube face: the face's axis ±1 and the other two components (in x, y, z order) from <paramref name="uv"/>.</summary>
+    /// <summary>
+    /// Unnormalised direction of a point of a cube face: the face's axis ±1 and the other two components (in x, y, z order) from
+    /// <paramref name="uv"/>.
+    /// </summary>
     public static Vector3 FaceDirection(int face, Vector2 uv)
     {
         float s = (face & 1) == 0 ? 1 : -1;
         return (face >> 1) switch { 0 => new(s, uv.X, uv.Y), 1 => new(uv.X, s, uv.Y), _ => new(uv.X, uv.Y, s) };
     }
 
-    /// <summary>The face and the position on it (±1) of a direction: the largest component's axis, the other two over its size.</summary>
+    /// <summary>
+    /// The face and the position on it (±1) of a direction: the largest component's axis, the other two over its size.
+    /// </summary>
     public static int Face(Vector3 d, out Vector2 uv)
     {
         var a = Vector3.Abs(d);
@@ -163,7 +210,9 @@ public static class StarField
         return d.Z > 0 ? 4 : 5;
     }
 
-    /// <summary>pcg3d (Jarzynski and Olano, 2020): three well mixed words from three. The shader has the same function.</summary>
+    /// <summary>
+    /// pcg3d (Jarzynski and Olano, 2020): three well mixed words from three. The shader has the same function.
+    /// </summary>
     public static (uint X, uint Y, uint Z) Pcg3D(uint x, uint y, uint z)
     {
         unchecked
@@ -176,7 +225,10 @@ public static class StarField
         return (x, y, z);
     }
 
-    /// <summary>The one-word PCG hash (O'Neill) of a cell id: whether a cell has a star is drawn from it, so the full <see cref="Pcg3D"/> is only worked out for stars. The shader has the same function.</summary>
+    /// <summary>
+    /// The one-word PCG hash (O'Neill) of a cell id: whether a cell has a star is drawn from it, so the full <see cref="Pcg3D"/> is only worked out
+    /// for stars. The shader has the same function.
+    /// </summary>
     public static uint Pcg1(uint v)
     {
         unchecked
@@ -187,23 +239,33 @@ public static class StarField
         }
     }
 
-    /// <summary>The id a cell hashes with: unique over the layers (six faces each), faces and cells (fewer than 256 a side).</summary>
+    /// <summary>
+    /// The id a cell hashes with: unique over the layers (six faces each), faces and cells (fewer than 256 a side).
+    /// </summary>
     public static uint CellId(int layer, int face, int ix, int iy) => (uint)(((layer * 6 + face) * 256 + iy) * 256 + ix);
 
-    /// <summary>The displayed brightness (peak energy before the shader's gain) of a star of magnitude <paramref name="magnitude"/>.</summary>
+    /// <summary>
+    /// The displayed brightness (peak energy before the shader's gain) of a star of magnitude <paramref name="magnitude"/>.
+    /// </summary>
     public static float Brightness(float magnitude) => MathF.Pow(10, -0.4f * BrightnessGamma * magnitude);
 
-    /// <summary>The magnitude at the fraction <paramref name="u"/> (0..1) of a layer's cumulative count: the power law inverted.</summary>
+    /// <summary>
+    /// The magnitude at the fraction <paramref name="u"/> (0..1) of a layer's cumulative count: the power law inverted.
+    /// </summary>
     public static float MagnitudeAt(StarLayer layer, float u)
     {
         float k = MathF.Pow(10, layer.Slope * (layer.FaintestMagnitude - layer.BrightestMagnitude));
         return layer.BrightestMagnitude + MathF.Log(1 + u * (k - 1)) / (layer.Slope * MathF.Log(10));
     }
 
-    /// <summary>How far in from a cell's edge a star is kept (fraction of the cell), and on a cube face's outer edge: no star's spot crosses a face edge.</summary>
+    /// <summary>
+    /// How far in from a cell's edge a star is kept (fraction of the cell), and on a cube face's outer edge: no star's spot crosses a face edge.
+    /// </summary>
     public const float CellMargin = 0.1f, FaceEdgeMargin = 0.25f;
 
-    /// <summary>The star of the cell (<paramref name="ix"/>, <paramref name="iy"/>) of <paramref name="layer"/> on <paramref name="face"/>, if it has one.</summary>
+    /// <summary>
+    /// The star of the cell (<paramref name="ix"/>, <paramref name="iy"/>) of <paramref name="layer"/> on <paramref name="face"/>, if it has one.
+    /// </summary>
     public static StarCandidate Candidate(int layer, int face, int ix, int iy)
     {
         var l = Layers[layer];
@@ -223,17 +285,27 @@ public static class StarField
     }
 }
 
-/// <summary>Star colours: B−V colour index → temperature → a blackbody's tint, kept near white (the eye and cameras see stars as pale), in a table that a uniform random number indexes.</summary>
+/// <summary>
+/// Star colours: B−V colour index → temperature → a blackbody's tint, kept near white (the eye and cameras see stars as pale), in a table that a
+/// uniform random number indexes.
+/// </summary>
 public static class StarColours
 {
     public const int TableSize = 32;
-    /// <summary>How much of the blackbody's saturation is kept (0 white, 1 the full colour).</summary>
+    /// <summary>
+    /// How much of the blackbody's saturation is kept (0 white, 1 the full colour).
+    /// </summary>
     public const float Saturation = 0.3f;
 
-    /// <summary>Ballesteros (2012): the effective temperature in kelvin of a star of colour index <paramref name="bv"/>.</summary>
+    /// <summary>
+    /// Ballesteros (2012): the effective temperature in kelvin of a star of colour index <paramref name="bv"/>.
+    /// </summary>
     public static float Temperature(float bv) => 4600 * (1 / (0.92f * bv + 1.7f) + 1 / (0.92f * bv + 0.62f));
 
-    /// <summary>A blackbody's linear sRGB at <paramref name="kelvin"/> (1667..25000: Kim et al.'s fit of the Planckian locus), scaled to luminance 1, blue-white to orange; not clamped to white.</summary>
+    /// <summary>
+    /// A blackbody's linear sRGB at <paramref name="kelvin"/> (1667..25000: Kim et al.'s fit of the Planckian locus), scaled to luminance 1,
+    /// blue-white to orange; not clamped to white.
+    /// </summary>
     public static Vector3 Blackbody(float kelvin)
     {
         float t = Math.Clamp(kelvin, 1667, 25000), t2 = t * t, t3 = t2 * t;
@@ -250,10 +322,15 @@ public static class StarColours
 
     public static float Luminance(Vector3 rgb) => 0.2126f * rgb.X + 0.7152f * rgb.Y + 0.0722f * rgb.Z;
 
-    /// <summary>The colour index distribution of the naked-eye sky, as a mixture: blue (B), white (A and F), yellow and orange (G and K giants), red (M).</summary>
+    /// <summary>
+    /// The colour index distribution of the naked-eye sky, as a mixture: blue (B), white (A and F), yellow and orange (G and K giants), red (M).
+    /// </summary>
     static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix = [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
 
-    /// <summary>The tint of the star at the fraction <paramref name="u"/> of the colour index distribution: its blackbody, desaturated by <see cref="Saturation"/>, luminance 1.</summary>
+    /// <summary>
+    /// The tint of the star at the fraction <paramref name="u"/> of the colour index distribution: its blackbody, desaturated by
+    /// <see cref="Saturation"/>, luminance 1.
+    /// </summary>
     public static Vector3 Tint(float u)
     {
         // Invert the mixture's CDF (normal CDFs, the logistic approximation Φ(z) ≈ 1 / (1 + e^(−1.702 z))) by bisection over the colour indices.
@@ -269,7 +346,9 @@ public static class StarColours
         return c / Luminance(c);
     }
 
-    /// <summary>The table the shader indexes with a uniform random number: <see cref="TableSize"/> tints at the middles of equal shares of the distribution.</summary>
+    /// <summary>
+    /// The table the shader indexes with a uniform random number: <see cref="TableSize"/> tints at the middles of equal shares of the distribution.
+    /// </summary>
     public static Vector3[] Table()
     {
         var t = new Vector3[TableSize];

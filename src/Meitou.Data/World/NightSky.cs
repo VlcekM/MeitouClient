@@ -11,9 +11,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class Starfield
 {
-    /// <summary>The texture coordinate of the zenith (the dome's 4 × the shader's 0.1); the horizon is a circle of this radius round it.</summary>
+    /// <summary>
+    /// The texture coordinate of the zenith (the dome's 4 × the shader's 0.1); the horizon is a circle of this radius round it.
+    /// </summary>
     public const float Centre = 0.4f, Radius = 0.4f;
-    /// <summary>Texture units the starfield moves along u and along v per game hour (<c>uTime · 0.1</c>, <c>uTime</c> = SkyX's time × 0.5).</summary>
+    /// <summary>
+    /// Texture units the starfield moves along u and along v per game hour (<c>uTime · 0.1</c>, <c>uTime</c> = SkyX's time × 0.5).
+    /// </summary>
     public const float ShiftPerHour = 0.05f;
 
     /// <summary>
@@ -28,7 +32,9 @@ public static class Starfield
         return new Vector2(Centre) + Radius * t * around + new Vector2(Shift(hours));
     }
 
-    /// <summary>The shift along both axes after <paramref name="hours"/>, wrapped to 0..1 (the texture repeats).</summary>
+    /// <summary>
+    /// The shift along both axes after <paramref name="hours"/>, wrapped to 0..1 (the texture repeats).
+    /// </summary>
     public static float Shift(double hours)
     {
         double s = hours * ShiftPerHour;
@@ -45,20 +51,33 @@ public static class Starfield
 /// </summary>
 public sealed record SkyPlanet(string Material, string Texture, Vector3 Direction, float Scale, float SpinPerDay)
 {
-    /// <summary>The radius of every vertex of <c>planet01.mesh</c> (a UV sphere).</summary>
+    /// <summary>
+    /// The radius of every vertex of <c>planet01.mesh</c> (a UV sphere).
+    /// </summary>
     public const float MeshRadius = 25.8721f;
-    /// <summary>The update places the planet <c>½ (near + far) (1 − tan 0.01°)</c> from the camera and scales it by <c>Scale × that × tan 0.01°</c>.</summary>
+    /// <summary>
+    /// The update places the planet <c>½ (near + far) (1 − tan 0.01°)</c> from the camera and scales it by <c>Scale × that × tan 0.01°</c>.
+    /// </summary>
     public static readonly float Tan001 = MathF.Tan(0.01f * MathF.PI / 180);
-    /// <summary>The mesh's u at longitude 0: <c>u = 0.2685 − atan2(z, x) / 2π</c>, <c>v = acos(y) / π</c> (fitted to every vertex of the mesh, exact).</summary>
+    /// <summary>
+    /// The mesh's u at longitude 0: <c>u = 0.2685 − atan2(z, x) / 2π</c>, <c>v = acos(y) / π</c> (fitted to every vertex of the mesh, exact).
+    /// </summary>
     public const float UOffset = 0.2685f;
 
-    /// <summary>The unit vector towards the planet's centre.</summary>
+    /// <summary>
+    /// The unit vector towards the planet's centre.
+    /// </summary>
     public Vector3 Towards => Vector3.Normalize(Direction);
 
-    /// <summary>The sine of the planet's angular radius: the sphere's radius over its distance, <c>MeshRadius · Scale · tan 0.01°</c> whatever the clip planes.</summary>
+    /// <summary>
+    /// The sine of the planet's angular radius: the sphere's radius over its distance, <c>MeshRadius · Scale · tan 0.01°</c> whatever the clip
+    /// planes.
+    /// </summary>
     public float SinRadius => MeshRadius * Scale * Tan001;
 
-    /// <summary>The angular radius in radians.</summary>
+    /// <summary>
+    /// The angular radius in radians.
+    /// </summary>
     public float AngularRadius => MathF.Asin(SinRadius);
 
     /// <summary>
@@ -72,11 +91,15 @@ public sealed record SkyPlanet(string Material, string Texture, Vector3 Directio
         return (float)(a - Math.Floor(a / (2 * Math.PI)) * 2 * Math.PI);
     }
 
-    /// <summary>The mesh's texture coordinate at the unit object-space normal <paramref name="n"/>.</summary>
+    /// <summary>
+    /// The mesh's texture coordinate at the unit object-space normal <paramref name="n"/>.
+    /// </summary>
     public static Vector2 Uv(Vector3 n) =>
         new(UOffset - MathF.Atan2(n.Z, n.X) / (2 * MathF.PI), MathF.Acos(Math.Clamp(n.Y, -1, 1)) / MathF.PI);
 
-    /// <summary>"Moon" (<c>moon_HI.dds</c>, 4096 × 2048), the large one, and "Moon2" (<c>moon2_HI.dds</c>, 2048 × 1024), in the sky creation's order.</summary>
+    /// <summary>
+    /// "Moon" (<c>moon_HI.dds</c>, 4096 × 2048), the large one, and "Moon2" (<c>moon2_HI.dds</c>, 2048 × 1024), in the sky creation's order.
+    /// </summary>
     public static readonly SkyPlanet[] All =
     [
         new("Moon", "moon_HI.dds", new Vector3(1, 0.3f, -1), 35, 1),
@@ -100,10 +123,14 @@ public static class Planetshine
     /// </summary>
     public const float FullBelow = -0.093f, NoneAbove = -0.04f;
 
-    /// <summary>The mean albedo (grey) assumed when the planet's texture is missing: Unknown, a plausible rocky world.</summary>
+    /// <summary>
+    /// The mean albedo (grey) assumed when the planet's texture is missing: Unknown, a plausible rocky world.
+    /// </summary>
     public const float FallbackAlbedo = 0.3f;
 
-    /// <summary>The first mip level at most this wide is averaged for the albedo (a 4096-wide map: level 5, 128 × 64).</summary>
+    /// <summary>
+    /// The first mip level at most this wide is averaged for the albedo (a 4096-wide map: level 5, 128 × 64).
+    /// </summary>
     const int AlbedoWidth = 128;
 
     /// <summary>
@@ -114,13 +141,19 @@ public static class Planetshine
     public static float PhaseAngle(Vector3 sun, Vector3 towardsPlanet) =>
         MathF.Acos(Math.Clamp(-Vector3.Dot(Vector3.Normalize(sun), Vector3.Normalize(towardsPlanet)), -1, 1));
 
-    /// <summary>The Lambert sphere's phase function, <c>(sin α + (π − α) cos α) / π</c>: 1 at α = 0, 0 at α = π.</summary>
+    /// <summary>
+    /// The Lambert sphere's phase function, <c>(sin α + (π − α) cos α) / π</c>: 1 at α = 0, 0 at α = π.
+    /// </summary>
     public static float LambertPhase(float alpha) => (MathF.Sin(alpha) + (MathF.PI - alpha) * MathF.Cos(alpha)) / MathF.PI;
 
-    /// <summary>The solid angle in steradians of a disc of angular radius <paramref name="radius"/> (radians): <c>2π (1 − cos r)</c>.</summary>
+    /// <summary>
+    /// The solid angle in steradians of a disc of angular radius <paramref name="radius"/> (radians): <c>2π (1 − cos r)</c>.
+    /// </summary>
     public static float SolidAngle(float radius) => 2 * MathF.PI * (1 - MathF.Cos(radius));
 
-    /// <summary>The planet's irradiance on a surface facing it, over the sun's: <c>albedo · Ω / π · Φ(α)</c>.</summary>
+    /// <summary>
+    /// The planet's irradiance on a surface facing it, over the sun's: <c>albedo · Ω / π · Φ(α)</c>.
+    /// </summary>
     public static float IrradianceRatio(float albedo, float solidAngle, float alpha) => albedo * solidAngle / MathF.PI * LambertPhase(alpha);
 
     /// <summary>
@@ -163,7 +196,9 @@ public static class Planetshine
         return (d.LengthSquared() > 1e-12f ? Vector3.Normalize(d) : planetDirection, sunLight + planetLight);
     }
 
-    /// <summary>Rec. 709 luminance of a linear colour.</summary>
+    /// <summary>
+    /// Rec. 709 luminance of a linear colour.
+    /// </summary>
     public static float Luminance(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
 
     /// <summary>
@@ -186,7 +221,9 @@ public static class Planetshine
         return total > 0 ? new Vector3((float)(r / total), (float)(g / total), (float)(b / total)) / 255f : new Vector3(FallbackAlbedo);
     }
 
-    /// <summary>The mean albedo of a planet DDS, from the first level at most 128 wide (see <see cref="MeanAlbedo(RgbaImage)"/>).</summary>
+    /// <summary>
+    /// The mean albedo of a planet DDS, from the first level at most 128 wide (see <see cref="MeanAlbedo(RgbaImage)"/>).
+    /// </summary>
     public static Vector3 MeanAlbedo(DdsFile dds)
     {
         int level = 0;
@@ -204,7 +241,10 @@ public static class Planetshine
 /// </summary>
 public static class NightAir
 {
-    /// <summary>The air's own faint glow (HDR, in the units of the haze colour; cool, a little green): luminance 0.043, under the 0.069 an up-facing surface of albedo 0.3 gets from the night's flat ambient (and it shows darker still after the night grade).</summary>
+    /// <summary>
+    /// The air's own faint glow (HDR, in the units of the haze colour; cool, a little green): luminance 0.043, under the 0.069 an up-facing surface
+    /// of albedo 0.3 gets from the night's flat ambient (and it shows darker still after the night grade).
+    /// </summary>
     public static readonly Vector3 Airglow = new(0.030f, 0.045f, 0.068f);
 
     /// <summary>
@@ -214,7 +254,10 @@ public static class NightAir
     public const float PlanetGain = 0.25f;
     public static readonly Vector3 PlanetTint = new(0.8f, 1.0f, 1.4f);
 
-    /// <summary>The height (the sine of the elevation) over which the glow falls to 1/e above the horizon: 11.5° is 0.2, so 10° keeps 0.4 of it and 30° a twentieth.</summary>
+    /// <summary>
+    /// The height (the sine of the elevation) over which the glow falls to 1/e above the horizon: 11.5° is 0.2, so 10° keeps 0.4 of it and 30° a
+    /// twentieth.
+    /// </summary>
     public const float FalloffHeight = 0.2f;
 
     /// <summary>
@@ -229,7 +272,10 @@ public static class NightAir
     /// </summary>
     public static float Weight(float sunY) => Planetshine.Weight(sunY);
 
-    /// <summary>The glow's share at the direction's height <paramref name="y"/> (its sine of elevation): 1 at and below the horizon, <c>exp(−y / FalloffHeight)</c> above it.</summary>
+    /// <summary>
+    /// The glow's share at the direction's height <paramref name="y"/> (its sine of elevation): 1 at and below the horizon, <c>exp(−y /
+    /// FalloffHeight)</c> above it.
+    /// </summary>
     public static float HorizonFalloff(float y) => MathF.Exp(-MathF.Max(y, 0) / FalloffHeight);
 
     /// <summary>
@@ -239,9 +285,15 @@ public static class NightAir
     /// </summary>
     public const float VeilHeight = 0.15f;
 
-    /// <summary>The share of a planet's light the night air in front of it hides, towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/> (0 by day and in Faithful, where the planet is drawn as the game does).</summary>
+    /// <summary>
+    /// The share of a planet's light the night air in front of it hides, towards a direction of height <paramref name="y"/> at the sun's height
+    /// <paramref name="sunY"/> (0 by day and in Faithful, where the planet is drawn as the game does).
+    /// </summary>
     public static float PlanetVeil(float sunY, float y, float hazeStrength = 1f) => Math.Clamp(Weight(sunY) * hazeStrength * MathF.Exp(-MathF.Max(y, 0) / VeilHeight), 0, 1);
 
-    /// <summary>The night air's radiance towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/>: what the haze adds to its colour and the sky to its own.</summary>
+    /// <summary>
+    /// The night air's radiance towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/>: what the haze adds to
+    /// its colour and the sky to its own.
+    /// </summary>
     public static Vector3 Radiance(Vector3 planetLight, float sunY, float y) => Colour(planetLight) * (Weight(sunY) * HorizonFalloff(y));
 }

@@ -9,7 +9,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class TerrainHeightmap : IDisposable
 {
-    /// <summary>Path of the heightmap relative to the install's <c>data/</c> folder.</summary>
+    /// <summary>
+    /// Path of the heightmap relative to the install's <c>data/</c> folder.
+    /// </summary>
     public const string RelativePath = "newland/land/fullmap.tif";
 
     TerrainHeightmap(TiffImage image) => Image = image;
@@ -53,7 +55,9 @@ public sealed class TerrainHeightmap : IDisposable
         return (float)(h * (WorldLayout.MaxHeight / ushort.MaxValue));
     }
 
-    /// <summary>The lowest ground a building stands on: the water floor (docs/formats/zones.md "Placement height").</summary>
+    /// <summary>
+    /// The lowest ground a building stands on: the water floor (docs/formats/zones.md "Placement height").
+    /// </summary>
     public const float BuildingGroundFloor = 100;
 
     /// <summary>
@@ -124,7 +128,9 @@ public sealed class TerrainHeightmap : IDisposable
         return new HeightWindow(column0, row0, step, columns, rows, raw);
     }
 
-    /// <summary>Calls <paramref name="visit"/> with every row in order (the span is reused between calls).</summary>
+    /// <summary>
+    /// Calls <paramref name="visit"/> with every row in order (the span is reused between calls).
+    /// </summary>
     public void ForEachRow(Action<int, ReadOnlySpan<ushort>> visit)
     {
         var bytes = new byte[Image.BytesPerRow];
@@ -154,7 +160,9 @@ public sealed class RawHeightTile
 
     public int Size { get; }
 
-    /// <summary>Row-major samples, <see cref="Size"/> × <see cref="Size"/>.</summary>
+    /// <summary>
+    /// Row-major samples, <see cref="Size"/> × <see cref="Size"/>.
+    /// </summary>
     public ushort[] Samples { get; }
 
     public ushort this[int column, int row] => Samples[row * Size + column];
@@ -172,7 +180,9 @@ public sealed class RawHeightTile
         return new RawHeightTile(size, samples);
     }
 
-    /// <summary>Parses the tile indices from <c>fullmap.X.Y.raw</c>.</summary>
+    /// <summary>
+    /// Parses the tile indices from <c>fullmap.X.Y.raw</c>.
+    /// </summary>
     public static bool TryParseFileName(string path, out int x, out int y)
     {
         x = y = 0;

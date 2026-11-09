@@ -4,8 +4,9 @@ using Meitou.Data.Particles;
 namespace Meitou.Tests.World;
 
 /// <summary>
-/// How the weather's particle groups change (docs/formats/particle-universe.md "Weather changes"): the warm-up in two halves, the new groups made on the
-/// side and swapped in when ready, the dwell before the camera's crossing into another region rebuilds anything, and the frame's simulation on its own thread.
+/// How the weather's particle groups change (docs/formats/particle-universe.md "Weather changes"): the warm-up in two halves, the new groups made on
+/// the side and swapped in when ready, the dwell before the camera's crossing into another region rebuilds anything, and the frame's simulation on
+/// its own thread.
 /// </summary>
 public class WeatherGroupsTests
 {
@@ -42,7 +43,9 @@ public class WeatherGroupsTests
     static EffectRecord Record(EffectType type) =>
         new("e", type, "test_puff", false, false, 1, 0, 0, Vector3.One, 1, false, 0, 0, 0, 0, 10) { MinAltitude = 0, MaxAltitude = 0 };
 
-    /// <summary>A weather with one GLOBAL group of <paramref name="count"/> units (a list object of its own, as the scheduler keeps one per weather).</summary>
+    /// <summary>
+    /// A weather with one GLOBAL group of <paramref name="count"/> units (a list object of its own, as the scheduler keeps one per weather).
+    /// </summary>
     static WeatherEffectInput Weather(string region = "", int count = 2, float strength = 1) =>
         new() { Effects = [new WeatherEffectEntry(Record(EffectType.Global), count, 0, 0)], Region = region, Strength = strength };
 

@@ -29,12 +29,17 @@ sealed unsafe partial class VpxDecoder : IDisposable
         _open = true;
     }
 
-    /// <summary>True when libvpx can be loaded (it is linked into published launchers; Debug builds look for it beside the executable).</summary>
+    /// <summary>
+    /// True when libvpx can be loaded (it is linked into published launchers; Debug builds look for it beside the executable).
+    /// </summary>
     public static bool Available
     {
         get
         {
-            try { return vpx_codec_vp8_dx() != 0; }
+            try
+            {
+                return vpx_codec_vp8_dx() != 0;
+            }
             catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
         }
     }
@@ -60,7 +65,9 @@ sealed unsafe partial class VpxDecoder : IDisposable
         return size;
     }
 
-    /// <summary>Y'CbCr (BT.601, studio range, the VP8/VP9 default) to BGRA, rows split across cores.</summary>
+    /// <summary>
+    /// Y'CbCr (BT.601, studio range, the VP8/VP9 default) to BGRA, rows split across cores.
+    /// </summary>
     static void ToBgra(Image* image, byte[] bgra, int width, int height)
     {
         byte* y = image->PlaneY, u = image->PlaneU, v = image->PlaneV;
@@ -99,7 +106,9 @@ sealed unsafe partial class VpxDecoder : IDisposable
         public uint Threads, Width, Height;
     }
 
-    /// <summary><c>vpx_image_t</c>, up to the planes and strides.</summary>
+    /// <summary>
+    /// <c>vpx_image_t</c>, up to the planes and strides.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Image
     {
@@ -112,7 +121,8 @@ sealed unsafe partial class VpxDecoder : IDisposable
     const string Vpx = "vpx";
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp8_dx();
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp9_dx();
-    [LibraryImport(Vpx)] private static partial int vpx_codec_dec_init_ver(IntPtr context, IntPtr iface, DecoderConfig* config, CLong flags, int version);
+    [LibraryImport(Vpx)] private static partial int vpx_codec_dec_init_ver(IntPtr context, IntPtr iface, DecoderConfig* config, CLong flags,
+            int version);
     [LibraryImport(Vpx)] private static partial int vpx_codec_decode(IntPtr context, byte* data, uint size, IntPtr userData, CLong deadline);
     [LibraryImport(Vpx)] private static partial Image* vpx_codec_get_frame(IntPtr context, IntPtr* iterator);
     [LibraryImport(Vpx)] private static partial int vpx_codec_destroy(IntPtr context);

@@ -4,12 +4,16 @@ using Meitou.Simulation.Combat;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The AI's area test by manoeuvre mode (FUN_140597790) and the range term's reach (AI::scoreTargetRange).</summary>
+/// <summary>
+/// The AI's area test by manoeuvre mode (FUN_140597790) and the range term's reach (AI::scoreTargetRange).
+/// </summary>
 public class ManoeuvreTests
 {
 }
 
-/// <summary>The turret goals' finder factor by distance and combat mode (FUN_1408ccc70).</summary>
+/// <summary>
+/// The turret goals' finder factor by distance and combat mode (FUN_1408ccc70).
+/// </summary>
 public class TurretFactorTests
 {
     [Fact]

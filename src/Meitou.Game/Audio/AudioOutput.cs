@@ -8,7 +8,9 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed unsafe class AudioOutput : IDisposable
 {
-    /// <summary>Frames per block: 1024 at 44100 Hz is 23 ms; four queued blocks keep about 90 ms ahead.</summary>
+    /// <summary>
+    /// Frames per block: 1024 at 44100 Hz is 23 ms; four queued blocks keep about 90 ms ahead.
+    /// </summary>
     public const int BlockFrames = 1024;
     const int Blocks = 4;
 
@@ -41,7 +43,9 @@ public sealed unsafe class AudioOutput : IDisposable
         _thread.Start();
     }
 
-    /// <summary>Opens the default output device; null (with the reason) when there is none or OpenAL cannot start.</summary>
+    /// <summary>
+    /// Opens the default output device; null (with the reason) when there is none or OpenAL cannot start.
+    /// </summary>
     public static AudioOutput? TryOpen(int sampleRate, Action<float[], int> fill, out string? error)
     {
         error = null;
@@ -71,14 +75,16 @@ public sealed unsafe class AudioOutput : IDisposable
         }
     }
 
-    /// <summary>The limiter's ceiling (about −1 dB) and its release time (seconds).</summary>
+    /// <summary>
+    /// The limiter's ceiling (about −1 dB) and its release time (seconds).
+    /// </summary>
     const float LimitCeiling = 0.89f, LimitRelease = 0.15f;
     float _limitEnvelope;
 
     /// <summary>
-    /// A peak limiter on the finished block (Meitou's, in both modes; docs/audio.md "Voice cap"): the louder of the two sides is
-    /// followed with an instant attack and a <see cref="LimitRelease"/> release, and the gain keeps it at <see cref="LimitCeiling"/>, so a big fight's sum is
-    /// turned down smoothly instead of clipped hard by the 16-bit conversion. Below the ceiling it changes nothing.
+    /// A peak limiter on the finished block (Meitou's, in both modes; docs/audio.md "Voice cap"): the louder of the two sides is followed with an
+    /// instant attack and a <see cref="LimitRelease"/> release, and the gain keeps it at <see cref="LimitCeiling"/>, so a big fight's sum is turned
+    /// down smoothly instead of clipped hard by the 16-bit conversion. Below the ceiling it changes nothing.
     /// </summary>
     void Limit(float[] mix)
     {
@@ -105,7 +111,10 @@ public sealed unsafe class AudioOutput : IDisposable
             if (!_failed)
             {
                 // A fault in the mixer stops the sound, never the host: report it once and play silence from then on.
-                try { _fill(mix, BlockFrames); }
+                try
+                {
+                    _fill(mix, BlockFrames);
+                }
                 catch (Exception e)
                 {
                     _failed = true;
@@ -137,7 +146,9 @@ public sealed unsafe class AudioOutput : IDisposable
         }
     }
 
-    /// <summary>ALC_CONNECTED (ALC_EXT_disconnect): 0 once the device is gone (unplugged headset, switched or disabled output).</summary>
+    /// <summary>
+    /// ALC_CONNECTED (ALC_EXT_disconnect): 0 once the device is gone (unplugged headset, switched or disabled output).
+    /// </summary>
     const int AlcConnected = 0x313;
     const int ReconnectCheckMs = 500;
     long _nextReconnectCheck;

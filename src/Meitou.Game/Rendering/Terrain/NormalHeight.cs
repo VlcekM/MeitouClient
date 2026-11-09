@@ -2,24 +2,41 @@ namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// A height map recovered from a tiling normal map (docs/render-terrain.md, "Ground relief"): the normal's slopes integrated in the frequency domain
-/// (Frankot–Chellappa), exact for a periodic texture up to a constant. The slopes are read in the terrain shader's tangent frame (tangent along world -X,
-/// binormal along +Z, texture u along +X and v along +Z: dh/du = x / z, dh/dv = -y / z), the frame the game lights them in, also where a normal map is
-/// authored in another (mirrored or turned; read so, its height would rise where the lighting puts a hollow). A slope field splits into
-/// a gradient part (along the frequency: what a surface makes) and a curl part (across it: what no surface makes); noise splits evenly between them, so
-/// in each half-octave band (g − c) / (g + c) of their energies is the share of the band that is surface, and the band is kept by that much (the Wiener
-/// gain with the noise measured from the curl). The lowest frequencies (under two cycles a tile) are dropped; a tilt weighs the broad shapes down
-/// against the detail. The result is scaled to 0..255 between its 1st and 99th percentiles, 255 the top.
+/// (Frankot–Chellappa), exact for a periodic texture up to a constant. The slopes are read in the terrain shader's tangent frame (tangent along world
+/// -X, binormal along +Z, texture u along +X and v along +Z: dh/du = x / z, dh/dv = -y / z), the frame the game lights them in, also where a normal
+/// map is authored in another (mirrored or turned; read so, its height would rise where the lighting puts a hollow). A slope field splits into a
+/// gradient part (along the frequency: what a surface makes) and a curl part (across it: what no surface makes); noise splits evenly between them, so
+/// in each half-octave band (g − c) / (g + c) of their energies is the share of the band that is surface, and the band is kept by that much (the
+/// Wiener gain with the noise measured from the curl). The lowest frequencies (under two cycles a tile) are dropped; a tilt weighs the broad shapes
+/// down against the detail. The result is scaled to 0..255 between its 1st and 99th percentiles, 255 the top.
 /// </summary>
 public static class NormalHeight
 {
     /// <summary>
-    /// An R8 height (rows top first) from an RGBA8 normal map of <paramref name="size"/>² texels (a power of two), and its steepness: its root-mean-square
-    /// slope per texel, the height range counted as 1 (<see cref="Steepness"/>). <paramref name="tilt"/>: each frequency also times (cycles a tile / 2)^tilt (0: none).
+    /// An R8 height (rows top first) from an RGBA8 normal map of <paramref name="size"/>² texels (a power of two), and its steepness: its
+    /// root-mean-square slope per texel, the height range counted as 1 (<see cref="Steepness"/>). <paramref name="tilt"/>: each frequency also times
+    /// (cycles a tile / 2)^tilt (0: none).
     /// </summary>
     public static byte[] FromNormals(byte[] rgba, int size, out float steepness, float tilt = 0)
     {
         int count = size * size;
         float[] pRe = new float[count], pIm = new float[count], qRe = new float[count], qIm = new float[count];
+        SlopeSpectra(rgba, count, pRe, qRe);
+        Fft2(pRe, pIm, size, false);
+        Fft2(qRe, qIm, size, false);
+        var gains = BandGains(pRe, pIm, qRe, qIm, size);
+        ApplyGains(pRe, pIm, qRe, qIm, size, gains, tilt);
+        Fft2(pRe, pIm, size, true);
+        var height = Scaled(pRe);
+        steepness = Steepness(height, size);
+        return height;
+    }
+
+    /// <summary>
+    /// The x and y slopes of each texel's normal (clamped), in <paramref name="pRe"/> and <paramref name="qRe"/>.
+    /// </summary>
+    static void SlopeSpectra(byte[] rgba, int count, float[] pRe, float[] qRe)
+    {
         for (int i = 0; i < count; i++)
         {
             float x = rgba[i * 4] / 127.5f - 1, y = rgba[i * 4 + 1] / 127.5f - 1;
@@ -27,10 +44,13 @@ public static class NormalHeight
             pRe[i] = Math.Clamp(x / z, -5f, 5f);
             qRe[i] = Math.Clamp(-y / z, -5f, 5f);
         }
-        Fft2(pRe, pIm, size, false);
-        Fft2(qRe, qIm, size, false);
+    }
 
-        // Each half-octave band's surface share.
+    /// <summary>
+    /// Each half-octave band's surface share, from the gradient and curl energies of the spectra.
+    /// </summary>
+    static float[] BandGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size)
+    {
         int bands = (int)Math.Ceiling(2 * Math.Log2(size)) + 1;
         double[] bandG = new double[bands], bandC = new double[bands];
         for (int row = 0; row < size; row++)
@@ -41,16 +61,26 @@ public static class NormalHeight
                 int fx = col <= size / 2 ? col : col - size, i = row * size + col;
                 if (fx * fx + fy * fy < 4) continue;
                 float r = MathF.Sqrt(fx * fx + fy * fy), ux = fx / r, uy = fy / r;
-                double gRe = ux * pRe[i] + uy * qRe[i], gIm = ux * pIm[i] + uy * qIm[i], cRe = -uy * pRe[i] + ux * qRe[i], cIm = -uy * pIm[i] + ux * qIm[i];
+                double gRe = ux * pRe[i] + uy * qRe[i], gIm = ux * pIm[i] + uy * qIm[i];
+                double cRe = -uy * pRe[i] + ux * qRe[i], cIm = -uy * pIm[i] + ux * qIm[i];
                 int j = Math.Clamp((int)Math.Round(2 * Math.Log2(r)) - 2, 0, bands - 1);
                 bandG[j] += gRe * gRe + gIm * gIm;
                 bandC[j] += cRe * cRe + cIm * cIm;
             }
         }
         var gains = new float[bands];
-        for (int j = 0; j < bands; j++) gains[j] = bandG[j] + bandC[j] > 0 ? (float)Math.Max(0, (bandG[j] - bandC[j]) / (bandG[j] + bandC[j])) : 0;
+        for (int j = 0; j < bands; j++)
+            gains[j] = bandG[j] + bandC[j] > 0 ? (float)Math.Max(0, (bandG[j] - bandC[j]) / (bandG[j] + bandC[j])) : 0;
+        return gains;
+    }
 
+    /// <summary>
+    /// Scales the gradient part of the spectra in place by each band's gain (and the tilt), and divides by the frequency: H = -i G / k.
+    /// </summary>
+    static void ApplyGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size, float[] gains, float tilt)
+    {
         // H = -i G / k, G the gradient part, times the band's share (interpolated between band centres in log frequency); -i (a + ib) = b - ia.
+        int bands = gains.Length;
         for (int row = 0; row < size; row++)
         {
             int fy = row <= size / 2 ? row : row - size;
@@ -66,14 +96,12 @@ public static class NormalHeight
                 (pRe[i], pIm[i]) = (gIm * gain / k, -gRe * gain / k);
             }
         }
-        Fft2(pRe, pIm, size, true);
-        var height = Scaled(pRe);
-        steepness = Steepness(height, size);
-        return height;
     }
 
-    /// <summary>The root-mean-square slope per texel of an R8 height (0..255 counted as 0..1), wrapping, measured over <see cref="SteepnessStep"/> texels: the
-    /// height averaged in blocks that wide, central differences between blocks, so a fine texture's texel noise does not count as its steepness.</summary>
+    /// <summary>
+    /// The root-mean-square slope per texel of an R8 height (0..255 counted as 0..1), wrapping, measured over <see cref="SteepnessStep"/> texels: the
+    /// height averaged in blocks that wide, central differences between blocks, so a fine texture's texel noise does not count as its steepness.
+    /// </summary>
     static float Steepness(byte[] height, int size)
     {
         int n = Math.Max(size / SteepnessStep, 2), step = size / n;
@@ -92,10 +120,14 @@ public static class NormalHeight
         return (float)Math.Sqrt(sum / (n * n));
     }
 
-    /// <summary>The scale <see cref="Steepness"/> is measured at, in texels (of a 512² height: features about 1/128 of the tile).</summary>
+    /// <summary>
+    /// The scale <see cref="Steepness"/> is measured at, in texels (of a 512² height: features about 1/128 of the tile).
+    /// </summary>
     public const int SteepnessStep = 4;
 
-    /// <summary>0..255 between the 1st and 99th percentiles, so a few deep pits do not flatten the rest.</summary>
+    /// <summary>
+    /// 0..255 between the 1st and 99th percentiles, so a few deep pits do not flatten the rest.
+    /// </summary>
     static byte[] Scaled(float[] values)
     {
         int count = values.Length;
@@ -107,7 +139,9 @@ public static class NormalHeight
         return bytes;
     }
 
-    /// <summary>In-place 2D FFT of a square power-of-two grid: rows, then columns (the inverse scaled by 1 / n²).</summary>
+    /// <summary>
+    /// In-place 2D FFT of a square power-of-two grid: rows, then columns (the inverse scaled by 1 / n²).
+    /// </summary>
     static void Fft2(float[] re, float[] im, int n, bool inverse)
     {
         Parallel.For(0, n, row => Fft(re.AsSpan(row * n, n), im.AsSpan(row * n, n), inverse));
@@ -124,7 +158,9 @@ public static class NormalHeight
         for (int k = 0; k < re.Length; k++) { re[k] *= s; im[k] *= s; }
     }
 
-    /// <summary>Iterative radix-2 FFT (unscaled).</summary>
+    /// <summary>
+    /// Iterative radix-2 FFT (unscaled).
+    /// </summary>
     static void Fft(Span<float> re, Span<float> im, bool inverse)
     {
         int n = re.Length;
@@ -147,7 +183,8 @@ public static class NormalHeight
                     int a = i + k, b = a + len / 2;
                     float tRe = re[b] * cRe - im[b] * cIm, tIm = re[b] * cIm + im[b] * cRe;
                     (re[b], im[b]) = (re[a] - tRe, im[a] - tIm);
-                    re[a] += tRe; im[a] += tIm;
+                    re[a] += tRe;
+                    im[a] += tIm;
                     (cRe, cIm) = (cRe * wRe - cIm * wIm, cRe * wIm + cIm * wRe);
                 }
             }

@@ -9,14 +9,14 @@ using Meitou.Game.Rendering.Profiling;
 namespace Meitou.ModelViewer;
 
 /// <summary>
-/// The frame cost breakdown (docs/engine.md "Frame cost breakdown"; <c>MEITOU_PASS_STATS=1</c>, off otherwise): at every stage boundary of the
-/// frame (<see cref="Meitou.Game.Rendering.Profiling.StageClock"/>: the stage laps, the shadow cascades, the parts of the foliage and post passes) it takes the
-/// render thread's time, the difference of the native counters since the previous boundary (<see cref="GpuStats.Running"/>, the context's
-/// fence wait and submit, the presenter's acquire and present) and a GPU timestamp, and sums them per row over the frames after the first
-/// <c>MEITOU_PASS_STATS_SKIP</c> (default 60). A stage is a row; its parts are rows under it (their time is part of the stage's; what is left
-/// over is the stage's own row "rest"). Printed at the end by <see cref="Report"/>: a table of per-frame means and one <c>PASSCSV</c> line per
-/// row for scripts. The meter only reads counters and timestamps, no picture changes. (Native since phase 8 stage 3: before, VkGl's counters
-/// and GL timer queries.)
+/// The frame cost breakdown (docs/engine.md "Frame cost breakdown"; <c>MEITOU_PASS_STATS=1</c>, off otherwise): at every stage boundary of the frame
+/// (<see cref="Meitou.Game.Rendering.Profiling.StageClock"/>: the stage laps, the shadow cascades, the parts of the foliage and post passes) it takes
+/// the render thread's time, the difference of the native counters since the previous boundary (<see cref="GpuStats.Running"/>, the context's fence
+/// wait and submit, the presenter's acquire and present) and a GPU timestamp, and sums them per row over the frames after the first
+/// <c>MEITOU_PASS_STATS_SKIP</c> (default 60). A stage is a row; its parts are rows under it (their time is part of the stage's; what is left over is
+/// the stage's own row "rest"). Printed at the end by <see cref="Report"/>: a table of per-frame means and one <c>PASSCSV</c> line per row for
+/// scripts. The meter only reads counters and timestamps, no picture changes. (Native since phase 8 stage 3: before, VkGl's counters and GL timer
+/// queries.)
 /// </summary>
 sealed class PassMeter : IDisposable
 {
@@ -26,7 +26,9 @@ sealed class PassMeter : IDisposable
     // The columns after the native counters: Stopwatch ticks.
     static readonly int Fence = Native, Submit = Native + 1, Acquire = Native + 2, Present = Native + 3;
     static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
-    /// <summary>Label of the final CPU lap that closes a frame.</summary>
+    /// <summary>
+    /// Label of the final CPU lap that closes a frame.
+    /// </summary>
     const string EndLabel = "gpu-wait";
 
     sealed class Row(string key, string name, string? parent)
@@ -232,7 +234,11 @@ sealed class PassMeter : IDisposable
             double ms = t >= previous ? (t - previous) / 1e6 : 0;
             previous = t;
             majorSum += ms;
-            if (_stampSub[s, i]) { subGaps.Add((_stampLabel[s, i]!, ms)); continue; }
+            if (_stampSub[s, i])
+            {
+                subGaps.Add((_stampLabel[s, i]!, ms));
+                continue;
+            }
             string label = _stampLabel[s, i]!;
             var parent = GetRow(label, null);
             parent.Gpu += majorSum;
@@ -245,7 +251,12 @@ sealed class PassMeter : IDisposable
                 r.GpuSamples++;
                 rest -= subMs;
             }
-            if (subGaps.Count > 0) { var r = GetRow(label + "/rest", label, "rest"); r.Gpu += rest; r.GpuSamples++; }
+            if (subGaps.Count > 0)
+            {
+                var r = GetRow(label + "/rest", label, "rest");
+                r.Gpu += rest;
+                r.GpuSamples++;
+            }
             subGaps.Clear();
             majorSum = 0;
         }
@@ -255,7 +266,9 @@ sealed class PassMeter : IDisposable
 
     static string Fmt(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
 
-    /// <summary>The table (per-frame means over the measured frames) and the PASSCSV lines.</summary>
+    /// <summary>
+    /// The table (per-frame means over the measured frames) and the PASSCSV lines.
+    /// </summary>
     public void Report(TextWriter output)
     {
         for (int s = 0; s < Slots; s++) Collect(s);

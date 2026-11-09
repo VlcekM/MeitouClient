@@ -4,15 +4,16 @@ using System.Text.RegularExpressions;
 namespace Meitou.Content;
 
 /// <summary>
-/// Places a Kenshi install made by something other than Steam can be: the game launchers' own lists (GOG's registry, Heroic's installed list, Lutris's game files), the usual install folders
-/// of GOG and Wine prefixes, and the folder Meitou itself sits in. They only produce <em>candidates</em>: <see cref="GameInstall.Locate"/> keeps the first one that
+/// Places a Kenshi install made by something other than Steam can be: the game launchers' own lists (GOG's registry, Heroic's installed list,
+/// Lutris's game files), the usual install folders of GOG and Wine prefixes, and the folder Meitou itself sits in. They only produce
+/// <em>candidates</em>: <see cref="GameInstall.Locate"/> keeps the first one that
 /// <see cref="GameInstall.IsValid"/> accepts, so a stale or wrong entry costs nothing.
 /// </summary>
 public static partial class GameInstallSources
 {
     /// <summary>
-    /// The candidates from every launcher on this machine, in the order they are tried; scanned once per process. Windows: its registry and Heroic's list (the Wine and Linux
-    /// launcher folders do not exist there).
+    /// The candidates from every launcher on this machine, in the order they are tried; scanned once per process. Windows: its registry and Heroic's
+    /// list (the Wine and Linux launcher folders do not exist there).
     /// </summary>
     public static IEnumerable<string> Launchers() => LauncherList.Value;
 
@@ -25,14 +26,21 @@ public static partial class GameInstallSources
             : [.. Launchers(home, appData, Environment.GetEnvironmentVariable)];
     });
 
-    /// <summary>The entries of a folder listing, none when it cannot be read (another user's folder, a broken mount).</summary>
+    /// <summary>
+    /// The entries of a folder listing, none when it cannot be read (another user's folder, a broken mount).
+    /// </summary>
     static string[] Safe(Func<IEnumerable<string>> list)
     {
-        try { return [.. list()]; }
+        try
+        {
+            return [.. list()];
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException) { return []; }
     }
 
-    /// <summary>A path from a launcher's file without quotes, with a leading <c>~</c> as the user's home.</summary>
+    /// <summary>
+    /// A path from a launcher's file without quotes, with a leading <c>~</c> as the user's home.
+    /// </summary>
     static string Unquote(string value)
     {
         value = value.Trim().Trim('"', '\'');
@@ -41,7 +49,8 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// The XDG base folders (<c>XDG_DATA_HOME</c>, <c>XDG_CONFIG_HOME</c>, <c>XDG_DATA_DIRS</c>): the variable when it holds an absolute path, else the specification's default under
+    /// The XDG base folders (<c>XDG_DATA_HOME</c>, <c>XDG_CONFIG_HOME</c>, <c>XDG_DATA_DIRS</c>): the variable when it holds an absolute path, else
+    /// the specification's default under
     /// <paramref name="home"/>. <paramref name="env"/> reads an environment variable (null when unset).
     /// </summary>
     public readonly record struct Xdg(string DataHome, string ConfigHome, IReadOnlyList<string> DataDirs)
@@ -59,15 +68,16 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// Meitou's own per-user settings file, <c>meitou/config.json</c> in <c>XDG_CONFIG_HOME</c> (<c>~/.config</c>), where <c>{"kenshiPath": "..."}</c> names the install. Linux and macOS only
-    /// (Windows keeps <c>meitou.local.json</c> next to the executable); null elsewhere.
+    /// Meitou's own per-user settings file, <c>meitou/config.json</c> in <c>XDG_CONFIG_HOME</c> (<c>~/.config</c>), where <c>{"kenshiPath":
+    /// "..."}</c> names the install. Linux and macOS only (Windows keeps <c>meitou.local.json</c> next to the executable); null elsewhere.
     /// </summary>
     public static string? UserConfigFile(Func<string, string?> env) =>
-        OperatingSystem.IsWindows() ? null : Path.Combine(Xdg.From(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), env).ConfigHome, "meitou", "config.json");
+        OperatingSystem.IsWindows() ? null : Path.Combine(Xdg.From(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), env).ConfigHome,
+                "meitou", "config.json");
 
     /// <summary>
-    /// The candidates from the files and folders under <paramref name="home"/> (and <paramref name="appData"/> on Windows): Heroic, Lutris, Bottles, <c>.desktop</c> launchers, a default Wine
-    /// prefix. The XDG folders come from <paramref name="env"/> (null: the specification's defaults).
+    /// The candidates from the files and folders under <paramref name="home"/> (and <paramref name="appData"/> on Windows): Heroic, Lutris, Bottles,
+    /// <c>.desktop</c> launchers, a default Wine prefix. The XDG folders come from <paramref name="env"/> (null: the specification's defaults).
     /// </summary>
     public static IEnumerable<string> Launchers(string home, string? appData = null, Func<string, string?>? env = null)
     {
@@ -76,21 +86,24 @@ public static partial class GameInstallSources
         if (!string.IsNullOrEmpty(appData)) configs.Add(appData);
         foreach (var config in configs)
             foreach (var path in HeroicInstalls(Path.Combine(config, "heroic", "gog_store", "installed.json"))) yield return path;
-        string[] lutris = [Path.Combine(xdg.ConfigHome, "lutris", "games"), Path.Combine(home, ".var", "app", "net.lutris.Lutris", "config", "lutris", "games")];
+        string[] lutris = [Path.Combine(xdg.ConfigHome, "lutris", "games"), Path.Combine(home, ".var", "app", "net.lutris.Lutris", "config", "lutris",
+                "games")];
         foreach (var games in lutris)
             foreach (var path in LutrisInstalls(games)) yield return path;
         foreach (var directory in xdg.DataDirs.Prepend(xdg.DataHome).Select(d => Path.Combine(d, "applications")).Distinct())
             foreach (var path in DesktopEntries(directory)) yield return path;
         yield return Path.Combine(home, "Games", "Heroic", "Kenshi");
         var prefixes = new List<string> { Path.Combine(home, ".wine") };
-        foreach (var bottles in new[] { Path.Combine(xdg.DataHome, "bottles", "bottles"), Path.Combine(home, ".var", "app", "com.usebottles.bottles", "data", "bottles", "bottles") })
+        foreach (var bottles in new[] { Path.Combine(xdg.DataHome, "bottles", "bottles"), Path.Combine(home, ".var", "app", "com.usebottles.bottles",
+                "data", "bottles", "bottles") })
             if (Directory.Exists(bottles)) prefixes.AddRange(Safe(() => Directory.EnumerateDirectories(bottles)));
         if (OperatingSystem.IsMacOS())
             foreach (var bottles in new[]
             {
                 Path.Combine(home, "Library", "Application Support", "CrossOver", "Bottles"),
                 Path.Combine(home, "Library", "Application Support", "Whisky", "Bottles"),
-                Path.Combine(home, "Library", "Containers", "com.isaacmarovitz.Whisky", "Data", "Library", "Application Support", "Whisky", "Bottles"),
+                Path.Combine(home, "Library", "Containers", "com.isaacmarovitz.Whisky", "Data", "Library", "Application Support", "Whisky",
+                        "Bottles"),
             })
                 if (Directory.Exists(bottles)) prefixes.AddRange(Safe(() => Directory.EnumerateDirectories(bottles)));
         // The registry of every Wine prefix we know of: what a GOG installer wrote there says where it installed Kenshi.
@@ -104,7 +117,10 @@ public static partial class GameInstallSources
             foreach (var path in InPrefix(Path.Combine(prefix, "drive_c"))) yield return path;
     }
 
-    /// <summary>The folder Steam records for Kenshi (app 233860) in <paramref name="steamapps"/>: <c>common/&lt;installdir&gt;</c> from <c>appmanifest_233860.acf</c>; null without the file.</summary>
+    /// <summary>
+    /// The folder Steam records for Kenshi (app 233860) in <paramref name="steamapps"/>: <c>common/&lt;installdir&gt;</c> from
+    /// <c>appmanifest_233860.acf</c>; null without the file.
+    /// </summary>
     public static string? SteamInstallDirectory(string steamapps)
     {
         try
@@ -117,7 +133,10 @@ public static partial class GameInstallSources
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    /// <summary>A prefix, and when it is one of a launcher's shared <c>default</c> folders (Heroic: <c>Prefixes/default/&lt;game&gt;</c>) its sibling prefixes too.</summary>
+    /// <summary>
+    /// A prefix, and when it is one of a launcher's shared <c>default</c> folders (Heroic: <c>Prefixes/default/&lt;game&gt;</c>) its sibling prefixes
+    /// too.
+    /// </summary>
     static IEnumerable<string> PrefixAndSiblings(string prefix)
     {
         yield return prefix;
@@ -126,7 +145,9 @@ public static partial class GameInstallSources
             foreach (var sibling in Safe(() => Directory.EnumerateDirectories(parent))) yield return sibling;
     }
 
-    /// <summary>The <c>winePrefix</c> of every game in Heroic's <c>GamesConfig</c> folder (one JSON file per game).</summary>
+    /// <summary>
+    /// The <c>winePrefix</c> of every game in Heroic's <c>GamesConfig</c> folder (one JSON file per game).
+    /// </summary>
     public static IEnumerable<string> HeroicPrefixes(string gamesConfig)
     {
         if (!Directory.Exists(gamesConfig)) yield break;
@@ -138,7 +159,8 @@ public static partial class GameInstallSources
                 using var doc = JsonDocument.Parse(File.ReadAllText(file));
                 if (doc.RootElement.ValueKind != JsonValueKind.Object) continue;
                 foreach (var game in doc.RootElement.EnumerateObject())
-                    if (game.Value.ValueKind == JsonValueKind.Object && game.Value.TryGetProperty("winePrefix", out var prefix) && prefix.ValueKind == JsonValueKind.String && prefix.GetString() is { Length: > 0 } text)
+                    if (game.Value.ValueKind == JsonValueKind.Object && game.Value.TryGetProperty("winePrefix", out var prefix)
+                            && prefix.ValueKind == JsonValueKind.String && prefix.GetString() is { Length: > 0 } text)
                         found.Add(Unquote(text));
             }
             catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { }
@@ -146,14 +168,19 @@ public static partial class GameInstallSources
         foreach (var prefix in found) yield return prefix;
     }
 
-    /// <summary>The <c>prefix:</c> of every Lutris game file that mentions Kenshi.</summary>
+    /// <summary>
+    /// The <c>prefix:</c> of every Lutris game file that mentions Kenshi.
+    /// </summary>
     public static IEnumerable<string> LutrisPrefixes(string gamesDirectory)
     {
         if (!Directory.Exists(gamesDirectory)) yield break;
         foreach (var file in Safe(() => Directory.EnumerateFiles(gamesDirectory, "*.yml")))
         {
             string text;
-            try { text = File.ReadAllText(file); }
+            try
+            {
+                text = File.ReadAllText(file);
+            }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
             if (!text.Contains("kenshi", StringComparison.OrdinalIgnoreCase)) continue;
             foreach (Match m in LutrisPrefix().Matches(text))
@@ -162,27 +189,33 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// The Kenshi folders a Wine prefix's registry (<c>system.reg</c>, a text file; <c>pfx/system.reg</c> for a Proton prefix) names, as Linux paths: the <c>path</c> of a GOG game called Kenshi under
-    /// <c>Software\Wow6432Node\GOG.com\Games</c>, and the <c>InstallLocation</c> / Inno Setup <c>App Path</c> of an uninstall entry called Kenshi (<b>Verified</b> on a Heroic prefix: GOG's keys and
-    /// value names, Wine's doubled backslashes).
+    /// The Kenshi folders a Wine prefix's registry (<c>system.reg</c>, a text file; <c>pfx/system.reg</c> for a Proton prefix) names, as Linux paths:
+    /// the <c>path</c> of a GOG game called Kenshi under
+    /// <c>Software\Wow6432Node\GOG.com\Games</c>, and the <c>InstallLocation</c> / Inno Setup <c>App Path</c> of an uninstall entry called Kenshi
+    /// (<b>Verified</b> on a Heroic prefix: GOG's keys and value names, Wine's doubled backslashes).
     /// </summary>
     public static IEnumerable<string> WinePrefixInstalls(string prefix)
     {
         var registry = new[] { Path.Combine(prefix, "system.reg"), Path.Combine(prefix, "pfx", "system.reg") }.FirstOrDefault(File.Exists);
         if (registry is null) yield break;
         string[] lines;
-        try { lines = File.ReadAllLines(registry); }
+        try
+        {
+            lines = File.ReadAllLines(registry);
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { yield break; }
         var root = File.Exists(Path.Combine(prefix, "system.reg")) ? prefix : Path.Combine(prefix, "pfx");
         var found = new List<string>();
         void Flush(string? section, Dictionary<string, string> values)
         {
             if (section is null) return;
-            bool gog = section.Contains(@"GOG.com\Games\", StringComparison.OrdinalIgnoreCase), uninstall = section.Contains(@"CurrentVersion\Uninstall\", StringComparison.OrdinalIgnoreCase);
+            bool gog = section.Contains(@"GOG.com\Games\", StringComparison.OrdinalIgnoreCase);
+            bool uninstall = section.Contains(@"CurrentVersion\Uninstall\", StringComparison.OrdinalIgnoreCase);
             string? name = gog ? values.GetValueOrDefault("gamename") : uninstall ? values.GetValueOrDefault("displayname") : null;
             if (name is null || !name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase)) return;
             foreach (var key in new[] { "path", "installlocation", "inno setup: app path" })
-                if (values.GetValueOrDefault(key) is { Length: > 0 } windows && ToUnixPath(root, windows) is { } unix) found.Add(unix);
+                if (values.GetValueOrDefault(key) is { Length: > 0 } windows && ToUnixPath(root, windows) is { } unix)
+                    found.Add(unix);
         }
         string? current = null;
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -202,7 +235,10 @@ public static partial class GameInstallSources
         foreach (var path in found) yield return path;
     }
 
-    /// <summary>A Windows path of a prefix (<c>Z:\mnt\Games\Kenshi</c>, <c>C:\GOG Games\Kenshi</c>) as a Linux path: the drive letter's <c>dosdevices</c> link, else <c>drive_c</c> and <c>/</c> for Z.</summary>
+    /// <summary>
+    /// A Windows path of a prefix (<c>Z:\mnt\Games\Kenshi</c>, <c>C:\GOG Games\Kenshi</c>) as a Linux path: the drive letter's <c>dosdevices</c>
+    /// link, else <c>drive_c</c> and <c>/</c> for Z.
+    /// </summary>
     public static string? ToUnixPath(string prefix, string windowsPath)
     {
         var m = Regex.Match(windowsPath.Trim().Trim('"'), @"^([A-Za-z]):[\\/]*(.*)$");
@@ -211,18 +247,25 @@ public static partial class GameInstallSources
         string rest = m.Groups[2].Value.Replace('\\', '/').TrimEnd('/');
         string link = Path.Combine(prefix, "dosdevices", drive + ":");
         string baseDirectory;
-        try { baseDirectory = Directory.Exists(link) ? new DirectoryInfo(link).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? link : link; }
+        try
+        {
+            baseDirectory = Directory.Exists(link) ? new DirectoryInfo(link).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? link : link;
+        }
         catch (IOException) { baseDirectory = link; }
-        if (!Directory.Exists(baseDirectory)) baseDirectory = drive == 'c' ? Path.Combine(prefix, "drive_c") : drive == 'z' ? "/" : link;
+        if (!Directory.Exists(baseDirectory))
+            baseDirectory = drive == 'c' ? Path.Combine(prefix, "drive_c") : drive == 'z' ? "/" : link;
         return Path.Combine(baseDirectory, rest);
     }
 
-    /// <summary>The usual GOG folders inside a drive's root or a Wine prefix's <c>drive_c</c>.</summary>
+    /// <summary>
+    /// The usual GOG folders inside a drive's root or a Wine prefix's <c>drive_c</c>.
+    /// </summary>
     public static IEnumerable<string> InPrefix(string driveRoot)
     {
         yield return Path.Combine(driveRoot, "GOG Games", "Kenshi");
         yield return Path.Combine(driveRoot, "Program Files (x86)", "GOG Galaxy", "Games", "Kenshi");
         yield return Path.Combine(driveRoot, "Program Files", "GOG Galaxy", "Games", "Kenshi");
+
         // A Windows Steam bottle (CrossOver/Whisky): its default and secondary library folders.
         yield return Path.Combine(driveRoot, "Program Files (x86)", "Steam", "steamapps", "common", "Kenshi");
         yield return Path.Combine(driveRoot, "Program Files", "Steam", "steamapps", "common", "Kenshi");
@@ -230,7 +273,8 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// The <c>install_path</c> of every game in Heroic's GOG list (<c>installed.json</c>). Every entry is returned, not only Kenshi's: the list holds ids, not names, and
+    /// The <c>install_path</c> of every game in Heroic's GOG list (<c>installed.json</c>). Every entry is returned, not only Kenshi's: the list holds
+    /// ids, not names, and
     /// <see cref="GameInstall.IsValid"/> picks the right folder.
     /// </summary>
     public static IEnumerable<string> HeroicInstalls(string installedJson)
@@ -242,7 +286,8 @@ public static partial class GameInstallSources
             using var doc = JsonDocument.Parse(File.ReadAllText(installedJson));
             if (doc.RootElement.TryGetProperty("installed", out var installed) && installed.ValueKind == JsonValueKind.Array)
                 foreach (var game in installed.EnumerateArray())
-                    if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("install_path", out var path) && path.GetString() is { Length: > 0 } text)
+                    if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("install_path", out var path)
+                            && path.GetString() is { Length: > 0 } text)
                         paths.Add(text);
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { }
@@ -250,7 +295,8 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// The folder of the <c>exe</c>, and the <c>working_dir</c>, of every Lutris game file in <paramref name="gamesDirectory"/> that mentions Kenshi; a relative path is the game's
+    /// The folder of the <c>exe</c>, and the <c>working_dir</c>, of every Lutris game file in <paramref name="gamesDirectory"/> that mentions Kenshi;
+    /// a relative path is the game's
     /// <c>prefix</c>'s (skipped without one).
     /// </summary>
     public static IEnumerable<string> LutrisInstalls(string gamesDirectory)
@@ -259,7 +305,10 @@ public static partial class GameInstallSources
         foreach (var file in Safe(() => Directory.EnumerateFiles(gamesDirectory, "*.yml")))
         {
             string text;
-            try { text = File.ReadAllText(file); }
+            try
+            {
+                text = File.ReadAllText(file);
+            }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
             if (!text.Contains("kenshi", StringComparison.OrdinalIgnoreCase)) continue;
             var prefix = LutrisPrefix().Match(text) is { Success: true } p ? Unquote(p.Groups[1].Value) : null;
@@ -271,7 +320,8 @@ public static partial class GameInstallSources
                     if (prefix is null) continue;
                     value = Path.Combine(prefix, value);
                 }
-                if ((m.Groups[1].Value == "working_dir" ? value : Path.GetDirectoryName(value)) is { Length: > 0 } folder) yield return folder;
+                if ((m.Groups[1].Value == "working_dir" ? value : Path.GetDirectoryName(value)) is { Length: > 0 } folder)
+                    yield return folder;
             }
         }
     }
@@ -283,8 +333,9 @@ public static partial class GameInstallSources
     private static partial Regex LutrisPrefix();
 
     /// <summary>
-    /// The folder a <c>.desktop</c> launcher that is named Kenshi starts from: its <c>Path=</c>, else the folder of the program in its <c>Exec=</c> (a Wine/Heroic/Lutris launcher
-    /// puts the game's exe there; only absolute paths count). Looks in <paramref name="directory"/> and two levels of folders below it (Wine keeps its launchers in <c>wine/Programs</c>).
+    /// The folder a <c>.desktop</c> launcher that is named Kenshi starts from: its <c>Path=</c>, else the folder of the program in its <c>Exec=</c>
+    /// (a Wine/Heroic/Lutris launcher puts the game's exe there; only absolute paths count). Looks in <paramref name="directory"/> and two levels of
+    /// folders below it (Wine keeps its launchers in <c>wine/Programs</c>).
     /// </summary>
     public static IEnumerable<string> DesktopEntries(string directory)
     {
@@ -292,10 +343,14 @@ public static partial class GameInstallSources
         var found = new List<string>();
         try
         {
-            foreach (var file in Directory.EnumerateFiles(directory, "*.desktop", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true }))
+            foreach (var file in Directory.EnumerateFiles(directory, "*.desktop", new EnumerationOptions { RecurseSubdirectories = true,
+                    MaxRecursionDepth = 2, IgnoreInaccessible = true }))
             {
                 string text;
-                try { text = File.ReadAllText(file); }
+                try
+                {
+                    text = File.ReadAllText(file);
+                }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
                 var name = DesktopField(text, "Name");
                 if (name is null || !name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase)) continue;
@@ -305,7 +360,8 @@ public static partial class GameInstallSources
                     {
                         // Only a program's absolute path: not WINEPREFIX=/x, a URL (steam://...) or a switch like /unix (whose folder is the root).
                         var program = m.Groups[1].Value.Trim('"', '\'');
-                        if (Path.IsPathRooted(program) && !program.Contains('=') && Path.GetDirectoryName(program) is { Length: > 0 } folder && Path.GetPathRoot(folder) != folder)
+                        if (Path.IsPathRooted(program) && !program.Contains('=') && Path.GetDirectoryName(program) is { Length: > 0 } folder
+                                && Path.GetPathRoot(folder) != folder)
                             found.Add(folder);
                     }
             }
@@ -324,8 +380,9 @@ public static partial class GameInstallSources
     private static partial Regex ExecPath();
 
     /// <summary>
-    /// Windows: the uninstall entry of Kenshi (<c>InstallLocation</c>, else the folder of its <c>DisplayIcon</c> or <c>UninstallString</c>) from the machine's and the user's list of installed programs,
-    /// then GOG's own <c>PATH</c> under <c>GOG.com\Games</c>, and the usual GOG folders on every fixed drive. Nothing off Windows.
+    /// Windows: the uninstall entry of Kenshi (<c>InstallLocation</c>, else the folder of its <c>DisplayIcon</c> or <c>UninstallString</c>) from the
+    /// machine's and the user's list of installed programs, then GOG's own <c>PATH</c> under <c>GOG.com\Games</c>, and the usual GOG folders on every
+    /// fixed drive. Nothing off Windows.
     /// </summary>
     static IEnumerable<string> Registered()
     {
@@ -337,15 +394,20 @@ public static partial class GameInstallSources
             foreach (var id in list?.GetSubKeyNames() ?? [])
             {
                 using var entry = list!.OpenSubKey(id);
-                if (entry?.GetValue("DisplayName") is not string name || !name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase)) continue;
-                if (entry.GetValue("InstallLocation") is string location && location.Length > 0) paths.Add(location.Trim('"'));
+                if (entry?.GetValue("DisplayName") is not string name || !name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (entry.GetValue("InstallLocation") is string location && location.Length > 0)
+                    paths.Add(location.Trim('"'));
                 foreach (var value in new[] { "DisplayIcon", "UninstallString" })
-                    if (entry.GetValue(value) is string command && Path.GetDirectoryName(command.Split(',')[0].Trim().Trim('"')) is { Length: > 0 } folder) paths.Add(folder);
+                    if (entry.GetValue(value) is string command
+                            && Path.GetDirectoryName(command.Split(',')[0].Trim().Trim('"')) is { Length: > 0 } folder)
+                        paths.Add(folder);
             }
         }
         try
         {
-            foreach (var key in new[] { @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
+            foreach (var key in new[] { @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                    @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
             {
                 Uninstall(Microsoft.Win32.Registry.LocalMachine, key);
                 Uninstall(Microsoft.Win32.Registry.CurrentUser, key);
@@ -357,8 +419,8 @@ public static partial class GameInstallSources
     }
 
     /// <summary>
-    /// GOG on Windows: the <c>PATH</c> of the GOG game whose <c>GAMENAME</c> is Kenshi under <c>HKLM\SOFTWARE\WOW6432Node\GOG.com\Games</c>, and the usual GOG folders on every fixed drive.
-    /// Nothing off Windows.
+    /// GOG on Windows: the <c>PATH</c> of the GOG game whose <c>GAMENAME</c> is Kenshi under <c>HKLM\SOFTWARE\WOW6432Node\GOG.com\Games</c>, and the
+    /// usual GOG folders on every fixed drive. Nothing off Windows.
     /// </summary>
     static IEnumerable<string> Gog()
     {
@@ -370,7 +432,8 @@ public static partial class GameInstallSources
             foreach (var id in games?.GetSubKeyNames() ?? [])
             {
                 using var game = games!.OpenSubKey(id);
-                if (game?.GetValue("GAMENAME") is string name && name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase) && game.GetValue("PATH") is string path)
+                if (game?.GetValue("GAMENAME") is string name && name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase)
+                        && game.GetValue("PATH") is string path)
                     paths.Add(path);
             }
         }

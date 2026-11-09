@@ -10,17 +10,19 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalGpuCapture
 {
-    readonly string path;
-    bool active;
+    readonly string _path;
+    bool _active;
 
     MetalGpuCapture(string path)
     {
-        this.path = path;
-        active = true;
+        this._path = path;
+        _active = true;
     }
 
-    /// <summary>The trace file the capture is writing.</summary>
-    public string OutputPath => path;
+    /// <summary>
+    /// The trace file the capture is writing.
+    /// </summary>
+    public string OutputPath => _path;
 
     /// <summary>
     /// Starts a capture of the given command queue into a <c>.gputrace</c>. Returns null and a readable reason when the
@@ -49,6 +51,7 @@ public sealed class MetalGpuCapture
             error = "the GPU trace document destination is unavailable (launch with MTL_CAPTURE_ENABLED=1)";
             return null;
         }
+
         // The descriptor and URL retain what they need once StartCapture returns; dispose our wrappers afterwards.
         var descriptor = new MTLCaptureDescriptor();
         var url = NSURL.FileURLWithPath((NSString)path);
@@ -80,29 +83,35 @@ public sealed class MetalGpuCapture
         return started ? new MetalGpuCapture(path) : null;
     }
 
-    /// <summary>Stops the capture and leaves the trace for Xcode.</summary>
+    /// <summary>
+    /// Stops the capture and leaves the trace for Xcode.
+    /// </summary>
     public void Stop()
     {
-        if (!active) return;
-        active = false;
+        if (!_active) return;
+        _active = false;
         MTLCaptureManager.SharedCaptureManager.StopCapture();
     }
 
-    /// <summary>Stops the capture and removes the partially written trace (the frame was skipped).</summary>
+    /// <summary>
+    /// Stops the capture and removes the partially written trace (the frame was skipped).
+    /// </summary>
     public void Abort()
     {
-        if (!active) return;
+        if (!_active) return;
         Stop();
         try
         {
-            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
-            else if (File.Exists(path)) File.Delete(path);
+            if (Directory.Exists(_path)) Directory.Delete(_path, recursive: true);
+            else if (File.Exists(_path)) File.Delete(_path);
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>The default trace folder: ~/Documents/Meitou Captures, with a timestamped name.</summary>
+    /// <summary>
+    /// The default trace folder: ~/Documents/Meitou Captures, with a timestamped name.
+    /// </summary>
     public static string DefaultPath()
     {
         string root = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);

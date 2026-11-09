@@ -10,17 +10,23 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace Meitou.Game.Rendering.Gpu;
 
-/// <summary>An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth
-/// clear defaults to 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.</summary>
+/// <summary>
+/// An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth clear defaults to
+/// 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.
+/// </summary>
 public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Load, ClearColour Clear = default, float DepthClear = 1f)
 {
     public bool IsNull => View.IsNull;
 }
 
-/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour attachment
-/// (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment (<c>ShadingRate</c>, an R8_UINT view in GENERAL
-/// layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
-public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0, GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
+/// <summary>
+/// What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour
+/// attachment (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment
+/// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been
+/// made for it, <see cref="AttachmentFormats.ShadingRate"/>).
+/// </summary>
+public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0,
+    GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
 
 /// <summary>
 /// A command buffer being recorded (docs/renderer-native.md 2.7). Thin: every method records what it says. It keeps only a redundancy
@@ -56,7 +62,8 @@ public sealed unsafe class CommandList : IGpuCommandList
     readonly delegate* unmanaged<CommandBuffer, float, float, float, void> _cmdSetDepthBias;
     readonly delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void> _cmdBindVertexBuffers;
     readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void> _cmdBindIndexBuffer;
-    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void> _cmdBindDescriptorSets;
+    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint,
+        DescriptorSet*, uint, uint*, void> _cmdBindDescriptorSets;
     readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> _cmdPushConstants;
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> _cmdDraw;
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> _cmdDrawIndexed;
@@ -82,28 +89,41 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdSetDepthBias = (delegate* unmanaged<CommandBuffer, float, float, float, void>)Proc("vkCmdSetDepthBias");
         _cmdBindVertexBuffers = (delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void>)Proc("vkCmdBindVertexBuffers");
         _cmdBindIndexBuffer = (delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void>)Proc("vkCmdBindIndexBuffer");
-        _cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void>)Proc("vkCmdBindDescriptorSets");
+        _cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*,
+            void>)Proc("vkCmdBindDescriptorSets");
         _cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
         _cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
         _cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
         _cmdDrawIndexedIndirect = (delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void>)Proc("vkCmdDrawIndexedIndirect");
     }
 
-    /// <summary>A device-level command entry point (all of them core in Vulkan 1.3, which the device requires).</summary>
+    /// <summary>
+    /// A device-level command entry point (all of them core in Vulkan 1.3, which the device requires).
+    /// </summary>
     void* Proc(string name)
     {
         var p = (void*)_vk.GetDeviceProcAddr(_device.Device, name).Handle;
         return p != null ? p : throw new InvalidOperationException($"{name} not found on the device");
     }
 
+    #region Recording and render passes
+
     public CommandBuffer Handle { get; internal set; }
     public GpuStats Stats { get; }
-    /// <summary>Counts seam crossings and new command buffers: state a caller cached (pushed descriptors, bound sets) is valid only within one epoch.</summary>
+
+    /// <summary>
+    /// Counts seam crossings and new command buffers: state a caller cached (pushed descriptors, bound sets) is valid only within one epoch.
+    /// </summary>
     public long Epoch { get; private set; }
-    /// <summary>The legacy program whose set 0 / set 1 are bound in this epoch (<see cref="LegacyProgram.Flush"/>).</summary>
+
+    /// <summary>
+    /// The legacy program whose set 0 / set 1 are bound in this epoch (<see cref="LegacyProgram.Flush"/>).
+    /// </summary>
     public object? BoundProgram { get; set; }
 
-    /// <summary>Forgets everything the redundancy filters and callers believed was bound (after VkGl recorded into the same buffer).</summary>
+    /// <summary>
+    /// Forgets everything the redundancy filters and callers believed was bound (after VkGl recorded into the same buffer).
+    /// </summary>
     public void Invalidate()
     {
         _lastPipeline = default;
@@ -115,8 +135,11 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     // ---- rendering ----
 
-    /// <summary>Begins dynamic rendering on <paramref name="d"/>. <paramref name="secondaries"/>: its contents are recorded in secondary command
-    /// buffers (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until <see cref="EndRendering"/>.</summary>
+    /// <summary>
+    /// Begins dynamic rendering on <paramref name="d"/>. <paramref name="secondaries"/>: its contents are recorded in secondary command buffers
+    /// (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until
+    /// <see cref="EndRendering"/>.
+    /// </summary>
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         // The colour attachments: the main one, then the extra one (location 1) when there is one.
@@ -184,7 +207,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         stats?.Rendering(this, before: false);
     }
 
-    /// <summary>Executes secondary command buffers in order (inside a rendering begun with secondaries). Afterwards nothing is assumed bound.</summary>
+    /// <summary>
+    /// Executes secondary command buffers in order (inside a rendering begun with secondaries). Afterwards nothing is assumed bound.
+    /// </summary>
     public void ExecuteCommands(ReadOnlySpan<CommandBuffer> buffers)
     {
         if (buffers.IsEmpty) return;
@@ -192,7 +217,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         Invalidate();
     }
 
-    /// <summary>Begins this list's command buffer as a secondary that continues a rendering of <paramref name="formats"/> (the dynamic-rendering inheritance).</summary>
+    /// <summary>
+    /// Begins this list's command buffer as a secondary that continues a rendering of <paramref name="formats"/> (the dynamic-rendering inheritance).
+    /// </summary>
     internal void BeginSecondary(in AttachmentFormats formats)
     {
         var colours = stackalloc Format[2] { GlConventions.VkFormatOrUndefined(formats.Colour), GlConventions.VkFormatOrUndefined(formats.Extra) };
@@ -218,23 +245,38 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     internal void EndSecondary() => VulkanException.Check(_vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
 
-    /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
+    /// <summary>
+    /// Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth
+    /// slice).
+    /// </summary>
     public void ClearDepth(float value, PixelRect rect) => Clear(false, default, true, value, rect);
 
-    /// <summary>Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>,
-    /// the colour first, as <c>VkGl.Clear</c> records it).</summary>
+    /// <summary>
+    /// Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>, the colour
+    /// first, as <c>VkGl.Clear</c> records it).
+    /// </summary>
     public void Clear(bool colour, ClearColour colourValue, bool depth, float depthValue, PixelRect rect)
     {
         var attachments = stackalloc ClearAttachment[2];
         uint n = 0;
-        if (colour) attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue.Vk));
-        if (depth) attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue, 0)));
+        if (colour)
+            attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue.Vk));
+        if (depth)
+            attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue,
+                    0)));
         if (n == 0) return;
         var area = new ClearRect(GlConventions.VkRect(rect), 0, 1);
         _vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
     }
 
-    /// <summary>The bench's triangle size histogram (<c>--bench-tris</c>, <see cref="TriangleCounter"/>): while set, every pipeline bound is swapped for its counting variant. Null (a null check per bind) otherwise.</summary>
+    #endregion
+
+    #region Pipeline state
+
+    /// <summary>
+    /// The bench's triangle size histogram (<c>--bench-tris</c>, <see cref="TriangleCounter"/>): while set, every pipeline bound is swapped for its
+    /// counting variant. Null (a null check per bind) otherwise.
+    /// </summary>
     internal static Func<GpuPipeline, GpuPipeline>? PipelineSubstitute;
 
     public void BindPipeline(GpuPipeline pipeline)
@@ -265,7 +307,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
     }
 
-    /// <summary>The front face alone (a draw that turns the winding round, the cull mode left as set).</summary>
+    /// <summary>
+    /// The front face alone (a draw that turns the winding round, the cull mode left as set).
+    /// </summary>
     public void SetFrontFace(FrontFaceDirection front)
     {
         _cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
@@ -283,6 +327,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdSetDepthBiasEnable(Handle, enable);
         _cmdSetDepthBias(Handle, constant, 0, slope);
     }
+
+    #endregion
+
+    #region Bindings
 
     public void BindVertexBuffers(uint first, ReadOnlySpan<GpuBufferBinding> bindings)
     {
@@ -324,35 +372,47 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void BindIndexBuffer(GpuBufferBinding binding, IndexKind type)
     {
         var buffer = _device.BufferAt(binding.Buffer.Index);
-        if (binding.Buffer.Index == _lastIndex.Buffer.Index && binding.Offset == _lastIndex.Offset && type == _lastIndexType && _lastIndex.Buffer.Index != 0) return;
+        if (binding.Buffer.Index == _lastIndex.Buffer.Index && binding.Offset == _lastIndex.Offset
+            && type == _lastIndexType && _lastIndex.Buffer.Index != 0)
+            return;
         _cmdBindIndexBuffer(Handle, buffer, binding.Offset, GlConventions.VkIndexKind(type));
         (_lastIndex, _lastIndexType) = (binding, type);
     }
 
-    /// <summary>Binds sets to a program (the layout comes from the program).</summary>
-    public void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets, GpuBindPoint point = GpuBindPoint.Graphics)
+    /// <summary>
+    /// Binds sets to a program (the layout comes from the program).
+    /// </summary>
+    public void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets,
+        GpuBindPoint point = GpuBindPoint.Graphics)
     {
         Span<DescriptorSet> resolved = stackalloc DescriptorSet[sets.Length];
         for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
         fixed (DescriptorSet* ps = resolved)
         fixed (uint* po = dynamicOffsets)
-            _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps, (uint)dynamicOffsets.Length, po);
+            _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps,
+                    (uint)dynamicOffsets.Length, po);
     }
 
-    static PipelineBindPoint VkBindPoint(GpuBindPoint point) => point == GpuBindPoint.Compute ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
+    static PipelineBindPoint VkBindPoint(GpuBindPoint point) =>
+        point == GpuBindPoint.Compute ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
 
-    /// <summary>Binds the bindless table to a program (the table is the context's).</summary>
+    /// <summary>
+    /// Binds the bindless table to a program (the table is the context's).
+    /// </summary>
     public void BindBindlessTable(GpuProgram program, uint set, GpuBindPoint point = GpuBindPoint.Graphics)
     {
         var table = new GpuSet(_ctx.Bindless.SetIndex);
         BindSets(program, set, new ReadOnlySpan<GpuSet>(in table), [], point);
     }
 
-    /// <summary>Pushes descriptors of set <paramref name="set"/> (legacy layout and compute; VK_KHR_push_descriptor).</summary>
+    /// <summary>
+    /// Pushes descriptors of set <paramref name="set"/> (legacy layout and compute; VK_KHR_push_descriptor).
+    /// </summary>
     public void PushDescriptors(GpuProgram program, uint set, ReadOnlySpan<WriteDescriptorSet> writes, GpuBindPoint point = GpuBindPoint.Graphics)
     {
         if (_push is null) throw new InvalidOperationException("VK_KHR_push_descriptor is not available");
-        fixed (WriteDescriptorSet* pw = writes) _push.CmdPushDescriptorSet(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, set, (uint)writes.Length, pw);
+        fixed (WriteDescriptorSet* pw = writes) _push.CmdPushDescriptorSet(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, set,
+            (uint)writes.Length, pw);
         Stats.DescriptorPushes++;
     }
 
@@ -375,7 +435,8 @@ public sealed unsafe class CommandList : IGpuCommandList
             {
                 case GpuBindingKind.Sampled:
                 case GpuBindingKind.StorageImage:
-                    images[i] = new DescriptorImageInfo(_device.SamplerAt(b.Texture.Sampler.Index), _device.ViewAt(b.Texture.View.Index), ImageLayout.General);
+                    images[i] = new DescriptorImageInfo(_device.SamplerAt(b.Texture.Sampler.Index), _device.ViewAt(b.Texture.View.Index),
+                            ImageLayout.General);
                     writes[i].DescriptorType = b.Kind == GpuBindingKind.Sampled ? DescriptorType.CombinedImageSampler : DescriptorType.StorageImage;
                     writes[i].PImageInfo = &images[i];
                     break;
@@ -408,8 +469,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdBindDescriptorSets(Handle, point, vp.Layout, set, 1, &allocated, 0, null);
     }
 
-    /// <summary>Pushes a block of constants to a program (the layout comes from the program). Vulkan names the stages of the program's one
-    /// range, whatever <paramref name="stages"/> says: a push must name every stage of a range it overlaps and none outside it.</summary>
+    /// <summary>
+    /// Pushes a block of constants to a program (the layout comes from the program). Vulkan names the stages of the program's one range, whatever
+    /// <paramref name="stages"/> says: a push must name every stage of a range it overlaps and none outside it.
+    /// </summary>
     public void PushConstants<T>(GpuProgram program, GpuStage stages, in T value, uint offset = 0) where T : unmanaged
     {
         var vp = _ctx.Shaders.Backend(program);
@@ -426,6 +489,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (stages.HasFlag(GpuStage.TessEvaluation)) f |= ShaderStageFlags.TessellationEvaluationBit;
         return f;
     }
+
+    #endregion
+
+    #region Draws and dispatches
 
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
@@ -453,9 +520,12 @@ public sealed unsafe class CommandList : IGpuCommandList
         Stats.IndirectDraws++;
     }
 
-    /// <summary>Non-indexed draws from <paramref name="args"/> (<c>VkDrawIndirectCommand</c>, 16 bytes each): the first
-    /// <paramref name="count"/> (a 32-bit value in <paramref name="countBuffer"/> at <paramref name="countOffset"/>, at most <paramref name="maxCount"/>),
-    /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.</summary>
+    /// <summary>
+    /// Non-indexed draws from <paramref name="args"/> (<c>VkDrawIndirectCommand</c>, 16 bytes each): the first
+    /// <paramref name="count"/> (a 32-bit value in <paramref name="countBuffer"/> at <paramref name="countOffset"/>, at most <paramref
+    /// name="maxCount"/>),
+    /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.
+    /// </summary>
     public void DrawIndirectCount(GpuBuffer args, ulong offset, GpuBuffer countBuffer, ulong countOffset, uint maxCount, uint stride = 16)
     {
         _vk.CmdDrawIndirectCount(Handle, _device.BufferAt(args.Index), offset, _device.BufferAt(countBuffer.Index), countOffset, maxCount, stride);
@@ -486,7 +556,12 @@ public sealed unsafe class CommandList : IGpuCommandList
         Stats.Dispatches++;
     }
 
-    public void FillBuffer(GpuBuffer b, ulong offset, ulong size, uint value) => _vk.CmdFillBuffer(Handle, _device.BufferAt(b.Index), offset, size, value);
+    #endregion
+
+    #region Transfers
+
+    public void FillBuffer(GpuBuffer b, ulong offset, ulong size, uint value) =>
+        _vk.CmdFillBuffer(Handle, _device.BufferAt(b.Index), offset, size, value);
 
     public void CopyBuffer(GpuBuffer src, GpuBuffer dst, in GpuBufferCopy region)
     {
@@ -503,8 +578,10 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// <inheritdoc/>
     public void InitTexture(GpuTexture texture) => _ctx.InitTexture(texture, Handle);
 
-    /// <summary>(Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a
-    /// whole level and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.</summary>
+    /// <summary>
+    /// (Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a whole level
+    /// and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.
+    /// </summary>
     public unsafe void CopyTextureToBuffer(GpuTexture src, int level, int layer, in PixelRect region, GpuBuffer dst, ulong offset)
     {
         var copy = new BufferImageCopy
@@ -528,7 +605,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         _vk.CmdCopyBufferToImage(Handle, _device.BufferAt(src.Index), _device.NativeImage(dst), ImageLayout.General, 1, &copy);
     }
 
-    /// <summary>Resolves level 0 / layer 0 of a multisampled colour texture into a single-sampled one (the reflection's 4× target).</summary>
+    /// <summary>
+    /// Resolves level 0 / layer 0 of a multisampled colour texture into a single-sampled one (the reflection's 4× target).
+    /// </summary>
     public void Resolve(GpuTexture src, GpuTexture dst)
     {
         var region = new ImageResolve
@@ -540,7 +619,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         _vk.CmdResolveImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &region);
     }
 
-    /// <summary>As <see cref="Resolve(Texture, Texture)"/> for two images in GENERAL layout (a render target taken from <see cref="PassTargets"/>), <paramref name="width"/> × <paramref name="height"/> from the origin.</summary>
+    /// <summary>
+    /// As <see cref="Resolve(Texture, Texture)"/> for two images in GENERAL layout (a render target taken from <see cref="PassTargets"/>), <paramref
+    /// name="width"/> × <paramref name="height"/> from the origin.
+    /// </summary>
     public void Resolve(Image src, Image dst, int width, int height)
     {
         var region = new ImageResolve
@@ -552,7 +634,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         _vk.CmdResolveImage(Handle, src, ImageLayout.General, dst, ImageLayout.General, 1, &region);
     }
 
-    /// <summary>Scales level 0 / layer 0 of <paramref name="src"/> over level 0 of <paramref name="dst"/>.</summary>
+    /// <summary>
+    /// Scales level 0 / layer 0 of <paramref name="src"/> over level 0 of <paramref name="dst"/>.
+    /// </summary>
     public void Blit(GpuTexture src, GpuTexture dst, TextureMinFilter filter)
     {
         var blit = new ImageBlit
@@ -562,7 +646,8 @@ public sealed unsafe class CommandList : IGpuCommandList
         };
         blit.SrcOffsets[1] = new Offset3D(src.Desc.Width, src.Desc.Height, 1);
         blit.DstOffsets[1] = new Offset3D(dst.Desc.Width, dst.Desc.Height, 1);
-        _vk.CmdBlitImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
+        _vk.CmdBlitImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &blit,
+            GlConventions.VkFilter(filter));
     }
 
     /// <summary>
@@ -593,13 +678,16 @@ public sealed unsafe class CommandList : IGpuCommandList
             };
             blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> (level - 1), 1), Math.Max(d.Height >> (level - 1), 1), 1);
             blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> level, 1), Math.Max(d.Height >> level, 1), 1);
-            _vk.CmdBlitImage(Handle, _device.NativeImage(t), ImageLayout.General, _device.NativeImage(t), ImageLayout.General, 1, &blit, Filter.Linear);
+            _vk.CmdBlitImage(Handle, _device.NativeImage(t), ImageLayout.General, _device.NativeImage(t), ImageLayout.General, 1, &blit,
+                Filter.Linear);
         }
         Barrier(BarrierBatch.Full);
     }
 
-    /// <summary>(Phase 8 stage 1.) Scales level <paramref name="srcLevel"/> of <paramref name="texture"/> over its level <paramref name="dstLevel"/>
-    /// (all layers), as VkGl's <c>GenerateMipmap</c> does per level.</summary>
+    /// <summary>
+    /// (Phase 8 stage 1.) Scales level <paramref name="srcLevel"/> of <paramref name="texture"/> over its level <paramref name="dstLevel"/> (all
+    /// layers), as VkGl's <c>GenerateMipmap</c> does per level.
+    /// </summary>
     public void BlitLevel(GpuTexture texture, int srcLevel, int dstLevel, TextureMinFilter filter)
     {
         var d = texture.Desc;
@@ -611,8 +699,13 @@ public sealed unsafe class CommandList : IGpuCommandList
         };
         blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> srcLevel, 1), Math.Max(d.Height >> srcLevel, 1), 1);
         blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> dstLevel, 1), Math.Max(d.Height >> dstLevel, 1), 1);
-        _vk.CmdBlitImage(Handle, _device.NativeImage(texture), ImageLayout.General, _device.NativeImage(texture), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
+        _vk.CmdBlitImage(Handle, _device.NativeImage(texture), ImageLayout.General, _device.NativeImage(texture), ImageLayout.General, 1, &blit,
+            GlConventions.VkFilter(filter));
     }
+
+    #endregion
+
+    #region Barriers, timestamps and labels
 
     // ---- sync, timing, labels ----
 
@@ -654,13 +747,17 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (!batch.IsEmpty) Barrier(in batch);
     }
 
-    /// <summary>Orders everything recorded before against everything after it (the seam between two passes).</summary>
+    /// <summary>
+    /// Orders everything recorded before against everything after it (the seam between two passes).
+    /// </summary>
     public void Order() => Barrier([GpuDependency.Full]);
 
-    const AccessFlags2 WriteMask = AccessFlags2.ColorAttachmentWriteBit | AccessFlags2.DepthStencilAttachmentWriteBit | AccessFlags2.ShaderStorageWriteBit |
-        AccessFlags2.TransferWriteBit | AccessFlags2.MemoryWriteBit;
+    const AccessFlags2 WriteMask = AccessFlags2.ColorAttachmentWriteBit | AccessFlags2.DepthStencilAttachmentWriteBit
+        | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.TransferWriteBit | AccessFlags2.MemoryWriteBit;
 
-    /// <summary>The stages and the access of an <see cref="Access"/>, and whether it writes (Vulkan's).</summary>
+    /// <summary>
+    /// The stages and the access of an <see cref="Access"/>, and whether it writes (Vulkan's).
+    /// </summary>
     static (PipelineStageFlags2 Stages, AccessFlags2 Access, bool Write) VkAccess(Access a)
     {
         var stages = PipelineStageFlags2.None;
@@ -671,25 +768,34 @@ public sealed unsafe class CommandList : IGpuCommandList
             if ((a & one) == 0) return;
             stages |= s; flags |= f; write |= w;
         }
-        Add(Access.ColourTarget, PipelineStageFlags2.ColorAttachmentOutputBit, AccessFlags2.ColorAttachmentReadBit | AccessFlags2.ColorAttachmentWriteBit, true);
+        Add(Access.ColourTarget, PipelineStageFlags2.ColorAttachmentOutputBit,
+            AccessFlags2.ColorAttachmentReadBit | AccessFlags2.ColorAttachmentWriteBit, true);
         Add(Access.DepthTarget, PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit,
             AccessFlags2.DepthStencilAttachmentReadBit | AccessFlags2.DepthStencilAttachmentWriteBit, true);
-        Add(Access.DepthRead, PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit, AccessFlags2.DepthStencilAttachmentReadBit, false);
-        Add(Access.Sampled, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderSampledReadBit, false);
-        Add(Access.StorageRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageReadBit, false);
+        Add(Access.DepthRead, PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit,
+            AccessFlags2.DepthStencilAttachmentReadBit, false);
+        Add(Access.Sampled, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
+            AccessFlags2.ShaderSampledReadBit, false);
+        Add(Access.StorageRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
+            AccessFlags2.ShaderStorageReadBit, false);
         Add(Access.StorageWrite, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
             AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit, true);
         Add(Access.TransferSrc, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferReadBit, false);
         Add(Access.TransferDst, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferWriteBit, true);
         Add(Access.IndirectRead, PipelineStageFlags2.DrawIndirectBit, AccessFlags2.IndirectCommandReadBit, false);
-        Add(Access.VertexRead, PipelineStageFlags2.VertexAttributeInputBit | PipelineStageFlags2.IndexInputBit, AccessFlags2.VertexAttributeReadBit | AccessFlags2.IndexReadBit, false);
-        Add(Access.UniformRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit, AccessFlags2.UniformReadBit, false);
+        Add(Access.VertexRead, PipelineStageFlags2.VertexAttributeInputBit | PipelineStageFlags2.IndexInputBit,
+            AccessFlags2.VertexAttributeReadBit | AccessFlags2.IndexReadBit, false);
+        Add(Access.UniformRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
+            AccessFlags2.UniformReadBit, false);
         Add(Access.Present, PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit, false);
-        if (stages == PipelineStageFlags2.None) return (PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit, true);
+        if (stages == PipelineStageFlags2.None)
+            return (PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit, true);
         return (stages, flags, write);
     }
 
-    /// <summary>Writes a timestamp into the frame's query arena slot (no-op on the backend's own arena without a pool behind it).</summary>
+    /// <summary>
+    /// Writes a timestamp into the frame's query arena slot (no-op on the backend's own arena without a pool behind it).
+    /// </summary>
     public void Timestamp(IGpuTimestamps arena, in QuerySlot slot, GpuStage stage = GpuStage.All)
     {
         if (!slot.IsValid || arena is not QueryArena pools) return;
@@ -704,14 +810,18 @@ public sealed unsafe class CommandList : IGpuCommandList
         _vk.CmdWriteTimestamp2(Handle, vkStage, pools.Pool(in slot), slot.Index);
     }
 
-    /// <summary>As <see cref="Timestamp(QueryArena, in QuerySlot, GpuStage)"/>, with the backend's own stage (the pipe's ends).</summary>
+    /// <summary>
+    /// As <see cref="Timestamp(QueryArena, in QuerySlot, GpuStage)"/>, with the backend's own stage (the pipe's ends).
+    /// </summary>
     public void Timestamp(QueryArena arena, in QuerySlot slot, PipelineStageFlags2 stage)
     {
         if (!slot.IsValid) return;
         _vk.CmdWriteTimestamp2(Handle, stage, arena.Pool(in slot), slot.Index);
     }
 
-    /// <summary>A debug label (VK_EXT_debug_utils; no-op without it).</summary>
+    /// <summary>
+    /// A debug label (VK_EXT_debug_utils; no-op without it).
+    /// </summary>
     public void BeginLabel(string name)
     {
         if (_debug is null) return;
@@ -724,4 +834,6 @@ public sealed unsafe class CommandList : IGpuCommandList
     {
         _debug?.CmdEndDebugUtilsLabel(Handle);
     }
+
+    #endregion
 }

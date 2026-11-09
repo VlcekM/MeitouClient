@@ -8,13 +8,17 @@ using Meitou.Content;
 
 namespace Meitou.Data.World;
 
-/// <summary>Switches for the derived-data load caches (<c>--no-load-cache</c>): when set nothing is read from or written to them.</summary>
+/// <summary>
+/// Switches for the derived-data load caches (<c>--no-load-cache</c>): when set nothing is read from or written to them.
+/// </summary>
 public static class LoadCaches
 {
     public static bool Disabled { get; set; }
 }
 
-/// <summary>What the foliage layout cache did so far (a snapshot of <see cref="FoliageLayoutCache.Stats"/>).</summary>
+/// <summary>
+/// What the foliage layout cache did so far (a snapshot of <see cref="FoliageLayoutCache.Stats"/>).
+/// </summary>
 public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int Rejected, int Written, double LoadMs, double ComputeMs, double SavedMs, long BytesRead, long BytesWritten)
 {
     public string Describe()
@@ -43,10 +47,14 @@ public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int 
 /// </summary>
 public sealed class FoliageLayoutCache
 {
-    /// <summary>The file format's version: bump it when the layout of the bytes changes.</summary>
+    /// <summary>
+    /// The file format's version: bump it when the layout of the bytes changes.
+    /// </summary>
     public const int FormatVersion = 1;
-    /// <summary>The layout's version: bump it whenever a change to the layout code (FoliageLayout, its random numbers, the readers it uses) changes what it places;
-    /// a stale cache otherwise keeps serving the old placement.</summary>
+    /// <summary>
+    /// The layout's version: bump it whenever a change to the layout code (FoliageLayout, its random numbers, the readers it uses) changes what it
+    /// places; a stale cache otherwise keeps serving the old placement.
+    /// </summary>
     public const int LayoutVersion = 1;
     const uint Magic = 0x434C464D;   // "MFLC"
     public const long DefaultMaxBytes = 2048L << 20;
@@ -76,7 +84,9 @@ public sealed class FoliageLayoutCache
 
     public string Root { get; }
     public string KeyName { get; }
-    /// <summary>The most the files may total in bytes; 0 or less is no cap.</summary>
+    /// <summary>
+    /// The most the files may total in bytes; 0 or less is no cap.
+    /// </summary>
     public long MaxBytes { get; set; }
     public string Directory => _directory;
 
@@ -87,7 +97,9 @@ public sealed class FoliageLayoutCache
 
     // ------------------------------------------------------------------ key
 
-    /// <summary>The 32-byte key (see the class summary).</summary>
+    /// <summary>
+    /// The 32-byte key (see the class summary).
+    /// </summary>
     public static byte[] ComputeKey(GameInstall install, FoliageCatalog catalog, IEnumerable<FoliageTown> towns)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -163,7 +175,9 @@ public sealed class FoliageLayoutCache
 
     // ------------------------------------------------------------------ read
 
-    /// <summary>The cached zone, or null (a miss: absent, or unusable, which is also counted in <see cref="FoliageLayoutCacheStats.Rejected"/>).</summary>
+    /// <summary>
+    /// The cached zone, or null (a miss: absent, or unusable, which is also counted in <see cref="FoliageLayoutCacheStats.Rejected"/>).
+    /// </summary>
     public (FoliageZone Zone, FoliageGround Ground)? TryLoad(ZoneCoordinate zone, bool farOnly) =>
         Fetch(zone, farOnly, grouped: false) is { } f ? (f.Zone, f.Ground) : null;
 
@@ -231,7 +245,9 @@ public sealed class FoliageLayoutCache
         return (buffer, read);   // a file that shrank meanwhile fails its checksum
     }
 
-    /// <summary>Parses and verifies one file's bytes; null when it is not a valid entry for this key, zone and kind.</summary>
+    /// <summary>
+    /// Parses and verifies one file's bytes; null when it is not a valid entry for this key, zone and kind.
+    /// </summary>
     public (FoliageZone Zone, FoliageGround Ground, float ComputeMs)? Decode(byte[] bytes, ZoneCoordinate zone, bool farOnly) =>
         Decode(bytes, bytes.Length, zone, farOnly, grouped: false) is { } d ? (d.Zone, d.Ground, d.ComputeMs) : null;
 
@@ -382,7 +398,9 @@ public sealed class FoliageLayoutCache
 
     // ------------------------------------------------------------------ write
 
-    /// <summary>Records the time a miss took to place (for the summary) and writes the zone; failures are ignored, the cache is only a cache.</summary>
+    /// <summary>
+    /// Records the time a miss took to place (for the summary) and writes the zone; failures are ignored, the cache is only a cache.
+    /// </summary>
     public void Save(ZoneCoordinate zone, bool farOnly, FoliageZone laid, FoliageGround ground, double computeMs)
     {
         if (LoadCaches.Disabled || Stale) return;
@@ -404,7 +422,9 @@ public sealed class FoliageLayoutCache
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>The file for a zone; null when the zone cannot be written back faithfully (an unknown reference).</summary>
+    /// <summary>
+    /// The file for a zone; null when the zone cannot be written back faithfully (an unknown reference).
+    /// </summary>
     public byte[]? Encode(FoliageZone laid, FoliageGround ground, bool farOnly, float computeMs)
     {
         var meshIndex = new Dictionary<FoliageMesh, int>();
@@ -507,7 +527,9 @@ public sealed class FoliageLayoutCache
 
     static int Unsafe_SizeOf() => System.Runtime.CompilerServices.Unsafe.SizeOf<InstanceOnDisk>();
 
-    /// <summary>A fast 64-bit checksum (eight bytes at a time, multiply-rotate); it only has to notice damage, not resist an attacker.</summary>
+    /// <summary>
+    /// A fast 64-bit checksum (eight bytes at a time, multiply-rotate); it only has to notice damage, not resist an attacker.
+    /// </summary>
     internal static ulong Checksum(ReadOnlySpan<byte> data)
     {
         const ulong p1 = 0x9E3779B185EBCA87UL, p2 = 0xC2B2AE3D27D4EB4FUL;
@@ -525,7 +547,9 @@ public sealed class FoliageLayoutCache
 
     void TouchOnce() { if (Interlocked.Increment(ref _maintained) == 1) MaintainInBackground(); }
 
-    /// <summary>A <see cref="Maintain"/> pass on a worker; failures are ignored.</summary>
+    /// <summary>
+    /// A <see cref="Maintain"/> pass on a worker; failures are ignored.
+    /// </summary>
     public void MaintainInBackground() => Task.Run(() =>
     {
         try { Maintain(); }

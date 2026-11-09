@@ -24,13 +24,19 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Cages, locks, arrests and jail (docs/simulation.md "Cages, beds and locks", "Arrest and jail"; docs/game/locks.md, docs/game/economy.md 11.5-11.8).</summary>
+/// <summary>
+/// Cages, locks, arrests and jail (docs/simulation.md "Cages, beds and locks", "Arrest and jail"; docs/game/locks.md, docs/game/economy.md
+/// 11.5-11.8).
+/// </summary>
 public class ArrestTests
 {
     static readonly Vector3 Centre = new(2000, 150, 2000);
-    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers, Anatomy = Human.Anatomy, Carriable = true };
+    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers,
+            Anatomy = Human.Anatomy, Carriable = true };
 
-    /// <summary>A town of a faction that books bounties, with a house of two doors and two cages.</summary>
+    /// <summary>
+    /// A town of a faction that books bounties, with a house of two doors and two cages.
+    /// </summary>
     internal static PopulationData Town(IEnumerable<FcsRecord>? extra = null)
     {
         static FcsRecord Rec(string id, FcsRecordType type, string name) => SyntheticTown.Rec(id, type, name);
@@ -65,14 +71,16 @@ public class ArrestTests
     }
 
     /// <summary>
-    /// The town above: two city policemen and two player characters. One, wanted for 5000 and just booked, stands by the first policeman, who arrests him (fight, lift, carry, cage A);
-    /// the other starts in cage B, picks its lock and gets out at tick 900 (an escape). Hashes at five checkpoints, pinned in <see cref="GoldenHashTests"/>.
+    /// The town above: two city policemen and two player characters. One, wanted for 5000 and just booked, stands by the first policeman, who arrests
+    /// him (fight, lift, carry, cage A); the other starts in cage B, picks its lock and gets out at tick 900 (an escape). Hashes at five checkpoints,
+    /// pinned in <see cref="GoldenHashTests"/>.
     /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
         var data = Town();
         var relations = data.Relations;
-        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = relations };
+        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
+                new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = relations };
         var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = relations };
         var crime = new CrimeSystem(relations);
         combat.Crimes = crime;
@@ -93,10 +101,12 @@ public class ArrestTests
             var cold = new Combatant { Name = "officer", Attack = 70, Strength = 70 }.MakeCold();
             cold.Faction = city;
             cold.NpcClass = FundamentalType.LawEnforcement;
-            var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = city, Town = 0, HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
+            var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = city, Town = 0,
+                    HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
             world.Squads.Add(squad);
             cold.SquadId = squad.Id;
-            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Yaw = MathF.Atan2(-at.X, -at.Y), Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                    WalkSpeed = 15, Yaw = MathF.Atan2(-at.X, -at.Y), Task = (byte)CharacterTask.Idle }, cold, 0);
             squad.Members.Add(id);
             squad.Leader = id;
             return id;
@@ -111,7 +121,8 @@ public class ArrestTests
             cold.SquadId = playerSquad.Id;
             var entry = (cold.Bounties = new BountyLedger()).Get(city, "city");
             entry.Amount = bounty;
-            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
+            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                    WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
             playerSquad.Members.Add(id);
             return id;
         }
@@ -123,6 +134,7 @@ public class ArrestTests
         var picker = Hero(new Vector2(-200, 0), "picker", 2500, new Combatant());
         world.Characters.Cold(picker.Slot)!.Stats![StatsEnumerated.Lockpicking] = 60;
         var cageB = world.Fixtures.Find("0.0:cageB")!;
+
         Assert.True(world.Fixtures.Imprison(world, picker, cageB));
 
         var hashes = new List<ulong>();
@@ -139,10 +151,13 @@ public class ArrestTests
             hashes.Add(world.StateHash());
         }
         var heroCold = world.Characters.Cold(hero.Slot)!;
-        var seen = (Jailed: heroCold.IsImprisoned && heroCold.InWhat == "0.0:cageA" && arrest.Log.Any(e => e.Kind == ArrestEventKind.Jailed && e.Target == hero),
+        var seen = (Jailed: heroCold.IsImprisoned && heroCold.InWhat == "0.0:cageA" && arrest.Log.Any(e => e.Kind == ArrestEventKind.Jailed
+                && e.Target == hero),
             Picked: picked, Escaped: world.Characters.Cold(picker.Slot)!.Escaped || arrest.Log.Any(e => e.Target == picker));
+
         // It covers what it is for: the arrest reached the cage, the prisoner's pick opened the other cage, and getting out was an escape.
         Assert.True(seen.Jailed && seen.Picked && seen.Escaped, $"{seen}");
+
         return hashes;
     }
 
@@ -160,26 +175,35 @@ public class ArrestTests
         Assert.Equal(0.9f, Lockpicking.Chance(40, 40));
         Assert.Equal(0.9f, Lockpicking.Chance(40, 90));
         Assert.Equal(0.45f, Lockpicking.Chance(40, 30), 5);
-        // Allowed while the chance is above 0.05 (strict): 41 below the level is, 42 is not; a caged picker rolls at skill - 10 but is allowed by its full skill.
+
+        // Allowed while the chance is above 0.05 (strict): 41 below the level is, 42 is not; a caged picker rolls at skill - 10 but is allowed by its
+        // full skill.
         Assert.Equal(0.05f, BaseGame.MinimumLockpickChance, 5);
+
         using var world = new SimWorld(new WorldSettings(), new OpenGroundWalkability((_, _) => 0));
         var picks = new Lockpicking(BaseGame, BodyOptions.Default);
         var picker = new Combatant().MakeCold();
         picker.Stats![StatsEnumerated.Lockpicking] = 20;
+
         Assert.True(picks.Allowed(world, picker, 61));
         Assert.False(picks.Allowed(world, picker, 62));
+
         picker.InSomething = HeldState.Imprisoned;
+
         Assert.True(picks.Allowed(world, picker, 61));
         Assert.Equal(Lockpicking.Chance(61, 10), Lockpicking.RollChance(picker, 61));
+
         picker.InSomething = HeldState.None;
         picker.Medical!.KnockOut(1000);
+
         Assert.False(picks.Allowed(world, picker, 20));
     }
 
     [Fact]
     public void A_bounty_is_perceived_while_the_target_is_recently_wanted_or_is_down_and_an_enemy()
     {
-        // FUN_140853fd0 behind goal 204's finder (FUN_14099bfc0): the entry of the guard's booking faction, visible with the recently-wanted marker, or on a downed enemy.
+        // FUN_140853fd0 behind goal 204's finder (FUN_14099bfc0): the entry of the guard's booking faction, visible with the recently-wanted marker,
+        // or on a downed enemy.
         var data = Town();
         var relations = data.Relations;
         int city = data.FactionIndex("50-a");
@@ -188,9 +212,12 @@ public class ArrestTests
         guard.Faction = city;
         var target = new Combatant().MakeCold();
         target.Faction = relations.PlayerFaction;
+
         Assert.False(arrest.PerceivedBounty(guard, target));
+
         (target.Bounties = new BountyLedger()).Get(city, "city").Amount = 500;
         target.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
+
         Assert.True(arrest.PerceivedBounty(guard, target));
     }
 }

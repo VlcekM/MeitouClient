@@ -16,14 +16,19 @@ Console.WriteLine(ImpostorApp.Usage);
 Console.WriteLine("The mesh and character viewers were removed (DECISIONS 23, docs/character-viewer.md).");
 return 2;
 
-/// <summary><c>--quit-after &lt;s&gt;</c> (any interactive mode): the window closes itself after that many seconds and the frames drawn are printed (an unattended smoke test).</summary>
+/// <summary>
+/// <c>--quit-after &lt;s&gt;</c> (any interactive mode): the window closes itself after that many seconds and the frames drawn are printed (an
+/// unattended smoke test).
+/// </summary>
 static class SmokeTest
 {
     static double? s_seconds;
     static long s_frames;
     static readonly Stopwatch Clock = new();
 
-    /// <summary>Takes <c>--quit-after</c> out of <paramref name="args"/>.</summary>
+    /// <summary>
+    /// Takes <c>--quit-after</c> out of <paramref name="args"/>.
+    /// </summary>
     public static string[] Strip(string[] args)
     {
         var rest = new List<string>();
@@ -35,13 +40,17 @@ static class SmokeTest
         return rest.ToArray();
     }
 
-    /// <summary>Counts a drawn frame.</summary>
+    /// <summary>
+    /// Counts a drawn frame.
+    /// </summary>
     public static void Frame()
     {
         if (s_frames++ == 0) Clock.Start();   // the time starts at the first frame, after loading
     }
 
-    /// <summary>Closes <paramref name="window"/> once the time is up (call from the update).</summary>
+    /// <summary>
+    /// Closes <paramref name="window"/> once the time is up (call from the update).
+    /// </summary>
     public static void Check(IWindow window)
     {
         if (s_seconds is not { } s || s_frames == 0 || Clock.Elapsed.TotalSeconds < s) return;

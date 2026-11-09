@@ -25,7 +25,8 @@ public sealed partial class AiSystem
 
     void SendCaptiveJobs(World world)
     {
-        if (Interlocked.Exchange(ref _capturing, 0) != 0) (_captives ??= world.SystemOf<CaptiveSystem>())?.SendGoalJobs(world);
+        if (Interlocked.Exchange(ref _capturing, 0) != 0)
+            (_captives ??= world.SystemOf<CaptiveSystem>())?.SendGoalJobs(world);
     }
 
     /// <summary>

@@ -5,7 +5,10 @@ namespace Meitou.Simulation.Navigation;
 
 internal static partial class ZoneNavMeshBuilder
 {
-    /// <summary>How long (cells) the part of two coinciding edges within the climb must be for the stitcher to join them as neighbours (engine choice: 4 units).</summary>
+    /// <summary>
+    /// How long (cells) the part of two coinciding edges within the climb must be for the stitcher to join them as neighbours (engine choice: 4
+    /// units).
+    /// </summary>
     const float SeamClimbCells = 2;
 
     // ---- stitching ----
@@ -16,7 +19,8 @@ internal static partial class ZoneNavMeshBuilder
         public Vector3 A, B;
     }
 
-    internal static ZoneNavMesh Stitch(ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld, HeightGrid?[]?[]? details = null)
+    internal static ZoneNavMesh Stitch(
+        ZoneGeometry g, NavBuildSettings s, RcPolyMesh?[] meshes, int tilesPerSide, float tileWorld, HeightGrid?[]?[]? details = null)
     {
         var vertices = new List<Vector3>();
         var polygons = new List<int[]>();
@@ -45,7 +49,10 @@ internal static partial class ZoneNavMeshBuilder
             int vBase = vertices.Count, pBase = polygons.Count;
             for (int i = 0; i < m.nverts; i++)
                 // A span's top is the surface rounded up to a cell: take the middle of the cell it fell in.
-                vertices.Add(new Vector3(m.bmin.X + m.verts[i * 3] * m.cs, m.bmin.Y + (m.verts[i * 3 + 1] - 0.5f) * m.ch, m.bmin.Z + m.verts[i * 3 + 2] * m.cs));
+                vertices.Add(new Vector3(
+                    m.bmin.X + m.verts[i * 3] * m.cs,
+                    m.bmin.Y + (m.verts[i * 3 + 1] - 0.5f) * m.ch,
+                    m.bmin.Z + m.verts[i * 3 + 2] * m.cs));
             for (int p = 0; p < m.npolys; p++)
             {
                 int count = 0;
@@ -61,7 +68,10 @@ internal static partial class ZoneNavMeshBuilder
                         nb[k] = -1;
                         int ia = m.polys[p * nvp * 2 + k], ib = m.polys[p * nvp * 2 + (k + 1 == count ? 0 : k + 1)];
                         int xa = m.verts[ia * 3], za = m.verts[ia * 3 + 2], xb = m.verts[ib * 3], zb = m.verts[ib * 3 + 2];
-                        int side = xa == 0 && xb == 0 ? 0 : za == s.TileCells && zb == s.TileCells ? 1 : xa == s.TileCells && xb == s.TileCells ? 2 : za == 0 && zb == 0 ? 3 : -1;
+                        int side = xa == 0 && xb == 0 ? 0
+                            : za == s.TileCells && zb == s.TileCells ? 1
+                            : xa == s.TileCells && xb == s.TileCells ? 2
+                            : za == 0 && zb == 0 ? 3 : -1;
                         if (side >= 0)
                         {
                             borders[tile, side] ??= [];
@@ -70,14 +80,19 @@ internal static partial class ZoneNavMeshBuilder
                         else
                         {
                             // An open inner edge may face one whose end vertex Recast did not weld (see the seam pass below).
-                            if (open.TryGetValue((xb, zb, xa, za), out var other) && SeamMeets(Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]),
-                                Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]), MathF.Sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za)), out bool partial)
+                            if (open.TryGetValue((xb, zb, xa, za), out var other) && SeamMeets(
+                                    Math.Abs(m.verts[ia * 3 + 1] - m.verts[other.Ib * 3 + 1]),
+                                    Math.Abs(m.verts[ib * 3 + 1] - m.verts[other.Ia * 3 + 1]),
+                                    MathF.Sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za)), out bool partial)
                                 && (!partial || SurfacesMeet(m, xa, za, xb, zb, details?[tile]?[p], details?[tile]?[other.Polygon - pBase])))
                             {
                                 open.Remove((xb, zb, xa, za));
                                 seams.Add((pBase + p, k, other.Polygon, other.Edge));
                             }
-                            else open[(xa, za, xb, zb)] = (pBase + p, k, ia, ib);
+                            else
+                            {
+                                open[(xa, za, xb, zb)] = (pBase + p, k, ia, ib);
+                            }
                         }
                     }
                     else if ((n & 0x8000) != 0)
@@ -87,7 +102,8 @@ internal static partial class ZoneNavMeshBuilder
                         borders[tile, side] ??= [];
                         borders[tile, side].Add(new BorderEdge { Polygon = pBase + p, Edge = k });
                     }
-                    else nb[k] = pBase + n;
+                    else
+                        nb[k] = pBase + n;
                 }
                 polygons.Add(vi);
                 neighbours.Add(nb);
@@ -97,8 +113,8 @@ internal static partial class ZoneNavMeshBuilder
         }
 
         // Open edges of the tile still unjoined that face each other off line: opposite directions, sharing one end in X/Z (so not two floors either
-        // side of a thin wall), the other overlap end within NavGeometry.NearMissGap of the line, and within the climb at both overlap ends: by the edges'
-        // own heights, else by the polygons' surfaces along the overlap (SurfacesStep).
+        // side of a thin wall), the other overlap end within NavGeometry.NearMissGap of the line, and within the climb at both overlap ends: by the
+        // edges' own heights, else by the polygons' surfaces along the overlap (SurfacesStep).
         void JoinNearMisses(int vBase, int pBase, HeightGrid?[]? grids)
         {
             var left = open.Values.ToArray();
@@ -110,7 +126,8 @@ internal static partial class ZoneNavMeshBuilder
                     if (p == q) continue;
                     Vector3 a0 = vertices[vBase + ia], a1 = vertices[vBase + ib], b0 = vertices[vBase + ja], b1 = vertices[vBase + jb];
                     if (!SameXz(a0, b1) && !SameXz(a1, b0)) continue;
-                    if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, NavGeometry.NearMissGap, out float lo, out float hi, out float yLo, out float yHi)) continue;
+                    if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, NavGeometry.NearMissGap, out float lo, out float hi, out float yLo, out float yHi))
+                        continue;
                     if ((hi - lo) * Vector2.Distance(new(a0.X, a0.Z), new(a1.X, a1.Z)) < s.CellSize / 2) continue;
                     if ((Math.Abs(float.Lerp(a0.Y, a1.Y, lo) - yLo) > climb || Math.Abs(float.Lerp(a0.Y, a1.Y, hi) - yHi) > climb)
                         && !SurfacesStep(a0, a1, lo, hi, yLo, yHi, grids?[p - pBase], grids?[q - pBase])) continue;
@@ -118,9 +135,10 @@ internal static partial class ZoneNavMeshBuilder
                 }
         }
 
-        // A long simplified edge runs straight in height across a kink of its polygon's surface (a stair's foot on flat ground: Recast simplifies contours in
-        // X/Z only), so its height at the overlap can be well off the ground beside. Along the overlap each side's surface (its own samples, else its edge)
-        // must be within the climb of the other's, at every cell; only with samples on at least one side (docs/game/pathfinding.md, "Inner seams").
+        // A long simplified edge runs straight in height across a kink of its polygon's surface (a stair's foot on flat ground: Recast simplifies
+        // contours in X/Z only), so its height at the overlap can be well off the ground beside. Along the overlap each side's surface (its own
+        // samples, else its edge) must be within the climb of the other's, at every cell; only with samples on at least one side
+        // (docs/game/pathfinding.md, "Inner seams").
         bool SurfacesStep(Vector3 a0, Vector3 a1, float lo, float hi, float yLo, float yHi, HeightGrid? own, HeightGrid? facing)
         {
             if (own?.Own is null && facing?.Own is null) return false;
@@ -136,8 +154,8 @@ internal static partial class ZoneNavMeshBuilder
             return true;
         }
 
-        // The height at (x, z) between the four samples round it that are the polygon's own region (a nearest sample on a steep stair can be the ground
-        // beside it, a step's worth off), else the nearest own one.
+        // The height at (x, z) between the four samples round it that are the polygon's own region (a nearest sample on a steep stair can be the
+        // ground beside it, a step's worth off), else the nearest own one.
         static bool OwnHeightAt(HeightGrid grid, float x, float z, out float height)
         {
             float u = (x - grid.X0) / grid.Step, v = (z - grid.Z0) / grid.Step;
@@ -174,10 +192,10 @@ internal static partial class ZoneNavMeshBuilder
 
         static bool SameXz(Vector3 a, Vector3 b) => a.X == b.X && a.Z == b.Z;
 
-        // Two coinciding edges (height gaps at their ends in cells, length in cells) meet when the gap stays within the climb along at least SeamClimbCells of
-        // them: a corner can take a higher neighbouring cell's height on one side (a stair's top beside a raised cheek, Storm House 27.22:1821-), which
-        // left one end over the climb although the rest of the edge steps less.
-        // partial: within the climb along part of it only, so the polygons' own surfaces are checked too (SurfacesMeet).
+        // Two coinciding edges (height gaps at their ends in cells, length in cells) meet when the gap stays within the climb along at least
+        // SeamClimbCells of them: a corner can take a higher neighbouring cell's height on one side (a stair's top beside a raised cheek, Storm House
+        // 27.22:1821-), which left one end over the climb although the rest of the edge steps less. partial: within the climb along part of it only,
+        // so the polygons' own surfaces are checked too (SurfacesMeet).
         bool SeamMeets(int gapA, int gapB, float cells, out bool partial)
         {
             partial = false;
@@ -189,10 +207,11 @@ internal static partial class ZoneNavMeshBuilder
             return within >= SeamClimbCells;
         }
 
-        // A seam within the climb along part of it only, by its corners' heights, is joined only when the two polygons' own surfaces (each one's region's
-        // height samples nearest the edge's cells) are within the climb along SeamClimbCells of it too: the corner within it can as well be the one that took a
-        // higher neighbouring cell's height, a floor's for a ramp passing under the floor's edge (engine choice; Observed: Ancient Lab with TwoStorey, zone
-        // 28.60, whose upper floor joined the middle of its spiral stair 8..17 below along the stairwell instead of the stair's top).
+        // A seam within the climb along part of it only, by its corners' heights, is joined only when the two polygons' own surfaces (each one's
+        // region's height samples nearest the edge's cells) are within the climb along SeamClimbCells of it too: the corner within it can as well be
+        // the one that took a higher neighbouring cell's height, a floor's for a ramp passing under the floor's edge (engine choice; Observed:
+        // Ancient Lab with TwoStorey, zone 28.60, whose upper floor joined the middle of its spiral stair 8..17 below along the stairwell instead of
+        // the stair's top).
         bool SurfacesMeet(RcPolyMesh m, int xa, int za, int xb, int zb, HeightGrid? own, HeightGrid? facing)
         {
             if (own?.Own is null || facing?.Own is null) return true;
@@ -221,8 +240,8 @@ internal static partial class ZoneNavMeshBuilder
                 int n = vi.Length;
                 var rv = new int[n];
                 var rn = new int[n];
-                // Reverse the vertex order. Edge j of the reversed polygon runs from old vertex n - 1 - j to n - 2 - j, which is the old edge n - 2 - j
-                // (wrapping), so that is where its neighbour is read from.
+                // Reverse the vertex order. Edge j of the reversed polygon runs from old vertex n - 1 - j to n - 2 - j, which is the old edge n - 2 -
+                // j (wrapping), so that is where its neighbour is read from.
                 for (int k = 0; k < n; k++) rv[k] = vi[n - 1 - k];
                 for (int k = 0; k < n; k++) rn[k] = nb[(n - 2 - k + n) % n];
                 polygons[p] = rv;
@@ -295,9 +314,9 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Whether the polygons wind clockwise with X right and Z up, by the sum of their signed areas (<see cref="NavGeometry.SignedArea"/>, in double from each first vertex).
-    /// The first polygon's own sign, summed in float at world coordinates, came out wrong for a thin one and left a whole interior clockwise, so no point was inside it
-    /// (Observed: Snailhouse Lagoon, zone 35.42, docs/game/pathfinding.md "Interiors").
+    /// Whether the polygons wind clockwise with X right and Z up, by the sum of their signed areas (<see cref="NavGeometry.SignedArea"/>, in double
+    /// from each first vertex). The first polygon's own sign, summed in float at world coordinates, came out wrong for a thin one and left a whole
+    /// interior clockwise, so no point was inside it (Observed: Snailhouse Lagoon, zone 35.42, docs/game/pathfinding.md "Interiors").
     /// </summary>
     static bool ClockwiseOverall(List<int[]> polygons, List<Vector3> vertices)
     {

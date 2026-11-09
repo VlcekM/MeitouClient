@@ -37,7 +37,8 @@ public class TerrainBiomeTests
                 for (int i = 1; i < n.Length; i++)
                     Assert.Equal(System.Numerics.BitOperations.PopCount((uint)BlendInfoFile.MaskSlots(n[i])), BlendInfoFile.MaskCount(n[i]));
                 for (int i = 1; i < 1024 / 2; i++)
-                    Assert.Equal(BlendInfoFile.MaskSlots(n[i]), BlendInfoFile.MaskSlots((byte)(n[4 * i] | n[4 * i + 1] | n[4 * i + 2] | n[4 * i + 3])));
+                    Assert.Equal(BlendInfoFile.MaskSlots(n[i]),
+                            BlendInfoFile.MaskSlots((byte)(n[4 * i] | n[4 * i + 1] | n[4 * i + 2] | n[4 * i + 3])));
                 // A leaf is one blend-map pixel: it holds the slots weighted there, and none that are not weighted in its 3 x 3 neighbourhood.
                 for (int lz = 0; lz < 32; lz++)
                     for (int lx = 0; lx < 32; lx++)
@@ -46,7 +47,8 @@ public class TerrainBiomeTests
                         for (int dz = -1; dz <= 1; dz++)
                             for (int dx = -1; dx <= 1; dx++) near |= Used(px + dx, pz + dz);
                         int leaf = BlendInfoFile.MaskSlots(n[1024 | BlendInfoFile.Morton(lx, lz)]);
-                        Assert.True((leaf & own) == own && (leaf & ~near) == 0, $"cell {cx},{cz} leaf {lx},{lz}: mask {leaf:X2}, weights {own:X2}, around {near:X2}");
+                        Assert.True((leaf & own) == own && (leaf & ~near) == 0,
+                                $"cell {cx},{cz} leaf {lx},{lz}: mask {leaf:X2}, weights {own:X2}, around {near:X2}");
                     }
             }
 

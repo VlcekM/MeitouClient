@@ -8,7 +8,8 @@ public class TgaReaderTests
     {
         var header = new byte[18];
         header[2] = 2;
-        header[12] = 2; header[14] = 2;
+        header[12] = 2;
+        header[14] = 2;
         header[16] = (byte)bits;
         header[17] = descriptor;
         return [.. header, .. pixelBytes];

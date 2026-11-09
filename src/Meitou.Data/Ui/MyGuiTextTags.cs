@@ -3,7 +3,9 @@ using System.Numerics;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>A run of tagged text: from <see cref="Start"/> (an index into the plain text) on, the text takes <see cref="Colour"/> (rgb; alpha 1).</summary>
+/// <summary>
+/// A run of tagged text: from <see cref="Start"/> (an index into the plain text) on, the text takes <see cref="Colour"/> (rgb; alpha 1).
+/// </summary>
 public readonly record struct TextColourRun(int Start, Vector3 Colour);
 
 /// <summary>
@@ -12,7 +14,9 @@ public readonly record struct TextColourRun(int Start, Vector3 Colour);
 /// </summary>
 public static class MyGuiTextTags
 {
-    /// <summary>The text without its tags, and the colour runs in it (empty when it has no tag).</summary>
+    /// <summary>
+    /// The text without its tags, and the colour runs in it (empty when it has no tag).
+    /// </summary>
     public static (string Plain, IReadOnlyList<TextColourRun> Runs) Parse(string text)
     {
         if (!text.Contains('#')) return (text, []);
@@ -35,6 +39,8 @@ public static class MyGuiTextTags
         return (plain.ToString(), runs);
     }
 
-    /// <summary>The text without its tags.</summary>
+    /// <summary>
+    /// The text without its tags.
+    /// </summary>
     public static string Strip(string text) => text.Contains('#') ? Parse(text).Plain : text;
 }

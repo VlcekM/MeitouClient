@@ -8,70 +8,119 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class KenshiCamera
 {
-    /// <summary>Shortest boom (pivot to camera), world units.</summary>
+    /// <summary>
+    /// Shortest boom (pivot to camera), world units.
+    /// </summary>
     public const float MinDistance = 10;
-    /// <summary>Longest boom: the zoom step clamps to it (the same constant scales the <c>Camera_Zoom</c> sound parameter).</summary>
+    /// <summary>
+    /// Longest boom: the zoom step clamps to it (the same constant scales the <c>Camera_Zoom</c> sound parameter).
+    /// </summary>
     public const float MaxDistance = 2000;
-    /// <summary>The boom when the camera is created or reset.</summary>
+    /// <summary>
+    /// The boom when the camera is created or reset.
+    /// </summary>
     public const float InitialDistance = 150;
-    /// <summary>The pitch when the camera is created or reset, degrees below the horizon.</summary>
+    /// <summary>
+    /// The pitch when the camera is created or reset, degrees below the horizon.
+    /// </summary>
     public const float InitialPitchDegrees = 30;
-    /// <summary>Steepest view: a pitch step is refused once the view direction's y is at or below this (about 67 degrees down).</summary>
+    /// <summary>
+    /// Steepest view: a pitch step is refused once the view direction's y is at or below this (about 67 degrees down).
+    /// </summary>
     public const float MinViewY = -0.92f;
-    /// <summary>Highest view: a pitch step upwards is refused once the view direction's y is at or above this (about 11.5 degrees up).</summary>
+    /// <summary>
+    /// Highest view: a pitch step upwards is refused once the view direction's y is at or above this (about 11.5 degrees up).
+    /// </summary>
     public const float MaxViewY = 0.2f;
 
-    /// <summary>The zoom step scales by <c>min(boom / ZoomLengthDivisor, ZoomScaleCap)</c>.</summary>
+    /// <summary>
+    /// The zoom step scales by <c>min(boom / ZoomLengthDivisor, ZoomScaleCap)</c>.
+    /// </summary>
     public const float ZoomLengthDivisor = 600;
-    /// <summary>Largest factor of the zoom step's length scaling.</summary>
+    /// <summary>
+    /// Largest factor of the zoom step's length scaling.
+    /// </summary>
     public const float ZoomScaleCap = 0.75f;
-    /// <summary><c>settings.cfg</c> <c>camera zoom</c> in the install (the zoom speed the step multiplies).</summary>
+    /// <summary>
+    /// <c>settings.cfg</c> <c>camera zoom</c> in the install (the zoom speed the step multiplies).
+    /// </summary>
     public const float DefaultZoomSpeed = 125;
-    /// <summary><c>settings.cfg</c> <c>camera speed</c> in the install (units not traced).</summary>
+    /// <summary>
+    /// <c>settings.cfg</c> <c>camera speed</c> in the install (units not traced).
+    /// </summary>
     public const float DefaultMoveSpeed = 500;
-    /// <summary>Zoom input of one wheel notch: the mouse reports 120 per notch and the camera divides by 100.</summary>
+    /// <summary>
+    /// Zoom input of one wheel notch: the mouse reports 120 per notch and the camera divides by 100.
+    /// </summary>
     public const float WheelNotchInput = 1.2f;
-    /// <summary>Zoom input per second of a held <c>camera_zoom_in</c> / <c>camera_zoom_out</c> key (three times that with Shift).</summary>
+    /// <summary>
+    /// Zoom input per second of a held <c>camera_zoom_in</c> / <c>camera_zoom_out</c> key (three times that with Shift).
+    /// </summary>
     public const float ZoomKeyRate = 5;
     public const float ZoomKeyShiftFactor = 3;
-    /// <summary>The boom closes on the zoom step's target by <c>min(ZoomFollowRate · frame time, 1)</c> of the remaining distance per frame.</summary>
+    /// <summary>
+    /// The boom closes on the zoom step's target by <c>min(ZoomFollowRate · frame time, 1)</c> of the remaining distance per frame.
+    /// </summary>
     public const float ZoomFollowRate = 70;
 
-    /// <summary><c>camera speed</c> scaled by <c>boom / ZoomLengthDivisor</c> (no cap) is the pan speed in units per second.</summary>
+    /// <summary>
+    /// <c>camera speed</c> scaled by <c>boom / ZoomLengthDivisor</c> (no cap) is the pan speed in units per second.
+    /// </summary>
     public static float PanSpeed(float moveSpeed, float boom) => moveSpeed * boom / ZoomLengthDivisor;
 
-    /// <summary>The rotation and tilt keys' input per frame (the mouse's is its movement in pixels times <see cref="DefaultMouseSpeed"/>).</summary>
+    /// <summary>
+    /// The rotation and tilt keys' input per frame (the mouse's is its movement in pixels times <see cref="DefaultMouseSpeed"/>).
+    /// </summary>
     public const float YawKeyInput = 9;
     public const float TiltKeyInput = 2;
-    /// <summary>Settings <c>mouse speed pan</c> / <c>mouse speed tilt</c> (Camera Rotate Speed X / Y): degrees per second per unit of input.</summary>
+    /// <summary>
+    /// Settings <c>mouse speed pan</c> / <c>mouse speed tilt</c> (Camera Rotate Speed X / Y): degrees per second per unit of input.
+    /// </summary>
     public const float DefaultRotateSpeed = 6;
-    /// <summary>Settings <c>mouse speed horizontal</c> / <c>vertical</c>: scale of the raw mouse movement.</summary>
+    /// <summary>
+    /// Settings <c>mouse speed horizontal</c> / <c>vertical</c>: scale of the raw mouse movement.
+    /// </summary>
     public const float DefaultMouseSpeed = 1.5f;
-    /// <summary>The yaw and pitch inputs are averaged over the last <see cref="SmoothingFrames"/> frames with weights 1, a, a², ... (newest first).</summary>
+    /// <summary>
+    /// The yaw and pitch inputs are averaged over the last <see cref="SmoothingFrames"/> frames with weights 1, a, a², ... (newest first).
+    /// </summary>
     public const int SmoothingFrames = 20;
     public const float YawSmoothing = 0.5f;
     public const float PitchSmoothing = 0.7f;
 
-    /// <summary>The pivot's height closes on its ground target at <c>HeightRate</c> times the gap per second (a gap of up to <see cref="HeightSnap"/> is closed at once).</summary>
+    /// <summary>
+    /// The pivot's height closes on its ground target at <c>HeightRate</c> times the gap per second (a gap of up to <see cref="HeightSnap"/> is
+    /// closed at once).
+    /// </summary>
     public const float HeightRate = 10;
     public const float HeightSnap = 0.1f;
 
-    /// <summary>Edge scrolling pans while the pointer is within this fraction of the screen's width or height of an edge.</summary>
+    /// <summary>
+    /// Edge scrolling pans while the pointer is within this fraction of the screen's width or height of an edge.
+    /// </summary>
     public const float EdgeMargin = 0.01f;
 
-    /// <summary>The eye is kept above the ground under it by <c>min(ClearanceBoomFraction · boom, ClearanceCap) + ClearanceBase</c>.</summary>
+    /// <summary>
+    /// The eye is kept above the ground under it by <c>min(ClearanceBoomFraction · boom, ClearanceCap) + ClearanceBase</c>.
+    /// </summary>
     public const float ClearanceBoomFraction = 0.2f;
     public const float ClearanceCap = 20;
     public const float ClearanceBase = 10;
 
-    /// <summary>How far the eye is kept above the ground under it for a boom of <paramref name="boom"/>.</summary>
+    /// <summary>
+    /// How far the eye is kept above the ground under it for a boom of <paramref name="boom"/>.
+    /// </summary>
     public static float EyeClearance(float boom) => MathF.Min(ClearanceBoomFraction * boom, ClearanceCap) + ClearanceBase;
 
-    /// <summary>The boom after one zoom step of <paramref name="input"/> (positive zooms in), clamped to the limits.</summary>
+    /// <summary>
+    /// The boom after one zoom step of <paramref name="input"/> (positive zooms in), clamped to the limits.
+    /// </summary>
     public static float ZoomedDistance(float boom, float zoomSpeed, float input) =>
         Math.Clamp(boom - zoomSpeed * input * MathF.Min(boom / ZoomLengthDivisor, ZoomScaleCap), MinDistance, MaxDistance);
 
-    /// <summary>The highest the camera gets above its pivot: the longest boom at the steepest view (1840).</summary>
+    /// <summary>
+    /// The highest the camera gets above its pivot: the longest boom at the steepest view (1840).
+    /// </summary>
     public const float MaxHeightAbovePivot = MaxDistance * -MinViewY;
 
     /// <summary>
@@ -82,12 +131,18 @@ public static class KenshiCamera
 
     // ------------------------------------------------------------------ the saved camera (docs/formats/camera.md "Saved camera")
 
-    /// <summary>A saved pivot whose x or z is outside ±this is replaced on load (<c>FUN_1407ade60</c>).</summary>
+    /// <summary>
+    /// A saved pivot whose x or z is outside ±this is replaced on load (<c>FUN_1407ade60</c>).
+    /// </summary>
     public const float SavedPivotLimit = 147456;
-    /// <summary>Where the loader puts a pivot that is out of bounds (x, z; the height comes from the ground).</summary>
+    /// <summary>
+    /// Where the loader puts a pivot that is out of bounds (x, z; the height comes from the ground).
+    /// </summary>
     public static readonly System.Numerics.Vector2 SavedPivotFallback = new(500, 51000);
 
-    /// <summary>Whether a saved pivot is inside the bounds the loader accepts.</summary>
+    /// <summary>
+    /// Whether a saved pivot is inside the bounds the loader accepts.
+    /// </summary>
     public static bool SavedPivotInBounds(System.Numerics.Vector3 pivot) =>
         pivot.X >= -SavedPivotLimit && pivot.X <= SavedPivotLimit && pivot.Z >= -SavedPivotLimit && pivot.Z <= SavedPivotLimit;
 
@@ -104,7 +159,9 @@ public static class KenshiCamera
         return (q.X < 0 ? -q : q, -distance);
     }
 
-    /// <summary>The view a CAMERA <c>rot</c> (w, x, y, z) and <c>zoom</c> describe: yaw, pitch and boom as <see cref="ToSaved"/> takes them.</summary>
+    /// <summary>
+    /// The view a CAMERA <c>rot</c> (w, x, y, z) and <c>zoom</c> describe: yaw, pitch and boom as <see cref="ToSaved"/> takes them.
+    /// </summary>
     public static (float Yaw, float Pitch, float Distance) FromSaved(System.Numerics.Vector4 rot, float zoom)
     {
         float w = rot.X, x = rot.Y, y = rot.Z, z = rot.W;

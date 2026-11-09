@@ -12,7 +12,9 @@ sealed class GameLog : TextWriter
 
     readonly FileStream _file;
     readonly StreamWriter _writer;
-    /// <summary>The output and the error both write here, each through its own synchronised writer; the flushing thread too.</summary>
+    /// <summary>
+    /// The output and the error both write here, each through its own synchronised writer; the flushing thread too.
+    /// </summary>
     readonly object _gate = new();
     readonly AutoResetEvent _lineEnded = new(false);
     bool _disposed;
@@ -25,8 +27,8 @@ sealed class GameLog : TextWriter
     }
 
     /// <summary>
-    /// A finished line goes to the disk, not just the OS cache: a hard reset (a GPU driver taking the PC down, #55) keeps it. On a thread of its own, at once: the
-    /// flush took milliseconds a line on the thread that wrote it, and a save's load logs hundreds (a fifth of a second in one frame).
+    /// A finished line goes to the disk, not just the OS cache: a hard reset (a GPU driver taking the PC down, #55) keeps it. On a thread of its own,
+    /// at once: the flush took milliseconds a line on the thread that wrote it, and a save's load logs hundreds (a fifth of a second in one frame).
     /// </summary>
     void FlushToDisk()
     {
@@ -39,15 +41,25 @@ sealed class GameLog : TextWriter
                 if (_disposed) return;
                 handle = _file.SafeFileHandle;   // the writes are already with the OS (AutoFlush): writers need not wait for the disk
             }
-            try { RandomAccess.FlushToDisk(handle); }
-            catch (ObjectDisposedException) { return; }
-            catch (IOException) { }
+            try
+            {
+                RandomAccess.FlushToDisk(handle);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+            catch (IOException)
+            {
+            }
         }
     }
 
     public override Encoding Encoding => _writer.Encoding;
 
-    /// <summary>The log of this run, or null when it cannot be opened (another game has it, or the folder is read-only).</summary>
+    /// <summary>
+    /// The log of this run, or null when it cannot be opened (another game has it, or the folder is read-only).
+    /// </summary>
     public static GameLog? Open()
     {
         try
@@ -58,12 +70,22 @@ sealed class GameLog : TextWriter
             log.WriteLine($"==== {DateTime.Now:yyyy-MM-dd HH:mm:ss} meitou {string.Join(' ', Environment.GetCommandLineArgs().Skip(1))}");
             return log;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     public override void Write(char value) { lock (_gate) { _writer.Write(value); Trim(value == '\n'); } }
     public override void Write(string? value) { lock (_gate) { _writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
-    public override void Write(char[] buffer, int index, int count) { lock (_gate) { _writer.Write(buffer, index, count); Trim(count > 0 && buffer[index + count - 1] == '\n'); } }
+    public override void Write(char[] buffer, int index, int count)
+    {
+        lock (_gate)
+        {
+            _writer.Write(buffer, index, count);
+            Trim(count > 0 && buffer[index + count - 1] == '\n');
+        }
+    }
     public override void WriteLine(string? value) { lock (_gate) { _writer.WriteLine(value); Trim(true); } }
 
     void Trim(bool lineEnd)
@@ -93,7 +115,9 @@ sealed class GameLog : TextWriter
     }
 }
 
-/// <summary>Writes to two writers: the log and the console (or wherever the output was redirected).</summary>
+/// <summary>
+/// Writes to two writers: the log and the console (or wherever the output was redirected).
+/// </summary>
 sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
     public override Encoding Encoding => second.Encoding;

@@ -22,7 +22,9 @@ public sealed partial record CodeModManifest
     /// </summary>
     public CodeModVersionRange? GameVersion { get; init; }
 
-    /// <summary>The keys used that an API 1 game would ignore, so they need <c>apiVersion</c> 2.</summary>
+    /// <summary>
+    /// The keys used that an API 1 game would ignore, so they need <c>apiVersion</c> 2.
+    /// </summary>
     public IEnumerable<string> Api2Keys()
     {
         if (DependsOn.Count > 0) yield return "dependencies";
@@ -31,19 +33,23 @@ public sealed partial record CodeModManifest
         if (GameVersion is not null) yield return "gameVersion";
     }
 
-    /// <summary>Whether this mod or <paramref name="other"/> declares the other incompatible (at its installed version).</summary>
+    /// <summary>
+    /// Whether this mod or <paramref name="other"/> declares the other incompatible (at its installed version).
+    /// </summary>
     public bool ConflictsWith(CodeModManifest other) =>
         Incompatible.Any(c => c.Matches(other)) || other.Incompatible.Any(c => c.Matches(this));
 
     static List<string> ReadLoadAfter(JsonElement root, string id)
     {
         if (!root.TryGetProperty("loadAfter", out var list)) return [];
-        if (list.ValueKind != JsonValueKind.Array) throw new InvalidDataException("loadAfter: a list of mod ids is needed");
+        if (list.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("loadAfter: a list of mod ids is needed");
         var ids = new List<string>();
         foreach (var item in list.EnumerateArray())
         {
             string? other = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
-            if (other is null || !IsValidId(other)) throw new InvalidDataException($"loadAfter: '{item}' is not a mod id");
+            if (other is null || !IsValidId(other))
+                throw new InvalidDataException($"loadAfter: '{item}' is not a mod id");
             if (other == id) throw new InvalidDataException($"loadAfter: the mod lists itself ('{id}')");
             if (!ids.Contains(other)) ids.Add(other);
         }
@@ -70,7 +76,10 @@ public sealed partial record CodeModManifest
         if (value.ValueKind != JsonValueKind.String)
             throw new InvalidDataException("gameVersion: a range string such as \">=0.16.0 <0.17.0\" is needed");
         CodeModVersionRange range;
-        try { range = CodeModVersionRange.Parse(value.GetString()!); }
+        try
+        {
+            range = CodeModVersionRange.Parse(value.GetString()!);
+        }
         catch (InvalidDataException e) { throw new InvalidDataException($"gameVersion: {e.Message}", e); }
         if (range.NamesPrerelease)
             throw new InvalidDataException("gameVersion: name releases only (0.16.1, not 0.16.1-nightly.x); a nightly counts as its release");
@@ -90,7 +99,9 @@ public sealed record CodeModConflict(string Id, CodeModVersionRange? Range = nul
         return new CodeModConflict(parsed.Id, parsed.Range);
     }
 
-    /// <summary>Whether <paramref name="other"/> is this mod at a version the range names (no range: any version, even none).</summary>
+    /// <summary>
+    /// Whether <paramref name="other"/> is this mod at a version the range names (no range: any version, even none).
+    /// </summary>
     public bool Matches(CodeModManifest other) => other.Id == Id && (Range is null || other.Version is { } v && Range.Contains(v));
 
     public override string ToString() => Range is null ? Id : $"{Id} {Range}";

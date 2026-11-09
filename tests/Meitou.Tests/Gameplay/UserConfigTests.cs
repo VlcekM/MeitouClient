@@ -4,8 +4,10 @@ using Meitou.Game.Host;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary><see cref="UserConfig"/> loading (docs/launcher.md "Graphics"): one file shared by every installed version, so a release
-/// must keep what it cannot read aside and what it does not know as it was.</summary>
+/// <summary>
+/// <see cref="UserConfig"/> loading (docs/launcher.md "Graphics"): one file shared by every installed version,
+/// so a release must keep what it cannot read aside and what it does not know as it was.
+/// </summary>
 public class UserConfigTests : IDisposable
 {
     readonly string _dir = Directory.CreateTempSubdirectory("meitou-config").FullName;

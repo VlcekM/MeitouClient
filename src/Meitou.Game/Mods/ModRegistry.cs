@@ -7,7 +7,9 @@ namespace Meitou.Modding;
 
 enum ModCodeKind { DialogueCondition, DialogueEffect, RecordType }
 
-/// <summary>What one mod registered during its <see cref="IMod.Initialize"/>; committed to the <see cref="ModRegistry"/> only when that returns.</summary>
+/// <summary>
+/// What one mod registered during its <see cref="IMod.Initialize"/>; committed to the <see cref="ModRegistry"/> only when that returns.
+/// </summary>
 sealed class ModRegistrations
 {
     public List<SystemFactory> Systems { get; } = [];
@@ -20,7 +22,9 @@ sealed class ModRegistrations
     public ModSettingsGroup? Settings { get; set; }
 }
 
-/// <summary>A mod's host-side view of the resolved combat hits (<see cref="ModContext.AddCombatHitFeed"/>); faulted once it threw.</summary>
+/// <summary>
+/// A mod's host-side view of the resolved combat hits (<see cref="ModContext.AddCombatHitFeed"/>); faulted once it threw.
+/// </summary>
 sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
 {
     public string Owner => owner;
@@ -28,10 +32,14 @@ sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
     public bool Faulted { get; set; }
 }
 
-/// <summary>A system a mod's factory made, for its save data: the mod and the name it was registered under.</summary>
+/// <summary>
+/// A system a mod's factory made, for its save data: the mod and the name it was registered under.
+/// </summary>
 sealed record ModSystemTag(string ModId, string Name);
 
-/// <summary>Every mod's committed registrations, in load order, and which mod made each system of a world.</summary>
+/// <summary>
+/// Every mod's committed registrations, in load order, and which mod made each system of a world.
+/// </summary>
 sealed class ModRegistry
 {
     readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = [];
@@ -44,7 +52,9 @@ sealed class ModRegistry
     public Dictionary<int, string> RecordTypes { get; } = [];
     public List<ModSettingsGroup> Settings { get; } = [];
 
-    /// <summary>Throws when a code is below the mods' range or another mod (or this one) has it already.</summary>
+    /// <summary>
+    /// Throws when a code is below the mods' range or another mod (or this one) has it already.
+    /// </summary>
     public void CheckFree(ModCodeKind kind, int code, ModRegistrations pending, string mod)
     {
         if (code < SimulationExtensions.FirstModCode)
@@ -76,7 +86,9 @@ sealed class ModRegistry
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 
-    /// <summary>The mod and name a world's system was made under; null for a standard system.</summary>
+    /// <summary>
+    /// The mod and name a world's system was made under; null for a standard system.
+    /// </summary>
     public ModSystemTag? TagOf(ITickSystem system) => _made.TryGetValue(system, out var tag) ? tag : null;
 
     void Claim(ModCodeKind kind, int code, string mod, Action add)

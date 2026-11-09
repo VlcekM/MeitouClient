@@ -6,13 +6,19 @@ using Meitou.Content;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>A msgid of an installed gettext template with its source references (file, line), e.g. ("kenshi/statswindow.cpp", 937).</summary>
+/// <summary>
+/// A msgid of an installed gettext template with its source references (file, line), e.g. ("kenshi/statswindow.cpp", 937).
+/// </summary>
 public sealed record PotEntry(IReadOnlyList<(string File, int Line)> References, string Id);
 
-/// <summary>Reads the user's English gettext template; the help catalogs take their structure from its source references, never from embedded game text.</summary>
+/// <summary>
+/// Reads the user's English gettext template; the help catalogs take their structure from its source references, never from embedded game text.
+/// </summary>
 public static class PotTemplate
 {
-    /// <summary>The entries that have a source reference and a msgid; none when <paramref name="path"/> is null or missing.</summary>
+    /// <summary>
+    /// The entries that have a source reference and a msgid; none when <paramref name="path"/> is null or missing.
+    /// </summary>
     public static IReadOnlyList<PotEntry> Read(string? path)
     {
         var result = new List<PotEntry>();

@@ -3,20 +3,29 @@ using NpgsqlTypes;
 
 namespace Meitou.Reports;
 
-/// <summary>One play report: a roadmap row seen working or broken on a build.</summary>
+/// <summary>
+/// One play report: a roadmap row seen working or broken on a build.
+/// </summary>
 sealed record Report(
     long Id, DateTimeOffset At, string Row, string Verdict, string Build, string Platform, bool? Modded,
     string? Note, string Source, string Reporter, bool Trusted, bool HasLog);
 
-/// <summary>Counts for one row since a cutoff: distinct reporters per verdict, and the newest report.</summary>
+/// <summary>
+/// Counts for one row since a cutoff: distinct reporters per verdict, and the newest report.
+/// </summary>
 sealed record RowSummary(string Row, int Works, int Broken, bool TrustedWorks, string LastVerdict, string LastBuild, DateTimeOffset LastAt);
 
-/// <summary>One in-game feedback form: what the player wrote, the game's details, the attachments asked for and uploaded, the issue it became.</summary>
+/// <summary>
+/// One in-game feedback form: what the player wrote, the game's details, the attachments asked for and uploaded, the issue it became.
+/// </summary>
 sealed record FeedbackRow(
     long Id, DateTimeOffset At, string Token, string Title, string? Body, string Version, string? Commit, string Platform, string[] Mods,
-    string[] Wants, long? ScreenshotSize, long? SaveSize, long? LogSize, int? Issue, string? IssueUrl, string? Discord, long? NavmeshSize, string? Location);
+    string[] Wants, long? ScreenshotSize, long? SaveSize, long? LogSize,
+    int? Issue, string? IssueUrl, string? Discord, long? NavmeshSize, string? Location);
 
-/// <summary>The reports and feedback tables in PostgreSQL. Reporters are only ever stored as salted hashes.</summary>
+/// <summary>
+/// The reports and feedback tables in PostgreSQL. Reporters are only ever stored as salted hashes.
+/// </summary>
 sealed class Store(NpgsqlDataSource db)
 {
     public async Task Migrate()
@@ -84,7 +93,9 @@ sealed class Store(NpgsqlDataSource db)
         return (long)(await cmd.ExecuteScalarAsync())!;
     }
 
-    /// <summary>How many reports <paramref name="reporter"/> made since <paramref name="since"/> (a per-person limit on top of the per-IP one).</summary>
+    /// <summary>
+    /// How many reports <paramref name="reporter"/> made since <paramref name="since"/> (a per-person limit on top of the per-IP one).
+    /// </summary>
     public async Task<int> CountBy(string reporter, DateTimeOffset since)
     {
         await using var cmd = db.CreateCommand("select count(*) from reports where reporter = $1 and at >= $2");
@@ -93,7 +104,9 @@ sealed class Store(NpgsqlDataSource db)
         return (int)(long)(await cmd.ExecuteScalarAsync())!;
     }
 
-    /// <summary>The counts per row over the reports <paramref name="w"/> lets count (a Broken one dated by its build's release, else its own time).</summary>
+    /// <summary>
+    /// The counts per row over the reports <paramref name="w"/> lets count (a Broken one dated by its build's release, else its own time).
+    /// </summary>
     public async Task<List<RowSummary>> Summary(Window w)
     {
         await using var cmd = db.CreateCommand("""
@@ -117,7 +130,8 @@ sealed class Store(NpgsqlDataSource db)
         var list = new List<RowSummary>();
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
-            list.Add(new(r.GetString(0), (int)r.GetInt64(1), (int)r.GetInt64(2), r.GetBoolean(3), r.GetString(4), r.GetString(5), r.GetFieldValue<DateTimeOffset>(6)));
+            list.Add(new(r.GetString(0), (int)r.GetInt64(1), (int)r.GetInt64(2), r.GetBoolean(3), r.GetString(4), r.GetString(5),
+                    r.GetFieldValue<DateTimeOffset>(6)));
         return list;
     }
 
@@ -134,7 +148,8 @@ sealed class Store(NpgsqlDataSource db)
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
             list.Add(new(r.GetInt64(0), r.GetFieldValue<DateTimeOffset>(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5),
-                r.IsDBNull(6) ? null : r.GetBoolean(6), r.IsDBNull(7) ? null : r.GetString(7), r.GetString(8), r.GetString(9), r.GetBoolean(10), r.GetBoolean(11)));
+                r.IsDBNull(6) ? null : r.GetBoolean(6), r.IsDBNull(7) ? null
+                        : r.GetString(7), r.GetString(8), r.GetString(9), r.GetBoolean(10), r.GetBoolean(11)));
         return list;
     }
 
@@ -173,7 +188,9 @@ sealed class Store(NpgsqlDataSource db)
         await cmd.ExecuteNonQueryAsync();
     }
 
-    /// <summary>How many feedback forms <paramref name="reporter"/> started since <paramref name="since"/>, sent or not.</summary>
+    /// <summary>
+    /// How many feedback forms <paramref name="reporter"/> started since <paramref name="since"/>, sent or not.
+    /// </summary>
     public async Task<int> FeedbackCountBy(string reporter, DateTimeOffset since)
     {
         await using var cmd = db.CreateCommand("select count(*) from feedback where reporter = $1 and at >= $2");
@@ -194,14 +211,18 @@ sealed class Store(NpgsqlDataSource db)
         long? Size(int i) => r.IsDBNull(i) ? null : r.GetInt64(i);
         return new(r.GetInt64(0), r.GetFieldValue<DateTimeOffset>(1), token, r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3), r.GetString(4),
             r.IsDBNull(5) ? null : r.GetString(5), r.GetString(6), r.GetFieldValue<string[]>(7), r.GetFieldValue<string[]>(8),
-            Size(9), Size(10), Size(11), r.IsDBNull(12) ? null : r.GetInt32(12), r.IsDBNull(13) ? null : r.GetString(13), r.IsDBNull(14) ? null : r.GetString(14),
+            Size(9), Size(10), Size(11), r.IsDBNull(12) ? null : r.GetInt32(12), r.IsDBNull(13) ? null : r.GetString(13), r.IsDBNull(14) ? null
+                    : r.GetString(14),
             Size(15), r.IsDBNull(16) ? null : r.GetString(16));
     }
 
-    /// <summary>Records an attachment's size (<paramref name="kind"/> is one of <see cref="Feedback.Kinds"/>).</summary>
+    /// <summary>
+    /// Records an attachment's size (<paramref name="kind"/> is one of <see cref="Feedback.Kinds"/>).
+    /// </summary>
     public async Task SetFeedbackUpload(string token, string kind, long size)
     {
-        string column = kind switch { "screenshot" => "screenshot_size", "navmesh" => "navmesh_size", "save" => "save_size", "log" => "log_size", _ => throw new ArgumentException(kind) };
+        string column = kind switch { "screenshot" => "screenshot_size", "navmesh" => "navmesh_size", "save" => "save_size", "log" => "log_size",
+                _ => throw new ArgumentException(kind) };
         await using var cmd = db.CreateCommand($"update feedback set {column} = $2 where token = $1");
         cmd.Parameters.Add(new() { Value = token });
         cmd.Parameters.Add(new() { Value = size });
@@ -217,7 +238,9 @@ sealed class Store(NpgsqlDataSource db)
         await cmd.ExecuteNonQueryAsync();
     }
 
-    /// <summary>Removes the forms started before <paramref name="before"/> and never sent; returns their tokens (whose files go too).</summary>
+    /// <summary>
+    /// Removes the forms started before <paramref name="before"/> and never sent; returns their tokens (whose files go too).
+    /// </summary>
     public async Task<List<string>> DeleteFeedbackDrafts(DateTimeOffset before)
     {
         await using var cmd = db.CreateCommand("delete from feedback where issue is null and at < $1 returning token");

@@ -1,13 +1,17 @@
 namespace Meitou.Data.Ui;
 
-/// <summary>How a tutorial page moves on by itself (docs/game/ui-screens.md "Tutorials", advance tests); <see cref="None"/> waits for the player's button.</summary>
+/// <summary>
+/// How a tutorial page moves on by itself (docs/game/ui-screens.md "Tutorials", advance tests); <see cref="None"/> waits for the player's button.
+/// </summary>
 public enum TutorialAdvance
 {
     None, CameraControls, CharSelection, CharMovement, CenterChar, SelectCharacter, Map, Signs, Medkiting, RecruitSelect, RecruitStats, SquadArrange,
     SelectUnconscious, Lockpicking, LockpickingSuccessful, CraftButton, CraftTab, ProductionSelection, ConstructionMaterials,
 }
 
-/// <summary>What a page highlights (<c>TutorialGUI::HighlightItem</c>, KenshiLib 1ce4a16; the numbers are the exe's).</summary>
+/// <summary>
+/// What a page highlights (<c>TutorialGUI::HighlightItem</c>, KenshiLib 1ce4a16; the numbers are the exe's).
+/// </summary>
 public enum TutorialHighlight
 {
     None, Portraits, PanelStats, PanelStatsBottom, PanelStatsBottomPowerButton, PanelStatsBottomWorkers, PanelMedical, PanelMedicalStatus, PanelMedicalBarBody,
@@ -85,12 +89,18 @@ public sealed class TutorialCatalog
 
     readonly Dictionary<int, string> _texts = [];
 
-    /// <summary>The English msgid at a source line ("" when the template lacks it).</summary>
+    /// <summary>
+    /// The English msgid at a source line ("" when the template lacks it).
+    /// </summary>
     public string EnglishAt(int line) => _texts.GetValueOrDefault(line, "");
-    /// <summary>The text at a source line in the active language.</summary>
+    /// <summary>
+    /// The text at a source line in the active language.
+    /// </summary>
     public string TextAt(int line) => Loc.Tr(EnglishAt(line));
     public string Title(int id) => TextAt(Items[id].Title);
-    /// <summary>The template had the tutorials' texts.</summary>
+    /// <summary>
+    /// The template had the tutorials' texts.
+    /// </summary>
     public bool HasTexts => _texts.Count > 0;
 
     public static TutorialCatalog From(IEnumerable<PotEntry> entries)

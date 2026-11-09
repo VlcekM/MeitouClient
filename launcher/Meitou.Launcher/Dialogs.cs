@@ -11,9 +11,12 @@ public sealed partial class MainWindow
     Point? _pointer;   // the last pointer position over the window, in window coordinates
 
     void TrackPointer() =>
-        AddHandler(PointerMovedEvent, (_, e) => _pointer = e.GetPosition(this), Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerMovedEvent, (_, e) => _pointer = e.GetPosition(this), Avalonia.Interactivity.RoutingStrategies.Tunnel,
+                handledEventsToo: true);
 
-    /// <summary>Asks; true for <paramref name="yes"/>. No, Escape and closing the question answer false.</summary>
+    /// <summary>
+    /// Asks; true for <paramref name="yes"/>. No, Escape and closing the question answer false.
+    /// </summary>
     Task<bool> AskAsync(string title, string text, string yes, string no) =>
         ChooseAsync(title, [Wrapped(text)], [(no, false), (yes, true)], cancel: false);
 

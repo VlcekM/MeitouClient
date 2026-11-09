@@ -1,6 +1,8 @@
 namespace Meitou.Game.Host.Input;
 
-/// <summary>Keyboard keys as the engine names them (the host maps its windowing library's keys to these).</summary>
+/// <summary>
+/// Keyboard keys as the engine names them (the host maps its windowing library's keys to these).
+/// </summary>
 public enum Key
 {
     A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
@@ -12,15 +14,23 @@ public enum Key
     LeftShift, RightShift, LeftControl, RightControl, LeftAlt, RightAlt,
     Semicolon, Comma, Period, Minus, Equal, Slash, Backslash, Grave,
     LeftBracket, RightBracket, Apostrophe,
-    /// <summary>Print Screen (SYSRQ in Kenshi's key names).</summary>
+    /// <summary>
+    /// Print Screen (SYSRQ in Kenshi's key names).
+    /// </summary>
     PrintScreen,
-    /// <summary>The numeric keypad's digits (NUM0..NUM9 in Kenshi's key names: the orders hotkeys, docs/game/ui-input.md section 4).</summary>
+    /// <summary>
+    /// The numeric keypad's digits (NUM0..NUM9 in Kenshi's key names: the orders hotkeys, docs/game/ui-input.md section 4).
+    /// </summary>
     Keypad0, Keypad1, Keypad2, Keypad3, Keypad4, Keypad5, Keypad6, Keypad7, Keypad8, Keypad9,
-    /// <summary>The numeric keypad's + and - (NUM+ / NUM-, the build map's second keys for tilt, docs/game/ui-input.md section 4).</summary>
+    /// <summary>
+    /// The numeric keypad's + and - (NUM+ / NUM-, the build map's second keys for tilt, docs/game/ui-input.md section 4).
+    /// </summary>
     KeypadAdd, KeypadSubtract,
 }
 
-/// <summary>Mouse buttons.</summary>
+/// <summary>
+/// Mouse buttons.
+/// </summary>
 public enum MouseButton
 {
     Left,
@@ -30,7 +40,9 @@ public enum MouseButton
     Button5,
 }
 
-/// <summary>One key or one mouse button an action can be bound to.</summary>
+/// <summary>
+/// One key or one mouse button an action can be bound to.
+/// </summary>
 public readonly record struct Binding
 {
     readonly int _code; // < 0: mouse button (-1 - button), >= 0: key
@@ -46,7 +58,9 @@ public readonly record struct Binding
     public Key Key => IsMouse ? throw new InvalidOperationException("A mouse binding") : (Key)_code;
     public MouseButton Button => IsMouse ? (MouseButton)(-1 - _code) : throw new InvalidOperationException("A key binding");
 
-    /// <summary>"W", or "Mouse:Right" for a button (the form <see cref="InputBindings"/> reads from a config).</summary>
+    /// <summary>
+    /// "W", or "Mouse:Right" for a button (the form <see cref="InputBindings"/> reads from a config).
+    /// </summary>
     public override string ToString() => IsMouse ? "Mouse:" + Button : Key.ToString();
 
     public static bool TryParse(string text, out Binding binding)

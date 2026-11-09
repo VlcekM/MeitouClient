@@ -6,11 +6,12 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The factions' WAR_SAVESTATEs (docs/formats/save.md "WAR_SAVESTATE (type 9)") to and from the war managers (<see cref="PopulationSystem.Wars"/>), with the original's keys.
-/// Keys Meitou does not know are kept (the capture writes into the loaded save's records). The original saves no phase timer (its phases start again at load); Meitou writes
-/// its own floats <c>meitou phase start c&lt;i&gt;</c>, <c>meitou fight start c&lt;i&gt;</c>, <c>meitou arrived c&lt;i&gt;</c>, <c>meitou announced c&lt;i&gt;</c> and
-/// <c>meitou carry start p&lt;i&gt;</c> (on the campaign platoon <c>p&lt;i&gt;</c>; absolute game hours, as <c>updatetime</c>; absent: not started) and reads them back, so a loaded campaign goes
-/// on where it was. Older saves' <c>meitou carry start c&lt;i&gt;</c> (one stamp per campaign) is read onto each of its platoons and dropped on the next write.
+/// The factions' WAR_SAVESTATEs (docs/formats/save.md "WAR_SAVESTATE (type 9)") to and from the war managers (<see cref="PopulationSystem.Wars"/>),
+/// with the original's keys. Keys Meitou does not know are kept (the capture writes into the loaded save's records). The original saves no phase
+/// timer (its phases start again at load); Meitou writes its own floats <c>meitou phase start c&lt;i&gt;</c>, <c>meitou fight start c&lt;i&gt;</c>,
+/// <c>meitou arrived c&lt;i&gt;</c>, <c>meitou announced c&lt;i&gt;</c> and <c>meitou carry start p&lt;i&gt;</c> (on the campaign platoon
+/// <c>p&lt;i&gt;</c>; absolute game hours, as <c>updatetime</c>; absent: not started) and reads them back, so a loaded campaign goes on where it was.
+/// Older saves' <c>meitou carry start c&lt;i&gt;</c> (one stamp per campaign) is read onto each of its platoons and dropped on the next write.
 /// </summary>
 internal static class WarSave
 {
@@ -20,44 +21,54 @@ internal static class WarSave
     static readonly string[] HandParts = ["TYPE", "C", "CS", "I", "S"];
 
     /// <summary>
-    /// The platoon handles (container and serial) the states' <c>p&lt;i&gt;</c> name, of type 1 or 34 (the reader takes no other), each with the <c>home c&lt;j&gt;</c> town handle of
-    /// the running campaign its <c>forces&lt;i&gt;</c> names (<see cref="Hand.Null"/> when none does).
+    /// The platoon handles (container and serial) the states' <c>p&lt;i&gt;</c> name, of type 1 or 34 (the reader takes no other), each with the
+    /// <c>home c&lt;j&gt;</c> town handle of the running campaign its <c>forces&lt;i&gt;</c> names (<see cref="Hand.Null"/> when none does).
     /// </summary>
     public static Dictionary<(int C, int CS), Hand> PlatoonHomes(IEnumerable<FcsRecord> wars)
     {
         var homes = new Dictionary<(int, int), Hand>();
+
         foreach (var war in wars)
         {
             var byId = new Dictionary<int, Hand>();
             for (int j = 0, n = war.Ints.GetValueOrDefault("num actives"); j < n; j++)
                 byId.TryAdd(war.Ints.GetValueOrDefault($"id c{j}"), Hand.Read(war, $"home c{j}"));
+
             for (int i = 0, n = war.Ints.GetValueOrDefault("num plats"); i < n; i++)
+            {
                 if (Hand.Read(war, $"p{i}") is { Type: 1 or (int)FcsRecordType.Platoon } h)
                     homes.TryAdd((h.C, h.Cs), byId.GetValueOrDefault(war.Ints.GetValueOrDefault($"forces{i}"), Hand.Null));
+            }
         }
+
         return homes;
     }
 
     /// <summary>
-    /// Reads each faction's state into its manager (<c>FUN_1409c9dc0</c>'s rules): <c>updatetime</c> when present, <c>fwc id</c> raised past every running id; a running campaign whose
-    /// <c>dat c</c> does not resolve is skipped (an unknown one joins the faction's list), one in phase 1 with no <c>pt2</c> ends; a request whose campaign or enemy does not resolve is
-    /// skipped; <c>poss time</c> sets the known campaigns' last starts; <c>p&lt;i&gt;</c> joins its platoon to the campaign <c>forces&lt;i&gt;</c> names.
+    /// Reads each faction's state into its manager (<c>FUN_1409c9dc0</c>'s rules): <c>updatetime</c> when present, <c>fwc id</c> raised past every
+    /// running id; a running campaign whose <c>dat c</c> does not resolve is skipped (an unknown one joins the faction's list), one in phase 1 with
+    /// no <c>pt2</c> ends; a request whose campaign or enemy does not resolve is skipped; <c>poss time</c> sets the known campaigns' last starts;
+    /// <c>p&lt;i&gt;</c> joins its platoon to the campaign <c>forces&lt;i&gt;</c> names.
     /// </summary>
     public static void Read(World world, PopulationSystem population, SavedPopulation saved)
     {
         var data = population.Data;
         double now = world.GameHours;
+
         foreach (var (factionId, war) in saved.Wars)
         {
             if (population.WarOf(data.FactionIndex(factionId)) is not { } m) continue;
             if (war.Floats.TryGetValue("updatetime", out float update)) m.UpdateTime = update;
+
             m.NextId = war.Ints.GetValueOrDefault("fwc id");
             var leaders = new Dictionary<CampaignInstance, int>();
             var legacyCarry = new Dictionary<CampaignInstance, double>();   // saves before the stamp was per platoon: every platoon starts there, and those carrying nobody drop it
+
             for (int i = 0, n = war.Ints.GetValueOrDefault("num actives"); i < n; i++)
             {
                 string id = war.Strings.GetValueOrDefault($"dat c{i}", "");
                 if (population.CampaignOf(id) is not { } c) continue;
+
                 string enemy = war.Strings.GetValueOrDefault($"enemy c{i}", "");
                 var inst = new CampaignInstance
                 {
@@ -79,15 +90,18 @@ internal static class WarSave
                 if (Hour(war, CarryStartKey + i) is double carry) legacyCarry[inst] = carry;
                 if (inst.Phase == 1 && !c.HasPt2) inst.Phase = 2;
                 if (Platoon(saved, Hand.Read(war, $"leader c{i}")) is int leader) leaders[inst] = leader;
+
                 m.Know(id);
                 m.Actives.Add(inst);
                 m.NextId = Math.Max(m.NextId, inst.Id + 1);
             }
+
             for (int i = 0, n = war.Ints.GetValueOrDefault("num requests"); i < n; i++)
             {
                 string id = war.Strings.GetValueOrDefault($"req sid{i}", "");
                 int enemy = data.FactionIndex(war.Strings.GetValueOrDefault($"req enemysid{i}", ""));
                 if (population.CampaignOf(id) is null || enemy < 0) continue;
+
                 m.Requests.Add(new CampaignRequest
                 {
                     CampaignId = id,
@@ -97,14 +111,26 @@ internal static class WarSave
                     Home = Town(world, saved, Hand.Read(war, $"req home{i}")),
                 });
             }
+
             for (int i = 0, n = war.Ints.GetValueOrDefault("num poss"); i < n; i++)
-                if (m.Known.FirstOrDefault(k => k.Id == war.Strings.GetValueOrDefault($"poss sid{i}", "")) is { } known) known.LastStart = war.Floats.GetValueOrDefault($"poss time{i}");
+            {
+                if (m.Known.FirstOrDefault(k => k.Id == war.Strings.GetValueOrDefault($"poss sid{i}", "")) is { } known)
+                    known.LastStart = war.Floats.GetValueOrDefault($"poss time{i}");
+            }
+
             for (int i = 0, n = war.Ints.GetValueOrDefault("num plats"); i < n; i++)
             {
                 var h = Hand.Read(war, $"p{i}");
-                if (h.Type is not (1 or (int)FcsRecordType.Platoon) || Platoon(saved, h) is not int pid || world.Platoons.Find(pid) is not { } p || p.Campaign is not null) continue;
+
+                if (h.Type is not (1 or (int)FcsRecordType.Platoon) || Platoon(saved, h) is not int pid || world.Platoons.Find(pid) is not { } p
+                    || p.Campaign is not null)
+                {
+                    continue;
+                }
+
                 int forces = war.Ints.GetValueOrDefault($"forces{i}");
                 if (m.Actives.FirstOrDefault(a => a.Id == forces) is not { } inst) continue;
+
                 p.Campaign = inst;
                 inst.Platoons.Add(p.Id);
                 inst.Men += population.LivingOf(world, p);
@@ -112,6 +138,7 @@ internal static class WarSave
                 if (carry is null && legacyCarry.TryGetValue(inst, out double legacy)) carry = legacy;
                 if (carry is { } stamp) inst.CarryStarts[p.Id] = stamp;
             }
+
             foreach (var inst in m.Actives)
                 inst.Leader = leaders.TryGetValue(inst, out int l) && inst.Platoons.Contains(l) ? l : inst.Platoons.Count > 0 ? inst.Platoons[0] : -1;
         }
@@ -133,37 +160,45 @@ internal static class WarSave
         if (saved.TownSites.TryGetValue((h.C, h.Cs), out int site)) return CampaignTown.OfSite(site);
         foreach (var town in world.Buildings.Towns)
             if (town.SaveHandle is { } t && t.C == h.C && t.Cs == h.Cs) return CampaignTown.OfPlayer(town.Number);
+
         return CampaignTown.None;
     }
 
     /// <summary>
-    /// Writes each faction's manager into its WAR_SAVESTATE: <c>faction</c>, <c>fwc id</c>, <c>updatetime</c>, the running campaigns, the requests, every known campaign with its last
-    /// start and the campaign platoons (<paramref name="platoons"/>: the PLATOON handle each world platoon was written with; <paramref name="outposts"/>: each player town's). Numbered
-    /// keys past the new counts are removed.
+    /// Writes each faction's manager into its WAR_SAVESTATE: <c>faction</c>, <c>fwc id</c>, <c>updatetime</c>, the running campaigns, the requests,
+    /// every known campaign with its last start and the campaign platoons (<paramref name="platoons"/>: the PLATOON handle each world platoon was
+    /// written with; <paramref name="outposts"/>: each player town's). Numbered keys past the new counts are removed.
     /// </summary>
-    public static void Write(SaveGame game, World world, PopulationData data, PopulationSystem population, IReadOnlyDictionary<int, Hand> platoons, IReadOnlyDictionary<int, Hand> outposts)
+    public static void Write(SaveGame game, World world, PopulationData data, PopulationSystem population, IReadOnlyDictionary<int, Hand> platoons,
+        IReadOnlyDictionary<int, Hand> outposts)
     {
         population.EnsureWars(world);
         var townHands = new Dictionary<string, Hand>(StringComparer.Ordinal);
         foreach (var t in game.Towns)
             if (!t.IsNest && t.Instance.Length > 0 && !t.Handle.IsNull) townHands.TryAdd(t.Instance, t.Handle);
+
         Hand TownHand(CampaignTown t)
         {
             if (t.Site >= 0) return townHands.GetValueOrDefault(data.Sites[t.Site].InstanceId, Hand.Null);
+
             return outposts.GetValueOrDefault(t.PlayerTown, Hand.Null);
         }
+
         Hand PlatoonHand(int id) => id >= 0 && platoons.TryGetValue(id, out var h) ? h : Hand.Null;
+
         string FactionId(int f) => f >= 0 && f < data.Factions.Count ? data.Factions[f].Id : "";
 
         foreach (var f in game.Factions)
         {
             if (f.War is not { } war || population.WarOf(data.FactionIndex(f.Id)) is not { } m) continue;
+
             war.Strings["faction"] = f.Id;
             war.Ints["fwc id"] = m.NextId;
             war.Floats["updatetime"] = (float)m.UpdateTime;
 
             int old = war.Ints.GetValueOrDefault("num actives");
             war.Ints["num actives"] = m.Actives.Count;
+
             for (int i = 0; i < m.Actives.Count; i++)
             {
                 var a = m.Actives[i];
@@ -182,10 +217,12 @@ internal static class WarSave
                 Hour(war, AnnouncedKey + i, a.AnnouncedAt);
                 war.Floats.Remove(CarryStartKey + i);   // the campaign-wide stamp older saves wrote: now one per platoon
             }
+
             for (int i = m.Actives.Count; i < old; i++) Remove(war, i, ActiveStrings, ActiveInts, ActiveBools, ActiveHands, Timers);
 
             old = war.Ints.GetValueOrDefault("num requests");
             war.Ints["num requests"] = m.Requests.Count;
+
             for (int i = 0; i < m.Requests.Count; i++)
             {
                 var r = m.Requests[i];
@@ -195,28 +232,36 @@ internal static class WarSave
                 TownHand(r.Target).Write(war, $"req targ{i}");
                 TownHand(r.Home).Write(war, $"req home{i}");
             }
+
             for (int i = m.Requests.Count; i < old; i++) Remove(war, i, ["req sid", "req enemysid"], [], [], ["req targ", "req home"], ["req time"]);
 
             old = war.Ints.GetValueOrDefault("num poss");
             war.Ints["num poss"] = m.Known.Count;
+
             for (int i = 0; i < m.Known.Count; i++)
             {
                 war.Strings[$"poss sid{i}"] = m.Known[i].Id;
                 war.Floats[$"poss time{i}"] = (float)m.Known[i].LastStart;
             }
+
             for (int i = m.Known.Count; i < old; i++) Remove(war, i, ["poss sid"], [], [], [], ["poss time"]);
 
             old = war.Ints.GetValueOrDefault("num plats");
             int k = 0;
+
             foreach (var a in m.Actives)
+            {
                 foreach (int id in a.Platoons)
                 {
                     if (PlatoonHand(id) is not { IsNull: false } h) continue;
+
                     h.Write(war, $"p{k}");
                     war.Ints[$"forces{k}"] = a.Id;
                     Hour(war, CarryPlatoonKey + k, a.CarryStarts.GetValueOrDefault(id, -1));
                     k++;
                 }
+            }
+
             war.Ints["num plats"] = k;
             for (int i = k; i < old; i++) Remove(war, i, [], ["forces"], [], ["p"], [CarryPlatoonKey]);
         }

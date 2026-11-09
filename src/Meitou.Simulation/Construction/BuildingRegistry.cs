@@ -7,7 +7,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Construction;
 
-/// <summary>A material entry of a site: the ITEM record, the amount needed and the amount handed over so far (whole units).</summary>
+/// <summary>
+/// A material entry of a site: the ITEM record, the amount needed and the amount handed over so far (whole units).
+/// </summary>
 public sealed class MaterialSlot(string item, float required)
 {
     public string Item { get; } = item;
@@ -16,56 +18,91 @@ public sealed class MaterialSlot(string item, float required)
 }
 
 /// <summary>
-/// A player-built building, owned town-house repair or construction site (docs/simulation.md "Buildings"; the state is the original's Building+0x160 block, docs/game/buildings-production.md
-/// "Construction state"). Serial phases only. <see cref="Progress"/> and <see cref="Target"/> are in material units.
+/// A player-built building, owned town-house repair or construction site (docs/simulation.md "Buildings"; the state is the original's Building+0x160
+/// block, docs/game/buildings-production.md "Construction state"). Serial phases only. <see cref="Progress"/> and <see cref="Target"/> are in
+/// material units.
 /// </summary>
 public sealed class BuildSite
 {
     public required string Id { get; init; }
-    /// <summary>Existing town placement, replaced in place during repairs; never a new save instance.</summary>
+    /// <summary>
+    /// Existing town placement, replaced in place during repairs; never a new save instance.
+    /// </summary>
     public BuildingPlacement? LevelPlacement { get; init; }
     public string? LevelTownName { get; init; }
-    /// <summary>The BUILDING record; an upgrade or downgrade swaps it in place (<see cref="ConstructionSystem"/> "Upgrades").</summary>
+    /// <summary>
+    /// The BUILDING record; an upgrade or downgrade swaps it in place (<see cref="ConstructionSystem"/> "Upgrades").
+    /// </summary>
     public required string Record { get; set; }
-    /// <summary>The BUILDING's name (messages only; not hashed).</summary>
+    /// <summary>
+    /// The BUILDING's name (messages only; not hashed).
+    /// </summary>
     public string Name { get; set; } = "";
     public Vector3 Position { get; init; }
     public Quaternion Rotation { get; init; } = Quaternion.Identity;
     public int Floor { get; init; }
-    /// <summary>The instance id of the building this one stands in (null outdoors).</summary>
+    /// <summary>
+    /// The instance id of the building this one stands in (null outdoors).
+    /// </summary>
     public string? Parent { get; set; }
     /// <summary>
-    /// The id of the wall this short piece, connector or wedge is attached to (the original's WallBuilding+0x368): work, deliveries and orders go to that wall and its progress sets this
-    /// one's (<see cref="ConstructionSystem.AttachWalls"/>). Rebuilt when placed or loaded; not saved, not hashed.
+    /// The id of the wall this short piece, connector or wedge is attached to (the original's WallBuilding+0x368): work, deliveries and orders go to
+    /// that wall and its progress sets this one's (<see cref="ConstructionSystem.AttachWalls"/>). Rebuilt when placed or loaded; not saved, not
+    /// hashed.
     /// </summary>
     public string? WallParent { get; set; }
-    /// <summary>The <see cref="PlayerTown.Number"/> of the player town it belongs to (the save's <c>town</c> handle); 0 for none.</summary>
+    /// <summary>
+    /// The <see cref="PlayerTown.Number"/> of the player town it belongs to (the save's <c>town</c> handle); 0 for none.
+    /// </summary>
     public int Town { get; set; }
-    /// <summary>The owning faction, a position in the world's faction list.</summary>
+    /// <summary>
+    /// The owning faction, a position in the world's faction list.
+    /// </summary>
     public int Owner { get; set; }
     public required MaterialSlot[] Materials { get; set; }
     public float Progress { get; set; }
     public float Target { get; set; }
-    /// <summary>Progress per game second of one unit of build work: <c>build speed mult</c> / (1200/11).</summary>
+    /// <summary>
+    /// Progress per game second of one unit of build work: <c>build speed mult</c> / (1200/11).
+    /// </summary>
     public float Rate { get; set; }
     public bool Complete { get; set; }
     public bool Paused { get; set; }
-    /// <summary>Open to the public (the original's Building+0xc8, saved as <c>is public day</c>; the stats panel's toggle).</summary>
+    /// <summary>
+    /// Open to the public (the original's Building+0xc8, saved as <c>is public day</c>; the stats panel's toggle).
+    /// </summary>
     public bool Public { get; set; } = true;
-    /// <summary>Being built up to a new record by an upgrade or downgrade: its doors stay meanwhile (the original keeps the door objects). Engine state, not saved; hashed while set.</summary>
+    /// <summary>
+    /// Being built up to a new record by an upgrade or downgrade: its doors stay meanwhile (the original keeps the door objects). Engine state, not
+    /// saved; hashed while set.
+    /// </summary>
     public bool Upgrading { get; set; }
-    /// <summary>The save's <c>destroyed</c> flag; the first tick on a player-built site, or explicit Repair on a town house, turns it back into a half-built site (<see cref="ConstructionSystem"/>).</summary>
+    /// <summary>
+    /// The save's <c>destroyed</c> flag; the first tick on a player-built site, or explicit Repair on a town house, turns it back into a half-built
+    /// site (<see cref="ConstructionSystem"/>).
+    /// </summary>
     public bool Destroyed { get; set; }
-    /// <summary>The destroyed flag has been acted on (the building is a ruin being rebuilt).</summary>
+    /// <summary>
+    /// The destroyed flag has been acted on (the building is a ruin being rebuilt).
+    /// </summary>
     public bool Ruined { get; set; }
-    /// <summary>Builders that have applied work to this site this tick (the 0.75 falloff counter, reset each tick); not saved.</summary>
+    /// <summary>
+    /// Builders that have applied work to this site this tick (the 0.75 falloff counter, reset each tick); not saved.
+    /// </summary>
     public int BuilderCounter { get; set; }
-    /// <summary>A builder has taken it apart this tick (derived; the snapshot's flag).</summary>
+    /// <summary>
+    /// A builder has taken it apart this tick (derived; the snapshot's flag).
+    /// </summary>
     public bool Dismantling { get; set; }
-    /// <summary>The zone the site stands in (its id and save file).</summary>
+    /// <summary>
+    /// The zone the site stands in (its id and save file).
+    /// </summary>
     public ZoneCoordinate Zone => WorldLayout.ZoneOf(Position.X, Position.Z);
 
-    /// <summary>The materials are all delivered and built: <c>sum(min(delivered, required))</c>, what progress may reach (<b>Verified</b>, <c>FUN_14054a3f0</c>).</summary>
+    /// <summary>
+    /// The materials are all delivered and built: <c>sum(min(delivered, required))</c>, what progress may reach (<b>Verified</b>,
+    /// <c>FUN_14054a3f0</c>).
+    /// </summary>
     public float Deliverable
     {
         get
@@ -76,9 +113,15 @@ public sealed class BuildSite
         }
     }
 
-    /// <summary>A site that is not complete and has built all it was given: the builder waits for more materials (<c>sum(min(delivered, required)) &lt;= progress</c>).</summary>
+    /// <summary>
+    /// A site that is not complete and has built all it was given: the builder waits for more materials (<c>sum(min(delivered, required)) &lt;=
+    /// progress</c>).
+    /// </summary>
     public bool Stalled => !Complete && Deliverable <= Progress;
-    /// <summary>Unfinished, or complete with progress below the target (damaged: Building slot 101 <c>FUN_1400f6b70</c>, <b>Verified</b>); building work (orders 2 and 95) applies.</summary>
+    /// <summary>
+    /// Unfinished, or complete with progress below the target (damaged: Building slot 101 <c>FUN_1400f6b70</c>, <b>Verified</b>); building work
+    /// (orders 2 and 95) applies.
+    /// </summary>
     public bool NeedsWork => Destroyed || !Complete || Progress < Target;
 
     internal void Hash(ref StateHasher h)
@@ -111,35 +154,55 @@ public sealed class BuildSite
 }
 
 /// <summary>
-/// A town the player's buildings made: the original's TOWN <c>player_town_template</c> ("Your Outpost"), owned by the player faction (docs/game/buildings-production.md "Placement",
-/// docs/simulation.md "Buildings"). Serial phases only.
+/// A town the player's buildings made: the original's TOWN <c>player_town_template</c> ("Your Outpost"), owned by the player faction
+/// (docs/game/buildings-production.md "Placement", docs/simulation.md "Buildings"). Serial phases only.
 /// </summary>
 public sealed class PlayerTown
 {
-    /// <summary>The TOWN record every outpost is made from (<b>Verified</b>, <c>FUN_140934e10</c>).</summary>
+    /// <summary>
+    /// The TOWN record every outpost is made from (<b>Verified</b>, <c>FUN_140934e10</c>).
+    /// </summary>
     public const string Template = "player_town_template";
-    /// <summary>The name a new outpost gets (<b>Verified</b>).</summary>
+    /// <summary>
+    /// The name a new outpost gets (<b>Verified</b>).
+    /// </summary>
     public const string DefaultName = "Your Outpost";
 
-    /// <summary>1, 2, ... in creation (or load) order: what <see cref="BuildSite.Town"/> holds.</summary>
+    /// <summary>
+    /// 1, 2, ... in creation (or load) order: what <see cref="BuildSite.Town"/> holds.
+    /// </summary>
     public required int Number { get; init; }
     public string Name { get; set; } = DefaultName;
-    /// <summary>The centre: where it was made, then the mean of its buildings (<see cref="ConstructionSystem.ReassessTown"/>).</summary>
+    /// <summary>
+    /// The centre: where it was made, then the mean of its buildings (<see cref="ConstructionSystem.ReassessTown"/>).
+    /// </summary>
     public Vector3 Position { get; set; }
-    /// <summary>The reassessed radius (the original's Town +0x51c); 0 until reassessed.</summary>
+    /// <summary>
+    /// The reassessed radius (the original's Town +0x51c); 0 until reassessed.
+    /// </summary>
     public float Override { get; set; }
-    /// <summary>Its radius (<c>Town::getRadius</c> of a player town, <b>Verified</b>, <c>FUN_140926eb0</c>): <see cref="Override"/>, or 2500 while that is at most 1.</summary>
+    /// <summary>
+    /// Its radius (<c>Town::getRadius</c> of a player town, <b>Verified</b>, <c>FUN_140926eb0</c>): <see cref="Override"/>, or 2500 while that is at
+    /// most 1.
+    /// </summary>
     public float Radius => Override > 1 ? Override : 2500;
-    /// <summary>The owning faction, a position in the world's faction list.</summary>
+    /// <summary>
+    /// The owning faction, a position in the world's faction list.
+    /// </summary>
     public int Owner { get; init; }
     /// <summary>
-    /// The town panel's Open to public tick (the original's Town +0x380, saved as the town state's <c>public</c>; <b>Verified</b>, <c>Town::vfunc_85</c> and the panel's
-    /// <c>FUN_140721e50</c>): a wandering trader in a public outpost stays as in a placed town instead of leaving at once. False when made (<c>FUN_140934e10</c>).
+    /// The town panel's Open to public tick (the original's Town +0x380, saved as the town state's <c>public</c>; <b>Verified</b>,
+    /// <c>Town::vfunc_85</c> and the panel's <c>FUN_140721e50</c>): a wandering trader in a public outpost stays as in a placed town instead of
+    /// leaving at once. False when made (<c>FUN_140934e10</c>).
     /// </summary>
     public bool Public { get; set; }
-    /// <summary>The save's instance id of its town-list entry (null until a save has named it); bookkeeping for <c>Saving.BuildingSave</c>, not hashed.</summary>
+    /// <summary>
+    /// The save's instance id of its town-list entry (null until a save has named it); bookkeeping for <c>Saving.BuildingSave</c>, not hashed.
+    /// </summary>
     public string? SaveInstance { get; set; }
-    /// <summary>The save's town handle <c>hand*</c> (null until a save has named it); not hashed.</summary>
+    /// <summary>
+    /// The save's town handle <c>hand*</c> (null until a save has named it); not hashed.
+    /// </summary>
     public Data.Save.Hand? SaveHandle { get; set; }
 
     internal void Hash(ref StateHasher h)
@@ -154,9 +217,10 @@ public sealed class PlayerTown
 }
 
 /// <summary>
-/// The player-built sites of the world in creation order (docs/simulation.md "Buildings"). Ids are the original's <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, n from a counter per zone that
-/// starts above every such id in the loaded save (<see cref="Reserve"/>). Every change that the host or a save must see bumps <see cref="Version"/>; adding, completing, destroying and
-/// removing a site also bump <see cref="Revision"/>. Hashed by <see cref="World.StateHash"/> only while it holds a site.
+/// The player-built sites of the world in creation order (docs/simulation.md "Buildings"). Ids are the original's
+/// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, n from a counter per zone that starts above every such id in the loaded save
+/// (<see cref="Reserve"/>). Every change that the host or a save must see bumps <see cref="Version"/>; adding, completing, destroying and removing a
+/// site also bump <see cref="Revision"/>. Hashed by <see cref="World.StateHash"/> only while it holds a site.
 /// </summary>
 public sealed partial class BuildingRegistry
 {
@@ -171,11 +235,15 @@ public sealed partial class BuildingRegistry
     public IReadOnlyList<BuildSite> All => _sites;
     public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
-    /// <summary>The player towns (outposts), in creation order; never removed.</summary>
+    /// <summary>
+    /// The player towns (outposts), in creation order; never removed.
+    /// </summary>
     public IReadOnlyList<PlayerTown> Towns => _towns;
     public PlayerTown? FindTown(int number) => number > 0 && number <= _towns.Count ? _towns[number - 1] : null;
 
-    /// <summary>Makes a player town with the next number.</summary>
+    /// <summary>
+    /// Makes a player town with the next number.
+    /// </summary>
     public PlayerTown AddTown(Vector3 position, int owner, string name = PlayerTown.DefaultName)
     {
         var town = new PlayerTown { Number = _towns.Count + 1, Name = name, Position = position, Owner = owner };
@@ -185,12 +253,19 @@ public sealed partial class BuildingRegistry
         return town;
     }
 
-    /// <summary>Bumped when a site is added, completed (or turned back into a site), destroyed or removed: the host diffs the snapshot's buildings by id when it changes.</summary>
+    /// <summary>
+    /// Bumped when a site is added, completed (or turned back into a site), destroyed or removed: the host diffs the snapshot's buildings by id when
+    /// it changes.
+    /// </summary>
     public long Revision { get; private set; }
-    /// <summary>Bumped by every change to a site (progress included); the published snapshots are rebuilt only then.</summary>
+    /// <summary>
+    /// Bumped by every change to a site (progress included); the published snapshots are rebuilt only then.
+    /// </summary>
     public long Version { get; private set; }
 
-    /// <summary>Sites that are not complete (the auto-job looks only while there are some).</summary>
+    /// <summary>
+    /// Sites that are not complete (the auto-job looks only while there are some).
+    /// </summary>
     public bool AnyIncomplete
     {
         get
@@ -200,7 +275,9 @@ public sealed partial class BuildingRegistry
         }
     }
 
-    /// <summary>Some site is unfinished or a complete building is damaged (progress below its target, docs/game/buildings-production.md "Repair").</summary>
+    /// <summary>
+    /// Some site is unfinished or a complete building is damaged (progress below its target, docs/game/buildings-production.md "Repair").
+    /// </summary>
     public bool AnyNeedsWork
     {
         get
@@ -213,7 +290,9 @@ public sealed partial class BuildingRegistry
     [GeneratedRegex(@"^(\d+)-zone(\d+)\.(\d+)-INGAME$")]
     private static partial Regex IdPattern();
 
-    /// <summary>The zone and number of an id of the pattern <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>; false for any other id.</summary>
+    /// <summary>
+    /// The zone and number of an id of the pattern <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>; false for any other id.
+    /// </summary>
     public static bool TryParseId(string id, out ZoneCoordinate zone, out int n)
     {
         zone = default;
@@ -226,13 +305,17 @@ public sealed partial class BuildingRegistry
         return true;
     }
 
-    /// <summary>Keeps new ids of the id's zone above its number (an id of another pattern is ignored).</summary>
+    /// <summary>
+    /// Keeps new ids of the id's zone above its number (an id of another pattern is ignored).
+    /// </summary>
     public void Reserve(string id)
     {
         if (TryParseId(id, out var zone, out int n)) _counters[zone] = Math.Max(_counters.GetValueOrDefault(zone), n);
     }
 
-    /// <summary>The id the next site in <paramref name="zone"/> gets (skipping any id in use).</summary>
+    /// <summary>
+    /// The id the next site in <paramref name="zone"/> gets (skipping any id in use).
+    /// </summary>
     public string NewId(ZoneCoordinate zone)
     {
         while (true)
@@ -266,17 +349,23 @@ public sealed partial class BuildingRegistry
         return true;
     }
 
-    /// <summary>Notes a change to a site's fields (progress, delivery, pause); the next snapshot is rebuilt.</summary>
+    /// <summary>
+    /// Notes a change to a site's fields (progress, delivery, pause); the next snapshot is rebuilt.
+    /// </summary>
     public void Touch() => Version++;
 
-    /// <summary>Notes a change the host must act on (completed, turned back into a site, destroyed).</summary>
+    /// <summary>
+    /// Notes a change the host must act on (completed, turned back into a site, destroyed).
+    /// </summary>
     public void Changed()
     {
         Revision++;
         Version++;
     }
 
-    /// <summary>The snapshots of every site, rebuilt only when something changed since the last call.</summary>
+    /// <summary>
+    /// The snapshots of every site, rebuilt only when something changed since the last call.
+    /// </summary>
     internal IReadOnlyList<BuildingSnapshot> Published()
     {
         if (_publishedVersion == Version) return _published;

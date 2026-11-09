@@ -8,8 +8,9 @@ using Meitou.Simulation.Production;
 namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
-/// The crops of the player's farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot is laid out once per building (positions, meshes,
-/// seeded by its id) and its plants' transforms follow its <see cref="FarmView.PlantGrowth"/> and death whenever the machines change.
+/// The crops of the player's farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot is laid out once per building
+/// (positions, meshes, seeded by its id) and its plants' transforms follow its <see cref="FarmView.PlantGrowth"/> and death whenever the machines
+/// change.
 /// </summary>
 sealed class FarmCrops(GameHost host)
 {
@@ -29,7 +30,9 @@ sealed class FarmCrops(GameHost host)
     readonly Dictionary<string, FarmData?> _farmData = new(StringComparer.Ordinal);
     (long Machines, long Buildings) _farmsVersion = (-1, -1);
 
-    /// <summary>Once a frame after <see cref="BuildingSync.UpdateBuildings"/>.</summary>
+    /// <summary>
+    /// Once a frame after <see cref="BuildingSync.UpdateBuildings"/>.
+    /// </summary>
     internal void UpdateFarms(WorldSnapshot snapshot)
     {
         if (host.ActiveObjects is not { } objects || host.Scene.Database is not { } db) return;
@@ -40,7 +43,8 @@ sealed class FarmCrops(GameHost host)
         foreach (var machine in snapshot.Machines)
         {
             if (machine.Farm is not { } view || !host.BuildingSync.ShownBuildings.TryGetValue(machine.Site, out var site)) continue;
-            if (!_farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position || look.Site.Rotation != site.Rotation)
+            if (!_farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position
+                    || look.Site.Rotation != site.Rotation)
             {
                 if (MakeFarm(db, objects, site) is not { } made) continue;
                 _farms[site.Id] = look = made;
@@ -52,7 +56,8 @@ sealed class FarmCrops(GameHost host)
             {
                 var sub = look.Plants.Meshes[i];
                 float growth = sub.Plant < view.PlantGrowth.Count ? view.PlantGrowth[sub.Plant] : 0;
-                look.Transforms[i] = FarmLayout.Transform(look.Data.Parts[sub.Part], look.Plants.Positions[sub.Plant], sub.Random, growth, view.Death, look.Height);
+                look.Transforms[i] = FarmLayout.Transform(look.Data.Parts[sub.Part], look.Plants.Positions[sub.Plant], sub.Random,
+                    growth, view.Death, look.Height);
                 look.Tints[i] = FarmLayout.Tint(look.Data, look.Data.Parts[sub.Part], sub.Random, view.Death);
             }
             objects.SetFarmPlants(site.Id, look.Meshes, look.Transforms, look.Tints);
@@ -71,7 +76,8 @@ sealed class FarmCrops(GameHost host)
         if (data is not { Parts.Count: > 0 } || db.Find(site.Record) is not { } building) return null;
         var plants = FarmLayout.Plant(data, site.Position, site.Rotation, host.ActiveGround, WorldObjectLayout.Seed(site.Id));
         var meshes = plants.Meshes.Select(m => data.Parts[m.Part])
-            .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id, PlacedKind.BuildingPart) { Material = p.Material }).ToArray();
+            .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id, PlacedKind.BuildingPart) { Material = p.Material })
+                .ToArray();
         float height = data.Parts.Max(p => objects.MeshTop(p.Mesh));
         return new FarmLook(site, data, plants, meshes, height);
     }

@@ -37,11 +37,15 @@ sealed class PlacementHeights(ZoneCoordinate zone, GameDatabase db, GameRecord l
     void StandOnGround((string Key, GameInstance Instance, GameRecord? State) p) =>
         heights[p.Key] = ground(p.Instance.Position.X, p.Instance.Position.Z) + Above(p.Instance, p.State);
 
-    /// <summary>Its height above the ground or the parent: a nonzero <c>player furniture Y offset</c>, else the instance Y.</summary>
+    /// <summary>
+    /// Its height above the ground or the parent: a nonzero <c>player furniture Y offset</c>, else the instance Y.
+    /// </summary>
     static float Above(GameInstance instance, GameRecord? state) =>
         state?.Floats.GetValueOrDefault("player furniture Y offset") is { } offset && offset != 0 ? offset : instance.Position.Y;
 
-    /// <summary>The height of placement <paramref name="i"/>, resolving its parents first; null when a parent is missing or the chain loops.</summary>
+    /// <summary>
+    /// The height of placement <paramref name="i"/>, resolving its parents first; null when a parent is missing or the chain loops.
+    /// </summary>
     float? HeightOf(int i)
     {
         var (key, instance, state) = _placed[i];
@@ -53,7 +57,9 @@ sealed class PlacementHeights(ZoneCoordinate zone, GameDatabase db, GameRecord l
         return heights[key] = y + Above(instance, state);
     }
 
-    /// <summary>The handle of the building it is inside of, else the one it is mounted on (C and I); null when both are null or missing.</summary>
+    /// <summary>
+    /// The handle of the building it is inside of, else the one it is mounted on (C and I); null when both are null or missing.
+    /// </summary>
     static (int C, int I)? ParentOf(GameRecord? state)
     {
         if (state is null) return null;

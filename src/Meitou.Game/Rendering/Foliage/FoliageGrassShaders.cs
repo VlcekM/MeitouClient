@@ -14,13 +14,19 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public static partial class FoliageGrassShaders
 {
-    /// <summary>The workgroup size of both kernels (one thread per slot).</summary>
+    /// <summary>
+    /// The workgroup size of both kernels (one thread per slot).
+    /// </summary>
     public const int Group = 256;
 
-    /// <summary>Bit flags of <see cref="GrassPatchRow.Flags"/>.</summary>
+    /// <summary>
+    /// Bit flags of <see cref="GrassPatchRow.Flags"/>.
+    /// </summary>
     public const uint FlagCross = 1, FlagColourMap = 2, FlagCoverage = 4, FlagWireframe = 8, FlagActive = 16;
 
-    /// <summary>The blades of a draw sit 16 vertices apart in the patch table: <c>firstVertex = row * 16</c>, <c>gl_VertexIndex &gt;&gt; 4</c> is the row.</summary>
+    /// <summary>
+    /// The blades of a draw sit 16 vertices apart in the patch table: <c>firstVertex = row * 16</c>, <c>gl_VertexIndex &gt;&gt; 4</c> is the row.
+    /// </summary>
     public const int RowShift = 4;
 
     const string Common = """
@@ -38,10 +44,10 @@ public static partial class FoliageGrassShaders
         """;
 
     /// <summary>
-    /// Kernel 1, one thread per slot (a page's blades of one patch): the decisions of <c>FoliageRenderer.PrepareGrass</c> in its operation
-    /// order, <c>precise</c> (no FMA): the page box against the planes (<c>WorldCamera.Intersects</c>), the page's distance
-    /// (<c>BoxDistance</c> with the correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>).
-    /// Writes <c>keys[s] = (distance bits, tie, blades, patch row)</c>, or distance bits <c>0xFFFFFFFF</c> for no draw; counts the draws and blades.
+    /// Kernel 1, one thread per slot (a page's blades of one patch): the decisions of <c>FoliageRenderer.PrepareGrass</c> in its operation order,
+    /// <c>precise</c> (no FMA): the page box against the planes (<c>WorldCamera.Intersects</c>), the page's distance (<c>BoxDistance</c> with the
+    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). Writes <c>keys[s] =
+    /// (distance bits, tie, blades, patch row)</c>, or distance bits <c>0xFFFFFFFF</c> for no draw; counts the draws and blades.
     /// </summary>
     public static readonly string CullCompute = Common + FoliageShaders.CrSqrt + """
         layout(std430, set = 0, binding = 2) readonly buffer Prefixes { uint prefixes[]; };
@@ -125,10 +131,14 @@ public static partial class FoliageGrassShaders
 
     // ---- the blade programs reading their patch row ----
 
-    /// <summary>The push block the GPU blade programs declare (they read no push constant; a block must have a member).</summary>
+    /// <summary>
+    /// The push block the GPU blade programs declare (they read no push constant; a block must have a member).
+    /// </summary>
     const string PushMembers = "            uint spare;";
 
-    /// <summary>Set 0, binding <see cref="Binding"/>: the patch rows of the view (<see cref="GrassPatchRow"/>, std430).</summary>
+    /// <summary>
+    /// Set 0, binding <see cref="Binding"/>: the patch rows of the view (<see cref="GrassPatchRow"/>, std430).
+    /// </summary>
     public const int Binding = 6;
 
     const string PatchBlock = """
@@ -159,27 +169,36 @@ public static partial class FoliageGrassShaders
 
     const string PreludeEnd = "#define gl_VertexID gl_VertexIndex\n";
 
-    /// <summary>A vertex program ported with the patch row taken from <c>gl_VertexIndex &gt;&gt; 4</c> (the draw's first vertex) and passed on, flat.</summary>
+    /// <summary>
+    /// A vertex program ported with the patch row taken from <c>gl_VertexIndex &gt;&gt; 4</c> (the draw's first vertex) and passed on, flat.
+    /// </summary>
     static string Vertex(string legacy)
     {
         string text = NativeShaders.Port(legacy, NativeShaders.Map(Map), PushMembers);
-        if (!text.Contains(PreludeEnd)) throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
-        text = text.Replace(PreludeEnd, $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}");
+        if (!text.Contains(PreludeEnd))
+            throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
+        text = text.Replace(PreludeEnd,
+            $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}");
         var main = MainRegex().Match(text);
-        if (!main.Success) throw new InvalidOperationException("FoliageGrassShaders: no main() in the blade vertex program");
+        if (!main.Success)
+            throw new InvalidOperationException("FoliageGrassShaders: no main() in the blade vertex program");
         return text.Insert(main.Index + main.Length, "\n    vRow = GRASS_ROW;");
     }
 
     static string Fragment(string legacy)
     {
         string text = NativeShaders.Port(legacy, NativeShaders.Map(Map), PushMembers);
-        if (!text.Contains(PreludeEnd)) throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
+        if (!text.Contains(PreludeEnd))
+            throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
         return text.Replace(PreludeEnd, $"{PreludeEnd}flat in uint vRow;\n#define GRASS_ROW vRow\n{PatchBlock}");
     }
 
     public static string GrassVertexGpu() => Vertex(FoliageShaders.GrassVertex);
-    /// <summary>The blades' colour program, with the interior cut and the GI resolve's surface output, as <see cref="FoliageShaders.GrassFragmentNative"/>.</summary>
-    public static string GrassFragmentGpu() => Gi.GiResolveShaders.WithAlbedo(Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment)), inShader: true);
+    /// <summary>
+    /// The blades' colour program, with the interior cut and the GI resolve's surface output, as <see cref="FoliageShaders.GrassFragmentNative"/>.
+    /// </summary>
+    public static string GrassFragmentGpu() => Gi.GiResolveShaders.WithAlbedo(Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment)),
+        inShader: true);
     public static string GrassMotionVertexGpu() => Vertex(FoliageShaders.GrassMotionVertex);
     public static string GrassMotionFragmentGpu() => Fragment(FoliageShaders.GrassMotionFragment);
 
@@ -187,10 +206,12 @@ public static partial class FoliageGrassShaders
     private static partial Regex MainRegex();
 }
 
-/// <summary>One slot of the slot table (std430, 32 bytes): a page's blades of one patch. <see cref="X0"/>, <see cref="Z0"/> and <see cref="Y"/> are
-/// the page's corner and the ground height at its centre as <c>PrepareGrass</c> computes them; <see cref="FirstBlade"/> the index of its first blade in the
-/// arena (the draw's first instance); <see cref="Zone"/> and <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out again);
-/// <see cref="Tie"/> orders pages of equal distance (creation order, then patch index).</summary>
+/// <summary>
+/// One slot of the slot table (std430, 32 bytes): a page's blades of one patch. <see cref="X0"/>, <see cref="Z0"/> and <see cref="Y"/> are the page's
+/// corner and the ground height at its centre as <c>PrepareGrass</c> computes them; <see cref="FirstBlade"/> the index of its first blade in the
+/// arena (the draw's first instance); <see cref="Zone"/> and <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out
+/// again); <see cref="Tie"/> orders pages of equal distance (creation order, then patch index).
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassSlot
 {
@@ -200,16 +221,20 @@ public struct GrassSlot
     public const int Size = 32;
 }
 
-/// <summary>A zone's patch rows in the view's patch table (std430, 8 bytes): the first row and the number of patches the zone has now.</summary>
+/// <summary>
+/// A zone's patch rows in the view's patch table (std430, 8 bytes): the first row and the number of patches the zone has now.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassZoneRow
 {
     public uint PatchBase, PatchCount;
 }
 
-/// <summary>A patch of the view's patch table (std430, 64 bytes): what <see cref="GrassPush"/> holds per draw, read by the blade programs and, for
-/// <see cref="Range"/>, <see cref="Flags"/> and <see cref="VertexCount"/>, by the cull. Flags: see <see cref="FoliageGrassShaders.FlagCross"/> and following;
-/// <see cref="FoliageGrassShaders.FlagActive"/> when the patch's sprite is loaded (and, for the motion pass, the patch sways).</summary>
+/// <summary>
+/// A patch of the view's patch table (std430, 64 bytes): what <see cref="GrassPush"/> holds per draw, read by the blade programs and, for
+/// <see cref="Range"/>, <see cref="Flags"/> and <see cref="VertexCount"/>, by the cull. Flags: see <see cref="FoliageGrassShaders.FlagCross"/> and
+/// following; <see cref="FoliageGrassShaders.FlagActive"/> when the patch's sprite is loaded (and, for the motion pass, the patch sways).
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassPatchRow
 {

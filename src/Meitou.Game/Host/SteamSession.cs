@@ -3,7 +3,9 @@ using Meitou.Content;
 
 namespace Meitou.Game.Host;
 
-/// <summary>Optional Steamworks lifetime for the Steam copy of Kenshi. No Steam binaries are shipped with Meitou.</summary>
+/// <summary>
+/// Optional Steamworks lifetime for the Steam copy of Kenshi. No Steam binaries are shipped with Meitou.
+/// </summary>
 sealed unsafe class SteamSession : IDisposable
 {
     const uint KenshiAppId = 233860;
@@ -14,9 +16,17 @@ sealed unsafe class SteamSession : IDisposable
 
     public static SteamSession? TryStart(GameInstall install)
     {
-        if (!OperatingSystem.IsWindows()) { Console.WriteLine("Steamworks: skipped (currently supported on Windows only)."); return null; }
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.WriteLine("Steamworks: skipped (currently supported on Windows only).");
+            return null;
+        }
         string path = Path.Combine(install.Root, "steam_api64.dll");
-        if (!File.Exists(path)) { Console.WriteLine("Steamworks: skipped (steam_api64.dll is missing from the Kenshi install)."); return null; }
+        if (!File.Exists(path))
+        {
+            Console.WriteLine("Steamworks: skipped (steam_api64.dll is missing from the Kenshi install).");
+            return null;
+        }
 
         try
         {

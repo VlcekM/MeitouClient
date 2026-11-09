@@ -9,7 +9,9 @@ namespace Meitou.Game.Rendering.Characters;
 
 internal sealed unsafe partial class CharacterRenderer
 {
-    /// <summary>Set by the host when the temporal upscalers run: the palettes of last frame are kept for <see cref="DrawMotion"/>.</summary>
+    /// <summary>
+    /// Set by the host when the temporal upscalers run: the palettes of last frame are kept for <see cref="DrawMotion"/>.
+    /// </summary>
     public bool Motion { get; set; }
     bool _motionHooked;
 
@@ -29,7 +31,8 @@ internal sealed unsafe partial class CharacterRenderer
     /// The scene frame as the post chain's motion pass needs it (a no-op without a temporal upscaler): hooks the characters' motion into
     /// <paramref name="post"/>'s one object-motion callback beside the grass's (once), and gives <see cref="DrawMotion"/> this frame's camera.
     /// </summary>
-    public void AttachMotion(IWorldPostChain? post, FoliageRenderer? foliage, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum,
+    public void AttachMotion(IWorldPostChain? post, FoliageRenderer? foliage, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye,
+        Vector4[] frustum,
         Matrix4x4? relative = null, Matrix4x4? relativeUnjittered = null)
     {
         if (post is not { Temporal: true }) return;
@@ -40,10 +43,14 @@ internal sealed unsafe partial class CharacterRenderer
         }
         SetMotionCamera(viewProjection, unjittered, eye, frustum);
         _motionHasRelative = relative is not null && relativeUnjittered is not null;
-        if (_motionHasRelative) (_motionRelative, _motionRelativeUnjittered) = (relative!.Value, relativeUnjittered!.Value);
+        if (_motionHasRelative)
+            (_motionRelative, _motionRelativeUnjittered) = (relative!.Value, relativeUnjittered!.Value);
     }
 
-    /// <summary>The scene camera for <see cref="DrawMotion"/> (the grass's <c>SetMotionCamera</c>): this frame's view-projection as drawn (jittered) and unjittered.</summary>
+    /// <summary>
+    /// The scene camera for <see cref="DrawMotion"/> (the grass's <c>SetMotionCamera</c>): this frame's view-projection as drawn (jittered) and
+    /// unjittered.
+    /// </summary>
     void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
     {
         (_motionViewProjection, _motionUnjittered, _motionEye, _motionFrustum) = (viewProjection, unjittered, eye, frustum);
@@ -53,19 +60,22 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>
     /// The characters' own motion over the camera's, for the upscalers: the scene's characters drawn with this and last frame's palettes and
-    /// transforms into the motion target (red and green), where they are what the scene depth shows. Called inside the post chain's object-motion pass.
+    /// transforms into the motion target (red and green), where they are what the scene depth shows. Called inside the post chain's object-motion
+    /// pass.
     /// </summary>
     void DrawMotion(MotionTargets targets)
     {
         if (!_motionCamera) return;
         _motionCamera = false;
         var previous = _havePreviousCamera ? _previousUnjittered : _motionUnjittered;
-        // Last frame's camera for positions relative to this frame's eye: its rotation-only matrix after the move from this eye to last frame's (exact in double: both
-        // eyes are floats), so the velocity carries no rounding of either eye's coordinates.
+
+        // Last frame's camera for positions relative to this frame's eye: its rotation-only matrix after the move from this eye to last frame's
+        // (exact in double: both eyes are floats), so the velocity carries no rounding of either eye's coordinates.
         Matrix4x4? previousRelative = null;
         if (_motionHasRelative)
         {
-            var move = _havePreviousCamera ? new Vector3((float)((double)_motionEye.X - _previousEye.X), (float)((double)_motionEye.Y - _previousEye.Y), (float)((double)_motionEye.Z - _previousEye.Z)) : Vector3.Zero;
+            var move = _havePreviousCamera ? new Vector3((float)((double)_motionEye.X - _previousEye.X),
+                (float)((double)_motionEye.Y - _previousEye.Y), (float)((double)_motionEye.Z - _previousEye.Z)) : Vector3.Zero;
             previousRelative = Matrix4x4.CreateTranslation(move) * (_havePreviousCamera ? _previousRelativeUnjittered : _motionRelativeUnjittered);
             (_previousRelativeUnjittered, _previousEye) = (_motionRelativeUnjittered, _motionEye);
         }
@@ -79,11 +89,13 @@ internal sealed unsafe partial class CharacterRenderer
             _motionDepthIndex = (targets.Depth, _motionDepth = Gpu.Bindless.Register(BindlessKind.Texture2D, targets.Depth));
         }
         _motionPass = true;
+
         // This draw is the "characters" stage's, not the post chain's: the lap before ends the post time so far, the one after is the characters'.
         StageClock.Lap(StageClock.Post, "post to motion");
         try
         {
-            DrawView(new ViewConstants { ViewProjection = _motionViewProjection, PreviousViewProjection = previous, Eye = _motionEye, NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
+            DrawView(new ViewConstants { ViewProjection = _motionViewProjection, PreviousViewProjection = previous, Eye = _motionEye,
+                NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
                 relative: _motionHasRelative ? _motionRelative : null, previousRelative: previousRelative);
         }
         finally { _motionPass = false; }

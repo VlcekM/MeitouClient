@@ -11,12 +11,15 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer
 {
-    // The objects the host registered; positions are written from the host's threads and read by the mixer (a tiny lock), the rest is the audio thread's.
+    // The objects the host registered; positions are written from the host's threads and read by the mixer (a tiny lock), the rest is the audio
+    // thread's.
     readonly ConcurrentDictionary<ulong, GameObjectState> _gameObjects = new();
     readonly object _listenerGate = new();
     Listener _listener = Listener.Default;
 
-    /// <summary>The object an action's sounds are made on while <see cref="Run"/> plays it (instances take it from their parent otherwise).</summary>
+    /// <summary>
+    /// The object an action's sounds are made on while <see cref="Run"/> plays it (instances take it from their parent otherwise).
+    /// </summary>
     ulong _postingObject;
 
     sealed class GameObjectState
@@ -25,7 +28,9 @@ public sealed partial class WwisePlayer
         Vector3 _position, _front;
         bool _placed;
 
-        /// <summary>Per-object game parameter values (override the global ones) and switch values: the audio thread's.</summary>
+        /// <summary>
+        /// Per-object game parameter values (override the global ones) and switch values: the audio thread's.
+        /// </summary>
         public readonly Dictionary<uint, float> Parameters = [];
         public readonly Dictionary<uint, uint> Switches = [];
 
@@ -96,7 +101,9 @@ public sealed partial class WwisePlayer
         lock (_listenerGate) return _listener;
     }
 
-    /// <summary>Posts an event on a game object: its sounds are placed at the object and stopped by stop actions restricted to the object.</summary>
+    /// <summary>
+    /// Posts an event on a game object: its sounds are placed at the object and stopped by stop actions restricted to the object.
+    /// </summary>
     public void Post(string eventName, ulong gameObject) => Post(WwiseHash.Id(eventName), gameObject);
 
     public void Post(uint eventId, ulong gameObject)
@@ -105,7 +112,9 @@ public sealed partial class WwisePlayer
         _commands.Enqueue(() => PostNow(eventId, gameObject, expires: _time + 10));
     }
 
-    /// <summary>Sets a game parameter for one object (overriding the global value for the sounds playing on it).</summary>
+    /// <summary>
+    /// Sets a game parameter for one object (overriding the global value for the sounds playing on it).
+    /// </summary>
     public void SetParameter(string name, float value, ulong gameObject) => SetParameter(WwiseHash.Id(name), value, gameObject);
 
     public void SetParameter(uint id, float value, ulong gameObject)
@@ -119,7 +128,10 @@ public sealed partial class WwisePlayer
         _commands.Enqueue(() => state.Parameters[id] = value);
     }
 
-    /// <summary>Sets a switch group for one object (<c>Emitters</c> on an emitter, <c>Indoors</c>); object 0 sets the global value, as <see cref="SetState(string, string)"/>.</summary>
+    /// <summary>
+    /// Sets a switch group for one object (<c>Emitters</c> on an emitter, <c>Indoors</c>); object 0 sets the global value, as
+    /// <see cref="SetState(string, string)"/>.
+    /// </summary>
     public void SetSwitch(string group, string value, ulong gameObject) => SetSwitch(WwiseHash.Id(group), WwiseHash.Id(value), gameObject);
 
     public void SetSwitch(uint group, uint value, ulong gameObject)
@@ -139,11 +151,15 @@ public sealed partial class WwisePlayer
         });
     }
 
-    /// <summary>A game parameter's value for an object: its own if the object has one, else the global one.</summary>
+    /// <summary>
+    /// A game parameter's value for an object: its own if the object has one, else the global one.
+    /// </summary>
     float Parameter(uint id, ulong gameObject) =>
         gameObject != 0 && _gameObjects.TryGetValue(gameObject, out var state) && state.Parameters.TryGetValue(id, out var v) ? v : Parameter(id);
 
-    /// <summary>A state or switch group's value for an object: its own switch if it has one, else the global value (0 when never set).</summary>
+    /// <summary>
+    /// A state or switch group's value for an object: its own switch if it has one, else the global value (0 when never set).
+    /// </summary>
     bool TryGetGroupValue(uint group, ulong gameObject, out uint value)
     {
         if (gameObject != 0 && _gameObjects.TryGetValue(gameObject, out var state) && state.Switches.TryGetValue(group, out value)) return true;

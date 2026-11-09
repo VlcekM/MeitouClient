@@ -10,7 +10,9 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class DdsDecoder
 {
-    /// <summary>Decodes one surface. A volume surface's depth slices are stacked vertically.</summary>
+    /// <summary>
+    /// Decodes one surface. A volume surface's depth slices are stacked vertically.
+    /// </summary>
     public static RgbaImage Decode(DdsFile file, int image = 0, int level = 0)
     {
         var surface = file.Surface(image, level);
@@ -26,7 +28,10 @@ public static class DdsDecoder
         return result;
     }
 
-    /// <summary>Decodes a 2D surface of <paramref name="width"/>×<paramref name="height"/> into <paramref name="rgba"/> (4 bytes per pixel, rows top to bottom).</summary>
+    /// <summary>
+    /// Decodes a 2D surface of <paramref name="width"/>×<paramref name="height"/> into <paramref name="rgba"/> (4 bytes per pixel, rows top to
+    /// bottom).
+    /// </summary>
     public static void Decode(DdsFormat format, DdsPixelMasks? masks, ReadOnlySpan<byte> data, int width, int height, Span<byte> rgba)
     {
         if (rgba.Length < width * height * 4) throw new ArgumentException("Target too small.", nameof(rgba));
@@ -154,7 +159,9 @@ public static class DdsDecoder
         rgba[3] = 255;
     }
 
-    /// <summary>BC3 alpha / BC4 block: two 8-bit endpoints, 3-bit indices; 8 interpolated values, or 6 plus 0 and 255.</summary>
+    /// <summary>
+    /// BC3 alpha / BC4 block: two 8-bit endpoints, 3-bit indices; 8 interpolated values, or 6 plus 0 and 255.
+    /// </summary>
     static void DecodeChannelBlock(ReadOnlySpan<byte> src, Span<byte> values)
     {
         int a0 = src[0], a1 = src[1];
@@ -199,7 +206,9 @@ public static class DdsDecoder
         public static Channel Of(uint mask) =>
             mask == 0 ? default : new Channel(mask, BitOperations.TrailingZeroCount(mask), mask >> BitOperations.TrailingZeroCount(mask));
 
-        /// <summary>The channel scaled to 0–255 (rounded), or <paramref name="absent"/> without a mask.</summary>
+        /// <summary>
+        /// The channel scaled to 0–255 (rounded), or <paramref name="absent"/> without a mask.
+        /// </summary>
         public byte Extract(uint value, byte absent) =>
             Mask == 0 ? absent : (byte)((((value & Mask) >> Shift) * 255 + Max / 2) / Max);
     }

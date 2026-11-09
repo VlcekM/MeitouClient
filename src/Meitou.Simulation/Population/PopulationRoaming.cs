@@ -36,7 +36,10 @@ public sealed partial class PopulationSystem
 
     Vector2 SiteCentre(int site) => new(_data.Sites[site].Position.X, _data.Sites[site].Position.Z);
 
-    /// <summary>Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>, <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
+    /// <summary>
+    /// Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>,
+    /// <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.
+    /// </summary>
     bool Wanted(Platoon p) =>
         ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, _active) || p.Pinned && p.Origin >= 0 && _active.Contains(_data.Sites[p.Origin].Zone);
 
@@ -105,7 +108,9 @@ public sealed partial class PopulationSystem
         }
     }
 
-    /// <summary>The original's orphan timer: a platoon it does not keep is activated, and so despawned, after this many seconds unloaded.</summary>
+    /// <summary>
+    /// The original's orphan timer: a platoon it does not keep is activated, and so despawned, after this many seconds unloaded.
+    /// </summary>
     const float OrphanLimitSeconds = 60;
 
     /// <summary>
@@ -115,11 +120,16 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool Kept(Platoon p) => !p.Dead && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers)) || CampaignKept(p);
 
-    /// <summary>The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a campaign's force that has not been spent is kept, a victorious or retreating one is not.</summary>
+    /// <summary>
+    /// The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a
+    /// campaign's force that has not been spent is kept, a victorious or retreating one is not.
+    /// </summary>
     internal static bool CampaignKept(Platoon p) => !p.ReplacedHome && p.Campaign is { Phase: not 2 };
 
     readonly List<Platoon> _movers = [];
-    /// <summary>Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).</summary>
+    /// <summary>
+    /// Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).
+    /// </summary>
     const int MoversPerJob = 64;
 
     /// <summary>
@@ -154,7 +164,9 @@ public sealed partial class PopulationSystem
         world.Platoons.Remove(p.Id);
     }
 
-    /// <summary>The unloaded half: moves a stand-in for the squad towards its target, with no physics (the original's <c>UnloadedPlatoon</c>).</summary>
+    /// <summary>
+    /// The unloaded half: moves a stand-in for the squad towards its target, with no physics (the original's <c>UnloadedPlatoon</c>).
+    /// </summary>
     void StandIn(World world, Platoon p, float dt)
     {
         if (p.Pinned || p.Wild || p.Campaign is not null) return;   // a town's own saved squad, or a wild one, stays where it was; a campaign moves its own
@@ -297,16 +309,25 @@ public sealed partial class PopulationSystem
         return p.Target >= 0 && p.Target < _data.Sites.Count ? p.Target : p.Origin;
     }
 
-    /// <summary>A shipping package (signal 11 or 28) whose off-screen job is TRAVEL_TARGET (<c>unloaded func</c> 5, as all four in the base data).</summary>
+    /// <summary>
+    /// A shipping package (signal 11 or 28) whose off-screen job is TRAVEL_TARGET (<c>unloaded func</c> 5, as all four in the base data).
+    /// </summary>
     bool IsShipping(string package) => _data.Ai.Package(package) is { Signal: 11 or 28, Unloaded: (int)PlatoonJob.TravelTarget };
 
-    /// <summary>The original's TRAVEL_TARGET speed off screen without a campaign (docs/game/factions-squads-towns.md "Off-screen world").</summary>
+    /// <summary>
+    /// The original's TRAVEL_TARGET speed off screen without a campaign (docs/game/factions-squads-towns.md "Off-screen world").
+    /// </summary>
     const float TravelTargetSpeed = 25;
 
-    /// <summary>The trim of the box inside which an unloaded platoon in a loaded zone stops (<c>DAT_141718a0c</c> = 178.49998, <b>Verified</b>, <c>FUN_1407ee790</c>); the activation box's is <see cref="ZoneActivation.ActivationTrim"/>.</summary>
+    /// <summary>
+    /// The trim of the box inside which an unloaded platoon in a loaded zone stops (<c>DAT_141718a0c</c> = 178.49998, <b>Verified</b>,
+    /// <c>FUN_1407ee790</c>); the activation box's is <see cref="ZoneActivation.ActivationTrim"/>.
+    /// </summary>
     const float StandInStopTrim = 178.49998f;
 
-    /// <summary>The original unloaded mover's top speed (its constructor's 70; no other writer found, Observed).</summary>
+    /// <summary>
+    /// The original unloaded mover's top speed (its constructor's 70; no other writer found, Observed).
+    /// </summary>
     public const float StandInSpeedCap = 70;
 
     void Arrive(World world, Platoon p)
@@ -321,10 +342,14 @@ public sealed partial class PopulationSystem
         p.GoingHome = p.Target != p.Origin;   // having reached another town, the way home is next
     }
 
-    /// <summary>Where a platoon is heading: its campaign's goal, else its patrol point, else its target town's centre; null when it has none.</summary>
+    /// <summary>
+    /// Where a platoon is heading: its campaign's goal, else its patrol point, else its target town's centre; null when it has none.
+    /// </summary>
     Vector2? Goal(Platoon p) => p.CampaignGoal ?? p.Point ?? (p.Target >= 0 ? SiteCentre(p.Target) : null);
 
-    /// <summary>Picks where a platoon goes next: home after a visit, else one of the 4 nearest settlements that are not hostile to it.</summary>
+    /// <summary>
+    /// Picks where a platoon goes next: home after a visit, else one of the 4 nearest settlements that are not hostile to it.
+    /// </summary>
     void ChooseNext(World world, Platoon p)
     {
         // The off-screen job of its package (docs/simulation.md "AI", Off screen): a point near home, or home; the rest travel as below.
@@ -366,7 +391,9 @@ public sealed partial class PopulationSystem
         p.GoingHome = false;
     }
 
-    /// <summary>A walkable point within <see cref="Ai.PlatoonJobs.PatrolRange"/> of the home town (seeded; 8 tries, else the town's centre).</summary>
+    /// <summary>
+    /// A walkable point within <see cref="Ai.PlatoonJobs.PatrolRange"/> of the home town (seeded; 8 tries, else the town's centre).
+    /// </summary>
     Vector2 PatrolPoint(World world, Platoon p)
     {
         var home = SiteCentre(p.Origin);
@@ -397,7 +424,10 @@ public sealed partial class PopulationSystem
         return false;
     }
 
-    /// <summary>A platoon with no member left (wiped out, removed, or all split off): the pool is free to make another (a saved platoon's characters are marked, for the next save).</summary>
+    /// <summary>
+    /// A platoon with no member left (wiped out, removed, or all split off): the pool is free to make another (a saved platoon's characters are
+    /// marked, for the next save).
+    /// </summary>
     void RemoveWiped(World world, Platoon p, Squad? squad)
     {
         if (p.Saved is { } gone)
@@ -528,7 +558,9 @@ public sealed partial class PopulationSystem
         }
     }
 
-    /// <summary>The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.</summary>
+    /// <summary>
+    /// The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.
+    /// </summary>
     internal static int MissionSite(Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
 
     /// <summary>
@@ -547,7 +579,9 @@ public sealed partial class PopulationSystem
         ChooseNext(world, p);
     }
 
-    /// <summary>The squared distance (600) within which a member goes with a leader that is out of the zone (<c>DAT_141714bd4</c> = 360000, <b>Verified</b>).</summary>
+    /// <summary>
+    /// The squared distance (600) within which a member goes with a leader that is out of the zone (<c>DAT_141714bd4</c> = 360000, <b>Verified</b>).
+    /// </summary>
     const float LeaderOutOfZoneRadiusSq = 600 * 600;
 
     /// <summary>
@@ -562,7 +596,9 @@ public sealed partial class PopulationSystem
         return at.X < minX || at.Z < minZ || at.X > maxX || at.Z > maxZ;
     }
 
-    /// <summary>A member the squad's place may follow: there, not down (<see cref="Ai.SquadIntact.Down"/>: out, dead or carried) and not in a bed or cage.</summary>
+    /// <summary>
+    /// A member the squad's place may follow: there, not down (<see cref="Ai.SquadIntact.Down"/>: out, dead or carried) and not in a bed or cage.
+    /// </summary>
     static bool Standing(CharacterTable table, CharacterId id) =>
         !Ai.SquadIntact.Down(table, id) && table.TryResolveNext(id, out int s) && table.Cold(s) is { InSomething: Locks.HeldState.None };
 
@@ -612,7 +648,9 @@ public sealed partial class PopulationSystem
         return n > 0 ? sum / n : last;
     }
 
-    /// <summary>Whether no member is a character that is not dead (<c>FUN_1404fed50</c> counts every member but a dead character; a knocked-out one counts).</summary>
+    /// <summary>
+    /// Whether no member is a character that is not dead (<c>FUN_1404fed50</c> counts every member but a dead character; a knocked-out one counts).
+    /// </summary>
     static bool AllDead(World world, Squad squad)
     {
         var table = world.Characters;
@@ -698,10 +736,16 @@ public sealed partial class PopulationSystem
         return true;
     }
 
-    /// <summary>The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no replacement, else the replacement.</summary>
+    /// <summary>
+    /// The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no
+    /// replacement, else the replacement.
+    /// </summary>
     bool HomeFits(Platoon p) => HomeFits(p.Saved!.LegacyBaseTown, p.Saved.Source.Record.Strings.GetValueOrDefault("basetown", ""), _data.Sites[p.Origin].Record.Id, _data.Sites[p.Origin].Replacement?.Id);
 
-    /// <summary>The activation's home test: an older Meitou save's platoon always fits; else an unset or own <paramref name="home"/> fits only a town with no replacement, otherwise <paramref name="home"/> must be the replacement.</summary>
+    /// <summary>
+    /// The activation's home test: an older Meitou save's platoon always fits; else an unset or own <paramref name="home"/> fits only a town with no
+    /// replacement, otherwise <paramref name="home"/> must be the replacement.
+    /// </summary>
     internal static bool HomeFits(bool legacy, string home, string own, string? replacement) =>
         legacy || (home.Length == 0 || home == own ? replacement is null : home == replacement);
 
@@ -763,7 +807,9 @@ public sealed partial class PopulationSystem
         }
     }
 
-    /// <summary>Null when the template is gone or plans no one now (e.g. a save's platoon whose members are all dead or unique).</summary>
+    /// <summary>
+    /// Null when the template is gone or plans no one now (e.g. a save's platoon whose members are all dead or unique).
+    /// </summary>
     BuiltSquad? BuildRoamer(string templateId, int faction, ulong key, ulong seed, Vector2 position)
     {
         if (_data.Db.Find(templateId) is not { } record) return null;
@@ -866,7 +912,9 @@ public sealed partial class PopulationSystem
 
     // ---- the pools ----
 
-    /// <summary>Every loaded town with roaming squads below its cap makes one (6.4, the town branch of 6.2's choice).</summary>
+    /// <summary>
+    /// Every loaded town with roaming squads below its cap makes one (6.4, the town branch of 6.2's choice).
+    /// </summary>
     void FillPools(World world)
     {
         var table = world.Characters;

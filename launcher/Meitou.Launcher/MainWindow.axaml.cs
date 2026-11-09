@@ -16,6 +16,13 @@ namespace Meitou.Launcher;
 
 public sealed partial class MainWindow : Window
 {
+    const uint WsCaption = 0x00C00000, WsSysmenu = 0x00080000, WsMinimizebox = 0x00020000, WsMaximizebox = 0x00010000;
+    static readonly Avalonia.Media.FontFamily Mono = new("Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, monospace");
+    WindowEdge? _resizeEdge;
+    PixelPoint _resizeStart;
+    Win32Window.Rect _resizeRect;
+    const string KenshiAppId = "233860";
+
     readonly LauncherConfig _config;
     static readonly HttpClient Http = Releases.CreateClient();
     readonly Releases _releases = new(Http);
@@ -33,12 +40,11 @@ public sealed partial class MainWindow : Window
     int _modsLoad;
     bool _modsReady;
     bool _toggleSavePending;
+
     // While ApplyOrder rebuilds the list: the mod count and the dependency check wait for the end.
     bool _checksSuspended;
     string? _launcherUpdateVersion;   // the launcher release the update button offers, for a language switch
     static string Tr(string text, params object?[] args) => LauncherText.Translate(text, args);
-
-    const uint WsCaption = 0x00C00000, WsSysmenu = 0x00080000, WsMinimizebox = 0x00020000, WsMaximizebox = 0x00010000;
 
     static string LauncherVersion => typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
@@ -53,17 +59,50 @@ public sealed partial class MainWindow : Window
         PopulateLanguageOptions(found);
         LauncherText.TranslateTree(this, _originalUiText);
         _languageReady = true;
-        // Windows animates minimise, maximise and restore only for windows with a caption style. Avalonia sizes the client area of an
-        // undecorated window to the whole window whatever its styles, so the caption bits add the animations and no frame.
-        if (OperatingSystem.IsWindows())
-            Win32Properties.AddWindowStylesCallback(this, (style, exStyle) => (style | WsCaption | WsSysmenu | WsMinimizebox | WsMaximizebox, exStyle));
+        ConfigureWindowStyle();
         PlayVersionButton.Flyout = _versionMenu;
         TrackPointer();
+        WireModList();
+        ConfigureOptions(config);
+        ShowReportButton();
+        ShowBuiltTexts();
+        InstallPathBox.Text = LauncherConfig.InstallDirectory;
+        LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Rid}";
+        RefreshPresets();
+        RefreshInstalled();
+        UseKenshi(found);
+        if (!config.FoldersConfirmed) ShowSetup();
+        WireWindowEvents();
+    }
+
+    /// <summary>
+    /// Windows animates minimise, maximise and restore only for windows with a caption style. Avalonia sizes the client area of an
+    /// undecorated window to the whole window whatever its styles, so the caption bits add the animations and no frame.
+    /// </summary>
+    void ConfigureWindowStyle()
+    {
+        if (OperatingSystem.IsWindows())
+            Win32Properties.AddWindowStylesCallback(this, (style, exStyle) => (style | WsCaption | WsSysmenu | WsMinimizebox | WsMaximizebox, exStyle));
+    }
+
+    /// <summary>
+    /// The mod list: its items, and the drag and reorder pointer handlers.
+    /// </summary>
+    void WireModList()
+    {
         ModListBox.ItemsSource = _mods;
         _mods.CollectionChanged += (_, _) => { if (_modsReady) ModListChanged(); };   // a drag or Alt+arrow move changes what loads first
         ModListBox.AddHandler(PointerMovedEvent, ModList_PointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerReleasedEvent, ModList_PointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
-        ModListBox.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
+        var captureRoutes = RoutingStrategies.Direct | RoutingStrategies.Bubble;
+        ModListBox.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), captureRoutes, handledEventsToo: true);
+    }
+
+    /// <summary>
+    /// The launch options and the settings boxes, each shown only where its platform has it.
+    /// </summary>
+    void ConfigureOptions(LauncherConfig config)
+    {
         ArgumentsBox.Text = config.LaunchArguments;
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
@@ -80,15 +119,15 @@ public sealed partial class MainWindow : Window
         NightlyBox.IsChecked = config.IncludePrereleases;
         AutoUpdateBox.IsChecked = config.AutoUpdateLauncher;
         AutoUpdateBox.IsEnabled = _updater.IsInstalled;
-        ShowReportButton();
-        ShowBuiltTexts();
-        InstallPathBox.Text = LauncherConfig.InstallDirectory;
-        LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Rid}";
-        RefreshPresets();
-        RefreshInstalled();
-        UseKenshi(found);
-        if (!config.FoldersConfirmed) ShowSetup();
+    }
+
+    /// <summary>
+    /// The window's own events: saving on close, a refresh of Continue when the window is activated, and the first news and releases once it opens.
+    /// </summary>
+    void WireWindowEvents()
+    {
         Closing += (_, _) => { if (_graphicsSave?.IsEnabled == true) SaveGame(); };
+
         // A save made in the game since: Continue names it.
         Activated += (_, _) => _ = RefreshContinueAsync();
         Opened += async (_, _) =>
@@ -122,14 +161,17 @@ public sealed partial class MainWindow : Window
 
     // ---- Language: one choice for the game (Kenshi's settings.cfg) and the launcher ----
 
-    /// <summary>The language to start in: the Kenshi folder's settings.cfg choice, else the launcher's last one.</summary>
+    /// <summary>
+    /// The language to start in: the Kenshi folder's settings.cfg choice, else the launcher's last one.
+    /// </summary>
     string StartLanguage(GameInstall? found) =>
         (found is null ? null : KenshiLanguageSettings.GetLanguage(found)) is { Length: > 0 } game ? game : _config.Language;
 
     void Language_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (!_languageReady || _populatingLanguages) return;
-        if (LanguageBox.SelectedItem is not ComboBoxItem item || item.Tag is not string code || code == LauncherText.Code) return;
+        if (LanguageBox.SelectedItem is not ComboBoxItem item || item.Tag is not string code || code == LauncherText.Code)
+            return;
         _config.Language = code;
         _config.Save();
         LauncherText.Use(code, _install);
@@ -162,11 +204,14 @@ public sealed partial class MainWindow : Window
         ShowBuiltTexts();
     }
 
-    /// <summary>English, Kenshi's own languages, the locale folders of the install and the languages Meitou has texts for; the current one selected.</summary>
+    /// <summary>
+    /// English, Kenshi's own languages, the locale folders of the install and the languages Meitou has texts for; the current one selected.
+    /// </summary>
     void PopulateLanguageOptions(GameInstall? gameInstall)
     {
         var codes = new List<string> { GameLanguage.DefaultCode };
-        foreach (string code in GameLanguage.SteamLanguages.Select(l => l.Code).Concat(MeitouTranslations.EmbeddedCodes).Concat(InstalledLocaleCodes(gameInstall)))
+        foreach (string code in GameLanguage.SteamLanguages.Select(l => l.Code)
+            .Concat(MeitouTranslations.EmbeddedCodes).Concat(InstalledLocaleCodes(gameInstall)))
             if (!codes.Any(known => SameLanguage(known, code))) codes.Add(code);
         _populatingLanguages = true;
         LanguageBox.Items.Clear();
@@ -176,7 +221,8 @@ public sealed partial class MainWindow : Window
             string name = translated ? GameLanguageName(code) : $"{GameLanguageName(code)} ({Tr("Meitou's texts not yet translated")})";
             LanguageBox.Items.Add(new ComboBoxItem { Content = name, Tag = code });
         }
-        LanguageBox.SelectedItem = LanguageBox.Items.OfType<ComboBoxItem>().FirstOrDefault(item => item.Tag is string code && SameLanguage(code, LauncherText.Code))
+        LanguageBox.SelectedItem = LanguageBox.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(item => item.Tag is string code && SameLanguage(code, LauncherText.Code))
             ?? LanguageBox.Items.OfType<ComboBoxItem>().First();
         _populatingLanguages = false;
     }
@@ -215,7 +261,11 @@ public sealed partial class MainWindow : Window
 
     void Nav_Click(object? sender, RoutedEventArgs e)
     {
-        foreach (var (nav, page) in new (ToggleButton, Control)[] { (NavHome, HomePage), (NavMods, ModsPage), (NavVersions, VersionsPage), (NavGraphics, GraphicsPage), (NavSettings, SettingsPage) })
+        var pages = new (ToggleButton, Control)[]
+        {
+            (NavHome, HomePage), (NavMods, ModsPage), (NavVersions, VersionsPage), (NavGraphics, GraphicsPage), (NavSettings, SettingsPage),
+        };
+        foreach (var (nav, page) in pages)
         {
             nav.IsChecked = nav == sender;
             page.IsVisible = nav == sender;
@@ -246,21 +296,33 @@ public sealed partial class MainWindow : Window
         var (posts, problem) = await _news.FetchAsync();
         NewsPanel.Children.Clear();
         foreach (var post in posts) NewsPanel.Children.Add(PostCard(post));
-        if (posts.Count == 0) NewsPanel.Children.Add(new TextBlock { Classes = { "desc" }, Text = problem ?? "No news yet." });
+        if (posts.Count == 0)
+            NewsPanel.Children.Add(new TextBlock { Classes = { "desc" }, Text = problem ?? "No news yet." });
         NewsCount.Text = NewsFeed.LocalFolder is not null ? $"Debug: local news/, {posts.Count} posts"
-            : posts.Count == 0 ? "" : problem is not null ? Tr("Offline: saved posts") : posts.Count == 1 ? Tr("1 post") : Tr("{1} posts", posts.Count);
+            : posts.Count == 0 ? ""
+            : problem is not null ? Tr("Offline: saved posts")
+            : posts.Count == 1 ? Tr("1 post")
+            : Tr("{1} posts", posts.Count);
     }
 
     Control PostCard(NewsPost post)
     {
         var card = new StackPanel { Spacing = 8 };
-        if (post.Image is { } cover) card.Children.Add(MarkdownView.Image(NewsFeed.Resolve(post, cover), _news, post.Video is { } video ? (NewsFeed.Resolve(post, video), OpenLink) : null));
+        if (post.Image is { } cover)
+        {
+            (string Url, Action<string> Open)? play = post.Video is { } video ? (NewsFeed.Resolve(post, video), OpenLink) : null;
+            card.Children.Add(MarkdownView.Image(NewsFeed.Resolve(post, cover), _news, play));
+        }
         // The title, with "19 October 2026 · author" (either part when only it is given) on its right.
         var heading = new DockPanel();
-        var byline = string.Join(" · ", new[] { post.Date?.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture), post.Author }.Where(s => !string.IsNullOrEmpty(s)));
+        string? date = post.Date?.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        var byline = string.Join(" · ", new[] { date, post.Author }.Where(s => !string.IsNullOrEmpty(s)));
         if (byline.Length > 0)
         {
-            var aside = new TextBlock { Classes = { "desc" }, Text = byline, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
+            var aside = new TextBlock
+            {
+                Classes = { "desc" }, Text = byline, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0),
+            };
             DockPanel.SetDock(aside, Dock.Right);
             heading.Children.Add(aside);
         }
@@ -287,7 +349,8 @@ public sealed partial class MainWindow : Window
         KenshiPathBox.Text = found?.Root ?? _config.KenshiPath ?? "";
         _ = RefreshContinueAsync();
         KenshiStatus.Text = found is null ? "Not found: browse to the folder with data/gamedata.base."
-            : found.WorkshopDirectory is null ? "The folder with data/gamedata.base." : "The folder with data/gamedata.base; Steam workshop mods found.";
+            : found.WorkshopDirectory is null ? "The folder with data/gamedata.base."
+            : "The folder with data/gamedata.base; Steam workshop mods found.";
         KenshiBadge.Text = found is null ? "Kenshi not found: set its folder in Settings" : found.Root;
         if (found is not null && _config.KenshiPath != found.Root)
         {
@@ -409,7 +472,11 @@ public sealed partial class MainWindow : Window
             bool sure = await AskAsync("Nightly builds",
                 "Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: "
                 + "back up your saves before playing one.\n\nContinue with nightly builds?", "Yes", "No");
-            if (!sure) { NightlyBox.IsChecked = false; return; }
+                if (!sure)
+                {
+                    NightlyBox.IsChecked = false;
+                    return;
+                }
         }
         _config.IncludePrereleases = NightlyBox.IsChecked == true;
         _config.Save();
@@ -426,12 +493,20 @@ public sealed partial class MainWindow : Window
 
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
-        if (_download is not null) { InstallStatus.Text = Tr("Wait for the download to finish first."); return; }
+        if (_download is not null)
+        {
+            InstallStatus.Text = Tr("Wait for the download to finish first.");
+            return;
+        }
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Install folder" });
-        if (folders is not [var folder] || folder.TryGetLocalPath() is not { } path || path == LauncherConfig.InstallDirectory) return;
+        if (folders is not [var folder] || folder.TryGetLocalPath() is not { } path || path == LauncherConfig.InstallDirectory)
+            return;
         var previous = LauncherConfig.InstallDirectory;
         InstallStatus.Text = Tr("Moving installed versions…");
-        try { await Task.Run(() => Releases.MoveInstalled(previous, path)); }
+        try
+        {
+            await Task.Run(() => Releases.MoveInstalled(previous, path));
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             InstallStatus.Text = Tr("Could not move the versions to {1}: {2}", path, ex.Message);
@@ -487,8 +562,13 @@ public sealed partial class MainWindow : Window
             entries = gameInstall is null ? [] : await Task.Run(() =>
             {
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
+
                 // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
-                foreach (var entry in order) { _ = entry.Mod.Header; _ = entry.Mod.HasNativePlugin; }
+                foreach (var entry in order)
+                {
+                    _ = entry.Mod.Header;
+                    _ = entry.Mod.HasNativePlugin;
+                }
                 return order.Select(e => (e, CodeModDependencies.ReadEntry(e.Mod, e.Enabled))).ToList();
             });
         }
@@ -501,6 +581,7 @@ public sealed partial class MainWindow : Window
         }
         if (load != _modsLoad) return;
         foreach (var (entry, code) in entries) _mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
+
         // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
         foreach (var row in _mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
         _modsReady = true;
@@ -539,7 +620,8 @@ public sealed partial class MainWindow : Window
             Status(Tr("The mod order already meets every dependency."));
             return;
         }
-        if (!await AskAsync(Tr("Arrange mods"), Tr("Proposed moves:") + "\n" + string.Join("\n", moves), Tr("Apply"), Tr("Cancel"))) return;
+        if (!await AskAsync(Tr("Arrange mods"), Tr("Proposed moves:") + "\n" + string.Join("\n", moves), Tr("Apply"), Tr("Cancel")))
+            return;
         var enabled = _mods.ToDictionary(m => m.Name, m => m.Enabled, StringComparer.Ordinal);
         ApplyOrder(result.Order.Select(name => (name, enabled[name])));
         int left = _mods.Count(m => m.DependencyProblems.Count > 0);
@@ -568,13 +650,18 @@ public sealed partial class MainWindow : Window
     // False while the list is loading or after it could not be read; Status says why.
     bool ModsReady()
     {
-        if (!_modsReady) Status(ModsEmpty.IsVisible ? ModsEmpty.Text ?? "" : "The mod list is still loading; try again in a moment.");
+        if (!_modsReady)
+            Status(ModsEmpty.IsVisible ? ModsEmpty.Text ?? "" : "The mod list is still loading; try again in a moment.");
         return _modsReady;
     }
 
     bool SaveMods()
     {
-        if (_install is null) { Status("Set the Kenshi folder first (Settings)."); return false; }
+        if (_install is null)
+        {
+            Status("Set the Kenshi folder first (Settings).");
+            return false;
+        }
         if (!ModsReady()) return false;
         try
         {
@@ -626,7 +713,8 @@ public sealed partial class MainWindow : Window
     // re-created underneath without ending the drag.
     void DragHandle_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Control { DataContext: ModRow row } || !e.GetCurrentPoint(ModListBox).Properties.IsLeftButtonPressed) return;
+        if (sender is not Control { DataContext: ModRow row } || !e.GetCurrentPoint(ModListBox).Properties.IsLeftButtonPressed)
+            return;
         _dragged = row;
         ModListBox.SelectedItem = row;
         e.Pointer.Capture(ModListBox);
@@ -641,8 +729,14 @@ public sealed partial class MainWindow : Window
         int from = _mods.IndexOf(_dragged), to = from;
         for (int i = 0; i < _mods.Count; i++)
         {
-            if (ModListBox.ContainerFromIndex(i) is not Control item || item.TranslatePoint(new Point(0, 0), ModListBox) is not { } top) continue;
-            if (y >= top.Y && y < top.Y + item.Bounds.Height) { to = i; break; }
+            if (ModListBox.ContainerFromIndex(i) is not Control item || item.TranslatePoint(new Point(0, 0), ModListBox) is not { } top)
+                continue;
+
+            if (y >= top.Y && y < top.Y + item.Bounds.Height)
+            {
+                to = i;
+                break;
+            }
         }
         if (to == from) return;
         MarkDragged(false);
@@ -674,14 +768,19 @@ public sealed partial class MainWindow : Window
 
     void ModListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (ModListBox.SelectedItem is not ModRow row) { ModDetails.Text = ""; return; }
+        if (ModListBox.SelectedItem is not ModRow row)
+        {
+            ModDetails.Text = "";
+            return;
+        }
         var header = row.Mod.Header;
         var parts = new List<string>();
         if (header is { Description.Length: > 0 }) parts.Add(header.Description.ReplaceLineEndings(" "));
         if (header is { Dependencies.Count: > 0 })
         {
             var missing = header.Dependencies.Where(d => !IsAvailableBefore(d, row)).ToList();
-            parts.Add(Tr("Needs {1}", string.Join(", ", header.Dependencies)) + (missing.Count > 0 ? Tr(" (not enabled above it: {1})", string.Join(", ", missing)) : ""));
+            string notEnabled = missing.Count > 0 ? Tr(" (not enabled above it: {1})", string.Join(", ", missing)) : "";
+            parts.Add(Tr("Needs {1}", string.Join(", ", header.Dependencies)) + notEnabled);
         }
         parts.Add(row.Mod.Folder);
         ModDetails.Text = string.Join(" · ", parts);
@@ -710,7 +809,11 @@ public sealed partial class MainWindow : Window
     void SavePreset_Click(object? sender, RoutedEventArgs e)
     {
         var name = PresetName.Text?.Trim();
-        if (string.IsNullOrEmpty(name)) { Status("Type a name for the preset."); return; }
+        if (string.IsNullOrEmpty(name))
+        {
+            Status("Type a name for the preset.");
+            return;
+        }
         if (!ModsReady()) return;
         _config.Presets.RemoveAll(p => p.Name == name);
         _config.Presets.Add(new ModPreset { Name = name, Mods = [.. _mods.Select(m => new PresetMod { Name = m.Name, Enabled = m.Enabled })] });
@@ -743,10 +846,18 @@ public sealed partial class MainWindow : Window
         {
             foreach (var (name, enabled) in order)
             {
-                if (byName.Remove(name, out var row)) { row.Enabled = enabled; ordered.Add(row); }
+                if (byName.Remove(name, out var row))
+                {
+                    row.Enabled = enabled;
+                    ordered.Add(row);
+                }
                 else if (enabled) missing.Add(name);
             }
-            foreach (var row in _mods.Where(m => byName.ContainsKey(m.Name))) { row.Enabled = false; ordered.Add(row); }
+            foreach (var row in _mods.Where(m => byName.ContainsKey(m.Name)))
+            {
+                row.Enabled = false;
+                ordered.Add(row);
+            }
             _mods.Clear();
             foreach (var row in ordered) _mods.Add(row);
         }
@@ -804,8 +915,10 @@ public sealed partial class MainWindow : Window
         _versionMenu.Items.Add(VersionItem(UpdatePending ? Tr("Latest (update to {1})", Releases.Display(LatestRelease!.Version))
             : _installedVersions.FirstOrDefault() is { } newest ? Tr("Latest ({1})", Releases.Display(newest)) : Tr("Latest"), null, picked));
         foreach (var version in _installedVersions) _versionMenu.Items.Add(VersionItem($"v{Releases.ParseVersion(version).Number}", version, picked));
+
         // Its settings are the played version's.
         if (GraphicsPage.IsVisible) ShowGraphics();
+
         // A skipped release stays installable from here.
         if (LatestRelease is { } latest && latest.Version == _config.SkippedVersion && !_installedVersions.Contains(latest.Version))
         {
@@ -836,6 +949,7 @@ public sealed partial class MainWindow : Window
         PlayIcon.Data = ContinueButton.IsVisible ? MenuIcon : StartIcon;
         UpdateIcon.IsVisible = pending;
         PlayText.FontSize = ContinueButton.IsVisible ? 17 : 21;
+
         // Two lines in the button's one-line height.
         PlayText.LineHeight = menu ? 20 : double.NaN;
         PlaySubText.IsVisible = menu;
@@ -860,18 +974,23 @@ public sealed partial class MainWindow : Window
     MenuItem VersionItem(string header, string? version, string? picked)
     {
         object content = header;
+
         // A nightly wears a brass tag with its build date, and a same-day second build its number: "v0.15.1  NIGHTLY 20 OCT #2".
         if (version is not null && version.Contains("-nightly.", StringComparison.Ordinal))
         {
             var parsed = Releases.ParseVersion(version);
-            var date = parsed.Nightly?.ToString(" d MMM", System.Globalization.CultureInfo.InvariantCulture) + (parsed.Build > 1 ? $" #{parsed.Build}" : "");
+            var date = parsed.Nightly?.ToString(" d MMM", System.Globalization.CultureInfo.InvariantCulture)
+                + (parsed.Build > 1 ? $" #{parsed.Build}" : "");
             content = new StackPanel
             {
                 Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10,
                 Children =
                 {
                     new TextBlock { Text = header },
-                    new TextBlock { Classes = { "warn" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Text = ("nightly" + date).ToUpperInvariant() },
+                    new TextBlock
+                    {
+                        Classes = { "warn" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Text = ("nightly" + date).ToUpperInvariant(),
+                    },
                 },
             };
         }
@@ -897,7 +1016,8 @@ public sealed partial class MainWindow : Window
     }
 
     // The newest game release with a build for this platform, honouring the pre-release setting.
-    Release? LatestRelease => _allReleases.FirstOrDefault(r => r.Kind == ReleaseKind.Game && (_config.IncludePrereleases || !r.Prerelease) && r.Asset is not null);
+    Release? LatestRelease =>
+        _allReleases.FirstOrDefault(r => r.Kind == ReleaseKind.Game && (_config.IncludePrereleases || !r.Prerelease) && r.Asset is not null);
 
     // With no version installed the footer offers Install latest instead of the version box and Play; with versions installed
     // but not the latest, an update button beside the version box installs it and selects it.
@@ -911,7 +1031,9 @@ public sealed partial class MainWindow : Window
         InstallLatestButton.IsVisible = none;
         SetText(InstallLatestText, Tr("Install {1}", Tr(Latest)));
         InstallLatestButton.IsEnabled = latest is not null;
-        ToolTip.SetTip(InstallLatestButton, latest is not null ? Tr("Download and install {1}", latest.Title) : Tr("No release with a {1} build found yet", Releases.Rid));
+        string latestTip = latest is not null ? Tr("Download and install {1}", latest.Title) : Tr("No release with a {1} build found yet", Releases.Rid);
+        ToolTip.SetTip(InstallLatestButton, latestTip);
+
         // Playing the latest, Play itself is the update (ShowPlay); playing a picked version, this button beside it.
         UpdateButton.IsVisible = PickedVersion is not null && NewRelease is not null;
         SkipButton.IsVisible = NewRelease is not null;
@@ -944,7 +1066,8 @@ public sealed partial class MainWindow : Window
         ShowReleases();
         Status(problem ?? "");
         await ShowLauncherUpdateAsync();   // after: its "Launcher … is available" line must not be cleared
-        if (updateLauncher && _config.AutoUpdateLauncher && _updater.IsInstalled && LauncherUpdateButton.IsVisible) await UpdateLauncherAsync();
+        if (updateLauncher && _config.AutoUpdateLauncher && _updater.IsInstalled && LauncherUpdateButton.IsVisible)
+            await UpdateLauncherAsync();
     }
 
     void ShowReleases()
@@ -959,20 +1082,26 @@ public sealed partial class MainWindow : Window
         ReleaseListBox.SelectedItem = rows.FirstOrDefault(r => r.Release.Tag == selected);
         NotesEmpty.IsVisible = ReleaseListBox.SelectedItem is null;
         ReleasesEmpty.IsVisible = rows.Count == 0;
-        ReleasesEmpty.Text = Tr(_allReleases.Any(r => r.Kind == ReleaseKind.Game) ? "Only nightly builds so far: tick Nightly builds beside Play to list them."
+        ReleasesEmpty.Text = Tr(_allReleases.Any(r => r.Kind == ReleaseKind.Game)
+            ? "Only nightly builds so far: tick Nightly builds beside Play to list them."
             : "No releases listed yet. Check for releases below.");
         VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count, installed.Count);
         ShowVersionButtons();
         ShowFooter();
     }
 
+    /// <summary>
+    /// A release's notes as a news post, for the notes pane's Markdown view.
+    /// </summary>
+    static NewsPost ReleaseNotesPost(Release release) =>
+        new("", release.Title, null, null, null, ReleaseNotesMarkdown(release.Notes), release.PageUrl);
+
     async void RefreshReleases_Click(object? sender, RoutedEventArgs e) => await RefreshReleasesAsync();
 
     void ReleaseListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         var release = (ReleaseListBox.SelectedItem as ReleaseRow)?.Release;
-        ReleaseNotes.Content = release is null ? null
-            : MarkdownView.Render(new NewsPost("", release.Title, null, null, null, ReleaseNotesMarkdown(release.Notes), release.PageUrl), _news, OpenLink);
+        ReleaseNotes.Content = release is null ? null : MarkdownView.Render(ReleaseNotesPost(release), _news, OpenLink);
         NotesEmpty.IsVisible = release is null;
         ShowVersionButtons();
     }
@@ -995,18 +1124,24 @@ public sealed partial class MainWindow : Window
     // Install, or Cancel while a download runs.
     async void Install_Click(object? sender, RoutedEventArgs e)
     {
-        if (_download is not null) { _download.Cancel(); return; }
+        if (_download is not null)
+        {
+            _download.Cancel();
+            return;
+        }
         if (ReleaseListBox.SelectedItem is ReleaseRow { Release: var release }) await InstallAsync(release);
     }
 
     // The footer's Install latest, or Cancel while a download runs.
     async void InstallLatest_Click(object? sender, RoutedEventArgs e)
     {
-        if (_download is not null) { _download.Cancel(); return; }
+        if (_download is not null)
+        {
+            _download.Cancel();
+            return;
+        }
         if (LatestRelease is { } release) await InstallAsync(release);
     }
-
-    static readonly Avalonia.Media.FontFamily Mono = new("Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, monospace");
 
     // The download percentage in a mono font, padded to "100%", so the footer buttons keep their width while it counts.
     void ShowProgress(double p)
@@ -1022,7 +1157,11 @@ public sealed partial class MainWindow : Window
     // padded so the line keeps its width; "Unpacking <title>..." once every byte is in.
     void ShowDownloadStatus(Release release, long done, long total, double bitsPerSecond)
     {
-        if (total > 0 && done >= total) { Status(Tr("Unpacking {1}...", release.Title)); return; }
+        if (total > 0 && done >= total)
+        {
+            Status(Tr("Unpacking {1}...", release.Title));
+            return;
+        }
         var size = total > 0 ? $"{done / 1e6,6:0.0} / {total / 1e6:0.0} MB" : $"{done / 1e6:0.0} MB";
         var speed = bitsPerSecond > 0 ? $" · {bitsPerSecond / 1e6,5:0.0} Mbps" : "";
         StatusText.Inlines = [new Run(Tr("Downloading {1}", release.Title) + "  "), new Run(size + speed) { FontFamily = Mono }];
@@ -1033,15 +1172,8 @@ public sealed partial class MainWindow : Window
     async Task InstallAsync(Release release)
     {
         using var cts = _download = new CancellationTokenSource();
-        ShowVersionButtons();
-        ShowProgress(0);
-        SkipButton.IsVisible = false;
-        ToolTip.SetTip(InstallLatestButton, Tr("Cancel the download of {1}", release.Title));
-        ToolTip.SetTip(UpdateButton, Tr("Cancel the download of {1}", release.Title));
-        if (PlayButton.Classes.Contains("pending")) ToolTip.SetTip(PlayButton, Tr("Cancel the download of {1}", release.Title));
-        DownloadProgress.Value = StatusProgress.Value = 0;
-        DownloadProgress.IsVisible = StatusProgress.IsVisible = true;
-        Status(Tr("Downloading {1}...", release.Title));
+        BeginInstallView(release);
+
         // The speed is smoothed over half-second samples, so the shown figure doesn't flicker with every 100 ms report.
         var clock = Stopwatch.StartNew();
         double sampleTime = 0, bitsPerSecond = 0;
@@ -1062,6 +1194,7 @@ public sealed partial class MainWindow : Window
                 ShowProgress(fraction);
                 ShowDownloadStatus(release, p.Done, p.Total, bitsPerSecond);
             }), cts.Token);
+
             // Play starts what was just installed: as the latest, or picked when older than an installed one.
             _config.SelectedVersion = release.Version == Releases.Installed().FirstOrDefault() ? null : release.Version;
             _config.Save();
@@ -1073,24 +1206,55 @@ public sealed partial class MainWindow : Window
         {
             Status(Tr("Download of {1} cancelled.", release.Title));
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex)
+            when (ex is HttpRequestException or OperationCanceledException or IOException or InvalidDataException
+                or UnauthorizedAccessException or InvalidOperationException)
         {
             Status(Tr("Install failed: {1}", ex.Message));
         }
         finally
         {
-            _download = null;
-            DownloadProgress.IsVisible = StatusProgress.IsVisible = false;
-            ShowVersionButtons();
-            ShowFooter();
+            EndInstallView();
         }
+    }
+
+    /// <summary>
+    /// Shows the download of <paramref name="release"/> starting: the cancel tips, and the progress bars at zero.
+    /// </summary>
+    void BeginInstallView(Release release)
+    {
+        ShowVersionButtons();
+        ShowProgress(0);
+        SkipButton.IsVisible = false;
+        ToolTip.SetTip(InstallLatestButton, Tr("Cancel the download of {1}", release.Title));
+        ToolTip.SetTip(UpdateButton, Tr("Cancel the download of {1}", release.Title));
+        if (PlayButton.Classes.Contains("pending"))
+            ToolTip.SetTip(PlayButton, Tr("Cancel the download of {1}", release.Title));
+        DownloadProgress.Value = StatusProgress.Value = 0;
+        DownloadProgress.IsVisible = StatusProgress.IsVisible = true;
+        Status(Tr("Downloading {1}...", release.Title));
+    }
+
+    /// <summary>
+    /// Clears the download: the progress bars go, the buttons and footer come back.
+    /// </summary>
+    void EndInstallView()
+    {
+        _download = null;
+        DownloadProgress.IsVisible = StatusProgress.IsVisible = false;
+        ShowVersionButtons();
+        ShowFooter();
     }
 
     void Uninstall_Click(object? sender, RoutedEventArgs e)
     {
         if (_download is not null || ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
         var dir = Releases.VersionDirectory(release.Version);
-        if (!Directory.Exists(dir)) { Status(Tr("{1} is not installed.", release.Title)); return; }
+        if (!Directory.Exists(dir))
+        {
+            Status(Tr("{1} is not installed.", release.Title));
+            return;
+        }
         try
         {
             Directory.Delete(dir, true);
@@ -1108,7 +1272,11 @@ public sealed partial class MainWindow : Window
     {
         if (ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
         var dir = Releases.VersionDirectory(release.Version);
-        if (!Directory.Exists(dir)) { Status(Tr("{1} is not installed.", release.Title)); return; }
+        if (!Directory.Exists(dir))
+        {
+            Status(Tr("{1} is not installed.", release.Title));
+            return;
+        }
         await this.Launcher.LaunchUriAsync(new Uri(dir + Path.DirectorySeparatorChar));
     }
 
@@ -1127,8 +1295,15 @@ public sealed partial class MainWindow : Window
         string? version;
         if (_updater.IsInstalled)
         {
-            try { version = await _updater.CheckAsync(); }
-            catch (Exception ex) { LauncherAbout.Text = Tr("Version {1}. The update check failed: {2}", LauncherVersion, ex.Message); return; }
+            try
+            {
+                version = await _updater.CheckAsync();
+            }
+            catch (Exception ex)
+            {
+                LauncherAbout.Text = Tr("Version {1}. The update check failed: {2}", LauncherVersion, ex.Message);
+                return;
+            }
             LauncherUpdateButton.Tag = null;
         }
         else
@@ -1143,7 +1318,8 @@ public sealed partial class MainWindow : Window
         LauncherUpdateButton.Content = Tr(_updater.IsInstalled ? "Update to {1}" : "Get launcher {1}", version);
         TitleLauncherUpdateButton.IsVisible = version is not null;
         TitleLauncherUpdateText.Text = Tr(_updater.IsInstalled ? "Update launcher to {1}" : "Get launcher {1}", version);
-        ToolTip.SetTip(TitleLauncherUpdateButton, _updater.IsInstalled ? "Download the new launcher and restart into it" : "Open the launcher's release page");
+        string updateTip = _updater.IsInstalled ? "Download the new launcher and restart into it" : "Open the launcher's release page";
+        ToolTip.SetTip(TitleLauncherUpdateButton, updateTip);
         if (version is not null) Status(Tr("Launcher {1} is available.", version));
     }
 
@@ -1161,7 +1337,11 @@ public sealed partial class MainWindow : Window
 
     async void LauncherUpdate_Click(object? sender, RoutedEventArgs e)
     {
-        if (LauncherUpdateButton.Tag is string url) { await this.Launcher.LaunchUriAsync(new Uri(url)); return; }
+        if (LauncherUpdateButton.Tag is string url)
+        {
+            await this.Launcher.LaunchUriAsync(new Uri(url));
+            return;
+        }
         await UpdateLauncherAsync();
     }
 
@@ -1206,13 +1386,11 @@ public sealed partial class MainWindow : Window
     // Windows does not start a resize drag (BeginResizeDrag) on a window without its frame, so there the grips size the window themselves:
     // the pixel rectangle at the press, its dragged edges following the pointer they capture (Avalonia's Width / Height on this frameless
     // window add a title bar's height). Elsewhere the platform does it (Wayland lets no window place itself).
-    WindowEdge? _resizeEdge;
-    PixelPoint _resizeStart;
-    Win32Window.Rect _resizeRect;
 
     void Grip_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Control { Tag: string tag } grip || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (sender is not Control { Tag: string tag } grip || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
         var edge = Enum.Parse<WindowEdge>(tag);
         if (!OperatingSystem.IsWindows() || TryGetPlatformHandle()?.Handle is not { } hwnd || !Win32Window.GetWindowRect(hwnd, out _resizeRect))
         {
@@ -1232,10 +1410,14 @@ public sealed partial class MainWindow : Window
         int dx = now.X - _resizeStart.X, dy = now.Y - _resizeStart.Y;
         int minWidth = (int)Math.Ceiling(MinWidth * DesktopScaling), minHeight = (int)Math.Ceiling(MinHeight * DesktopScaling);
         var (left, top, right, bottom) = (_resizeRect.Left, _resizeRect.Top, _resizeRect.Right, _resizeRect.Bottom);
-        if (edge is WindowEdge.West or WindowEdge.NorthWest or WindowEdge.SouthWest) left = Math.Min(left + dx, right - minWidth);
-        if (edge is WindowEdge.East or WindowEdge.NorthEast or WindowEdge.SouthEast) right = Math.Max(right + dx, left + minWidth);
-        if (edge is WindowEdge.North or WindowEdge.NorthWest or WindowEdge.NorthEast) top = Math.Min(top + dy, bottom - minHeight);
-        if (edge is WindowEdge.South or WindowEdge.SouthWest or WindowEdge.SouthEast) bottom = Math.Max(bottom + dy, top + minHeight);
+        if (edge is WindowEdge.West or WindowEdge.NorthWest or WindowEdge.SouthWest)
+            left = Math.Min(left + dx, right - minWidth);
+        if (edge is WindowEdge.East or WindowEdge.NorthEast or WindowEdge.SouthEast)
+            right = Math.Max(right + dx, left + minWidth);
+        if (edge is WindowEdge.North or WindowEdge.NorthWest or WindowEdge.NorthEast)
+            top = Math.Min(top + dy, bottom - minHeight);
+        if (edge is WindowEdge.South or WindowEdge.SouthWest or WindowEdge.SouthEast)
+            bottom = Math.Max(bottom + dy, top + minHeight);
         Win32Window.SetWindowPos(hwnd, IntPtr.Zero, left, top, right - left, bottom - top, Win32Window.NoZOrder | Win32Window.NoActivate);
     }
 
@@ -1267,23 +1449,37 @@ public sealed partial class MainWindow : Window
     async void Play_Click(object? sender, RoutedEventArgs e)
     {
         // As the update button: install the latest, or cancel its download.
-        if (PlayButton.Classes.Contains("pending")) { InstallLatest_Click(sender, e); return; }
+        if (PlayButton.Classes.Contains("pending"))
+        {
+            InstallLatest_Click(sender, e);
+            return;
+        }
         await StartGame(continueSave: false);
     }
 
     // Starts the played version; with continueSave, in the newest save (ContinueSave.cs), not at all when its mods are other ones.
     async Task StartGame(bool continueSave)
     {
-        if (_install is null) { Status("Set the Kenshi folder first (Settings)."); return; }
+        if (_install is null)
+        {
+            Status("Set the Kenshi folder first (Settings).");
+            return;
+        }
         if (FindPlayedGame() is not (string exe, string version)) return;
+
         // A second game would share meitou.user.json and the mod list with the first; whichever closes last overwrites the other's.
-        if (_running is { HasExited: false }) { Status("Meitou is already running: close it before starting it again."); return; }
+        if (_running is { HasExited: false })
+        {
+            Status("Meitou is already running: close it before starting it again.");
+            return;
+        }
 
         SaveModSlot? save = null;
         if (continueSave && (save = await ContinueTarget(_install)) is null) return;
         if (!SaveMods()) return;
         if (_graphicsSave?.IsEnabled == true) SaveGame();
-        if (_running is { HasExited: false }) return;   // a second click while the save was checked started the game already
+        if (_running is { HasExited: false })
+            return;   // a second click while the save was checked started the game already
 
         var start = GameStartInfo(exe, _install);
         var steamAppIdFiles = SetUpSteamAppId(start, exe, _install);
@@ -1302,7 +1498,11 @@ public sealed partial class MainWindow : Window
 #if DEBUG
         if (FindDevelopmentGame() is { } development) return (development, "Debug build");
 #endif
-        if (PlayVersion is not { } version) { Status("Install a version first (Versions)."); return null; }
+        if (PlayVersion is not { } version)
+        {
+            Status("Install a version first (Versions).");
+            return null;
+        }
         if (Releases.FindGame(Releases.VersionDirectory(version)) is { } exe) return (exe, version);
         Status(Tr("Meitou {1} is not installed any more.", version));
         return null;
@@ -1320,6 +1520,7 @@ public sealed partial class MainWindow : Window
 #endif
         };
         start.Environment[GameInstall.EnvironmentVariable] = gameInstall.Root;
+
         // The Metal GPU cull is experimental and has caused GPU progress timeouts; it is not a user setting.
         start.Environment.Remove("MEITOU_METAL_GPU_CULL");
         start.Environment.Remove("MEITOU_METAL_GPU_BUDGET_MB");
@@ -1332,8 +1533,8 @@ public sealed partial class MainWindow : Window
     List<string> SetUpSteamAppId(ProcessStartInfo start, string exe, GameInstall gameInstall)
     {
         var written = new List<string>();
-        string[] appIdFiles = [.. new[] { Path.Combine(start.WorkingDirectory, "steam_appid.txt"), Path.Combine(Path.GetDirectoryName(exe)!, "steam_appid.txt") }
-            .Distinct(StringComparer.OrdinalIgnoreCase)];
+        string besideExe = Path.Combine(Path.GetDirectoryName(exe)!, "steam_appid.txt");
+        string[] appIdFiles = [.. new[] { Path.Combine(start.WorkingDirectory, "steam_appid.txt"), besideExe }.Distinct(StringComparer.OrdinalIgnoreCase)];
         if (!_config.LaunchAsSteamKenshi)
         {
             // Off: no Kenshi ID anywhere (not one inherited from Steam, nor a file an earlier launch left), so the game's Steamworks init skips.
@@ -1341,8 +1542,13 @@ public sealed partial class MainWindow : Window
             start.Environment.Remove("SteamGameId");
             foreach (string file in appIdFiles)
             {
-                try { if (File.Exists(file) && File.ReadAllText(file).Trim() == KenshiAppId) TryDeleteSteamAppId(file); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                try
+                {
+                    if (File.Exists(file) && File.ReadAllText(file).Trim() == KenshiAppId) TryDeleteSteamAppId(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
             }
         }
         else if (OperatingSystem.IsWindows() && File.Exists(Path.Combine(gameInstall.Root, "steam_api64.dll")) && !SteamAppIdConflict(appIdFiles))
@@ -1355,7 +1561,9 @@ public sealed partial class MainWindow : Window
                     File.WriteAllText(file, KenshiAppId);
                     written.Add(file);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
             }
             start.Environment["SteamAppId"] = KenshiAppId;
             start.Environment["SteamGameId"] = KenshiAppId;
@@ -1369,7 +1577,10 @@ public sealed partial class MainWindow : Window
         bool conflict = false;
         foreach (string file in appIdFiles)
         {
-            try { if (File.Exists(file) && File.ReadAllText(file).Trim() != KenshiAppId) conflict = true; }
+            try
+            {
+                if (File.Exists(file) && File.ReadAllText(file).Trim() != KenshiAppId) conflict = true;
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { conflict = true; }
         }
         return conflict;
@@ -1444,7 +1655,11 @@ public sealed partial class MainWindow : Window
             var game = Process.Start(start);
             _running = game;
             Status(started);
-            if (game is null) { RemoveSteamAppIds(steamAppIdFiles); return; }
+            if (game is null)
+            {
+                RemoveSteamAppIds(steamAppIdFiles);
+                return;
+            }
 #if DEBUG
             ForwardOutput(game);
 #endif
@@ -1468,7 +1683,8 @@ public sealed partial class MainWindow : Window
             {
                 // On the UI thread, as Play: a game started since then has taken these files over and removes them itself.
                 if (_running == game) RemoveSteamAppIds(steamAppIdFiles);
-                if (code != 0) Status(Tr("Meitou {1} stopped with an error (exit code {2}); its log is {3}", version, code, log));
+                if (code != 0)
+                    Status(Tr("Meitou {1} stopped with an error (exit code {2}); its log is {3}", version, code, log));
                 _ = RefreshContinueAsync();
             });
         };
@@ -1477,10 +1693,22 @@ public sealed partial class MainWindow : Window
 #if DEBUG
     static void ForwardOutput(Process game)
     {
-        game.OutputDataReceived += (_, data) => { if (data.Data is { } line) { Console.WriteLine($"[Meitou] {line}"); Debug.WriteLine($"[Meitou] {line}"); } };
-        game.ErrorDataReceived += (_, data) => { if (data.Data is { } line) { Console.Error.WriteLine($"[Meitou] {line}"); Debug.WriteLine($"[Meitou] {line}"); } };
+        game.OutputDataReceived += (_, data) => ForwardLine(data, Console.Out);
+        game.ErrorDataReceived += (_, data) => ForwardLine(data, Console.Error);
         game.BeginOutputReadLine();
         game.BeginErrorReadLine();
+    }
+
+    /// <summary>
+    /// A line of the game's output, tagged [Meitou], to the launcher's console and the debugger.
+    /// </summary>
+    static void ForwardLine(DataReceivedEventArgs data, TextWriter console)
+    {
+        if (data.Data is not { } line)
+            return;
+
+        console.WriteLine($"[Meitou] {line}");
+        Debug.WriteLine($"[Meitou] {line}");
     }
 #endif
 
@@ -1500,12 +1728,15 @@ public sealed partial class MainWindow : Window
     }
 #endif
 
-    const string KenshiAppId = "233860";
-
     static void TryDeleteSteamAppId(string path)
     {
-        try { File.Delete(path); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     // Space-separated, with double quotes around arguments that contain spaces.
@@ -1515,15 +1746,30 @@ public sealed partial class MainWindow : Window
         bool quoted = false, any = false;
         foreach (char c in text)
         {
-            if (c == '"') { quoted = !quoted; any = true; }
-            else if (char.IsWhiteSpace(c) && !quoted) { if (any) yield return current.ToString(); current.Clear(); any = false; }
-            else { current.Append(c); any = true; }
+            if (c == '"')
+            {
+                quoted = !quoted;
+                any = true;
+            }
+            else if (char.IsWhiteSpace(c) && !quoted)
+            {
+                if (any) yield return current.ToString();
+                current.Clear();
+                any = false;
+            }
+            else
+            {
+                current.Append(c);
+                any = true;
+            }
         }
         if (any) yield return current.ToString();
     }
 }
 
-/// <summary>The Win32 calls the resize grips use on Windows (MainWindow.Grip_PointerPressed).</summary>
+/// <summary>
+/// The Win32 calls the resize grips use on Windows (MainWindow.Grip_PointerPressed).
+/// </summary>
 static partial class Win32Window
 {
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]

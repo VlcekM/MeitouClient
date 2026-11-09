@@ -12,10 +12,14 @@ namespace Meitou.Data.Save;
 /// </summary>
 public static class SaveWeather
 {
-    /// <summary>Game-speed seconds per game minute (1200/11 s per game hour, docs/game/game-loop.md): <c>_w_wi_time</c> counts them.</summary>
+    /// <summary>
+    /// Game-speed seconds per game minute (1200/11 s per game hour, docs/game/game-loop.md): <c>_w_wi_time</c> counts them.
+    /// </summary>
     public const double SecondsPerGameMinute = 20.0 / 11.0;
 
-    /// <summary>The region id → key prefix entries of a BIOMES record (a prefix is an integer; the region's own keys start with it and '_').</summary>
+    /// <summary>
+    /// The region id → key prefix entries of a BIOMES record (a prefix is an integer; the region's own keys start with it and '_').
+    /// </summary>
     public static IEnumerable<(string RegionId, string Prefix)> Prefixes(FcsRecord biomes)
     {
         foreach (var (key, value) in biomes.Strings)
@@ -23,7 +27,9 @@ public static class SaveWeather
                 yield return (key, value);
     }
 
-    /// <summary>The regions the record has a weather for (a region without <c>_w_w_id</c> or <c>_w_wi_start</c> is left out: it keeps the schedule it has).</summary>
+    /// <summary>
+    /// The regions the record has a weather for (a region without <c>_w_w_id</c> or <c>_w_wi_start</c> is left out: it keeps the schedule it has).
+    /// </summary>
     public static List<WeatherRegionSnapshot> Read(FcsRecord biomes)
     {
         var list = new List<WeatherRegionSnapshot>();

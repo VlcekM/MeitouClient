@@ -10,6 +10,7 @@ public sealed class GameRecord
 {
     readonly OrderedDictionary<string, OrderedDictionary<string, ReferenceValues>> _references = new(StringComparer.Ordinal);
     readonly OrderedDictionary<string, GameInstance> _instances = new(StringComparer.Ordinal);
+    string? _baseName;
 
     internal GameRecord(string stringId, FcsRecordType type, string name, string definedBy)
     {
@@ -21,10 +22,11 @@ public sealed class GameRecord
 
     public string StringId { get; }
     public FcsRecordType Type { get; }
-    /// <summary>The name shown to the player: a translation file renames records (docs/formats/localisation.md), so this is in the active language.</summary>
-    public string Name { get; internal set; }
 
-    string? _baseName;
+    /// <summary>
+    /// The name shown to the player: a translation file renames records (docs/formats/localisation.md), so this is in the active language.
+    /// </summary>
+    public string Name { get; internal set; }
 
     /// <summary>
     /// The name the data files gave the record, before a translation file renamed it. Code that finds a record by its English name (the player's
@@ -38,10 +40,14 @@ public sealed class GameRecord
         Name = translated;
     }
 
-    /// <summary>The file that defined the record.</summary>
+    /// <summary>
+    /// The file that defined the record.
+    /// </summary>
     public string DefinedBy { get; }
 
-    /// <summary>Files that changed the record after <see cref="DefinedBy"/>, in load order.</summary>
+    /// <summary>
+    /// Files that changed the record after <see cref="DefinedBy"/>, in load order.
+    /// </summary>
     public List<string> ModifiedBy { get; } = [];
 
     // One table per value kind, as in the game: a value only replaces the same key of the same kind, so a
@@ -61,7 +67,9 @@ public sealed class GameRecord
     public IReadOnlyDictionary<string, Vector4> Vector4S => Vector4Table;
     public IReadOnlyDictionary<string, string> Strings => StringTable;
 
-    /// <summary>File path fields (a separate table from <see cref="Strings"/>).</summary>
+    /// <summary>
+    /// File path fields (a separate table from <see cref="Strings"/>).
+    /// </summary>
     public IReadOnlyDictionary<string, string> Filenames => FilenameTable;
 
     public IEnumerable<string> ReferenceLists => _references.Keys;
@@ -81,6 +89,7 @@ public sealed class GameRecord
     {
         if (!_references.TryGetValue(list, out var refs))
             _references[list] = refs = new(StringComparer.Ordinal);
+
         return refs;
     }
 
@@ -99,7 +108,9 @@ public sealed class GameInstance
 
     public string Id { get; }
 
-    /// <summary>The placed record; empty if a later file cleared the instance (the game keeps the entry).</summary>
+    /// <summary>
+    /// The placed record; empty if a later file cleared the instance (the game keeps the entry).
+    /// </summary>
     public string Target { get; internal set; } = "";
 
     public bool IsCleared => Target.Length == 0;

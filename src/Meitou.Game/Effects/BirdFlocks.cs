@@ -5,17 +5,23 @@ using Meitou.Game.Rendering.Objects;
 
 namespace Meitou.Game.Effects;
 
-/// <summary>A world object that draws birds of one WILDLIFE_BIRDS kind to it (a record's <c>bird attractor</c> reference: <paramref name="Range"/> its first value, <paramref name="Max"/> its second).</summary>
+/// <summary>
+/// A world object that draws birds of one WILDLIFE_BIRDS kind to it (a record's <c>bird attractor</c> reference: <paramref name="Range"/> its first
+/// value, <paramref name="Max"/> its second).
+/// </summary>
 public readonly record struct BirdAttractor(object Key, string Kind, Vector3 Position, int Range, int Max);
 
 /// <summary>
-/// The birds (docs/game/birds.md): the original's <c>BirdManager</c> thread step <c>FUN_140262830</c>, run on the display's real time. Per WILDLIFE_BIRDS kind: spawn a flock when the
-/// birds alive plus its <c>spawn count</c> fit the amounts of the BIOME_GROUP cells in range (<c>FUN_140260620</c>, <c>FUN_140262500</c>), then move each bird by its state
-/// (<see cref="BirdState"/>) with a turn limited to about one radian per second. Birds are drawn as loose meshes (<see cref="DebrisPiece"/>).
+/// The birds (docs/game/birds.md): the original's <c>BirdManager</c> thread step <c>FUN_140262830</c>, run on the display's real time. Per
+/// WILDLIFE_BIRDS kind: spawn a flock when the birds alive plus its <c>spawn count</c> fit the amounts of the BIOME_GROUP cells in range
+/// (<c>FUN_140260620</c>, <c>FUN_140262500</c>), then move each bird by its state (<see cref="BirdState"/>) with a turn limited to about one radian
+/// per second. Birds are drawn as loose meshes (<see cref="DebrisPiece"/>).
 /// </summary>
 public sealed class BirdFlocks
 {
-    /// <summary>A bird's state (<b>Verified</b>, the <c>+0x38</c> field of <c>FUN_140262830</c>; 8 is never set).</summary>
+    /// <summary>
+    /// A bird's state (<b>Verified</b>, the <c>+0x38</c> field of <c>FUN_140262830</c>; 8 is never set).
+    /// </summary>
     public enum BirdState { Gone = 0, Return = 1, Wander = 2, Follow = 3, Circle = 4, Attracted = 5, Rest = 6 }
 
     sealed class Bird
@@ -38,10 +44,17 @@ public sealed class BirdFlocks
     sealed class Group(BirdFlockData kind, Func<int, int, string?> groupOfCell)
     {
         public readonly BirdFlockData Kind = kind;
-        /// <summary>The kind's amount in each weather cell (-1: the cell's group does not list it), row z * 64 + x; the map does not change while the birds fly.</summary>
+        /// <summary>
+        /// The kind's amount in each weather cell (-1: the cell's group does not list it), row z * 64 + x; the map does not change while the birds
+        /// fly.
+        /// </summary>
         public readonly int[] Amounts = BuildAmounts(kind, groupOfCell);
-        /// <summary>Summed-area tables of the listing cells and their amounts (65 x 65: rows and columns of the cells before), so a rectangle's sums take four reads.</summary>
-        public readonly int[] MatchSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)], TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
+        /// <summary>
+        /// Summed-area tables of the listing cells and their amounts (65 x 65: rows and columns of the cells before), so a rectangle's sums take four
+        /// reads.
+        /// </summary>
+        public readonly int[] MatchSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)],
+            TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
 
         static int[] BuildAmounts(BirdFlockData kind, Func<int, int, string?> groupOfCell)
         {
@@ -72,7 +85,9 @@ public sealed class BirdFlocks
 
         public readonly List<Bird> Birds = [];
         public readonly List<Attractor> Attractors = [];
-        /// <summary>The mesh with its texture, as the debris renderer takes it.</summary>
+        /// <summary>
+        /// The mesh with its texture, as the debris renderer takes it.
+        /// </summary>
         public readonly string Mesh = kind.Texture.Length == 0 ? kind.Mesh : kind.Mesh + DebrisPiece.TextureMark + kind.Texture;
     }
 
@@ -95,12 +110,15 @@ public sealed class BirdFlocks
 
     public int BirdCount => _groups.Sum(g => g.Birds.Count);
 
-    /// <summary>The birds in state <paramref name="state"/>.</summary>
+    /// <summary>
+    /// The birds in state <paramref name="state"/>.
+    /// </summary>
     public int CountIn(BirdState state) => _groups.Sum(g => g.Birds.Count(b => b.State == state));
 
     /// <summary>
-    /// Moves the birds by <paramref name="dt"/> real seconds. <paramref name="eye"/> is the camera's position, <paramref name="focus"/> the camera controller's (where new flocks look), and
-    /// <paramref name="frustum"/> the view's six planes, normals inwards and normalised (a bird beyond its kind's <c>distance</c> and outside them is removed; null: none is).
+    /// Moves the birds by <paramref name="dt"/> real seconds. <paramref name="eye"/> is the camera's position, <paramref name="focus"/> the camera
+    /// controller's (where new flocks look), and <paramref name="frustum"/> the view's six planes, normals inwards and normalised (a bird beyond its
+    /// kind's <c>distance</c> and outside them is removed; null: none is).
     /// </summary>
     public void Update(float dt, Vector3 eye, Vector3 focus, Vector4[]? frustum)
     {
@@ -114,7 +132,10 @@ public sealed class BirdFlocks
         }
     }
 
-    /// <summary>Gives the attractors of this frame (<c>FUN_140260880</c>: one the world no longer has is dropped, one it has gains its place with no birds on it).</summary>
+    /// <summary>
+    /// Gives the attractors of this frame (<c>FUN_140260880</c>: one the world no longer has is dropped, one it has gains its place with no birds on
+    /// it).
+    /// </summary>
     public void SetAttractors(IReadOnlyList<BirdAttractor> attractors)
     {
         foreach (var g in _groups)
@@ -140,7 +161,9 @@ public sealed class BirdFlocks
 
     readonly record struct CellRange(int MinX, int MinZ, int MaxX, int MaxZ, int Matches, int Total);
 
-    /// <summary>The cells within the kind's <c>distance</c> of the camera (clamped to the map) that list the kind, and the sum of their amounts.</summary>
+    /// <summary>
+    /// The cells within the kind's <c>distance</c> of the camera (clamped to the map) that list the kind, and the sum of their amounts.
+    /// </summary>
     CellRange CellsAround(Group g, Vector3 eye)
     {
         var kind = g.Kind;
@@ -158,11 +181,16 @@ public sealed class BirdFlocks
         (int X, int Z)? cell = null;
         for (int x = range.MinX; x <= range.MaxX && pick >= 1; x++)
             for (int z = range.MinZ; z <= range.MaxZ && pick >= 1; z++)
-                if (AmountOf(g, x, z) is not null) { cell = (x, z); pick--; }
+                if (AmountOf(g, x, z) is not null)
+                {
+                    cell = (x, z);
+                    pick--;
+                }
         if (cell is not { } c) return;
         var (x0, z0, x1, z1) = WeatherAreas.CellRect(c.X, c.Z);
         float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = _ground(px, pz);
-        if (new Vector2(px - focus.X, pz - focus.Z).LengthSquared() < FarSpawn * FarSpawn || py <= kind.SpawnHeightMin || py >= kind.SpawnHeightMax) return;
+        if (new Vector2(px - focus.X, pz - focus.Z).LengthSquared() < FarSpawn * FarSpawn || py <= kind.SpawnHeightMin || py >= kind.SpawnHeightMax)
+            return;
         var at = new Vector3(px, py, pz);
         for (int i = 0; i < kind.SpawnCount; i++)
         {
@@ -219,7 +247,9 @@ public sealed class BirdFlocks
         return false;
     }
 
-    /// <summary>The terrain's unit normal at a position (finite differences of the height).</summary>
+    /// <summary>
+    /// The terrain's unit normal at a position (finite differences of the height).
+    /// </summary>
     Vector3 Normal(Vector3 p)
     {
         const float e = 16;
@@ -227,7 +257,9 @@ public sealed class BirdFlocks
         return Vector3.Normalize(new Vector3(-dx, 2 * e, -dz));
     }
 
-    /// <summary>The direction the bird wants to fly in, by its state; a circling bird lifts <paramref name="groundY"/> to its altitude minus 500.</summary>
+    /// <summary>
+    /// The direction the bird wants to fly in, by its state; a circling bird lifts <paramref name="groundY"/> to its altitude minus 500.
+    /// </summary>
     Vector3 Desire(Group g, Bird b, bool inside, float dt, ref float groundY)
     {
         var kind = g.Kind;
@@ -266,7 +298,10 @@ public sealed class BirdFlocks
         }
     }
 
-    /// <summary>Head for the point 100 units beside the mate (on the bird's own side), and speed up or slow down by up to 30 percent of a unit per second to keep level with it.</summary>
+    /// <summary>
+    /// Head for the point 100 units beside the mate (on the bird's own side), and speed up or slow down by up to 30 percent of a unit per second to
+    /// keep level with it.
+    /// </summary>
     static Vector3 Follow(Bird b, Bird mate, float dt)
     {
         var side = new Vector3(mate.Forward.Z, 0, -mate.Forward.X);
@@ -282,7 +317,11 @@ public sealed class BirdFlocks
     {
         if (b.State == BirdState.Circle)
         {
-            if (groundY > b.Altitude) { b.Target = b.Position; b.Altitude = groundY; }
+            if (groundY > b.Altitude)
+            {
+                b.Target = b.Position;
+                b.Altitude = groundY;
+            }
             float sign = kind.Height > b.Altitude ? 1 : -1;
             var normal = Normal(b.Position);
             b.Target += Normalise(new Vector3(normal.X, 0, normal.Z)) * dt * sign;
@@ -297,7 +336,9 @@ public sealed class BirdFlocks
         return centre + push * b.Radius - b.Position;
     }
 
-    /// <summary>Settles the bird's height over the ground and turns its heading towards <paramref name="desired"/> by about a radian per second.</summary>
+    /// <summary>
+    /// Settles the bird's height over the ground and turns its heading towards <paramref name="desired"/> by about a radian per second.
+    /// </summary>
     static void Turn(Bird b, Vector3 desired, int index, float groundY, float dt, BirdFlockData kind)
     {
         desired = Normalise(desired);
@@ -314,14 +355,21 @@ public sealed class BirdFlocks
         }
         desired = Normalise(desired);
         float cos = Vector3.Dot(b.Forward, desired);
-        if (cos > 0.99) { b.Forward = desired; return; }
+        if (cos > 0.99)
+        {
+            b.Forward = desired;
+            return;
+        }
         float angle = -1 < cos ? MathF.Acos(cos) : TurnPi;
         b.Forward = Normalise(b.Forward + (desired - b.Forward) * (dt / angle));
     }
 
     // ---- Neighbours and attractors (FUN_140260200, FUN_1402604f0)
 
-    /// <summary>The nearest bird of a flocking kind that is ahead of this one's view of it (it moves away from this bird) within <paramref name="radius"/>, unless it already follows this bird.</summary>
+    /// <summary>
+    /// The nearest bird of a flocking kind that is ahead of this one's view of it (it moves away from this bird) within <paramref name="radius"/>,
+    /// unless it already follows this bird.
+    /// </summary>
     static Bird? FindMate(Group g, Bird self, float radius)
     {
         if (!g.Kind.Flocking) return null;
@@ -409,7 +457,10 @@ public sealed class BirdFlocks
 
     static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
 
-    /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z); <paramref name="ready"/> says per mesh whether it is loaded (null: all are).</summary>
+    /// <summary>
+    /// This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z); <paramref name="ready"/> says per
+    /// mesh whether it is loaded (null: all are).
+    /// </summary>
     public void AddPieces(List<DebrisPiece> pieces, Func<string, bool>? ready = null)
     {
         foreach (var g in _groups)
@@ -419,7 +470,9 @@ public sealed class BirdFlocks
         }
     }
 
-    /// <summary>Ogre's <c>Quaternion::FromAxes</c> of x = up x forward, y = forward x x, z = forward.</summary>
+    /// <summary>
+    /// Ogre's <c>Quaternion::FromAxes</c> of x = up x forward, y = forward x x, z = forward.
+    /// </summary>
     static Quaternion Orientation(Vector3 forward)
     {
         var x = Normalise(Vector3.Cross(Vector3.UnitY, forward));
@@ -431,8 +484,8 @@ public sealed class BirdFlocks
 }
 
 /// <summary>
-/// The thread the birds' step runs on (the original's <c>BirdManager</c> has its own, "Birds"): the host starts a step with <see cref="Start"/> once the last one is done (<see cref="Busy"/>)
-/// and reads the flocks between steps only.
+/// The thread the birds' step runs on (the original's <c>BirdManager</c> has its own, "Birds"): the host starts a step with <see cref="Start"/> once
+/// the last one is done (<see cref="Busy"/>) and reads the flocks between steps only.
 /// </summary>
 public sealed class BirdThread
 {
@@ -449,7 +502,10 @@ public sealed class BirdThread
 
     public bool Busy => _busy;
 
-    /// <summary>Runs the work once on the thread; the caller waits for <see cref="Busy"/> to clear first. A step that failed throws here, on the host's thread.</summary>
+    /// <summary>
+    /// Runs the work once on the thread; the caller waits for <see cref="Busy"/> to clear first. A step that failed throws here, on the host's
+    /// thread.
+    /// </summary>
     public void Start()
     {
         if (_failure is { } e) { _failure = null; throw new InvalidOperationException("The bird thread failed.", e); }
@@ -462,8 +518,14 @@ public sealed class BirdThread
         while (true)
         {
             _go.Wait();
-            try { _work(); }
-            catch (Exception e) { _failure = e; }
+            try
+            {
+                _work();
+            }
+            catch (Exception e)
+            {
+                _failure = e;
+            }
             _busy = false;
         }
     }

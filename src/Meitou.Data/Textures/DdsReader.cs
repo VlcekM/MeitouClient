@@ -28,7 +28,9 @@ public static class DdsReader
 
     public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
-    /// <summary>Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.</summary>
+    /// <summary>
+    /// Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.
+    /// </summary>
     public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
 
     /// <summary>
@@ -95,7 +97,10 @@ public static class DdsReader
         return read;
     }
 
-    /// <summary>The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are <paramref name="data"/> (empty when only the headers were read).</summary>
+    /// <summary>
+    /// The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are
+    /// <paramref name="data"/> (empty when only the headers were read).
+    /// </summary>
     static DdsFile Parse(ReadOnlySpan<byte> span, long fileLength, byte[] data)
     {
         if (span.Length < 4 + HeaderSize) throw new DdsFormatException($"File too short for a DDS header ({span.Length} bytes).");
@@ -201,7 +206,9 @@ public static class DdsReader
         };
     }
 
-    /// <summary>Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.</summary>
+    /// <summary>
+    /// Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.
+    /// </summary>
     public static long SurfaceSize(DdsFormat format, DdsPixelMasks? masks, int width, int height)
     {
         long blocks = (long)((width + 3) / 4) * ((height + 3) / 4);

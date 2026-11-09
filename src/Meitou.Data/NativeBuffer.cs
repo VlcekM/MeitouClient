@@ -13,14 +13,17 @@ public sealed unsafe class NativeBuffer : MemoryManager<byte>
 {
     static long s_liveBytes;
 
-    /// <summary>The bytes of every block not freed yet, over the process.</summary>
-    public static long LiveBytes => Interlocked.Read(ref s_liveBytes);
-
     nint _pointer;
+
+    /// <summary>
+    /// The bytes of every block not freed yet, over the process.
+    /// </summary>
+    public static long LiveBytes => Interlocked.Read(ref s_liveBytes);
 
     public NativeBuffer(int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
+
         _pointer = (nint)NativeMemory.Alloc((nuint)Math.Max(length, 1));
         Length = length;
         Interlocked.Add(ref s_liveBytes, length);
@@ -49,6 +52,7 @@ public sealed unsafe class NativeBuffer : MemoryManager<byte>
     {
         nint p = Interlocked.Exchange(ref _pointer, 0);
         if (p == 0) return;
+
         NativeMemory.Free((void*)p);
         Interlocked.Add(ref s_liveBytes, -Length);
     }

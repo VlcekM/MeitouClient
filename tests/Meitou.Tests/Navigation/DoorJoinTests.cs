@@ -6,8 +6,8 @@ namespace Meitou.Tests.Navigation;
 
 /// <summary>
 /// Interiors joined to the street, on zones of the install built alone (docs/game/pathfinding.md "Door painters", "Join sweep", "Inner seams"): door
-/// painters swept into the hull and the polygon winding in double give the Sho-Battai Longhouses, Storm House Lagoon and Heft's bar their door joins, the
-/// seed ray rule on floor-0/1 parts keeps the Hive village's ground, and the seam rule joins Storm House 27.22's ramp to its door landing.
+/// painters swept into the hull and the polygon winding in double give the Sho-Battai Longhouses, Storm House Lagoon and Heft's bar their door joins,
+/// the seed ray rule on floor-0/1 parts keeps the Hive village's ground, and the seam rule joins Storm House 27.22's ramp to its door landing.
 /// </summary>
 [Slow]
 public class DoorJoinTests
@@ -15,7 +15,10 @@ public class DoorJoinTests
     static readonly object Gate = new();
     static readonly Dictionary<ZoneCoordinate, Built> BuiltCache = [];
 
-    /// <summary>A zone's build: the combined mesh before its kept set is resolved, its interiors in the order they were appended, and each interior site's gathered painters and kind.</summary>
+    /// <summary>
+    /// A zone's build: the combined mesh before its kept set is resolved, its interiors in the order they were appended,
+    /// and each interior site's gathered painters and kind.
+    /// </summary>
     sealed record Built(ZoneNavMesh Full, IReadOnlyList<InteriorMesh> Inner, Dictionary<string, (int Painters, bool Doorless, bool Destroyed)> Sites);
 
     static Built Zone(int x, int z)
@@ -30,16 +33,25 @@ public class DoorJoinTests
             var full = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(zone), settings, out _, out var inner, interiors: true);
             var sites = new Dictionary<string, (int, bool, bool)>();
             foreach (var site in gatherer.InteriorSites(zone))
-                if (gatherer.GatherInterior(site, NavMeshPipeline.InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight) is { InteriorOf: { } key } g)
+            {
+                var step = NavMeshPipeline.InteriorTileStep * settings.CellSize;
+                if (gatherer.GatherInterior(site, step, agentHeight: settings.AgentHeight) is { InteriorOf: { } key } g)
+                {
                     sites[key] = (g.Painters.Count, g.InteriorDoorless, g.InteriorDestroyed);
+                }
+            }
             return BuiltCache[zone] = new Built(full, inner, sites);
         }
     }
 
-    /// <summary>The zone with its kept set resolved as the game publishes a zone loaded alone, for path queries.</summary>
+    /// <summary>
+    /// The zone with its kept set resolved as the game publishes a zone loaded alone, for path queries.
+    /// </summary>
     static NavQuery Query(Built b) => new(NavWorld.Empty.With(ZoneKeptClosure.ResolveAlone(b.Full, new NavBuildSettings())));
 
-    /// <summary>Each interior's polygon range in the combined mesh (the exterior's polygons come first).</summary>
+    /// <summary>
+    /// Each interior's polygon range in the combined mesh (the exterior's polygons come first).
+    /// </summary>
     static IEnumerable<(InteriorMesh Interior, int First)> Ranges(Built b)
     {
         int first = b.Full.PolygonCount - b.Inner.Sum(i => i.Mesh.PolygonCount);
@@ -69,7 +81,10 @@ public class DoorJoinTests
         var b = Zone(x, z);
         var mesh = b.Full;
         int exterior = mesh.PolygonCount - b.Inner.Sum(i => i.Mesh.PolygonCount);
-        var expected = b.Sites.Where(s => s.Value.Painters > 0 && !s.Value.Doorless && !s.Value.Destroyed).Select(s => s.Key).ToHashSet();
+        var expected = b.Sites
+            .Where(s => s.Value.Painters > 0 && !s.Value.Doorless && !s.Value.Destroyed)
+            .Select(s => s.Key)
+            .ToHashSet();
         Assert.Equal(painted, expected.Count);
         Assert.Superset(doorToDoor.ToHashSet(), expected);
         var unjoined = new List<string>();
@@ -93,16 +108,18 @@ public class DoorJoinTests
         // A painted interior that built no polygon is not in the build at all.
         Assert.True(expected.Count == 0, $"{x}.{z}: interiors with a door painter missing from the build: {string.Join(", ", expected)}");
         Assert.True(unjoined.Count == 0, $"{x}.{z}: interiors with a door painter joining nothing: {string.Join(", ", unjoined)}");
-        // The interiors the painter sweep and the winding fix mended join door polygon to door polygon (not only through the doorway or approach fallbacks).
-        Assert.True(doorToDoor.All(doorJoined.Contains), $"{x}.{z}: no door-to-door join for {string.Join(", ", doorToDoor.Where(k => !doorJoined.Contains(k)))}");
+        // The interiors the painter sweep and the winding fix mended join door polygon to door polygon
+        // (not only through the doorway or approach fallbacks).
+        var notDoorJoined = doorToDoor.Where(k => !doorJoined.Contains(k));
+        Assert.True(doorToDoor.All(doorJoined.Contains), $"{x}.{z}: no door-to-door join for {string.Join(", ", notDoorJoined)}");
     }
 
     [Fact]
     public void A_path_from_the_street_reaches_the_upper_floor_of_hefts_bar()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        // Heft's bar, the Outpost s-III 47.16:241-Newwworld-INGAME (issue #130): its door leaf stands outside the hull; the street south of its door, the
-        // upper floor at 1187 over the ground floor at 1141.
+        // Heft's bar, the Outpost s-III 47.16:241-Newwworld-INGAME (issue #130): its door leaf stands outside the hull;
+        // the street south of its door, the upper floor at 1187 over the ground floor at 1141.
         var path = Query(Zone(47, 16)).FindPath(new Vector3(70150, 1104, -70800), new Vector3(70200, 1187, -70660));
         Assert.True(path.Found, "no path from the street to the bar's upper floor");
         Assert.InRange(path.Points[^1].Y, 1185f, 1189f);

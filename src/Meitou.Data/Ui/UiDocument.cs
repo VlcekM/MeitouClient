@@ -2,8 +2,13 @@ using System.Numerics;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>A list row; <paramref name="Cells"/> are its per-column texts in a MultiListBox (null: the caption is the first column).</summary>
-/// <summary>A list row; <paramref name="SortKeys"/>, per column, what a MultiListBox sorts it by instead of its shown cells (a date by its time, as the save list's comparator).</summary>
+/// <summary>
+/// A list row; <paramref name="Cells"/> are its per-column texts in a MultiListBox (null: the caption is the first column).
+/// </summary>
+/// <summary>
+/// A list row; <paramref name="SortKeys"/>, per column, what a MultiListBox sorts it by instead of its shown cells (a date by its time, as the save
+/// list's comparator).
+/// </summary>
 public sealed record UiListItem(string Id, string Caption, IReadOnlyList<string>? Cells = null, IReadOnlyList<string>? SortKeys = null);
 
 public sealed record UiControl(string Name, string Type, UiRect Bounds, string Caption, string Action,
@@ -11,10 +16,14 @@ public sealed record UiControl(string Name, string Type, UiRect Bounds, string C
     Vector4? TextColour = null, Vector4? HoverColour = null, Vector4? ActiveColour = null, Vector4? DisabledColour = null,
     bool? Pickable = null, string Argument = "", float? TextScale = null, UiRect? Clip = null);
 
-/// <summary>A frame shared by both frontends; bindings supply data and visibility without changing source documents.</summary>
+/// <summary>
+/// A frame shared by both frontends; bindings supply data and visibility without changing source documents.
+/// </summary>
 public sealed partial class UiBindings
 {
-    /// <summary>Scale pixel-based template chrome along with viewport-relative layouts.</summary>
+    /// <summary>
+    /// Scale pixel-based template chrome along with viewport-relative layouts.
+    /// </summary>
     public float TemplateScale { get; set; } = 1;
     public Dictionary<string, string> Text { get; } = new(StringComparer.Ordinal);
 
@@ -28,10 +37,15 @@ public sealed partial class UiBindings
     public HashSet<string> Disabled { get; } = new(StringComparer.Ordinal);
     public HashSet<MyGuiWidget> HiddenWidgets { get; } = [];
     public Dictionary<string, UiRect> Positions { get; } = new(StringComparer.Ordinal);
-    /// <summary>Parent-relative runtime geometry, including anonymous layout panels.</summary>
+    /// <summary>
+    /// Parent-relative runtime geometry, including anonymous layout panels.
+    /// </summary>
     public Dictionary<MyGuiWidget, UiRect> RelativePositions { get; } = [];
     public Dictionary<string, int> SelectedTabs { get; } = new(StringComparer.Ordinal);
-    /// <summary>A TabControl whose buttons are made at run time (one per player squad): their captions; the selected button shows the first page (MyGUI adds TabItems so).</summary>
+    /// <summary>
+    /// A TabControl whose buttons are made at run time (one per player squad): their captions; the selected button shows the first page (MyGUI adds
+    /// TabItems so).
+    /// </summary>
     public Dictionary<string, IReadOnlyList<string>> TabCaptions { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, float> Progress { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> States { get; } = new(StringComparer.Ordinal);
@@ -139,7 +153,9 @@ public static partial class MyGuiPresentation
         return -1;
     }
 
-    /// <summary>Transparent full-screen roots never swallow world input. Reverse order matches painting.</summary>
+    /// <summary>
+    /// Transparent full-screen roots never swallow world input. Reverse order matches painting.
+    /// </summary>
     public static UiControl? HitTest(IReadOnlyList<UiControl> controls, float x, float y) => controls.Reverse().FirstOrDefault(c =>
         c.Bounds.Contains(x, y) && (c.Clip is null || c.Clip.Value.Contains(x, y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false" &&
         (c.Pickable ?? (c.Action.Length > 0 || c.Type == "Button" || c.Skin.Length > 0 && c.Skin != "PanelEmpty" || c.Background.W > 0)));

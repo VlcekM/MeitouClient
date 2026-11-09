@@ -2,7 +2,10 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>Meitou's scotopic night grading (docs/render-post.md "Night grading"): the weights, the rod luminance and the blend, and that the composite shader carries the same constants.</summary>
+/// <summary>
+/// Meitou's scotopic night grading (docs/render-post.md "Night grading"): the weights, the rod luminance and the blend, and that the composite shader
+/// carries the same constants.
+/// </summary>
 public class NightGradeTests
 {
     [Fact]

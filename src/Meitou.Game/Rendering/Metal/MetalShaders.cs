@@ -11,30 +11,36 @@ namespace Meitou.Game.Rendering.Metal;
 /// The backend's own artifacts of a program (the twin of <c>VulkanProgram</c>): the MSL libraries and
 /// functions. The engine's compile result (<see cref="ProgramInfo"/>) lives on the handle.
 /// </summary>
-/// <summary>The MSL of one stage's descriptor set as a Metal argument buffer: one struct per set, its members in
-/// declaration order (a member's <c>[[id(N)]]</c> names its binding, the position is its entry).</summary>
+/// <summary>
+/// The MSL of one stage's descriptor set as a Metal argument buffer: one struct per set, its members in
+/// declaration order (a member's <c>[[id(N)]]</c> names its binding, the position is its entry).
+/// </summary>
 internal sealed class MetalSetLayout
 {
-    readonly Dictionary<uint, uint[]> members = [];
+    readonly Dictionary<uint, uint[]> _members = [];
 
     public static MetalSetLayout Parse(string msl)
     {
         var layout = new MetalSetLayout();
         foreach (Match set in Regex.Matches(msl, @"struct\s+spvDescriptorSetBuffer(?<set>\d+)\s*\{(?<body>[^}]*)\}"))
-            layout.members[uint.Parse(set.Groups["set"].Value)] =
+            layout._members[uint.Parse(set.Groups["set"].Value)] =
             [
                 .. Regex.Matches(set.Groups["body"].Value, @"\[\[id\((?<id>\d+)\)\]\]").Select(m => uint.Parse(m.Groups["id"].Value)),
             ];
         return layout;
     }
 
-    /// <summary>The empty layout (a graphics program has no compute structs).</summary>
+    /// <summary>
+    /// The empty layout (a graphics program has no compute structs).
+    /// </summary>
     public static readonly MetalSetLayout Empty = new();
 
-    /// <summary>The set's member ids in declaration order (empty when the stage does not read the set).</summary>
-    public uint[] Members(uint set) => members.TryGetValue(set, out var ids) ? ids : [];
+    /// <summary>
+    /// The set's member ids in declaration order (empty when the stage does not read the set).
+    /// </summary>
+    public uint[] Members(uint set) => _members.TryGetValue(set, out var ids) ? ids : [];
 
-    public override string ToString() => string.Join("; ", members.OrderBy(m => m.Key).Select(m => $"{m.Key}: [{string.Join(",", m.Value)}]"));
+    public override string ToString() => string.Join("; ", _members.OrderBy(m => m.Key).Select(m => $"{m.Key}: [{string.Join(",", m.Value)}]"));
 }
 
 internal sealed class MetalProgram : IDisposable
@@ -51,7 +57,9 @@ internal sealed class MetalProgram : IDisposable
 
     }
 
-    /// <summary>A compute program: one entry point, its set structs and the threadgroup size the MSL was compiled with.</summary>
+    /// <summary>
+    /// A compute program: one entry point, its set structs and the threadgroup size the MSL was compiled with.
+    /// </summary>
     public MetalProgram(ProgramInfo info, MTLLibrary computeLibrary, MTLFunction computeFunction, string computeMsl, (uint X, uint Y, uint Z) threads)
     {
         ArgumentBuffers = true;
@@ -65,24 +73,34 @@ internal sealed class MetalProgram : IDisposable
     // A compute program has no graphics stage (the handles stay default); the graphics constructor fills them.
     public MTLLibrary VertexLibrary { get; }
     public MTLFunction VertexFunction { get; }
-    /// <summary>The vertex stage's MSL (diagnostics: what SPIR-V became).</summary>
+    /// <summary>
+    /// The vertex stage's MSL (diagnostics: what SPIR-V became).
+    /// </summary>
     public string VertexMsl { get; } = "";
     public MTLLibrary FragmentLibrary { get; }
     public MTLFunction FragmentFunction { get; }
     public string FragmentMsl { get; } = "";
-    /// <summary>The stage's argument buffer layout (empty for a stage that does not read the table).</summary>
+    /// <summary>
+    /// The stage's argument buffer layout (empty for a stage that does not read the table).
+    /// </summary>
     public MetalTableLayout VertexTable { get; } = MetalTableLayout.Empty;
     public MetalTableLayout FragmentTable { get; } = MetalTableLayout.Empty;
-    /// <summary>The stage's descriptor-set member ids, in declaration order (Metal lays a struct's members out by
-    /// declaration, not by their <c>[[id]]</c>: the position is what the runtime writes).</summary>
+    /// <summary>
+    /// The stage's descriptor-set member ids, in declaration order (Metal lays a struct's members out by
+    /// declaration, not by their <c>[[id]]</c>: the position is what the runtime writes).
+    /// </summary>
     public MetalSetLayout VertexSets { get; } = MetalSetLayout.Empty;
     public MetalSetLayout FragmentSets { get; } = MetalSetLayout.Empty;
-    /// <summary>Whether the program's descriptor sets are Metal argument buffers (every native program with the bindless table).</summary>
+    /// <summary>
+    /// Whether the program's descriptor sets are Metal argument buffers (every native program with the bindless table).
+    /// </summary>
     public bool ArgumentBuffers { get; }
     public MTLLibrary ComputeLibrary { get; }
     public MTLFunction ComputeFunction { get; }
     public string ComputeMsl { get; } = "";
-    /// <summary>The threadgroup size the MSL declares (the GLSL's <c>local_size_x/y/z</c>), for a dispatch.</summary>
+    /// <summary>
+    /// The threadgroup size the MSL declares (the GLSL's <c>local_size_x/y/z</c>), for a dispatch.
+    /// </summary>
     public (uint X, uint Y, uint Z) Threads { get; }
     public MetalTableLayout ComputeTable { get; } = MetalTableLayout.Empty;
     public MetalSetLayout ComputeSets { get; } = MetalSetLayout.Empty;
@@ -107,7 +125,9 @@ internal sealed class MetalProgram : IDisposable
 /// </summary>
 public sealed class MetalShaders : IGpuShaders
 {
-    /// <summary>The shaded character cut-outs must reject alpha before committing depth (docs/metal-backend.md).</summary>
+    /// <summary>
+    /// The shaded character cut-outs must reject alpha before committing depth (docs/metal-backend.md).
+    /// </summary>
     public bool DiscardNeedsLateDepth => true;
 
     /// <summary>
@@ -121,26 +141,34 @@ public sealed class MetalShaders : IGpuShaders
     internal const uint SetStride = 8;
     internal const uint VertexBlockBase = 16;
 
-    /// <summary>A slot's index in its stage's MSL table. The bases are per kind (Metal has one table per kind and only the
+    /// <summary>
+    /// A slot's index in its stage's MSL table. The bases are per kind (Metal has one table per kind and only the
     /// buffer tables carry the vertex buffers): a vertex module's buffers shift by <see cref="VertexBlockBase"/>, its images
-    /// and samplers — and the fragment stage's everything — flatten from 0.</summary>
+    /// and samplers — and the fragment stage's everything — flatten from 0.
+    /// </summary>
     internal static uint Flatten(GpuSlotKind kind, GpuStage stages, uint set, uint binding) =>
         (stages.HasFlag(GpuStage.Vertex) && kind is GpuSlotKind.UniformBuffer or GpuSlotKind.StorageBuffer ? VertexBlockBase : 0)
         + set * SetStride + binding;
 
     // ---- the bindless table's rewrite (docs/metal-backend.md, "the bindless table") ----
 
-    /// <summary>The Metal table's capacities per kind (<see cref="BindlessKind"/> order). The rewrite sizes the argument
+    /// <summary>
+    /// The Metal table's capacities per kind (<see cref="BindlessKind"/> order). The rewrite sizes the argument
     /// buffer's arrays with them so the ids stay in order and within the argument buffer's limits; the runtime's table
-    /// mirrors them (<see cref="MetalBindlessTable"/>). 2D textures get most of the room, as the Vulkan table's shares do.</summary>
+    /// mirrors them (<see cref="MetalBindlessTable"/>). 2D textures get most of the room, as the Vulkan table's shares do.
+    /// </summary>
     internal static readonly uint[] TableCapacity = [2048, 512, 128, 128, 128, 128, 64];
 
-    /// <summary>The argument buffer's members' offsets, in entries (8 bytes each), by kind: the arrays follow one another in
+    /// <summary>
+    /// The argument buffer's members' offsets, in entries (8 bytes each), by kind: the arrays follow one another in
     /// binding order (every texture array, then every sampler array). Metal lays the members out sequentially from 0 — the
-    /// <c>[[id]]</c> decorations the MSL carries do not move them (verified with the pipeline reflection).</summary>
+    /// <c>[[id]]</c> decorations the MSL carries do not move them (verified with the pipeline reflection).
+    /// </summary>
     static readonly uint[] TablePrefix = Prefix();
 
-    /// <summary>All the texture arrays' total: where the sampler arrays begin.</summary>
+    /// <summary>
+    /// All the texture arrays' total: where the sampler arrays begin.
+    /// </summary>
     internal static readonly uint TableTotal = Total();
 
     static uint[] Prefix()
@@ -158,18 +186,25 @@ public sealed class MetalShaders : IGpuShaders
         return total;
     }
 
-    /// <summary>The argument buffer entry of kind <paramref name="kind"/>'s first texture (an entry is 8 bytes).</summary>
+    /// <summary>
+    /// The argument buffer entry of kind <paramref name="kind"/>'s first texture (an entry is 8 bytes).
+    /// </summary>
     internal static uint TableTextureId(int kind) => TablePrefix[kind];
 
-    /// <summary>The argument buffer's id of kind <paramref name="kind"/>'s first sampler (the sampler arrays come after all the
-    /// textures).</summary>
+    /// <summary>
+    /// The argument buffer's id of kind <paramref name="kind"/>'s first sampler (the sampler arrays come after all the textures).
+    /// </summary>
     internal static uint TableSamplerId(int kind) => TableTotal + TableTextureId(kind);
 
-    /// <summary>The MSL's <c>[[id]]</c> of a kind's first texture array and first sampler array (the set's base plus the binding).</summary>
+    /// <summary>
+    /// The MSL's <c>[[id]]</c> of a kind's first texture array and first sampler array (the set's base plus the binding).
+    /// </summary>
     internal static uint TableTextureBinding(int kind) => (uint)(SetStride * Frame.NativeShaders.BindlessSet) + TablePrefix[kind];
     internal static uint TableSamplerBinding(int kind) => TableTextureBinding(kind) + TableTotal;
 
-    /// <summary>Which array a member at an argument buffer id is: its kind and whether it is the sampler array (null: not the table's).</summary>
+    /// <summary>
+    /// Which array a member at an argument buffer id is: its kind and whether it is the sampler array (null: not the table's).
+    /// </summary>
     internal static (int Kind, bool Sampler)? TableKindOf(uint id)
     {
         for (int k = 0; k < TableCapacity.Length; k++)
@@ -180,7 +215,9 @@ public sealed class MetalShaders : IGpuShaders
         return null;
     }
 
-    /// <summary>Whether a kind's entries have a sampler array in the MSL (every kind but the integer ones: their fetches never read one).</summary>
+    /// <summary>
+    /// Whether a kind's entries have a sampler array in the MSL (every kind but the integer ones: their fetches never read one).
+    /// </summary>
     internal static bool HasSamplers(int kind) => kind != (int)BindlessKind.UintTexture2D && kind != (int)BindlessKind.IntTexture2D;
 
 
@@ -199,6 +236,7 @@ public sealed class MetalShaders : IGpuShaders
         for (int k = 0; k < cap.Length; k++)
         {
             string decl = $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {k}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[];";
+
             // A stage that does not include the table's text (the host's test programs) has nothing to rewrite.
             if (!glsl.Contains(decl)) continue;
             glsl = glsl.Replace(decl, $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {prefix[k]}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[{cap[k]}];");
@@ -214,29 +252,36 @@ public sealed class MetalShaders : IGpuShaders
         "0" or "false" => false,
         _ => null,
     };
-    readonly MTLDevice device;
-    readonly List<MetalProgram> programs = [];
+    readonly MTLDevice _device;
+    readonly List<MetalProgram> _programs = [];
 
     public MetalShaders(MTLDevice device)
     {
-        this.device = device;
+        this._device = device;
         if (FastMath is { } fast) Console.WriteLine($"metal     shaders fast math {fast.ToString().ToLowerInvariant()} (MEITOU_METAL_FAST_MATH)");
     }
 
-    /// <summary>The compiler the programs go through: Metal's own options (per-stage bindings at 0, no cache shared with Vulkan's; no
-    /// <c>DepthReversed</c>: Metal's scene depth is conventional).</summary>
+    /// <summary>
+    /// The compiler the programs go through: Metal's own options (per-stage bindings at 0, no cache shared with Vulkan's; no
+    /// <c>DepthReversed</c>: Metal's scene depth is conventional).
+    /// </summary>
     public GlslProgramCompiler Compiler { get; } = new(new ShaderCompileOptions { FragmentBindingBase = 0, UseDiskCache = false });
 
-    /// <summary>The backend's identity of a program handle (the internals resolve through this).</summary>
-    internal MetalProgram Backend(GpuProgram program) => programs[program.Index];
+    /// <summary>
+    /// The backend's identity of a program handle (the internals resolve through this).
+    /// </summary>
+    internal MetalProgram Backend(GpuProgram program) => _programs[program.Index];
 
     public GpuProgram Legacy(string vertexGlsl, string fragmentGlsl, string name)
     {
         var c = Compiler.Compile(vertexGlsl, fragmentGlsl);
+
         // The default blocks move to set 1 (vertex binding 0, fragment binding 1), as the Vulkan path's do (SpirvPatch, VkGl's step);
         // then both stages' bindings flatten onto Metal's one table per stage (the vertex stage's blocks above the vertex buffers).
-        byte[] v = SpirvPatch.RemapBindings(c.Vertex.DefaultBlock is null ? c.VertexSpirv : SpirvPatch.MoveDefaultBlock(c.VertexSpirv, 0), VertexBlockBase, 0, SetStride);
-        byte[] f = SpirvPatch.RemapBindings(c.Fragment.DefaultBlock is null ? c.FragmentSpirv : SpirvPatch.MoveDefaultBlock(c.FragmentSpirv, 1), 0, 0, SetStride);
+        byte[] v = SpirvPatch.RemapBindings(c.Vertex.DefaultBlock is null ? c.VertexSpirv : SpirvPatch.MoveDefaultBlock(c.VertexSpirv, 0),
+            VertexBlockBase, 0, SetStride);
+        byte[] f = SpirvPatch.RemapBindings(c.Fragment.DefaultBlock is null ? c.FragmentSpirv : SpirvPatch.MoveDefaultBlock(c.FragmentSpirv, 1), 0, 0,
+            SetStride);
 
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dir)
         {
@@ -252,16 +297,18 @@ public sealed class MetalShaders : IGpuShaders
         {
             foreach (var b in r.Blocks)
                 if (b.Kind == BlockKind.Uniform && !b.IsDefault) slots.Add(new GpuSlot((uint)b.Binding, GpuSlotKind.UniformBuffer, stage));
-            foreach (var s in r.Samplers) slots.Add(new GpuSlot((uint)s.Binding, GpuSlotKind.CombinedSampler, stage, (uint)Math.Max(1, s.ArrayLength)));
+            foreach (var s in r.Samplers) slots.Add(new GpuSlot((uint)s.Binding, GpuSlotKind.CombinedSampler, stage,
+                    (uint)Math.Max(1, s.ArrayLength)));
         }
         AddSlots(c.Vertex, GpuStage.Vertex);
         AddSlots(c.Fragment, GpuStage.Fragment);
         var defaultSlots = new List<GpuSlot>();
         if (c.Vertex.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(0, GpuSlotKind.UniformBuffer, GpuStage.Vertex, 1, OffsetAtBind: true));
-        if (c.Fragment.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1, OffsetAtBind: true));
+        if (c.Fragment.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1,
+                OffsetAtBind: true));
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Legacy, VertexCode = v, FragmentCode = f, Compiled = c,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Legacy, VertexCode = v, FragmentCode = f, Compiled = c,
             VertexReflection = c.Vertex, FragmentReflection = c.Fragment,
             NeutralSets = [GpuSetLayout.Written([.. slots]), GpuSetLayout.Fixed([.. defaultSlots])],
         };
@@ -277,7 +324,7 @@ public sealed class MetalShaders : IGpuShaders
         }
         var vertexLibrary = Library(vertexMsl, name);
         var fragmentLibrary = Library(fragmentMsl, name);
-        programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
+        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
             fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, false));
         return new GpuProgram(info.Index, info);
     }
@@ -293,7 +340,7 @@ public sealed class MetalShaders : IGpuShaders
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code, ComputeReflection = r,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code, ComputeReflection = r,
             PushConstantBytes = pc, NeutralSets = [GpuSetLayout.Written([]), .. extraSets],
         };
         var threads = LocalSize(glsl);
@@ -305,11 +352,13 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.comp.msl"), msl);
         }
         var library = Library(msl, name);
-        programs.Add(new MetalProgram(info, library, Function(library, "compute_main", name), msl, threads));
+        _programs.Add(new MetalProgram(info, library, Function(library, "compute_main", name), msl, threads));
         return new GpuProgram(info.Index, info);
     }
 
-    /// <summary>The GLSL's threadgroup size (GLSL makes it mandatory; 1 for an axis the source does not name).</summary>
+    /// <summary>
+    /// The GLSL's threadgroup size (GLSL makes it mandatory; 1 for an axis the source does not name).
+    /// </summary>
     static (uint X, uint Y, uint Z) LocalSize(string glsl)
     {
         static uint Of(string source, string axis)
@@ -334,6 +383,7 @@ public sealed class MetalShaders : IGpuShaders
     {
         if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
+
         // The bindless set's runtime arrays are Metal 3 tier-2 argument buffers (docs/metal-backend.md); only a program
         // whose layout includes the table is translated with them, and only its shared text needs the rewrite.
         bool bindless = Array.Exists(setLayouts, l => ReferenceEquals(l, GpuSetLayout.Bindless));
@@ -356,7 +406,7 @@ public sealed class MetalShaders : IGpuShaders
 
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
             VertexReflection = rv, FragmentReflection = rf, PushConstantBytes = pushConstantBytes, NeutralSets = setLayouts,
         };
         uint? tableSet = bindless ? Frame.NativeShaders.BindlessSet : null;
@@ -370,7 +420,7 @@ public sealed class MetalShaders : IGpuShaders
         }
         var vertexLibrary = Library(vertexMsl, name);
         var fragmentLibrary = Library(fragmentMsl, name);
-        programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
+        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
             fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, bindless));
         return new GpuProgram(info.Index, info);
     }
@@ -382,7 +432,7 @@ public sealed class MetalShaders : IGpuShaders
         NSError error = default;
         var options = new MTLCompileOptions();
         if (FastMath is { } fast) options.FastMathEnabled = fast;
-        var library = device.NewLibrary((NSString)msl, options, ref error);
+        var library = _device.NewLibrary((NSString)msl, options, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{name}: the MSL did not compile: {error.LocalizedDescription}");
         return library;

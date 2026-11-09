@@ -8,13 +8,16 @@ using Vk = Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// The fog shading rate (<c>fog-vrs</c>; <see cref="FogShadingRate"/>, docs/render-post.md "Fog shading rate"): after each frame's scene, two small passes turn its depth
-/// into an R8_UINT image with one fragment size per tile of pixels, where the placed fog volumes, the haze and the weather's fog hide the surface; the next frame's opaque scene passes
-/// (sky, terrain, objects, foliage, water) take it as their fragment shading rate attachment.
+/// The fog shading rate (<c>fog-vrs</c>; <see cref="FogShadingRate"/>, docs/render-post.md "Fog shading rate"): after each frame's scene, two small
+/// passes turn its depth into an R8_UINT image with one fragment size per tile of pixels, where the placed fog volumes, the haze and the weather's
+/// fog hide the surface; the next frame's opaque scene passes (sky, terrain, objects, foliage, water) take it as their fragment shading rate
+/// attachment.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
-    /// <summary>The nearest distance of each block of 4 x 4 pixels (<see cref="PostProcessShaders.FogRateDistance"/>).</summary>
+    /// <summary>
+    /// The nearest distance of each block of 4 x 4 pixels (<see cref="PostProcessShaders.FogRateDistance"/>).
+    /// </summary>
     sealed class FogRateDistancePass : FullscreenProgram
     {
         public readonly SamplerSlot NearDepth;
@@ -22,12 +25,15 @@ public sealed unsafe partial class PostProcess
         public FogRateDistancePass(GpuContext gpu) : base(gpu, PostProcessShaders.FogRateDistance, "post fog rate distance")
         {
             NearDepth = P.Sampler("uNearDepth");
-            (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"));
+            (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"),
+                P.Uniform("uBack"));
             (Eye, Size, WaterY) = (P.Uniform("uEye"), P.Uniform("uSize"), P.Uniform("uWaterY"));
         }
     }
 
-    /// <summary>The fragment size code of each shading rate tile (<see cref="PostProcessShaders.FogRate"/>).</summary>
+    /// <summary>
+    /// The fragment size code of each shading rate tile (<see cref="PostProcessShaders.FogRate"/>).
+    /// </summary>
     sealed class FogRatePass : FullscreenProgram
     {
         public readonly SamplerSlot Distance;
@@ -50,27 +56,41 @@ public sealed unsafe partial class PostProcess
     readonly long[] _rateTiles = new long[3];
     long _rateTotal, _rateFrames;
 
-    /// <summary>The user's switch for the fog shading rate (default off). It does nothing where the device lacks VK_KHR_fragment_shading_rate (<see cref="FogVrsSupported"/>).</summary>
+    /// <summary>
+    /// The user's switch for the fog shading rate (default off). It does nothing where the device lacks VK_KHR_fragment_shading_rate
+    /// (<see cref="FogVrsSupported"/>).
+    /// </summary>
     public bool FogVrs { get; set; }
 
-    /// <summary>The device can shade several pixels with one fragment from an attachment image.</summary>
+    /// <summary>
+    /// The device can shade several pixels with one fragment from an attachment image.
+    /// </summary>
     public bool FogVrsSupported => Gpu.Device.HasFragmentShadingRate;
 
-    /// <summary>Counting the tiles of each rate (the bench's report): a readback of the rate image every frame.</summary>
+    /// <summary>
+    /// Counting the tiles of each rate (the bench's report): a readback of the rate image every frame.
+    /// </summary>
     public bool FogVrsStats { get; set; }
 
-    /// <summary>The share of the screen's tiles shaded 1 x 1, 2 x 2 and 4 x 4 over the frames counted (<see cref="FogVrsStats"/>), and how many frames were counted.</summary>
+    /// <summary>
+    /// The share of the screen's tiles shaded 1 x 1, 2 x 2 and 4 x 4 over the frames counted (<see cref="FogVrsStats"/>), and how many frames were
+    /// counted.
+    /// </summary>
     public (double One, double Two, double Four, long Frames) FogVrsShare =>
-        _rateFrames == 0 ? default : (_rateTiles[0] / (double)_rateTotal, _rateTiles[1] / (double)_rateTotal, _rateTiles[2] / (double)_rateTotal, rateFrames: _rateFrames);
+        _rateFrames == 0 ? default : (_rateTiles[0] / (double)_rateTotal, _rateTiles[1] / (double)_rateTotal, _rateTiles[2] / (double)_rateTotal,
+                rateFrames: _rateFrames);
 
-    /// <summary>Starts the count of <see cref="FogVrsShare"/> afresh.</summary>
+    /// <summary>
+    /// Starts the count of <see cref="FogVrsShare"/> afresh.
+    /// </summary>
     public void ResetFogVrsStats() { Array.Clear(_rateTiles); _rateTotal = _rateFrames = 0; }
 
     /// <summary>
-    /// <paramref name="targets"/> with the fog shading rate image as their fragment shading rate attachment, when there is one fit for this frame: built by the previous frame, at this
-    /// size, with the camera no more than a little moved (a cut or a fast turn shows none until the next build). Else, with the switch on, a neutral image (every tile 1 x 1):
-    /// the frame shades as without one, and draws with the same pipelines as the others. Without any attachment it needed a second pipeline of everything it drew, made at the
-    /// first cut in play: a stall of seconds with a cold driver cache (docs/bench.md "Play benchmark"). With the switch off, <paramref name="targets"/> as they are.
+    /// <paramref name="targets"/> with the fog shading rate image as their fragment shading rate attachment, when there is one fit for this frame:
+    /// built by the previous frame, at this size, with the camera no more than a little moved (a cut or a fast turn shows none until the next build).
+    /// Else, with the switch on, a neutral image (every tile 1 x 1): the frame shades as without one, and draws with the same pipelines as the
+    /// others. Without any attachment it needed a second pipeline of everything it drew, made at the first cut in play: a stall of seconds with a
+    /// cold driver cache (docs/bench.md "Play benchmark"). With the switch off, <paramref name="targets"/> as they are.
     /// </summary>
     public PassTargets WithShadingRate(PassTargets targets)
     {
@@ -84,13 +104,16 @@ public sealed unsafe partial class PostProcess
 
     Target2D? _neutralRate;
 
-    /// <summary>An R8_UINT image of <paramref name="tiles"/> x <paramref name="rows"/> zeros: the rate code of 1 x 1 fragments in every tile.</summary>
+    /// <summary>
+    /// An R8_UINT image of <paramref name="tiles"/> x <paramref name="rows"/> zeros: the rate code of 1 x 1 fragments in every tile.
+    /// </summary>
     Target2D NeutralRate(int tiles, int rows)
     {
         if (_neutralRate is { } made && made.Width == tiles && made.Height == rows) return made;
         _neutralRate?.Texture.Dispose();   // released after the frames in flight
         using var batch = Gpu.Uploads.Begin();
-        var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tiles, rows, Use: TextureUse.Sampled | TextureUse.ShadingRate | TextureUse.TransferDst, Name: "post fog rate neutral"));
+        var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tiles, rows,
+            Use: TextureUse.Sampled | TextureUse.ShadingRate | TextureUse.TransferDst, Name: "post fog rate neutral"));
         batch.Write(texture, 0, 0, new PixelRect(0, 0, (uint)tiles, (uint)rows), new byte[tiles * rows]);
         return _neutralRate = new Target2D(texture, TextureMinFilter.Nearest, TextureMagFilter.Nearest);
     }
@@ -98,8 +121,9 @@ public sealed unsafe partial class PostProcess
     static Vector3 BackOf(Matrix4x4 rotation) => new(rotation.M13, rotation.M23, rotation.M33);
 
     /// <summary>
-    /// Builds the fog shading rate for the next frame from this frame's depth (call after the scene's passes, with <paramref name="eye"/> the camera's position): the nearest distance
-    /// per 4 x 4 pixels, then per tile the opacity of the air to the nearest surface within it and a margin, and its rate. Does nothing with the switch off.
+    /// Builds the fog shading rate for the next frame from this frame's depth (call after the scene's passes, with <paramref name="eye"/> the
+    /// camera's position): the nearest distance per 4 x 4 pixels, then per tile the opacity of the air to the nearest surface within it and a margin,
+    /// and its rate. Does nothing with the switch off.
     /// </summary>
     public void BuildShadingRate(Vector3 eye)
     {
@@ -117,7 +141,8 @@ public sealed unsafe partial class PostProcess
             foreach (var t in new[] { _rateDistance, _rateImage }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
             _rateDistance = Make(batch, dw, dh, InternalFormat.Rg32F, TextureMinFilter.Nearest, "post fog rate distance");
-            var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tw, th, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.ShadingRate | TextureUse.TransferSrc, Name: "post fog rate"));
+            var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tw, th,
+                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.ShadingRate | TextureUse.TransferSrc, Name: "post fog rate"));
             _rateImage = new Target2D(texture, TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         }
         _rateDistancePass ??= new FogRateDistancePass(Gpu);
@@ -170,13 +195,16 @@ public sealed unsafe partial class PostProcess
             ImageSubresource = new Vk.ImageSubresourceLayers(Vk.ImageAspectFlags.ColorBit, 0, 0, 1),
             ImageExtent = new Vk.Extent3D((uint)image.Width, (uint)image.Height, 1),
         };
-        Gpu.Device.Vk.CmdCopyImageToBuffer(((CommandList)cmd).Handle, Gpu.Device.NativeImage(image.Texture), Vk.ImageLayout.General, Gpu.Device.BufferAt(slot.Buffer.Handle.Index), 1, &region);
+        Gpu.Device.Vk.CmdCopyImageToBuffer(((CommandList)cmd).Handle, Gpu.Device.NativeImage(image.Texture), Vk.ImageLayout.General,
+            Gpu.Device.BufferAt(slot.Buffer.Handle.Index), 1, &region);
         cmd.Order();
         slot.Frame = Gpu.Frame.Number;
         _rateReadbackNext = (_rateReadbackNext + 1) % _rateReadbacks.Length;
     }
 
-    /// <summary>Tallies the rate images whose frames have completed.</summary>
+    /// <summary>
+    /// Tallies the rate images whose frames have completed.
+    /// </summary>
     void CollectRateStats()
     {
         if (_rateImage is null) return;

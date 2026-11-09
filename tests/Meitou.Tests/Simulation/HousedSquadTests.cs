@@ -7,7 +7,10 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Housed squads of the installed game's towns: prisoners caged at spawn and building shops (docs/simulation.md "Cages, beds and locks", "Trade"). Skipped without the game.</summary>
+/// <summary>
+/// Housed squads of the installed game's towns: prisoners caged at spawn and building shops (docs/simulation.md "Cages, beds and locks", "Trade").
+/// Skipped without the game.
+/// </summary>
 [Slow]
 public class HousedSquadTests(ITestOutputHelper output)
 {
@@ -17,6 +20,7 @@ public class HousedSquadTests(ITestOutputHelper output)
     static PopulationData Load()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+
         lock (Gate)
         {
             if (s_cached is not null) return s_cached;
@@ -32,7 +36,9 @@ public class HousedSquadTests(ITestOutputHelper output)
     static SimWorld Town(PopulationData data, TownSite site, StandardParts parts)
     {
         var walk = new OpenGroundWalkability((_, _) => 300);
-        var set = StandardSystems.Build(data, walk, new StandardSystemOptions { Parts = StandardParts.Population | StandardParts.Movement | parts, Population = new PopulationSettings { CheckEveryTicks = 1 } });
+        var set = StandardSystems.Build(data, walk,
+                new StandardSystemOptions { Parts = StandardParts.Population | StandardParts.Movement | parts,
+                Population = new PopulationSettings { CheckEveryTicks = 1 } });
         var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk, set.Systems);
         world.Player.Faction = data.PlayerFaction;
         world.Commands.Enqueue(new FocusCommand(site.Position) { Tick = 0 });
@@ -44,19 +50,24 @@ public class HousedSquadTests(ITestOutputHelper output)
     {
         var data = Load();
         var db = data.Db;
+
         // The first town with a level-data home whose template makes prisoners and that has cages.
         var (site, home) = data.Sites.SelectMany(s => s.Buildings.Select(b => (Site: s, Building: b)))
-            .First(x => x.Building.ResidentsTemplate.Length > 0 && db.Find(x.Building.ResidentsTemplate) is { } t && t.GetReferences("prisoners").Count > 0 && x.Building.Fixtures.Any(f => f.IsCage));
+            .First(x => x.Building.ResidentsTemplate.Length > 0 && db.Find(x.Building.ResidentsTemplate) is { } t
+                    && t.GetReferences("prisoners").Count > 0 && x.Building.Fixtures.Any(f => f.IsCage));
         using var world = Town(data, site, 0);
         world.RunTicks(3);
         var table = world.Characters;
         var caged = world.Fixtures.OfBuilding(home.Key).Where(f => f.Kind == FixtureKind.Cage && !f.Occupant.IsNone).ToList();
         output.WriteLine($"{site.Town.Name}, {home.Name} ({home.ResidentsTemplate}): {caged.Count} of {home.Fixtures.Count(f => f.IsCage)} cages hold " +
             string.Join(", ", caged.Select(f => table.Cold(f.Occupant.Slot)!.Name)));
+
         Assert.NotEmpty(caged);
         Assert.All(caged, f =>
+
         {
             var c = table.Cold(f.Occupant.Slot)!;
+
             Assert.True(c.IsImprisoned && c.Kidnapped);
             Assert.Equal(f.Id, c.InWhat);
             Assert.Equal(0, c.SentenceLength);
@@ -73,18 +84,29 @@ public class HousedSquadTests(ITestOutputHelper output)
         world.RunTicks(3);
         var shops = world.Squads.All.Where(s => s.Shop?.Building is not null).ToList();
         foreach (var s in shops) output.WriteLine($"{s.Name} in {s.HomeBuilding!.Name}: {s.Shop!.Stock.Width} x {s.Shop.Stock.Height}, {s.Shop.Stock.All().Sum(i => i.Quantity)} units, {s.Money} cats");
+
         Assert.NotEmpty(shops);
+
         foreach (var s in shops)
         {
             var template = SquadTemplate.From(data.Db.Find(s.TemplateId)!);
+
             Assert.Equal(s.HomeBuilding!.Key, s.Shop!.Building);
             Assert.Empty(template.Prisoners);
+
             int cells = s.HomeBuilding.Fixtures.Where(f => f.HoldsShopStock).Sum(f => f.StorageWidth * f.StorageHeight);
+
             Assert.Equal(Math.Max(18, s.HomeBuilding.Fixtures.Where(f => f.HoldsShopStock).Max(f => f.StorageWidth)), s.Shop.Stock.Width);
-            int packed = (cells + s.Shop.Stock.Width - 1) / s.Shop.Stock.Width;   // the original's merged section; each container's own rectangle takes a few rows more
+
+            // the original's merged section; each container's own rectangle takes a few rows more
+            int packed = (cells + s.Shop.Stock.Width - 1) / s.Shop.Stock.Width;
+
             Assert.InRange(s.Shop.Stock.Height, packed, packed * 11 / 10 + 3);
             Assert.NotEmpty(s.Shop.Stock.Items);
-            if (template.VendorMoney > 0) Assert.True(s.Money >= template.VendorMoney - (int)(template.VendorMoney * 0.4), $"{s.Name}: {s.Money}");
+
+            if (template.VendorMoney > 0)
+
+                Assert.True(s.Money >= template.VendorMoney - (int)(template.VendorMoney * 0.4), $"{s.Name}: {s.Money}");
         }
     }
 
@@ -93,15 +115,20 @@ public class HousedSquadTests(ITestOutputHelper output)
     {
         var data = Load();
         var db = data.Db;
-        // A level-data home with an empty template that holds vendor lists or special items (a ruin's loot, FUN_140583a10's empty path) and stock containers.
+
+        // A level-data home with an empty template that holds vendor lists or special items (a ruin's loot, FUN_140583a10's empty path) and stock
+        // containers.
         var (site, home) = data.Sites.SelectMany(s => s.Buildings.Select(b => (Site: s, Building: b)))
-            .First(x => x.Building.ResidentsTemplate.Length > 0 && x.Building.Fixtures.Any(f => f.HoldsShopStock) && db.Find(x.Building.ResidentsTemplate) is { } r
-                && r.GetReferences("squad").Count + r.GetReferences("squad2").Count + r.GetReferences("animals").Count + r.GetReferences("animals2").Count + r.GetReferences("leader").Count + r.GetReferences("choosefrom list").Count == 0
+            .First(x => x.Building.ResidentsTemplate.Length > 0 && x.Building.Fixtures.Any(f => f.HoldsShopStock)
+                    && db.Find(x.Building.ResidentsTemplate) is { } r
+                && r.GetReferences("squad").Count + r.GetReferences("squad2").Count + r.GetReferences("animals").Count
+                    + r.GetReferences("animals2").Count + r.GetReferences("leader").Count + r.GetReferences("choosefrom list").Count == 0
                 && r.GetReferences("vendors").Count > 0 && Site0(x.Site));
         using var world = Town(data, site, StandardParts.Trade);
         world.RunTicks(3);
         var held = world.Fixtures.OfBuilding(home.Key).Where(f => f.Contents is not null).Sum(f => f.Contents!.Items.Count);
         output.WriteLine($"{site.Town.Name}, {home.Name} ({home.ResidentsTemplate}): {held} stacks in its containers");
+
         Assert.True(held > 0);
     }
 

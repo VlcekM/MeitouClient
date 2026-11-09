@@ -5,19 +5,23 @@ using Meitou.Simulation.Ai;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The AI dialogue gave a squad, on its PLATOON record (docs/formats/save.md "NPC platoons"): <c>contractjob</c> (the contract package id, "" for none), <c>jobhr</c> (a float: the game
-/// hours it ends at) and <c>replacementAI</c> (the <c>change AI</c> package id, "" for the template's packages). The contract's mission target is not kept: the original loads it with
-/// an empty target too.
+/// The AI dialogue gave a squad, on its PLATOON record (docs/formats/save.md "NPC platoons"): <c>contractjob</c> (the contract package id, "" for none),
+/// <c>jobhr</c> (a float: the game hours it ends at) and <c>replacementAI</c> (the <c>change AI</c> package id, "" for the template's packages). The
+/// contract's mission target is not kept: the original loads it with an empty target too.
 /// </summary>
 public sealed record AiSave(string? Contract, double ContractEnd, string? Replacement)
 {
     public const string ContractKey = "contractjob", EndKey = "jobhr", ReplacementKey = "replacementAI";
 
-    /// <summary>What <paramref name="board"/> holds of it; null when it runs neither.</summary>
+    /// <summary>
+    /// What <paramref name="board"/> holds of it; null when it runs neither.
+    /// </summary>
     public static AiSave? Of(Blackboard? board) =>
         board is { } b && (b.Contract is not null || b.Replacement is not null) ? new AiSave(b.Contract?.Id, b.ContractEnd, b.Replacement?.Id) : null;
 
-    /// <summary>Writes the keys over the platoon's (each of them, so a contract that ended since the save was read is cleared).</summary>
+    /// <summary>
+    /// Writes the keys over the platoon's (each of them, so a contract that ended since the save was read is cleared).
+    /// </summary>
     public static void Write(FcsRecord platoon, AiSave? ai)
     {
         platoon.Strings[ContractKey] = ai?.Contract ?? "";
@@ -32,7 +36,9 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         return contract is null && replacement is null ? null : new AiSave(contract, platoon.Floats.GetValueOrDefault(EndKey), replacement);
     }
 
-    /// <summary>Puts it on a squad's new blackboard: the replacement first (its packages), then the contract with its saved end. Unknown packages are skipped.</summary>
+    /// <summary>
+    /// Puts it on a squad's new blackboard: the replacement first (its packages), then the contract with its saved end. Unknown packages are skipped.
+    /// </summary>
     public void Apply(Blackboard board, AiDatabase ai, IPackageRules rules)
     {
         if (Replacement is not null && ai.Package(Replacement) is { } replacement) board.Replace(replacement, rules);

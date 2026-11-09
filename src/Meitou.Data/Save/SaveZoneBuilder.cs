@@ -14,7 +14,9 @@ namespace Meitou.Data.Save;
 /// </summary>
 public static partial class SaveZoneBuilder
 {
-    /// <summary>The <c>version</c> of every saved building state (<b>Observed</b>: 270 in all 36561 states of the owner's saves).</summary>
+    /// <summary>
+    /// The <c>version</c> of every saved building state (<b>Observed</b>: 270 in all 36561 states of the owner's saves).
+    /// </summary>
     public const int StateVersion = 270;
 
     /// <summary>

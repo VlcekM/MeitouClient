@@ -3,10 +3,14 @@ using Meitou.Content;
 
 namespace Meitou.Launcher;
 
-/// <summary>Reads and updates only the <c>language</c> line of the game's settings.cfg, keeping its encoding, line endings and every other line.</summary>
+/// <summary>
+/// Reads and updates only the <c>language</c> line of the game's settings.cfg, keeping its encoding, line endings and every other line.
+/// </summary>
 internal static class KenshiLanguageSettings
 {
-    /// <summary>The value of <c>language</c> in the install's settings.cfg (trimmed), or null when the file or the key is missing or unreadable.</summary>
+    /// <summary>
+    /// The value of <c>language</c> in the install's settings.cfg (trimmed), or null when the file or the key is missing or unreadable.
+    /// </summary>
     public static string? GetLanguage(GameInstall install)
     {
         string path = Path.Combine(install.Root, "settings.cfg");
@@ -21,7 +25,9 @@ internal static class KenshiLanguageSettings
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    /// <summary>Writes <c>language=<paramref name="code"/></c> into the install's settings.cfg, replacing the existing line or appending one.</summary>
+    /// <summary>
+    /// Writes <c>language=<paramref name="code"/></c> into the install's settings.cfg, replacing the existing line or appending one.
+    /// </summary>
     public static void SetLanguage(GameInstall install, string code)
     {
         string path = Path.Combine(install.Root, "settings.cfg");
@@ -46,7 +52,9 @@ internal static class KenshiLanguageSettings
         return string.Concat(text, separator, "language=", code, newline);
     }
 
-    /// <summary>The value span of the first <c>language=</c> line (after the <c>=</c> and its blanks, up to the line end).</summary>
+    /// <summary>
+    /// The value span of the first <c>language=</c> line (after the <c>=</c> and its blanks, up to the line end).
+    /// </summary>
     static bool FindLanguage(string text, out int valueStart, out int contentEnd)
     {
         for (int lineStart = 0; lineStart < text.Length;)
@@ -69,8 +77,10 @@ internal static class KenshiLanguageSettings
 
     static (Encoding Encoding, int PreambleLength) DetectEncoding(byte[] bytes)
     {
-        if (bytes.AsSpan().StartsWith(new byte[] { 0x00, 0x00, 0xFE, 0xFF })) return (new UTF32Encoding(true, false), 4);
-        if (bytes.AsSpan().StartsWith(new byte[] { 0xFF, 0xFE, 0x00, 0x00 })) return (new UTF32Encoding(false, false), 4);
+        if (bytes.AsSpan().StartsWith(new byte[] { 0x00, 0x00, 0xFE, 0xFF }))
+            return (new UTF32Encoding(true, false), 4);
+        if (bytes.AsSpan().StartsWith(new byte[] { 0xFF, 0xFE, 0x00, 0x00 }))
+            return (new UTF32Encoding(false, false), 4);
         if (bytes.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF })) return (new UTF8Encoding(false), 3);
         if (bytes.AsSpan().StartsWith(new byte[] { 0xFE, 0xFF })) return (Encoding.BigEndianUnicode, 2);
         if (bytes.AsSpan().StartsWith(new byte[] { 0xFF, 0xFE })) return (Encoding.Unicode, 2);

@@ -1,6 +1,8 @@
 using System.Numerics;
 
-/// <summary>A tiny CPU rasteriser for debug images: triangles seen from above (+Y), the highest surface wins, shaded by slope.</summary>
+/// <summary>
+/// A tiny CPU rasteriser for debug images: triangles seen from above (+Y), the highest surface wins, shaded by slope.
+/// </summary>
 sealed class TopDownRenderer
 {
     readonly float _minX, _minZ, _unitsPerPixel;
@@ -24,7 +26,9 @@ sealed class TopDownRenderer
         for (int i = 0; i < Width * Height; i++) { _rgb[i * 3] = background.R; _rgb[i * 3 + 1] = background.G; _rgb[i * 3 + 2] = background.B; }
     }
 
-    /// <summary>Draws a triangle (world positions); pixels where it is the highest surface so far take <paramref name="colour"/> shaded by its slope.</summary>
+    /// <summary>
+    /// Draws a triangle (world positions); pixels where it is the highest surface so far take <paramref name="colour"/> shaded by its slope.
+    /// </summary>
     public void Triangle(Vector3 a, Vector3 b, Vector3 c, (byte R, byte G, byte B) colour, float biasUp = 0)
     {
         var n = Vector3.Cross(b - a, c - a);
@@ -32,8 +36,10 @@ sealed class TopDownRenderer
         float shade = len > 1e-9f ? 0.55f + 0.45f * Math.Clamp(Math.Abs(n.Y) / len, 0, 1) : 1;
         float x0 = Math.Min(a.X, Math.Min(b.X, c.X)), x1 = Math.Max(a.X, Math.Max(b.X, c.X));
         float z0 = Math.Min(a.Z, Math.Min(b.Z, c.Z)), z1 = Math.Max(a.Z, Math.Max(b.Z, c.Z));
-        int px0 = Math.Max(0, (int)MathF.Floor((x0 - _minX) / _unitsPerPixel)), px1 = Math.Min(Width - 1, (int)MathF.Floor((x1 - _minX) / _unitsPerPixel));
-        int pz0 = Math.Max(0, (int)MathF.Floor((z0 - _minZ) / _unitsPerPixel)), pz1 = Math.Min(Height - 1, (int)MathF.Floor((z1 - _minZ) / _unitsPerPixel));
+        int px0 = Math.Max(0, (int)MathF.Floor((x0 - _minX) / _unitsPerPixel)), px1 = Math.Min(Width - 1,
+                (int)MathF.Floor((x1 - _minX) / _unitsPerPixel));
+        int pz0 = Math.Max(0, (int)MathF.Floor((z0 - _minZ) / _unitsPerPixel)), pz1 = Math.Min(Height - 1,
+                (int)MathF.Floor((z1 - _minZ) / _unitsPerPixel));
         float det = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
         if (Math.Abs(det) < 1e-12f) return;
         for (int pz = pz0; pz <= pz1; pz++)
@@ -64,11 +70,15 @@ sealed class TopDownRenderer
                 int px = cx + dx, pz = cz + dz;
                 if (px < 0 || pz < 0 || px >= Width || pz >= Height) continue;
                 int i = (pz * Width + px) * 3;
-                _rgb[i] = colour.R; _rgb[i + 1] = colour.G; _rgb[i + 2] = colour.B;
+                _rgb[i] = colour.R;
+                _rgb[i + 1] = colour.G;
+                _rgb[i + 2] = colour.B;
             }
     }
 
-    /// <summary>A line on the image (for polygon edges); no depth test.</summary>
+    /// <summary>
+    /// A line on the image (for polygon edges); no depth test.
+    /// </summary>
     public void Line(Vector3 a, Vector3 b, (byte R, byte G, byte B) colour)
     {
         float length = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Z - a.Z)) / _unitsPerPixel;

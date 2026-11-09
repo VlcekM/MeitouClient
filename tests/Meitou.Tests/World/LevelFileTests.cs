@@ -23,6 +23,7 @@ public class LevelFileTests
 
         var formats = new Dictionary<int, int>();
         int trailers = 0, wideTrailers = 0;
+
         foreach (var path in LevelFiles(install!))
         {
             var bytes = File.ReadAllBytes(path);
@@ -37,6 +38,7 @@ public class LevelFileTests
             if (file.Trailer is { Length: > 0 } t && file.TrailerEntryInts == 1)
                 Assert.True(t.SequenceEqual(t.Order()) && t.All(v => v > 0), $"{path}: trailer is not ascending positive ints");
         }
+
         Assert.Equal(715, formats.Values.Sum());
         Assert.Equal(new Dictionary<int, int> { [10] = 2, [13] = 4, [15] = 680, [16] = 29 }, formats);
         Assert.Equal(657, trailers);
@@ -59,6 +61,7 @@ public class LevelFileTests
         var buildings = world.Buildings().ToList();
         Assert.Equal(11708, buildings.Count);
         Assert.All(buildings, b => Assert.Equal(b.Zone, WorldLayout.ZoneOf(b.Position.X, b.Position.Z)));
+
         // The other building-list entries sit at the origin and point at records of their own zone file.
         var local = world.BuildingListEntries().Where(e => e.TargetsZoneRecord).ToList();
         Assert.All(local, e => Assert.Equal(Vector3.Zero, e.Position));

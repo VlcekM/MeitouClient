@@ -1,10 +1,9 @@
 namespace Meitou.Data.Fcs;
 
 /// <summary>
-/// Record type numbers (<see cref="FcsRecord.Type"/>), as numbered by the Forgotten Construction Set
-/// (its <c>itemType</c> enum, consecutive from 0). Field evidence for the types the base game uses is in
-/// docs/formats/fcs-mod.md. Types the base game never uses (GAMESTATE_*, *_STATE, PLATOON, ...) are probably
-/// for save games.
+/// Record type numbers (<see cref="FcsRecord.Type"/>), as numbered by the Forgotten Construction Set (its <c>itemType</c> enum, consecutive from 0).
+/// Field evidence for the types the base game uses is in docs/formats/fcs-mod.md. Types the base game never uses (GAMESTATE_*, *_STATE, PLATOON, ...)
+/// are probably for save games.
 /// </summary>
 public enum FcsRecordType
 {

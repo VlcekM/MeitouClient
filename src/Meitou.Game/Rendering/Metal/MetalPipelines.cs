@@ -14,27 +14,31 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalPipelines : IGpuPipelines
 {
-    readonly MTLDevice device;
-    readonly MetalShaders shaders;
-    readonly Dictionary<GraphicsPipelineDesc, MTLRenderPipelineState> graphics = [];
-    readonly Dictionary<ComputePipelineDesc, MTLComputePipelineState> computes = [];
+    readonly MTLDevice _device;
+    readonly MetalShaders _shaders;
+    readonly Dictionary<GraphicsPipelineDesc, MTLRenderPipelineState> _graphics = [];
+    readonly Dictionary<ComputePipelineDesc, MTLComputePipelineState> _computes = [];
 
     public MetalPipelines(MTLDevice device, MetalShaders shaders)
     {
-        this.device = device;
-        this.shaders = shaders;
+        this._device = device;
+        this._shaders = shaders;
     }
 
-    /// <summary>The backend's object of a pipeline handle.</summary>
-    internal MTLRenderPipelineState Backend(in GpuPipeline pipeline) => graphics[pipeline.Desc];
+    /// <summary>
+    /// The backend's object of a pipeline handle.
+    /// </summary>
+    internal MTLRenderPipelineState Backend(in GpuPipeline pipeline) => _graphics[pipeline.Desc];
 
-    /// <summary>The backend's object of a compute pipeline handle.</summary>
-    internal MTLComputePipelineState Backend(in GpuComputePipeline pipeline) => computes[pipeline.Desc];
+    /// <summary>
+    /// The backend's object of a compute pipeline handle.
+    /// </summary>
+    internal MTLComputePipelineState Backend(in GpuComputePipeline pipeline) => _computes[pipeline.Desc];
 
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
     {
-        if (graphics.TryGetValue(desc, out var made)) return new GpuPipeline(desc);
-        var program = shaders.Backend(desc.Program);
+        if (_graphics.TryGetValue(desc, out var made)) return new GpuPipeline(desc);
+        var program = _shaders.Backend(desc.Program);
         var d = new MTLRenderPipelineDescriptor(new ObjectiveCClass(ObjectiveC.objc_getClass("MTLRenderPipelineDescriptor")).AllocInit());
         d.VertexFunction = program.VertexFunction;
         d.FragmentFunction = program.FragmentFunction;
@@ -70,33 +74,35 @@ public sealed class MetalPipelines : IGpuPipelines
         if (desc.Targets.Depth != InternalFormat.None) d.DepthAttachmentPixelFormat = MetalConventions.Pixel(desc.Targets.Depth);
         if (desc.Vertex.Inputs.Length > 0) d.VertexDescriptor = VertexDescriptor(desc.Vertex);
         NSError error = default;
-        var state = device.NewRenderPipelineState(d, ref error);
+        var state = _device.NewRenderPipelineState(d, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{desc.Program.Name}: the pipeline '{desc.Name}' failed: {error.LocalizedDescription}");
-        graphics[desc] = state;
+        _graphics[desc] = state;
         return new GpuPipeline(desc);
     }
 
     public GpuComputePipeline Get(in ComputePipelineDesc desc)
     {
-        if (computes.ContainsKey(desc)) return new GpuComputePipeline(desc);
-        var program = shaders.Backend(desc.Program);
+        if (_computes.ContainsKey(desc)) return new GpuComputePipeline(desc);
+        var program = _shaders.Backend(desc.Program);
         if (!program.IsCompute) throw new InvalidOperationException($"{desc.Program.Name}: not a compute program");
         NSError error = default;
-        var state = device.NewComputePipelineState(program.ComputeFunction, ref error);
+        var state = _device.NewComputePipelineState(program.ComputeFunction, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{desc.Program.Name}: the compute pipeline '{desc.Name}' failed: {error.LocalizedDescription}");
-        computes[desc] = state;
+        _computes[desc] = state;
         return new GpuComputePipeline(desc);
     }
 
-    /// <summary>Drops a program's cached pipelines (the program is going away).</summary>
+    /// <summary>
+    /// Drops a program's cached pipelines (the program is going away).
+    /// </summary>
     public void Forget(GpuProgram program)
     {
-        foreach (var (desc, _) in graphics)
-            if (desc.Program.Index == program.Index) graphics.Remove(desc);
-        foreach (var (desc, _) in computes)
-            if (desc.Program.Index == program.Index) computes.Remove(desc);
+        foreach (var (desc, _) in _graphics)
+            if (desc.Program.Index == program.Index) _graphics.Remove(desc);
+        foreach (var (desc, _) in _computes)
+            if (desc.Program.Index == program.Index) _computes.Remove(desc);
     }
 
     /// <summary>
@@ -105,7 +111,9 @@ public sealed class MetalPipelines : IGpuPipelines
     internal void BindDepthClipMode(MTLRenderCommandEncoder encoder, bool depthClamp) =>
         encoder.SetDepthClipMode(depthClamp ? MTLDepthClipMode.Clamp : MTLDepthClipMode.Clip);
 
-    /// <summary>The vertex inputs of a pipeline: each location its own binding (binding = location, as VkGl), stride and step per binding.</summary>
+    /// <summary>
+    /// The vertex inputs of a pipeline: each location its own binding (binding = location, as VkGl), stride and step per binding.
+    /// </summary>
     static MTLVertexDescriptor VertexDescriptor(VertexLayout vertex)
     {
         var descriptor = new MTLVertexDescriptor();

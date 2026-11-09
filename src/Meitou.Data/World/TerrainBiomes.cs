@@ -21,15 +21,23 @@ public sealed class BlendInfoFile
     BlendInfoFile(int cells, int resolution, uint[] slots, byte[][]? nodes) =>
         (Cells, Resolution, Slots, Nodes) = (cells, resolution, slots, nodes);
 
-    /// <summary>Cells per side (32 in the base game: 2 × 2 zones per cell).</summary>
+    /// <summary>
+    /// Cells per side (32 in the base game: 2 × 2 zones per cell).
+    /// </summary>
     public int Cells { get; }
-    /// <summary>Same as <see cref="Cells"/>; the grid is square (kept for callers that think in X and Z).</summary>
+    /// <summary>
+    /// Same as <see cref="Cells"/>; the grid is square (kept for callers that think in X and Z).
+    /// </summary>
     public int CellsX => Cells;
     public int CellsZ => Cells;
-    /// <summary>Leaves per cell side of the slot-mask quadtree (32 in the base game: one blend-map pixel per leaf).</summary>
+    /// <summary>
+    /// Leaves per cell side of the slot-mask quadtree (32 in the base game: one blend-map pixel per leaf).
+    /// </summary>
     public int Resolution { get; }
 
-    /// <summary>Stored slot values, <c>(z × Cells + x) × SlotsPerCell + k</c>: RGB in the low 24 bits.</summary>
+    /// <summary>
+    /// Stored slot values, <c>(z × Cells + x) × SlotsPerCell + k</c>: RGB in the low 24 bits.
+    /// </summary>
     public uint[] Slots { get; }
 
     /// <summary>
@@ -41,19 +49,27 @@ public sealed class BlendInfoFile
 
     public double CellSize => (double)WorldLayout.WorldSize / Cells;
 
-    /// <summary>RGB colour of a slot (the high byte of the stored value is dropped), 0 = unused.</summary>
+    /// <summary>
+    /// RGB colour of a slot (the high byte of the stored value is dropped), 0 = unused.
+    /// </summary>
     public uint Slot(int cellX, int cellZ, int slot) => Slots[(cellZ * Cells + cellX) * SlotsPerCell + slot] & 0xFFFFFF;
 
-    /// <summary>The cell containing world point (x, z), clamped to the grid.</summary>
+    /// <summary>
+    /// The cell containing world point (x, z), clamped to the grid.
+    /// </summary>
     public (int X, int Z) CellOf(double x, double z) =>
         (Math.Clamp((int)Math.Floor((x + WorldLayout.HalfWorldSize) / CellSize), 0, Cells - 1),
          Math.Clamp((int)Math.Floor((z + WorldLayout.HalfWorldSize) / CellSize), 0, Cells - 1));
 
-    /// <summary>Slot bits (bit k = slot k) of a node byte; the top three bits hold how many are set.</summary>
+    /// <summary>
+    /// Slot bits (bit k = slot k) of a node byte; the top three bits hold how many are set.
+    /// </summary>
     public static int MaskSlots(byte node) => node & 0x1F;
     public static int MaskCount(byte node) => node >> 5;
 
-    /// <summary>Morton code of a leaf: x in the even bits, z in the odd bits.</summary>
+    /// <summary>
+    /// Morton code of a leaf: x in the even bits, z in the odd bits.
+    /// </summary>
     public static int Morton(int x, int z)
     {
         int m = 0;
@@ -119,7 +135,9 @@ public sealed class BlendInfoFile
     }
 }
 
-/// <summary>Terrain layers of a biome, in the order of Kenshi's terrain texture arrays (terrain shader, docs/formats/terrain.md).</summary>
+/// <summary>
+/// Terrain layers of a biome, in the order of Kenshi's terrain texture arrays (terrain shader, docs/formats/terrain.md).
+/// </summary>
 public enum TerrainLayer { Base, Slope, Cliff, Grass, Dirt, Road }
 
 /// <summary>
@@ -131,29 +149,46 @@ public sealed record BiomeTerrain
 {
     public required string StringId { get; init; }
     public required string Name { get; init; }
-    /// <summary>Colour of the biome in <c>biomemap.png</c> / <c>blendinfo.dat</c> (RGB).</summary>
+    /// <summary>
+    /// Colour of the biome in <c>biomemap.png</c> / <c>blendinfo.dat</c> (RGB).
+    /// </summary>
     public required uint Index { get; init; }
-    /// <summary>Per <see cref="TerrainLayer"/>: diffuse and normal texture paths as stored (null when empty).</summary>
+    /// <summary>
+    /// Per <see cref="TerrainLayer"/>: diffuse and normal texture paths as stored (null when empty).
+    /// </summary>
     public required string?[] Diffuse { get; init; }
     public required string?[] Normal { get; init; }
-    /// <summary>Per layer: repeats per 5000 world units on X and Y.</summary>
+    /// <summary>
+    /// Per layer: repeats per 5000 world units on X and Y.
+    /// </summary>
     public required Vector2[] Tiling { get; init; }
-    /// <summary>Shader slope ranges: X slope layer, Y cliff layer, Z "slope … 3" (unused by the shader), W grass.</summary>
+    /// <summary>
+    /// Shader slope ranges: X slope layer, Y cliff layer, Z "slope … 3" (unused by the shader), W grass.
+    /// </summary>
     public required Vector4 SlopeMin { get; init; }
     public required Vector4 SlopeMax { get; init; }
     public required Vector4 SlopeBlend { get; init; }
-    /// <summary>Colour-map strength for cliff, grass, dirt, road (base and slope always take the full colour).</summary>
+    /// <summary>
+    /// Colour-map strength for cliff, grass, dirt, road (base and slope always take the full colour).
+    /// </summary>
     public required Vector4 OverlayMult { get; init; }
-    /// <summary>Ground colour (RGB 0..1): what the textures fade to with distance.</summary>
+    /// <summary>
+    /// Ground colour (RGB 0..1): what the textures fade to with distance.
+    /// </summary>
     public required Vector3 GroundColour { get; init; }
     public required float FadeDistance { get; init; }
     public required float BrightnessFix { get; init; }
     public required float DistortWavelength { get; init; }
     public required float DistortAmplitude { get; init; }
-    /// <summary>Per layer in the order base, slope, cliff, grass, dirt, road (the `absorbance 0`, `1`, `2`, `grass`, `dirt`, `road` fields, fcs.def defaults 0.55, 0.2, 0.5, 0.44, 0.3, 0.25): how much rain darkens and shines the layer (docs/formats/weather.md "Rain and wetness").</summary>
+    /// <summary>
+    /// Per layer in the order base, slope, cliff, grass, dirt, road (the `absorbance 0`, `1`, `2`, `grass`, `dirt`, `road` fields, fcs.def defaults
+    /// 0.55, 0.2, 0.5, 0.44, 0.3, 0.25): how much rain darkens and shines the layer (docs/formats/weather.md "Rain and wetness").
+    /// </summary>
     public required float[] Absorbance { get; init; }
 
-    /// <summary>Factor the game applies to the FCS slope values before handing them to the shader (Verified, kenshi_x64.exe).</summary>
+    /// <summary>
+    /// Factor the game applies to the FCS slope values before handing them to the shader (Verified, kenshi_x64.exe).
+    /// </summary>
     public const float SlopeScale = 0.01f;
 
     static readonly string[] TextureFields = ["texture base", "texture slope", "texture vertical", "texture grass", "texture dirt", "texture road"];
@@ -189,7 +224,9 @@ public sealed record BiomeTerrain
         };
     }
 
-    /// <summary>All BIOMES records by <see cref="Index"/> colour (the first record wins if two share a colour).</summary>
+    /// <summary>
+    /// All BIOMES records by <see cref="Index"/> colour (the first record wins if two share a colour).
+    /// </summary>
     public static Dictionary<uint, BiomeTerrain> ByIndex(GameDatabase db)
     {
         var result = new Dictionary<uint, BiomeTerrain>();
@@ -211,7 +248,9 @@ public static class TerrainMaps
     public const string BiomeMap = "newland/land/biomemap.png";
     public const int OverlayTiles = 8;
 
-    /// <summary><c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss.</summary>
+    /// <summary>
+    /// <c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss.
+    /// </summary>
     public static string OverlayTile(GameInstall install, string kind, int x, int z) =>
         GameFiles.Resolve(Path.Combine(install.DataDirectory, LandDirectory, "overlaymaps", $"{kind}.{x}.{z}.png"));
 }

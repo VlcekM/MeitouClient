@@ -17,11 +17,15 @@ public sealed unsafe class FrameRing : IDisposable
         public List<Action> Deletions = new();
         public bool InFlight;
         public long Frame;
-        /// <summary>The primary being recorded: <see cref="Cmd"/>, or after a <see cref="SubmitAndWait"/> one of <see cref="Extra"/>.</summary>
+        /// <summary>
+        /// The primary being recorded: <see cref="Cmd"/>, or after a <see cref="SubmitAndWait"/> one of <see cref="Extra"/>.
+        /// </summary>
         public CommandBuffer Recording;
         public readonly List<CommandBuffer> Extra = new();
         public int ExtraUsed;
     }
+
+    #region State
 
     readonly VulkanDevice _dev;
     readonly Vk _vk;
@@ -31,6 +35,10 @@ public sealed unsafe class FrameRing : IDisposable
     Fence _splitFence;
     bool _inFrame;
     bool _disposed;
+
+    #endregion
+
+    #region Construction
 
     internal FrameRing(VulkanDevice dev, int count)
     {
@@ -61,17 +69,36 @@ public sealed unsafe class FrameRing : IDisposable
         }
     }
 
+    #endregion
+
+    #region Properties
+
     public int Count => _slots.Length;
-    /// <summary>The current (or last begun) frame; 0 before the first.</summary>
+
+    /// <summary>
+    /// The current (or last begun) frame; 0 before the first.
+    /// </summary>
     public long FrameNumber { get; private set; }
-    /// <summary>The slot of the current frame (FrameNumber-1 modulo the count).</summary>
+
+    /// <summary>
+    /// The slot of the current frame (FrameNumber-1 modulo the count).
+    /// </summary>
     public int Slot { get; private set; }
-    /// <summary>The newest frame whose fence has been seen signalled (all its deletions have run).</summary>
+
+    /// <summary>
+    /// The newest frame whose fence has been seen signalled (all its deletions have run).
+    /// </summary>
     public long CompletedFrame { get; private set; }
     public bool InFrame => _inFrame;
     public CommandBuffer Current => _slots[Slot].Recording;
 
-    /// <summary>Waits for this slot's frame from N frames ago, runs its deletions, resets and begins the command buffer.</summary>
+    #endregion
+
+    #region Frames
+
+    /// <summary>
+    /// Waits for this slot's frame from N frames ago, runs its deletions, resets and begins the command buffer.
+    /// </summary>
     public CommandBuffer BeginFrame()
     {
         if (_inFrame)
@@ -101,8 +128,14 @@ public sealed unsafe class FrameRing : IDisposable
         return s.Cmd;
     }
 
-    /// <summary>Ends the command buffer and submits it (graphics queue) with this slot's fence. <paramref name="before"/>, when given, is an
-    /// already ended command buffer submitted ahead of the frame's own in the same submission (uploads).</summary>
+    #endregion
+
+    #region Submission
+
+    /// <summary>
+    /// Ends the command buffer and submits it (graphics queue) with this slot's fence. <paramref name="before"/>, when given, is an
+    /// already ended command buffer submitted ahead of the frame's own in the same submission (uploads).
+    /// </summary>
     public void EndFrame(ReadOnlySpan<Silk.NET.Vulkan.Semaphore> wait = default, ReadOnlySpan<PipelineStageFlags> waitStages = default,
         ReadOnlySpan<Silk.NET.Vulkan.Semaphore> signal = default, CommandBuffer before = default)
     {
@@ -151,8 +184,8 @@ public sealed unsafe class FrameRing : IDisposable
     }
 
     /// <summary>
-    /// (Diagnostic, <c>MEITOU_DIAG_SUBMIT</c>, issue #108.) Ends the frame's command buffer so far, submits it after <paramref name="before"/> (an ended
-    /// buffer) and waits for both; the frame goes on in another primary of the slot's pool, returned (begun).
+    /// (Diagnostic, <c>MEITOU_DIAG_SUBMIT</c>, issue #108.) Ends the frame's command buffer so far, submits it after
+    /// <paramref name="before"/> (an ended buffer) and waits for both; the frame goes on in another primary of the slot's pool, returned (begun).
     /// </summary>
     public CommandBuffer SubmitAndWait(CommandBuffer before)
     {
@@ -186,7 +219,13 @@ public sealed unsafe class FrameRing : IDisposable
 
     CommandBuffer Allocate(CommandPool pool)
     {
-        var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = pool, Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
+        var ai = new CommandBufferAllocateInfo
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = pool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = 1,
+        };
         VulkanException.Check(_vk.AllocateCommandBuffers(_dev.Device, in ai, out var cb), "vkAllocateCommandBuffers");
         return cb;
     }
@@ -196,6 +235,10 @@ public sealed unsafe class FrameRing : IDisposable
         var bi = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
         VulkanException.Check(_vk.BeginCommandBuffer(cb, in bi), "vkBeginCommandBuffer");
     }
+
+    #endregion
+
+    #region Deletion
 
     /// <summary>
     /// Runs <paramref name="destroy"/> once every frame that could use the resource has finished: on the current
@@ -224,8 +267,8 @@ public sealed unsafe class FrameRing : IDisposable
     }
 
     /// <summary>
-    /// Out of memory: waits for the frames already submitted (not the one being recorded) and runs their deletions, so what they released is freed now
-    /// rather than frames later. Render thread only. False when none was in flight.
+    /// Out of memory: waits for the frames already submitted (not the one being recorded) and runs their deletions, so what they released
+    /// is freed now rather than frames later. Render thread only. False when none was in flight.
     /// </summary>
     public bool RetireSubmitted()
     {
@@ -242,7 +285,9 @@ public sealed unsafe class FrameRing : IDisposable
         return any;
     }
 
-    /// <summary>Waits for all submitted frames and runs all pending deletions.</summary>
+    /// <summary>
+    /// Waits for all submitted frames and runs all pending deletions.
+    /// </summary>
     public void WaitAll()
     {
         foreach (var s in _slots)
@@ -294,7 +339,13 @@ public sealed unsafe class FrameRing : IDisposable
         }
     }
 
-    /// <summary>The device must be idle. Runs the remaining deletions and destroys the per-frame objects.</summary>
+    #endregion
+
+    #region Lifetime
+
+    /// <summary>
+    /// The device must be idle. Runs the remaining deletions and destroys the per-frame objects.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -322,4 +373,6 @@ public sealed unsafe class FrameRing : IDisposable
             _vk.DestroyCommandPool(_dev.Device, s.Pool, null);
         }
     }
+
+    #endregion
 }

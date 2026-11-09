@@ -8,10 +8,11 @@ using EngineKey = Meitou.Game.Host.Input.Key;
 namespace Meitou.Game.Editor;
 
 /// <summary>
-/// The interior editor (Meitou's take on the original's level-editor Layout window, docs/game/interior-editor.md), opened from the F10 menu's Tools. Read only for now: it shows the
-/// layouts of the selected building's type (interior: furniture, exterior: signs and NPCs, as the original's two lists), the parts of one layout, and marks them on the screen.
-/// Up/Down pick, Tab switches interior / exterior, Enter opens a layout's parts, C centres the camera on the picked part (the original's "->"), Esc goes back and closes. While open it takes
-/// every key; a left click still selects another building, which the editor then shows.
+/// The interior editor (Meitou's take on the original's level-editor Layout window, docs/game/interior-editor.md), opened from the F10 menu's Tools.
+/// Read only for now: it shows the layouts of the selected building's type (interior: furniture, exterior: signs and NPCs, as the original's two
+/// lists), the parts of one layout, and marks them on the screen. Up/Down pick, Tab switches interior / exterior, Enter opens a layout's parts, C
+/// centres the camera on the picked part (the original's "->"), Esc goes back and closes. While open it takes every key; a left click still selects
+/// another building, which the editor then shows.
 /// </summary>
 sealed class InteriorEditorHost(GameHost host)
 {
@@ -27,22 +28,29 @@ sealed class InteriorEditorHost(GameHost host)
 
     const int InteriorEditorRows = 18;
 
-    /// <summary>The level building the editor shows: the selected one, with its state record (null for a player's site or nothing selected).</summary>
+    /// <summary>
+    /// The level building the editor shows: the selected one, with its state record (null for a player's site or nothing selected).
+    /// </summary>
     (ResolvedBuilding Building, GameRecord? State)? InteriorEditorBuilding()
     {
         if (host.Player.BuildingSelection.SelectedBuildingKey is not { } key || host.Scene.Objects is not { } objects) return null;
         if (_interiorEditorPlacements?.Levels != objects.Levels || _interiorEditorPlacements?.Revision != objects.Levels.EditRevision)
             _interiorEditorPlacements = (objects.Levels, objects.Levels.EditRevision, objects.Levels.Buildings().GroupBy(b => b.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal));
         if (!_interiorEditorPlacements.Value.ByKey.TryGetValue(key, out var placement)) return null;
-        if (BuildingPlacements.Resolve(placement, objects.Database, objects.Levels, (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved) return null;
+        if (BuildingPlacements.Resolve(placement, objects.Database, objects.Levels,
+                (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved)
+            return null;
         var state = placement.StateId is { } id && objects.Levels.Zones.TryGetValue(placement.Zone, out var zone) ? zone.Find(id) : null;
         return (resolved, state);
     }
 
-    /// <summary>The layouts of the building's type (its own, then those of the buildings it shares interiors with), interior or exterior.</summary>
+    /// <summary>
+    /// The layouts of the building's type (its own, then those of the buildings it shares interiors with), interior or exterior.
+    /// </summary>
     internal List<GameRecord> InteriorEditorLayouts(GameRecord building, bool exterior) =>
         host.Scene.Objects is not { } objects ? []
-        : [.. objects.Layouts.Names(building, exterior).Distinct(StringComparer.Ordinal).Select(n => objects.Layouts.Find(building, n, exterior)).OfType<GameRecord>().Distinct()];
+        : [.. objects.Layouts.Names(building, exterior).Distinct(StringComparer.Ordinal).Select(n => objects.Layouts.Find(building, n, exterior))
+            .OfType<GameRecord>().Distinct()];
 
     List<LayoutItem> InteriorEditorParts() =>
         _interiorEditorLayout is { } layout && host.Scene.Objects is { } objects ? [.. objects.Layouts.Items(layout)] : [];
@@ -56,16 +64,24 @@ sealed class InteriorEditorHost(GameHost host)
     internal void InteriorEditorKey(EngineKey key)
     {
         var shown = InteriorEditorBuilding();
-        int count = _interiorEditorLayout is not null ? InteriorEditorParts().Count : shown is { } s ? InteriorEditorLayouts(s.Building.Record, _interiorEditorExterior).Count : 0;
+        int count = _interiorEditorLayout is not null ? InteriorEditorParts().Count
+            : shown is { } s ? InteriorEditorLayouts(s.Building.Record, _interiorEditorExterior).Count
+            : 0;
         ref int row = ref _interiorEditorLayout is not null ? ref _interiorEditorPart : ref _interiorEditorRow;
         switch (key)
         {
-            case EngineKey.Escape when _interiorEditorLayout is not null: _interiorEditorLayout = null; break;
-            case EngineKey.Escape: InteriorEditorOpen = false; break;
-            case EngineKey.Up when count > 0: row = (row + count - 1) % count; break;
-            case EngineKey.Down when count > 0: row = (row + 1) % count; break;
-            case EngineKey.PageUp: row = Math.Max(0, row - InteriorEditorRows); break;
-            case EngineKey.PageDown when count > 0: row = Math.Min(count - 1, row + InteriorEditorRows); break;
+            case EngineKey.Escape when _interiorEditorLayout is not null: _interiorEditorLayout = null;
+            break;
+            case EngineKey.Escape: InteriorEditorOpen = false;
+            break;
+            case EngineKey.Up when count > 0: row = (row + count - 1) % count;
+            break;
+            case EngineKey.Down when count > 0: row = (row + 1) % count;
+            break;
+            case EngineKey.PageUp: row = Math.Max(0, row - InteriorEditorRows);
+            break;
+            case EngineKey.PageDown when count > 0: row = Math.Min(count - 1, row + InteriorEditorRows);
+            break;
             case EngineKey.Tab or EngineKey.Left or EngineKey.Right when _interiorEditorLayout is null:
                 _interiorEditorExterior = !_interiorEditorExterior;
                 _interiorEditorRow = 0;
@@ -76,7 +92,8 @@ sealed class InteriorEditorHost(GameHost host)
                 break;
             case EngineKey.C when shown is { } centre:
                 var at = _interiorEditorLayout is not null && InteriorEditorParts() is { Count: > 0 } parts
-                    ? BuildingLayouts.Place(centre.Building.Position, centre.Building.Placement.Rotation, parts[Math.Min(_interiorEditorPart, parts.Count - 1)]).Position
+                    ? BuildingLayouts.Place(centre.Building.Position, centre.Building.Placement.Rotation,
+                        parts[Math.Min(_interiorEditorPart, parts.Count - 1)]).Position
                     : centre.Building.Position;
                 host.Session.Camera.MovePivot(new Vector2(at.X, at.Z));
                 host.Player.Follow = null;
@@ -89,7 +106,12 @@ sealed class InteriorEditorHost(GameHost host)
         var shown = InteriorEditorBuilding();
         // Another building was selected: start over at its layout list.
         string? key = shown?.Building.Placement.Key;
-        if (key != _interiorEditorKey) { _interiorEditorKey = key; _interiorEditorLayout = null; _interiorEditorRow = 0; }
+        if (key != _interiorEditorKey)
+        {
+            _interiorEditorKey = key;
+            _interiorEditorLayout = null;
+            _interiorEditorRow = 0;
+        }
         var lines = new List<(string Text, bool Picked)>();
         string title, hint;
         if (shown is not { } s)
@@ -161,7 +183,9 @@ sealed class InteriorEditorHost(GameHost host)
         }
     }
 
-    /// <summary>Each part of the open layout as a dot where it stands on the screen, the picked one as a bigger square with its name.</summary>
+    /// <summary>
+    /// Each part of the open layout as a dot where it stands on the screen, the picked one as a bigger square with its name.
+    /// </summary>
     void DrawInteriorMarkers(DebugOverlay o, int width, int height, ResolvedBuilding building, List<LayoutItem> parts)
     {
         var view = host.Camera.View * host.Camera.Projection(width / (float)Math.Max(height, 1), host.Camera.Near, host.Camera.ViewDistance);
@@ -172,7 +196,11 @@ sealed class InteriorEditorHost(GameHost host)
             if (clip.W <= 0.1f) continue;
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;
             if (x < -10 || y < -10 || x > width + 10 || y > height + 10) continue;
-            if (i != _interiorEditorPart) { o.Rect(x - 3, y - 3, x + 3, y + 3, new Vector4(1f, 0.75f, 0.2f, 0.8f)); continue; }
+            if (i != _interiorEditorPart)
+            {
+                o.Rect(x - 3, y - 3, x + 3, y + 3, new Vector4(1f, 0.75f, 0.2f, 0.8f));
+                continue;
+            }
             o.Rect(x - 7, y - 7, x + 7, y + 7, new Vector4(1f, 0.15f, 0.1f, 0.95f));
             o.Rect(x - 4, y - 4, x + 4, y + 4, new Vector4(1f, 1f, 1f, 1f));
             o.Text(parts[i].Building.Name, x + 10, y - o.LineHeight / 2, new Vector4(1f, 0.9f, 0.4f, 1));

@@ -6,43 +6,64 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Perception;
 
-/// <summary>The indoor volume and the lights of a town's building, from the level data (the host's; null on <see cref="PopulationData"/>: everyone stays outdoors and unlit).</summary>
+/// <summary>
+/// The indoor volume and the lights of a town's building, from the level data (the host's; null on <see cref="PopulationData"/>: everyone stays
+/// outdoors and unlit).
+/// </summary>
 public interface ISightSource
 {
-    /// <summary>The building's indoor volume (<see cref="InteriorVolume.For"/>), or null when it has none.</summary>
+    /// <summary>
+    /// The building's indoor volume (<see cref="InteriorVolume.For"/>), or null when it has none.
+    /// </summary>
     InteriorVolume? Room(TownBuilding building);
-    /// <summary>The building's lights, its interior and exterior layouts' included (<see cref="WorldLights.ForBuilding"/>).</summary>
+    /// <summary>
+    /// The building's lights, its interior and exterior layouts' included (<see cref="WorldLights.ForBuilding"/>).
+    /// </summary>
     IReadOnlyList<WorldLight> Lights(TownBuilding building);
-    /// <summary>A completed player building's lights (placed as the renderer lights them; none by default).</summary>
+    /// <summary>
+    /// A completed player building's lights (placed as the renderer lights them; none by default).
+    /// </summary>
     IReadOnlyList<WorldLight> SiteLights(Construction.BuildSite site) => [];
-    /// <summary>BUILDING <c>enforce ceiling</c> (7 true): nobody on an upper floor of it is on top (<c>Character::threadedUpdatePeriodic</c>, <b>Verified</b>).</summary>
+    /// <summary>
+    /// BUILDING <c>enforce ceiling</c> (7 true): nobody on an upper floor of it is on top (<c>Character::threadedUpdatePeriodic</c>,
+    /// <b>Verified</b>).
+    /// </summary>
     bool EnforcesCeiling(TownBuilding building) => false;
 }
 
 /// <summary>
-/// Where each character is for sight and how lit it is (docs/game/perception.md "Sight"): the original keeps both on the character (its location handle and light level <c>+0xd8</c>);
-/// here they are worked out in the schedule phase of every tick from the last tick's positions and read by every sight test (<see cref="Sees"/>). Derived, not state.
-/// <list type="bullet">
-/// <item><b>Place</b>: the building whose indoor volume holds the character (a carried one takes its carrier's, a caged or bedded one its fixture's building), else outdoors. Standing in a
-/// building with nothing over it (a roof, a roofless part: the original's overhead query <c>0x8079e00</c>) is <b>on top</b>.</item>
-/// <item><b>Light</b> (<c>FUN_140a0af10</c>): 1 while the daylight factor is above 0.5, else 2 x daylight plus the lit lamps within their radius: <c>1.5 x power x (1 - d^2 / r^2)</c>
-/// (x the spot cone) for a lamp of the character's own indoor state, and on its floor when both are inside; interior lamps lit at any daylight with <see cref="InteriorLampsAllDay"/>.
-/// An NPC keeps the bare daylight factor while it is 0.75 or more.</item>
-/// </list>
-/// Rooms are the registered towns' buildings only (ruins and the player's buildings are outdoors); the lamps of completed player buildings and the lanterns characters
-/// carry (at their owner) light too.
+/// Where each character is for sight and how lit it is (docs/game/perception.md "Sight"): the original keeps both on the character (its location
+/// handle and light level <c>+0xd8</c>); here they are worked out in the schedule phase of every tick from the last tick's positions and read by
+/// every sight test (<see cref="Sees"/>). Derived, not state. <list type="bullet"> <item><b>Place</b>: the building whose indoor volume holds the
+/// character (a carried one takes its carrier's, a caged or bedded one its fixture's building), else outdoors. Standing in a building with nothing
+/// over it (a roof, a roofless part: the original's overhead query <c>0x8079e00</c>) is <b>on top</b>.</item> <item><b>Light</b>
+/// (<c>FUN_140a0af10</c>): 1 while the daylight factor is above 0.5, else 2 x daylight plus the lit lamps within their radius: <c>1.5 x power x (1 -
+/// d^2 / r^2)</c> (x the spot cone) for a lamp of the character's own indoor state, and on its floor when both are inside; interior lamps lit at any
+/// daylight with <see cref="InteriorLampsAllDay"/>. An NPC keeps the bare daylight factor while it is 0.75 or more.</item> </list> Rooms are the
+/// registered towns' buildings only (ruins and the player's buildings are outdoors); the lamps of completed player buildings and the lanterns
+/// characters carry (at their owner) light too.
 /// </summary>
 public sealed class SightMap
 {
-    /// <summary>The original's sight inside a building (<c>FUN_140851bc0</c>, Verified literal; no race multiplier).</summary>
+    /// <summary>
+    /// The original's sight inside a building (<c>FUN_140851bc0</c>, Verified literal; no race multiplier).
+    /// </summary>
     public const float IndoorSight = 500;
-    /// <summary>The light sampler's daylight cut: above it everyone is fully lit (Verified literal).</summary>
+    /// <summary>
+    /// The light sampler's daylight cut: above it everyone is fully lit (Verified literal).
+    /// </summary>
     public const float LitDaylight = 0.5f;
-    /// <summary>An NPC's light is the bare daylight factor from this up (the update's gate, Verified literal).</summary>
+    /// <summary>
+    /// An NPC's light is the bare daylight factor from this up (the update's gate, Verified literal).
+    /// </summary>
     public const float NpcDaylight = 0.75f;
-    /// <summary>A lamp's contribution factor (Verified literal).</summary>
+    /// <summary>
+    /// A lamp's contribution factor (Verified literal).
+    /// </summary>
     public const float LampGain = 1.5f;
-    /// <summary>The ambient light's floor in the sight test: a looker inside a building, outside one (Verified literals).</summary>
+    /// <summary>
+    /// The ambient light's floor in the sight test: a looker inside a building, outside one (Verified literals).
+    /// </summary>
     public const float InsideFloor = 0.2f, OutsideFloor = 0.4f;
 
     const float Cell = 500;
@@ -71,15 +92,19 @@ public sealed class SightMap
     int _count;
 
     /// <summary>
-    /// The <c>interiorlamps</c> switch's Meitou side, as the renderer's <c>WorldLamps.InteriorAllDay</c>: interior lamps count at every daylight (the game: night-only ones at
-    /// daylight 0.1 or less), so a lamp that is drawn on also lights. Set by the host.
+    /// The <c>interiorlamps</c> switch's Meitou side, as the renderer's <c>WorldLamps.InteriorAllDay</c>: interior lamps count at every daylight (the
+    /// game: night-only ones at daylight 0.1 or less), so a lamp that is drawn on also lights. Set by the host.
     /// </summary>
     public bool InteriorLampsAllDay { get; set; } = true;
 
-    /// <summary>The daylight factor of this tick (<see cref="WorldLights.DaylightFactor"/>).</summary>
+    /// <summary>
+    /// The daylight factor of this tick (<see cref="WorldLights.DaylightFactor"/>).
+    /// </summary>
     public float Daylight { get; private set; } = 1;
 
-    /// <summary>Adds a town building's room and lamps once (when its town registers, <see cref="Locks.FixtureRegistry.RegisterSite"/>).</summary>
+    /// <summary>
+    /// Adds a town building's room and lamps once (when its town registers, <see cref="Locks.FixtureRegistry.RegisterSite"/>).
+    /// </summary>
     public void Add(ISightSource source, TownBuilding building)
     {
         this._source ??= source;
@@ -103,7 +128,10 @@ public sealed class SightMap
         _entries[building.Key] = (room, own);
     }
 
-    /// <summary>A registered building became a ruin (a town override's residents, docs/game/buildings-production.md "Ruined by residents"): its room and lamps go.</summary>
+    /// <summary>
+    /// A registered building became a ruin (a town override's residents, docs/game/buildings-production.md "Ruined by residents"): its room and lamps
+    /// go.
+    /// </summary>
     public void Remove(string building)
     {
         if (!_entries.TryGetValue(building, out var e) || !_hidden.Add(building)) return;
@@ -116,8 +144,8 @@ public sealed class SightMap
     }
 
     /// <summary>
-    /// A registered building laid out afresh (a town override's residents, <see cref="PopulationData.Relay"/>): its old room and lamps go and its new ones come, unless it
-    /// is a ruin.
+    /// A registered building laid out afresh (a town override's residents, <see cref="PopulationData.Relay"/>): its old room and lamps go and its new
+    /// ones come, unless it is a ruin.
     /// </summary>
     public void Relay(ISightSource source, TownBuilding building)
     {
@@ -129,7 +157,9 @@ public sealed class SightMap
         Add(source, building);
     }
 
-    /// <summary>A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.</summary>
+    /// <summary>
+    /// A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.
+    /// </summary>
     public void Restore(ISightSource source, TownBuilding building)
     {
         if (!_hidden.Remove(building.Key))
@@ -178,7 +208,9 @@ public sealed class SightMap
         list.Add(item);
     }
 
-    /// <summary>Works out every character's place and light from the last tick's positions (the schedule phase, serial).</summary>
+    /// <summary>
+    /// Works out every character's place and light from the last tick's positions (the schedule phase, serial).
+    /// </summary>
     public void Update(World world)
     {
         Daylight = WorldLights.DaylightFactor((float)(world.GameHours % 24), world.Settings.Sunrise, world.Settings.Sunset);
@@ -206,14 +238,23 @@ public sealed class SightMap
             _place[s] = -1;
             _low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
             _facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
-            if (!prev[s].Alive || _rooms.Count == 0) { _onTop[s] = false; _probed[s] = default; continue; }
+            if (!prev[s].Alive || _rooms.Count == 0)
+            {
+                _onTop[s] = false;
+                _probed[s] = default;
+                continue;
+            }
             var c = table.Cold(s);
             var at = prev[s].Position;
             if (c?.InWhat is { } held && world.Fixtures.Find(held) is { } fixture)
             {
                 _place[s] = _roomOf.GetValueOrDefault(fixture.Building, -1);
                 _onTop[s] = false;
-                if (_place[s] != was) { _floorOf[s] = -1; _probed[s] = default; }
+                if (_place[s] != was)
+                {
+                    _floorOf[s] = -1;
+                    _probed[s] = default;
+                }
             }
             else if (RoomAt(at) is var r and >= 0)
             {
@@ -228,11 +269,13 @@ public sealed class SightMap
                     _probed[s] = key;
                 }
             }
-            else _onTop[s] = false;
+            else
+                _onTop[s] = false;
         }
         // A carried body is where its carrier is (the original's location of a carried character is its carrier's).
         for (int s = 0; s < _count; s++)
-            if (prev[s].Alive && table.Cold(s) is { CarriedBy.IsNone: false } c && table.TryResolveNext(c.CarriedBy, out int carrier) && carrier < _count)
+            if (prev[s].Alive && table.Cold(s) is { CarriedBy.IsNone: false } c && table.TryResolveNext(c.CarriedBy, out int carrier)
+                    && carrier < _count)
                 (_place[s], _onTop[s]) = (_place[carrier], _onTop[carrier]);
         RefreshSites(world);
         // The lights characters carry (lanterns; docs/formats/lights.md "Carried lanterns"), at their owner, lit as their night flag allows.
@@ -250,13 +293,15 @@ public sealed class SightMap
         }
     }
 
-    // Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample clears it (set from any worker, only ever to true).
+    // Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample
+    // clears it (set from any worker, only ever to true).
     bool[] _wanted = [];
 
     /// <summary>
-    /// A character's light value for this tick (<c>FUN_1405ccd90</c>:53-60, <b>Verified</b>): every update first overwrites it with the bare daylight factor; only when its request was raised since
-    /// (a sight test on it, as looker or target, or the stat multiplier) and it is player-controlled or the daylight is at or below the threshold is the request cleared and the light sampled in
-    /// full (lamps, ray, indoor flag; <see cref="LightOf"/>). So a first test after a quiet period reads bare daylight.
+    /// A character's light value for this tick (<c>FUN_1405ccd90</c>:53-60, <b>Verified</b>): every update first overwrites it with the bare daylight
+    /// factor; only when its request was raised since (a sight test on it, as looker or target, or the stat multiplier) and it is player-controlled
+    /// or the daylight is at or below the threshold is the request cleared and the light sampled in full (lamps, ray, indoor flag;
+    /// <see cref="LightOf"/>). So a first test after a quiet period reads bare daylight.
     /// </summary>
     float SampleLight(int slot, Vector3 at, bool player)
     {
@@ -272,18 +317,24 @@ public sealed class SightMap
 
     float _brightest = 1;
 
-    /// <summary>Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> -1: not asked yet there).</summary>
+    /// <summary>
+    /// Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> -1: not asked yet there).
+    /// </summary>
     readonly record struct Probe(Vector3 At, int Room, int Generation);
     Probe[] _probed = [];
     // Each character crawling or staying low at the last update (the sight test's ground posture).
     bool[] _low = [];
-    /// <summary>Each character's sight-cone forward: its drawn facing (<see cref="CharacterAnimation.DrawYaw"/>), else its facing.</summary>
+    /// <summary>
+    /// Each character's sight-cone forward: its drawn facing (<see cref="CharacterAnimation.DrawYaw"/>), else its facing.
+    /// </summary>
     float[] _facing = [];
     int[] _floorOf = [];
     // The carried lights of this update: owner slot, light, position.
     readonly List<(int Owner, WorldLight Light, Vector3 At)> _carried = [];
 
-    /// <summary>The farthest the looker can see anyone this tick (<see cref="Range"/> with the brightest target and full ambient): a query radius.</summary>
+    /// <summary>
+    /// The farthest the looker can see anyone this tick (<see cref="Range"/> with the brightest target and full ambient): a query radius.
+    /// </summary>
     public float MaxRange(int looker, float outdoor)
     {
         bool top = Known(looker) && _onTop[looker];
@@ -291,7 +342,10 @@ public sealed class SightMap
         return range * Math.Clamp(MathF.Max(_brightest, 1) - PeekLight(looker) + 1, 1, 2);
     }
 
-    /// <summary>The room (<see cref="PlaceOf"/>'s numbering) a point lies in, -1 outdoors: an item's location as <c>FUN_14099b1d0</c> compares it with a character's.</summary>
+    /// <summary>
+    /// The room (<see cref="PlaceOf"/>'s numbering) a point lies in, -1 outdoors: an item's location as <c>FUN_14099b1d0</c> compares it with a
+    /// character's.
+    /// </summary>
     public int PlaceAt(Vector3 at) => RoomAt(at);
 
     int RoomAt(Vector3 at)
@@ -326,7 +380,9 @@ public sealed class SightMap
         return sum;
     }
 
-    /// <summary>One lamp's share of a character's light (0 when it is off, of the other indoor state or floor, or out of reach).</summary>
+    /// <summary>
+    /// One lamp's share of a character's light (0 when it is off, of the other indoor state or floor, or out of reach).
+    /// </summary>
     float Gain(Lamp lamp, int slot, Vector3 at, bool inside, int floor)
     {
         var (l, room) = lamp;
@@ -347,7 +403,10 @@ public sealed class SightMap
         return LampGain * l.Intensity * f;
     }
 
-    /// <summary>Rebuilds the completed player buildings' lamps when the building registry changed (a level-placed building bought is a town building, already counted).</summary>
+    /// <summary>
+    /// Rebuilds the completed player buildings' lamps when the building registry changed (a level-placed building bought is a town building, already
+    /// counted).
+    /// </summary>
     void RefreshSites(World world)
     {
         if (_source is null || world.Buildings.Revision == _sitesRevision) return;
@@ -371,15 +430,20 @@ public sealed class SightMap
 
     bool Known(int slot) => (uint)slot < (uint)_count;
 
-    /// <summary>In a building's indoor volume with something over it: the original's indoor sight and indoor lights.</summary>
+    /// <summary>
+    /// In a building's indoor volume with something over it: the original's indoor sight and indoor lights.
+    /// </summary>
     public bool Inside(int slot) => Known(slot) && _place[slot] >= 0 && !_onTop[slot];
 
-    /// <summary>In no building at all, neither inside nor on top (the original's location type 0xb, outdoors).</summary>
+    /// <summary>
+    /// In no building at all, neither inside nor on top (the original's location type 0xb, outdoors).
+    /// </summary>
     public bool Outdoors(int slot) => !Known(slot) || _place[slot] < 0;
 
     /// <summary>
-    /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building (the original's <c>getFloor</c>); 0 outdoors or on top. Worked out on first
-    /// ask after the character moved and kept; the parallel looks ask it too, and any worker writes the same value.
+    /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building (the original's <c>getFloor</c>); 0
+    /// outdoors or on top. Worked out on first ask after the character moved and kept; the parallel looks ask it too, and any worker writes the same
+    /// value.
     /// </summary>
     public int FloorOf(int slot, Vector3 at)
     {
@@ -388,42 +452,59 @@ public sealed class SightMap
         return _floorOf[slot];
     }
 
-    /// <summary>The floor of <paramref name="building"/> at <paramref name="at"/> (an object's <c>getFloor</c>); 0 for a building the map does not hold.</summary>
+    /// <summary>
+    /// The floor of <paramref name="building"/> at <paramref name="at"/> (an object's <c>getFloor</c>); 0 for a building the map does not hold.
+    /// </summary>
     public int FloorAt(string building, Vector3 at) => _roomOf.TryGetValue(building, out int r) ? _rooms[r].Volume.FloorAt(at) : 0;
 
-    /// <summary>Whether the map holds an indoor volume for <paramref name="building"/> (the key of a fixture's building): its <c>isIndoors</c> handle is then that building, else none.</summary>
+    /// <summary>
+    /// Whether the map holds an indoor volume for <paramref name="building"/> (the key of a fixture's building): its <c>isIndoors</c> handle is then
+    /// that building, else none.
+    /// </summary>
     public bool HasRoom(string building) => _roomOf.ContainsKey(building);
 
-    /// <summary>The <see cref="TownBuilding.Key"/> of the building the character is <see cref="Inside"/>; null outdoors or on top.</summary>
+    /// <summary>
+    /// The <see cref="TownBuilding.Key"/> of the building the character is <see cref="Inside"/>; null outdoors or on top.
+    /// </summary>
     public string? BuildingOf(int slot) => Inside(slot) ? _rooms[_place[slot]].Key : null;
 
-    /// <summary>The key of the building a place (<see cref="PlaceOf"/>) is in.</summary>
+    /// <summary>
+    /// The key of the building a place (<see cref="PlaceOf"/>) is in.
+    /// </summary>
     public string PlaceKey(int place) => _rooms[place].Key;
 
-    /// <summary>The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.</summary>
+    /// <summary>
+    /// The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.
+    /// </summary>
     public int PlaceOf(int slot) => Inside(slot) ? _place[slot] : -1;
 
     /// <summary>
-    /// The building the character is in, on top of it too (room index, -1 outdoors): the original's location (Character slot 59), which standing on top does not change
-    /// (the on-top flag is slot 60, read by the sight test only). The medic finder compares it (docs/game/ai-tasks.md "Medic jobs").
+    /// The building the character is in, on top of it too (room index, -1 outdoors): the original's location (Character slot 59), which standing on
+    /// top does not change (the on-top flag is slot 60, read by the sight test only). The medic finder compares it (docs/game/ai-tasks.md "Medic
+    /// jobs").
     /// </summary>
     public int LocationOf(int slot) => Known(slot) ? _place[slot] : -1;
 
-    /// <summary>The light level of the character (1 in daylight; see the class remarks).</summary>
+    /// <summary>
+    /// The light level of the character (1 in daylight; see the class remarks).
+    /// </summary>
     public float Light(int slot)
     {
         Request(slot);
         return PeekLight(slot);
     }
 
-    /// <summary>The light level without raising the character's light request (the HUD and the query bound read it, no sight test or stat multiplier does).</summary>
+    /// <summary>
+    /// The light level without raising the character's light request (the HUD and the query bound read it, no sight test or stat multiplier does).
+    /// </summary>
     public float PeekLight(int slot) => Known(slot) ? _light[slot] : 1;
 
     /// <summary>
-    /// The range a looker sees <paramref name="target"/> to before the view cone (<c>FUN_140857b10</c>, <c>FUN_140852f70</c>, <c>FUN_140851bc0</c>): 0 when they are in different places
-    /// (outdoors and inside a building, or two buildings) and neither stands on top; else 500 inside a building or <paramref name="outdoor"/> (the looker's outdoor sight, race multiplier
-    /// applied), twice that on top, times lerp(daylight, 0.5, 1); times lerp(ambient, 0.2 inside or 0.4 outside, 1) and the contrast clamp(target light - looker light + 1, 0, 2),
-    /// ambient = clamp(mean of both lights, 0, 1).
+    /// The range a looker sees <paramref name="target"/> to before the view cone (<c>FUN_140857b10</c>, <c>FUN_140852f70</c>, <c>FUN_140851bc0</c>):
+    /// 0 when they are in different places (outdoors and inside a building, or two buildings) and neither stands on top; else 500 inside a building
+    /// or <paramref name="outdoor"/> (the looker's outdoor sight, race multiplier applied), twice that on top, times lerp(daylight, 0.5, 1); times
+    /// lerp(ambient, 0.2 inside or 0.4 outside, 1) and the contrast clamp(target light - looker light + 1, 0, 2), ambient = clamp(mean of both
+    /// lights, 0, 1).
     /// </summary>
     public float Range(int looker, int target, float outdoor)
     {
@@ -441,8 +522,10 @@ public sealed class SightMap
     }
 
     /// <summary>
-    /// The whole sight test of a looker at <paramref name="eye"/>, its cone along its drawn facing as the schedule phase found it (FUN_140852f70 reads the drawn node), on the character in <paramref name="target"/> at <paramref name="at"/>: the view
-    /// factor (<see cref="AggroSystem.Visibility"/>, or <see cref="AggroSystem.SneakVisibility"/> with the target's <paramref name="stealth"/> when it sneaks) within <see cref="Range"/>.
+    /// The whole sight test of a looker at <paramref name="eye"/>, its cone along its drawn facing as the schedule phase found it (FUN_140852f70
+    /// reads the drawn node), on the character in <paramref name="target"/> at <paramref name="at"/>: the view factor
+    /// (<see cref="AggroSystem.Visibility"/>, or <see cref="AggroSystem.SneakVisibility"/> with the target's <paramref name="stealth"/> when it
+    /// sneaks) within <see cref="Range"/>.
     /// </summary>
     public float Sees(int looker, int target, Vector3 eye, Vector3 at, float outdoor, float stealth = -1)
     {
@@ -450,7 +533,10 @@ public sealed class SightMap
         if (!(range > 0)) return 0;
         // A target crawling or staying low is half as visible (FUN_140852f70: ground posture x0.5, before the sneaking factors).
         float posture = (uint)target < (uint)_count && _low[target] ? 0.5f : 1;
-        float yaw = (uint)looker < (uint)_count ? _facing[looker] : 0;   // a looker made this tick has no facing captured yet: yaw 0 until the next schedule phase
-        return stealth >= 0 ? AggroSystem.SneakVisibility(eye, yaw, at, range, stealth, posture) : AggroSystem.Visibility(eye, yaw, at, range, posture);
+        // a looker made this tick has no facing captured yet: yaw 0 until the next schedule phase
+        float yaw = (uint)looker < (uint)_count ? _facing[looker] : 0;
+        return stealth >= 0
+            ? AggroSystem.SneakVisibility(eye, yaw, at, range, stealth, posture)
+            : AggroSystem.Visibility(eye, yaw, at, range, posture);
     }
 }

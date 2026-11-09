@@ -36,7 +36,8 @@ static class FoliageShaders
             out float vFade;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """, required: true);
-        // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass tests depth EQUAL.
+        // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass
+        // tests depth EQUAL.
         v = Replace(v, @"void\s+main\s*\(\s*\)\s*\{", """
             invariant gl_Position;
             void main()
@@ -47,10 +48,11 @@ static class FoliageShaders
     }
 
     /// <summary>
-    /// The depth prepass's fragment stage (<see cref="FoliagePrepass"/>): only what decides whether a fragment is seen, no lighting. The fade dither and the
-    /// cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither and tests depth EQUAL,
-    /// so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth test) for the instances that are
-    /// fully visible in a part without a cut-out. Only normal-map alpha (<c>uAlphaSource</c> 2) is handled, which is all the foliage meshes use.
+    /// The depth prepass's fragment stage (<see cref="FoliagePrepass"/>): only what decides whether a fragment is seen, no lighting. The fade dither
+    /// and the cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither
+    /// and tests depth EQUAL, so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth
+    /// test) for the instances that are fully visible in a part without a cut-out. Only normal-map alpha (<c>uAlphaSource</c> 2) is handled, which is
+    /// all the foliage meshes use.
     /// </summary>
     public static string MeshPrepassFragment(bool solid = false)
     {
@@ -96,7 +98,8 @@ static class FoliageShaders
             """;
     }
 
-    /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before it).</param>
+    /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before
+    /// it).</param>
     public static string MeshFragment(bool solid = false)
     {
         string f = Shaders.MeshFragment;
@@ -114,8 +117,10 @@ static class FoliageShaders
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
-        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have no cut-out.)
-        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", solid ? "float foliageCoverage = 1.0;" : """
+        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
+        // no cut-out.)
+        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;",
+            solid ? "float foliageCoverage = 1.0;" : """
             float foliageCoverage = 1.0;
             if (uAlphaThreshold > 0.0)
             {
@@ -131,7 +136,8 @@ static class FoliageShaders
         return f;
     }
 
-    /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add: grass covers much of the screen.</remarks>
+    /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add:
+    /// grass covers much of the screen.</remarks>
     public static readonly string GrassVertex = "#version 330 core\n" + AtmosphereShaders.Functions + """
         layout(location = 0) in vec4 aBlade;     // x, y, z, scale 0..1
         layout(location = 1) in float aYaw;
@@ -304,17 +310,32 @@ static class FoliageShaders
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
 
-    /// <summary><see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).</summary>
+    /// <summary>
+    /// <see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).
+    /// </summary>
     public static string MeshVertexNative() => NativeShaders.Port(MeshVertex());
-    /// <summary><see cref="MeshFragment"/> in the native model; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>, on while the view has it).</summary>
+
+    /// <summary>
+    /// <see cref="MeshFragment"/> in the native model; the full one (not <paramref name="solid"/>) also has the interior cut
+    /// (<see cref="InteriorMaskRenderer.WithCut"/>, on while the view has it).
+    /// </summary>
     public static string MeshFragmentNative(bool solid = false) =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? MeshFragment(true) : InteriorMaskRenderer.WithCut(MeshFragment())), inShader: true);
-    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.</summary>
-    public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
-    /// <summary><see cref="MeshPrepassFragment"/> in the native model, for <see cref="MeshVertexNative"/>; the full one also has the interior cut.</summary>
-    public static string MeshPrepassNative(bool solid = false) => NativeShaders.Port(solid ? MeshPrepassFragment(true) : InteriorMaskRenderer.WithCut(MeshPrepassFragment()));
 
-    /// <summary>The blade programs' push constants (<see cref="GrassPush"/> is the C# side; std430).</summary>
+    /// <summary>
+    /// <see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.
+    /// </summary>
+    public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
+
+    /// <summary>
+    /// <see cref="MeshPrepassFragment"/> in the native model, for <see cref="MeshVertexNative"/>; the full one also has the interior cut.
+    /// </summary>
+    public static string MeshPrepassNative(bool solid = false) =>
+        NativeShaders.Port(solid ? MeshPrepassFragment(true) : InteriorMaskRenderer.WithCut(MeshPrepassFragment()));
+
+    /// <summary>
+    /// The blade programs' push constants (<see cref="GrassPush"/> is the C# side; std430).
+    /// </summary>
     public const string GrassPushMembers = """
             vec4 size;
             vec4 colourBounds;
@@ -330,7 +351,9 @@ static class FoliageShaders
             uint nearDepth;
         """;
 
-    /// <summary>The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).</summary>
+    /// <summary>
+    /// The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).
+    /// </summary>
     static readonly Dictionary<string, string> GrassMap = new()
     {
         ["uSize"] = "pc.size",
@@ -348,8 +371,12 @@ static class FoliageShaders
     };
 
     public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
-    /// <summary>The blades' colour program, with the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>; the cut-out already has a <c>discard</c>).</summary>
-    public static string GrassFragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
+
+    /// <summary>
+    /// The blades' colour program, with the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>; the cut-out already has a <c>discard</c>).
+    /// </summary>
+    public static string GrassFragmentNative() =>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 
@@ -361,7 +388,9 @@ static class FoliageShaders
     // of a decision is `precise` (no FMA contraction) and written out in the C#'s order: IEEE adds and multiplies are correctly rounded in
     // Vulkan, so the decisions are the CPU's bit for bit; the square root of the fade is corrected to the correctly rounded one (CrSqrt).
 
-    /// <summary>The workgroup size and the largest chunk (instances of one group per workgroup).</summary>
+    /// <summary>
+    /// The workgroup size and the largest chunk (instances of one group per workgroup).
+    /// </summary>
     public const int CullChunk = 256;
 
     /// <summary>
@@ -742,7 +771,9 @@ static class FoliageShaders
     }
 }
 
-/// <summary>The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 72)]
 struct GrassPush
 {

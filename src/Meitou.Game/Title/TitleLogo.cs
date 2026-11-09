@@ -11,7 +11,9 @@ static class TitleLogo
 {
     const string Resource = "kenshi-logo.png";
 
-    /// <summary>The wordmark as straight-alpha RGBA, rows top to bottom, or null when the resource is missing.</summary>
+    /// <summary>
+    /// The wordmark as straight-alpha RGBA, rows top to bottom, or null when the resource is missing.
+    /// </summary>
     public static RgbaImage? Load()
     {
         using var stream = typeof(TitleLogo).Assembly.GetManifestResourceStream(Resource);

@@ -12,17 +12,24 @@ using SilkKey = Silk.NET.Input.Key;
 namespace Meitou.Game.DevTools;
 
 /// <summary>
-/// The dev console (Meitou only; docs/game/ui-input.md "Dev console"): Insert or Ctrl+` opens a panel over the top of the screen with an input line; while open it takes every key, as the debug
-/// menu does. Commands that change the world enqueue <see cref="DebugCommand"/>s like the menu's cheats, so they apply between ticks; the text side is <see cref="DevTools.DevConsole"/>.
+/// The dev console (Meitou only; docs/game/ui-input.md "Dev console"): Insert or Ctrl+` opens a panel over the top of the screen with an input line;
+/// while open it takes every key, as the debug menu does. Commands that change the world enqueue <see cref="DebugCommand"/>s like the menu's cheats,
+/// so they apply between ticks; the text side is <see cref="DevTools.DevConsole"/>.
 /// </summary>
 sealed class DevConsoleHost(GameHost host)
 {
     internal readonly DevConsole DevConsole = new();
 
-    /// <summary>The <c>version --say</c> bubble waiting for its moment: the speaker picked when the command was typed, the text, and the <see cref="Stopwatch"/> timestamp it is due at.</summary>
+    /// <summary>
+    /// The <c>version --say</c> bubble waiting for its moment: the speaker picked when the command was typed, the text, and the
+    /// <see cref="Stopwatch"/> timestamp it is due at.
+    /// </summary>
     (long DueTimestamp, CharacterId Speaker, string Text)? _pendingVersionSay;
 
-    /// <summary>Once per frame (also while the console is open): enqueues the pending <c>version --say</c> bubble when it is due; dropped when no game is loaded, silently skipped when the speaker is gone or dead.</summary>
+    /// <summary>
+    /// Once per frame (also while the console is open): enqueues the pending <c>version --say</c> bubble when it is due; dropped when no game is
+    /// loaded, silently skipped when the speaker is gone or dead.
+    /// </summary>
     internal void PumpPendingSay()
     {
         if (_pendingVersionSay is not { } pending) return;
@@ -33,22 +40,36 @@ sealed class DevConsoleHost(GameHost host)
         host.Session.World.Commands.Enqueue(new DebugSay(pending.Speaker, pending.Text) { Tick = host.Session.World.Tick });
     }
 
-    /// <summary>The console that ran <c>explode</c> and waits for its result line (see <see cref="GameHost.WorldNews"/>).</summary>
+    /// <summary>
+    /// The console that ran <c>explode</c> and waits for its result line (see <see cref="GameHost.WorldNews"/>).
+    /// </summary>
     internal DevConsole? ExplodeAsker;
     readonly Dictionary<bool, List<string>> _consoleNames = [];
     internal bool ConsoleRegistered;
-    /// <summary>The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.</summary>
+    /// <summary>
+    /// The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.
+    /// </summary>
     internal Vector2 ConsolePointer;
-    /// <summary>--headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read from the window instead.</summary>
+    /// <summary>
+    /// --headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read
+    /// from the window instead.
+    /// </summary>
     internal Vector2? HeadlessMouse;
-    /// <summary>The control channel's <c>click</c>: steps the interactive loop plays one per frame ('m' move, 'i' idle, 'd' press, 'u' release; right button; pixel).</summary>
+    /// <summary>
+    /// The control channel's <c>click</c>: steps the interactive loop plays one per frame ('m' move, 'i' idle, 'd' press, 'u' release; right button;
+    /// pixel).
+    /// </summary>
     internal readonly Queue<(char Kind, bool Right, Vector2 At)> PointerSteps = new();
-    /// <summary>The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).</summary>
+    /// <summary>
+    /// The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).
+    /// </summary>
     internal bool ControlQuit;
 
     internal bool ConsoleOpen => DevConsole.Open;
 
-    /// <summary>Insert, or Ctrl plus the backquote key (which the game binds to select all, so it stays free only with Ctrl).</summary>
+    /// <summary>
+    /// Insert, or Ctrl plus the backquote key (which the game binds to select all, so it stays free only with Ctrl).
+    /// </summary>
     internal static bool IsConsoleToggle(SilkKey key, bool ctrl) => key == SilkKey.Insert || (ctrl && key == SilkKey.GraveAccent);
 
     internal void ToggleConsole()
@@ -58,7 +79,9 @@ sealed class DevConsoleHost(GameHost host)
         if (DevConsole.Open) host.DebugMenu.DebugMenuOpen = false;
     }
 
-    /// <summary>A key pressed while the console is open (the toggle key is handled by the caller).</summary>
+    /// <summary>
+    /// A key pressed while the console is open (the toggle key is handled by the caller).
+    /// </summary>
     internal void ConsoleKey(Silk.NET.Input.IKeyboard keyboard, SilkKey key)
     {
         bool ctrl = keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight);
@@ -125,10 +148,14 @@ sealed class DevConsoleHost(GameHost host)
 
     // ---- commands
 
-    /// <summary>The world point under the cursor (terrain, a floor or a wall top, as a move order picks it), else null.</summary>
+    /// <summary>
+    /// The world point under the cursor (terrain, a floor or a wall top, as a move order picks it), else null.
+    /// </summary>
     Vector3? ConsoleCursorPoint() => host.Player.Ray(ConsolePointer) is { } ray ? host.Player.Picking.MoveHit(ray.Origin, ray.Direction) : null;
 
-    /// <summary>Names of the character or item records, sorted, for Tab completion.</summary>
+    /// <summary>
+    /// Names of the character or item records, sorted, for Tab completion.
+    /// </summary>
     List<string> ConsoleRecordNames(bool character)
     {
         if (_consoleNames.TryGetValue(character, out var cached)) return cached;
@@ -145,7 +172,10 @@ sealed class DevConsoleHost(GameHost host)
         return starts.Count > 0 || typed.Length == 0 ? starts.Count > 0 ? starts : all : all.Where(n => n.Contains(typed, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The placed town a typed name means (ignoring case): the exact name, else the shortest name starting with it. Its position is the town's centre as the level data places it.</summary>
+    /// <summary>
+    /// The placed town a typed name means (ignoring case): the exact name, else the shortest name starting with it. Its position is the town's centre
+    /// as the level data places it.
+    /// </summary>
     TownSite? ConsoleTown(string typed, out List<string> others)
     {
         others = [];
@@ -158,10 +188,15 @@ sealed class DevConsoleHost(GameHost host)
         return hits[0];
     }
 
-    /// <summary>Edit distance between two command names (for the "close names" hint of help).</summary>
+    /// <summary>
+    /// Edit distance between two command names (for the "close names" hint of help).
+    /// </summary>
     static int HelpDistance(string a, string b) => DevConsole.EditDistance(a, b);
 
-    /// <summary>Argument completion for the commands the control-side registration helpers add (they take no completer): character ids from the live world, carried items, flag values. Any word starting with a dash completes the command's own flags (DevConsole.Complete).</summary>
+    /// <summary>
+    /// Argument completion for the commands the control-side registration helpers add (they take no completer): character ids from the live world,
+    /// carried items, flag values. Any word starting with a dash completes the command's own flags (DevConsole.Complete).
+    /// </summary>
     void RegisterConsoleCompletions()
     {
         var c = DevConsole;

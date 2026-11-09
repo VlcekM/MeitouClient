@@ -9,16 +9,20 @@ namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
 /// Loose items on the ground (docs/simulation.md "Ground items"): the snapshot's <see cref="WorldSnapshot.GroundItems"/> are diffed by id whenever
-/// <see cref="WorldSnapshot.GroundItemsRevision"/> changes, each one a runtime placement of the world objects (its record's mesh, <c>WorldObjectLayout.Item</c>).
+/// <see cref="WorldSnapshot.GroundItemsRevision"/> changes, each one a runtime placement of the world objects (its record's mesh,
+/// <c>WorldObjectLayout.Item</c>).
 /// </summary>
 sealed class GroundItemSync(GameHost host)
 {
     long _groundRevision = -1;
     readonly HashSet<int> _shownGround = [];
 
-    static string GroundId(int id) => Rendering.Objects.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    static string GroundId(int id) =>
+        Rendering.Objects.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>Once a frame with <see cref="BuildingSync.UpdateBuildings"/>, after a new world's runtime placements were cleared.</summary>
+    /// <summary>
+    /// Once a frame with <see cref="BuildingSync.UpdateBuildings"/>, after a new world's runtime placements were cleared.
+    /// </summary>
     internal void UpdateGroundItems(WorldSnapshot snapshot)
     {
         host.Session.World.GroundItems.Limit = host.Config.GroundItemLimit;   // the setting, applied at the next drop
@@ -53,25 +57,34 @@ sealed class GroundItemSync(GameHost host)
         }
     }
 
-    /// <summary>The placement of a ground item: its record's mesh at its place, turned by <paramref name="rotation"/> and set at height <paramref name="y"/>.</summary>
+    /// <summary>
+    /// The placement of a ground item: its record's mesh at its place, turned by <paramref name="rotation"/> and set at height <paramref name="y"/>.
+    /// </summary>
     internal void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>
-        host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(g.Position.X, g.Position.Z), GroundId(g.Id), g.Record, g.Position, rotation, null, y) { Key = GroundId(g.Id) });
+        host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(g.Position.X, g.Position.Z), GroundId(g.Id), g.Record, g.Position,
+            rotation, null, y) { Key = GroundId(g.Id) });
 
     /// <summary>
-    /// The ground items above the shown floor of a building in the interior view (game: <c>FUN_1409fb540</c>, as a character there): not picked and without a label; the renderer leaves
-    /// their placements out by <see cref="HiddenGroundKeys"/>, a limb's debris is left out here.
+    /// The ground items above the shown floor of a building in the interior view (game: <c>FUN_1409fb540</c>, as a character there): not picked and
+    /// without a label; the renderer leaves their placements out by <see cref="HiddenGroundKeys"/>, a limb's debris is left out here.
     /// </summary>
     internal readonly HashSet<int> HiddenGround = [];
 
-    /// <summary>The placement keys of <see cref="HiddenGround"/>, the renderer's <c>WorldObjectRenderer.HiddenItems</c>: drawing and picking share one answer.</summary>
+    /// <summary>
+    /// The placement keys of <see cref="HiddenGround"/>, the renderer's <c>WorldObjectRenderer.HiddenItems</c>: drawing and picking share one answer.
+    /// </summary>
     internal readonly HashSet<string> HiddenGroundKeys = [];
 
-    /// <summary>By ground item, the building in the view it was last found in, where it was drawn then and the floor it lies on there (<see cref="UpdateGroundVisibility"/>).</summary>
+    /// <summary>
+    /// By ground item, the building in the view it was last found in, where it was drawn then and the floor it lies on there (<see
+    /// cref="UpdateGroundVisibility"/>).
+    /// </summary>
     readonly Dictionary<int, (InteriorVolume Building, Vector3 At, int Floor)> _groundFloors = [];
 
     /// <summary>
-    /// After the interior view each frame: which ground items are above their building's shown floor (as <see cref="InteriorView.AboveViewedFloor"/>). An item's floor is worked out again only
-    /// when it is drawn somewhere else or found in another building: a still item stays on its floor, only the shown floor changes.
+    /// After the interior view each frame: which ground items are above their building's shown floor (as <see
+    /// cref="InteriorView.AboveViewedFloor"/>). An item's floor is worked out again only when it is drawn somewhere else or found in another
+    /// building: a still item stays on its floor, only the shown floor changes.
     /// </summary>
     internal void UpdateGroundVisibility()
     {
@@ -88,14 +101,16 @@ sealed class GroundItemSync(GameHost host)
         }
     }
 
-    /// <summary>Where each shown ground item is drawn (a falling limb: where it comes to rest), for <see cref="GroundShape"/>.</summary>
+    /// <summary>
+    /// Where each shown ground item is drawn (a falling limb: where it comes to rest), for <see cref="GroundShape"/>.
+    /// </summary>
     readonly Dictionary<int, (Vector3 At, Quaternion Rotation, string Key)> _groundPoses = [];
     readonly Dictionary<(string Record, bool File), IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _groundShapes = [];
 
     /// <summary>
-    /// What the pointer's ray meets of a ground item, where it is drawn (docs/game/ui-input.md "Building picking and selection"): its record's collision as the original makes it
-    /// (<c>FUN_1407626e0</c>, <b>Verified</b>): a weapon's or a severed limb's <c>physics file</c> when that names an <c>.xml</c>, otherwise its mesh's bounds box. Null without
-    /// <c>has collision</c> (it is then picked only by its label).
+    /// What the pointer's ray meets of a ground item, where it is drawn (docs/game/ui-input.md "Building picking and selection"): its record's
+    /// collision as the original makes it (<c>FUN_1407626e0</c>, <b>Verified</b>): a weapon's or a severed limb's <c>physics file</c> when that names
+    /// an <c>.xml</c>, otherwise its mesh's bounds box. Null without <c>has collision</c> (it is then picked only by its label).
     /// </summary>
     internal (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)? GroundShape(GroundItemSnapshot g)
     {
@@ -104,7 +119,8 @@ sealed class GroundItemSync(GameHost host)
         if (!_groundShapes.TryGetValue((g.Record, file), out var mesh))
         {
             mesh = file ? host.Player.Build.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
-            if (mesh.Count == 0 && BoundsOf(g.Record) is { } box) mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
+            if (mesh.Count == 0 && BoundsOf(g.Record) is { } box)
+                mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
             _groundShapes[(g.Record, file)] = mesh;
         }
         return mesh.Count == 0 ? null : (mesh, pose.At, pose.Rotation);
@@ -112,16 +128,22 @@ sealed class GroundItemSync(GameHost host)
 
     readonly Dictionary<string, (bool Weapon, string? Xml)?> _groundCollision = [];
 
-    /// <summary>What <see cref="GroundShape"/> reads of a record, once: whether it is a WEAPON and its <c>physics file</c> when that names an <c>.xml</c>; null without <c>has collision</c>.</summary>
+    /// <summary>
+    /// What <see cref="GroundShape"/> reads of a record, once: whether it is a WEAPON and its <c>physics file</c> when that names an <c>.xml</c>;
+    /// null without <c>has collision</c>.
+    /// </summary>
     (bool Weapon, string? Xml)? GroundCollisionOf(string record)
     {
         if (_groundCollision.TryGetValue(record, out var known)) return known;
         if (host.Scene.Database?.Find(record) is not { } item) return null;   // not kept: the database may not be loaded yet
         string physics = item.GetPath("physics file");
-        return _groundCollision[record] = item.GetBool("has collision") ? (item.Type == Data.Fcs.FcsRecordType.Weapon, physics.Contains(".xml") ? physics : null) : null;
+        return _groundCollision[record] = item.GetBool("has collision")
+            ? (item.Type == Data.Fcs.FcsRecordType.Weapon, physics.Contains(".xml") ? physics : null) : null;
     }
 
-    /// <summary>The twelve triangles of a box.</summary>
+    /// <summary>
+    /// The twelve triangles of a box.
+    /// </summary>
     static IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Box(Vector3 min, Vector3 max)
     {
         var v = new Vector3[8];
@@ -131,23 +153,31 @@ sealed class GroundItemSync(GameHost host)
 
     readonly Dictionary<string, OgreBounds?> _groundBounds = [];
 
-    /// <summary>The bounds of a record's item mesh (its ground mesh, else its mesh), read once; null when it has none.</summary>
+    /// <summary>
+    /// The bounds of a record's item mesh (its ground mesh, else its mesh), read once; null when it has none.
+    /// </summary>
     OgreBounds? BoundsOf(string record)
     {
         if (_groundBounds.TryGetValue(record, out var bounds)) return bounds;
         bounds = null;
         if (host.Scene.Database?.Find(record) is { } item && host.Assets.Find(WorldObjectLayout.ItemMesh(item)) is { } file)
         {
-            try { bounds = OgreMeshReader.TryReadBounds(file, out var b) ? b : OgreMeshReader.ReadFile(file).Bounds; }
-            catch (Exception e) when (e is IOException or OgreFormatException) { }
+            try
+            {
+                bounds = OgreMeshReader.TryReadBounds(file, out var b) ? b : OgreMeshReader.ReadFile(file).Bounds;
+            }
+            catch (Exception e) when (e is IOException or OgreFormatException)
+            {
+            }
         }
         return _groundBounds[record] = bounds;
     }
 
     /// <summary>
-    /// A dropped item as it would come to rest (engine choice; the original lets a physics body settle it): its mesh's thinnest bounds axis turned upright, then its yaw, then tilted to the
-    /// slope of the terrain under it, and set down so that no point of its bounds is below the ground at that point. A weapon (modelled along +Y) lies on the flat of its blade; a limb
-    /// on a slope lies along it instead of hanging by its downhill end. Where the simulation's ground is not the terrain (a floor of a building) the ground is flat at the drop point.
+    /// A dropped item as it would come to rest (engine choice; the original lets a physics body settle it): its mesh's thinnest bounds axis turned
+    /// upright, then its yaw, then tilted to the slope of the terrain under it, and set down so that no point of its bounds is below the ground at
+    /// that point. A weapon (modelled along +Y) lies on the flat of its blade; a limb on a slope lies along it instead of hanging by its downhill
+    /// end. Where the simulation's ground is not the terrain (a floor of a building) the ground is flat at the drop point.
     /// </summary>
     (Quaternion Rotation, float Y) LaidFlat(GroundItemSnapshot g)
     {
@@ -163,11 +193,14 @@ sealed class GroundItemSync(GameHost host)
         bool onTerrain = MathF.Abs(host.ActiveGround(at.X, at.Z) - at.Y) < 3;
         float Ground(float x, float z) => onTerrain ? host.ActiveGround(x, z) : at.Y;
         float reach = MathF.Max(MathF.Max(size.X, size.Z) * 0.5f, 1);
-        var slope = Vector3.Normalize(new Vector3(Ground(at.X - reach, at.Z) - Ground(at.X + reach, at.Z), 2 * reach, Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
+        var slope = Vector3.Normalize(new Vector3(Ground(at.X - reach, at.Z) - Ground(at.X + reach, at.Z), 2 * reach,
+            Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
         float tilt = MathF.Acos(Math.Clamp(slope.Y, -1, 1));
         if (tilt > 1e-3f)
-            rotation = Quaternion.Normalize(Quaternion.Concatenate(rotation, Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tilt)));
-        // Every point of a lattice over its bounds must be at or above the ground below it (a limb on a crest touches the crest, not only the dips round it).
+            rotation = Quaternion.Normalize(Quaternion.Concatenate(rotation,
+                Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tilt)));
+        // Every point of a lattice over its bounds must be at or above the ground below it (a limb on a crest touches the crest, not only the dips
+        // round it).
         float y = float.MinValue;
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 5; j++)
@@ -181,14 +214,16 @@ sealed class GroundItemSync(GameHost host)
     }
 
     /// <summary>
-    /// A severed limb drops from its stump (docs/simulation.md "Ground items", docs/formats/collision.md "Item physics"): <see cref="Debris.UpdateFalls"/> lets it fall from the
-    /// stump's bone, sampled once its character is drawn, with gravity from rest, drifts it across to where the simulation put it and tips it flat on landing. Engine choice:
-    /// the drift and the hanging pose are not the original's physics. False when the item has no mesh to fall with (it is then shown at rest).
+    /// A severed limb drops from its stump (docs/simulation.md "Ground items", docs/formats/collision.md "Item physics"): <see
+    /// cref="Debris.UpdateFalls"/> lets it fall from the stump's bone, sampled once its character is drawn, with gravity from rest, drifts it across
+    /// to where the simulation put it and tips it flat on landing. Engine choice: the drift and the hanging pose are not the original's physics.
+    /// False when the item has no mesh to fall with (it is then shown at rest).
     /// </summary>
     internal bool StartFall(GroundItemSnapshot g, FallSource stump, Quaternion lying, float y)
     {
         if (host.Scene.Database?.Find(g.Record) is not { } record || WorldObjectLayout.ItemMesh(record) is not { Length: > 0 } mesh) return false;
-        if (host.Gpu.Debris?.Extent(mesh, null, host.Debris.LimbLookOf(g.Record)) is null) return false;   // the debris renderer draws only meshes it has loaded
+        if (host.Gpu.Debris?.Extent(mesh, null, host.Debris.LimbLookOf(g.Record)) is null)
+            return false;   // the debris renderer draws only meshes it has loaded
         // Hanging: the mesh's long axis down, turned by the item's yaw (the same yaw the rest pose keeps).
         var yaw = new Quaternion(0, g.Rotation.Y, 0, g.Rotation.W);
         var hang = BoundsOf(g.Record) is { } box ? Debris.Turn(LongAxis(box.Max - box.Min), -Vector3.UnitY) : Quaternion.Identity;
@@ -206,7 +241,9 @@ sealed class GroundItemSync(GameHost host)
         return true;
     }
 
-    /// <summary>The axis of a box's longest extent (a unit vector).</summary>
+    /// <summary>
+    /// The axis of a box's longest extent (a unit vector).
+    /// </summary>
     static Vector3 LongAxis(Vector3 size) => size.X >= size.Y && size.X >= size.Z ? Vector3.UnitX : size.Y >= size.Z ? Vector3.UnitY : Vector3.UnitZ;
 
     internal void ForgetGroundItems()

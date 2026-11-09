@@ -4,8 +4,8 @@ namespace Meitou.Data.Fcs;
 
 /// <summary>
 /// UTF-8 that never fails: a byte that is not part of a valid sequence becomes the lone low surrogate U+DC00 + byte (as Python's
-/// <c>surrogateescape</c> does) and turns back into that byte when encoded, so any byte string survives decoding and encoding unchanged. Save files need it:
-/// the ids of the instances in a TERRAIN_DECALS record are raw 4-byte integers in a string slot (docs/formats/save.md).
+/// <c>surrogateescape</c> does) and turns back into that byte when encoded, so any byte string survives decoding and encoding unchanged. Save files
+/// need it: the ids of the instances in a TERRAIN_DECALS record are raw 4-byte integers in a string slot (docs/formats/save.md).
 /// </summary>
 public static class LosslessUtf8
 {
@@ -25,6 +25,7 @@ public static class LosslessUtf8
                 bytes = bytes[1..];
             }
         }
+
         return sb.ToString();
     }
 
@@ -40,6 +41,7 @@ public static class LosslessUtf8
                 bytes.Add((byte)(c - 0xDC00));
                 continue;
             }
+
             if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
             {
                 int n = new Rune(c, s[i + 1]).EncodeToUtf8(buffer);
@@ -47,10 +49,14 @@ public static class LosslessUtf8
                 i++;
                 continue;
             }
-            if (char.IsSurrogate(c)) throw new ArgumentException("A lone surrogate other than an escaped byte cannot be written.", nameof(s));
+
+            if (char.IsSurrogate(c))
+                throw new ArgumentException("A lone surrogate other than an escaped byte cannot be written.", nameof(s));
+
             int len = new Rune(c).EncodeToUtf8(buffer);
             for (int k = 0; k < len; k++) bytes.Add(buffer[k]);
         }
+
         return [.. bytes];
     }
 }

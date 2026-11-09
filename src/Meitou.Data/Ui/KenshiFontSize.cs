@@ -8,7 +8,9 @@ namespace Meitou.Data.Ui;
 /// </summary>
 public static class KenshiFontSize
 {
-    /// <summary>The original's <c>font size2</c> default (settings.cfg).</summary>
+    /// <summary>
+    /// The original's <c>font size2</c> default (settings.cfg).
+    /// </summary>
     public const float DefaultSetting = 3;
 
     /// <summary>

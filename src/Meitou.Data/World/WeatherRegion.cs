@@ -2,7 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
-/// <summary>A region's weather fog: whether it is on (0..1 while fading), its colour and its distance.</summary>
+/// <summary>
+/// A region's weather fog: whether it is on (0..1 while fading), its colour and its distance.
+/// </summary>
 public readonly record struct RegionFog(float Enabled, Vector3 Colour, float Distance);
 
 /// <summary>
@@ -21,7 +23,10 @@ public readonly record struct WindInterpolation(double StartMinute, double Durat
     }
 }
 
-/// <summary>Everything a region needs to continue from a saved game (the random source is not part of it: a restored region draws from a fresh seeded sequence).</summary>
+/// <summary>
+/// Everything a region needs to continue from a saved game (the random source is not part of it: a restored region draws from a fresh seeded
+/// sequence).
+/// </summary>
 public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int SeasonIndex, int SeasonEndDay, string WeatherId, int WeatherEntryIndex,
     double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom, double FogFadeMinutes);
 
@@ -31,9 +36,13 @@ public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int
 /// </summary>
 public sealed class WeatherRegion
 {
-    /// <summary>The share of a weather's duration over which its fog fades in from the previous weather's.</summary>
+    /// <summary>
+    /// The share of a weather's duration over which its fog fades in from the previous weather's.
+    /// </summary>
     public const double FogFadeShare = 0.025;
-    /// <summary>The wind change after an update is interpolated over this share of the wind update time.</summary>
+    /// <summary>
+    /// The wind change after an update is interpolated over this share of the wind update time.
+    /// </summary>
     public const double WindInterpolationShare = 0.05;
 
     Random _random;
@@ -61,31 +70,48 @@ public sealed class WeatherRegion
     public RegionDef Def { get; }
     public int Index { get; }
 
-    /// <summary>The position of the current season in <see cref="RegionDef.Seasons"/>.</summary>
+    /// <summary>
+    /// The position of the current season in <see cref="RegionDef.Seasons"/>.
+    /// </summary>
     public int SeasonIndex { get; private set; }
     public RegionSeason Season => Def.Seasons[SeasonIndex];
-    /// <summary>The day count at which the next season starts.</summary>
+    /// <summary>
+    /// The day count at which the next season starts.
+    /// </summary>
     public int SeasonEndDay { get; private set; }
 
-    /// <summary>The position of the current weather in the season's <see cref="SeasonDef.Weathers"/>.</summary>
+    /// <summary>
+    /// The position of the current weather in the season's <see cref="SeasonDef.Weathers"/>.
+    /// </summary>
     public int WeatherEntryIndex { get; private set; }
     public SeasonWeather Entry => Season.Season.Weathers[WeatherEntryIndex];
     public WeatherDef Weather => Entry.Weather;
-    /// <summary>Game minutes (since day 0) at which the current weather started and at which it ends.</summary>
+    /// <summary>
+    /// Game minutes (since day 0) at which the current weather started and at which it ends.
+    /// </summary>
     public double WeatherStartMinute { get; private set; }
     public double WeatherEndMinute { get; private set; }
-    /// <summary>The weather strength s (0..1): scales wind speed, rain, dust and heat haze.</summary>
+    /// <summary>
+    /// The weather strength s (0..1): scales wind speed, rain, dust and heat haze.
+    /// </summary>
     public float Strength { get; private set; }
-    /// <summary>Counts the weathers started so far; a change means the camera's sky should start its transition.</summary>
+    /// <summary>
+    /// Counts the weathers started so far; a change means the camera's sky should start its transition.
+    /// </summary>
     public int Serial { get; private set; }
 
     public float WindSpeed { get; private set; }
-    /// <summary>The wind's unit direction in the ground plane (x, z).</summary>
+    /// <summary>
+    /// The wind's unit direction in the ground plane (x, z).
+    /// </summary>
     public Vector2 WindDirection { get; private set; } = Vector2.UnitX;
     public WindInterpolation Wind => _wind;
     public double NextWindUpdateMinute { get; private set; }
 
-    /// <summary>Advances the schedule to <paramref name="now"/>: a new season when the day count reaches the season's end, a new weather when the current one has run out, a wind update when it is due.</summary>
+    /// <summary>
+    /// Advances the schedule to <paramref name="now"/>: a new season when the day count reaches the season's end, a new weather when the current one
+    /// has run out, a wind update when it is due.
+    /// </summary>
     public void Update(WeatherTime now)
     {
         double t = now.Minutes;
@@ -108,7 +134,9 @@ public sealed class WeatherRegion
 
     void SyncWind(double minute) => (WindSpeed, WindDirection) = _wind.At(minute);
 
-    /// <summary>The region's weather fog at a game time: the previous weather's fog fades into the current weather's over the first 2.5 % of its duration.</summary>
+    /// <summary>
+    /// The region's weather fog at a game time: the previous weather's fog fades into the current weather's over the first 2.5 % of its duration.
+    /// </summary>
     public RegionFog FogAt(double minute)
     {
         var w = Weather;
@@ -208,14 +236,18 @@ public sealed class WeatherRegion
         return candidates[^1];
     }
 
-    /// <summary>A whole number of minutes in [min, max], both inclusive: <c>min + trunc(r · (max − min + 1))</c>.</summary>
+    /// <summary>
+    /// A whole number of minutes in [min, max], both inclusive: <c>min + trunc(r · (max − min + 1))</c>.
+    /// </summary>
     int RollMinutes(int min, int max)
     {
         max = Math.Max(min, max);
         return Math.Clamp(min + (int)(_random.NextDouble() * (max - min + 1)), min, max);
     }
 
-    /// <summary><c>clamp(random[limit min, limit max] × random[multiplier min, multiplier max], 0, 1)</c>.</summary>
+    /// <summary>
+    /// <c>clamp(random[limit min, limit max] × random[multiplier min, multiplier max], 0, 1)</c>.
+    /// </summary>
     float RollStrength(SeasonDef season)
     {
         float limit = season.StrengthLimitMin + (season.StrengthLimitMax - season.StrengthLimitMin) * _random.NextSingle();
@@ -241,7 +273,9 @@ public sealed class WeatherRegion
         _wind = new WindInterpolation(t, duration, speed, heading, targetSpeed, targetHeading);
     }
 
-    /// <summary>An angle wrapped into [−π, π].</summary>
+    /// <summary>
+    /// An angle wrapped into [−π, π].
+    /// </summary>
     public static float WrapPi(float angle) => MathF.IEEERemainder(angle, MathF.Tau);
 
     // ---- saving ----

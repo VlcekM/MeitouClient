@@ -59,7 +59,10 @@ public sealed partial class ProductionSystem
         if (table.TryResolveNext(remove.Character, out int slot)) RemoveJob(world, slot, remove.Index);
     }
 
-    /// <summary>Takes the job at <paramref name="index"/> out of a character's list (the list's X, and the circle break of <see cref="MovementSystem"/>): the task of the job it is on ends, the running index follows (serial phases only).</summary>
+    /// <summary>
+    /// Takes the job at <paramref name="index"/> out of a character's list (the list's X, and the circle break of <see cref="MovementSystem"/>): the
+    /// task of the job it is on ends, the running index follows (serial phases only).
+    /// </summary>
     internal static void RemoveJob(World world, int slot, int index)
     {
         var table = world.Characters;
@@ -158,7 +161,9 @@ public sealed partial class ProductionSystem
 
         public string Name => "Implicit jobs";
         public DecisionStep Step => DecisionStep.Jobs;
-        /// <summary>After the list (its key 0).</summary>
+        /// <summary>
+        /// After the list (its key 0).
+        /// </summary>
         public int Key => 1;
 
         public DecisionCheck CanRun(World world, int slot)
@@ -190,7 +195,9 @@ public sealed partial class ProductionSystem
         }
     }
 
-    /// <summary>How far (X/Z) from where it idles a character sits down on a chair (engine choice: the original's sitter looks in its home town only).</summary>
+    /// <summary>
+    /// How far (X/Z) from where it idles a character sits down on a chair (engine choice: the original's sitter looks in its home town only).
+    /// </summary>
     public const float SeatRange = 600;
 
     /// <summary>
@@ -237,7 +244,10 @@ public sealed partial class ProductionSystem
         return null;
     }
 
-    /// <summary>The training dummy's gain per second of the continuous entry (<b>Verified</b>, <c>UseableStuff</c> vfunc 0x4b0: <c>FUN_1408c64f0</c> with 2.0).</summary>
+    /// <summary>
+    /// The training dummy's gain per second of the continuous entry (<b>Verified</b>, <c>UseableStuff</c> vfunc 0x4b0: <c>FUN_1408c64f0</c> with
+    /// 2.0).
+    /// </summary>
     public const float TrainingRate = 2;
 
     /// <summary>
@@ -253,18 +263,27 @@ public sealed partial class ProductionSystem
         if (cold.Stats is { } stats && cold.Race is { } race) _xp.Capped(stats, race, (Meitou.Data.Gameplay.Bodies.StatsEnumerated)m.Data.Stat, dt, TrainingRate, m.Data.OutputValue);
     }
 
-    /// <summary>BF_CHAIR and BF_THRONE (17, 24; docs/game/ai-tasks.md "Town goals").</summary>
+    /// <summary>
+    /// BF_CHAIR and BF_THRONE (17, 24; docs/game/ai-tasks.md "Town goals").
+    /// </summary>
     static bool IsSeat(Machine m) => m.Data.Function is TownBuildings.ChairFunction or ThroneFunction;
 
     const int ThroneFunction = 24;
 
-    /// <summary>Nobody else lies or sits on it.</summary>
+    /// <summary>
+    /// Nobody else lies or sits on it.
+    /// </summary>
     static bool Free(World world, CharacterCold cold, BuildSite site, Machine m) => OperatorsOf(world, site.Id) - (cold.OperateSite == site.Id ? 1 : 0) < m.Data.MaxOperators;
 
-    /// <summary>A body part below full health (<b>engine choice</b>: the original's injury test is Unknown; its 257 is "get out of bed once healed").</summary>
+    /// <summary>
+    /// A body part below full health (<b>engine choice</b>: the original's injury test is Unknown; its 257 is "get out of bed once healed").
+    /// </summary>
     static bool Injured(CharacterCold cold) => cold.Medical is { Dead: false } medical && medical.Parts.Any(p => p.Fraction is >= 0 and < 1);
 
-    /// <summary>The player's complete building nearest <paramref name="at"/> within <paramref name="range"/> whose machine passes <paramref name="ok"/> (ties: the lower site id).</summary>
+    /// <summary>
+    /// The player's complete building nearest <paramref name="at"/> within <paramref name="range"/> whose machine passes <paramref name="ok"/> (ties:
+    /// the lower site id).
+    /// </summary>
     string? NearestSite(World world, Vector3 at, float range, Func<BuildSite, Machine, bool> ok)
     {
         string? best = null;
@@ -291,7 +310,10 @@ public sealed partial class ProductionSystem
         if (task == CharacterTask.Sleep && table.Next[slot].Task == (byte)CharacterTask.Sleep) cold.OperateSite = siteId;
     }
 
-    /// <summary>A sitter or sleeper at its chair or bed: on the seat's origin facing its way, as the original's <c>Task_OperateMachine</c> (docs/game/ai-tasks.md "Town goals").</summary>
+    /// <summary>
+    /// A sitter or sleeper at its chair or bed: on the seat's origin facing its way, as the original's <c>Task_OperateMachine</c>
+    /// (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
     void Settle(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m)
     {
         n.Position = site.Position;
@@ -382,7 +404,9 @@ public sealed partial class ProductionSystem
         }
     }
 
-    /// <summary>State 38 <c>hasOneWorkingArm</c>, which rows 87, 97, 146 and 234 need and no row provides, so the job cannot run without it.</summary>
+    /// <summary>
+    /// State 38 <c>hasOneWorkingArm</c>, which rows 87, 97, 146 and 234 need and no row provides, so the job cannot run without it.
+    /// </summary>
     static bool HasWorkingArm(CharacterCold cold) => cold.Medical is { } m && (m.ArmWorks(left: true) || m.ArmWorks(left: false));
 
     /// <summary>
@@ -404,7 +428,9 @@ public sealed partial class ProductionSystem
         return Supplied(world, site, m, cold) && (m.Craft is not null || Room(world, site, m));
     }
 
-    /// <summary>Every input holds something or the operator can fill it: it carries the item or, with AutoHaul, <see cref="NearestSource"/> finds it.</summary>
+    /// <summary>
+    /// Every input holds something or the operator can fill it: it carries the item or, with AutoHaul, <see cref="NearestSource"/> finds it.
+    /// </summary>
     bool Supplied(World world, BuildSite site, Machine m, CharacterCold cold)
     {
         foreach (var input in m.Inputs)
@@ -436,15 +462,22 @@ public sealed partial class ProductionSystem
         return NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
     }
 
-    /// <summary>The output has room, or with AutoHaul a storage takes it.</summary>
+    /// <summary>
+    /// The output has room, or with AutoHaul a storage takes it.
+    /// </summary>
     bool Room(World world, BuildSite site, Machine m) =>
         m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one && NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
 
-    /// <summary>A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes (not the character's own kit), that the storage takes and has room for.</summary>
+    /// <summary>
+    /// A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes (not the character's own kit), that
+    /// the storage takes and has room for.
+    /// </summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
         Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && s.Output?.Recipe.Item == item.Record);
 
-    /// <summary>A loose stack (not the character's own kit) the storage takes and has room for.</summary>
+    /// <summary>
+    /// A loose stack (not the character's own kit) the storage takes and has room for.
+    /// </summary>
     internal static bool Stores(Machine store, Items.ItemInstance item) =>
         item.Section is "main" or "backpack_content" && !item.LockedOn && item.Contents is null && store.Data.Accepts(item.Record, item.Type) && Fits(store.Storage!, item);
 
@@ -467,11 +500,17 @@ public sealed partial class ProductionSystem
         }
     }
 
-    /// <summary>What a hauler puts into the storage: for a ditch run what <see cref="Ditchable"/> lists and the storage takes, else what <see cref="Takes"/> allows.</summary>
+    /// <summary>
+    /// What a hauler puts into the storage: for a ditch run what <see cref="Ditchable"/> lists and the storage takes, else what <see cref="Takes"/>
+    /// allows.
+    /// </summary>
     static IEnumerable<Items.ItemInstance> Delivered(World world, Items.Inventory inv, Machine store, bool ditch) =>
         ditch ? Ditchable(inv).Where(i => Stores(store, i)) : inv.All().Where(i => Takes(world, store, i));
 
-    /// <summary>The player's complete machine (not a storage) nearest a storage within <see cref="ProductionSettings.HaulRange"/> whose output holds items the storage takes (ties: the lower site id).</summary>
+    /// <summary>
+    /// The player's complete machine (not a storage) nearest a storage within <see cref="ProductionSettings.HaulRange"/> whose output holds items the
+    /// storage takes (ties: the lower site id).
+    /// </summary>
     string? HaulSource(World world, BuildSite storage, Machine store)
     {
         string? best = null;
@@ -518,7 +557,10 @@ public sealed partial class ProductionSystem
         else TaskStart.Start(world, slot, request);
     }
 
-    /// <summary>A <see cref="CharacterTask.Haul"/> trip to a storage: what the character already carries for it goes there first; else it fetches a machine's output.</summary>
+    /// <summary>
+    /// A <see cref="CharacterTask.Haul"/> trip to a storage: what the character already carries for it goes there first; else it fetches a machine's
+    /// output.
+    /// </summary>
     void StartHaulTrip(World world, int slot, BuildSite storage, Machine store, bool ditch = false)
     {
         var table = world.Characters;
@@ -537,10 +579,15 @@ public sealed partial class ProductionSystem
         _sweep = true;
     }
 
-    /// <summary>The haul trip is the implicit ditching's (242).</summary>
+    /// <summary>
+    /// The haul trip is the implicit ditching's (242).
+    /// </summary>
     static bool Ditching(CharacterCold cold) => cold.Running is { Implicit: true, Row: TaskType.DitchAllResources } run && run.Runs(CharacterTask.Haul);
 
-    /// <summary>A hauler at the end of a leg (serial): at the source it takes the output, then makes for the storage; at the storage it puts in what the storage takes and the job's trip ends.</summary>
+    /// <summary>
+    /// A hauler at the end of a leg (serial): at the source it takes the output, then makes for the storage; at the storage it puts in what the
+    /// storage takes and the job's trip ends.
+    /// </summary>
     void HaulStep(World world, int slot)
     {
         var table = world.Characters;

@@ -15,7 +15,9 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
 
     public bool IsInstalled => _manager.IsInstalled;
 
-    /// <summary>The newer launcher version on GitHub, or null (none, or not installed).</summary>
+    /// <summary>
+    /// The newer launcher version on GitHub, or null (none, or not installed).
+    /// </summary>
     public async Task<string?> CheckAsync()
     {
         if (!_manager.IsInstalled) return null;
@@ -23,7 +25,9 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
         return _pending?.TargetFullRelease.Version.ToString();
     }
 
-    /// <summary>Downloads the update <see cref="CheckAsync"/> found, then restarts into it.</summary>
+    /// <summary>
+    /// Downloads the update <see cref="CheckAsync"/> found, then restarts into it.
+    /// </summary>
     public async Task UpdateAndRestartAsync(Action<int> progress, CancellationToken ct)
     {
         if (_pending is null) return;
@@ -48,7 +52,8 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
                     Name = r.Title,
                     Prerelease = r.Prerelease,
                     PublishedAt = r.Published.UtcDateTime,
-                    Assets = [.. r.Assets.Select(a => new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url, ContentType = "application/octet-stream" })],
+                    Assets = [.. r.Assets.Select(a => new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url,
+                            ContentType = "application/octet-stream" })],
                 })];
         }
     }

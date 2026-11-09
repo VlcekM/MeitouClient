@@ -13,7 +13,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class BuildingSwapPass
 {
-    /// <summary>Applies the swaps of <paramref name="db"/> to <paramref name="levels"/>; returns how many placements changed or went.</summary>
+    /// <summary>
+    /// Applies the swaps of <paramref name="db"/> to <paramref name="levels"/>; returns how many placements changed or went.
+    /// </summary>
     public static int ApplyBuildingSwaps(this WorldLevelData levels, GameDatabase db, BuildingLayouts? layouts = null)
     {
         var swaps = BuildingSwaps.From(db);
@@ -56,7 +58,9 @@ public static class BuildingSwapPass
         return best;
     }
 
-    /// <summary>A draw in [0, 1) fixed by a name (FNV-1a).</summary>
+    /// <summary>
+    /// A draw in [0, 1) fixed by a name (FNV-1a).
+    /// </summary>
     internal static float Roll(string name)
     {
         ulong h = 14695981039346656037UL;

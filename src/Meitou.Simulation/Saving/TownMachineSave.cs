@@ -7,10 +7,13 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The machines of NPC town buildings on the CAMERA record (docs/formats/save.md "Town machines"): the original keeps the production state of every building in its GAMESTATE_BUILDING
-/// (<c>production amount</c>, <c>consumption amount-&lt;k&gt;</c>, the items in an INVENTORY_STATE); Meitou's town buildings of a new game have no state record to put them in, so they are Meitou-only keys:
-/// <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c> (progress, float), <c>meitou tm&lt;i&gt; outn</c> (output items, int), <c>meitou tm&lt;i&gt; st</c> (status, int),
-/// <c>meitou tm&lt;i&gt; in&lt;k&gt;</c> (items of input k, int) and <c>meitou tm&lt;i&gt; lv&lt;k&gt;</c> (its level, float). The original ignores them (keys are read by name).
+/// The machines of NPC town buildings on the CAMERA record (docs/formats/save.md "Town machines"): the original keeps the production state
+/// of every building in its GAMESTATE_BUILDING (<c>production amount</c>, <c>consumption amount-&lt;k&gt;</c>, the items in an INVENTORY_STATE);
+/// Meitou's town buildings of a new game have no state record to put them in, so they are Meitou-only keys:
+/// <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c> (progress, float),
+/// <c>meitou tm&lt;i&gt; outn</c> (output items, int), <c>meitou tm&lt;i&gt; st</c> (status, int),
+/// <c>meitou tm&lt;i&gt; in&lt;k&gt;</c> (items of input k, int) and <c>meitou tm&lt;i&gt; lv&lt;k&gt;</c> (its level, float).
+/// The original ignores them (keys are read by name).
 /// </summary>
 public static class TownMachineSave
 {
@@ -21,10 +24,17 @@ public static class TownMachineSave
     public static void Write(FcsRecord camera, World world)
     {
         for (int i = 0; camera.Strings.ContainsKey(Key(i)); i++)
-            foreach (var k in camera.Strings.Keys.Concat(camera.Floats.Keys).Concat(camera.Ints.Keys).Where(k => k.StartsWith(Key(i), StringComparison.Ordinal)).ToList())
+        {
+            var keys = camera.Strings.Keys.Concat(camera.Floats.Keys).Concat(camera.Ints.Keys)
+                .Where(k => k.StartsWith(Key(i), StringComparison.Ordinal))
+                .ToList();
+            foreach (var k in keys)
             {
-                camera.Strings.Remove(k); camera.Floats.Remove(k); camera.Ints.Remove(k);
+                camera.Strings.Remove(k);
+                camera.Floats.Remove(k);
+                camera.Ints.Remove(k);
             }
+        }
         int n = 0;
         foreach (var m in world.Machines.All)
         {
@@ -45,7 +55,9 @@ public static class TownMachineSave
         }
     }
 
-    /// <summary>The town building of a run-time key and the faction owning its town now, over the population's sites (built at the first use).</summary>
+    /// <summary>
+    /// The town building of a run-time key and the faction owning its town now, over the population's sites (built at the first use).
+    /// </summary>
     public static Func<string, (TownBuilding Building, int Owner)?> Resolver(PopulationData data)
     {
         Dictionary<string, (TownBuilding, int)>? map = null;
@@ -55,13 +67,18 @@ public static class TownMachineSave
             {
                 map = new Dictionary<string, (TownBuilding, int)>(StringComparer.Ordinal);
                 foreach (var site in data.Sites)
-                    foreach (var b in site.Buildings) map[b.Key] = (b, site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1);
+                {
+                    int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+                    foreach (var b in site.Buildings) map[b.Key] = (b, owner);
+                }
             }
             return map.TryGetValue(key, out var found) ? found : null;
         };
     }
 
-    /// <summary>Makes the machines the save holds (a key naming no town building of the data is dropped).</summary>
+    /// <summary>
+    /// Makes the machines the save holds (a key naming no town building of the data is dropped).
+    /// </summary>
     public static void Read(FcsRecord camera, World world, ProductionSystem production, Func<string, (TownBuilding Building, int Owner)?> resolve)
     {
         if (!camera.Strings.ContainsKey(Key(0))) return;

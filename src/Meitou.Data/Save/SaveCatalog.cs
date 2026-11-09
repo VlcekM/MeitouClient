@@ -3,7 +3,9 @@ namespace Meitou.Data.Save;
 public sealed record SaveSlot(string Name, string Folder, DateTime ModifiedUtc, bool Writable);
 public sealed record SaveSlotInfo(string Version, string Faction, int Funds, int Members, int Day, int Hour, int Minute, string Area);
 
-/// <summary>Menu save discovery and safe named slots. Reading an original slot never makes it a write destination.</summary>
+/// <summary>
+/// Menu save discovery and safe named slots. Reading an original slot never makes it a write destination.
+/// </summary>
 public static class SaveCatalog
 {
     public static string ValidateName(string name)

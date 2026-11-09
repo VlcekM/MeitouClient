@@ -3,14 +3,16 @@ namespace Meitou.Data.Ogre;
 public enum OgreConcreteNodeType { Word, Quote, Variable, VariableAssign, Import, LeftBrace, RightBrace, Colon }
 
 /// <summary>
-/// Ogre's "concrete" syntax tree: one node per word, with the rest of its line (and a following <c>{ }</c> block)
-/// as children. <see cref="OgreScriptCompiler"/> turns it into objects and properties.
+/// Ogre's "concrete" syntax tree: one node per word, with the rest of its line (and a following <c>{ }</c> block) as children.
+/// <see cref="OgreScriptCompiler"/> turns it into objects and properties.
 /// </summary>
 public sealed class OgreConcreteNode
 {
     public OgreConcreteNodeType Type { get; init; }
 
-    /// <summary>The token text; quotes are stripped for <see cref="OgreConcreteNodeType.Quote"/> (except in base lists).</summary>
+    /// <summary>
+    /// The token text; quotes are stripped for <see cref="OgreConcreteNodeType.Quote"/> (except in base lists).
+    /// </summary>
     public string Token { get; set; } = "";
 
     public string File { get; init; } = "";
@@ -22,8 +24,8 @@ public sealed class OgreConcreteNode
 }
 
 /// <summary>
-/// Builds the concrete tree from tokens, following Ogre's ScriptParser (MIT) state machine. Malformed
-/// <c>import</c>, <c>set</c> or <c>:</c> lines throw <see cref="OgreScriptException"/>, which in Ogre aborts the file.
+/// Builds the concrete tree from tokens, following Ogre's ScriptParser (MIT) state machine. Malformed <c>import</c>, <c>set</c> or <c>:</c> lines
+/// throw <see cref="OgreScriptException"/>, which in Ogre aborts the file.
 /// </summary>
 public static class OgreScriptParser
 {
@@ -56,7 +58,8 @@ public static class OgreScriptParser
                             throw new OgreScriptException($"expected import target at line {node.Line}", node.File, node.Line);
                         // Ogre strips a quoted import target using the length of the "import" token instead of the
                         // target's own (ScriptParser::parse), so `import "Foo" from ...` asks for `Foo"`. Kept as is.
-                        node.Children.Add(Child(node, tokens[i], tokens[i].Type == OgreScriptTokenType.Quote ? SafeSubstring(tokens[i].Lexeme, 1, token.Lexeme.Length - 2) : null));
+                        node.Children.Add(Child(node, tokens[i],
+                            tokens[i].Type == OgreScriptTokenType.Quote ? SafeSubstring(tokens[i].Lexeme, 1, token.Lexeme.Length - 2) : null));
                         // The word in between ("from") is skipped without being checked.
                         i += 2;
                         if (i >= tokens.Count || tokens[i].Type is not (OgreScriptTokenType.Word or OgreScriptTokenType.Quote))
@@ -170,8 +173,8 @@ public static class OgreScriptParser
     }
 
     /// <summary>
-    /// Parses a variable's value for expansion (Ogre's ScriptParser::parseChunk): words and variables only. A
-    /// quoted phrase throws, because Ogre's switch falls through into its error case.
+    /// Parses a variable's value for expansion (Ogre's ScriptParser::parseChunk): words and variables only. A quoted phrase throws, because Ogre's
+    /// switch falls through into its error case.
     /// </summary>
     public static List<OgreConcreteNode> ParseChunk(IReadOnlyList<OgreScriptToken> tokens)
     {

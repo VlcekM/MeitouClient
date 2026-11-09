@@ -10,14 +10,18 @@ namespace Meitou.Data.Save;
 /// </summary>
 public readonly record struct Hand(int Type, int C, int Cs, int I, int S)
 {
-    /// <summary>The <c>TYPE</c> of the null handle (<see cref="FcsRecordType.NullItem"/>).</summary>
+    /// <summary>
+    /// The <c>TYPE</c> of the null handle (<see cref="FcsRecordType.NullItem"/>).
+    /// </summary>
     public const int NullType = 11;
 
     public static readonly Hand Null = new(NullType, 0, 0, 0, 0);
 
     public bool IsNull => Type == NullType;
 
-    /// <summary>The class of the object when the type is a known <see cref="FcsRecordType"/>.</summary>
+    /// <summary>
+    /// The class of the object when the type is a known <see cref="FcsRecordType"/>.
+    /// </summary>
     public FcsRecordType RecordType => (FcsRecordType)Type;
 
     /// <summary>
@@ -30,12 +34,16 @@ public readonly record struct Hand(int Type, int C, int Cs, int I, int S)
         return new Hand(Get(record, prefix + "TYPE"), Get(record, prefix + "C"), Get(record, prefix + "CS"), i, Get(record, prefix + "S"));
     }
 
-    /// <summary>True when the record has all five parts under the prefix.</summary>
+    /// <summary>
+    /// True when the record has all five parts under the prefix.
+    /// </summary>
     public static bool IsComplete(FcsRecord record, string prefix) =>
         record.Ints.ContainsKey(prefix + "TYPE") && record.Ints.ContainsKey(prefix + "C") && record.Ints.ContainsKey(prefix + "CS") &&
         record.Ints.ContainsKey(prefix + "I") && record.Ints.ContainsKey(prefix + "S");
 
-    /// <summary>Writes the five parts under <paramref name="prefix"/> in the order the game does (TYPE, C, CS, I, S).</summary>
+    /// <summary>
+    /// Writes the five parts under <paramref name="prefix"/> in the order the game does (TYPE, C, CS, I, S).
+    /// </summary>
     public void Write(FcsRecord record, string prefix)
     {
         record.Ints[prefix + "TYPE"] = Type;
@@ -45,7 +53,9 @@ public readonly record struct Hand(int Type, int C, int Cs, int I, int S)
         record.Ints[prefix + "S"] = S;
     }
 
-    /// <summary>The prefixes of the handles in a record: every int key ending in <c>TYPE</c> whose prefix also has an <c>I</c>.</summary>
+    /// <summary>
+    /// The prefixes of the handles in a record: every int key ending in <c>TYPE</c> whose prefix also has an <c>I</c>.
+    /// </summary>
     public static IEnumerable<string> Prefixes(FcsRecord record)
     {
         foreach (var key in record.Ints.Keys)

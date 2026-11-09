@@ -24,10 +24,14 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 public sealed unsafe class WaterRenderer : IDisposable
 {
-    /// <summary>Set 2: the water's own values and the bindless indices of its maps (the native frame is set 0 and the table set 1).</summary>
+    /// <summary>
+    /// Set 2: the water's own values and the bindless indices of its maps (the native frame is set 0 and the table set 1).
+    /// </summary>
     const int ConstantsSet = 2;
 
-    /// <summary>The block <see cref="WaterConstants"/> mirrors. It is already placed, so <see cref="NativeShaders.Port"/> leaves it alone.</summary>
+    /// <summary>
+    /// The block <see cref="WaterConstants"/> mirrors. It is already placed, so <see cref="NativeShaders.Port"/> leaves it alone.
+    /// </summary>
     const string ConstantsBlock = """
         layout(std140, set = 2, binding = 0) uniform WaterConstants
         {
@@ -76,7 +80,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
         """;
 
-    /// <summary>The C# side of <see cref="ConstantsBlock"/> (std140).</summary>
+    /// <summary>
+    /// The C# side of <see cref="ConstantsBlock"/> (std140).
+    /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 512)]
     struct WaterConstants
     {
@@ -989,7 +995,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + MeitouMotion + MeitouBody;
 
-    /// <summary>The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.</summary>
+    /// <summary>
+    /// The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.
+    /// </summary>
     static readonly Dictionary<string, string> NativeOwn = new()
     {
         ["uWaterHeight"] = "water.params.x",
@@ -1047,7 +1055,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
 
-    /// <summary>Puts the water constants block after the version line, before the shared text.</summary>
+    /// <summary>
+    /// Puts the water constants block after the version line, before the shared text.
+    /// </summary>
     static string WithConstants(string source)
     {
         int line = source.IndexOf('\n');
@@ -1059,7 +1069,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     static string NativeVertex(string source) => NativeShaders.Port(WithConstants(source), NativeMap);
     static string NativeFragment(string source) => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(WithConstants(source), NativeMap), none: true);
 
-    /// <summary>The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).</summary>
+    /// <summary>
+    /// The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).
+    /// </summary>
     public IGpuContext Gpu { get; }
     readonly DeviceBuffer _quad;
     readonly DeviceBuffer? _grid, _gridIndices;
@@ -1089,13 +1101,19 @@ public sealed unsafe class WaterRenderer : IDisposable
     long _sceneDepthFrame = -1;
     Vector2 _sceneDepthPlanes;
 
-    /// <summary>The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).</summary>
+    /// <summary>
+    /// The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).
+    /// </summary>
     public bool Meitou { get; set; } = true;
 
-    /// <summary>The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.</summary>
+    /// <summary>
+    /// The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.
+    /// </summary>
     public const int DefaultGridSegments = 256;
 
-    /// <summary>One native water program: the vertex layout and buffers its one draw needs.</summary>
+    /// <summary>
+    /// One native water program: the vertex layout and buffers its one draw needs.
+    /// </summary>
     sealed class WaterProgram : IDisposable
     {
         public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap", "uRiverMap"];
@@ -1120,7 +1138,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         public void Dispose() => Program.Dispose();
     }
 
-    /// <summary>A stable bindless entry for one water texture; its sampler may change with the upscaler's LOD bias.</summary>
+    /// <summary>
+    /// A stable bindless entry for one water texture; its sampler may change with the upscaler's LOD bias.
+    /// </summary>
     sealed class BindlessTexture : IDisposable
     {
         readonly IGpuContext _gpu;
@@ -1201,14 +1221,18 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
     }
 
-    /// <summary>The quad's only vertex input, location 0: two floats, 8 bytes apart (the GL vertex array's
-    /// <c>VertexAttribPointer(0, 2, FLOAT, false, 8, 0)</c>); no element buffer.</summary>
+    /// <summary>
+    /// The quad's only vertex input, location 0: two floats, 8 bytes apart (the GL vertex array's
+    /// <c>VertexAttribPointer(0, 2, FLOAT, false, 8, 0)</c>); no element buffer.
+    /// </summary>
     internal static LegacyProgram.Attribute QuadAttribute(DeviceBuffer quad) =>
         new(new GpuBufferBinding(quad.Handle, 0), GlConventions.VertexFormat(GlEnum.Float, 2, false, false), 8, false);
 
-    /// <summary>The Meitou water's mesh: a centre vertex and rings round it whose spacing grows with the radius (as fine across as along, from
+    /// <summary>
+    /// The Meitou water's mesh: a centre vertex and rings round it whose spacing grows with the radius (as fine across as along, from
     /// 1 unit out to <see cref="GridDetailRadius"/>), then one ring marked to reach the plane's extent. Offsets from the eye, triangle list,
-    /// counter-clockwise from above.</summary>
+    /// counter-clockwise from above.
+    /// </summary>
     internal static (float[] Positions, uint[] Indices) PolarGrid(int segments)
     {
         double q = 1 + 2 * Math.PI / segments;
@@ -1234,12 +1258,15 @@ public sealed unsafe class WaterRenderer : IDisposable
         return (positions, indices.ToArray());
     }
 
-    /// <summary>Out to this radius the Meitou grid is fine enough for the waves; beyond it the water is flat.</summary>
+    /// <summary>
+    /// Out to this radius the Meitou grid is fine enough for the waves; beyond it the water is flat.
+    /// </summary>
     public const float GridDetailRadius = 6000;
 
     /// <summary>
-    /// What <see cref="Create"/> reads and works out on the CPU (about 1.5 s at a cold start): the colour, flow, normal and rain maps, the biome water parameters
-    /// baked per blend-map pixel, the open sea, the river flow map baked from the world's heights and the foam. Made by <see cref="Prepare"/> on any thread.
+    /// What <see cref="Create"/> reads and works out on the CPU (about 1.5 s at a cold start): the colour, flow, normal and rain maps, the biome
+    /// water parameters baked per blend-map pixel, the open sea, the river flow map baked from the world's heights and the foam. Made by <see
+    /// cref="Prepare"/> on any thread.
     /// </summary>
     public sealed class Source
     {
@@ -1252,7 +1279,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         internal readonly List<string> Messages = [];
     }
 
-    /// <summary>The CPU part of <see cref="Create"/>, on any thread (it makes no GPU resource).</summary>
+    /// <summary>
+    /// The CPU part of <see cref="Create"/>, on any thread (it makes no GPU resource).
+    /// </summary>
     public static Source Prepare(GameInstall install, GameDatabase db, AssetLocator assets, ushort[]? coarseHeights = null)
     {
         var s = new Source { Colour = Load(install, WorldWater.ColourMap), Flow = Load(install, WorldWater.FlowMap) };
@@ -1356,8 +1385,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (Meitou) _ocean?.Update(gameHours, windDirection, windSpeed);
     }
 
-    /// <summary>Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
-    /// terrain's heights of this frame. Nothing while the water is Faithful.</summary>
+    /// <summary>
+    /// Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
+    /// terrain's heights of this frame. Nothing while the water is Faithful.
+    /// </summary>
     internal void Track(Vector3 eye, HeightSnapshot heights)
     {
         if (Meitou) _shore?.Update(eye, heights);
@@ -1372,11 +1403,15 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (Meitou && OceanInView) _ocean?.Record();   // the FFT only while water near enough to show its detail is in view
     }
 
-    /// <summary>The Meitou water refracts what lies under it (<see cref="CaptureScene"/> before each of its draws); off: it blends over it as
-    /// the game's water does (`--no-water-refraction`, for integrated GPUs).</summary>
+    /// <summary>
+    /// The Meitou water refracts what lies under it (<see cref="CaptureScene"/> before each of its draws); off: it blends over it as
+    /// the game's water does (`--no-water-refraction`, for integrated GPUs).
+    /// </summary>
     public bool Refraction { get; set; } = true;
 
-    /// <summary>Skip zero-contribution work (<c>--ab water-lean</c>).</summary>
+    /// <summary>
+    /// Skip zero-contribution work (<c>--ab water-lean</c>).
+    /// </summary>
     public bool Lean { get; set; } = true;
 
     /// <summary>
@@ -1386,16 +1421,22 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     public float NearestWater { get; set; } = float.NaN;
 
-    /// <summary>The eye distance past which the fragment stage reads no ocean texture: the open waves' detail fades from 9000 to 14000 units
-    /// (<c>open</c> in <see cref="MeitouFragment"/>; the vertex displacement is gone by <see cref="WaveFadeEnd"/>). The FFT serves nothing beyond it.</summary>
+    /// <summary>
+    /// The eye distance past which the fragment stage reads no ocean texture: the open waves' detail fades from 9000 to 14000 units (<c>open</c> in
+    /// <see cref="MeitouFragment"/>; the vertex displacement is gone by <see cref="WaveFadeEnd"/>). The FFT serves nothing beyond it.
+    /// </summary>
     public const float OceanFadeEnd = 14000;
 
-    /// <summary>Whether the ocean's FFT has anything to feed this frame: water within <see cref="OceanFadeEnd"/> is in view, or that is unknown.</summary>
+    /// <summary>
+    /// Whether the ocean's FFT has anything to feed this frame: water within <see cref="OceanFadeEnd"/> is in view, or that is unknown.
+    /// </summary>
     bool OceanInView => float.IsNaN(NearestWater) || NearestWater <= OceanFadeEnd;
 
-    /// <summary>The camera's near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
+    /// <summary>
+    /// The camera's near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
     /// transmitted floor colour nor wet sand contributes, so the blended path is opaque and needs no copy. The same
-    /// bound holds for the nearest water in view: with none nearer, the view shows no transmitting water at all.</summary>
+    /// bound holds for the nearest water in view: with none nearer, the view shows no transmitting water at all.
+    /// </summary>
     internal bool NeedsRefraction(float near) => Meitou && Refraction &&
         (!Lean || SliceCanTransmit(near, ClearDistance)) &&
         (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
@@ -1403,40 +1444,57 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal static bool SliceCanTransmit(float near, float clearDistance) =>
         near < Math.Max(Math.Max(clearDistance, 100f) * 1.5f, ShoreFadeEnd);
 
-    /// <summary>The Tab panel's "Water clarity x" (Meitou water; not in the game): the biome's absorption per unit of depth is divided by it, so
-    /// above 1 the floor shows through deeper water. 1 is the game's opacity; the default 0.5 is murkier.</summary>
+    /// <summary>
+    /// The Tab panel's "Water clarity x" (Meitou water; not in the game): the biome's absorption per unit of depth is divided by it, so
+    /// above 1 the floor shows through deeper water. 1 is the game's opacity; the default 0.5 is murkier.
+    /// </summary>
     public float Clarity { get; set; } = 0.5f;
 
-    /// <summary>The Tab panel's "Far water clarity" (Meitou water; not in the game): 0 absorbs along the true slant path through the water (it is
-    /// up to 20 times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above. Default 0.25.</summary>
+    /// <summary>
+    /// The Tab panel's "Far water clarity" (Meitou water; not in the game): 0 absorbs along the true slant path through the water (it is up to 20
+    /// times the depth at grazing angles, so distant shallows read opaque), 1 only along the depth, as if looked at from straight above. Default
+    /// 0.25.
+    /// </summary>
     public float FarClarity { get; set; } = 0.25f;
 
-    /// <summary>The Tab panel's "Water see-through distance" (Meitou water): the eye distance where the floor starts to fade out under the water,
+    /// <summary>
+    /// The Tab panel's "Water see-through distance" (Meitou water): the eye distance where the floor starts to fade out under the water,
     /// gone by 1.5 times it (refracted; by 1.25 times when blended). The game's water turns opaque at 4000 units, which from high above leaves
-    /// only a disc of clear water under the camera. Default 10000.</summary>
+    /// only a disc of clear water under the camera. Default 10000.
+    /// </summary>
     public float ClearDistance { get; set; } = 10000;
 
-    /// <summary>How overcast the sky is this frame (<c>WorldFrame.Overcast</c>: the cloud density, or the rain's amount where that is more), which the
-    /// Meitou water's sun glint fades under (<see cref="GlintCloudFade"/>).</summary>
+    /// <summary>
+    /// How overcast the sky is this frame (<c>WorldFrame.Overcast</c>: the cloud density, or the rain's amount where that is more), which the
+    /// Meitou water's sun glint fades under (<see cref="GlintCloudFade"/>).
+    /// </summary>
     public float Overcast { get; set; }
 
-    /// <summary>How much of the Meitou water's sun glint a full overcast takes away (docs/render-water.md "Glint under clouds"; not in the game, whose
-    /// specular ignores the weather). Default 0.95.</summary>
+    /// <summary>
+    /// How much of the Meitou water's sun glint a full overcast takes away (docs/render-water.md "Glint under clouds"; not in the game, whose
+    /// specular ignores the weather). Default 0.95.
+    /// </summary>
     public float GlintCloudShade { get; set; } = 0.95f;
 
-    /// <summary>What is left of the glint at cloud density <paramref name="c"/>: 1 up to c 0.3, easing (smoothstep) to 1 − shade at full cover.</summary>
+    /// <summary>
+    /// What is left of the glint at cloud density <paramref name="c"/>: 1 up to c 0.3, easing (smoothstep) to 1 − shade at full cover.
+    /// </summary>
     internal static float GlintCloudFade(float shade, float c)
     {
         float t = Math.Clamp((c - 0.3f) / 0.7f, 0, 1);
         return 1 - Math.Clamp(shade, 0, 1) * t * t * (3 - 2 * t);
     }
 
-    /// <summary>The eye distance from which the Faithful water is opaque (the game's alpha: 1 from 4000 units), so needs no depth.</summary>
+    /// <summary>
+    /// The eye distance from which the Faithful water is opaque (the game's alpha: 1 from 4000 units), so needs no depth.
+    /// </summary>
     public const float FaithfulOpaqueDistance = 4000;
 
-    /// <summary>Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
+    /// <summary>
+    /// Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
     /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
-    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.</summary>
+    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.
+    /// </summary>
     internal bool NeedsDepth(float near)
     {
         if (Gpu is not GpuContext) return false;
@@ -1444,13 +1502,15 @@ public sealed unsafe class WaterRenderer : IDisposable
         return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
     }
 
-    /// <summary>Whether the scene needs <see cref="CaptureScene"/> before its water.</summary>
+    /// <summary>
+    /// Whether the scene needs <see cref="CaptureScene"/> before its water.
+    /// </summary>
     internal bool NeedsCapture(float near) => NeedsRefraction(near) || NeedsDepth(near);
 
     /// <summary>
-    /// Copies the scene drawn so far (the opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water
-    /// refracts (the floor and whatever stands in the water, seen through the waves), and the depth, from which both waters measure the distance
-    /// through them (<see cref="ThicknessFunctions"/>). One native segment (a full barrier on each side), a blit for the colour and a copy for the depth.
+    /// Copies the scene drawn so far (the opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water refracts
+    /// (the floor and whatever stands in the water, seen through the waves), and the depth, from which both waters measure the distance through them
+    /// (<see cref="ThicknessFunctions"/>). One native segment (a full barrier on each side), a blit for the colour and a copy for the depth.
     /// </summary>
     public void CaptureScene(GpuTexture sceneColour, GpuTexture? sceneDepth, float near, float far)
     {
@@ -1494,7 +1554,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         Gpu.EndNative(cmd);
     }
 
-    /// <summary>The open waves (for the viewer's statistics and tests).</summary>
+    /// <summary>
+    /// The open waves (for the viewer's statistics and tests).
+    /// </summary>
     public OceanWaves? Ocean => _ocean;
 
     /// <summary>
@@ -1633,8 +1695,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         return made;
     }
 
-    /// <summary>The eye distances over which the Meitou open waves fade into the flat water (the grid coarsens with the distance), and over which
-    /// the shore's breakers and foam fade (they read from much further).</summary>
+    /// <summary>
+    /// The eye distances over which the Meitou open waves fade into the flat water (the grid coarsens with the distance), and over which
+    /// the shore's breakers and foam fade (they read from much further).
+    /// </summary>
     public const float WaveFadeStart = 3000, WaveFadeEnd = 5500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
 
     static readonly SamplerDesc ClampLinear = new(TextureMinFilter.Linear, TextureMagFilter.Linear, false,

@@ -11,20 +11,35 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class KenshiLighting
 {
-    /// <summary>The sky controller asks SkyX for its colour at the sun's direction plus this much world +Z.</summary>
+    /// <summary>
+    /// The sky controller asks SkyX for its colour at the sun's direction plus this much world +Z.
+    /// </summary>
     public const float SunColourOffsetZ = 0.04f;
-    /// <summary>Below this sun height the sun's colour is black.</summary>
+    /// <summary>
+    /// Below this sun height the sun's colour is black.
+    /// </summary>
     public const float SunColourCutoff = -0.2f;
-    /// <summary>The SkyX colour is divided by this times SkyX's exposure.</summary>
+    /// <summary>
+    /// The SkyX colour is divided by this times SkyX's exposure.
+    /// </summary>
     public const float SunColourDivisor = 4;
-    /// <summary>The specular colour of a dielectric; diffuse light is scaled by <c>1 − </c> it.</summary>
+    /// <summary>
+    /// The specular colour of a dielectric; diffuse light is scaled by <c>1 − </c> it.
+    /// </summary>
     public const float DielectricSpecular = 0.04f;
-    /// <summary><c>EXPOSURE_KEY</c> of the HDR composite: the image is scaled by this over the adapted luminance.</summary>
+    /// <summary>
+    /// <c>EXPOSURE_KEY</c> of the HDR composite: the image is scaled by this over the adapted luminance.
+    /// </summary>
     public const float ExposureKey = 0.55f;
-    /// <summary>The irradiance cube is read at this mip level (<c>mp_irradiance.dds</c>, 16² with 5 levels).</summary>
+    /// <summary>
+    /// The irradiance cube is read at this mip level (<c>mp_irradiance.dds</c>, 16² with 5 levels).
+    /// </summary>
     public const float IrradianceLevel = 3;
 
-    /// <summary><c>sunColour.rgb</c>: SkyX's HDR colour towards <c>normalise(sun + (0, 0, 0.04))</c> over <c>4 · exposure</c>; black when the sun is under −0.2.</summary>
+    /// <summary>
+    /// <c>sunColour.rgb</c>: SkyX's HDR colour towards <c>normalise(sun + (0, 0, 0.04))</c> over <c>4 · exposure</c>; black when the sun is under
+    /// −0.2.
+    /// </summary>
     public static Vector3 SunColour(Vector3 sun) =>
         sun.Y < SunColourCutoff ? Vector3.Zero
         : SkyXModel.Colour(sun + new Vector3(0, 0, SunColourOffsetZ), sun, skydome: false) / (SunColourDivisor * SkyAtmosphere.Exposure);
@@ -46,7 +61,9 @@ public static class KenshiLighting
     /// </summary>
     public static Vector3 SunLight(Vector3 sun) => SunColour(sun) * Daylight(sun.Y);
 
-    /// <summary>The lighting pass's <c>sunDirection</c>: SkyX's sun direction with its height clamped to 0 and renormalised.</summary>
+    /// <summary>
+    /// The lighting pass's <c>sunDirection</c>: SkyX's sun direction with its height clamped to 0 and renormalised.
+    /// </summary>
     public static Vector3 LightDirection(Vector3 sun)
     {
         if (sun.Y >= 0) return sun;
@@ -54,22 +71,32 @@ public static class KenshiLighting
         return flat.LengthSquared() > 1e-12f ? Vector3.Normalize(flat) : Vector3.UnitX;
     }
 
-    /// <summary>The environment light's scale by the sun: <c>clamp(5 L.y + 0.2, 0.1, 1)</c>, with L the clamped light direction (so at least 0.2).</summary>
+    /// <summary>
+    /// The environment light's scale by the sun: <c>clamp(5 L.y + 0.2, 0.1, 1)</c>, with L the clamped light direction (so at least 0.2).
+    /// </summary>
     public static float EnvironmentFactor(Vector3 lightDirection) => Math.Clamp(lightDirection.Y * 5 + 0.2f, 0.1f, 1);
 
-    /// <summary><c>MIN_LUMINANCE</c>, set every frame: <c>exposure min · lerp(night darkness, 1, saturate(5 · sunY))</c> (the sun's real height).</summary>
+    /// <summary>
+    /// <c>MIN_LUMINANCE</c>, set every frame: <c>exposure min · lerp(night darkness, 1, saturate(5 · sunY))</c> (the sun's real height).
+    /// </summary>
     public static float MinLuminance(float sunY, float exposureMin, float nightDarkness) =>
         exposureMin * (nightDarkness + (1 - nightDarkness) * Math.Clamp(sunY * 5, 0, 1));
 
-    /// <summary>The composite's scale for a mean scene luminance: <c>max(0.55 / clamp(mean, min, max), 0.001)</c>.</summary>
+    /// <summary>
+    /// The composite's scale for a mean scene luminance: <c>max(0.55 / clamp(mean, min, max), 0.001)</c>.
+    /// </summary>
     public static float ExposureScale(float meanLuminance, float minLuminance, float maxLuminance) =>
         MathF.Max(ExposureKey / Math.Clamp(meanLuminance, minLuminance, MathF.Max(minLuminance, maxLuminance)), 0.001f);
 }
 
-/// <summary>The CONSTANTS values the sky controller reads for the exposure: <c>exposure min</c> / <c>exposure max</c> and <c>night darkness</c>.</summary>
+/// <summary>
+/// The CONSTANTS values the sky controller reads for the exposure: <c>exposure min</c> / <c>exposure max</c> and <c>night darkness</c>.
+/// </summary>
 public sealed record ExposureConstants(float Min, float Max, float NightDarkness)
 {
-    /// <summary>The merged load order's values (0.8, 1.2, 0.35).</summary>
+    /// <summary>
+    /// The merged load order's values (0.8, 1.2, 0.35).
+    /// </summary>
     public static readonly ExposureConstants Default = new(0.8f, 1.2f, 0.35f);
 
     public static ExposureConstants FromDatabase(GameDatabase db)
@@ -89,7 +116,9 @@ public static class AmbientMap
 {
     public const float HalfWorld = 147456;
 
-    /// <summary>The texel for a biome record (null: no record for the colour).</summary>
+    /// <summary>
+    /// The texel for a biome record (null: no record for the colour).
+    /// </summary>
     public static (byte R, byte G, byte B, byte A) Texel(GameRecord? biome)
     {
         if (biome is null) return (255, 255, 255, 0x80);
@@ -98,7 +127,9 @@ public static class AmbientMap
         return ((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, (byte)(int)(sun * 0.5f * 255f));
     }
 
-    /// <summary>The map at the biome map's size: each biome-map colour through its record (the first by string id when two share an index).</summary>
+    /// <summary>
+    /// The map at the biome map's size: each biome-map colour through its record (the first by string id when two share an index).
+    /// </summary>
     public static RgbaImage Build(GameDatabase db, RgbaImage biomeMap)
     {
         var byIndex = new Dictionary<uint, GameRecord>();

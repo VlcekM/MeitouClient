@@ -11,7 +11,9 @@ public readonly record struct CharacterId(int Slot, int Generation)
     public override string ToString() => IsNone ? "none" : $"{Slot}.{Generation}";
 }
 
-/// <summary>What an AI's ignore map names: a character (<see cref="Name"/> null) or a site, machine or loose item by its string id.</summary>
+/// <summary>
+/// What an AI's ignore map names: a character (<see cref="Name"/> null) or a site, machine or loose item by its string id.
+/// </summary>
 public readonly record struct IgnoreKey(string? Name, CharacterId Id)
 {
     public static IgnoreKey Of(CharacterId id) => new(null, id);

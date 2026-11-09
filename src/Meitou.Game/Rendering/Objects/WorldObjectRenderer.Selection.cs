@@ -9,15 +9,18 @@ using Meitou.Game.Rendering.Terrain;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// The outlined buildings (the selected and the hovered one; Meitou only, docs/game/ui-input.md "Hover outline"): the main view's colour pass keeps its draws of each
-/// building's parts and of the layout objects that go with it (<see cref="Selected"/>), with the levels, fades and construction clip it drew them at; after the post
-/// chain each building's are drawn alone into a mask (<see cref="DrawSelectionMasks"/>) that <see cref="HoverOutlineRenderer"/> outlines and tints as it does a
-/// hovered character. Nothing for a building the interior view shows.
+/// The outlined buildings (the selected and the hovered one; Meitou only, docs/game/ui-input.md "Hover outline"): the main view's colour pass keeps
+/// its draws of each building's parts and of the layout objects that go with it (<see cref="Selected"/>), with the levels, fades and construction
+/// clip it drew them at; after the post chain each building's are drawn alone into a mask (<see cref="DrawSelectionMasks"/>) that
+/// <see cref="HoverOutlineRenderer"/> outlines and tints as it does a hovered character. Nothing for a building the interior view shows.
 /// </summary>
 public sealed partial class WorldObjectRenderer
 {
-    /// <summary>One draw <see cref="Emit"/> added for an outlined building (its key, <see cref="AddLevels"/>'s arguments) and the instance's bounding sphere.</summary>
-    readonly record struct SelectionDraw(string Key, GpuObjectMesh Gpu, ObjectMaterialSet Materials, LodBlend Blend, Matrix4x4 M, float Weight, float Near, bool BackCull,
+    /// <summary>
+    /// One draw <see cref="Emit"/> added for an outlined building (its key, <see cref="AddLevels"/>'s arguments) and the instance's bounding sphere.
+    /// </summary>
+    readonly record struct SelectionDraw(string Key, GpuObjectMesh Gpu, ObjectMaterialSet Materials, LodBlend Blend, Matrix4x4 M, float Weight,
+        float Near, bool BackCull,
         bool Site, Vector3 Centre, float Radius);
 
     readonly List<SelectionDraw> _selectionDraws = [];
@@ -28,17 +31,21 @@ public sealed partial class WorldObjectRenderer
     readonly List<string> _selecting = [];
 
     /// <summary>
-    /// The buildings whose draws the next colour pass keeps for <see cref="DrawSelectionMasks"/> (their keys: their parts and their layout objects); the main view
-    /// sets it round its <see cref="Draw"/>, as it does <see cref="FogCull"/>. Empty: none.
+    /// The buildings whose draws the next colour pass keeps for <see cref="DrawSelectionMasks"/> (their keys: their parts and their layout objects);
+    /// the main view sets it round its <see cref="Draw"/>, as it does <see cref="FogCull"/>. Empty: none.
     /// </summary>
     public IReadOnlyList<(string Key, float Floor, Vector4 Colour)> Selected { get; set; } = [];
 
-    /// <summary>This frame's masks of the outlined buildings (empty: none).</summary>
+    /// <summary>
+    /// This frame's masks of the outlined buildings (empty: none).
+    /// </summary>
     public IReadOnlyList<HoverMask> SelectionMasks => _selectionMasks;
 
     static bool Selects(PlacedMesh p, string key) => p.PlacementId == key || p.ParentPlacementId == key;
 
-    /// <summary>The outlined building <paramref name="p"/> belongs to (<see cref="_selecting"/>), null: none.</summary>
+    /// <summary>
+    /// The outlined building <paramref name="p"/> belongs to (<see cref="_selecting"/>), null: none.
+    /// </summary>
     string? SelectingKey(PlacedMesh p)
     {
         foreach (var key in _selecting)
@@ -46,7 +53,10 @@ public sealed partial class WorldObjectRenderer
         return null;
     }
 
-    /// <summary>A colour pass with <see cref="Selected"/> set keeps its draws of those buildings afresh, less the ones the interior view shows (<see cref="Update"/> drops what is left).</summary>
+    /// <summary>
+    /// A colour pass with <see cref="Selected"/> set keeps its draws of those buildings afresh, less the ones the interior view shows
+    /// (<see cref="Update"/> drops what is left).
+    /// </summary>
     void BeginSelection()
     {
         _selecting.Clear();
@@ -57,11 +67,14 @@ public sealed partial class WorldObjectRenderer
     }
 
     /// <summary>
-    /// Draws what the main view drew of each building of <paramref name="outlines"/> above its floor alone, through the colour pass (it writes alpha 1), into a
-    /// <paramref name="width"/> × <paramref name="height"/> mask of its own outlined in its colour, seen from <paramref name="eye"/> along <paramref name="view"/>
-    /// (unjittered), its planes hugging the building. Called after the frame's colour pass, outside any pass; the draw counters stay as that pass left them.
+    /// Draws what the main view drew of each building of <paramref name="outlines"/> above its floor alone, through the colour pass (it writes alpha
+    /// 1), into a
+    /// <paramref name="width"/> × <paramref name="height"/> mask of its own outlined in its colour, seen from <paramref name="eye"/> along
+    /// <paramref name="view"/> (unjittered), its planes hugging the building. Called after the frame's colour pass, outside any pass; the draw
+    /// counters stay as that pass left them.
     /// </summary>
-    public void DrawSelectionMasks(IReadOnlyList<(string Key, float Floor, Vector4 Colour)> outlines, int width, int height, Matrix4x4 view, float fieldOfView, Vector3 eye,
+    public void DrawSelectionMasks(IReadOnlyList<(string Key, float Floor, Vector4 Colour)> outlines, int width, int height, Matrix4x4 view,
+        float fieldOfView, Vector3 eye,
         WorldRenderOptions options)
     {
         _selectionMasks.Clear();
@@ -77,7 +90,9 @@ public sealed partial class WorldObjectRenderer
         _maskDraws.Clear();
     }
 
-    /// <summary>One building's mask from its draws (<see cref="_maskDraws"/>), into the next free target.</summary>
+    /// <summary>
+    /// One building's mask from its draws (<see cref="_maskDraws"/>), into the next free target.
+    /// </summary>
     void DrawSelectionMask((string Key, float Floor, Vector4 Colour) outline, int width, int height, Matrix4x4 view, float fieldOfView, Vector3 eye,
         WorldRenderOptions options)
     {
@@ -91,12 +106,15 @@ public sealed partial class WorldObjectRenderer
         _selectionMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, outline.Colour, spheres));
     }
 
-    /// <summary>How far above its floor the outline starts: the floor's own top (the slab's, at the building's height) is left out with what is below it.</summary>
+    /// <summary>
+    /// How far above its floor the outline starts: the floor's own top (the slab's, at the building's height) is left out with what is below it.
+    /// </summary>
     const float FloorClearance = 1;
 
     /// <summary>
-    /// The mask's view: one cut volume with no footprint edges, everything at or below <paramref name="floor"/> + <see cref="FloorClearance"/>, which the draws
-    /// (all cut, <see cref="BatchSelection"/>) leave out: the foundations, piers and the base slab the building stands on, hidden or not, get no outline.
+    /// The mask's view: one cut volume with no footprint edges, everything at or below <paramref name="floor"/> + <see cref="FloorClearance"/>, which
+    /// the draws (all cut, <see cref="BatchSelection"/>) leave out: the foundations, piers and the base slab the building stands on, hidden or not,
+    /// get no outline.
     /// </summary>
     static ViewConstants SelectionView(Matrix4x4 viewProjection, Vector3 eye, float floor)
     {
@@ -105,7 +123,9 @@ public sealed partial class WorldObjectRenderer
         return view;
     }
 
-    /// <summary>The mask's instances' bounding spheres and the planes round them, as the characters' masks have theirs.</summary>
+    /// <summary>
+    /// The mask's instances' bounding spheres and the planes round them, as the characters' masks have theirs.
+    /// </summary>
     (float Near, float Far, List<(Vector3 Centre, float Radius)> Spheres) SelectionPlanes(Vector3 eye)
     {
         var spheres = new List<(Vector3 Centre, float Radius)>(_maskDraws.Count);
@@ -119,7 +139,10 @@ public sealed partial class WorldObjectRenderer
         return (Math.Max(0.25f, near), far, spheres);
     }
 
-    /// <summary>The mask's draws as the only batches, all cut (<see cref="SelectionView"/>), their matrices in this frame's constants (the frame's next <see cref="Draw"/> starts its own from nothing).</summary>
+    /// <summary>
+    /// The mask's draws as the only batches, all cut (<see cref="SelectionView"/>), their matrices in this frame's constants (the frame's next
+    /// <see cref="Draw"/> starts its own from nothing).
+    /// </summary>
     void BatchSelection()
     {
         foreach (var b in _batchMap.Values) b.Count = 0;
@@ -128,7 +151,9 @@ public sealed partial class WorldObjectRenderer
         UploadInstances();
     }
 
-    /// <summary>The batches into the mask, cleared to nothing in the scene's depth convention (the outline reads its depth as the scene's).</summary>
+    /// <summary>
+    /// The batches into the mask, cleared to nothing in the scene's depth convention (the outline reads its depth as the scene's).
+    /// </summary>
     void RecordSelection(PassTargets target, in ViewConstants view, WorldRenderOptions options)
     {
         var cmd = Gpu.BeginNative("selection mask");
@@ -145,7 +170,9 @@ public sealed partial class WorldObjectRenderer
         _active.Clear();
     }
 
-    /// <summary>Mask <paramref name="index"/>'s targets, made again at a new size (the characters' masks' formats).</summary>
+    /// <summary>
+    /// Mask <paramref name="index"/>'s targets, made again at a new size (the characters' masks' formats).
+    /// </summary>
     (GpuTexture Colour, GpuTexture Depth) SelectionTarget(int index, int width, int height)
     {
         if (index < _selectionTargets.Count)
@@ -155,8 +182,10 @@ public sealed partial class WorldObjectRenderer
             made.Colour.Dispose();
             made.Depth.Dispose();
         }
-        var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "selection mask"));
-        var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.Sampled | TextureUse.DepthTarget,
+        var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
+            Name: "selection mask"));
+        var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height,
+            Use: TextureUse.Sampled | TextureUse.DepthTarget,
             Name: "selection mask depth"));
         if (index < _selectionTargets.Count) _selectionTargets[index] = (colour, depth);
         else _selectionTargets.Add((colour, depth));

@@ -2,7 +2,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
-/// <summary>Adds a character's stats and medical state to the state hash (the body classes themselves know nothing of it).</summary>
+/// <summary>
+/// Adds a character's stats and medical state to the state hash (the body classes themselves know nothing of it).
+/// </summary>
 static class BodyHash
 {
     public static void Add(ref StateHasher h, CharacterStats? stats, MedicalState? medical)
@@ -11,8 +13,14 @@ static class BodyHash
         else
         {
             foreach (float v in stats.ToArray()) h.Add(v);
-            // Debug god mode keeps the real values aside; they come back on Unboost, so they are state. Only while boosted, so normal hashes are unchanged.
-            if (stats.GodOriginal is { } original) { h.Add(0x476F6444); foreach (float v in original) h.Add(v); }
+
+            // Debug god mode keeps the real values aside; they come back on Unboost, so they are state. Only while boosted, so normal hashes are
+            // unchanged.
+            if (stats.GodOriginal is { } original)
+            {
+                h.Add(0x476F6444);
+                foreach (float v in original) h.Add(v);
+            }
         }
         if (medical is null)
         {

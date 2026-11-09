@@ -4,8 +4,8 @@ using Meitou.Content;
 namespace Meitou.Data.Ogre;
 
 /// <summary>
-/// The resource index the game registers for an install (<see cref="OgreScriptResources.ForInstall"/>: <c>resources.cfg</c>, the language folder,
-/// the enabled mods' folders), made once per install and <c>mods.cfg</c> version and shared, so the art lookup and the data files that the game opens
+/// The resource index the game registers for an install (<see cref="OgreScriptResources.ForInstall"/>: <c>resources.cfg</c>, the language folder, the
+/// enabled mods' folders), made once per install and <c>mods.cfg</c> version and shared, so the art lookup and the data files that the game opens
 /// through Ogre (<c>areasmap.tga</c>, <c>names*.txt</c>, docs/formats/overview.md) see the same mods.
 /// </summary>
 public static class GameResources

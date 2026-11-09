@@ -14,16 +14,25 @@ namespace Meitou.Data.World;
 /// <param name="Footprint">Convex polygon of the hull in world X/Z, counter-clockwise.</param>
 public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, float YMin, float YMax)
 {
-    /// <summary>The building's <c>interior ambience</c> (enum <c>InteriorSound</c>: 0 None, 1 Metal, 2 Stone, 3 Wicker, 4 Wood).</summary>
+    /// <summary>
+    /// The building's <c>interior ambience</c> (enum <c>InteriorSound</c>: 0 None, 1 Metal, 2 Stone, 3 Wicker, 4 Wood).
+    /// </summary>
     public int Ambience { get; init; }
 
-    /// <summary>The building's <c>interior integrity</c> (0..100): the <c>Building_Integrity</c> game parameter while inside.</summary>
+    /// <summary>
+    /// The building's <c>interior integrity</c> (0..100): the <c>Building_Integrity</c> game parameter while inside.
+    /// </summary>
     public float Integrity { get; init; } = 100;
 
-    /// <summary>The building's <c>cavernous</c> flag: <c>Enter_Building_Big</c> (the big reverb) instead of <c>Enter_Building</c>.</summary>
+    /// <summary>
+    /// The building's <c>cavernous</c> flag: <c>Enter_Building_Big</c> (the big reverb) instead of <c>Enter_Building</c>.
+    /// </summary>
     public bool Cavernous { get; init; }
 
-    /// <summary>A gateway's hull: the original builds the interior object of any building with an <c>interior</c> list (<c>FUN_140551b20</c>, no gateway test) and the audio ray hits its hull, but it is no room (no roof hiding, no sight, no view).</summary>
+    /// <summary>
+    /// A gateway's hull: the original builds the interior object of any building with an <c>interior</c> list (<c>FUN_140551b20</c>, no gateway test)
+    /// and the audio ray hits its hull, but it is no room (no roof hiding, no sight, no view).
+    /// </summary>
     public bool IsGateway { get; init; }
 
     /// <summary>
@@ -32,7 +41,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// </summary>
     public IReadOnlyList<string> MaskMeshes { get; init; } = [];
 
-    /// <summary>The building's node (position, rotation, <c>scale</c>) the mask meshes are placed with.</summary>
+    /// <summary>
+    /// The building's node (position, rotation, <c>scale</c>) the mask meshes are placed with.
+    /// </summary>
     public Matrix4x4 Node { get; init; } = Matrix4x4.Identity;
 
     /// <summary>
@@ -54,7 +65,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return true;
     }
 
-    /// <summary>Whether <paramref name="p"/> is inside the footprint and height range, both widened by <paramref name="margin"/>.</summary>
+    /// <summary>
+    /// Whether <paramref name="p"/> is inside the footprint and height range, both widened by <paramref name="margin"/>.
+    /// </summary>
     public bool Contains(Vector3 p, float margin = 0)
     {
         if (p.Y < YMin - margin || p.Y > YMax + margin || Footprint.Length < 3) return false;
@@ -68,7 +81,10 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return true;
     }
 
-    /// <summary>How far <paramref name="p"/> is from the volume's box (footprint box by height range): a point nearer than that to it is still outside (<see cref="Contains"/>, no margin).</summary>
+    /// <summary>
+    /// How far <paramref name="p"/> is from the volume's box (footprint box by height range): a point nearer than that to it is still outside
+    /// (<see cref="Contains"/>, no margin).
+    /// </summary>
     public float Distance(Vector3 p)
     {
         var e = _edges;
@@ -123,7 +139,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
 
     Lazy<FloorSurfaces>? _floors;
 
-    /// <summary>How far above a point the search for something over it starts (the floor it stands on is not its cover).</summary>
+    /// <summary>
+    /// How far above a point the search for something over it starts (the floor it stands on is not its cover).
+    /// </summary>
     public const float CoverClearance = 5;
 
     /// <summary>
@@ -133,7 +151,10 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// </summary>
     public bool Covered(Vector3 p) => _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance) is not null;
 
-    /// <summary>The height of the ceiling over <paramref name="p"/> (from <see cref="CoverClearance"/> up), or null when nothing is over it (<see cref="FloorSurfaces.CeilingAbove"/>).</summary>
+    /// <summary>
+    /// The height of the ceiling over <paramref name="p"/> (from <see cref="CoverClearance"/> up), or null when nothing is over it
+    /// (<see cref="FloorSurfaces.CeilingAbove"/>).
+    /// </summary>
     public float? CeilingAbove(Vector3 p) => _floors?.Value.CeilingAbove(p.X, p.Z, p.Y + CoverClearance);
 
     /// <summary>
@@ -162,10 +183,15 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return best;
     }
 
-    /// <summary>The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/> (<see cref="FloorSurfaces.NormalBelow"/>); null for none.</summary>
+    /// <summary>
+    /// The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/>
+    /// (<see cref="FloorSurfaces.NormalBelow"/>); null for none.
+    /// </summary>
     public Vector3? FloorNormal(Vector3 point, int floor, float reach) => _floors?.Value.NormalBelow(point, floor, reach);
 
-    /// <summary>A movement pick on this building's collision at or below the viewed floor.</summary>
+    /// <summary>
+    /// A movement pick on this building's collision at or below the viewed floor.
+    /// </summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
         if (Footprint.Length < 3 || _floors is null) return null;
@@ -219,7 +245,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         };
     }
 
-    /// <summary>Andrew's monotone chain: the convex hull of <paramref name="points"/>, counter-clockwise (X right, Y = world Z).</summary>
+    /// <summary>
+    /// Andrew's monotone chain: the convex hull of <paramref name="points"/>, counter-clockwise (X right, Y = world Z).
+    /// </summary>
     public static Vector2[] ConvexHull2(List<Vector2> points)
     {
         var p = points.Distinct().OrderBy(v => v.X).ThenBy(v => v.Y).ToArray();
@@ -247,22 +275,33 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
 /// </summary>
 public sealed partial class FloorSurfaces
 {
-    /// <summary>One part's triangles (three corners each) with its floor, whether it is stairs, its height range, its X/Z box and its triangles binned by X/Z (<see cref="TriangleGrid"/>).</summary>
+    /// <summary>
+    /// One part's triangles (three corners each) with its floor, whether it is stairs, its height range, its X/Z box and its triangles binned by X/Z
+    /// (<see cref="TriangleGrid"/>).
+    /// </summary>
     sealed record Surface(int Floor, bool Stairs, Vector3[] Corners, float YMin, float YMax, Vector2 Min, Vector2 Max)
     {
         public TriangleGrid Grid { get; } = new(Corners, Min, Max);
     }
 
     readonly List<Surface> _surfaces = [];
-    /// <summary>The <c>is unwalkable roof</c> parts: no floor, only cover (<see cref="LowestAbove"/>).</summary>
+    /// <summary>
+    /// The <c>is unwalkable roof</c> parts: no floor, only cover (<see cref="LowestAbove"/>).
+    /// </summary>
     readonly List<Surface> _roofs = [];
-    /// <summary>The solids' flat undersides left out of the floors: a slab's bottom, what a ceiling ghost hangs from (<see cref="CeilingAbove"/>).</summary>
+    /// <summary>
+    /// The solids' flat undersides left out of the floors: a slab's bottom, what a ceiling ghost hangs from (<see cref="CeilingAbove"/>).
+    /// </summary>
     readonly List<Surface> _undersides = [];
 
-    /// <summary>How far above the feet the downward ray starts (game: 10 units above the character).</summary>
+    /// <summary>
+    /// How far above the feet the downward ray starts (game: 10 units above the character).
+    /// </summary>
     public const float RayStart = 10;
 
-    /// <summary>The share of a stairs shape's height from the top within which a hit counts as the floor above (game: the top 30 %).</summary>
+    /// <summary>
+    /// The share of a stairs shape's height from the top within which a hit counts as the floor above (game: the top 30 %).
+    /// </summary>
     public const float StairsTop = 0.3f;
 
     /// <summary>
@@ -335,7 +374,9 @@ public sealed partial class FloorSurfaces
         return floor;
     }
 
-    /// <summary>The height of triangle (a, b, c) above <paramref name="q"/> (X/Z), or null when q is outside it or the triangle is vertical.</summary>
+    /// <summary>
+    /// The height of triangle (a, b, c) above <paramref name="q"/> (X/Z), or null when q is outside it or the triangle is vertical.
+    /// </summary>
     static float? HeightAt(Vector3 a, Vector3 b, Vector3 c, Vector2 q)
     {
         float d = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
@@ -355,15 +396,22 @@ public sealed partial class FloorSurfaces
 /// </summary>
 public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Outward);
 
-/// <summary>The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts), read and triangulated once each; safe from several threads.</summary>
+/// <summary>
+/// The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts), read and triangulated once each; safe from several
+/// threads.
+/// </summary>
 public sealed class InteriorCollisions(GameInstall install)
 {
     readonly ConcurrentDictionary<string, CollisionMesh?> _files = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Every triangulated vertex of the file's shapes, or null when the path is empty or the file is missing or unreadable.</summary>
+    /// <summary>
+    /// Every triangulated vertex of the file's shapes, or null when the path is empty or the file is missing or unreadable.
+    /// </summary>
     public Vector3[]? Vertices(string recordPath) => Mesh(recordPath)?.Vertices;
 
-    /// <summary>The file's triangles, or null when the path is empty or the file is missing, unreadable or has no triangles.</summary>
+    /// <summary>
+    /// The file's triangles, or null when the path is empty or the file is missing, unreadable or has no triangles.
+    /// </summary>
     public CollisionMesh? Mesh(string recordPath) =>
         string.IsNullOrWhiteSpace(recordPath) ? null : _files.GetOrAdd(recordPath, Load);
 

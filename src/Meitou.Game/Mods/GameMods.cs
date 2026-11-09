@@ -10,9 +10,9 @@ using Meitou.Simulation.Population;
 namespace Meitou.Modding;
 
 /// <summary>
-/// Code mods (docs/modding.md): loaded and initialized once in <see cref="GameHost.BootSimulation"/>, after the data and before the first world's systems; their simulation
-/// extensions go into every <see cref="GameSaves.BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
-/// systems' save data into and out of the save's sidecar files.
+/// Code mods (docs/modding.md): loaded and initialized once in <see cref="GameHost.BootSimulation"/>, after the data and before the first world's
+/// systems; their simulation extensions go into every <see cref="GameSaves.BuildSystems"/>, their interface extensions and notices to the interface,
+/// their debug rows to the F10 menu, and their systems' save data into and out of the save's sidecar files.
 /// </summary>
 sealed class GameMods(GameHost host)
 {
@@ -25,7 +25,9 @@ sealed class GameMods(GameHost host)
     ConcurrentQueue<CombatHit> _hitFeed = new();
     readonly List<CombatHit> _frameHits = [];
 
-    /// <summary>Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.</summary>
+    /// <summary>
+    /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.
+    /// </summary>
     internal void StartWarmup()
     {
         if (ModHost.EnabledCodeMods(host.Install).Count > 0) _warmupAfterMods = true;
@@ -39,7 +41,9 @@ sealed class GameMods(GameHost host)
         JitWarmup.Start();
     }
 
-    /// <summary>Loads the enabled code mods and runs their initialization; on the boot worker.</summary>
+    /// <summary>
+    /// Loads the enabled code mods and runs their initialization; on the boot worker.
+    /// </summary>
     internal void StartMods(Data.GameDatabase db, PopulationData data)
     {
         var (enabled, disabled) = ModHost.CodeMods(host.Install);
@@ -49,7 +53,9 @@ sealed class GameMods(GameHost host)
             id => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
     }
 
-    /// <summary>The mods' interface extensions and their load notices, for a new interface.</summary>
+    /// <summary>
+    /// The mods' interface extensions and their load notices, for a new interface.
+    /// </summary>
     internal void ConnectModUi(PlayerInterface ui)
     {
         if (Mods is null) return;
@@ -128,7 +134,9 @@ sealed class GameMods(GameHost host)
         }
     }
 
-    /// <summary>The save's mod data into the systems of the world just loaded from it; between ticks, before the first.</summary>
+    /// <summary>
+    /// The save's mod data into the systems of the world just loaded from it; between ticks, before the first.
+    /// </summary>
     internal void RestoreModData(World world, Data.Save.SaveGame save) => Mods?.RestoreSaveData(world, save.ModData);
 
     internal IReadOnlyList<ModDebugCommand> ModDebugRows => Mods?.DebugCommands ?? [];
@@ -147,7 +155,9 @@ sealed class GameMods(GameHost host)
         while (host.DebugMenu.DebugFields.Count < DebugRowCount) host.DebugMenu.DebugFields.Add("");
     }
 
-    /// <summary>A mod's debug row: its handler with the field, the selection and the camera target; a throw shows as the status line.</summary>
+    /// <summary>
+    /// A mod's debug row: its handler with the field, the selection and the camera target; a throw shows as the status line.
+    /// </summary>
     internal string ModDebugApply(int row, string field, CharacterId[] selected, Vector3 here, long tick)
     {
         var command = ModDebugRows[row];

@@ -5,7 +5,9 @@ using Meitou.Tests.Gameplay;
 
 namespace Meitou.Tests.World;
 
-/// <summary>A wind generator's rotor is read only from the parts its placement spawns (FUN_1404cbd90 over the created parts).</summary>
+/// <summary>
+/// A wind generator's rotor is read only from the parts its placement spawns (FUN_1404cbd90 over the created parts).
+/// </summary>
 public class WindRotorTests
 {
     [Fact]
@@ -29,7 +31,11 @@ public class WindRotorTests
             var chosen = WorldObjectLayout.Building(db, building, "b", at, Quaternion.Identity).Any(m => m.Source.StringId == "rotor");
             var rotor = WorldObjectLayout.WindRotor(db, building, at);
             Assert.Equal(chosen, rotor is not null);
-            if (rotor is { } range) { Assert.Equal((3f, 3f), range); withRotor++; }
+            if (rotor is { } range)
+            {
+                Assert.Equal((3f, 3f), range);
+                withRotor++;
+            }
         }
         Assert.InRange(withRotor, 1, 39);
     }

@@ -30,7 +30,9 @@ public sealed class SaveBuilder
         Game.Portraits = SavePortraits.Blank();
     }
 
-    /// <summary>Adds to an existing save (a loaded one): containers and numbers continue after the highest in use.</summary>
+    /// <summary>
+    /// Adds to an existing save (a loaded one): containers and numbers continue after the highest in use.
+    /// </summary>
     public SaveBuilder(SaveGame game, ulong seed = 0)
     {
         this._seed = seed;
@@ -50,7 +52,9 @@ public sealed class SaveBuilder
 
     // ------------------------------------------------------------------ ids
 
-    /// <summary>The next number of a file: one more than the highest numeric id in it.</summary>
+    /// <summary>
+    /// The next number of a file: one more than the highest numeric id in it.
+    /// </summary>
     public static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
 
     static string QuickId(int n) => $"{n}-{SaveFolder.QuickSaveName}-INGAME";
@@ -64,7 +68,9 @@ public sealed class SaveBuilder
         return r;
     }
 
-    /// <summary>A random 32-bit serial from the seed and a counter, the way the game's allocator makes one (any value is legal; negative ones occur).</summary>
+    /// <summary>
+    /// A random 32-bit serial from the seed and a counter, the way the game's allocator makes one (any value is legal; negative ones occur).
+    /// </summary>
     public int Serial()
     {
         ulong x = _seed + 0x9E3779B97F4A7C15UL * (ulong)(++_nextSerial);
@@ -153,7 +159,10 @@ public sealed class SaveBuilder
         return faction;
     }
 
-    /// <summary>Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps <paramref name="hand"/> (a level town state's).</summary>
+    /// <summary>
+    /// Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps
+    /// <paramref name="hand"/> (a level town state's).
+    /// </summary>
     public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.Town, Hand? hand = null)
     {
         var r = Quick(FcsRecordType.GamestateTown, name);
@@ -183,7 +192,10 @@ public sealed class SaveBuilder
         return town;
     }
 
-    /// <summary>Adds the world records the game always writes after the towns: BIOMES, RESEARCH and TERRAIN_DECALS, empty. (Weather is not modelled yet; the research is written by <c>Meitou.Simulation.Saving.ResearchSave</c>.)</summary>
+    /// <summary>
+    /// Adds the world records the game always writes after the towns: BIOMES, RESEARCH and TERRAIN_DECALS, empty. (Weather is not modelled yet; the
+    /// research is written by <c>Meitou.Simulation.Saving.ResearchSave</c>.)
+    /// </summary>
     public void AddEmptyWorldState()
     {
         Quick(FcsRecordType.Biomes);
@@ -250,7 +262,9 @@ public sealed class SaveBuilder
         platoon.File = file;
     }
 
-    /// <summary>Gives a record the next number of the file: id, string id <c>&lt;n&gt;-&lt;suffix&gt;-INGAME</c>.</summary>
+    /// <summary>
+    /// Gives a record the next number of the file: id, string id <c>&lt;n&gt;-&lt;suffix&gt;-INGAME</c>.
+    /// </summary>
     static void AssignId(SaveFile file, FcsRecord r, string suffix, string stateSuffix = "")
     {
         int n = NextNumber(file);
@@ -320,7 +334,10 @@ public sealed class SaveBuilder
         return c;
     }
 
-    /// <summary>Removes a platoon: its PLATOON record and its file (the original deletes the record of a platoon it destroys, docs/game/factions-squads-towns.md "Persistent platoons").</summary>
+    /// <summary>
+    /// Removes a platoon: its PLATOON record and its file (the original deletes the record of a platoon it destroys,
+    /// docs/game/factions-squads-towns.md "Persistent platoons").
+    /// </summary>
     public void RemovePlatoon(SavePlatoon platoon)
     {
         Game.Quick.Records.Remove(platoon.Record);
@@ -368,7 +385,9 @@ public sealed class SaveBuilder
 
     // ------------------------------------------------------------------ STATS defaults
 
-    /// <summary>The STATS floats a record always has that the stat system does not write (the legacy ones): zero.</summary>
+    /// <summary>
+    /// The STATS floats a record always has that the stat system does not write (the legacy ones): zero.
+    /// </summary>
     public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival", "arrow defence"];
 
     /// <summary>

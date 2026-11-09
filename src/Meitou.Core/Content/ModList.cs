@@ -8,13 +8,19 @@ namespace Meitou.Content;
 /// </summary>
 public static class ModList
 {
-    /// <summary>mods.cfg entries the game ignores because they name core files.</summary>
+    /// <summary>
+    /// mods.cfg entries the game ignores because they name core files.
+    /// </summary>
     public static readonly IReadOnlyList<string> CoreModNames = ["Newwworld", "Dialogue", "rebirth"];
 
-    /// <summary>The file in a mod's folder that makes it an RE_Kenshi plugin mod (docs/formats/rekenshi.md); Meitou ignores its DLLs.</summary>
+    /// <summary>
+    /// The file in a mod's folder that makes it an RE_Kenshi plugin mod (docs/formats/rekenshi.md); Meitou ignores its DLLs.
+    /// </summary>
     public const string NativePluginFile = "RE_Kenshi.json";
 
-    /// <summary>The file in a mod's folder that makes it a Meitou code mod (docs/modding.md "Discovery").</summary>
+    /// <summary>
+    /// The file in a mod's folder that makes it a Meitou code mod (docs/modding.md "Discovery").
+    /// </summary>
     public const string CodeManifestFile = "meitou.json";
 
     /// <summary>
@@ -42,7 +48,9 @@ public static class ModList
     public static Dictionary<string, string> FindMods(GameInstall install) =>
         Discover(install).ToDictionary(m => m.Name, m => m.Path, StringComparer.Ordinal);
 
-    /// <summary><see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order.</summary>
+    /// <summary>
+    /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order.
+    /// </summary>
     public static List<ModInfo> Discover(GameInstall install)
     {
         var mods = new Dictionary<string, ModInfo>(StringComparer.Ordinal);
@@ -67,10 +75,16 @@ public static class ModList
         return [.. mods.Values.OrderBy(m => m.Name, StringComparer.Ordinal)];
     }
 
-    /// <summary>The file the enabled mods are read from instead of <c>data/mods.cfg</c> (<c>--mods-cfg</c>, <see cref="UseModsCfg"/>); null: the install's own. Saving always writes the install's file.</summary>
+    /// <summary>
+    /// The file the enabled mods are read from instead of <c>data/mods.cfg</c> (<c>--mods-cfg</c>, <see cref="UseModsCfg"/>); null: the install's
+    /// own. Saving always writes the install's file.
+    /// </summary>
     public static string? ModsCfgOverride { get; private set; }
 
-    /// <summary>Reads the enabled mods from <paramref name="file"/> from now on (<c>--mods-cfg</c>, <c>MEITOU_MODS_CFG</c>); a missing file is an error, not an empty list.</summary>
+    /// <summary>
+    /// Reads the enabled mods from <paramref name="file"/> from now on (<c>--mods-cfg</c>, <c>MEITOU_MODS_CFG</c>); a missing file is an error, not
+    /// an empty list.
+    /// </summary>
     public static void UseModsCfg(string file)
     {
         file = Path.GetFullPath(file);
@@ -78,24 +92,33 @@ public static class ModList
         ModsCfgOverride = file;
     }
 
-    /// <summary>Back to the install's own <c>data/mods.cfg</c> (tests).</summary>
+    /// <summary>
+    /// Back to the install's own <c>data/mods.cfg</c> (tests).
+    /// </summary>
     public static void ClearModsCfg() => ModsCfgOverride = null;
 
-    /// <summary>The file the enabled mods are read from: <see cref="ModsCfgOverride"/>, else <c>data/mods.cfg</c>.</summary>
+    /// <summary>
+    /// The file the enabled mods are read from: <see cref="ModsCfgOverride"/>, else <c>data/mods.cfg</c>.
+    /// </summary>
     public static string ModsCfgPath(GameInstall install) => ModsCfgOverride ?? Path.Combine(install.DataDirectory, "mods.cfg");
 
-    /// <summary>The enabled mods named in <c>data/mods.cfg</c> (or the <c>--mods-cfg</c> file), in order, without duplicates; empty when the file is missing.</summary>
+    /// <summary>
+    /// The enabled mods named in <c>data/mods.cfg</c> (or the <c>--mods-cfg</c> file), in order, without duplicates; empty when the file is missing.
+    /// </summary>
     public static List<string> ReadEnabled(GameInstall install)
     {
         var path = ModsCfgPath(install);
         return File.Exists(path) ? [.. ParseModsCfg(File.ReadAllLines(path)).Distinct(StringComparer.Ordinal)] : [];
     }
 
-    /// <summary>Names the launcher has seen, from <c>data/__mods.list</c> (one name per line, no extension); empty when missing.</summary>
+    /// <summary>
+    /// Names the launcher has seen, from <c>data/__mods.list</c> (one name per line, no extension); empty when missing.
+    /// </summary>
     public static HashSet<string> ReadKnown(GameInstall install)
     {
         var path = Path.Combine(install.DataDirectory, "__mods.list");
-        return File.Exists(path) ? new HashSet<string>(File.ReadAllLines(path).Where(l => l.Length > 0), StringComparer.Ordinal) : new(StringComparer.Ordinal);
+        return File.Exists(path) ? new HashSet<string>(File.ReadAllLines(path).Where(l => l.Length > 0),
+                StringComparer.Ordinal) : new(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -142,7 +165,8 @@ public static class ModList
     static IEnumerable<ModInfo> DependencyOrder(List<ModInfo> mods)
     {
         var byFile = mods.ToDictionary(m => m.Name + ".mod", StringComparer.Ordinal);
-        var waiting = mods.ToDictionary(m => m, m => m.Header?.Dependencies.Where(byFile.ContainsKey).Select(d => byFile[d]).Where(d => d != m).ToHashSet() ?? []);
+        var waiting = mods.ToDictionary(m => m,
+                m => m.Header?.Dependencies.Where(byFile.ContainsKey).Select(d => byFile[d]).Where(d => d != m).ToHashSet() ?? []);
         while (waiting.Count > 0)
         {
             var ready = waiting.Where(p => p.Value.Count == 0).Select(p => p.Key).OrderBy(m => m.Name, StringComparer.Ordinal).FirstOrDefault();
@@ -158,7 +182,9 @@ public static class ModList
 
 public enum ModSource { Local, Workshop }
 
-/// <summary>A mod on disk: its name (the <c>.mod</c> file's stem), file and source.</summary>
+/// <summary>
+/// A mod on disk: its name (the <c>.mod</c> file's stem), file and source.
+/// </summary>
 public sealed class ModInfo(string name, string path, ModSource source)
 {
     ModHeader? _header;
@@ -171,20 +197,30 @@ public sealed class ModInfo(string name, string path, ModSource source)
     public ModSource Source { get; } = source;
     public string Folder => System.IO.Path.GetDirectoryName(Path)!;
 
-    /// <summary>An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.</summary>
+    /// <summary>
+    /// An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.
+    /// </summary>
     public bool HasNativePlugin => _nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
 
-    /// <summary>A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.</summary>
+    /// <summary>
+    /// A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.
+    /// </summary>
     public bool HasCode => _code ??= File.Exists(CodeManifestPath);
 
     public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);
 
-    /// <summary>The <c>.mod</c> file's header, read on first use; null when it is unreadable.</summary>
+    /// <summary>
+    /// The <c>.mod</c> file's header, read on first use; null when it is unreadable.
+    /// </summary>
     public ModHeader? Header
     {
         get
         {
-            if (!_headerRead) { _header = ModHeader.TryRead(Path); _headerRead = true; }
+            if (!_headerRead)
+            {
+                _header = ModHeader.TryRead(Path);
+                _headerRead = true;
+            }
             return _header;
         }
     }
@@ -192,7 +228,9 @@ public sealed class ModInfo(string name, string path, ModSource source)
 
 public sealed record ModEntry(ModInfo Mod, bool Enabled);
 
-/// <summary>The author, description, dependencies and references of a type 16/17 <c>.mod</c> header (docs/formats/fcs-mod.md, "File").</summary>
+/// <summary>
+/// The author, description, dependencies and references of a type 16/17 <c>.mod</c> header (docs/formats/fcs-mod.md, "File").
+/// </summary>
 public sealed record ModHeader(int FileType, string Author, string Description, IReadOnlyList<string> Dependencies, IReadOnlyList<string> References)
 {
     public static ModHeader? TryRead(string path)

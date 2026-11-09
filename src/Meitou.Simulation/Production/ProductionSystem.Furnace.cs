@@ -7,14 +7,24 @@ namespace Meitou.Simulation.Production;
 // The item furnace (docs/game/buildings-production.md "Item furnace"): FurnaceBuilding burns whatever lies in its input grid into its output (Raw Iron), by the metal the items hold.
 public sealed partial class ProductionSystem
 {
-    /// <summary>The furnace's input grid (<b>Verified</b>, <c>FurnaceBuilding::setupFromData</c> <c>FUN_14029f980</c>): section <c>in1</c>, 12 x 7 cells, stacks at least 10.</summary>
+    /// <summary>
+    /// The furnace's input grid (<b>Verified</b>, <c>FurnaceBuilding::setupFromData</c> <c>FUN_14029f980</c>): section <c>in1</c>, 12 x 7 cells,
+    /// stacks at least 10.
+    /// </summary>
     public const int FurnaceWidth = 12, FurnaceHeight = 7, FurnaceStackMinimum = 10;
-    /// <summary>The ITEM whose ingredient amounts are the iron in an item (<b>Verified</b>, the literal in <c>FurnaceBuilding::getIronAmountInItem</c> <c>FUN_1402a5750</c>).</summary>
+    /// <summary>
+    /// The ITEM whose ingredient amounts are the iron in an item (<b>Verified</b>, the literal in <c>FurnaceBuilding::getIronAmountInItem</c>
+    /// <c>FUN_1402a5750</c>).
+    /// </summary>
     public const string RawIron = "1866-gamedata.base";
-    /// <summary>The LOCATIONAL_DAMAGE entry whose <c>part coverage</c> counts 1.5 times in an armour's total coverage (<b>Observed</b>, <c>FUN_14082fd80</c>).</summary>
+    /// <summary>
+    /// The LOCATIONAL_DAMAGE entry whose <c>part coverage</c> counts 1.5 times in an armour's total coverage (<b>Observed</b>, <c>FUN_14082fd80</c>).
+    /// </summary>
     const string WeightedPart = "101-gamedata.quack";
 
-    /// <summary>An empty furnace grid (<see cref="FurnaceWidth"/> x <see cref="FurnaceHeight"/>, stacks at least <see cref="FurnaceStackMinimum"/>).</summary>
+    /// <summary>
+    /// An empty furnace grid (<see cref="FurnaceWidth"/> x <see cref="FurnaceHeight"/>, stacks at least <see cref="FurnaceStackMinimum"/>).
+    /// </summary>
     static Inventory FurnaceGrid() => new(FurnaceWidth, FurnaceHeight) { StackBonusMinimum = FurnaceStackMinimum };
 
     /// <summary>
@@ -58,7 +68,9 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
-    /// <summary>The metal of a furnace grid (<c>FUN_140299820</c>, the panel's <c>Total Metals:</c>): the sum of <see cref="MetalOf"/> over its items.</summary>
+    /// <summary>
+    /// The metal of a furnace grid (<c>FUN_140299820</c>, the panel's <c>Total Metals:</c>): the sum of <see cref="MetalOf"/> over its items.
+    /// </summary>
     public float FurnaceMetal(Inventory grid)
     {
         float total = 0;

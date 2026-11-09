@@ -9,12 +9,17 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>M6: <see cref="SimWorld.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/> and the snapshot facts the menu reads (docs/simulation.md "Order queue", "Shared predicates").</summary>
+/// <summary>
+/// M6: <see cref="SimWorld.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/> and the snapshot facts the menu reads
+/// (docs/simulation.md "Order queue", "Shared predicates").
+/// </summary>
 public class CanOrderTests
 {
     static string[] States => ["standing", "down", "carried", "caged", "asleep", "animal", "crawling"];
 
-    /// <summary>The order rows the menu gives, by the name <see cref="TaskStartTests.Order"/> uses, with their target and site.</summary>
+    /// <summary>
+    /// The order rows the menu gives, by the name <see cref="TaskStartTests.Order"/> uses, with their target and site.
+    /// </summary>
     static (TaskType Row, CharacterId Target, string? Site) Row(TaskStartTests.Rig rig, string name) => name switch
     {
         "move" => (TaskType.MoveCusOrdered, CharacterId.None, null),
@@ -35,14 +40,16 @@ public class CanOrderTests
     static IEnumerable<(string State, string Order)> StatesAndOrders()
     {
         foreach (string state in States)
-            foreach (string order in new[] { "move", "follow", "first aid", "rest", "pick up", "loot", "stealth ko", "operate", "build", "dismantle", "use bed", "attack" })
+            foreach (string order in new[] { "move", "follow", "first aid", "rest", "pick up", "loot", "stealth ko", "operate", "build", "dismantle",
+                    "use bed", "attack" })
                 yield return (state, order);
     }
 
     /// <summary>
-    /// <c>CanOrder</c> is the read the queue starts and barks through: for a character that is standing, down, carried, caged, asleep, an animal or crawling, an order that <c>CanOrder</c> accepts
-    /// starts its act-out when given and one it refuses does not (it stays queued with its text, or leaves the queue). Catches a read that drifts from the start path (a handler testing its own
-    /// precondition, a row's repertoire left out) so that a menu or the multiplayer gate would offer or refuse what the order then does otherwise.
+    /// <c>CanOrder</c> is the read the queue starts and barks through: for a character that is standing, down, carried, caged, asleep, an animal or
+    /// crawling, an order that <c>CanOrder</c> accepts starts its act-out when given and one it refuses does not (it stays queued with its text, or
+    /// leaves the queue). Catches a read that drifts from the start path (a handler testing its own precondition, a row's repertoire left out) so
+    /// that a menu or the multiplayer gate would offer or refuse what the order then does otherwise.
     /// </summary>
     [Fact]
     public void CanOrder_agrees_with_what_giving_the_order_does() => Assert.All(StatesAndOrders(), row => AgreesWithTheOrder(row.State, row.Order));
@@ -56,15 +63,27 @@ public class CanOrderTests
         var cold = rig.Cold(f);
         switch (state)
         {
-            case "down": cold.Medical!.KnockOut(1000); break;
-            case "carried": (cold.CarriedBy, rig.Cold(rig.Mate).Carrying) = (rig.Mate, f); break;
-            case "caged": rig.World.Fixtures.Imprison(rig.World, f, rig.World.Fixtures.Find(rig.EmptyCage)!); break;
-            case "animal": cold.Fighter = new Fighter(null) { IsAnimal = true }; break;
-            case "crawling": cold.Medical!.StayingLow = true; break;
+            case "down":
+                cold.Medical!.KnockOut(1000);
+                break;
+            case "carried":
+                (cold.CarriedBy, rig.Cold(rig.Mate).Carrying) = (rig.Mate, f);
+                break;
+            case "caged":
+                rig.World.Fixtures.Imprison(rig.World, f, rig.World.Fixtures.Find(rig.EmptyCage)!);
+                break;
+            case "animal":
+                cold.Fighter = new Fighter(null) { IsAnimal = true };
+                break;
+            case "crawling":
+                cold.Medical!.StayingLow = true;
+                break;
             case "asleep":
                 rig.Say(new UseBedOrder([f], rig.BedFixture) { Tick = rig.World.Tick });
                 for (int i = 0; i < 600 && rig.Task(f) != CharacterTask.Sleep; i++) rig.World.RunTick();
+
                 Assert.Equal(CharacterTask.Sleep, rig.Task(f));
+
                 rig.Say(new StopCommand([f]) { Tick = rig.World.Tick });
                 break;
         }
@@ -77,24 +96,28 @@ public class CanOrderTests
         rig.Say(order);
         rig.World.RunTick();
         bool started = rig.Task(f) == task && before != task || rig.Cold(f).OrderQueue.Front is { Started: true };
+
         Assert.True(can == started, $"{state}, {name}: CanOrder {can} ({why}), started {started}, task {before} -> {rig.Task(f)}");
     }
 
     /// <summary>
-    /// A world without the order's owning system or a gone actor has no answer (false, no text), and an order row nobody owns is refused. Catches a null owner reaching the queue.
+    /// A world without the order's owning system or a gone actor has no answer (false, no text), and an order row nobody owns is refused. Catches a
+    /// null owner reaching the queue.
     /// </summary>
     [Fact]
     public void CanOrder_answers_false_without_text_for_a_gone_actor_or_an_unowned_row()
     {
         using var rig = new TaskStartTests.Rig(carrying: false);
         rig.World.RunTicks(3);
+
         Assert.Equal((false, null), rig.World.CanOrder(TaskType.Rest, CharacterId.None));
         Assert.Equal((false, null), rig.World.CanOrder(TaskType.None, rig.Fighter));
     }
 
     /// <summary>
-    /// The snapshot facts the menu reads, from the simulation: Conscious (not dead, out cold or carried), Standing (not dead or out cold), Animal, and HostileToPlayer (another faction without
-    /// relations, or one that fights the player). Catches the UI's own copies drifting from them, and a replica client getting none.
+    /// The snapshot facts the menu reads, from the simulation: Conscious (not dead, out cold or carried), Standing (not dead or out cold), Animal,
+    /// and HostileToPlayer (another faction without relations, or one that fights the player). Catches the UI's own copies drifting from them, and a
+    /// replica client getting none.
     /// </summary>
     [Fact]
     public void The_snapshot_publishes_the_facts_the_menu_reads()
@@ -115,6 +138,7 @@ public class CanOrderTests
         var animal = Add(2, c => c.Fighter = new Fighter(null) { IsAnimal = true });
         world.RunTick();
         CharacterSnapshot Of(CharacterId id) => world.Snapshot.Characters.Single(c => c.Id == id);
+
         Assert.True(Of(other).Conscious && Of(other).Standing && !Of(other).Animal);
         Assert.True(!Of(ko).Conscious && !Of(ko).Standing);
         Assert.True(!Of(carried).Conscious && Of(carried).Standing);
@@ -125,8 +149,8 @@ public class CanOrderTests
     }
 
     /// <summary>
-    /// An animal holding a limb in its mouth publishes the limb's record and the skin tone of the character it was cut from, one with an empty mouth none (the renderer draws
-    /// the limb from them, docs/game/character-stats.md "Eating"). Catches the snapshot dropping them.
+    /// An animal holding a limb in its mouth publishes the limb's record and the skin tone of the character it was cut from, one with an empty mouth
+    /// none (the renderer draws the limb from them, docs/game/character-stats.md "Eating"). Catches the snapshot dropping them.
     /// </summary>
     [Fact]
     public void The_snapshot_publishes_the_limb_in_an_animals_mouth()
@@ -143,6 +167,7 @@ public class CanOrderTests
         var empty = Add();
         world.RunTick();
         CharacterSnapshot Of(CharacterId id) => world.Snapshot.Characters.Single(c => c.Id == id);
+
         Assert.Equal(("limb-t", tone), (Of(holder).Mouth, Of(holder).MouthTone));
         Assert.Null(Of(empty).Mouth);
     }

@@ -6,35 +6,55 @@ using Meitou.Game.Building;
 namespace Meitou.Game.DevTools;
 
 /// <summary>
-/// The pick & collision inspector (Meitou only; the host's inspector menu, opened from the F10 menu's Tools row, switches these on and off; docs/viewer.md "Pick & collision inspector"): what is under the cursor and why a
-/// click would pick it. The panel is a text list (the ground point, the zone, the building a click would select with its hull, the other buildings the ray passes); the rest is drawn on the world
-/// for those buildings: the pick hull a click uses, each collision shape's own hull, and the real collision triangles.
+/// The pick & collision inspector (Meitou only; the host's inspector menu, opened from the F10 menu's Tools row, switches these on and off;
+/// docs/viewer.md "Pick & collision inspector"): what is under the cursor and why a click would pick it. The panel is a text list (the ground point,
+/// the zone, the building a click would select with its hull, the other buildings the ray passes); the rest is drawn on the world for those
+/// buildings: the pick hull a click uses, each collision shape's own hull, and the real collision triangles.
 /// </summary>
 sealed class PickInspector(PlayerInterface player)
 {
-    /// <summary>Show the text panel.</summary>
+    /// <summary>
+    /// Show the text panel.
+    /// </summary>
     public bool InspectorPanel { get; set; }
-    /// <summary>Draw the pick hull (the merged one a click is tested against) of the buildings along the ray.</summary>
+    /// <summary>
+    /// Draw the pick hull (the merged one a click is tested against) of the buildings along the ray.
+    /// </summary>
     public bool InspectorHull { get; set; }
-    /// <summary>Draw each collision shape's own convex hull.</summary>
+    /// <summary>
+    /// Draw each collision shape's own convex hull.
+    /// </summary>
     public bool InspectorShapes { get; set; }
-    /// <summary>Draw the real collision triangles of the building a click would select.</summary>
+    /// <summary>
+    /// Draw the real collision triangles of the building a click would select.
+    /// </summary>
     public bool InspectorMesh { get; set; }
 
-    /// <summary>True while anything of the inspector is on (the world is searched under the cursor every frame then).</summary>
+    /// <summary>
+    /// True while anything of the inspector is on (the world is searched under the cursor every frame then).
+    /// </summary>
     public bool InspectorOn => InspectorPanel || InspectorDrawing;
-    /// <summary>True while something is drawn on the world.</summary>
+    /// <summary>
+    /// True while something is drawn on the world.
+    /// </summary>
     public bool InspectorDrawing => InspectorHull || InspectorShapes || InspectorMesh;
 
-    /// <summary>Counts up whenever <see cref="InspectorGeometry"/> changed, so the host uploads it only then.</summary>
+    /// <summary>
+    /// Counts up whenever <see cref="InspectorGeometry"/> changed, so the host uploads it only then.
+    /// </summary>
     public int InspectorRevision { get; private set; }
 
-    /// <summary>The geometry to draw (positions relative to <c>Origin</c>, <c>Meitou.Game.Rendering.Overlays.NavmeshOverlayRenderer</c> layout: 7 floats a vertex).</summary>
+    /// <summary>
+    /// The geometry to draw (positions relative to <c>Origin</c>, <c>Meitou.Game.Rendering.Overlays.NavmeshOverlayRenderer</c> layout: 7 floats a
+    /// vertex).
+    /// </summary>
     public (Vector3 Origin, float[] Fill, float[] Edges) InspectorGeometry { get; private set; } = (Vector3.Zero, [], []);
 
     string _inspectorKey = "";
 
-    /// <summary>Forgets what was drawn (a switch changed), so the next frame rebuilds it.</summary>
+    /// <summary>
+    /// Forgets what was drawn (a switch changed), so the next frame rebuilds it.
+    /// </summary>
     public void InspectorChanged()
     {
         _inspectorKey = "";
@@ -43,7 +63,10 @@ sealed class PickInspector(PlayerInterface player)
 
     sealed record InspectedBuilding(string Name, string? Record, string Key, float? Hit, Vector2[] Hull, IReadOnlyList<Vector2[]> Shapes, float Y, float YMin, float YMax, Vector3 Position, Quaternion Rotation);
 
-    /// <summary>The buildings a click at <paramref name="ray"/> chooses from: the level data's, with where the ray meets each one's hull prism (null: it does not).</summary>
+    /// <summary>
+    /// The buildings a click at <paramref name="ray"/> chooses from: the level data's, with where the ray meets each one's hull prism (null: it does
+    /// not).
+    /// </summary>
     List<InspectedBuilding> InspectBuildings((Vector3 Origin, Vector3 Direction) ray, float limit)
     {
         var result = new List<InspectedBuilding>();
@@ -78,7 +101,9 @@ sealed class PickInspector(PlayerInterface player)
         return MathF.Abs(a) / 2;
     }
 
-    /// <summary>The panel, and the hull drawing when it changed.</summary>
+    /// <summary>
+    /// The panel, and the hull drawing when it changed.
+    /// </summary>
     internal void AddInspectorPanel(List<UiControl> controls)
     {
         if (!InspectorOn || player.Ray(player.Mouse) is not { } ray) return;
@@ -142,7 +167,9 @@ sealed class PickInspector(PlayerInterface player)
         if (InspectorDrawing) UpdateInspectorGeometry(buildings, picked, ground);
     }
 
-    /// <summary>Rebuilds the drawn hulls when the picked building, the ones along the ray or the level changed.</summary>
+    /// <summary>
+    /// Rebuilds the drawn hulls when the picked building, the ones along the ray or the level changed.
+    /// </summary>
     void UpdateInspectorGeometry(List<InspectedBuilding> buildings, InspectedBuilding? picked, Vector3? ground)
     {
         string key = (InspectorHull ? "h" : "") + (InspectorShapes ? "s" : "") + (InspectorMesh ? "m" : "") + "|" + (picked?.Key ?? "") + "|" + string.Join(',', buildings.Select(b => b.Key));
@@ -173,7 +200,9 @@ sealed class PickInspector(PlayerInterface player)
         InspectorRevision++;
     }
 
-    /// <summary>The collision triangles of a building as lines (every triangle's three edges), placed as the building is; at most 20000 triangles.</summary>
+    /// <summary>
+    /// The collision triangles of a building as lines (every triangle's three edges), placed as the building is; at most 20000 triangles.
+    /// </summary>
     static void CollisionEdges(List<float> edges, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, InspectedBuilding b, Vector3 origin, Vector4 colour)
     {
         int budget = 20000;
@@ -199,7 +228,9 @@ sealed class PickInspector(PlayerInterface player)
 
     static void Segment(List<float> edges, Vector3 a, Vector3 b, Vector4 colour) { Vertex(edges, a, colour); Vertex(edges, b, colour); }
 
-    /// <summary>A convex polygon's outline at the bottom and the top of its prism, and a post at each corner.</summary>
+    /// <summary>
+    /// A convex polygon's outline at the bottom and the top of its prism, and a post at each corner.
+    /// </summary>
     static void Prism(List<float> edges, Vector2[] hull, float yMin, float yMax, Vector3 origin, Vector4 colour)
     {
         for (int i = 0; i < hull.Length; i++)
@@ -213,7 +244,9 @@ sealed class PickInspector(PlayerInterface player)
         }
     }
 
-    /// <summary>A convex polygon as a flat translucent fan at height <paramref name="y"/>.</summary>
+    /// <summary>
+    /// A convex polygon as a flat translucent fan at height <paramref name="y"/>.
+    /// </summary>
     static void HullFloor(List<float> fill, Vector2[] hull, float y, Vector3 origin, Vector4 colour)
     {
         for (int i = 1; i + 1 < hull.Length; i++)

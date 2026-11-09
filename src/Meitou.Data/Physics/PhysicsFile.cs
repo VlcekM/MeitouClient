@@ -5,20 +5,32 @@ using Meitou.Data.Characters;
 
 namespace Meitou.Data.Physics;
 
-/// <summary>Shape kinds of a Scythe physics file (the shape record's type; docs/formats/phs.md, "Building the PhysX objects").</summary>
+/// <summary>
+/// Shape kinds of a Scythe physics file (the shape record's type; docs/formats/phs.md, "Building the PhysX objects").
+/// </summary>
 public enum PhysicsShapeType
 {
-    /// <summary>Any type the game does not name (3, and 6 in two lantern files): a box of <see cref="PhysicsShape.Size"/> full extents.</summary>
+    /// <summary>
+    /// Any type the game does not name (3, and 6 in two lantern files): a box of <see cref="PhysicsShape.Size"/> full extents.
+    /// </summary>
     Box = 3,
-    /// <summary>A sphere; size.x is the diameter.</summary>
+    /// <summary>
+    /// A sphere; size.x is the diameter.
+    /// </summary>
     Sphere = 4,
-    /// <summary>A capsule along the shape's local Y; size.x is the diameter, size.y the length between the cap centres.</summary>
+    /// <summary>
+    /// A capsule along the shape's local Y; size.x is the diameter, size.y the length between the cap centres.
+    /// </summary>
     Capsule = 5,
-    /// <summary>A cooked PhysX mesh (<see cref="PhysicsShape.CookedFile"/>), convex when <see cref="PhysicsShape.Convex"/>.</summary>
+    /// <summary>
+    /// A cooked PhysX mesh (<see cref="PhysicsShape.CookedFile"/>), convex when <see cref="PhysicsShape.Convex"/>.
+    /// </summary>
     Mesh = 9,
 }
 
-/// <summary>Joint kinds (the joint record's type; 1 to 7 as PhysX 2.8's joint types; others are skipped by the game).</summary>
+/// <summary>
+/// Joint kinds (the joint record's type; 1 to 7 as PhysX 2.8's joint types; others are skipped by the game).
+/// </summary>
 public enum PhysicsJointType { Revolute = 1, Spherical = 2, Cylindrical = 3, Prismatic = 4, Fixed = 5, D6 = 6, PointOnLine = 7 }
 
 /// <summary>
@@ -33,7 +45,9 @@ public sealed class PhysicsFile
 
     public static PhysicsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
-    /// <summary>Reads a whole file; throws <see cref="FormatException"/> when the data is cut short, has bad counts or does not end where the layout does.</summary>
+    /// <summary>
+    /// Reads a whole file; throws <see cref="FormatException"/> when the data is cut short, has bad counts or does not end where the layout does.
+    /// </summary>
     public static PhysicsFile Read(byte[] data)
     {
         var r = new Reader(data);
@@ -145,7 +159,9 @@ public sealed class PhysicsFile
             full ? Spring(b, 0x108) : null, full ? Spring(b, 0x118) : null, full ? Spring(b, 0x128) : null);
     }
 
-    /// <summary>A bounds-checked little-endian cursor over the file.</summary>
+    /// <summary>
+    /// A bounds-checked little-endian cursor over the file.
+    /// </summary>
     ref struct Reader(byte[] data)
     {
         readonly byte[] _data = data;
@@ -189,10 +205,14 @@ public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static
     public List<PhysicsShape> Shapes { get; } = [];
 }
 
-/// <summary>A collision shape in model space: its centre and rotation, and its size as <see cref="PhysicsShapeType"/> reads it.</summary>
+/// <summary>
+/// A collision shape in model space: its centre and rotation, and its size as <see cref="PhysicsShapeType"/> reads it.
+/// </summary>
 public sealed record PhysicsShape(PhysicsShapeType Type, Vector3 Position, Quaternion Rotation, Vector3 Size, float Mass, float Density, float SkinWidth, string CookedFile, bool Convex);
 
-/// <summary>A joint spring: target (degrees for a revolute joint), spring and damper.</summary>
+/// <summary>
+/// A joint spring: target (degrees for a revolute joint), spring and damper.
+/// </summary>
 public readonly record struct PhysicsSpring(float Target, float Spring, float Damper);
 
 /// <summary>

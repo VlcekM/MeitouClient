@@ -6,11 +6,14 @@ using Meitou.Data.Gameplay;
 namespace Meitou.Simulation.Factions;
 
 /// <summary>
-/// The WORLD_EVENT_STATEs answered live, as the original's <c>FUN_1409a7e00</c> (docs/game/factions-squads-towns.md "Unique characters", queries): a state holds when every
-/// <c>NPC is</c> unique has its state (and, with <c>player involvement</c>, one other than alive has the player flag), no <c>NPC is NOT</c> unique has its state (with the player
-/// flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c> faction is or is not the player's ally (relation ≥ 50) / hostile to it (≤ -30) as the entry
-/// says. A unique with no entry is alive and the player not involved, so a new game answers by the data alone. Nothing is saved: the unique table and the relations are.
-/// <para>The population refreshes the unique states it reads every tick (<see cref="Refresh"/>, serial; a look's own changes to the table are taken again at once); a query reads that copy, so the build threads may ask at any time.</para>
+/// The WORLD_EVENT_STATEs answered live, as the original's <c>FUN_1409a7e00</c> (docs/game/factions-squads-towns.md "Unique characters", queries): a
+/// state holds when every
+/// <c>NPC is</c> unique has its state (and, with <c>player involvement</c>, one other than alive has the player flag), no <c>NPC is NOT</c> unique
+/// has its state (with the player flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c> faction is or is not the player's
+/// ally (relation ≥ 50) / hostile to it (≤ -30) as the entry says. A unique with no entry is alive and the player not involved, so a new game answers
+/// by the data alone. Nothing is saved: the unique table and the relations are.
+/// <para>The population refreshes the unique states it reads every tick (<see cref="Refresh"/>, serial; a look's own changes to the table are taken
+/// again at once); a query reads that copy, so the build threads may ask at any time.</para>
 /// </summary>
 public sealed class WorldStates(GameDatabase db, FactionRelations relations) : IWorldStates
 {
@@ -20,7 +23,9 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
 
     sealed record Snapshot(IReadOnlyDictionary<string, (UniqueState State, bool Player)> Uniques, int Player);
 
-    /// <summary>Takes the unique table's states and the player's faction (serial phase); cheap when nothing changed.</summary>
+    /// <summary>
+    /// Takes the unique table's states and the player's faction (serial phase); cheap when nothing changed.
+    /// </summary>
     public void Refresh(UniqueCharacters uniques, int playerFaction)
     {
         if (uniques.Version == _version && _current.Player == playerFaction) return;
@@ -30,7 +35,9 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
         _current = new Snapshot(copy, playerFaction);
     }
 
-    /// <summary>The state's record, read once (null: not a WORLD_EVENT_STATE).</summary>
+    /// <summary>
+    /// The state's record, read once (null: not a WORLD_EVENT_STATE).
+    /// </summary>
     public WorldEventStateData? Find(string id) =>
         _states.GetOrAdd(id, static (key, d) => d.Find(key) is { Type: FcsRecordType.WorldEventState } r ? WorldEventStateData.From(d, r) : null, db);
 

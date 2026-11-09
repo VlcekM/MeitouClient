@@ -4,20 +4,24 @@ using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Ai;
 
-// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes the shops' stock and the squads' purses.
+// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes
+// the shops' stock and the squads' purses.
 public sealed partial class AiSystem
 {
     // Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
     int _shopping;
     TradeSystem? _trade;
 
-    /// <summary>Ticks between two units (Task_Shopping's timer is 1.0 s, FUN_14033a4c0 / FUN_140337d00, Verified).</summary>
+    /// <summary>
+    /// Ticks between two units (Task_Shopping's timer is 1.0 s, FUN_14033a4c0 / FUN_140337d00, Verified).
+    /// </summary>
     static long BuyTicks(World world) => (long)MathF.Ceiling(1 / world.TickSeconds);
 
     /// <summary>
-    /// Task_Shopping's update (<c>FUN_140337d00</c>) for every shopper whose timer ran out, in slot order: it buys one unit (<see cref="BuyOnce"/>) and waits another second; a call that buys
-    /// nothing ends the task (as finished when it had bought, else as impossible: <b>Observed</b>, Meitou ends both alike), so the shopper picks its shop again at its next think. A shopper
-    /// the AI no longer runs, or no longer at its shop, loses its timer.
+    /// Task_Shopping's update (<c>FUN_140337d00</c>) for every shopper whose timer ran out, in slot order: it buys one unit (<see cref="BuyOnce"/>)
+    /// and waits another second; a call that buys nothing ends the task (as finished when it had bought, else as impossible: <b>Observed</b>, Meitou
+    /// ends both alike), so the shopper picks its shop again at its next think. A shopper the AI no longer runs, or no longer at its shop, loses its
+    /// timer.
     /// </summary>
     void BuyForShoppers(World world)
     {
@@ -46,9 +50,9 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// One call of the buying step (<c>FUN_1409a14b0</c>, <b>Verified</b>): the first open entry of the list; each attempt counts a unit of it before the sale, and a sale that fails (cannot pay, no room)
-    /// tries again while the entry has units left; a function no seller has an item of is set aside for the call and the next open entry is taken. True after the first unit bought; false
-    /// when nothing was left to try.
+    /// One call of the buying step (<c>FUN_1409a14b0</c>, <b>Verified</b>): the first open entry of the list; each attempt counts a unit of it before
+    /// the sale, and a sale that fails (cannot pay, no room) tries again while the entry has units left; a function no seller has an item of is set
+    /// aside for the call and the next open entry is taken. True after the first unit bought; false when nothing was left to try.
     /// </summary>
     bool BuyOnce(World world, int slot, AiMind mind, TownBuilding shop)
     {

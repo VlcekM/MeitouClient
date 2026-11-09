@@ -16,6 +16,7 @@ public sealed class App : Application
         KenshiFonts.Register(install);
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.MainWindow = new MainWindow(config, install);
+
         base.OnFrameworkInitializationCompleted();
     }
 }

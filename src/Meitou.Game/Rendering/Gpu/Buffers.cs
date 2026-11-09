@@ -6,21 +6,33 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace Meitou.Game.Rendering.Gpu;
 
-/// <summary>What a buffer is used for (docs/renderer-native.md 2.3).</summary>
+/// <summary>
+/// What a buffer is used for (docs/renderer-native.md 2.3).
+/// </summary>
 [Flags]
 public enum BufferUse
 {
     Vertex = 1, Index = 2, Uniform = 4, Storage = 8, Indirect = 16, TransferSrc = 32, TransferDst = 64,
-    /// <summary>Read by acceleration structure builds and by shaders through its device address (needs <see cref="Core.VulkanDevice.HasRayQuery"/>).</summary>
+
+    /// <summary>
+    /// Read by acceleration structure builds and by shaders through its device address (needs <see cref="Core.VulkanDevice.HasRayQuery"/>).
+    /// </summary>
     RayInput = 128,
-    /// <summary>Static GPU-only storage: Metal may choose private storage; Vulkan ignores this hint.</summary>
+
+    /// <summary>
+    /// Static GPU-only storage: Metal may choose private storage; Vulkan ignores this hint.
+    /// </summary>
     GpuOnly = 256,
 }
 
-/// <summary>A range of a buffer as a draw or a descriptor reads it.</summary>
+/// <summary>
+/// A range of a buffer as a draw or a descriptor reads it.
+/// </summary>
 public readonly record struct GpuBufferBinding(GpuBuffer Buffer, ulong Offset, ulong Size = GpuBufferBinding.WholeSize)
 {
-    /// <summary>The whole of the rest of the buffer (what a draw or a descriptor reads).</summary>
+    /// <summary>
+    /// The whole of the rest of the buffer (what a draw or a descriptor reads).
+    /// </summary>
     public const ulong WholeSize = ulong.MaxValue;
 
     public bool IsNull => Buffer.IsNull;
@@ -46,7 +58,10 @@ public sealed class DeviceBuffer : IDisposable
         this._owned = owned;
         Name = name;
     }
-    /// <summary>A new device-local buffer of <paramref name="size"/> bytes.</summary>
+
+    /// <summary>
+    /// A new device-local buffer of <paramref name="size"/> bytes.
+    /// </summary>
     public static DeviceBuffer Create(IGpuContext ctx, ulong size, BufferUse use, string name) =>
         new(ctx, ctx.CreateBuffer(size, use, name), owned: true, name);
 
@@ -60,20 +75,33 @@ public sealed class DeviceBuffer : IDisposable
         if (use.HasFlag(BufferUse.Indirect)) f |= BufferUsageFlags.IndirectBufferBit;
         if (use.HasFlag(BufferUse.TransferSrc)) f |= BufferUsageFlags.TransferSrcBit;
         if (use.HasFlag(BufferUse.TransferDst)) f |= BufferUsageFlags.TransferDstBit;
-        if (use.HasFlag(BufferUse.RayInput)) f |= BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr;
+        if (use.HasFlag(BufferUse.RayInput))
+        {
+            f |= BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr;
+        }
         return f;
     }
 
-    /// <summary>The handle the renderers hold: the backend's identity and the size.</summary>
+    /// <summary>
+    /// The handle the renderers hold: the backend's identity and the size.
+    /// </summary>
     public GpuBuffer Handle { get; }
-    /// <summary>The name the buffer was made with (diagnostics).</summary>
+
+    /// <summary>
+    /// The name the buffer was made with (diagnostics).
+    /// </summary>
     public string Name { get; }
     public ulong Size => Handle.Size;
-    /// <summary>The last frame that bound it (<see cref="Binding"/>); 0 when never.</summary>
+
+    /// <summary>
+    /// The last frame that bound it (<see cref="Binding"/>); 0 when never.
+    /// </summary>
     public long UsedFrame { get; internal set; }
 
-    /// <summary>A binding of the range from <paramref name="offset"/>, marking the buffer used by <paramref name="frame"/> (the Uploader
-    /// refuses to write it again in that frame).</summary>
+    /// <summary>
+    /// A binding of the range from <paramref name="offset"/>, marking the buffer used by <paramref name="frame"/> (the Uploader refuses to write it
+    /// again in that frame).
+    /// </summary>
     public GpuBufferBinding Binding(IGpuFrame frame, ulong offset = 0, ulong size = GpuBufferBinding.WholeSize)
     {
         UsedFrame = frame.Number;
@@ -107,10 +135,14 @@ public sealed unsafe class ReadbackBuffer : IGpuReadback
     public GpuBuffer Handle => _buffer.Handle;
     public ulong Size => _buffer.Size;
 
-    /// <summary>Whether frame <paramref name="frame"/> (a <see cref="GpuFrame.Number"/>) has completed on the GPU, so what it copied can be read.</summary>
+    /// <summary>
+    /// Whether frame <paramref name="frame"/> (a <see cref="GpuFrame.Number"/>) has completed on the GPU, so what it copied can be read.
+    /// </summary>
     public static bool Completed(GpuContext ctx, long frame) => ctx.Device.Frames.CompletedFrame >= frame;
 
-    /// <summary>The bytes [<paramref name="offset"/>, +<paramref name="size"/>), made visible to the host first (invalidated when not coherent).</summary>
+    /// <summary>
+    /// The bytes [<paramref name="offset"/>, +<paramref name="size"/>), made visible to the host first (invalidated when not coherent).
+    /// </summary>
     public ReadOnlySpan<byte> Read(ulong offset, ulong size)
     {
         if (offset + size > _buffer.Size) throw new ArgumentOutOfRangeException(nameof(size));
@@ -121,7 +153,9 @@ public sealed unsafe class ReadbackBuffer : IGpuReadback
     public void Dispose() => _device.DeferFree(_buffer);
 }
 
-/// <summary>A slice of host-visible per-frame memory, valid until the frame slot comes round again.</summary>
+/// <summary>
+/// A slice of host-visible per-frame memory, valid until the frame slot comes round again.
+/// </summary>
 public readonly unsafe struct Transient(GpuBuffer handle, ulong offset, byte* pointer, ulong size)
 {
     public GpuBuffer Handle { get; } = handle;
@@ -133,9 +167,9 @@ public readonly unsafe struct Transient(GpuBuffer handle, ulong offset, byte* po
 }
 
 /// <summary>
-/// Per-frame host-visible memory: a pointer bump in 8 MB chunks (larger requests get a chunk of their own, freed at the next reset).
-/// Regular chunks live as long as the allocator (unless <see cref="Reset"/> trims them), so descriptor sets made for them stay valid. One per frame slot (and, in wave 4, per
-/// recording thread); <see cref="Reset"/> when the slot comes round. Not thread-safe.
+/// Per-frame host-visible memory: a pointer bump in 8 MB chunks (larger requests get a chunk of their own, freed at the next reset). Regular chunks
+/// live as long as the allocator (unless <see cref="Reset"/> trims them), so descriptor sets made for them stay valid. One per frame slot (and, in
+/// wave 4, per recording thread); <see cref="Reset"/> when the slot comes round. Not thread-safe.
 /// </summary>
 public sealed unsafe class LinearAllocator : IDisposable
 {
@@ -154,7 +188,9 @@ public sealed unsafe class LinearAllocator : IDisposable
         this._name = name;
     }
 
-    /// <summary>Bytes handed out since the last reset.</summary>
+    /// <summary>
+    /// Bytes handed out since the last reset.
+    /// </summary>
     public ulong Used { get; private set; }
 
     /// <summary>
@@ -200,7 +236,8 @@ public sealed unsafe class LinearAllocator : IDisposable
     }
 
     // A request larger than a regular chunk gets one of its own, kept apart until the reset: in the regular list it moved the bump cursor past the
-    // regular chunks after the current one, and the next small request then added a regular chunk the reset keeps (one more per frame while such requests come).
+    // regular chunks after the current one, and the next small request then added a regular chunk the reset keeps (one more per frame while such
+    // requests come).
     readonly List<BufferAllocation> _large = [];
 
     BufferAllocation NewChunk(ulong size, List<BufferAllocation> into)
@@ -212,7 +249,9 @@ public sealed unsafe class LinearAllocator : IDisposable
         return chunk;
     }
 
-    /// <summary>Copies <paramref name="data"/> into a fresh slice aligned to 16 bytes (or <paramref name="alignment"/>).</summary>
+    /// <summary>
+    /// Copies <paramref name="data"/> into a fresh slice aligned to 16 bytes (or <paramref name="alignment"/>).
+    /// </summary>
     public Transient Write<T>(ReadOnlySpan<T> data, ulong alignment = 16) where T : unmanaged
     {
         ulong bytes = (ulong)(data.Length * sizeof(T));
@@ -237,7 +276,9 @@ public sealed unsafe class LinearAllocator : IDisposable
     }
 }
 
-/// <summary>A range of a <see cref="BufferArena"/>.</summary>
+/// <summary>
+/// A range of a <see cref="BufferArena"/>.
+/// </summary>
 public readonly record struct ArenaRange(ulong Offset, ulong Size)
 {
     public bool IsEmpty => Size == 0;
@@ -261,10 +302,15 @@ public sealed class BufferArena : IDisposable
     }
 
     public DeviceBuffer Buffer { get; }
-    /// <summary>Bytes not handed out (freed ranges count once their frames have finished).</summary>
+
+    /// <summary>
+    /// Bytes not handed out (freed ranges count once their frames have finished).
+    /// </summary>
     public ulong FreeBytes { get { lock (_gate) return _free.Aggregate(0ul, (s, r) => s + r.Size); } }
 
-    /// <summary>A range of <paramref name="size"/> bytes at a multiple of <paramref name="alignment"/>; empty when the arena is full.</summary>
+    /// <summary>
+    /// A range of <paramref name="size"/> bytes at a multiple of <paramref name="alignment"/>; empty when the arena is full.
+    /// </summary>
     public ArenaRange Allocate(ulong size, ulong alignment)
     {
         if (size == 0) return default;
@@ -284,7 +330,9 @@ public sealed class BufferArena : IDisposable
         return default;
     }
 
-    /// <summary>Returns <paramref name="range"/> once every frame in flight has finished with it.</summary>
+    /// <summary>
+    /// Returns <paramref name="range"/> once every frame in flight has finished with it.
+    /// </summary>
     public void Free(ArenaRange range)
     {
         if (range.IsEmpty) return;

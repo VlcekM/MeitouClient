@@ -5,14 +5,16 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Items;
 
-/// <summary>Read a map item (inventory right click, docs/game/ui-screens.md "Map"): adds its towns to the player's map.</summary>
+/// <summary>
+/// Read a map item (inventory right click, docs/game/ui-screens.md "Map"): adds its towns to the player's map.
+/// </summary>
 public sealed record ReadMapItem(CharacterId Character, InventoryItemToken Item) : SimCommand;
 
 /// <summary>
-/// The towns a MAP_ITEM reveals (docs/game/ui-screens.md "Map"). Per <c>towns</c> link: the placed towns of that record, without nests and ones already discovered;
-/// v0 of them at random when v0 is above 0 and below their number. Then <c>unlock count</c> weighted draws by v1 without repeats, or all of them when it is 0 or not
-/// less than the candidates. The original seeds the draws from the item; Meitou from the world seed and the item record (engine choice), so the tooltip's list is what a
-/// read reveals.
+/// The towns a MAP_ITEM reveals (docs/game/ui-screens.md "Map"). Per <c>towns</c> link: the placed towns of that record, without nests and ones
+/// already discovered; v0 of them at random when v0 is above 0 and below their number. Then <c>unlock count</c> weighted draws by v1 without repeats,
+/// or all of them when it is 0 or not less than the candidates. The original seeds the draws from the item; Meitou from the world seed and the item
+/// record (engine choice), so the tooltip's list is what a read reveals.
 /// </summary>
 public static class MapItems
 {
@@ -24,7 +26,8 @@ public static class MapItems
         var pool = new List<(int Site, float Weight)>();
         foreach (var link in map.GetReferences("towns"))
         {
-            var candidates = data.Sites.Where(s => s.Town.Id == link.TargetStringId && s.Town.Type is not (TownType.Nest or TownType.NestMarker or TownType.Null)
+            var candidates = data.Sites.Where(s => s.Town.Id == link.TargetStringId
+                    && s.Town.Type is not (TownType.Nest or TownType.NestMarker or TownType.Null)
                 && (s.Index >= known.Count || (known[s.Index] & TownKnowledge.Discovered) == 0)).Select(s => s.Index).ToList();
             int count = link.Values.Value0;
             while (count > 0 && count < candidates.Count) candidates.RemoveAt(Rng.Int(Next(), candidates.Count));

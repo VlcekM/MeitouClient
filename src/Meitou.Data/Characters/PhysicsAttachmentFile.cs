@@ -12,7 +12,9 @@ public sealed class PhysicsAttachmentFile
 {
     public float Version { get; private init; }
     public List<PhysicsActor> Actors { get; } = [];
-    /// <summary>Attachment points stored outside any actor (version 1.4+), e.g. the preview skeleton mesh.</summary>
+    /// <summary>
+    /// Attachment points stored outside any actor (version 1.4+), e.g. the preview skeleton mesh.
+    /// </summary>
     public List<PhysicsAttachmentPoint> LoosePoints { get; } = [];
 
     public static PhysicsAttachmentFile ReadFile(string path)
@@ -49,7 +51,8 @@ public sealed class PhysicsAttachmentFile
     static PhysicsActor ReadActor(BinaryReader r, float v)
     {
         int shapes = r.ReadInt32(), points = r.ReadInt32(), extras = r.ReadInt32();
-        if (shapes < 0 || points < 0 || extras < 0 || points > 10_000 || extras > 10_000) throw new FormatException("Bad actor counts.");
+        if (shapes < 0 || points < 0 || extras < 0 || points > 10_000 || extras > 10_000)
+            throw new FormatException("Bad actor counts.");
         r.ReadInt32();
         var position = ReadVector(r);
         r.ReadBytes(4 + 4 + 1 + 4 + 4 + 4 + 32 + 4 + 8 + 12 + 36); // physical properties, not needed here
@@ -72,7 +75,8 @@ public sealed class PhysicsAttachmentFile
             boneRotation = FromColumns(ReadVector(r), ReadVector(r), ReadVector(r));
             r.ReadByte();
         }
-        if (shapes > 0) throw new NotSupportedException($"Actor '{name}' has {shapes} collision shapes (record size unknown).");
+        if (shapes > 0)
+            throw new NotSupportedException($"Actor '{name}' has {shapes} collision shapes (record size unknown).");
         var actor = new PhysicsActor(name, position, bone is { Length: > 0 } ? bone : null, bonePosition, boneRotation);
         for (int i = 0; i < points; i++) actor.Points.Add(ReadPoint(r));
         Skip(r, extras, 0x7c);
@@ -113,7 +117,9 @@ public sealed class PhysicsAttachmentFile
 
     static Vector3 ReadVector(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
 
-    /// <summary>Rotation whose matrix has the three vectors as columns (column-vector convention, as Ogre's Matrix3).</summary>
+    /// <summary>
+    /// Rotation whose matrix has the three vectors as columns (column-vector convention, as Ogre's Matrix3).
+    /// </summary>
     public static Quaternion FromColumns(Vector3 x, Vector3 y, Vector3 z)
     {
         // System.Numerics uses row vectors: the rotation matrix there is the transpose, i.e. rows = the columns above.
@@ -122,7 +128,9 @@ public sealed class PhysicsAttachmentFile
     }
 }
 
-/// <summary>An actor of a physics file; for attachment files the name is the attachment slot ("hip", "back").</summary>
+/// <summary>
+/// An actor of a physics file; for attachment files the name is the attachment slot ("hip", "back").
+/// </summary>
 public sealed record PhysicsActor(string Name, Vector3 Position, string? Bone, Vector3 BonePosition, Quaternion BoneRotation)
 {
     public List<PhysicsAttachmentPoint> Points { get; } = [];
@@ -138,5 +146,7 @@ public sealed record PhysicsActor(string Name, Vector3 Position, string? Bone, V
     }
 }
 
-/// <summary>A point in model space (binding pose), with the mesh the editor previews there.</summary>
+/// <summary>
+/// A point in model space (binding pose), with the mesh the editor previews there.
+/// </summary>
 public sealed record PhysicsAttachmentPoint(Vector3 Position, Quaternion Rotation, string Mesh, Vector3 Scale);

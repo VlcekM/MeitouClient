@@ -13,13 +13,21 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class MeitouShadowFit
 {
-    /// <summary>Weight of the logarithmic split against the uniform one.</summary>
+    /// <summary>
+    /// Weight of the logarithmic split against the uniform one.
+    /// </summary>
     public const float Lambda = 0.8f;
-    /// <summary>Share of each slice over which the next cascade is blended in (the next cascade's fit includes it).</summary>
+    /// <summary>
+    /// Share of each slice over which the next cascade is blended in (the next cascade's fit includes it).
+    /// </summary>
     public const float BlendBand = 0.15f;
-    /// <summary>Near planes are rounded down to powers of this, so the splits change only in steps.</summary>
+    /// <summary>
+    /// Near planes are rounded down to powers of this, so the splits change only in steps.
+    /// </summary>
     public const float NearStep = 1.25f;
-    /// <summary>The Meitou shadows' number of cascades by default (the game's CSM has <see cref="KenshiShadows.CascadeCount"/>).</summary>
+    /// <summary>
+    /// The Meitou shadows' number of cascades by default (the game's CSM has <see cref="KenshiShadows.CascadeCount"/>).
+    /// </summary>
     public const int DefaultCascades = 5;
 
     /// <summary>
@@ -34,14 +42,20 @@ public static class MeitouShadowFit
     /// feet under a low sun, 10 to 100 texels of the first cascade). The receiver's normal offset (a texel or two) keeps the acne off.
     /// </summary>
     public const float FixedTexels = 1, Slope = 2, MaxTexels = 4;
-    /// <summary>The box's depth reaches this many sphere radii towards the sun beyond the sphere (casters there keep their depth).</summary>
+    /// <summary>
+    /// The box's depth reaches this many sphere radii towards the sun beyond the sphere (casters there keep their depth).
+    /// </summary>
     public const float SunwardReach = 2;
 
-    /// <summary>The near plane rounded down to a power of <see cref="NearStep"/> (at least 1).</summary>
+    /// <summary>
+    /// The near plane rounded down to a power of <see cref="NearStep"/> (at least 1).
+    /// </summary>
     public static float QuantizedNear(float near) =>
         near <= 1 ? 1 : MathF.Pow(NearStep, MathF.Floor(MathF.Log(near) / MathF.Log(NearStep)));
 
-    /// <summary>The practical split scheme between <paramref name="near"/> and <paramref name="far"/> (no halving).</summary>
+    /// <summary>
+    /// The practical split scheme between <paramref name="near"/> and <paramref name="far"/> (no halving).
+    /// </summary>
     public static float[] Splits(float near, float far, int count)
     {
         var s = new float[count + 1];
@@ -55,7 +69,9 @@ public static class MeitouShadowFit
         return s;
     }
 
-    /// <summary>The first split is at most this many times the camera's focus distance (<see cref="ShadowView.Focus"/>).</summary>
+    /// <summary>
+    /// The first split is at most this many times the camera's focus distance (<see cref="ShadowView.Focus"/>).
+    /// </summary>
     public const float FocusSplit = 2;
 
     /// <summary>
@@ -75,7 +91,9 @@ public static class MeitouShadowFit
         return [near, .. rest];
     }
 
-    /// <summary>The cascades the split scheme is made for; more are fitted by <see cref="Subdivided"/>.</summary>
+    /// <summary>
+    /// The cascades the split scheme is made for; more are fitted by <see cref="Subdivided"/>.
+    /// </summary>
     public const int BaseCascades = 4;
 
     /// <summary>
@@ -98,7 +116,9 @@ public static class MeitouShadowFit
         return s;
     }
 
-    /// <summary>The view depths cascade <paramref name="i"/> covers: its slice, started earlier by the previous slice's blend band.</summary>
+    /// <summary>
+    /// The view depths cascade <paramref name="i"/> covers: its slice, started earlier by the previous slice's blend band.
+    /// </summary>
     public static (float Near, float Far) Slice(float[] splits, int i) =>
         (i == 0 ? splits[0] : splits[i] - BlendBand * (splits[i] - splits[i - 1]), splits[i + 1]);
 
@@ -115,7 +135,9 @@ public static class MeitouShadowFit
         return (c, r);
     }
 
-    /// <summary>The light-space centre of the slice's sphere for this view (rotation from <see cref="ShadowCascades.LightRotation"/>).</summary>
+    /// <summary>
+    /// The light-space centre of the slice's sphere for this view (rotation from <see cref="ShadowCascades.LightRotation"/>).
+    /// </summary>
     public static (double X, double Y, double Z) LightCentre(ShadowView view, Matrix4x4 rotation, double along)
     {
         var f = Vector3.Normalize(view.Forward);

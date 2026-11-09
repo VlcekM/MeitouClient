@@ -51,11 +51,14 @@ static class WorldSurvey
                 else if (file.ToBytes().AsSpan().SequenceEqual(bytes)) roundTripped++;
                 else { notRoundTripped++; Console.WriteLine($"  does not round-trip: {path}"); }
                 var e = byDir.GetValueOrDefault(dir);
-                var formats = e.Formats is null ? $"{file.Format}" : e.Formats.Split(',').Contains($"{file.Format}") ? e.Formats : $"{e.Formats},{file.Format}";
-                byDir[dir] = (e.Files + 1, e.Records + file.Data.Records.Count, e.Instances + file.Data.Records.Sum(r => r.Instances.Count), e.Trailers + (file.Trailer is null ? 0 : 1), formats);
+                var formats = e.Formats is null
+                        ? $"{file.Format}" : e.Formats.Split(',').Contains($"{file.Format}") ? e.Formats : $"{e.Formats},{file.Format}";
+                byDir[dir] = (e.Files + 1, e.Records + file.Data.Records.Count, e.Instances + file.Data.Records.Sum(r => r.Instances.Count),
+                        e.Trailers + (file.Trailer is null ? 0 : 1), formats);
                 foreach (var r in file.Data.Records)
                 {
-                    var key = Enum.IsDefined((FcsRecordType)r.Type) ? ((FcsRecordType)r.Type).ToString() : r.Type.ToString(CultureInfo.InvariantCulture);
+                    var key = Enum.IsDefined((FcsRecordType)r.Type) ? ((FcsRecordType)r.Type).ToString()
+                            : r.Type.ToString(CultureInfo.InvariantCulture);
                     types[key] = types.GetValueOrDefault(key) + 1;
                 }
             }
@@ -107,10 +110,22 @@ static class WorldSurvey
         int matched = 0, mismatched = 0, noState = 0, noZones = 0;
         foreach (var t in towns)
         {
-            if (!townZones.TryGetValue(t.InstanceId, out var list)) { noState++; continue; }
-            if (list.Count == 0) { noZones++; continue; }
+            if (!townZones.TryGetValue(t.InstanceId, out var list))
+            {
+                noState++;
+                continue;
+            }
+            if (list.Count == 0)
+            {
+                noZones++;
+                continue;
+            }
             var zone = WorldLayout.ZoneOf(t.Position.X, t.Position.Z);
-            if (list.Contains(zone)) { matched++; continue; }
+            if (list.Contains(zone))
+            {
+                matched++;
+                continue;
+            }
             if (mismatched++ < 5)
                 Console.WriteLine($"    town {t.InstanceId} ({t.TownId}) at {Fmt(t.Position)} is in zone {zone}, its state lists {string.Join(" ", list)}" +
                     $" (nearest {list.Min(z => Math.Max(Math.Abs(z.X - zone.X), Math.Abs(z.Y - zone.Y)))} zones away)");
@@ -159,7 +174,8 @@ static class WorldSurvey
         var plainDiff = placed.Select(b => (double)b.WorldY!.Value - map.HeightAt(b.Position.X, b.Position.Z)).ToList();
         Console.WriteLine($"  building 'world Y pos' - (terrain + instance Y): {Stats(offsetDiff)}");
         Console.WriteLine($"  building 'world Y pos' - terrain:                {Stats(plainDiff)}");
-        var roadDiff = world.Roads().SelectMany(r => r.Points).Where(p => Math.Abs(p.X) < WorldLayout.HalfWorldSize && Math.Abs(p.Z) < WorldLayout.HalfWorldSize)
+        var roadDiff = world.Roads().SelectMany(r => r.Points).Where(p => Math.Abs(p.X) < WorldLayout.HalfWorldSize
+                && Math.Abs(p.Z) < WorldLayout.HalfWorldSize)
             .Select(p => (double)p.Y - map.HeightAt(p.X, p.Z)).ToList();
         Console.WriteLine($"  road point Y - terrain:                          {Stats(roadDiff)}");
         var townDiff = world.Towns().Select(t => (double)t.Position.Y - map.HeightAt(t.Position.X, t.Position.Z)).ToList();
@@ -191,7 +207,11 @@ static class WorldSurvey
     static int SurveyLegacyTiles(GameInstall install)
     {
         var dir = Path.Combine(install.DataDirectory, "land", "grasssplits");
-        if (!Directory.Exists(dir)) { Console.WriteLine("Legacy height tiles: none"); return 0; }
+        if (!Directory.Exists(dir))
+        {
+            Console.WriteLine("Legacy height tiles: none");
+            return 0;
+        }
         var tiles = new Dictionary<(int X, int Y), RawHeightTile>();
         foreach (var path in Directory.EnumerateFiles(dir, "*.raw"))
             if (RawHeightTile.TryParseFileName(path, out int x, out int y))
@@ -220,7 +240,8 @@ static class WorldSurvey
     static void SurveyOtherFiles(GameInstall install)
     {
         Console.WriteLine("Other world files (header only):");
-        foreach (var rel in new[] { "newland/land/blendinfo.dat", "newland/land/features.dat", "newland/land/fogfeatures.dat", "globalPathing.path", "newland/land/areasmap.tga", "newland/land/biomemap.png", "newland/land/blendmap.png" })
+        foreach (var rel in new[] { "newland/land/blendinfo.dat", "newland/land/features.dat", "newland/land/fogfeatures.dat", "globalPathing.path",
+                "newland/land/areasmap.tga", "newland/land/biomemap.png", "newland/land/blendmap.png" })
         {
             var path = Path.Combine(install.DataDirectory, rel);
             if (!File.Exists(path)) continue;
@@ -250,8 +271,10 @@ static class WorldSurvey
             {
                 int i = y * size + x;
                 float h = WorldLayout.RawToHeight(heights[i]);
-                float hx = WorldLayout.RawToHeight(heights[y * size + Math.Min(x + 1, size - 1)]) - WorldLayout.RawToHeight(heights[y * size + Math.Max(x - 1, 0)]);
-                float hy = WorldLayout.RawToHeight(heights[Math.Min(y + 1, size - 1) * size + x]) - WorldLayout.RawToHeight(heights[Math.Max(y - 1, 0) * size + x]);
+                float hx = WorldLayout.RawToHeight(heights[y * size + Math.Min(x + 1, size - 1)])
+                        - WorldLayout.RawToHeight(heights[y * size + Math.Max(x - 1, 0)]);
+                float hy = WorldLayout.RawToHeight(heights[Math.Min(y + 1, size - 1) * size + x])
+                        - WorldLayout.RawToHeight(heights[Math.Max(y - 1, 0) * size + x]);
                 // Light from the north-west.
                 var normal = Vector3.Normalize(new Vector3(-hx, (float)(2 * metersPerPixel), -hy));
                 float shade = Math.Clamp(Vector3.Dot(normal, Vector3.Normalize(new Vector3(-1, 1.2f, -1))), 0.15f, 1f);
@@ -263,7 +286,8 @@ static class WorldSurvey
 
         var world = WorldLevelData.Load(install);
         double scale = (size - 1) / (double)WorldLayout.WorldSize;
-        (int X, int Y) Px(double wx, double wz) => ((int)Math.Round((wx + WorldLayout.HalfWorldSize) * scale), (int)Math.Round((wz + WorldLayout.HalfWorldSize) * scale));
+        (int X, int Y) Px(double wx, double wz) => ((int)Math.Round((wx + WorldLayout.HalfWorldSize) * scale),
+                (int)Math.Round((wz + WorldLayout.HalfWorldSize) * scale));
         void Put(int x, int y, (byte R, byte G, byte B) c, float alpha = 1)
         {
             if (x < 0 || y < 0 || x >= size || y >= size) return;
@@ -284,7 +308,8 @@ static class WorldSurvey
         {
             var (ox, oz) = WorldLayout.ZoneOrigin(zone);
             var (x0, y0) = Px(ox, oz);
-            for (int t = 0; t <= zonePx; t++) { Put(x0 + t, y0, (255, 230, 0), 0.6f); Put(x0, y0 + t, (255, 230, 0), 0.6f); Put(x0 + t, y0 + zonePx, (255, 230, 0), 0.6f); Put(x0 + zonePx, y0 + t, (255, 230, 0), 0.6f); }
+            for (int t = 0; t <= zonePx; t++) { Put(x0 + t, y0, (255, 230, 0), 0.6f); Put(x0, y0 + t, (255, 230, 0), 0.6f); Put(x0 + t, y0 + zonePx,
+                    (255, 230, 0), 0.6f); Put(x0 + zonePx, y0 + t, (255, 230, 0), 0.6f); }
         }
         foreach (var road in world.Roads())
             for (int p = 1; p < road.Points.Count; p++)
@@ -331,7 +356,9 @@ static class WorldSurvey
     }
 }
 
-/// <summary>Minimal 8-bit RGB PNG writer (zlib via System.IO.Compression), for survey images only.</summary>
+/// <summary>
+/// Minimal 8-bit RGB PNG writer (zlib via System.IO.Compression), for survey images only.
+/// </summary>
 static class WorldPng
 {
     static readonly uint[] CrcTable = Enumerable.Range(0, 256).Select(n =>
@@ -377,6 +404,9 @@ static class WorldPng
 
     static void BigEndian(byte[] b, int o, uint v)
     {
-        b[o] = (byte)(v >> 24); b[o + 1] = (byte)(v >> 16); b[o + 2] = (byte)(v >> 8); b[o + 3] = (byte)v;
+        b[o] = (byte)(v >> 24);
+        b[o + 1] = (byte)(v >> 16);
+        b[o + 2] = (byte)(v >> 8);
+        b[o + 3] = (byte)v;
     }
 }

@@ -3,20 +3,24 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The Meitou <c>stars</c> switch's night sky (docs/formats/sky.md "Meitou night sky"): the turn about the sun's axis, the star model's numbers, the air.</summary>
+/// <summary>
+/// The Meitou <c>stars</c> switch's night sky (docs/formats/sky.md "Meitou night sky"): the turn about the sun's axis, the star model's numbers, the
+/// air.
+/// </summary>
 public class MeitouNightSkyTests
 {
     static readonly SkyClock Game = new(54, 5, 23);   // the game's latitude, sunrise and sunset
 
-    static float DegreesBetween(Vector3 a, Vector3 b) => MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)) * 180 / MathF.PI;
+    static float DegreesBetween(Vector3 a,
+            Vector3 b) => MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)) * 180 / MathF.PI;
 
     // ---- rotation ----
 
     [Fact]
     public void Stars_rise_in_the_east_and_set_in_the_west_like_the_sun()
     {
-        // A star on the celestial equator at the equinox point: at the phase offset's start it is where the sun rises (+x, east), a quarter day on it is up
-        // and south (+z), then it sets towards −x.
+        // A star on the celestial equator at the equinox point: at the phase offset's start it is where the sun rises (+x, east), a quarter day on it
+        // is up and south (+z), then it sets towards −x.
         var c = Vector3.UnitX;
         double offset = CelestialSphere.PhaseOffset;
         float hourOfOffset = (float)(-offset / (2 * Math.PI) * 24);          // the hour at which the turn is 0
@@ -60,7 +64,8 @@ public class MeitouNightSkyTests
         // The bright layer: stars within 25° of a face's centre against within 25° of a cube corner. A cell shrinks to a fifth of its
         // solid angle towards the corner, so without the chance's solid-angle weight the corner would hold about three times as many.
         var stars = AllStars().Where(s => s.Layer == 0).Select(s => Vector3.Normalize(StarField.FaceDirection(s.Face, s.Star.FaceUv))).ToList();
-        int centre = stars.Count(d => DegreesBetween(d, new Vector3(0.3f, 0.2f, 1)) < 25), corner = stars.Count(d => DegreesBetween(d, new Vector3(1, 1, 1)) < 25);
+        int centre = stars.Count(d => DegreesBetween(d, new Vector3(0.3f, 0.2f, 1)) < 25), corner = stars.Count(d => DegreesBetween(d,
+                new Vector3(1, 1, 1)) < 25);
         Assert.InRange(centre / (double)corner, 0.65, 1.55);
     }
 

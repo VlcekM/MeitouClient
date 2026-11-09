@@ -3,8 +3,9 @@ using System.Text;
 namespace Meitou.Modding;
 
 /// <summary>
-/// A mod's sidecar file in a save (<c>meitou-mods/&lt;id&gt;.dat</c>, docs/formats/save.md "Mod data"): the magic <c>MTMD</c>, the format version (int32 1), the entry count
-/// (int32), then per entry the system name (a 7-bit length-prefixed UTF-8 string, as <see cref="BinaryWriter"/> writes it), the data length (int32) and the data. Little-endian.
+/// A mod's sidecar file in a save (<c>meitou-mods/&lt;id&gt;.dat</c>, docs/formats/save.md "Mod data"): the magic <c>MTMD</c>, the format version
+/// (int32 1), the entry count (int32), then per entry the system name (a 7-bit length-prefixed UTF-8 string, as <see cref="BinaryWriter"/> writes
+/// it), the data length (int32) and the data. Little-endian.
 /// </summary>
 static class ModSaveFile
 {
@@ -29,7 +30,9 @@ static class ModSaveFile
         return stream.ToArray();
     }
 
-    /// <summary>The entries by system name; throws <see cref="InvalidDataException"/> for a file that is not one.</summary>
+    /// <summary>
+    /// The entries by system name; throws <see cref="InvalidDataException"/> for a file that is not one.
+    /// </summary>
     public static Dictionary<string, byte[]> Read(byte[] file)
     {
         using var r = new BinaryReader(new MemoryStream(file), Encoding.UTF8);

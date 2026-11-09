@@ -6,13 +6,17 @@ using Meitou.Game.Rendering.Post;
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
-/// How the editor's stage and the squad portraits are finished (docs/character-renderer.md "Meitou stage and portraits"). Faithful (<see cref="Enhanced"/> false): drawn
-/// straight into their 8-bit pictures as the original's. Enhanced: drawn unclamped into a half-float picture <see cref="Supersample"/> times larger each way, then
-/// tone mapped, graded, averaged down and dithered as the world's composite (<see cref="PostProcessShaders.Composite"/>) finishes the world.
+/// How the editor's stage and the squad portraits are finished (docs/character-renderer.md "Meitou stage and portraits"). Faithful
+/// (<see cref="Enhanced"/> false): drawn straight into their 8-bit pictures as the original's. Enhanced: drawn unclamped into a half-float picture
+/// <see cref="Supersample"/> times larger each way, then tone mapped, graded, averaged down and dithered as the world's composite
+/// (<see cref="PostProcessShaders.Composite"/>) finishes the world.
 /// </summary>
 public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMapOperator Tone, float ToneMix, bool Grade, bool Dither)
 {
-    /// <summary>The look of the world's options: enhanced when its tone map, grade or anti-aliasing is Meitou's, supersampled twice with Meitou's anti-aliasing.</summary>
+    /// <summary>
+    /// The look of the world's options: enhanced when its tone map, grade or anti-aliasing is Meitou's, supersampled twice with Meitou's
+    /// anti-aliasing.
+    /// </summary>
     public static PreviewLook Of(PostOptions o)
     {
         bool aa = o.Upscale.Kind != UpscalerKind.Off;
@@ -21,7 +25,9 @@ public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMa
     }
 }
 
-/// <summary>The enhanced preview's resolve: a supersampled half-float picture into a region of an 8-bit one, per <see cref="PreviewLook"/>.</summary>
+/// <summary>
+/// The enhanced preview's resolve: a supersampled half-float picture into a region of an 8-bit one, per <see cref="PreviewLook"/>.
+/// </summary>
 internal sealed class PreviewResolve : IDisposable
 {
     const string Fragment = """
@@ -89,24 +95,33 @@ internal sealed class PreviewResolve : IDisposable
         this._gpu = gpu;
         _program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "character preview resolve");
         _source = _program.Sampler("uSource");
-        (_rect, _scale, _tone, _toneMix) = (_program.Uniform("uRect"), _program.Uniform("uScale"), _program.Uniform("uTone"), _program.Uniform("uToneMix"));
-        (_grade, _saturation, _contrast, _dither) = (_program.Uniform("uGrade"), _program.Uniform("uSaturation"), _program.Uniform("uContrast"), _program.Uniform("uDither"));
+        (_rect, _scale, _tone, _toneMix) = (_program.Uniform("uRect"), _program.Uniform("uScale"), _program.Uniform("uTone"),
+            _program.Uniform("uToneMix"));
+        (_grade, _saturation, _contrast, _dither) = (_program.Uniform("uGrade"), _program.Uniform("uSaturation"), _program.Uniform("uContrast"),
+            _program.Uniform("uDither"));
     }
 
-    /// <summary>A half-float colour target and its depth for <paramref name="width"/> × <paramref name="height"/> destination pixels at <paramref name="look"/>'s supersampling.</summary>
-    public static (GpuTexture Colour, GpuTexture Depth, SampledTexture Sampled) Targets(IGpuContext gpu, int width, int height, PreviewLook look, string name)
+    /// <summary>
+    /// A half-float colour target and its depth for <paramref name="width"/> × <paramref name="height"/> destination pixels at
+    /// <paramref name="look"/>'s supersampling.
+    /// </summary>
+    public static (GpuTexture Colour, GpuTexture Depth, SampledTexture Sampled) Targets(IGpuContext gpu, int width, int height, PreviewLook look,
+        string name)
     {
         int s = Math.Max(look.Supersample, 1);
-        var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width * s, height * s, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
-        var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget, Name: name + " depth"));
+        var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width * s, height * s,
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
+        var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget,
+            Name: name + " depth"));
         var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
         return (colour, depth, sampled);
     }
 
     /// <summary>
-    /// Resolves <paramref name="from"/> into the <paramref name="regions"/> of <paramref name="into"/> (each its destination pixels; the source holds each from its corner,
-    /// <see cref="PreviewLook.Supersample"/> times larger), outside any pass; the rest of <paramref name="into"/> keeps what it holds.
+    /// Resolves <paramref name="from"/> into the <paramref name="regions"/> of <paramref name="into"/> (each its destination pixels; the source holds
+    /// each from its corner, <see cref="PreviewLook.Supersample"/> times larger), outside any pass; the rest of <paramref name="into"/> keeps what it
+    /// holds.
     /// </summary>
     public void Run(SampledTexture from, GpuTexture into, PreviewLook look, ReadOnlySpan<PixelRect> regions)
     {
@@ -114,7 +129,8 @@ internal sealed class PreviewResolve : IDisposable
         var targets = PassTargets.Of(into, null);
         var state = DrawState.For(targets.Formats, false);
         if (!_pipelines.TryGetValue(into.Desc.Format, out var pipeline))
-            _pipelines[into.Desc.Format] = pipeline = _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, targets.Formats, _program.Name));
+            _pipelines[into.Desc.Format] = pipeline = _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]),
+                    PrimitiveType.Triangles, targets.Formats, _program.Name));
         var cmd = _gpu.BeginNative("character preview resolve");
         cmd.Order();   // the source was just drawn
         cmd.BeginRendering(new RenderingDesc(targets.Colour, default, targets.Width, targets.Height));

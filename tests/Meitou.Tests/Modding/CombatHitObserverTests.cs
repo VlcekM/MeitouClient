@@ -19,6 +19,7 @@ public class CombatHitObserverTests
     {
         public readonly List<CombatHit> Hits = [];
         public readonly List<int> Threads = [];
+
         public void HitResolved(SimWorld world, in CombatHit hit)
         {
             Hits.Add(hit);
@@ -131,6 +132,7 @@ public class CombatHitObserverTests
         float toughness = victimCold.Stats![StatsEnumerated.Toughness] * victimCold.Medical.StatMultiplier(StatsEnumerated.Toughness);
         var expected = HitResolver.Resolve(packet, armour, toughness, body.GlobalDamageMultiplier, Constants);
         var stopped = HitResolver.Absorbed(packet, armour);
+
         if (replaceShooter)
         {
             world.Characters.Remove(shooter);
@@ -138,6 +140,7 @@ public class CombatHitObserverTests
             Assert.Equal(shooter.Slot, replacement.Slot);
             Assert.NotEqual(shooter.Generation, replacement.Generation);
         }
+
         int caller = Environment.CurrentManagedThreadId;
 
         RunUntil(world, () => observer.Hits.Count > 0);
@@ -175,10 +178,12 @@ public class CombatHitObserverTests
             using var world = DuelFixture.NewWorld(17, threads, out var combat);
             var observer = new Recorder();
             if (observe) world.AddSystem(observer);
+
             DuelFixture.Pair(world, new Combatant { Armour = [BodyPlate, Helmet] }, new Combatant());
             world.RunTicks(600);
             return (world.StateHash(), combat.Log.ToArray(), observer.Hits.ToArray());
         }
+
         var plain = Run(1, false);
         var one = Run(1, true);
         Assert.Equal(plain.Hash, one.Hash);
@@ -187,6 +192,7 @@ public class CombatHitObserverTests
         Assert.Contains(one.Log, entry => entry.Outcome != BlowOutcome.Hit);
         Assert.Equal(one.Log.Count(entry => entry.Outcome == BlowOutcome.Hit), one.Hits.Length);
         Assert.Equal(one.Hits.Length, one.Hits.Select(hit => (hit.Tick, hit.Source, hit.Attacker, hit.Victim, hit.Sequence, hit.Blow)).Distinct().Count());
+
         foreach (int threads in new[] { 4, 16 })
         {
             var parallel = Run(threads, true);
@@ -202,6 +208,7 @@ public class CombatHitObserverTests
     static void RunUntil(SimWorld world, Func<bool> condition)
     {
         for (int ticks = 0; ticks < 900 && !condition(); ticks++) world.RunTick();
+
         Assert.True(condition(), "The fixture must reach a real combat delivery.");
     }
 }

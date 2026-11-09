@@ -5,7 +5,9 @@ using Meitou.Localisation;
 
 namespace Meitou.Launcher;
 
-/// <summary>A line of the Mods page.</summary>
+/// <summary>
+/// A line of the Mods page.
+/// </summary>
 public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null) : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -18,7 +20,9 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     /// </summary>
     public CodeModEntry Code { get; } = code ?? new CodeModEntry(mod.Name, null, enabled);
 
-    /// <summary>The code manifest (docs/modding-dependencies.md); null for a data mod or one that cannot be read.</summary>
+    /// <summary>
+    /// The code manifest (docs/modding-dependencies.md); null for a data mod or one that cannot be read.
+    /// </summary>
     public CodeModManifest? Manifest => Code.Manifest;
 
     /// <summary>
@@ -55,10 +59,19 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public bool Enabled
     {
         get;
-        set { if (field != value) { field = value; Changed(); } }
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                Changed();
+            }
+        }
     } = enabled;
 
-    /// <summary>The launcher's language changed: the translated texts are read again.</summary>
+    /// <summary>
+    /// The launcher's language changed: the translated texts are read again.
+    /// </summary>
     public void LanguageChanged()
     {
         Changed(nameof(Detail));
@@ -68,7 +81,9 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-/// <summary>A line of the Versions page.</summary>
+/// <summary>
+/// A line of the Versions page.
+/// </summary>
 public sealed class ReleaseRow(Release release, bool installed, bool played)
 {
     public Release Release { get; } = release;
@@ -80,7 +95,9 @@ public sealed class ReleaseRow(Release release, bool installed, bool played)
         Release.Prerelease ? LauncherText.Translate("nightly") : null,
         Release.Asset is null ? Loc.Format(LauncherText.Translate("no {1} build"), Releases.Rid) : null,
     }.OfType<string>());
-    /// <summary>The version Play starts.</summary>
+    /// <summary>
+    /// The version Play starts.
+    /// </summary>
     public bool Played { get; } = played;
     public string State => Played ? LauncherText.Translate("Installed · Play") : Installed ? LauncherText.Translate("Installed") : "";
 }

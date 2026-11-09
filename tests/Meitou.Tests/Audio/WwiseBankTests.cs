@@ -4,7 +4,9 @@ using Meitou.Data.Audio;
 
 namespace Meitou.Tests.Audio;
 
-/// <summary>The Wwise bank reader on a hand-built bank and the name hash (docs/formats/wwise-bnk.md).</summary>
+/// <summary>
+/// The Wwise bank reader on a hand-built bank and the name hash (docs/formats/wwise-bnk.md).
+/// </summary>
 public class WwiseBankTests
 {
     [Theory]
@@ -43,9 +45,16 @@ public class WwiseBankTests
                 .. HircObject(WwiseObjectType.Action, 0x20, play), .. HircObject(WwiseObjectType.Sound, 0x30, s),
                 .. HircObject(WwiseObjectType.ActorMixer, 0x40, mixer)];
             byte[] stid = [.. U32(1), .. U32(1), .. U32(0xB0), 4, .. "Test"u8];
-            return [.. Section("BKHD", [.. U32(112), .. U32(0xB0), .. U32(0), .. U32(0)]), .. Section("DIDX", [.. U32(0x77), .. U32(0), .. U32((uint)wem.Length)]),
-                .. Section("DATA", wem), .. Section("HIRC", hirc), .. Section("STID", stid)];
+            return
+            [
+                .. Section("BKHD", [.. U32(112), .. U32(0xB0), .. U32(0), .. U32(0)]),
+                .. Section("DIDX", [.. U32(0x77), .. U32(0), .. U32((uint)wem.Length)]),
+                .. Section("DATA", wem),
+                .. Section("HIRC", hirc),
+                .. Section("STID", stid),
+            ];
         }
+
         // The sound stores the WEM's offset in the file: BKHD (8 + 16) + DIDX (8 + 12) + the DATA header (8).
         var bank = WwiseBank.Read(Build(24 + 20 + 8));
 

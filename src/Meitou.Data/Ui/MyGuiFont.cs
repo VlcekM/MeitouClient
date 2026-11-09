@@ -3,18 +3,26 @@ using System.Xml.Linq;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>The FreeType hinting modes of a <c>ResourceTrueTypeFont</c> (<c>Hinting</c> property; any other value is <see cref="UseNative"/>).</summary>
+/// <summary>
+/// The FreeType hinting modes of a <c>ResourceTrueTypeFont</c> (<c>Hinting</c> property; any other value is <see cref="UseNative"/>).
+/// </summary>
 public enum MyGuiHinting { UseNative, ForceAuto, DisableAuto, DisableAll }
 
-/// <summary>Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.</summary>
+/// <summary>
+/// Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.
+/// </summary>
 public sealed class MyGuiCodeRanges
 {
     readonly (int First, int Last)[] _ranges;
 
-    /// <summary>The Basic Multilingual Plane: the set of a font whose <c>Codes</c> list no <c>range</c>.</summary>
+    /// <summary>
+    /// The Basic Multilingual Plane: the set of a font whose <c>Codes</c> list no <c>range</c>.
+    /// </summary>
     public static MyGuiCodeRanges Bmp { get; } = new([(0, 0xFFFF)], []);
 
-    /// <summary><paramref name="include"/> merged, then every <paramref name="hide"/> range removed (MyGUI applies exclusions last).</summary>
+    /// <summary>
+    /// <paramref name="include"/> merged, then every <paramref name="hide"/> range removed (MyGUI applies exclusions last).
+    /// </summary>
     public MyGuiCodeRanges(IEnumerable<(int First, int Last)> include, IEnumerable<(int First, int Last)> hide)
     {
         var merged = new List<(int First, int Last)>();
@@ -37,10 +45,14 @@ public sealed class MyGuiCodeRanges
         _ranges = [.. merged];
     }
 
-    /// <summary>The merged ranges, ascending.</summary>
+    /// <summary>
+    /// The merged ranges, ascending.
+    /// </summary>
     public IReadOnlyList<(int First, int Last)> Ranges => _ranges;
 
-    /// <summary>How many code points the set holds.</summary>
+    /// <summary>
+    /// How many code points the set holds.
+    /// </summary>
     public long Count => _ranges.Sum(r => (long)r.Last - r.First + 1);
 
     public bool Contains(int codePoint)
@@ -56,7 +68,9 @@ public sealed class MyGuiCodeRanges
         return false;
     }
 
-    /// <summary>Every code point of the set, ascending.</summary>
+    /// <summary>
+    /// Every code point of the set, ascending.
+    /// </summary>
     public IEnumerable<int> CodePoints()
     {
         foreach (var (first, last) in _ranges)
@@ -79,10 +93,14 @@ public sealed class MyGuiCodeRanges
 public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resolution, bool Antialias, MyGuiHinting Hinting, float TabWidth,
     int OffsetHeight, int SubstituteCode, int Distance, MyGuiCodeRanges Codes)
 {
-    /// <summary>MyGUI's default resolution when the property is absent.</summary>
+    /// <summary>
+    /// MyGUI's default resolution when the property is absent.
+    /// </summary>
     public const float DefaultResolution = 96;
 
-    /// <summary>The font <paramref name="resource"/> describes; null when it is not a <c>ResourceTrueTypeFont</c> or names no source.</summary>
+    /// <summary>
+    /// The font <paramref name="resource"/> describes; null when it is not a <c>ResourceTrueTypeFont</c> or names no source.
+    /// </summary>
     public static MyGuiTrueTypeFont? Read(XElement resource)
     {
         if ((string?)resource.Attribute("type") != "ResourceTrueTypeFont") return null;
@@ -109,7 +127,9 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
             Number("TabWidth", 0), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
     }
 
-    /// <summary>"first" or "first last" (decimal code points).</summary>
+    /// <summary>
+    /// "first" or "first last" (decimal code points).
+    /// </summary>
     static (int First, int Last)? Range(string? value)
     {
         if (value is null) return null;

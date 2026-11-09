@@ -2,7 +2,9 @@ using Meitou.Content;
 
 namespace Meitou.Data.Physics;
 
-/// <summary>Finds the collision (and other asset) files that records name by install-relative paths.</summary>
+/// <summary>
+/// Finds the collision (and other asset) files that records name by install-relative paths.
+/// </summary>
 public static class CollisionPaths
 {
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> ModCache = new();

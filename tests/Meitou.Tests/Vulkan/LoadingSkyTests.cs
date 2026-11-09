@@ -52,7 +52,8 @@ public class LoadingSkyTests
             Assert.Equal(0, worldCallbacks);
             Assert.NotNull(gpu.Post.ObjectMotion);
             var pixels = context.ReadBack(target, 4);
-            Assert.True(pixels.Where((_, i) => i % 4 != 3).Distinct().Count() > 8, "The sky should contain visible variation, rather than a blank frame.");
+            Assert.True(pixels.Where((_, i) => i % 4 != 3).Distinct().Count() > 8,
+                    "The sky should contain visible variation, rather than a blank frame.");
         }
         Assert.True(device!.ValidationErrors == 0, string.Join("\n", device.ValidationLog));
     }

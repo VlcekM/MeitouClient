@@ -26,7 +26,8 @@ public class BedSelectionTests
     public void Clicking_an_interior_bed_selects_its_own_condition_rental_and_healing_panel()
     {
         const UiMode mode = UiMode.Meitou;
-        var install = GameInstall.Locate(); Assert.SkipWhen(install is null, "Kenshi install not found");
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "Kenshi install not found");
         var (original, house) = HousePurchaseTests.Setup();
         var bedRecord = new FcsRecord { StringId = "camp-bed", Name = "Camp Bed", RecordType = FcsRecordType.Building, Flags = 0x10 };
         bedRecord.Ints["build materials"] = 1;
@@ -36,8 +37,11 @@ public class BedSelectionTests
         var function = new FcsRecord { StringId = "bed-function", RecordType = FcsRecordType.BuildingFunctionality, Flags = 0x10 };
         function.Ints["function"] = TownBuildings.BedFunction;
         var residents = new FcsRecord { StringId = "residents", RecordType = FcsRecordType.SquadTemplate, Flags = 0x10 };
-        residents.Bools["public beds"] = true; residents.Ints["bed usage cost"] = 100;
-        var file = new FcsFile(); file.Records.AddRange([bedRecord, function, residents]); original.Db.Apply(file, "test.mod");
+        residents.Bools["public beds"] = true;
+        residents.Ints["bed usage cost"] = 100;
+        var file = new FcsFile();
+        file.Records.AddRange([bedRecord, function, residents]);
+        original.Db.Apply(file, "test.mod");
         house = house with { Name = "Bar", Spots = [new(HomeSpotKind.Bed, new(100, 0, 100), 0) { Record = "camp-bed" }] };
         var data = PopulationData.Create(original.Db, [new TownPlacement("town-instance", "town", house.Position, null)],
             buildings: new Dictionary<string, List<TownBuilding>> { ["town-instance"] = [house] });
@@ -71,7 +75,8 @@ public class BedSelectionTests
             world.RunTick();
             Assert.Null(world.Snapshot.InspectedBuilding!.Bed);
             var point = new Vector2(800, 450);
-            ui.MouseDown(MouseButton.Left, point, false); ui.MouseUp(MouseButton.Left, point, false);
+            ui.MouseDown(MouseButton.Left, point, false);
+            ui.MouseUp(MouseButton.Left, point, false);
             world.RunTick();
             Assert.Equal(bed.Id, world.Player.InspectedBuilding);
             Assert.Empty(world.Snapshot.InspectedBuilding!.Doors);
@@ -84,7 +89,8 @@ public class BedSelectionTests
             Assert.Contains(lines.Stats, l => l.Label == "Healing bonus:" && l.Value == "x4");
             Assert.DoesNotContain(lines.Stats, l => l.Label is "Open/Close:" or "Security:" or "Open to public:");
             var condition = Assert.Single(ui.BuildingSelection.BuildingRows(focus));
-            Assert.Equal("Condition", condition.Name); Assert.Equal("1", condition.Value);
+            Assert.Equal("Condition", condition.Name);
+            Assert.Equal("1", condition.Value);
             Assert.Equal(1, condition.Yellow);
             // Changing access rules must update the selected panel rather than caching the original price.
             data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 100);

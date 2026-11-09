@@ -5,20 +5,31 @@ using System.Text.Json.Serialization;
 
 namespace Meitou.Game.Rendering.Bench;
 
-/// <summary>One side of a run: its metrics (<c>gpu:terrain</c>, <c>cpu:total</c>, <c>post:ssao</c>, <c>frame</c>...) in ms, and the main view's counts per frame.</summary>
+/// <summary>
+/// One side of a run: its metrics (<c>gpu:terrain</c>, <c>cpu:total</c>, <c>post:ssao</c>, <c>frame</c>...) in ms, and the main view's counts per
+/// frame.
+/// </summary>
 public sealed class BenchConfig
 {
     public string Label { get; set; } = "";
     public int Frames { get; set; }
     public Dictionary<string, MetricStats> Metrics { get; set; } = [];
     public Dictionary<string, double> Counts { get; set; } = [];
-    /// <summary>With <c>--bench-tris</c>: what the pipeline statistics queries counted per pass of a frame (mean per frame; key: the stage, or stage/part), in the order the frame runs them.</summary>
+    /// <summary>
+    /// With <c>--bench-tris</c>: what the pipeline statistics queries counted per pass of a frame (mean per frame; key: the stage, or stage/part), in
+    /// the order the frame runs them.
+    /// </summary>
     public Dictionary<string, PassStat> Passes { get; set; } = [];
-    /// <summary>With <c>--bench-tris</c>: the main view's triangles per frame by screen area, per category (<see cref="TriangleBins.Categories"/>).</summary>
+    /// <summary>
+    /// With <c>--bench-tris</c>: the main view's triangles per frame by screen area, per category (<see cref="TriangleBins.Categories"/>).
+    /// </summary>
     public Dictionary<string, SizeHistogram> Sizes { get; set; } = [];
 }
 
-/// <summary>Differing pixels between the A and the B still (<c>--ab</c>): counts of pixels whose largest channel difference reaches each threshold (1, 4, 12 of 255).</summary>
+/// <summary>
+/// Differing pixels between the A and the B still (<c>--ab</c>): counts of pixels whose largest channel difference reaches each threshold (1, 4, 12
+/// of 255).
+/// </summary>
 public sealed class PictureDiffResult
 {
     public int Width { get; set; }
@@ -36,7 +47,9 @@ public sealed class PictureDiffResult
 public sealed class BenchResult
 {
     public Dictionary<string, string> Meta { get; set; } = [];
-    /// <summary>"single" or "ab".</summary>
+    /// <summary>
+    /// "single" or "ab".
+    /// </summary>
     public string Mode { get; set; } = "single";
     public string? Ab { get; set; }
     public int Period { get; set; } = 1;
@@ -45,7 +58,8 @@ public sealed class BenchResult
     public Dictionary<string, DeltaStats> Deltas { get; set; } = [];
     public PictureDiffResult? Picture { get; set; }
 
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never, NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
+    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
 
     public void Save(string path)
     {
@@ -69,7 +83,9 @@ public sealed class BenchResult
 
     static string Short(string key, string prefix) => prefix == "frame" ? key : key[prefix.Length..];
 
-    /// <summary>The run's tables: per stage mean / median / p95 / p99 / max for each side, and A minus B with its 95% interval (<c>*</c>: excludes zero).</summary>
+    /// <summary>
+    /// The run's tables: per stage mean / median / p95 / p99 / max for each side, and A minus B with its 95% interval (<c>*</c>: excludes zero).
+    /// </summary>
     public void Print(TextWriter w)
     {
         w.WriteLine($"bench     {string.Join(", ", new[] { "view", "commit", "gpu", "resolution", "upscaler", "motion" }.Where(Meta.ContainsKey).Select(k => $"{k} {Meta[k]}"))}");
@@ -117,14 +133,18 @@ public sealed class BenchResult
         }
     }
 
-    static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e4 ? (v / 1e3).ToString("0.0", CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
+    static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e4 ? (v / 1e3).ToString("0.0",
+        CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
 
-    /// <summary>The tables of <c>--bench-tris</c> for one side: triangles and fragments per pass, and the main view's triangles by screen area per category.</summary>
+    /// <summary>
+    /// The tables of <c>--bench-tris</c> for one side: triangles and fragments per pass, and the main view's triangles by screen area per category.
+    /// </summary>
     void PrintTriangles(TextWriter w, string side, BenchConfig c)
     {
         if (c.Passes.Count > 0)
         {
-            double pixels = Meta.TryGetValue("renderPixels", out var px) && double.TryParse(px, NumberStyles.Float, CultureInfo.InvariantCulture, out var pv) ? pv : 0;
+            double pixels = Meta.TryGetValue("renderPixels", out var px) && double.TryParse(px, NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var pv) ? pv : 0;
             w.WriteLine();
             w.WriteLine($"triangles per pass, side {side} (pipeline statistics queries, mean per frame over {Meta.GetValueOrDefault("passFrames", "?")} serial frames; a part of a stage is indented under it; 'fs/tri' = fragment invocations per primitive out of the clipper, 'fs/px' = per render pixel)");
             w.WriteLine($"{"pass",-30}{"prims",9}{"vs inv",9}{"clip in",9}{"clip out",9}{"fs inv",9}{"fs/tri",8}{"fs/px",7}");
@@ -163,12 +183,15 @@ public sealed class BenchResult
         var line = new StringBuilder(string.Format(CultureInfo.InvariantCulture, "{0,-16}", "fps"));
         foreach (var s in sides)
             if (Configs[s].Metrics.TryGetValue("frame", out var m) && m.Mean > 0 && m.Median > 0 && m.P99 > 0)
-                line.Append(string.Format(CultureInfo.InvariantCulture, "| {0} {1,6:0.0}{2,7:0.0}{3,7}{4,7:0.0}{5,8} ", s, 1000 / m.Mean, 1000 / m.Median, "", 1000 / m.P99, ""));
+                line.Append(string.Format(CultureInfo.InvariantCulture, "| {0} {1,6:0.0}{2,7:0.0}{3,7}{4,7:0.0}{5,8} ", s, 1000 / m.Mean,
+                        1000 / m.Median, "", 1000 / m.P99, ""));
         w.WriteLine(line.ToString().TrimEnd() + "   (1000 / mean, of the median frame, of the p99 frame)");
         if (Meta.TryGetValue("frameMode", out var mode)) w.WriteLine("frame mode: " + mode);
     }
 
-    /// <summary><c>--bench-compare a.json b.json</c>: the first side of each file next to each other, B - A with an unpaired 95% interval from the spreads.</summary>
+    /// <summary>
+    /// <c>--bench-compare a.json b.json</c>: the first side of each file next to each other, B - A with an unpaired 95% interval from the spreads.
+    /// </summary>
     public static void Compare(string fileA, string fileB, TextWriter w)
     {
         var a = Load(fileA);

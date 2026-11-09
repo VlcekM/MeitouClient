@@ -6,17 +6,22 @@ namespace Meitou.Simulation.Population;
 
 public sealed partial class PopulationSystem
 {
-    /// <summary>The AI package an imprisoned member's own squad runs (<c>FUN_14079c1c0</c>, <b>Verified</b>): "captured NPC".</summary>
+    /// <summary>
+    /// The AI package an imprisoned member's own squad runs (<c>FUN_14079c1c0</c>, <b>Verified</b>): "captured NPC".
+    /// </summary>
     const string CapturedPackage = "CAPTURED_NPC";
 
-    /// <summary>The AI package that squad runs when the member is a slave (slave state 1): "Slave only squad".</summary>
+    /// <summary>
+    /// The AI package that squad runs when the member is a slave (slave state 1): "Slave only squad".
+    /// </summary>
     const string SlaveOnlyPackage = "5344-gamedata.base";
 
     /// <summary>
-    /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a platoon with 2 or more members): each imprisoned member goes into a squad and platoon of its own, same faction
-    /// and template, at its place, loaded (it then keeps or loses its zone by its own test), with the captured NPC package (the slave-only one for a slave); persistent when the
-    /// old platoon is or the member is unique. A persistent platoon left with just that member keeps it (reused). The original's skip of a chained slave whose owner exists and its
-    /// carried clause (partly <b>Unknown</b>) are not modelled. Serial.
+    /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a platoon with 2 or more members): each imprisoned member goes into a squad and
+    /// platoon of its own, same faction and template, at its place, loaded (it then keeps or loses its zone by its own test), with the captured NPC
+    /// package (the slave-only one for a slave); persistent when the old platoon is or the member is unique. A persistent platoon left with just that
+    /// member keeps it (reused). The original's skip of a chained slave whose owner exists and its carried clause (partly <b>Unknown</b>) are not
+    /// modelled. Serial.
     /// </summary>
     void SplitPrisoners(World world, Platoon p, Squad squad)
     {
@@ -25,6 +30,7 @@ public sealed partial class PopulationSystem
         {
             if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsImprisoned: true } cold) continue;
             if (squad.Members.Count == 1 && PersistentPlatoon(p)) break;
+
             var at = table.Previous[slot].Position;
             var np = new Platoon
             {
@@ -56,6 +62,7 @@ public sealed partial class PopulationSystem
             };
             squad.Members.Remove(id);
             if (squad.Leader == id) squad.Leader = SquadRegistry.Successor(squad.Members, table);
+
             cold.SquadId = made.Id;
             cold.Role = (int)SquadRole.Leader;
             cold.Ai = null;
@@ -70,7 +77,11 @@ public sealed partial class PopulationSystem
 
     bool PersistentPlatoon(Platoon p) => !p.PersistentCleared && (p.Persistent || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
 
-    /// <summary>The id of the AI_PACKAGE the original looks up by name (<c>FUN_1406bfe60</c>); null when the data has none.</summary>
+    /// <summary>
+    /// The id of the AI_PACKAGE the original looks up by name (<c>FUN_1406bfe60</c>); null when the data has none.
+    /// </summary>
     string? PackageNamed(string name) =>
-        _data.Db.Find(name) is { Type: FcsRecordType.AiPackage } r ? r.StringId : _data.Db.OfType(FcsRecordType.AiPackage).FirstOrDefault(x => x.Name == name)?.StringId;
+        _data.Db.Find(name) is { Type: FcsRecordType.AiPackage } r
+            ? r.StringId
+            : _data.Db.OfType(FcsRecordType.AiPackage).FirstOrDefault(x => x.Name == name)?.StringId;
 }

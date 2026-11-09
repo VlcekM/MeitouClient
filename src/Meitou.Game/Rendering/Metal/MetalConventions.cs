@@ -11,7 +11,9 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public static class MetalConventions
 {
-    /// <summary>The Metal pixel format of an engine one (GL's 24-bit depth is a 32-bit float, as Vulkan's).</summary>
+    /// <summary>
+    /// The Metal pixel format of an engine one (GL's 24-bit depth is a 32-bit float, as Vulkan's).
+    /// </summary>
     public static MTLPixelFormat Pixel(InternalFormat f) => f switch
     {
         InternalFormat.Rgba8 => MTLPixelFormat.RGBA8Unorm,
@@ -46,15 +48,20 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal pixel format for {f}"),
     };
 
-    /// <summary>The engine's sRGB rule: the sRGB format is its linear twin's, as GlConventions names Vulkan's.</summary>
+    /// <summary>
+    /// The engine's sRGB rule: the sRGB format is its linear twin's, as GlConventions names Vulkan's.
+    /// </summary>
     public static bool IsDepthFormat(InternalFormat f) =>
         f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F or InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8;
 
-    /// <summary>The bytes a texel (or a texture block) takes, as the uploads' row strides need.</summary>
+    /// <summary>
+    /// The bytes a texel (or a texture block) takes, as the uploads' row strides need.
+    /// </summary>
     public static int TexelBytes(InternalFormat f) => f switch
     {
         InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext => 8,  // a 4x4 block
-        InternalFormat.CompressedRgbaS3TcDxt3Ext or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRgbaBptcUnorm => 16,  // a 4x4 block
+        // a 4x4 block
+        InternalFormat.CompressedRgbaS3TcDxt3Ext or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRgbaBptcUnorm => 16,
         InternalFormat.Rgba16F => 8,
         InternalFormat.Rgba32F => 16,
         InternalFormat.R8 => 1,
@@ -74,7 +81,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no texel size for {f}"),
     };
 
-    /// <summary>4 for the block formats (BC1's 4x4), else 1.</summary>
+    /// <summary>
+    /// 4 for the block formats (BC1's 4x4), else 1.
+    /// </summary>
     public static int BlockWidth(InternalFormat f) =>
         f is InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt3Ext
             or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRedRgtc1 or InternalFormat.CompressedRgRgtc2 or InternalFormat.CompressedRgbaBptcUnorm ? 4 : 1;
@@ -157,7 +166,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal index type for {k}"),
     };
 
-    /// <summary>The bytes of one index of <paramref name="type"/>.</summary>
+    /// <summary>
+    /// The bytes of one index of <paramref name="type"/>.
+    /// </summary>
     public static ulong IndexBytes(MTLIndexType type) => type == MTLIndexType.UInt32 ? 4ul : 2ul;
 
     public static MTLCullMode Cull(CullMode c) => c switch
@@ -168,11 +179,15 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"Metal has no front-and-back cull"),
     };
 
-    /// <summary>The winding passes through: Metal's NDC points up as GL's does (no flip, unlike Vulkan's).</summary>
+    /// <summary>
+    /// The winding passes through: Metal's NDC points up as GL's does (no flip, unlike Vulkan's).
+    /// </summary>
     public static MTLWinding Winding(FrontFaceDirection f) =>
         f == FrontFaceDirection.Cw ? MTLWinding.Clockwise : MTLWinding.CounterClockwise;
 
-    /// <summary>The vertex format of an attribute input (Metal's own vertex format table).</summary>
+    /// <summary>
+    /// The vertex format of an attribute input (Metal's own vertex format table).
+    /// </summary>
     public static MTLVertexFormat VertexFormat(InternalFormat f) => f switch
     {
         InternalFormat.R8 => MTLVertexFormat.UCharNormalized,

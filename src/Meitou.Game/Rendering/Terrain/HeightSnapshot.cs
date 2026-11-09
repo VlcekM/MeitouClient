@@ -14,7 +14,9 @@ internal readonly struct HeightSnapshot
     readonly HeightWindow _fine;
     readonly float _fineBand, _fx0, _fz0, _fx1, _fz1;
 
-    /// <summary>The fine window it was taken with: the same one means the same heights (they are never written after they are published).</summary>
+    /// <summary>
+    /// The fine window it was taken with: the same one means the same heights (they are never written after they are published).
+    /// </summary>
     public HeightWindow Fine => _fine;
 
     public HeightSnapshot(ushort[] coarse, int coarseSize, HeightWindow fine, float fineBand)
@@ -30,7 +32,9 @@ internal readonly struct HeightSnapshot
         _fz1 = _fz0 + (fine.Rows - 1) * fine.Spacing;
     }
 
-    /// <summary>Height at a world point (bilinear in the coarse grid, blended into the fine window across its edge band).</summary>
+    /// <summary>
+    /// Height at a world point (bilinear in the coarse grid, blended into the fine window across its edge band).
+    /// </summary>
     public float HeightAt(float x, float z)
     {
         float h = WorldLayout.HalfWorldSize;
@@ -46,12 +50,16 @@ internal readonly struct HeightSnapshot
         int i = Math.Clamp((int)fx, 0, Math.Max(cols - 2, 0)), j = Math.Clamp((int)fz, 0, Math.Max(rows - 2, 0));
         int i1 = Math.Min(i + 1, cols - 1), j1 = Math.Min(j + 1, rows - 1);
         float tx = fx - i, tz = fz - j;
-        float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz + raw[j1 * cols + i1] * tx * tz;
+        float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz +
+            raw[j1 * cols + i1] * tx * tz;
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 }
 
-/// <summary>A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>, <see cref="HeightAt"/> reads it.</summary>
+/// <summary>
+/// A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>,
+/// <see cref="HeightAt"/> reads it.
+/// </summary>
 public sealed class TerrainHeights
 {
     HeightSnapshot _snapshot;

@@ -1,14 +1,16 @@
 namespace Meitou.Data.Fcs;
 
 /// <summary>
-/// The record schema from <c>fcs.def</c>: which fields each record type has, their defaults and descriptions.
-/// Format: docs/formats/fcs-mod.md, section "Schema".
+/// The record schema from <c>fcs.def</c>: which fields each record type has, their defaults and descriptions. Format: docs/formats/fcs-mod.md,
+/// section "Schema".
 /// </summary>
 public sealed class FcsSchema
 {
     readonly Dictionary<string, List<FcsFieldDef>> _fieldsByType = new(StringComparer.Ordinal);
 
-    /// <summary>Record type names in order of first appearance.</summary>
+    /// <summary>
+    /// Record type names in order of first appearance.
+    /// </summary>
     public IEnumerable<string> TypeNames => _fieldsByType.Keys;
 
     readonly Dictionary<string, HashSet<string>> _ownedByType = new(StringComparer.Ordinal);
@@ -16,13 +18,15 @@ public sealed class FcsSchema
     public IReadOnlyList<FcsFieldDef> FieldsOf(string typeName) =>
         _fieldsByType.TryGetValue(typeName, out var fields) ? fields : [];
 
-    /// <summary>True if <paramref name="referenceList"/> of <paramref name="typeName"/> holds child records owned by the record.</summary>
+    /// <summary>
+    /// True if <paramref name="referenceList"/> of <paramref name="typeName"/> holds child records owned by the record.
+    /// </summary>
     public bool IsOwned(string typeName, string referenceList) =>
         _ownedByType.TryGetValue(typeName, out var owned) && owned.Contains(referenceList);
 
     /// <summary>
-    /// Finds the field a stored key belongs to. Looped fields are declared once with a trailing number
-    /// (<c>text0</c>) and stored as <c>text0</c>, <c>text1</c>, ...
+    /// Finds the field a stored key belongs to. Looped fields are declared once with a trailing number (<c>text0</c>) and stored as <c>text0</c>,
+    /// <c>text1</c>, ...
     /// </summary>
     public FcsFieldDef? FindField(string typeName, string key)
     {
@@ -155,8 +159,17 @@ public sealed class FcsSchema
         var sb = new System.Text.StringBuilder();
         for (i++; i < s.Length; i++)
         {
-            if (s[i] == '\\' && i + 1 < s.Length) { sb.Append(s[i]).Append(s[++i]); continue; }
-            if (s[i] == '"') { i++; SkipSpace(s, ref i); return sb.ToString(); }
+            if (s[i] == '\\' && i + 1 < s.Length)
+            {
+                sb.Append(s[i]).Append(s[++i]);
+                continue;
+            }
+            if (s[i] == '"')
+            {
+                i++;
+                SkipSpace(s, ref i);
+                return sb.ToString();
+            }
             sb.Append(s[i]);
         }
         throw new FormatException($"fcs.def line {lineNumber}: unterminated string.");
@@ -168,17 +181,23 @@ public sealed class FcsSchema
     }
 }
 
-/// <summary>One field of a record type in <c>fcs.def</c>.</summary>
+/// <summary>
+/// One field of a record type in <c>fcs.def</c>.
+/// </summary>
 /// <param name="Default">Default value as written (unquoted for strings; the type name for references).</param>
 /// <param name="ReferenceType">Target record type for <see cref="FcsFieldKind.Reference"/> / <see cref="FcsFieldKind.Instance"/>.</param>
 /// <param name="Groups">Parenthesised defaults, e.g. <c>"0, 24,0"</c> for reference values.</param>
 public sealed record FcsFieldDef(
     string Name, FcsFieldKind Kind, string Default, string? ReferenceType, IReadOnlyList<string> Groups, string Description)
 {
-    /// <summary>Words after the value; only <c>looped</c> is known.</summary>
+    /// <summary>
+    /// Words after the value; only <c>looped</c> is known.
+    /// </summary>
     public IReadOnlyList<string> Modifiers { get; init; } = [];
 
-    /// <summary>A numbered series: declared as <c>name0</c>, stored as <c>name0</c>, <c>name1</c>, ...</summary>
+    /// <summary>
+    /// A numbered series: declared as <c>name0</c>, stored as <c>name0</c>, <c>name1</c>, ...
+    /// </summary>
     public bool IsLooped => Modifiers.Contains("looped");
 }
 
@@ -189,16 +208,28 @@ public enum FcsFieldKind
     Int,
     Float,
     String,
-    /// <summary>A file path; the default is an editor file filter like <c>"Ogre mesh|*.mesh"</c>.</summary>
+    /// <summary>
+    /// A file path; the default is an editor file filter like <c>"Ogre mesh|*.mesh"</c>.
+    /// </summary>
     Filename,
-    /// <summary><c>Enum.VALUE</c>, an enum from fcs_enums.def.</summary>
+    /// <summary>
+    /// <c>Enum.VALUE</c>, an enum from fcs_enums.def.
+    /// </summary>
     Enum,
-    /// <summary><c>#RRGGBB</c>.</summary>
+    /// <summary>
+    /// <c>#RRGGBB</c>.
+    /// </summary>
     Colour,
-    /// <summary><c>TEXTURE_ANY</c> / <c>TEXTURE_DDS</c>.</summary>
+    /// <summary>
+    /// <c>TEXTURE_ANY</c> / <c>TEXTURE_DDS</c>.
+    /// </summary>
     Texture,
-    /// <summary>A reference list to records of <see cref="FcsFieldDef.ReferenceType"/>.</summary>
+    /// <summary>
+    /// A reference list to records of <see cref="FcsFieldDef.ReferenceType"/>.
+    /// </summary>
     Reference,
-    /// <summary>Placed instances (<c>TYPE (pos) (rot)</c>).</summary>
+    /// <summary>
+    /// Placed instances (<c>TYPE (pos) (rot)</c>).
+    /// </summary>
     Instance,
 }

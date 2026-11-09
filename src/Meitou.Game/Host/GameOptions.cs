@@ -4,97 +4,190 @@ using Meitou.Game.Scenarios;
 
 namespace Meitou.Game.Host;
 
-/// <summary>Game-only options; everything else is the world options shared with the viewer (<see cref="WorldOptions"/>).</summary>
+/// <summary>
+/// Game-only options; everything else is the world options shared with the viewer (<see cref="WorldOptions"/>).
+/// </summary>
 sealed class GameOptions
 {
     public bool TitlePreview;
     public int? FpsLimit;
     public ulong Seed;
-    /// <summary><c>--seed</c> was given: a new game from the menu keeps it instead of rolling a fresh one.</summary>
+    /// <summary>
+    /// <c>--seed</c> was given: a new game from the menu keeps it instead of rolling a fresh one.
+    /// </summary>
     public bool SeedGiven;
     public bool? VSync;
     public Meitou.Data.Ui.UiMode? UiMode;
-    /// <summary><c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.</summary>
+    /// <summary>
+    /// <c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.
+    /// </summary>
     public bool LowEnd;
-    /// <summary><c>--benchmark-baseline</c> (also passed on to WorldOptions): the benchmarks' settings for this run, the saved graphics neither applied nor overwritten.</summary>
+    /// <summary>
+    /// <c>--benchmark-baseline</c> (also passed on to WorldOptions): the benchmarks' settings for this run, the saved graphics neither applied nor
+    /// overwritten.
+    /// </summary>
     public bool BenchmarkBaseline;
-    /// <summary><c>--mods-cfg</c>: read the enabled mods from this file instead of <c>data/mods.cfg</c> (also <c>MEITOU_MODS_CFG</c>; the option wins).</summary>
+    /// <summary>
+    /// <c>--mods-cfg</c>: read the enabled mods from this file instead of <c>data/mods.cfg</c> (also <c>MEITOU_MODS_CFG</c>; the option wins).
+    /// </summary>
     public string? ModsCfg;
     public bool UiShowcase;
-    /// <summary>With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).</summary>
+    /// <summary>
+    /// With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).
+    /// </summary>
     public string? UiPanel;
-    /// <summary>With <c>--screenshot</c>: the settings menu's Graphics page in a set of states (docs/native-ui.md "Settings"), one picture each.</summary>
+    /// <summary>
+    /// With <c>--screenshot</c>: the settings menu's Graphics page in a set of states (docs/native-ui.md "Settings"), one picture each.
+    /// </summary>
     public bool SettingsShowcase;
-    /// <summary>With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.</summary>
+    /// <summary>
+    /// With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.
+    /// </summary>
     public int Ticks;
     public bool NoPopulation, NewGame, ListStarts, DataCheck;
-    /// <summary><c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).</summary>
+    /// <summary>
+    /// <c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).
+    /// </summary>
     public string? WikiExport;
 
-    /// <summary><c>--facts-only</c> with <c>--wiki-export</c>: leave out every description text taken from the game data.</summary>
+    /// <summary>
+    /// <c>--facts-only</c> with <c>--wiki-export</c>: leave out every description text taken from the game data.
+    /// </summary>
     public bool WikiFactsOnly;
-    /// <summary>The animation sandbox (<c>--sandbox [n]</c>): 0 off, else the number of characters (1 or 2) on a flat wireframe floor.</summary>
+    /// <summary>
+    /// The animation sandbox (<c>--sandbox [n]</c>): 0 off, else the number of characters (1 or 2) on a flat wireframe floor.
+    /// </summary>
     public int Sandbox;
-    /// <summary>The CHARACTER record (name or id) the sandbox spawns (null: the default new-game start's first squad member).</summary>
+    /// <summary>
+    /// The CHARACTER record (name or id) the sandbox spawns (null: the default new-game start's first squad member).
+    /// </summary>
     public string? SandboxCharacter;
-    /// <summary>The sandbox hero's start state, comma-separated: walk, run or free; a fixed speed in units/s; patrol (a 400-unit line), for pictures.</summary>
+    /// <summary>
+    /// The sandbox hero's start state, comma-separated: walk, run or free; a fixed speed in units/s; patrol (a 400-unit line), for pictures.
+    /// </summary>
     public string? SandboxMode;
-    /// <summary><c>--sandbox-races</c>: one character of every person race (a CHARACTER record listing only that race) in rings round the pair, whatever n is.</summary>
+    /// <summary>
+    /// <c>--sandbox-races</c>: one character of every person race (a CHARACTER record listing only that race) in rings round the pair, whatever n is.
+    /// </summary>
     public bool SandboxRaces;
-    /// <summary><c>--terrain-sandbox [x,z]</c>: the empty world round a flat spot whose ground is a field of tiles, one per ground texture (GroundRelief.FieldCentre).</summary>
+    /// <summary>
+    /// <c>--terrain-sandbox [x,z]</c>: the empty world round a flat spot whose ground is a field of tiles, one per ground texture
+    /// (GroundRelief.FieldCentre).
+    /// </summary>
     public (float X, float Z)? TerrainSandbox;
-    /// <summary>The terrain sandbox's default spot: the flattest 2000-unit square of the heightmap found (16 cm of relief, 0.25% slope; docs/render-terrain.md "Ground relief").</summary>
+    /// <summary>
+    /// The terrain sandbox's default spot: the flattest 2000-unit square of the heightmap found (16 cm of relief, 0.25% slope; docs/render-terrain.md
+    /// "Ground relief").
+    /// </summary>
     public static readonly (float X, float Z) TerrainSandboxSpot = (38376, -8280);
-    /// <summary><c>--terrain-sandbox cliffs</c>: the field of cliff textures on a steep face instead.</summary>
+    /// <summary>
+    /// <c>--terrain-sandbox cliffs</c>: the field of cliff textures on a steep face instead.
+    /// </summary>
     public bool TerrainSandboxCliffs;
-    /// <summary>The cliff field's default spot: an even 45-degree face about 1 km across facing −Z, the steadiest found (plane-fit residual 2.7 units over 800).</summary>
+    /// <summary>
+    /// The cliff field's default spot: an even 45-degree face about 1 km across facing −Z, the steadiest found (plane-fit residual 2.7 units over
+    /// 800).
+    /// </summary>
     public static readonly (float X, float Z) CliffSandboxSpot = (92164, 123124);
-    /// <summary>The looping duel for trailers (<c>--duel [x,z]</c>, docs/simulation.md "Duel"): two Samurai Heavy fight on rails at sunset, the same fight every lap.</summary>
+    /// <summary>
+    /// The looping duel for trailers (<c>--duel [x,z]</c>, docs/simulation.md "Duel"): two Samurai Heavy fight on rails at sunset, the same fight
+    /// every lap.
+    /// </summary>
     public bool Duel;
-    /// <summary>Where the duel is fought (null: the built-in dune crest).</summary>
+    /// <summary>
+    /// Where the duel is fought (null: the built-in dune crest).
+    /// </summary>
     public (float X, float Z)? DuelAt;
-    /// <summary>The battle (<c>--battle n unit m unit</c>, docs/simulation.md "Battle"): two groups of NPCs, each a count of one CHARACTER or ANIMAL_CHARACTER record (name or id).</summary>
+    /// <summary>
+    /// The battle (<c>--battle n unit m unit</c>, docs/simulation.md "Battle"): two groups of NPCs, each a count of one CHARACTER or ANIMAL_CHARACTER
+    /// record (name or id).
+    /// </summary>
     public (int Count, string Unit)[]? Battle;
-    /// <summary>The optional fifth <c>--battle</c> value: each block in this many rows (the back row takes the rest), or null for rows of 25.</summary>
+    /// <summary>
+    /// The optional fifth <c>--battle</c> value: each block in this many rows (the back row takes the rest), or null for rows of 25.
+    /// </summary>
     public int? BattleRows;
-    /// <summary><c>--battle-width a[,b]</c>: fighters per row of each side (one value: both), over <see cref="BattleRows"/>; null for a side that keeps its rows.</summary>
+    /// <summary>
+    /// <c>--battle-width a[,b]</c>: fighters per row of each side (one value: both), over <see cref="BattleRows"/>; null for a side that keeps its
+    /// rows.
+    /// </summary>
     public int?[] BattleWidth = [null, null];
-    /// <summary><c>--battle-map sandbox</c>: the battle is fought on the sandbox's flat floor instead of the map.</summary>
+    /// <summary>
+    /// <c>--battle-map sandbox</c>: the battle is fought on the sandbox's flat floor instead of the map.
+    /// </summary>
     public bool BattleFlat;
-    /// <summary><c>--battle-map x,z</c>: where on the map the battle is fought (null: the plateau, <see cref="BattleScenario.BattleSpot"/>).</summary>
+    /// <summary>
+    /// <c>--battle-map x,z</c>: where on the map the battle is fought (null: the plateau, <see cref="BattleScenario.BattleSpot"/>).
+    /// </summary>
     public (float X, float Z)? BattleAt;
-    /// <summary><c>--battle-no-fear</c>: nobody runs away, every fighter fights until it is down (no flee system).</summary>
+    /// <summary>
+    /// <c>--battle-no-fear</c>: nobody runs away, every fighter fights until it is down (no flee system).
+    /// </summary>
     public bool BattleNoFear;
-    /// <summary>The start to play (null = the default); with <c>--move-to</c> the picture shows a selected squad walking.</summary>
+    /// <summary>
+    /// The start to play (null = the default); with <c>--move-to</c> the picture shows a selected squad walking.
+    /// </summary>
     public string? NewGameName;
     public (float X, float Z)? MoveTo;
-    /// <summary>Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).</summary>
+    /// <summary>
+    /// Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).
+    /// </summary>
     public double? QuitAfter;
-    /// <summary>A save folder (Meitou's or the original game's) started in instead of a new world, loaded as the game menu's Load does (<c>--load</c>).</summary>
+    /// <summary>
+    /// A save folder (Meitou's or the original game's) started in instead of a new world, loaded as the game menu's Load does (<c>--load</c>).
+    /// </summary>
     public string? Load;
-    /// <summary><c>--continue</c>: start in the newest save (<see cref="Meitou.Content.SaveModList.Scan"/>), resolved into <see cref="Load"/> once the install is found.</summary>
+    /// <summary>
+    /// <c>--continue</c>: start in the newest save (<see cref="Meitou.Content.SaveModList.Scan"/>), resolved into <see cref="Load"/> once the install
+    /// is found.
+    /// </summary>
     public bool Continue;
-    /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see AgentChannel.</summary>
+    /// <summary>
+    /// <c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from
+    /// (<c>out</c>), see AgentChannel.
+    /// </summary>
     public string? ControlDir;
-    /// <summary><c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (AgentChannel); the first failing command stops the list and fails the run (exit code 3).</summary>
+    /// <summary>
+    /// <c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (AgentChannel); the
+    /// first failing command stops the list and fails the run (exit code 3).
+    /// </summary>
     public string? Exec;
-    /// <summary><c>--screenshot-after &lt;s&gt;</c>: once the setup is done, wait this many real seconds, save one frame (<see cref="ShotOut"/>) and quit.</summary>
+    /// <summary>
+    /// <c>--screenshot-after &lt;s&gt;</c>: once the setup is done, wait this many real seconds, save one frame (<see cref="ShotOut"/>) and quit.
+    /// </summary>
     public double? ShotAfter;
-    /// <summary><c>--screenshot-out &lt;png&gt;</c>: where <see cref="ShotAfter"/> saves (default <control-dir>/shot.png, else ./meitou-shot.png).</summary>
+    /// <summary>
+    /// <c>--screenshot-out &lt;png&gt;</c>: where <see cref="ShotAfter"/> saves (default <control-dir>/shot.png, else ./meitou-shot.png).
+    /// </summary>
     public string? ShotOut;
-    /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (PlayBench).</summary>
+    /// <summary>
+    /// <c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (PlayBench).
+    /// </summary>
     public string? PlayBench;
-    /// <summary><c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).</summary>
+    /// <summary>
+    /// <c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).
+    /// </summary>
     public bool NoPrecompile;
-    /// <summary>The renderer for the whole frame: <c>vulkan</c> (the default) or <c>metal</c> (macOS: the scene, HUD and faithful panels, the port's current slice).</summary>
+    /// <summary>
+    /// The renderer for the whole frame: <c>vulkan</c> (the default) or <c>metal</c> (macOS: the scene, HUD and faithful panels, the port's current
+    /// slice).
+    /// </summary>
     public string Renderer = "vulkan";
-    /// <summary>With <c>--screenshot</c>: a staged scene to check behaviour offscreen (<c>--scene</c>: fight, turret, bed, acid, menu; ScreenshotScenes).</summary>
+    /// <summary>
+    /// With <c>--screenshot</c>: a staged scene to check behaviour offscreen (<c>--scene</c>: fight, turret, bed, acid, menu; ScreenshotScenes).
+    /// </summary>
     public string? Scene;
-    /// <summary>The scene's frames and the control ticks between them (<c>--scene-frames</c>, <c>--scene-every</c>).</summary>
+    /// <summary>
+    /// The scene's frames and the control ticks between them (<c>--scene-frames</c>, <c>--scene-every</c>).
+    /// </summary>
     public int SceneFrames = 8, SceneEvery = 30;
-    /// <summary>The CHARACTER record (name or id) the fight and turret scenes spawn as enemies (<c>--scene-npc</c>).</summary>
+    /// <summary>
+    /// The CHARACTER record (name or id) the fight and turret scenes spawn as enemies (<c>--scene-npc</c>).
+    /// </summary>
     public string SceneNpc = "Bandit";
-    /// <summary>The town (name, part of it) the turret scene moves the squad to first (<c>--scene-town</c>; null: the nearest turret to where the save is).</summary>
+    /// <summary>
+    /// The town (name, part of it) the turret scene moves the squad to first (<c>--scene-town</c>; null: the nearest turret to where the save is).
+    /// </summary>
     public string? SceneTown;
 
     public const string Usage = """
@@ -162,7 +255,9 @@ sealed class GameOptions
         Settings (frame limit, vsync, full screen (--windowed for one run), tick rate (tickRate), simulation threads (simThreads), the settings sliders, key bindings) are kept in meitou.user.json.
         """;
 
-    /// <summary>Takes the game's own options out of <paramref name="args"/> and returns the rest.</summary>
+    /// <summary>
+    /// Takes the game's own options out of <paramref name="args"/> and returns the rest.
+    /// </summary>
     public static (GameOptions, string[]) Split(string[] args)
     {
         var g = new GameOptions();
@@ -173,39 +268,66 @@ sealed class GameOptions
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{a} needs a value");
             switch (a)
             {
-                case "--ui-showcase": g.UiShowcase = true; break;
-                case "--ui-panel": g.UiPanel = Next(); break;
-                case "--settings-showcase": g.SettingsShowcase = true; break;
-                case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture); g.SeedGiven = true; break;
+                case "--ui-showcase": g.UiShowcase = true;
+                break;
+                case "--ui-panel": g.UiPanel = Next();
+                break;
+                case "--settings-showcase": g.SettingsShowcase = true;
+                break;
+                case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+                case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture);
+                g.SeedGiven = true;
+                break;
                 case "--ui":
-                    g.UiMode = Next().ToLowerInvariant() switch { "faithful" => Data.Ui.UiMode.Faithful, "meitou" => Data.Ui.UiMode.Meitou, _ => throw new ArgumentException("--ui must be faithful or meitou") };
+                    g.UiMode = Next().ToLowerInvariant() switch
+                    {
+                        "faithful" => Data.Ui.UiMode.Faithful,
+                        "meitou" => Data.Ui.UiMode.Meitou,
+                        _ => throw new ArgumentException("--ui must be faithful or meitou"),
+                    };
                     break;
-                case "--vsync": g.VSync = true; break;
-                case "--no-vsync": g.VSync = false; break;
-                case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--no-population": g.NoPopulation = true; break;
-                case "--title-preview": g.TitlePreview = true; g.UiMode = Data.Ui.UiMode.Meitou; break;
+                case "--vsync": g.VSync = true;
+                break;
+                case "--no-vsync": g.VSync = false;
+                break;
+                case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+                case "--no-population": g.NoPopulation = true;
+                break;
+                case "--title-preview": g.TitlePreview = true;
+                g.UiMode = Data.Ui.UiMode.Meitou;
+                break;
                 case "--new-game":
                     g.NewGame = true;
                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
                     break;
-                case "--list-starts": g.ListStarts = true; break;
-                case "--data-check": g.DataCheck = true; break;
-                case "--wiki-export": g.WikiExport = Next(); break;
-                case "--facts-only": g.WikiFactsOnly = true; break;
+                case "--list-starts": g.ListStarts = true;
+                break;
+                case "--data-check": g.DataCheck = true;
+                break;
+                case "--wiki-export": g.WikiExport = Next();
+                break;
+                case "--facts-only": g.WikiFactsOnly = true;
+                break;
                 case "--sandbox":
-                    g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count) ? Math.Clamp(count, 1, 1000) : 1;
+                    g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count)
+                        ? Math.Clamp(count, 1, 1000) : 1;
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
                     break;
-                case "--sandbox-character": g.SandboxCharacter = Next(); break;
-                case "--sandbox-mode": g.SandboxMode = Next(); break;
-                case "--sandbox-races": g.SandboxRaces = true; break;
+                case "--sandbox-character": g.SandboxCharacter = Next();
+                break;
+                case "--sandbox-mode": g.SandboxMode = Next();
+                break;
+                case "--sandbox-races": g.SandboxRaces = true;
+                break;
                 case "--terrain-sandbox":
                     g.TerrainSandbox = TerrainSandboxSpot;
-                    if (i + 1 < args.Length && args[i + 1] == "cliffs") (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
-                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var tx, var tz] && float.TryParse(tx, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
-                        && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
+                    if (i + 1 < args.Length && args[i + 1] == "cliffs")
+                        (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
+                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var tx, var tz]
+                            && float.TryParse(tx, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
+                            && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
                     {
                         g.TerrainSandbox = (fx, fz);
                         i++;
@@ -213,7 +335,9 @@ sealed class GameOptions
                     break;
                 case "--duel":
                     g.Duel = true;
-                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var dx, var dz] && float.TryParse(dx, NumberStyles.Float, CultureInfo.InvariantCulture, out float x) && float.TryParse(dz, NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var dx, var dz]
+                            && float.TryParse(dx, NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                            && float.TryParse(dz, NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
                     {
                         g.DuelAt = (x, z);
                         i++;
@@ -230,30 +354,49 @@ sealed class GameOptions
                 case "--battle-map":
                     switch (Next())
                     {
-                        case "plateau": (g.BattleFlat, g.BattleAt) = (false, null); break;
-                        case "mesa": (g.BattleFlat, g.BattleAt) = (false, (DuelScenario.DuelSpot.X, DuelScenario.DuelSpot.Y)); break;
-                        case "fog": (g.BattleFlat, g.BattleAt) = (false, (BattleScenario.FogBattleSpot.X, BattleScenario.FogBattleSpot.Y)); break;
-                        case "sandbox": (g.BattleFlat, g.BattleAt) = (true, null); break;
-                        case var map when map.Split(',') is [var mx, var mz] && float.TryParse(mx, NumberStyles.Float, CultureInfo.InvariantCulture, out float bx)
+                        case "plateau": (g.BattleFlat, g.BattleAt) = (false, null);
+                        break;
+                        case "mesa": (g.BattleFlat, g.BattleAt) = (false, (DuelScenario.DuelSpot.X, DuelScenario.DuelSpot.Y));
+                        break;
+                        case "fog": (g.BattleFlat, g.BattleAt) = (false, (BattleScenario.FogBattleSpot.X, BattleScenario.FogBattleSpot.Y));
+                        break;
+                        case "sandbox": (g.BattleFlat, g.BattleAt) = (true, null);
+                        break;
+                        case var map when map.Split(',') is [var mx, var mz]
+                                && float.TryParse(mx, NumberStyles.Float, CultureInfo.InvariantCulture, out float bx)
                             && float.TryParse(mz, NumberStyles.Float, CultureInfo.InvariantCulture, out float bz):
                             (g.BattleFlat, g.BattleAt) = (false, (bx, bz));
                             break;
                         default: throw new ArgumentException("--battle-map must be plateau, mesa, fog, sandbox or x,z");
                     }
                     break;
-                case "--battle-no-fear": g.BattleNoFear = true; break;
+                case "--battle-no-fear": g.BattleNoFear = true;
+                break;
                 case "--battle-width":
                     var widths = Next().Split(',').Select(w => (int?)Math.Max(int.Parse(w, CultureInfo.InvariantCulture), 1)).ToArray();
-                    g.BattleWidth = widths switch { [var both] => [both, both], [var first, var second] => [first, second], _ => throw new ArgumentException("--battle-width takes one or two counts, a,b") };
+                    g.BattleWidth = widths switch
+                    {
+                        [var both] => [both, both],
+                        [var first, var second] => [first, second],
+                        _ => throw new ArgumentException("--battle-width takes one or two counts, a,b"),
+                    };
                     break;
-                case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture)); break;
-                case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--load": g.Load = Next(); break;
-                case "--continue": g.Continue = true; break;
-                case "--control-dir": g.ControlDir = Next(); break;
-                case "--screenshot-after": g.ShotAfter = double.Parse(Next(), CultureInfo.InvariantCulture); break;
-                case "--screenshot-out": g.ShotOut = Next(); break;
-                case "--exec": case "--setup": g.Exec = Next(); break;
+                case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture));
+                break;
+                case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+                case "--load": g.Load = Next();
+                break;
+                case "--continue": g.Continue = true;
+                break;
+                case "--control-dir": g.ControlDir = Next();
+                break;
+                case "--screenshot-after": g.ShotAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+                case "--screenshot-out": g.ShotOut = Next();
+                break;
+                case "--exec": case "--setup": g.Exec = Next();
+                break;
                 case "--renderer":
                     {
                         string renderer = Next().ToLowerInvariant();
@@ -261,17 +404,30 @@ sealed class GameOptions
                         g.Renderer = renderer;
                         break;
                     }
-                case "--play-bench": (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false); break;
-                case "--no-precompile": g.NoPrecompile = true; break;
-                case "--scene": g.Scene = Next().ToLowerInvariant(); break;
-                case "--scene-frames": g.SceneFrames = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 200); break;
-                case "--scene-every": g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1); break;
-                case "--scene-npc": g.SceneNpc = Next(); break;
-                case "--scene-town": g.SceneTown = Next(); break;
-                case "--mods-cfg": g.ModsCfg = Next(); break;
-                case "--low-end": g.LowEnd = true; rest.Add(a); break;
-                case "--benchmark-baseline": g.BenchmarkBaseline = true; rest.Add(a); break;
-                default: rest.Add(a); break;
+                case "--play-bench": (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
+                break;
+                case "--no-precompile": g.NoPrecompile = true;
+                break;
+                case "--scene": g.Scene = Next().ToLowerInvariant();
+                break;
+                case "--scene-frames": g.SceneFrames = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 200);
+                break;
+                case "--scene-every": g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1);
+                break;
+                case "--scene-npc": g.SceneNpc = Next();
+                break;
+                case "--scene-town": g.SceneTown = Next();
+                break;
+                case "--mods-cfg": g.ModsCfg = Next();
+                break;
+                case "--low-end": g.LowEnd = true;
+                rest.Add(a);
+                break;
+                case "--benchmark-baseline": g.BenchmarkBaseline = true;
+                rest.Add(a);
+                break;
+                default: rest.Add(a);
+                break;
             }
         }
         if (g.LowEnd) g.UiMode = Data.Ui.UiMode.Faithful;

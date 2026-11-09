@@ -11,12 +11,16 @@ static class CameraCode
 {
     public static string Encode(WorldCamera camera) => WorldCameraCode.Encode(camera);
 
-    /// <summary>Moves <paramref name="camera"/> to the code in <paramref name="text"/> (spaces ignored); false when it is not a camera code.</summary>
+    /// <summary>
+    /// Moves <paramref name="camera"/> to the code in <paramref name="text"/> (spaces ignored); false when it is not a camera code.
+    /// </summary>
     public static bool TryApply(string? text, WorldCamera camera) => WorldCameraCode.TryApply(text, camera);
 
     public static string Describe(WorldCamera c) => WorldCameraCode.Describe(c);
 
-    /// <summary>The window options moved onto monitor <paramref name="monitor"/> (1-based, <c>--monitor</c>), where it then maximizes.</summary>
+    /// <summary>
+    /// The window options moved onto monitor <paramref name="monitor"/> (1-based, <c>--monitor</c>), where it then maximizes.
+    /// </summary>
     public static WindowOptions OnMonitor(WindowOptions options, int? monitor)
     {
         if (monitor is not { } n) return options;

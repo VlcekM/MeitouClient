@@ -8,8 +8,10 @@ public class UiPaddingTests
     public void SkinTextInsetsResizeAndExtraPaddingOnlyChangesTheTextClient()
     {
         var resources = new MyGuiResources();
-        resources.Skins["parchment"] = new("parchment", 152, 41, "atlas.png", [new("SimpleText", new(13, 7, 126, 26), "Stretch", new Dictionary<string, UiRect>())]);
-        var control = new UiControl("description", "TextBox", new(10, 20, 300, 100), "Text", "", "parchment", true, new Dictionary<string, string> { ["TextPadding"] = "6 8 10 12" }, default);
+        resources.Skins["parchment"] = new("parchment", 152, 41, "atlas.png",
+                [new("SimpleText", new(13, 7, 126, 26), "Stretch", new Dictionary<string, UiRect>())]);
+        var control = new UiControl("description", "TextBox", new(10, 20, 300, 100), "Text", "", "parchment", true, new Dictionary<string,
+                string> { ["TextPadding"] = "6 8 10 12" }, default);
         Assert.Equal(new UiRect(29, 35, 258, 65), UiTextLayout.ContentRect(resources, control));
         Assert.Equal(new UiRect(10, 20, 300, 100), control.Bounds);
         Assert.Equal("description", MyGuiPresentation.HitTest([control with { Pickable = true }], 11, 21)!.Name);

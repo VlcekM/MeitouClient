@@ -20,7 +20,9 @@ static class ModCheck
 {
     sealed record Options(string Save, int Ticks, int Threads, IReadOnlyList<string> ModFolders);
 
-    /// <summary>Per tick: the world's hash and each hashed system's, by label.</summary>
+    /// <summary>
+    /// Per tick: the world's hash and each hashed system's, by label.
+    /// </summary>
     sealed record Trace(List<ulong> World, List<Dictionary<string, ulong>> Systems)
     {
         public int Characters { get; set; }
@@ -131,15 +133,20 @@ static class ModCheck
         return 1;
     }
 
-    /// <summary>The parallel phases cut the slots into partitions of at least 32: under 64 characters they run as one partition.</summary>
+    /// <summary>
+    /// The parallel phases cut the slots into partitions of at least 32: under 64 characters they run as one partition.
+    /// </summary>
     static void ReportWorldSize(int characters)
     {
         Console.WriteLine($"world     {characters} characters at the end of a run");
         if (characters < 64)
-            Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; use a busier save");
+            Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; "
+                + "use a busier save");
     }
 
-    /// <summary>On a difference: the same comparison without mods. If the game alone differs too, the save shows a game fault, not only a mod's.</summary>
+    /// <summary>
+    /// On a difference: the same comparison without mods. If the game alone differs too, the save shows a game fault, not only a mod's.
+    /// </summary>
     static void CheckGameAlone(Options options, Setup setup, bool runToRun)
     {
         Console.WriteLine("baseline  the same runs without mods...");
@@ -205,7 +212,9 @@ static class ModCheck
     static string Label(ITickSystem system, ModHost? mods) =>
         mods?.OwnerOf(system) is { } owner ? $"mod {owner.ModId} system '{owner.Name}'" : system.GetType().Name;
 
-    /// <summary>Prints the first differing tick and the hashed systems that differ there; true when the runs agree.</summary>
+    /// <summary>
+    /// Prints the first differing tick and the hashed systems that differ there; true when the runs agree.
+    /// </summary>
     static bool Report(string what, Trace a, Trace b)
     {
         int tick = FirstDifference(a.World, b.World);

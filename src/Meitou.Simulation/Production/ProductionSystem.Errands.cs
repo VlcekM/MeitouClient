@@ -13,42 +13,66 @@ namespace Meitou.Simulation.Production;
 // task takes it; the lift and the put-down are the carry system's.
 public sealed partial class ProductionSystem
 {
-    /// <summary>The carry system that lifts and puts down the bodies of the carrying jobs; null: they never run.</summary>
+    /// <summary>
+    /// The carry system that lifts and puts down the bodies of the carrying jobs; null: they never run.
+    /// </summary>
     public CarrySystem? Carry { get; set; }
 
-    /// <summary>Ticks between the steps of a carrying job's carry under way (engine choice); its start is the decision step's.</summary>
+    /// <summary>
+    /// Ticks between the steps of a carrying job's carry under way (engine choice); its start is the decision step's.
+    /// </summary>
     public const int ErrandEveryTicks = 15;
-    /// <summary>A body carried out is put down within this of its goal (engine choice).</summary>
+    /// <summary>
+    /// A body carried out is put down within this of its goal (engine choice).
+    /// </summary>
     public const float ErrandArrive = 40;
-    /// <summary>Game minutes an intruder carrier may stand still before it drops the body (<b>Verified</b>: 5, <c>FUN_1403356e0</c>).</summary>
+    /// <summary>
+    /// Game minutes an intruder carrier may stand still before it drops the body (<b>Verified</b>: 5, <c>FUN_1403356e0</c>).
+    /// </summary>
     public const float CarryOutMinutes = 5;
-    /// <summary>How far past a town's farthest building an intruder is carried out of the town (<b>Observed</b>: 200 beyond the town's edge).</summary>
+    /// <summary>
+    /// How far past a town's farthest building an intruder is carried out of the town (<b>Observed</b>: 200 beyond the town's edge).
+    /// </summary>
     public const float OutsideTown = 200;
-    /// <summary>The finders look this far for a body or an intruder (the sensed list's reach, an engine stand-in as the rescue job's).</summary>
+    /// <summary>
+    /// The finders look this far for a body or an intruder (the sensed list's reach, an engine stand-in as the rescue job's).
+    /// </summary>
     const float ErrandSight = 1600;
 
     enum ErrandKind : byte { Corpse, OutOfBuilding, OutOfTown }
 
-    /// <summary>One carrying job under way: what the character carries it for, the goal of its walk and how many walks ended short.</summary>
+    /// <summary>
+    /// One carrying job under way: what the character carries it for, the goal of its walk and how many walks ended short.
+    /// </summary>
     sealed class Errand
     {
         public ErrandKind Kind;
         public Vector2 Goal;
         public CharacterId Body;
-        /// <summary>The carrier's current GoTo is this job's own (else a GoTo task is an order of the player's).</summary>
+        /// <summary>
+        /// The carrier's current GoTo is this job's own (else a GoTo task is an order of the player's).
+        /// </summary>
         public bool Walking;
-        /// <summary>Intruder carry-out: the game hours at the first step the carrier was not moving (cleared while it moves).</summary>
+        /// <summary>
+        /// Intruder carry-out: the game hours at the first step the carrier was not moving (cleared while it moves).
+        /// </summary>
         public double? StoppedAt;
-        /// <summary>The player's Corpse Disposal order started it: the delivery needs no job in the list.</summary>
+        /// <summary>
+        /// The player's Corpse Disposal order started it: the delivery needs no job in the list.
+        /// </summary>
         public bool Ordered;
-        /// <summary>The corpse machine the carrier is taking the body to: claimed against its squad mates (the squad blackboard's goal list).</summary>
+        /// <summary>
+        /// The corpse machine the carrier is taking the body to: claimed against its squad mates (the squad blackboard's goal list).
+        /// </summary>
         public string? Site;
     }
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
     readonly Dictionary<CharacterId, Errand> _errands = [];
 
-    /// <summary>The finders' kinds a job type runs, with the companion type that must be in the list for the carrying out.</summary>
+    /// <summary>
+    /// The finders' kinds a job type runs, with the companion type that must be in the list for the carrying out.
+    /// </summary>
     static ErrandKind? KindOf(TaskType type) => type switch
     {
         TaskType.FindADeadGuy => ErrandKind.Corpse,
@@ -57,7 +81,9 @@ public sealed partial class ProductionSystem
         _ => null,
     };
 
-    /// <summary>The delivery job that must be in the list for the carrying out.</summary>
+    /// <summary>
+    /// The delivery job that must be in the list for the carrying out.
+    /// </summary>
     static TaskType CompanionOf(ErrandKind kind) => kind switch
     {
         ErrandKind.Corpse => TaskType.DeadGuysGoInThePot,
@@ -72,7 +98,10 @@ public sealed partial class ProductionSystem
     bool DeliveryReady(World world, CharacterId self, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
         (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0) && (kind != ErrandKind.Corpse || NearestIncinerator(world, at, self, cold.SquadId) is not null);
 
-    /// <summary>The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the decision step's (<see cref="ErrandJobs"/>).</summary>
+    /// <summary>
+    /// The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the
+    /// decision step's (<see cref="ErrandJobs"/>).
+    /// </summary>
     void Errands(World world)
     {
         if (Carry is null || world.Tick % ErrandEveryTicks != 0 || _errands.Count == 0) return;
@@ -119,7 +148,9 @@ public sealed partial class ProductionSystem
         }
     }
 
-    /// <summary>The Corpse Disposal order (<see cref="DisposeCorpseOrder"/>): a corpse errand for each player character that carries a dead body.</summary>
+    /// <summary>
+    /// The Corpse Disposal order (<see cref="DisposeCorpseOrder"/>): a corpse errand for each player character that carries a dead body.
+    /// </summary>
     void DisposeCarried(World world, DisposeCorpseOrder order)
     {
         var table = world.Characters;
@@ -144,13 +175,17 @@ public sealed partial class ProductionSystem
         return new LiftedBodies(carried, SquadGoals.Of(world), squad, asker);
     }
 
-    /// <summary>The bodies a finder skips (<see cref="Lifted"/>).</summary>
+    /// <summary>
+    /// The bodies a finder skips (<see cref="Lifted"/>).
+    /// </summary>
     sealed class LiftedBodies(HashSet<CharacterId> carried, SquadGoals goals, int squad, CharacterId asker)
     {
         public bool Contains(CharacterId body) => carried.Contains(body) || goals.Working(squad, asker, GoalTarget.Of(body)) > 0;
     }
 
-    /// <summary>The corpse machines the carriers of the squad are taking a body to, in the squad's goal list.</summary>
+    /// <summary>
+    /// The corpse machines the carriers of the squad are taking a body to, in the squad's goal list.
+    /// </summary>
     void IGoalSource.Publish(World world, SquadGoals goals)
     {
         foreach (var (id, e) in _errands)
@@ -223,7 +258,11 @@ public sealed partial class ProductionSystem
         return wasWalking || world.GameHours - e.StoppedAt.Value >= CarryOutMinutes / 60.0;
     }
 
-    /// <summary>The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in <c>FUN_1408d0770</c>).</summary>
+    /// <summary>
+    /// The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for
+    /// <see cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in
+    /// <c>FUN_1408d0770</c>).
+    /// </summary>
     void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)
     {
         if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(world, n, site, machine)) return;
@@ -290,7 +329,10 @@ public sealed partial class ProductionSystem
         table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id)
         && CarrySystem.CanBeLifted(world, body);
 
-    /// <summary>The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> = 2.1233664e7, <b>Verified</b>).</summary>
+    /// <summary>
+    /// The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> =
+    /// 2.1233664e7, <b>Verified</b>).
+    /// </summary>
     static float DisposalWeight(float distanceSquared) => Math.Clamp(1 - distanceSquared / 21233664f, 1e-5f, 1f);
 
     /// <summary>
@@ -319,16 +361,25 @@ public sealed partial class ProductionSystem
         return best is null ? null : (bestSite!, best);
     }
 
-    /// <summary>Whether another member of the squad is already taking a body to the machine at <paramref name="site"/> (<c>FUN_1402690e0</c> on the squad's goal list, <b>Verified</b>): not offered, even before it operates it.</summary>
+    /// <summary>
+    /// Whether another member of the squad is already taking a body to the machine at <paramref name="site"/> (<c>FUN_1402690e0</c> on the squad's
+    /// goal list, <b>Verified</b>): not offered, even before it operates it.
+    /// </summary>
     static bool MachineClaimed(SquadGoals goals, CharacterId self, int squad, string site) => goals.Working(squad, self, GoalTarget.At(site)) > 0;
 
-    /// <summary>The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).</summary>
+    /// <summary>
+    /// The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).
+    /// </summary>
     const float OwnFactionWeight = 100;
 
-    /// <summary>The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).</summary>
+    /// <summary>
+    /// The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).
+    /// </summary>
     const float DisposalTownReach = 15625000f;
 
-    /// <summary>The player's town nearest to a point by centre, if its squared distance is within <paramref name="reachSquared"/>.</summary>
+    /// <summary>
+    /// The player's town nearest to a point by centre, if its squared distance is within <paramref name="reachSquared"/>.
+    /// </summary>
     static PlayerTown? NearestPlayerTown(World world, Vector3 at, float reachSquared)
     {
         PlayerTown? best = null;
@@ -399,7 +450,9 @@ public sealed partial class ProductionSystem
         return best is { } found ? (found, OutsideTownGoal(world, town, at)) : null;
     }
 
-    /// <summary>The player's town (of the player's faction) a point lies in: the nearest by centre within its radius, or null.</summary>
+    /// <summary>
+    /// The player's town (of the player's faction) a point lies in: the nearest by centre within its radius, or null.
+    /// </summary>
     static PlayerTown? PlayerTownAt(World world, Vector3 at)
     {
         PlayerTown? best = null;
@@ -412,10 +465,14 @@ public sealed partial class ProductionSystem
         return best;
     }
 
-    /// <summary>A point lies in one of the player's complete buildings with doors (<see cref="EnclosedAt"/>): the context menu's Throw out of home.</summary>
+    /// <summary>
+    /// A point lies in one of the player's complete buildings with doors (<see cref="EnclosedAt"/>): the context menu's Throw out of home.
+    /// </summary>
     public bool InPlayerBuilding(World world, Vector3 at) => EnclosedAt(world, at) is not null;
 
-    /// <summary>The player's complete building with doors whose footprint holds a point (the nearest by origin), or null.</summary>
+    /// <summary>
+    /// The player's complete building with doors whose footprint holds a point (the nearest by origin), or null.
+    /// </summary>
     BuildSite? EnclosedAt(World world, Vector3 at)
     {
         BuildSite? best = null;
@@ -452,7 +509,9 @@ public sealed partial class ProductionSystem
         return world.Walkability.IsWalkable(exit.X, exit.Y) ? exit : Outward(world, centre, exit - centre, Vector2.Distance(exit, centre));
     }
 
-    /// <summary>Past the town's farthest building by <see cref="OutsideTown"/>, on the side of <paramref name="from"/> (the carrier).</summary>
+    /// <summary>
+    /// Past the town's farthest building by <see cref="OutsideTown"/>, on the side of <paramref name="from"/> (the carrier).
+    /// </summary>
     Vector2 OutsideTownGoal(World world, PlayerTown town, Vector3 from)
     {
         var origin = new Vector2(town.Position.X, town.Position.Z);
@@ -462,7 +521,10 @@ public sealed partial class ProductionSystem
         return Outward(world, origin, new Vector2(from.X, from.Z) - origin, far + OutsideTown);
     }
 
-    /// <summary>The point <paramref name="distance"/> from <paramref name="origin"/> along <paramref name="dir"/>, pulled in towards the origin until the ground is walkable.</summary>
+    /// <summary>
+    /// The point <paramref name="distance"/> from <paramref name="origin"/> along <paramref name="dir"/>, pulled in towards the origin until the
+    /// ground is walkable.
+    /// </summary>
     static Vector2 Outward(World world, Vector2 origin, Vector2 dir, float distance)
     {
         dir = dir.LengthSquared() > 1e-4f ? Vector2.Normalize(dir) : Vector2.UnitX;

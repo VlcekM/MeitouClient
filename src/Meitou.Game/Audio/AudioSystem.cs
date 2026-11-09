@@ -6,25 +6,33 @@ using Meitou.Data.World;
 namespace Meitou.Game.Audio;
 
 /// <summary>
-/// The player's audio options (the original's <c>settings.cfg</c> keys, docs/formats/settings.md#audio): the six category volumes (0..1, the
-/// game sends them as the <c>User_Volume_*</c> parameters × 100) and how often biome music starts (<see cref="MusicFrequency"/>, minutes); and Meitou's own
-/// <see cref="Voices"/>, the most sounds mixed at once, and <see cref="Range"/>, how far sounds carry (neither in <c>settings.cfg</c>).
+/// The player's audio options (the original's <c>settings.cfg</c> keys, docs/formats/settings.md#audio): the six category volumes (0..1, the game
+/// sends them as the <c>User_Volume_*</c> parameters × 100) and how often biome music starts (<see cref="MusicFrequency"/>, minutes); and Meitou's
+/// own <see cref="Voices"/>, the most sounds mixed at once, and <see cref="Range"/>, how far sounds carry (neither in <c>settings.cfg</c>).
 /// </summary>
 public sealed record AudioSettings(float Music = 0.5f, float Ambient = 0.5f, float Footstep = 0.5f, float Sfx = 0.5f, float Ui = 0.5f, float Vo = 0.5f,
     float MusicFrequency = 5, int Voices = AudioSettings.MeitouVoices, float Range = AudioSettings.MeitouRange)
 {
     public const float MinFrequency = 1, MaxFrequency = 20;
 
-    /// <summary>The voice cap's range and Meitou's default (docs/audio.md "Voice cap"); <see cref="MaxVoices"/> means every sound is mixed.</summary>
+    /// <summary>
+    /// The voice cap's range and Meitou's default (docs/audio.md "Voice cap"); <see cref="MaxVoices"/> means every sound is mixed.
+    /// </summary>
     public const int MinVoices = 16, MaxVoices = 256, MeitouVoices = 96;
 
-    /// <summary>The hearing range's factor on every distance (docs/audio.md "Hearing range"): 1 is the original, Meitou's default carries twice as far.</summary>
+    /// <summary>
+    /// The hearing range's factor on every distance (docs/audio.md "Hearing range"): 1 is the original, Meitou's default carries twice as far.
+    /// </summary>
     public const float MinRange = 1, MaxRange = 4, MeitouRange = 2;
 
-    /// <summary>What <see cref="WwisePlayer.VoiceCap"/> takes: the cap, 0 at <see cref="MaxVoices"/> (no cap).</summary>
+    /// <summary>
+    /// What <see cref="WwisePlayer.VoiceCap"/> takes: the cap, 0 at <see cref="MaxVoices"/> (no cap).
+    /// </summary>
     public int VoiceCap => Voices >= MaxVoices ? 0 : Math.Max(Voices, MinVoices);
 
-    /// <summary>The install's <c>settings.cfg</c>; every missing key takes the original's default.</summary>
+    /// <summary>
+    /// The install's <c>settings.cfg</c>; every missing key takes the original's default.
+    /// </summary>
     public static AudioSettings FromInstall(GameInstall install) => new(
         Music: AudioSystem.Setting(install, "Music volume", 0.5f),
         Ambient: AudioSystem.Setting(install, "Ambient volume", 0.5f),
@@ -50,10 +58,14 @@ public sealed class AudioSystem : IDisposable
 {
     public const int SampleRate = 44100;
 
-    /// <summary>The game object the original posts the music, the ambience and the pause events on (<c>RegisterGameObj(100, "Music")</c>).</summary>
+    /// <summary>
+    /// The game object the original posts the music, the ambience and the pause events on (<c>RegisterGameObj(100, "Music")</c>).
+    /// </summary>
     public const ulong MusicObject = 100;
 
-    /// <summary>The game object of the interface sounds (<c>RegisterGameObj(110, "GUI")</c>).</summary>
+    /// <summary>
+    /// The game object of the interface sounds (<c>RegisterGameObj(110, "GUI")</c>).
+    /// </summary>
     public const ulong GuiObject = 110;
 
     readonly AudioOutput _output;
@@ -64,7 +76,9 @@ public sealed class AudioSystem : IDisposable
     public MusicDirector Music { get; }
     public string DeviceName => _output.DeviceName;
 
-    /// <summary>The options last applied (<see cref="Apply"/>).</summary>
+    /// <summary>
+    /// The options last applied (<see cref="Apply"/>).
+    /// </summary>
     public AudioSettings Settings { get; private set; }
 
     AudioSystem(WwisePlayer player, AudioOutput output, MusicDirector music, AudioSettings settings)
@@ -78,8 +92,8 @@ public sealed class AudioSystem : IDisposable
     }
 
     /// <summary>
-    /// <paramref name="ambientVolume"/>: the install's <c>settings.cfg</c> <c>Ambient volume</c> (0..1, missing → 0.5), for hosts that keep the other options
-    /// in <c>settings.cfg</c> too (the viewer): the rest is read from there.
+    /// <paramref name="ambientVolume"/>: the install's <c>settings.cfg</c> <c>Ambient volume</c> (0..1, missing → 0.5), for hosts that keep the other
+    /// options in <c>settings.cfg</c> too (the viewer): the rest is read from there.
     /// </summary>
     public static AudioSystem? TryCreate(GameInstall install, float ambientVolume, out string? error) =>
         TryCreate(install, AudioSettings.FromInstall(install) with { Ambient = ambientVolume }, out error);
@@ -129,8 +143,9 @@ public sealed class AudioSystem : IDisposable
     }
 
     /// <summary>
-    /// The game was paused (or its speed set to 0) or resumed: posts <c>Pause_Game</c> / <c>Resume_Game</c> on the music object, which duck the SFX bus
-    /// to silence and the ambience by 9 dB over a second, and give them back over three; the music is not touched. Does nothing when the state is the same.
+    /// The game was paused (or its speed set to 0) or resumed: posts <c>Pause_Game</c> / <c>Resume_Game</c> on the music object, which duck the SFX
+    /// bus to silence and the ambience by 9 dB over a second, and give them back over three; the music is not touched. Does nothing when the state is
+    /// the same.
     /// </summary>
     public void SetPaused(bool pause)
     {
@@ -139,7 +154,9 @@ public sealed class AudioSystem : IDisposable
         Player.Post(pause ? "Pause_Game" : "Resume_Game", MusicObject);
     }
 
-    /// <summary>Whether <see cref="SetPaused"/> last paused.</summary>
+    /// <summary>
+    /// Whether <see cref="SetPaused"/> last paused.
+    /// </summary>
     public bool Paused => _paused;
 
     /// <summary>
@@ -150,9 +167,9 @@ public sealed class AudioSystem : IDisposable
 
     /// <summary>
     /// Feeds the ambience and the music the frame's state the way the game's camera update does (docs/audio.md): <paramref name="region"/> is the
-    /// weather region under the camera's pivot (null: none), <paramref name="weather"/> the weather at the camera (null: clear), <paramref name="hour"/>
-    /// the game hour against <paramref name="sunrise"/> and <paramref name="sunset"/>, <paramref name="eyeAboveGround"/> the eye's height over the
-    /// ground under it and <paramref name="realSeconds"/> the real time since the last call.
+    /// weather region under the camera's pivot (null: none), <paramref name="weather"/> the weather at the camera (null: clear),
+    /// <paramref name="hour"/> the game hour against <paramref name="sunrise"/> and <paramref name="sunset"/>, <paramref name="eyeAboveGround"/> the
+    /// eye's height over the ground under it and <paramref name="realSeconds"/> the real time since the last call.
     /// </summary>
     public void Update(WeatherRegion? region, WeatherState? weather, double hour, double sunrise, double sunset, float eyeAboveGround, double realSeconds)
     {
@@ -170,19 +187,41 @@ public sealed class AudioSystem : IDisposable
         Music.Update(region?.Def.Music);
     }
 
-    /// <summary>One line for a statistics overlay: the biome heard, day or night, rain, wind, voices and clips, and the music (the one remembered, seconds until its timer posts it, music voices).</summary>
+    /// <summary>
+    /// One line for a statistics overlay: the biome heard, day or night, rain, wind, voices and clips, and the music (the one remembered, seconds
+    /// until its timer posts it, music voices).
+    /// </summary>
     public string StatsLine()
     {
-        string music = Music.Remembered is null ? "nothing to post" : Music.Volume <= 0 ? "volume 0" : $"next in {Math.Max(0, Music.SecondsToNext):0} s";
+        string music = MusicState();
         string biome = Ambience.Biome is { } heard ? $"{heard} {(Ambience.Night ? "night" : "day")}" : "no biome";
-        return $"{biome}{(Ambience.Raining ? ", rain" : "")}{(Ambience.Windy ? ", wind" : "")}{(_paused ? ", paused" : "")}: {Player.Stats.Voices} voices{(Player.Silenced > 0 ? $" ({Player.Silenced} capped)" : "")}, {Player.Stats.Clips} clips loaded; " +
-            $"music {(Music.TitleScreen ? "main theme" : Music.Biome ?? "none")}, {music}, {Player.MusicVoices} voices";
+        string flags = $"{(Ambience.Raining ? ", rain" : "")}{(Ambience.Windy ? ", wind" : "")}{(_paused ? ", paused" : "")}";
+        string capped = Player.Silenced > 0 ? $" ({Player.Silenced} capped)" : "";
+        string musicHeard = Music.TitleScreen ? "main theme" : Music.Biome ?? "none";
+        return $"{biome}{flags}: {Player.Stats.Voices} voices{capped}, {Player.Stats.Clips} clips loaded; " +
+            $"music {musicHeard}, {music}, {Player.MusicVoices} voices";
     }
 
-    /// <summary><c>settings.cfg</c>'s <c>Ambient volume</c> (0..1); 0.5 when missing or unreadable.</summary>
+    /// <summary>
+    /// The music part of <see cref="StatsLine"/>: what the timer has remembered, its volume, or the seconds to the next post.
+    /// </summary>
+    string MusicState()
+    {
+        if (Music.Remembered is null) return "nothing to post";
+        if (Music.Volume <= 0) return "volume 0";
+
+        return $"next in {Math.Max(0, Music.SecondsToNext):0} s";
+    }
+
+    /// <summary>
+    /// <c>settings.cfg</c>'s <c>Ambient volume</c> (0..1); 0.5 when missing or unreadable.
+    /// </summary>
     public static float AmbientVolumeSetting(GameInstall install) => Setting(install, "Ambient volume", 0.5f);
 
-    /// <summary>A number of the install's <c>settings.cfg</c> (<c>key=value</c> lines), clamped to <paramref name="min"/>..<paramref name="max"/>; <paramref name="fallback"/> when missing or unreadable.</summary>
+    /// <summary>
+    /// A number of the install's <c>settings.cfg</c> (<c>key=value</c> lines), clamped to <paramref name="min"/>..<paramref name="max"/>;
+    /// <paramref name="fallback"/> when missing or unreadable.
+    /// </summary>
     public static float Setting(GameInstall install, string key, float fallback, float min = 0, float max = 1)
     {
         try
@@ -192,14 +231,22 @@ public sealed class AudioSystem : IDisposable
             foreach (var line in File.ReadLines(file))
             {
                 int eq = line.IndexOf('=');
-                if (eq > 0 && line[..eq].Trim().Equals(key, StringComparison.OrdinalIgnoreCase)
-                    && float.TryParse(line[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                if (eq > 0 && line[..eq].Trim().Equals(key, StringComparison.OrdinalIgnoreCase) && TryParseValue(line[(eq + 1)..], out float v))
                     return Math.Clamp(v, min, max);
             }
         }
-        catch (IOException) { }
+        catch (IOException)
+        {
+        }
+
         return fallback;
     }
+
+    /// <summary>
+    /// Parses a settings value as an invariant-culture float.
+    /// </summary>
+    static bool TryParseValue(string text, out float value) =>
+        float.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
 
     public void Dispose()
     {

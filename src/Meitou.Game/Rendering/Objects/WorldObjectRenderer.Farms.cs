@@ -6,7 +6,8 @@ namespace Meitou.Game.Rendering.Objects;
 
 public sealed partial class WorldObjectRenderer
 {
-    // The crops of the player's farms, by building id: one loose instance per plant mesh and whether it is drawn now (docs/render-objects.md "Farm plants").
+    // The crops of the player's farms, by building id: one loose instance per plant mesh and whether it is drawn now (docs/render-objects.md
+    // "Farm plants").
     sealed class FarmSlot
     {
         public object? Meshes;
@@ -17,9 +18,10 @@ public sealed partial class WorldObjectRenderer
     readonly Dictionary<string, FarmSlot> _farmSlots = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// A farm's plants (docs/game/buildings-production.md "Farm plants"): <paramref name="meshes"/> are its plant meshes (the same list keeps its instances),
-    /// <paramref name="transforms"/> where each is drawn now, null for one not drawn (harvested), <paramref name="tints"/> each one's colour (death tint and
-    /// brightness). Drawn like the building's parts, shadows included.
+    /// A farm's plants (docs/game/buildings-production.md "Farm plants"): <paramref name="meshes"/> are its plant meshes (the same list keeps its
+    /// instances),
+    /// <paramref name="transforms"/> where each is drawn now, null for one not drawn (harvested), <paramref name="tints"/> each one's colour (death
+    /// tint and brightness). Drawn like the building's parts, shadows included.
     /// </summary>
     public void SetFarmPlants(string site, IReadOnlyList<PlacedMesh> meshes, IReadOnlyList<Matrix4x4?> transforms, IReadOnlyList<Vector3> tints)
     {
@@ -46,8 +48,9 @@ public sealed partial class WorldObjectRenderer
     }
 
     /// <summary>
-    /// A tint for the instance matrix's spare M44 (<see cref="BuildingLodShaders"/> <c>instanceTint</c>): each channel in [0, <see cref="BuildingLodShaders.TintRange"/>] to 8 bits,
-    /// packed r + 256 g + 65536 b, stored as -(packed + 1) so it is exact in a float and below every other use of M44.
+    /// A tint for the instance matrix's spare M44 (<see cref="BuildingLodShaders"/> <c>instanceTint</c>): each channel in [0,
+    /// <see cref="BuildingLodShaders.TintRange"/>] to 8 bits, packed r + 256 g + 65536 b, stored as -(packed + 1) so it is exact in a float and below
+    /// every other use of M44.
     /// </summary>
     internal static float PackTint(Vector3 c)
     {
@@ -55,13 +58,17 @@ public sealed partial class WorldObjectRenderer
         return -(Q(c.X) + 256 * Q(c.Y) + 65536 * Q(c.Z) + 1);
     }
 
-    /// <summary>A farm's plants are gone (the building is).</summary>
+    /// <summary>
+    /// A farm's plants are gone (the building is).
+    /// </summary>
     public void RemoveFarmPlants(string site)
     {
         if (_farmSlots.Remove(site, out var slot)) DropFarm(slot);
     }
 
-    /// <summary>The top of a mesh (its bounds' maximum y), from its file's bounds chunk; 0 when not found.</summary>
+    /// <summary>
+    /// The top of a mesh (its bounds' maximum y), from its file's bounds chunk; 0 when not found.
+    /// </summary>
     public float MeshTop(string meshPath) => MeshBounds(meshPath).Item2.Y;
 
     void DropFarm(FarmSlot slot)

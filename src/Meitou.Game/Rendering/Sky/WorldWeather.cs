@@ -6,10 +6,12 @@ using Meitou.Data.World;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// Hooks the weather scheduler (<see cref="WeatherWorld"/>, docs/formats/weather.md) to the frame: the host sets the game day, speed and paused flag, <see cref="Update"/>
-/// feeds the scheduler the camera, the game time and this frame's three frame times, and <see cref="Apply"/> maps the resulting <see cref="WeatherState"/> onto the sky
-/// (colour multiplier, cloud density and drift, fog). The state of the last frame is <see cref="State"/>, for the renderers that read it later (wetness, dust, particles).
-/// Every timer runs on the frame clock the caller holds still for a picture: a held frame has dt 0 and the first frame is a teleport, so a still shows the settled state.
+/// Hooks the weather scheduler (<see cref="WeatherWorld"/>, docs/formats/weather.md) to the frame: the host sets the game day, speed and paused flag,
+/// <see cref="Update"/>
+/// feeds the scheduler the camera, the game time and this frame's three frame times, and <see cref="Apply"/> maps the resulting <see
+/// cref="WeatherState"/> onto the sky (colour multiplier, cloud density and drift, fog). The state of the last frame is <see cref="State"/>, for the
+/// renderers that read it later (wetness, dust, particles). Every timer runs on the frame clock the caller holds still for a picture: a held frame
+/// has dt 0 and the first frame is a teleport, so a still shows the settled state.
 /// </summary>
 public sealed class WorldWeather
 {
@@ -19,7 +21,9 @@ public sealed class WorldWeather
     string _lastForced = "";
     Vector3? _eye;   // the camera of the last update
 
-    /// <summary>The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.</summary>
+    /// <summary>
+    /// The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.
+    /// </summary>
     public ZoneCoordinate? CameraZone => _eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
 
     readonly Data.GameDatabase? _database;
@@ -28,25 +32,37 @@ public sealed class WorldWeather
     public WorldWeather(WeatherWorld world, Data.GameDatabase? database = null) => (World, this._database) = (world, database);
 
     public WeatherWorld World { get; }
-    /// <summary>The state of the last <see cref="Update"/>.</summary>
+    /// <summary>
+    /// The state of the last <see cref="Update"/>.
+    /// </summary>
     public WeatherState State => World.Current;
-    /// <summary>The frame times of the last update (the sky's cloud drift steps by <see cref="FrameTimes.Game"/>).</summary>
+    /// <summary>
+    /// The frame times of the last update (the sky's cloud drift steps by <see cref="FrameTimes.Game"/>).
+    /// </summary>
     public FrameTimes Times { get; private set; }
 
-    /// <summary>The game day (the viewer's <c>--day</c> and its day keys, the game's clock).</summary>
+    /// <summary>
+    /// The game day (the viewer's <c>--day</c> and its day keys, the game's clock).
+    /// </summary>
     public int Day { get; set; }
-    /// <summary>The game speed (1 in the viewer) and whether the game is paused (never in the viewer).</summary>
+    /// <summary>
+    /// The game speed (1 in the viewer) and whether the game is paused (never in the viewer).
+    /// </summary>
     public float GameSpeed { get; set; } = 1;
     public bool Paused { get; set; }
-    /// <summary>Overrides the cloud drift (<c>--cloud-wind</c>); null follows the weather's wind.</summary>
+    /// <summary>
+    /// Overrides the cloud drift (<c>--cloud-wind</c>); null follows the weather's wind.
+    /// </summary>
     public Vector2? CloudWindOverride { get; set; }
-    /// <summary>Writes the weather change lines to the console.</summary>
+    /// <summary>
+    /// Writes the weather change lines to the console.
+    /// </summary>
     public bool Log { get; set; } = true;
 
 
     /// <summary>
-    /// One frame: the scheduler at the camera, the game day and <paramref name="hour"/> of day. <paramref name="held"/> holds every timer still (a screenshot);
-    /// real time is measured here otherwise (at most 0.25 s a frame).
+    /// One frame: the scheduler at the camera, the game day and <paramref name="hour"/> of day. <paramref name="held"/> holds every timer still (a
+    /// screenshot); real time is measured here otherwise (at most 0.25 s a frame).
     /// </summary>
     public WeatherState Update(Vector3 eye, double hour, float sunHeight, bool held)
     {
@@ -56,15 +72,17 @@ public sealed class WorldWeather
         var times = FrameTimes.FromClock(real, GameSpeed, Paused);
         Times = times;
         var now = new WeatherTime(Day, hour);
-        // The schedule runs from the world's creation (day 0, 00:00; the seasons count from there, as `meitou-tools weather --days 0 ..` prints them) in game minutes, so a
-        // start at --day 50 or a jump forward (the step keys, the time slider) passes through every change before it; a jump of more than an hour then snaps everything.
+        // The schedule runs from the world's creation (day 0, 00:00; the seasons count from there, as `meitou-tools weather --days 0 ..` prints them)
+        // in game minutes, so a start at --day 50 or a jump forward (the step keys, the time slider) passes through every change before it; a jump of
+        // more than an hour then snaps everything.
         double from = _last?.Minutes ?? 0;
         for (double m = Math.Floor(from) + 1; m <= now.Minutes; m++)
         {
             var t = WeatherTime.FromHours(m / 60);
             foreach (var region in World.Regions) region.Update(t);
         }
-        // The clock moved back (the viewer's time slider or its camera keys set the hour, not the day): nothing to replay, the sky and fog snap as for a long jump.
+        // The clock moved back (the viewer's time slider or its camera keys set the hour, not the day): nothing to replay, the sky and fog snap as
+        // for a long jump.
         if (now.Minutes - from > 60 || (_last is not null && now.Minutes < from)) { World.Snap(); times = default; }
         _last = now;
         var state = World.Update(eye, now, times, sunHeight);
@@ -73,8 +91,9 @@ public sealed class WorldWeather
     }
 
     /// <summary>
-    /// Continues the regions of a save (docs/formats/save.md "BIOMES") at the game <paramref name="day"/> and <paramref name="hour"/>: the schedules first run up to
-    /// that time (so a region the save lacks has its own weather there), then the saved ones take over and the sky snaps to them. The next frame does not replay.
+    /// Continues the regions of a save (docs/formats/save.md "BIOMES") at the game <paramref name="day"/> and <paramref name="hour"/>: the schedules
+    /// first run up to that time (so a region the save lacks has its own weather there), then the saved ones take over and the sky snaps to them. The
+    /// next frame does not replay.
     /// </summary>
     public void Restore(IReadOnlyList<WeatherRegionSnapshot> regions, int day, double hour)
     {
@@ -92,18 +111,26 @@ public sealed class WorldWeather
 
     WeatherRegion? Here => World.CameraRegion ?? (_eye is { } e ? World.RegionAt(e.X, e.Z) : null);
 
-    /// <summary>The Tab panel's weather list: the weathers of the camera region's season, in its order (empty before the first frame).</summary>
+    /// <summary>
+    /// The Tab panel's weather list: the weathers of the camera region's season, in its order (empty before the first frame).
+    /// </summary>
     public IReadOnlyList<string> Choices() => Here is { } r ? [.. r.Season.Season.Weathers.Select(w => w.Weather.Name)] : [];
 
-    /// <summary>The list's current entry (-1: a forced weather or no region).</summary>
+    /// <summary>
+    /// The list's current entry (-1: a forced weather or no region).
+    /// </summary>
     public int Current() => World.ForcedWeather is null && Here is { } r ? r.WeatherEntryIndex : -1;
 
-    /// <summary>The list's button: the region and its weather.</summary>
-    public string ChoiceLabel() => World.ForcedWeather is { } f ? $"Weather: {f.Name} (forced)" : Here is { } r ? $"Weather: {r.Weather.Name}" : "Weather";
+    /// <summary>
+    /// The list's button: the region and its weather.
+    /// </summary>
+    public string ChoiceLabel() => World.ForcedWeather is { } f ? $"Weather: {f.Name} (forced)"
+        : Here is { } r ? $"Weather: {r.Weather.Name}"
+        : "Weather";
 
     /// <summary>
-    /// The Tab panel's weather list: the camera region starts the season's weather <paramref name="entry"/> now (a forced weather is released first), and the
-    /// sky, fog and ramps snap to it. Returns the line the panel shows.
+    /// The Tab panel's weather list: the camera region starts the season's weather <paramref name="entry"/> now (a forced weather is released first),
+    /// and the sky, fog and ramps snap to it. Returns the line the panel shows.
     /// </summary>
     public string Choose(int entry)
     {
@@ -113,10 +140,13 @@ public sealed class WorldWeather
         region.Pick(World.Time, entry);
         World.Snap();
         Console.WriteLine($"weather   chose {region.Def.Name}: {before} -> {region.Weather.Name}");
-        return $"{region.Def.Name}: {before} -> {region.Weather.Name}, strength {region.Strength:0.00}, for {FormatMinutes(region.WeatherEndMinute - World.Time.Minutes)}.";
+        string minutes = FormatMinutes(region.WeatherEndMinute - World.Time.Minutes);
+        return $"{region.Def.Name}: {before} -> {region.Weather.Name}, strength {region.Strength:0.00}, for {minutes}.";
     }
 
-    /// <summary>Maps the state onto the sky renderer's weather inputs.</summary>
+    /// <summary>
+    /// Maps the state onto the sky renderer's weather inputs.
+    /// </summary>
     public void Apply(SkyRenderer sky)
     {
         var s = State;
@@ -127,8 +157,8 @@ public sealed class WorldWeather
     }
 
     /// <summary>
-    /// The particle effect groups' input from the state: the camera region's effect list (EFFECT, count, respawn; the same list object while the weather
-    /// stays, so the groups are kept), the weather strength s and the wind velocity. Empty without a database.
+    /// The particle effect groups' input from the state: the camera region's effect list (EFFECT, count, respawn; the same list object while the
+    /// weather stays, so the groups are kept), the weather strength s and the wind velocity. Empty without a database.
     /// </summary>
     public Meitou.Data.Particles.WeatherEffectInput EffectInput()
     {
@@ -142,8 +172,12 @@ public sealed class WorldWeather
                     entries.Add(new(Data.Particles.EffectRecord.From(record, _database), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
             _effectLists[s.Weather] = list = entries;
         }
-        // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the forced adapter did.
-        return new Meitou.Data.Particles.WeatherEffectInput { Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName };
+        // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the
+        // forced adapter did.
+        return new Meitou.Data.Particles.WeatherEffectInput
+        {
+            Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName,
+        };
     }
 
     void LogChange(WeatherState s)
@@ -165,7 +199,9 @@ public sealed class WorldWeather
 
     int _lastRegion = -1;
 
-    /// <summary>The line for the log and the statistics: region, season, weather, strength, wind and the time left.</summary>
+    /// <summary>
+    /// The line for the log and the statistics: region, season, weather, strength, wind and the time left.
+    /// </summary>
     public string Describe()
     {
         var s = State;
@@ -177,10 +213,14 @@ public sealed class WorldWeather
             where = $"{region.Def.Name} ({region.Season.Season.Name}), {s.Weather.Name}, ends in {FormatMinutes(left)}";
         }
         else where = $"forced {s.Weather.Name}";
-        return string.Create(inv, $"{where}; strength {s.Strength:0.00}, wind {s.WindSpeed:0} u/s heading {MathF.Atan2(s.WindDirection.Y, s.WindDirection.X) * 180 / MathF.PI:0} deg, day {Day}");
+        float heading = MathF.Atan2(s.WindDirection.Y, s.WindDirection.X) * 180 / MathF.PI;
+        return string.Create(inv,
+            $"{where}; strength {s.Strength:0.00}, wind {s.WindSpeed:0} u/s heading {heading:0} deg, day {Day}");
     }
 
-    /// <summary>Game minutes as <c>1 d 3 h</c>, <c>3 h 20 min</c> or <c>45 min</c>.</summary>
+    /// <summary>
+    /// Game minutes as <c>1 d 3 h</c>, <c>3 h 20 min</c> or <c>45 min</c>.
+    /// </summary>
     public static string FormatMinutes(double minutes)
     {
         if (minutes >= 1_000_000 - 1) return "never";

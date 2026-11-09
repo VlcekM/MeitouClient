@@ -9,13 +9,15 @@ using Meitou.Game.Ui;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// One feedback report as the host hands it over: the form, the game's details, the screenshot and the navmesh screenshot being encoded, the camera's location, the save being written (a temporary
-/// folder) and log.txt's path, each null when not sent.
+/// One feedback report as the host hands it over: the form, the game's details, the screenshot and the navmesh screenshot being encoded, the camera's
+/// location, the save being written (a temporary folder) and log.txt's path, each null when not sent.
 /// </summary>
 sealed record FeedbackPackage(FeedbackForm Form, string Version, string Commit, string Platform, IReadOnlyList<string> Mods,
     Task<byte[]>? Screenshot, Task<byte[]>? Navmesh, string? Location, string? SaveFolder, Task? SaveWritten, string? LogPath);
 
-/// <summary>A sent report's GitHub issue, or why it was not sent.</summary>
+/// <summary>
+/// A sent report's GitHub issue, or why it was not sent.
+/// </summary>
 readonly record struct FeedbackResult(int Number, string? Url, string? Error);
 
 /// <summary>
@@ -24,13 +26,19 @@ readonly record struct FeedbackResult(int Number, string? Url, string? Error);
 /// </summary>
 static class FeedbackSender
 {
-    /// <summary>The reports service, as the launcher's <c>ReportsUrl</c>.</summary>
+    /// <summary>
+    /// The reports service, as the launcher's <c>ReportsUrl</c>.
+    /// </summary>
     internal const string ServiceUrl = "https://gear-pastry-chorus.cloudovna.app";
-    /// <summary>The service's limit for the zipped save.</summary>
+    /// <summary>
+    /// The service's limit for the zipped save.
+    /// </summary>
     const long SaveMax = 95_000_000;
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
 
-    /// <summary>The report sent; <paramref name="status"/> hears each step. Never throws: a failure is the result's error, for the form.</summary>
+    /// <summary>
+    /// The report sent; <paramref name="status"/> hears each step. Never throws: a failure is the result's error, for the form.
+    /// </summary>
     public static async Task<FeedbackResult> Send(FeedbackPackage p, Action<string> status)
     {
         string? temp = p.SaveFolder is null ? null : Path.GetDirectoryName(p.SaveFolder);
@@ -66,7 +74,8 @@ static class FeedbackSender
                 ["save"] = zip is not null,
                 ["log"] = log is not null,
             };
-            var created = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback", new StringContent(form.ToJsonString(), Encoding.UTF8, "application/json")));
+            var content = new StringContent(form.ToJsonString(), Encoding.UTF8, "application/json");
+            var created = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback", content));
             string token = (string)created["token"]!;
             if (png is not null)
             {
@@ -97,7 +106,10 @@ static class FeedbackSender
             var issue = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback/{token}/send", null));
             return new((int)issue["number"]!, (string)issue["url"]!, null);
         }
-        catch (Refused e) { return new(0, null, e.Message); }
+        catch (Refused e)
+        {
+            return new(0, null, e.Message);
+        }
         catch (HttpRequestException e) { return new(0, null, $"Could not reach the feedback service: {e.Message}"); }
         catch (TaskCanceledException) { return new(0, null, "The feedback service took too long to answer. Try again."); }
         catch (Exception e)
@@ -107,12 +119,19 @@ static class FeedbackSender
         }
         finally
         {
-            try { if (temp is not null && Directory.Exists(temp)) Directory.Delete(temp, recursive: true); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            try
+            {
+                if (temp is not null && Directory.Exists(temp)) Directory.Delete(temp, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 
-    /// <summary>GitHub shows an image in an issue only up to 5 MB (its proxy refuses more): the PNG stays under this.</summary>
+    /// <summary>
+    /// GitHub shows an image in an issue only up to 5 MB (its proxy refuses more): the PNG stays under this.
+    /// </summary>
     const int PngMax = 4_500_000;
 
     /// <summary>
@@ -133,7 +152,9 @@ static class FeedbackSender
         }
     }
 
-    /// <summary>The picture at <paramref name="w"/> × <paramref name="h"/>, each pixel the average of the source pixels it covers.</summary>
+    /// <summary>
+    /// The picture at <paramref name="w"/> × <paramref name="h"/>, each pixel the average of the source pixels it covers.
+    /// </summary>
     static byte[] Shrink(byte[] rgba, int width, int height, int w, int h)
     {
         var small = new byte[w * h * 4];
@@ -155,7 +176,9 @@ static class FeedbackSender
         return small;
     }
 
-    /// <summary>win, linux or mac; a Windows build under Wine or Proton (its registry has a Software\Wine key) is proton (as the launcher's reports).</summary>
+    /// <summary>
+    /// win, linux or mac; a Windows build under Wine or Proton (its registry has a Software\Wine key) is proton (as the launcher's reports).
+    /// </summary>
     public static string Platform()
     {
         if (OperatingSystem.IsLinux()) return "linux";
@@ -168,7 +191,9 @@ static class FeedbackSender
         return "win";
     }
 
-    /// <summary>log.txt gzipped (GameLog keeps it under 10 MiB), read while the game goes on writing it.</summary>
+    /// <summary>
+    /// log.txt gzipped (GameLog keeps it under 10 MiB), read while the game goes on writing it.
+    /// </summary>
     static byte[] GzipLog(string path)
     {
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -184,17 +209,27 @@ static class FeedbackSender
         if (!response.IsSuccessStatusCode) await Answer(response);
     }
 
-    /// <summary>The service's JSON answer; a refusal throws <see cref="Refused"/> with its reason.</summary>
+    /// <summary>
+    /// The service's JSON answer; a refusal throws <see cref="Refused"/> with its reason.
+    /// </summary>
     static async Task<JsonNode> Answer(HttpResponseMessage response)
     {
         using (response)
         {
             string text = await response.Content.ReadAsStringAsync();
             JsonNode? json = null;
-            try { json = text.Length > 0 ? JsonNode.Parse(text) : null; } catch (System.Text.Json.JsonException) { }
+            try
+            {
+                json = text.Length > 0 ? JsonNode.Parse(text) : null;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
             if (response.IsSuccessStatusCode && json is not null) return json;
             string reason = (json as JsonObject)?["error"]?.ToString()
-                ?? (response.StatusCode == HttpStatusCode.TooManyRequests ? "too many requests, try again later" : $"HTTP {(int)response.StatusCode}");
+                ?? (response.StatusCode == HttpStatusCode.TooManyRequests
+                    ? "too many requests, try again later"
+                    : $"HTTP {(int)response.StatusCode}");
             throw new Refused($"The feedback service refused it: {reason}.");
         }
     }
@@ -203,7 +238,9 @@ static class FeedbackSender
 
     sealed class Refused(string message) : Exception(message);
 
-    /// <summary>A file sent from the disk, telling how much has gone.</summary>
+    /// <summary>
+    /// A file sent from the disk, telling how much has gone.
+    /// </summary>
     sealed class FileUpload(string path, Action<long> sent) : HttpContent
     {
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)

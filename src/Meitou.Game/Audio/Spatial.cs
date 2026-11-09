@@ -3,13 +3,19 @@ using Meitou.Data.Audio;
 
 namespace Meitou.Game.Audio;
 
-/// <summary>The listener: where the camera's ears are and which way they face (<see cref="WwisePlayer.SetListener"/>).</summary>
+/// <summary>
+/// The listener: where the camera's ears are and which way they face (<see cref="WwisePlayer.SetListener"/>).
+/// </summary>
 public readonly record struct Listener(Vector3 Position, Vector3 Front, Vector3 Up)
 {
-    /// <summary>At the origin looking along -z (Ogre's forward) with y up.</summary>
+    /// <summary>
+    /// At the origin looking along -z (Ogre's forward) with y up.
+    /// </summary>
     public static Listener Default { get; } = new(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY);
 
-    /// <summary>The listener's right-hand direction (front × up in the right-handed, y-up world); zero when front and up are parallel.</summary>
+    /// <summary>
+    /// The listener's right-hand direction (front × up in the right-handed, y-up world); zero when front and up are parallel.
+    /// </summary>
     public Vector3 Right
     {
         get
@@ -51,7 +57,9 @@ static class Spatial
         return (distance, pan * (horizontal / (horizontal + CentreRadius)));
     }
 
-    /// <summary>Left and right gains for a pan: constant gain per side that is full on the near side and falls to 0 on the far one (equal power across).</summary>
+    /// <summary>
+    /// Left and right gains for a pan: constant gain per side that is full on the near side and falls to 0 on the far one (equal power across).
+    /// </summary>
     public static (float Left, float Right) PanGains(float pan)
     {
         float angle = (Math.Clamp(pan, -1, 1) + 1) * MathF.PI / 4;
@@ -59,8 +67,8 @@ static class Spatial
     }
 
     /// <summary>
-    /// A volume curve at <paramref name="distance"/> as a linear gain: scaling 2 curves store gain - 1 (Observed, as the RTPC volume curves), others the
-    /// gain itself. Held flat beyond the last point.
+    /// A volume curve at <paramref name="distance"/> as a linear gain: scaling 2 curves store gain - 1 (Observed, as the RTPC volume curves), others
+    /// the gain itself. Held flat beyond the last point.
     /// </summary>
     public static float VolumeGain(WwiseAttenuationCurve? curve, float distance)
     {
@@ -69,7 +77,9 @@ static class Spatial
         return Math.Max(0, curve.Scaling == 2 ? 1 + y : y);
     }
 
-    /// <summary>The cone's gain and low-pass amount for an emitter whose front is <paramref name="front"/> (zero: no direction, no cone effect).</summary>
+    /// <summary>
+    /// The cone's gain and low-pass amount for an emitter whose front is <paramref name="front"/> (zero: no direction, no cone effect).
+    /// </summary>
     public static (float Gain, float LowPass) Cone(WwiseCone? cone, Vector3 front, Vector3 emitter, Vector3 listener)
     {
         if (cone is null || front.LengthSquared() < 1e-12f) return (1, 0);

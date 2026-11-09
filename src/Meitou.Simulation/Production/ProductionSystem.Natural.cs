@@ -36,7 +36,10 @@ public sealed partial class ProductionSystem
             return Vector2.Distance(at, new Vector2(nearest.X, nearest.Z));
         }
 
-        /// <summary>Whether <paramref name="from"/> is inside the footprint scaled 1.2 about the box's middle (taken at the box's height), else inside the bounds circle scaled 1.2.</summary>
+        /// <summary>
+        /// Whether <paramref name="from"/> is inside the footprint scaled 1.2 about the box's middle (taken at the box's height), else inside the
+        /// bounds circle scaled 1.2.
+        /// </summary>
         public bool Touches(Vector3 from)
         {
             if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse)) return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
@@ -48,14 +51,20 @@ public sealed partial class ProductionSystem
 
     readonly Dictionary<string, RockBounds> _naturalBounds = new(StringComparer.Ordinal);
 
-    /// <summary>The site id of the rock of BUILDING <paramref name="record"/> at <paramref name="at"/>.</summary>
+    /// <summary>
+    /// The site id of the rock of BUILDING <paramref name="record"/> at <paramref name="at"/>.
+    /// </summary>
     public static string NaturalId(string record, Vector3 at) =>
         string.Create(CultureInfo.InvariantCulture, $"{NaturalPrefix}{record}@{at.X:R},{at.Y:R},{at.Z:R}");
 
-    /// <summary>Whether a site id names a rock (<see cref="NaturalId"/>).</summary>
+    /// <summary>
+    /// Whether a site id names a rock (<see cref="NaturalId"/>).
+    /// </summary>
     public static bool IsNatural(string id) => id.StartsWith(NaturalPrefix, StringComparison.Ordinal);
 
-    /// <summary>A player site of the registry, else the rock a natural id names, else a town seat or training dummy; null for none.</summary>
+    /// <summary>
+    /// A player site of the registry, else the rock a natural id names, else a town seat or training dummy; null for none.
+    /// </summary>
     BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id) ?? TownDummy(world, id) ?? TownWorkSite(id);
 
     readonly Dictionary<string, BuildSite> _dummySites = new(StringComparer.Ordinal);
@@ -134,7 +143,9 @@ public sealed partial class ProductionSystem
         };
     }
 
-    /// <summary>The name of the player town a worked rock joined (null: none, the original's NO_TOWN, which the panel's <c>Town:</c> line leaves out).</summary>
+    /// <summary>
+    /// The name of the player town a worked rock joined (null: none, the original's NO_TOWN, which the panel's <c>Town:</c> line leaves out).
+    /// </summary>
     static string? TownNameOf(World world, BuildSite? site) =>
         site is { Town: not 0 and var number } ? world.Buildings.Towns.FirstOrDefault(t => t.Number == number)?.Name : null;
 }

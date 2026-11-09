@@ -4,21 +4,25 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// The low-resolution particles over the vendor upscaler's output (docs/render-post.md "Colour, night and particles"), both sizes in one pass with their own
-/// temporal filter (<see cref="PostProcessShaders.ParticleLate"/>). Each display pixel takes the particles at the surfaces of the four render pixels round it
-/// (the jitter undone), weighted bilinearly, then last frame's result, reprojected and kept within those four values, blended in. One surface per pixel
-/// (the nearest of the four, as before) gave the outline of a ridge in front of the dust a hard edge again over the upscaler's smoothed one: a staircase.
+/// The low-resolution particles over the vendor upscaler's output (docs/render-post.md "Colour, night and particles"), both sizes in one pass with
+/// their own temporal filter (<see cref="PostProcessShaders.ParticleLate"/>). Each display pixel takes the particles at the surfaces of the four
+/// render pixels round it (the jitter undone), weighted bilinearly, then last frame's result, reprojected and kept within those four values, blended
+/// in. One surface per pixel (the nearest of the four, as before) gave the outline of a ridge in front of the dust a hard edge again over the
+/// upscaler's smoothed one: a staircase.
 /// </summary>
 public sealed partial class PostProcess
 {
     sealed class LateParticlesPass : FullscreenProgram
     {
-        public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, Scene, Output, History, Motion;
+        public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, Scene, Output,
+            History, Motion;
         public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, Late, Target;
         public LateParticlesPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLate, "post late particles")
         {
-            (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"), P.Sampler("uLowDepthFarH"));
-            (AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ) = (P.Sampler("uAccumQ"), P.Sampler("uLowDepthQ"), P.Sampler("uAccumFarQ"), P.Sampler("uLowDepthFarQ"));
+            (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"),
+                P.Sampler("uLowDepthFarH"));
+            (AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ) = (P.Sampler("uAccumQ"), P.Sampler("uLowDepthQ"), P.Sampler("uAccumFarQ"),
+                P.Sampler("uLowDepthFarQ"));
             (Depth, Scene, Output) = (P.Sampler("uDepth"), P.Sampler("uScene"), P.Sampler("uOutput"));
             (History, Motion) = (P.Sampler("uHistory"), P.Sampler("uMotion"));
             (LowSizeH, LowSizeQ, Has, NearPlanes) = (P.Uniform("uLowSizeH"), P.Uniform("uLowSizeQ"), P.Uniform("uHas"), P.Uniform("uNearPlanes"));
@@ -29,18 +33,23 @@ public sealed partial class PostProcess
     sealed class LateParticlesApplyPass : FullscreenProgram
     {
         public readonly SamplerSlot Layer;
-        public LateParticlesApplyPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
+        public LateParticlesApplyPass(GpuContext gpu) : base(gpu,
+            PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
     }
 
     LateParticlesPass? _lateParticles;
     LateParticlesApplyPass? _lateParticlesApply;
     Target2D? _lateParticlesNow, _lateParticlesLast;
     bool _lateParticlesValid;
-    /// <summary>The share of this frame's particles in the filter (about ten frames, so the jitter's phases at an outline average out).</summary>
+    /// <summary>
+    /// The share of this frame's particles in the filter (about ten frames, so the jitter's phases at an outline average out).
+    /// </summary>
     const float LateParticlesBlend = 0.1f;
 
-    /// <summary>The low-resolution particles kept for after the vendor upscaler, both sizes through the filter, over its output <paramref name="target"/>
-    /// (<paramref name="reset"/>: no history).</summary>
+    /// <summary>
+    /// The low-resolution particles kept for after the vendor upscaler, both sizes through the filter, over its output <paramref name="target"/>
+    /// (<paramref name="reset"/>: no history).
+    /// </summary>
     void CompositeLateParticlesFiltered(Target2D target, int targetWidth, int targetHeight, bool reset)
     {
         var (half, quarter) = (_lowTargets[0], _lowTargets[1]);

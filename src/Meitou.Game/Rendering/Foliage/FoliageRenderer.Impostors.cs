@@ -27,14 +27,23 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public sealed partial class FoliageRenderer
 {
-    /// <summary>The default transition distance of small and medium meshes (units along the ground; the Tab slider "Impostor distance").</summary>
+    /// <summary>
+    /// The default transition distance of small and medium meshes (units along the ground; the Tab slider "Impostor distance").
+    /// </summary>
     public const float DefaultImpostorDistance = 4000;
-    /// <summary>The default transition distance of the large size class (trees, rock stacks, hoodoos; the Tab slider "Large impostor distance"): their billboards look flat up close.</summary>
+    /// <summary>
+    /// The default transition distance of the large size class (trees, rock stacks, hoodoos; the Tab slider "Large impostor distance"): their
+    /// billboards look flat up close.
+    /// </summary>
     public const float DefaultLargeImpostorDistance = 12000;
-    /// <summary>The crossfade band before the transition, as a share of it.</summary>
+    /// <summary>
+    /// The crossfade band before the transition, as a share of it.
+    /// </summary>
     public const float ImpostorBand = 0.1f;
 
-    /// <summary>The <c>impostors</c> switch (Enhancements): Meitou (default) draws far instances as impostors; Faithful never loads or draws one.</summary>
+    /// <summary>
+    /// The <c>impostors</c> switch (Enhancements): Meitou (default) draws far instances as impostors; Faithful never loads or draws one.
+    /// </summary>
     public bool Impostors { get; set; } = true;
 
     /// <summary>
@@ -48,30 +57,50 @@ public sealed partial class FoliageRenderer
             if (a.Impostor is not null) UnloadImpostor(a);
         DisposeImpostors();
     }
-    /// <summary>The transition distance (units along the ground) of meshes below the large size class (the small impostor class scales it by size).</summary>
+    /// <summary>
+    /// The transition distance (units along the ground) of meshes below the large size class (the small impostor class scales it by size).
+    /// </summary>
     public float ImpostorDistance { get; set; } = DefaultImpostorDistance;
-    /// <summary>The transition distance of meshes of the large size class (<see cref="FoliageSizes.LargeFrom"/> and up), instead of <see cref="ImpostorDistance"/>.</summary>
+    /// <summary>
+    /// The transition distance of meshes of the large size class (<see cref="FoliageSizes.LargeFrom"/> and up), instead of
+    /// <see cref="ImpostorDistance"/>.
+    /// </summary>
     public float LargeImpostorDistance { get; set; } = DefaultLargeImpostorDistance;
     /// <summary>
     /// An explicit limit on the video memory the resident atlases may use, in megabytes (<c>--impostor-budget</c>);
     /// null: the default rule, a share of the card's budget (<see cref="ImpostorBudget"/>, <see cref="ImpostorLimitMb"/>).
     /// </summary>
     public double? ImpostorBudgetMb { get; set; }
-    /// <summary>The limit in force as of the last scan (MB): the override or the default rule, three quarters of it under the guard's pressure.</summary>
+    /// <summary>
+    /// The limit in force as of the last scan (MB): the override or the default rule, three quarters of it under the guard's pressure.
+    /// </summary>
     public double ImpostorLimitMb => _impostorLimitBytes / 1048576.0;
     long _impostorLimitBytes = (long)(ImpostorBudget.UnknownMb * 1048576);
     const double ImpostorRetrySeconds = 2;
-    /// <summary>The share of the limit a refine's new textures may take over it while the old ones are still drawn.</summary>
+    /// <summary>
+    /// The share of the limit a refine's new textures may take over it while the old ones are still drawn.
+    /// </summary>
     const double ImpostorTransientShare = 1.1;
-    /// <summary>Levels of safety on the mip an atlas needs: see <see cref="PlanImpostors"/>.</summary>
+    /// <summary>
+    /// Levels of safety on the mip an atlas needs: see <see cref="PlanImpostors"/>.
+    /// </summary>
     const float FarMipMargin = 1f;
-    /// <summary>The most levels beyond what an atlas's nearest instance needs the plan takes off an atlas that would not fit (a blurrier far crown instead of a mesh).</summary>
+    /// <summary>
+    /// The most levels beyond what an atlas's nearest instance needs the plan takes off an atlas that would not fit (a blurrier far crown instead of
+    /// a mesh).
+    /// </summary>
     const int ImpostorMaxExtraLevels = 3;
-    /// <summary>A resident atlas counts as this much nearer in the plan's order, so a newcomer must be that much nearer to take its place (hysteresis).</summary>
+    /// <summary>
+    /// A resident atlas counts as this much nearer in the plan's order, so a newcomer must be that much nearer to take its place (hysteresis).
+    /// </summary>
     const float ImpostorStickiness = 0.8f;
-    /// <summary>Seconds an atlas must hold a finer level than needed before it is coarsened without budget pressure (and by at least two levels).</summary>
+    /// <summary>
+    /// Seconds an atlas must hold a finer level than needed before it is coarsened without budget pressure (and by at least two levels).
+    /// </summary>
     const double ImpostorCoarsenSeconds = 10;
-    /// <summary>Refines (reload + upload + swap) in flight at once.</summary>
+    /// <summary>
+    /// Refines (reload + upload + swap) in flight at once.
+    /// </summary>
     const int ImpostorMaxRefines = 3;
 
     enum ImpostorStage { Loading, Baking, Uploading, Ready, None }
@@ -86,55 +115,86 @@ public sealed partial class FoliageRenderer
         public ImpostorAtlas? Atlas;
         public ImpostorTextures? Textures;
         public long LastUsed;
-        /// <summary>A refused atlas (<see cref="ImpostorStage.None"/>): the tick from which it may ask again; 0 for one that never can (too small, ineligible).</summary>
+        /// <summary>
+        /// A refused atlas (<see cref="ImpostorStage.None"/>): the tick from which it may ask again; 0 for one that never can (too small,
+        /// ineligible).
+        /// </summary>
         public long RetryAt;
-        /// <summary>The work list that last numbered this mesh's impostor batch, and its number among the impostor batches.</summary>
+        /// <summary>
+        /// The work list that last numbered this mesh's impostor batch, and its number among the impostor batches.
+        /// </summary>
         public int Stamp, Index;
-        /// <summary>How soon the nearest zone that wants this atlas is close (units, smaller first) as of the scan at <see cref="PriorityScan"/>: the order bakes run in.</summary>
+        /// <summary>
+        /// How soon the nearest zone that wants this atlas is close (units, smaller first) as of the scan at <see cref="PriorityScan"/>: the order
+        /// bakes run in.
+        /// </summary>
         public float Priority;
         public long PriorityScan;
-        /// <summary>The atlas's shape once its class is known (kept after the CPU copy is dropped): frame pixels, grid, levels, and the world radius of its largest instance.</summary>
+        /// <summary>
+        /// The atlas's shape once its class is known (kept after the CPU copy is dropped): frame pixels, grid, levels, and the world radius of its
+        /// largest instance.
+        /// </summary>
         public int FramePixels, Grid, Levels;
         public float WorldRadius;
-        /// <summary>The nearest ground distance (units) at which an instance of the mesh is drawn as this impostor, as of the last scan, and the levels
-        /// the plan takes off beyond what that distance needs.</summary>
+        /// <summary>
+        /// The nearest ground distance (units) at which an instance of the mesh is drawn as this impostor, as of the last scan, and the levels the
+        /// plan takes off beyond what that distance needs.
+        /// </summary>
         public float Need;
         public int Extra;
-        /// <summary>Top albedo levels left out of the resident textures (<see cref="ImpostorTextures.SkipOf"/>).</summary>
+        /// <summary>
+        /// Top albedo levels left out of the resident textures (<see cref="ImpostorTextures.SkipOf"/>).
+        /// </summary>
         public int Skip, WantSkip;
-        /// <summary>Since when the atlas has held a finer level than the plan wants (tick; 0 when it does not).</summary>
+        /// <summary>
+        /// Since when the atlas has held a finer level than the plan wants (tick; 0 when it does not).
+        /// </summary>
         public long FinerSince;
-        /// <summary>Scans in a row the plan left this atlas out.</summary>
+        /// <summary>
+        /// Scans in a row the plan left this atlas out.
+        /// </summary>
         public int DropScans;
-        /// <summary>The atlas was baked here, not read from the cache (a loading screen does not wait for its upload: <see cref="ImpostorUploadsAwaited"/>).</summary>
+        /// <summary>
+        /// The atlas was baked here, not read from the cache (a loading screen does not wait for its upload: <see cref="ImpostorUploadsAwaited"/>).
+        /// </summary>
         public bool Baked;
-        /// <summary>A refine in flight: the cache read, the atlas, the new textures and the albedo skip they are made with.</summary>
+        /// <summary>
+        /// A refine in flight: the cache read, the atlas, the new textures and the albedo skip they are made with.
+        /// </summary>
         public Task<ImpostorAtlas?>? RefineLoad;
         public ImpostorAtlas? RefineAtlas;
         public ImpostorTextures? Next;
         public int RefineSkip;
-        /// <summary>The textures being made on a worker (<see cref="ImpostorTextures.MakeOffThread"/>) for the first upload or a refine, and the albedo skip.</summary>
+        /// <summary>
+        /// The textures being made on a worker (<see cref="ImpostorTextures.MakeOffThread"/>) for the first upload or a refine, and the albedo skip.
+        /// </summary>
         public Task<GpuTexture?[]>? Making;
         public int MakingSkip;
         public long RefineRetryAt;
     }
 
-    /// <summary>The seconds of the eye's motion the order of the waiting bakes looks ahead.</summary>
+    /// <summary>
+    /// The seconds of the eye's motion the order of the waiting bakes looks ahead.
+    /// </summary>
     const float ImpostorLookaheadSeconds = 3;
     /// <summary>
-    /// The most shaded samples of a bake recorded in one frame (4 million; a row is
-    /// <c>grid x (2 x frame)^2 x 3</c> of them; 4 since 2026-10-08 (it was 40, which cost 3 to 6 ms of GPU time in every frame with a bake step: the "other" spikes), docs/impostors.md
-    /// section 8). A row is the least a step records: a large atlas (256 pixel frames, 9.4 million a row) takes one row a frame (twelve frames), a 128 pixel one (2.4 million) one row (twelve
-    /// frames), a 64 pixel one (0.6 million) six rows (two frames).
+    /// The most shaded samples of a bake recorded in one frame (4 million; a row is <c>grid x (2 x frame)^2 x 3</c> of them; 4 since 2026-10-08 (it
+    /// was 40, which cost 3 to 6 ms of GPU time in every frame with a bake step: the "other" spikes), docs/impostors.md section 8). A row is the
+    /// least a step records: a large atlas (256 pixel frames, 9.4 million a row) takes one row a frame (twelve frames), a 128 pixel one (2.4 million)
+    /// one row (twelve frames), a 64 pixel one (0.6 million) six rows (two frames).
     /// </summary>
     const double ImpostorBakeSamplesPerFrame = 4e6;
-    /// <summary>The pooled bake memory (readback buffers, atlas levels, filtering scratch) is freed this long after the last bake.</summary>
+    /// <summary>
+    /// The pooled bake memory (readback buffers, atlas levels, filtering scratch) is freed this long after the last bake.
+    /// </summary>
     const long ImpostorBakeIdleMs = 10000;
     long _impostorLastBake;
     bool _impostorBakeMemoryHeld;
 
     readonly ImpostorCache _impostorCache = new();
-    /// <summary>The atlas disk cache (the Tab panel's delete button). Deleting its files leaves the resident atlases: they are baked again when next needed.</summary>
+    /// <summary>
+    /// The atlas disk cache (the Tab panel's delete button). Deleting its files leaves the resident atlases: they are baked again when next needed.
+    /// </summary>
     public ImpostorCache ImpostorDiskCache => _impostorCache;
     bool _impostorCacheChecked;
     /// <summary>
@@ -149,9 +209,14 @@ public sealed partial class FoliageRenderer
     }
     ImpostorBaker? _impostorBaker;
     ImpostorBakeJob? _impostorBake;
-    /// <summary>Atlas bytes uploaded per frame while settling; <see cref="_impostorUploadsWaiting"/>: more wait for the next frame.</summary>
+    /// <summary>
+    /// Atlas bytes uploaded per frame while settling; <see cref="_impostorUploadsWaiting"/>: more wait for the next frame.
+    /// </summary>
     const long SettleUploadBytes = 64L << 20, UploadBytesPerFrame = 6L << 20;
-    /// <summary>Milliseconds of a frame's update the atlas uploads may run for (besides the byte budget: the copy into staging runs from 1 to 9 GB/s, so 6 MB took 0.7 to 5 ms); the first step always runs.</summary>
+    /// <summary>
+    /// Milliseconds of a frame's update the atlas uploads may run for (besides the byte budget: the copy into staging runs from 1 to 9 GB/s, so 6 MB
+    /// took 0.7 to 5 ms); the first step always runs.
+    /// </summary>
     const double UploadMsPerFrame = 2;
     readonly System.Diagnostics.Stopwatch _impostorWatch = new();
     bool UploadTimeLeft(bool settling) => settling || _impostorWatch.Elapsed.TotalMilliseconds < UploadMsPerFrame;
@@ -160,12 +225,16 @@ public sealed partial class FoliageRenderer
     ImpostorDraw? _impostorDraw;
     readonly List<MeshAsset> _impostorBakes = [];
     readonly List<MeshAsset> _impostorWork = [];
-    /// <summary>Resident atlases being refined or coarsened (their new textures loading or uploading).</summary>
+    /// <summary>
+    /// Resident atlases being refined or coarsened (their new textures loading or uploading).
+    /// </summary>
     readonly List<MeshAsset> _impostorRefining = [];
     long _impostorBytes, _lastImpostorScan;
     int _impostorsBaked, _impostorsLoaded, _impostorUnloads, _impostorRefined, _impostorCoarsened, _impostorRefused, _impostorDropped;
 
-    /// <summary>What the last plan found (see <see cref="ImpostorPopIn"/>).</summary>
+    /// <summary>
+    /// What the last plan found (see <see cref="ImpostorPopIn"/>).
+    /// </summary>
     int _impostorWantedCount, _impostorAdmittedCount, _impostorMissingCount, _impostorCoarseCount, _impostorExtraCount;
     long _impostorPlannedBytes;
 
@@ -174,13 +243,16 @@ public sealed partial class FoliageRenderer
     /// (<c>NotAdmitted</c>), admitted ones not resident yet (<c>Missing</c>: meshes are drawn until they are), resident ones held coarser than their
     /// nearest instance wants while a refine is on its way (<c>Coarse</c>: a blurrier crown for a moment), and the refines in flight.
     /// </summary>
-    public (int NotAdmitted, int Missing, int Coarse, int Refining) ImpostorPopIn => (_impostorWantedCount - _impostorAdmittedCount, _impostorMissingCount, _impostorCoarseCount, _impostorRefining.Count);
+    public (int NotAdmitted, int Missing, int Coarse, int Refining) ImpostorPopIn => (_impostorWantedCount - _impostorAdmittedCount,
+        _impostorMissingCount, _impostorCoarseCount, _impostorRefining.Count);
 
-    /// <summary>Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).</summary>
+    /// <summary>
+    /// Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).
+    /// </summary>
     int ImpostorPending => _impostorWork.Count + _impostorBakes.Count + (_impostorBake is null ? 0 : 1);
     /// <summary>
-    /// The atlases a loading screen waits for: those read from the cache and uploading. Not the reads still queued (behind a long setting's far grass jobs
-    /// on the workers they can wait half a minute) nor the bakes and their uploads: the meshes draw until each atlas is ready.
+    /// The atlases a loading screen waits for: those read from the cache and uploading. Not the reads still queued (behind a long setting's far grass
+    /// jobs on the workers they can wait half a minute) nor the bakes and their uploads: the meshes draw until each atlas is ready.
     /// </summary>
     int ImpostorUploadsAwaited
     {
@@ -198,23 +270,39 @@ public sealed partial class FoliageRenderer
 
     // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
 
-    /// <summary>A TERRAIN-mode mesh whose triangles cover less than this share of its bounding sphere's surface gets no impostor.</summary>
+    /// <summary>
+    /// A TERRAIN-mode mesh whose triangles cover less than this share of its bounding sphere's surface gets no impostor.
+    /// </summary>
     const float RockMinSurface = 0.06f;
-    /// <summary>The terrain of the last <see cref="Draw"/> (the rock bake's material; null before the first), and whether it draws textured (rocks are TERRAIN-mode only then).</summary>
+    /// <summary>
+    /// The terrain of the last <see cref="Draw"/> (the rock bake's material; null before the first), and whether it draws textured (rocks are
+    /// TERRAIN-mode only then).
+    /// </summary>
     TerrainRenderer? _rockTerrain;
     bool _drawTextures = true;
     float _drawMaterialDistance = 30000;
-    /// <summary>The terrain the TERRAIN-mode rocks are textured by and baked with; set by the world frame (so the offscreen settle, which updates before it draws, has it), and by every <see cref="Draw"/>.</summary>
+    /// <summary>
+    /// The terrain the TERRAIN-mode rocks are textured by and baked with; set by the world frame (so the offscreen settle, which updates before it
+    /// draws, has it), and by every <see cref="Draw"/>.
+    /// </summary>
     public TerrainRenderer? Terrain { get => _rockTerrain; set => _rockTerrain = value; }
-    /// <summary>Rock impostors are on: the impostors Enhancement, the GPU cull (the CPU cull has no rock impostors) and textures.</summary>
+    /// <summary>
+    /// Rock impostors are on: the impostors Enhancement, the GPU cull (the CPU cull has no rock impostors) and textures.
+    /// </summary>
     bool RockImpostorsActive => Impostors && GpuCull && _gpuCull is not null && _drawTextures && _rockTerrain is not null;
-    /// <summary>The holders of the rocks' per-biome impostors (see <see cref="MeshAsset.RockVariants"/>), for the loops that go over every atlas.</summary>
+    /// <summary>
+    /// The holders of the rocks' per-biome impostors (see <see cref="MeshAsset.RockVariants"/>), for the loops that go over every atlas.
+    /// </summary>
     readonly List<MeshAsset> _rockHolders = [];
 
-    /// <summary>Every asset that can hold an atlas: the meshes and the rocks' per-biome holders.</summary>
+    /// <summary>
+    /// Every asset that can hold an atlas: the meshes and the rocks' per-biome holders.
+    /// </summary>
     IEnumerable<MeshAsset> ImpostorAssets() => _assetsByMesh.Values.Concat(_rockHolders);
 
-    /// <summary>The holder of a rock's impostor for the biome of terrain row <paramref name="row"/> (made on first ask).</summary>
+    /// <summary>
+    /// The holder of a rock's impostor for the biome of terrain row <paramref name="row"/> (made on first ask).
+    /// </summary>
     MeshAsset RockVariant(MeshAsset rock, int row)
     {
         rock.RockVariants ??= [];
@@ -237,17 +325,26 @@ public sealed partial class FoliageRenderer
         return v;
     }
 
-    /// <summary>The holder of a rock's impostor for terrain row <paramref name="row"/> when its atlas is resident, else null.</summary>
+    /// <summary>
+    /// The holder of a rock's impostor for terrain row <paramref name="row"/> when its atlas is resident, else null.
+    /// </summary>
     static MeshAsset? ReadyRock(MeshAsset rock, int row) =>
         row >= 0 && rock.RockVariants is { } vs && vs.TryGetValue(row, out var v) && v.Impostor is { Stage: ImpostorStage.Ready } ? v : null;
 
-    /// <summary>A mesh's name for the log; a rock's per-biome holder adds its terrain row.</summary>
+    /// <summary>
+    /// A mesh's name for the log; a rock's per-biome holder adds its terrain row.
+    /// </summary>
     static string Label(MeshAsset a) => a.RockOf is null ? a.Mesh.Name : $"{a.Mesh.Name} [biome row {a.RockRow}]";
 
-    /// <summary>The class of a mesh's atlas from its largest instance's radius: TERRAIN-mode rocks have their own largest frame.</summary>
-    static ImpostorClass? ClassFor(MeshAsset a, float worldRadius, int triangles) => a.Terrain ? ImpostorClass.ForRock(worldRadius, triangles) : ImpostorClass.For(worldRadius, triangles);
+    /// <summary>
+    /// The class of a mesh's atlas from its largest instance's radius: TERRAIN-mode rocks have their own largest frame.
+    /// </summary>
+    static ImpostorClass? ClassFor(MeshAsset a, float worldRadius, int triangles) => a.Terrain ? ImpostorClass.ForRock(worldRadius,
+        triangles) : ImpostorClass.For(worldRadius, triangles);
 
-    /// <summary>The class of an atlas that is not loaded yet, estimated from the mesh's own bounds (the exact one comes with the load).</summary>
+    /// <summary>
+    /// The class of an atlas that is not loaded yet, estimated from the mesh's own bounds (the exact one comes with the load).
+    /// </summary>
     static ImpostorClass? EstimateClass(MeshAsset a)
     {
         if (!a.ClassEstimated && a.HasBounds)
@@ -260,21 +357,27 @@ public sealed partial class FoliageRenderer
         return a.EstimatedClass;
     }
 
-    /// <summary>The ground distance from which a mesh would be its impostor, for an atlas of class <paramref name="cls"/> (exact once loaded): the impostor
-    /// distance for medium and large atlases, in proportion to the size for the small class.</summary>
+    /// <summary>
+    /// The ground distance from which a mesh would be its impostor, for an atlas of class <paramref name="cls"/> (exact once loaded): the impostor
+    /// distance for medium and large atlases, in proportion to the size for the small class.
+    /// </summary>
     float TransitionFor(MeshAsset a, in ImpostorClass cls, float worldRadius, Group? g = null)
     {
         float t = cls.Transition(worldRadius, DistanceFor(a));
         return g is null || !ScreenLod ? t : ScreenTransition(a, cls, t, g);
     }
 
-    /// <summary>The nearest a <c>screen-lod</c> transition goes, whatever the sizes: ground units.</summary>
+    /// <summary>
+    /// The nearest a <c>screen-lod</c> transition goes, whatever the sizes: ground units.
+    /// </summary>
     const float ScreenLodMinTransition = 600;
 
     /// <summary>
-    /// The transition of a group under the <c>screen-lod</c> rule (<see cref="FoliageScreenLod.Transition"/>): the billboard replaces the mesh where the mesh's mean triangle (at the
-    /// coarsest level it can be drawn at) is under <see cref="ScreenLodTriPixels"/> square pixels for the group's largest instance, but not nearer than its atlas frame can be magnified
-    /// (the atlas was made for the largest instance at <paramref name="baseTransition"/>, so smaller instances of the group, and meshes with tiny triangles, switch nearer at the same size on the screen).
+    /// The transition of a group under the <c>screen-lod</c> rule (<see cref="FoliageScreenLod.Transition"/>): the billboard replaces the mesh where
+    /// the mesh's mean triangle (at the coarsest level it can be drawn at) is under <see cref="ScreenLodTriPixels"/> square pixels for the group's
+    /// largest instance, but not nearer than its atlas frame can be magnified (the atlas was made for the largest instance at
+    /// <paramref name="baseTransition"/>, so smaller instances of the group, and meshes with tiny triangles, switch nearer at the same size on the
+    /// screen).
     /// </summary>
     float ScreenTransition(MeshAsset a, in ImpostorClass cls, float baseTransition, Group g)
     {
@@ -291,19 +394,29 @@ public sealed partial class FoliageRenderer
         }
         if (!(a.ScreenPerRadian > 0)) return baseTransition;
         float radius = g.BoundsReady && g.MaxRadius > 0 ? g.MaxRadius : a.Radius * a.Mesh.MaxScale;
-        return Math.Min(baseTransition, Math.Max(FoliageScreenLod.Transition(baseTransition, radius, a.ScreenPerRadian, a.ScreenFloor), ScreenLodMinTransition));
+        return Math.Min(baseTransition, Math.Max(FoliageScreenLod.Transition(baseTransition, radius, a.ScreenPerRadian, a.ScreenFloor),
+            ScreenLodMinTransition));
     }
 
-    /// <summary>The impostor distance of a mesh:<see cref="LargeImpostorDistance"/> for large meshes other than trees (rocks, rock stacks, hoodoos, ruins; <see cref="FoliageSizes.LargeBillboard"/>), else <see cref="ImpostorDistance"/>.</summary>
+    /// <summary>
+    /// The impostor distance of a mesh:<see cref="LargeImpostorDistance"/> for large meshes other than trees (rocks, rock stacks, hoodoos, ruins;
+    /// <see cref="FoliageSizes.LargeBillboard"/>), else <see cref="ImpostorDistance"/>.
+    /// </summary>
     float DistanceFor(MeshAsset a) => a.HasBounds && a.LargeBillboard ? LargeImpostorDistance : ImpostorDistance;
 
-    /// <summary>The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).</summary>
-    float EstimatedTransition(MeshAsset a, Group? g = null) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale, g) : float.PositiveInfinity;
+    /// <summary>
+    /// The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).
+    /// </summary>
+    float EstimatedTransition(MeshAsset a, Group? g = null) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale,
+        g) : float.PositiveInfinity;
 
-    /// <summary>The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).</summary>
+    /// <summary>
+    /// The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).
+    /// </summary>
     float TransitionOf(MeshAsset a, Group? g = null)
     {
         if (!Impostors) return float.PositiveInfinity;
+
         // A rock has atlases per biome, one class for all of them (it follows from the mesh): the transition of any that is resident.
         if (a.Terrain)
         {
@@ -347,7 +460,9 @@ public sealed partial class FoliageRenderer
 
     // ---- residency: wanted, plan, refine ----
 
-    /// <summary>The atlases wanted this scan, with the nearest ground distance of any zone that would draw them as impostors (before the transition floor).</summary>
+    /// <summary>
+    /// The atlases wanted this scan, with the nearest ground distance of any zone that would draw them as impostors (before the transition floor).
+    /// </summary>
     readonly Dictionary<MeshAsset, float> _impostorWanted = [];
 
     struct PlanItem
@@ -376,7 +491,10 @@ public sealed partial class FoliageRenderer
         return skip;
     }
 
-    /// <summary>The GPU bytes of an atlas of <paramref name="grid"/> frames of <paramref name="framePixels"/> with <paramref name="skip"/> top albedo levels (one more of the normal map) left out: BC1 and BC5, same as <see cref="ImpostorTextures.BytesFor"/>.</summary>
+    /// <summary>
+    /// The GPU bytes of an atlas of <paramref name="grid"/> frames of <paramref name="framePixels"/> with <paramref name="skip"/> top albedo levels
+    /// (one more of the normal map) left out: BC1 and BC5, same as <see cref="ImpostorTextures.BytesFor"/>.
+    /// </summary>
     internal static long AtlasBytes(int framePixels, int grid, int skip)
     {
         int levels = BitOperations.Log2((uint)framePixels) - 1;
@@ -388,7 +506,9 @@ public sealed partial class FoliageRenderer
         return bytes;
     }
 
-    /// <summary>The limit from the current budget and pressure (once a scan).</summary>
+    /// <summary>
+    /// The limit from the current budget and pressure (once a scan).
+    /// </summary>
     void UpdateImpostorLimit()
     {
         long budget = _guard is { BudgetBytes: > 0 } g ? g.BudgetBytes : (long)Math.Min(Gpu.VideoMemoryBudget, (ulong)long.MaxValue);
@@ -396,15 +516,17 @@ public sealed partial class FoliageRenderer
     }
 
     /// <summary>
-    /// Decides, nearest first, which wanted atlases fit the limit and at which mip (<see cref="_impostorWanted"/> in, <see cref="_impostorPlan"/> out). A resident
-    /// atlas counts as nearer (<see cref="ImpostorStickiness"/>). An atlas that does not fit at the mip its nearest instance needs may take up to
-    /// <see cref="ImpostorMaxExtraLevels"/> more off; one that still does not fit stays a mesh.
+    /// Decides, nearest first, which wanted atlases fit the limit and at which mip (<see cref="_impostorWanted"/> in, <see cref="_impostorPlan"/>
+    /// out). A resident atlas counts as nearer (<see cref="ImpostorStickiness"/>). An atlas that does not fit at the mip its nearest instance needs
+    /// may take up to <see cref="ImpostorMaxExtraLevels"/> more off; one that still does not fit stays a mesh.
     /// </summary>
     void PlanImpostors(long now)
     {
         _impostorPlan.Clear();
-        // The distance the mip is chosen for is the nearest instance's divided by 2^margin: the sampler's lod at the screen's edge is up to half a level
-        // finer than the centre's (a ray off the axis crosses a frame plane at a larger angle) and the upscaler's texture bias (negative) makes it finer still.
+
+        // The distance the mip is chosen for is the nearest instance's divided by 2^margin: the sampler's lod at the screen's edge is up to half a
+        // level finer than the centre's (a ray off the axis crosses a frame plane at a larger angle) and the upscaler's texture bias (negative) makes
+        // it finer still.
         float margin = MathF.Pow(2, -(FarMipMargin + Math.Max(0, -Gpu.LodBias)));
         foreach (var (a, raw) in _impostorWanted)
         {
@@ -423,9 +545,11 @@ public sealed partial class FoliageRenderer
                 (frame, grid, levels, radius) = (est.FramePixels, est.Grid, est.Levels, a.Radius * a.Mesh.MaxScale);
                 t = TransitionFor(a, est, radius);
             }
+
             // Far mips: the nearest instance's ground distance, never inside the transition (an impostor is not drawn nearer).
             float need = Math.Max(raw * margin, t);
-            _impostorPlan.Add(new PlanItem { Asset = a, Need = need, Key = need * (s is { Stage: ImpostorStage.Ready } ? ImpostorStickiness : 1f), Frame = frame, Grid = grid, Levels = levels, Radius = radius });
+            _impostorPlan.Add(new PlanItem { Asset = a, Need = need, Key = need * (s is { Stage: ImpostorStage.Ready } ? ImpostorStickiness : 1f),
+                Frame = frame, Grid = grid, Levels = levels, Radius = radius });
         }
         _impostorPlan.Sort((x, y) => x.Key.CompareTo(y.Key));
         long limit = _impostorLimitBytes, total = 0;
@@ -437,6 +561,7 @@ public sealed partial class FoliageRenderer
             total += it.Bytes;
             _impostorPlan[i] = it;
         }
+
         // Over the limit: first the farthest atlases take one level more off (a blurrier far crown costs no frame time; a mesh does), then the next
         // farthest, and so on, a pass at a time up to the most levels allowed; only then are the farthest left out, one by one.
         for (int pass = 1; pass <= ImpostorMaxExtraLevels && total > limit; pass++)
@@ -466,18 +591,22 @@ public sealed partial class FoliageRenderer
         (_impostorWantedCount, _impostorAdmittedCount, _impostorExtraCount, _impostorPlannedBytes) = (_impostorPlan.Count, admitted, extras, total);
     }
 
-    /// <summary>Applies the plan: drops what it left out, makes room by evicting atlases nobody wants when the real use is over the limit, requests the
-    /// admitted ones, refines or coarsens the resident ones. Counts what is not yet in place.</summary>
+    /// <summary>
+    /// Applies the plan: drops what it left out, makes room by evicting atlases nobody wants when the real use is over the limit, requests the
+    /// admitted ones, refines or coarsens the resident ones. Counts what is not yet in place.
+    /// </summary>
     void ApplyImpostorPlan(long now)
     {
         long limit = _impostorLimitBytes;
         _impostorRefineQueue.Clear();
+
         // Bytes the admitted atlases that are not resident yet will take.
         long pending = 0;
         foreach (var it in _impostorPlan)
             if (it.Admit && it.Asset.Impostor is not { Stage: ImpostorStage.Ready }) pending += it.Bytes;
         bool pressure = _guard is { Pressure: true };
         if (pressure && SpikeLog.Enabled) SpikeLog.Note("vram guard pressure (impostor plan)");
+
         // Atlases nobody wanted this scan go first (least recently used first) when the real use plus what is coming passes the limit.
         if (_impostorBytes + pending > limit)
         {
@@ -527,20 +656,28 @@ public sealed partial class FoliageRenderer
             int want = Math.Clamp(SkipFor(s.FramePixels, s.Levels, s.WorldRadius, it.Need) + it.Extra, 0, s.Levels - 1);
             s.WantSkip = want;
             if (want < s.Skip) coarse++;
+
             // How long it has held a finer level than wanted (a candidate for coarsening).
             if (want > s.Skip) { if (s.FinerSince == 0) s.FinerSince = now; }
             else s.FinerSince = 0;
+
             // Finer: an instance is coming near (refine at once); coarser: only when the budget needs it, or after holding more than needed for a while.
-            if (want < s.Skip || (want > s.Skip && (over || (want >= s.Skip + 2 && now - s.FinerSince > ImpostorCoarsenSeconds * 1000)))) _impostorRefineQueue.Add(a);
+            if (want < s.Skip || (want > s.Skip && (over || (want >= s.Skip + 2 && now - s.FinerSince > ImpostorCoarsenSeconds * 1000))))
+                _impostorRefineQueue.Add(a);
         }
         (_impostorMissingCount, _impostorCoarseCount) = (missing, coarse);
         StartQueuedRefines(now);
     }
 
-    /// <summary>Atlases the plan wants remade (finer or coarser), from the last scan: <see cref="StartQueuedRefines"/> starts them as slots free up.</summary>
+    /// <summary>
+    /// Atlases the plan wants remade (finer or coarser), from the last scan: <see cref="StartQueuedRefines"/> starts them as slots free up.
+    /// </summary>
     readonly List<MeshAsset> _impostorRefineQueue = [];
 
-    /// <summary>Starts refines from the queue while fewer than <see cref="ImpostorMaxRefines"/> run: finer ones first (an instance is about to need them), nearest first.</summary>
+    /// <summary>
+    /// Starts refines from the queue while fewer than <see cref="ImpostorMaxRefines"/> run: finer ones first (an instance is about to need them),
+    /// nearest first.
+    /// </summary>
     void StartQueuedRefines(long now)
     {
         while (_impostorRefining.Count < ImpostorMaxRefines && _impostorRefineQueue.Count > 0)
@@ -549,8 +686,10 @@ public sealed partial class FoliageRenderer
             float bestKey = float.PositiveInfinity;
             for (int i = 0; i < _impostorRefineQueue.Count; i++)
             {
-                // Not one already refining (its atlas loaded, its textures being made): a second refine would list it twice and free the atlas the first still uses.
-                if (_impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null, RefineAtlas: null, Making: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && _guard is { Pressure: true }))
+                // Not one already refining (its atlas loaded, its textures being made): a second refine would list it twice and free the atlas the
+                // first still uses.
+                if (_impostorRefineQueue[i].Impostor is not { Stage: ImpostorStage.Ready, Next: null, RefineLoad: null, RefineAtlas: null,
+                        Making: null } s || s.WantSkip == s.Skip || now < s.RefineRetryAt || (s.WantSkip < s.Skip && _guard is { Pressure: true }))
                 {
                     _impostorRefineQueue.RemoveAt(i--);
                     continue;
@@ -565,7 +704,10 @@ public sealed partial class FoliageRenderer
         }
     }
 
-    /// <summary>Reloads the atlas from the cache on a worker to remake its textures with <paramref name="skip"/> top levels left out (finer or coarser than now).</summary>
+    /// <summary>
+    /// Reloads the atlas from the cache on a worker to remake its textures with <paramref name="skip"/> top levels left out (finer or coarser than
+    /// now).
+    /// </summary>
     void StartRefine(MeshAsset a, int skip)
     {
         var s = a.Impostor!;
@@ -575,21 +717,26 @@ public sealed partial class FoliageRenderer
         s.RefineSkip = skip;
         s.RefineLoad = BackgroundWork.Run<ImpostorAtlas?>(() =>
         {
-            var atlas = cache.TryLoad(source, skip);   // only the levels the new textures keep are read (the albedo's from skip, the normal map's from skip + 1)
+            var atlas = cache.TryLoad(source,
+                skip);   // only the levels the new textures keep are read (the albedo's from skip, the normal map's from skip + 1)
             if (atlas is not null && (atlas.FramePixels != frame || atlas.Grid != grid)) Free(ref atlas);
             return atlas;
         });
         _impostorRefining.Add(a);
     }
 
-    /// <summary>Steps the refines in flight: the loaded atlas's new textures are made and uploaded within the frame's budget, then swapped in (the old ones are drawn until then).</summary>
+    /// <summary>
+    /// Steps the refines in flight: the loaded atlas's new textures are made and uploaded within the frame's budget, then swapped in (the old ones
+    /// are drawn until then).
+    /// </summary>
     void StepImpostorRefines(bool settling, ref long uploaded)
     {
         for (int i = 0; i < _impostorRefining.Count; i++)
         {
             var a = _impostorRefining[i];
             var s = a.Impostor;
-            if (s is not { Stage: ImpostorStage.Ready, Textures: not null }) { _impostorRefining.RemoveAt(i--); continue; }   // unloaded meanwhile (UnloadImpostor frees the rest)
+            // unloaded meanwhile (UnloadImpostor frees the rest)
+            if (s is not { Stage: ImpostorStage.Ready, Textures: not null }) { _impostorRefining.RemoveAt(i--); continue; }
             if (s.RefineLoad is { } load)
             {
                 if (!load.IsCompleted) continue;
@@ -604,7 +751,14 @@ public sealed partial class FoliageRenderer
                 {
                     long need = ImpostorTextures.BytesFor(atlas, s.RefineSkip, s.RefineSkip + 1);
                     bool finer = s.RefineSkip < s.Skip;
-                    if (finer && (_impostorBytes + need > _impostorLimitBytes * ImpostorTransientShare || _guard is { } g && !g.Allows((ulong)need))) { Abandon(s, _impostorRefining, i--); continue; }   // no room beside the old textures: the plan is asked again at the next scan
+                    bool noRoom = finer && (_impostorBytes + need > _impostorLimitBytes * ImpostorTransientShare
+                        || _guard is { } g && !g.Allows((ulong)need));
+                    if (noRoom)
+                    {
+                        // no room beside the old textures: the plan is asked again at the next scan
+                        Abandon(s, _impostorRefining, i--);
+                        continue;
+                    }
                     StartMaking(s, atlas, s.RefineSkip);
                     continue;
                 }
@@ -660,17 +814,22 @@ public sealed partial class FoliageRenderer
             {
                 _impostorCacheChecked = true;
                 _impostorCache.MaintainInBackground();
+
                 // The baker's programs compile here, with the loading, not at the first bake
                 // (the first bake of a cold cache was a 60 ms frame). The drawing programs and the quad follow below.
                 Gpu.EnsureFrame();
                 _impostorBaker ??= new ImpostorBaker(Gpu, _textures);
+
                 // The drawing programs and the quad too, here in the update (a frame is open, no pass is): not at the first impostor in view
                 // (a 7 ms hitch: both programs and the quad's upload).
                 _impostorDraw ??= new ImpostorDraw(Gpu, _nativeFrame);
             }
             UpdateImpostorLimit();
+
             // The nearest any transition is: the small class's smallest (a zone ending before it has no impostor ground for any mesh).
-            float shortest = Math.Min(ImpostorDistance, LargeImpostorDistance) * Math.Min(1, ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) * (1 - ImpostorBand);
+            float shortest = Math.Min(ImpostorDistance, LargeImpostorDistance) * Math.Min(1,
+                ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) * (1 - ImpostorBand);
+
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
             var lead = settling ? Vector2.Zero : _velocity * ImpostorLookaheadSeconds;
             if (ScreenLod) shortest = Math.Min(shortest, ScreenLodMinTransition * (1 - ImpostorBand));
@@ -686,6 +845,7 @@ public sealed partial class FoliageRenderer
                 foreach (var g in state.Groups)
                 {
                     var a = g.Asset;
+
                     // Only meshes that can be impostors here: the group reaches beyond the transition (its range ends after it and its
                     // fade band, as WithImpostor requires) and this zone has ground from the band on.
                     var (range, band) = RangeOf(g);
@@ -708,15 +868,18 @@ public sealed partial class FoliageRenderer
                         continue;
                     }
                     if (a.Impostor is { Stage: ImpostorStage.None, RetryAt: 0 }) continue;
+
                     // Its own transition (the exact one once the atlas is loaded; before that estimated from the mesh's bounds, which also rules out
                     // a mesh that could never have an atlas: the load would only find that out).
-                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius, g) : EstimatedTransition(a, g);
+                    float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius,
+                        g) : EstimatedTransition(a, g);
                     if (range - band < t || far < t * (1 - ImpostorBand)) continue;
                     _impostorWanted[a] = _impostorWanted.TryGetValue(a, out float known) ? Math.Min(known, urgency) : urgency;
                 }
             }
             PlanImpostors(now);
             ApplyImpostorPlan(now);
+
             // A jump (a save loaded from the menu's scene, a teleport): the atlases the old place wanted go now, not after the idle time,
             // so they do not hold the new place's to the limit meanwhile.
             if (_impostorScanEye is { } last && Vector3.Distance(last, eye) > ImpostorJumpDistance)
@@ -726,7 +889,8 @@ public sealed partial class FoliageRenderer
         }
         if (now - _lastImpostorScan < 2000 || settling)
             foreach (var a in ImpostorAssets())
-                if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds) UnloadImpostor(a);
+                if (a.Impostor is { Stage: ImpostorStage.Ready } s && (now - s.LastUsed) / 1000.0 > ImpostorIdleSeconds)
+                    UnloadImpostor(a);
         if (_impostorBakeMemoryHeld && _impostorBake is null && _impostorBakes.Count == 0 && now - _impostorLastBake > ImpostorBakeIdleMs)
         {
             _impostorBaker?.Trim();
@@ -734,7 +898,8 @@ public sealed partial class FoliageRenderer
             _impostorBakeMemoryHeld = false;
         }
         StartQueuedRefines(now);
-        if (_impostorWork.Count == 0 && _impostorBakes.Count == 0 && _impostorBake is null && _impostorRefining.Count == 0) return;
+        if (_impostorWork.Count == 0 && _impostorBakes.Count == 0 && _impostorBake is null && _impostorRefining.Count == 0)
+            return;
         Gpu.EnsureFrame();
         long uploaded = 0;
         var impWatch = _impostorWatch;
@@ -759,6 +924,7 @@ public sealed partial class FoliageRenderer
                 s.Stage = ImpostorStage.Uploading;
             }
             if (s.Stage != ImpostorStage.Uploading) continue;
+
             // At most a budget of atlas levels a frame, over all atlases: the copy into the staging is render-thread time (a flight that
             // reaches a new biome asks for dozens at once), and while settling, when no frames end, the staging lives in the frame's
             // constant chunks, which are kept for good.
@@ -772,7 +938,8 @@ public sealed partial class FoliageRenderer
         }
         StepImpostorRefines(settling, ref uploaded);
         StepBake(settling);
-        if (impWatch.Elapsed.TotalMilliseconds > 3) SpikeLog.Note("slow impostors", ms: impWatch.Elapsed.TotalMilliseconds);
+        if (impWatch.Elapsed.TotalMilliseconds > 3)
+            SpikeLog.Note("slow impostors", ms: impWatch.Elapsed.TotalMilliseconds);
     }
 
     /// <param name="firstLevel">The finest level worth reading from the cache: the albedo level the plan wants now, one finer for a nearer approach before the atlas arrives. An atlas
@@ -781,6 +948,7 @@ public sealed partial class FoliageRenderer
     void RequestImpostor(MeshAsset a, long now, int firstLevel)
     {
         if (a.Impostor is not null) return;
+
         // A TERRAIN-mode rock's atlas (a holder of one biome: MeshAsset.RockOf) is baked with that biome's terrain material; the mesh itself is never asked.
         bool rock = a.RockOf is not null;
         string? material = rock ? _rockTerrain?.RockBiomeKey(a.RockRow) : null;
@@ -801,7 +969,8 @@ public sealed partial class FoliageRenderer
             if (source is null) return default;
             var meshes = ImpostorMeshes.Load(source, messages);
             if (meshes is null) return (source, null, null, null);
-            var cls = rock ? ImpostorClass.ForRock(meshes.Radius * mesh.MaxScale, meshes.Triangles) : ImpostorClass.For(meshes.Radius * mesh.MaxScale, meshes.Triangles);
+            var cls = rock ? ImpostorClass.ForRock(meshes.Radius * mesh.MaxScale, meshes.Triangles) : ImpostorClass.For(meshes.Radius * mesh.MaxScale,
+                meshes.Triangles);
             if (rock && cls is not null)
             {
                 float share = meshes.SurfaceShare;
@@ -815,18 +984,31 @@ public sealed partial class FoliageRenderer
         _impostorWork.Add(a);
     }
 
-    /// <summary>The picture height the atlas resolution is chosen for (<see cref="SkipFor"/>): 1080 lines (above it the nearest impostors are slightly softer).</summary>
+    /// <summary>
+    /// The picture height the atlas resolution is chosen for (<see cref="SkipFor"/>): 1080 lines (above it the nearest impostors are slightly
+    /// softer).
+    /// </summary>
     const float ImpostorReferenceHeight = 1080;
-    /// <summary>Impostor atlases unused this long are unloaded (shorter than the meshes' <see cref="IdleSeconds"/>: an atlas is 9 to 36 MB).</summary>
+    /// <summary>
+    /// Impostor atlases unused this long are unloaded (shorter than the meshes' <see cref="IdleSeconds"/>: an atlas is 9 to 36 MB).
+    /// </summary>
     const double ImpostorIdleSeconds = 20;
-    /// <summary>The eye moved at least this far between two scans: a jump, after which only what the plan admitted stays resident.</summary>
+    /// <summary>
+    /// The eye moved at least this far between two scans: a jump, after which only what the plan admitted stays resident.
+    /// </summary>
     const float ImpostorJumpDistance = 10000;
     Vector3? _impostorScanEye;
 
-    /// <summary>The top levels an atlas never needs at a transition distance (<see cref="SkipFor"/> with the atlas's own radius).</summary>
-    internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition) => SkipFor(atlas.FramePixels, atlas.Levels, atlas.Radius * maxScale, transition);
+    /// <summary>
+    /// The top levels an atlas never needs at a transition distance (<see cref="SkipFor"/> with the atlas's own radius).
+    /// </summary>
+    internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition) => SkipFor(atlas.FramePixels, atlas.Levels,
+        atlas.Radius * maxScale, transition);
 
-    /// <summary>Makes the atlas's textures with <paramref name="skip"/> on a worker (<see cref="ImpostorTextures.MakeOffThread"/>); <see cref="TakeMade"/> takes them.</summary>
+    /// <summary>
+    /// Makes the atlas's textures with <paramref name="skip"/> on a worker (<see cref="ImpostorTextures.MakeOffThread"/>); <see cref="TakeMade"/>
+    /// takes them.
+    /// </summary>
     void StartMaking(ImpostorState s, ImpostorAtlas atlas, int skip)
     {
         var gpu = Gpu;
@@ -840,7 +1022,9 @@ public sealed partial class FoliageRenderer
         return made;
     }
 
-    /// <summary>The atlas's textures (made on a worker first), level by level within the frame's upload budget; true when resident.</summary>
+    /// <summary>
+    /// The atlas's textures (made on a worker first), level by level within the frame's upload budget; true when resident.
+    /// </summary>
     bool UploadImpostor(MeshAsset a, long budget, ref long uploaded)
     {
         var s = a.Impostor!;
@@ -848,9 +1032,10 @@ public sealed partial class FoliageRenderer
         {
             if (s.Making is null)
             {
-                // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the lighting,
-                // which varies slowly over a crown.
-                int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, Math.Max(s.Need, TransitionFor(a, s.Class, s.WorldRadius)))
+                // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the
+                // lighting, which varies slowly over a crown.
+                int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, Math.Max(s.Need,
+                    TransitionFor(a, s.Class, s.WorldRadius)))
                     + s.Extra, 0, s.Atlas.Levels - 1);
                 long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
                 if (!MakeImpostorRoom(need, a) || _guard is { } g && !g.Allows((ulong)need))
@@ -871,6 +1056,7 @@ public sealed partial class FoliageRenderer
             _impostorBytes += s.Textures.Bytes;
         }
         using var batch = Gpu.Uploads.Begin();
+
         // At least one step (a level larger than the budget still goes), then while the budget lasts.
         do
         {
@@ -886,12 +1072,15 @@ public sealed partial class FoliageRenderer
         return true;
     }
 
-    /// <summary>The bake in progress, a step a frame (rows recorded, read back, filtered and encoded on workers); the next one when it is done.</summary>
+    /// <summary>
+    /// The bake in progress, a step a frame (rows recorded, read back, filtered and encoded on workers); the next one when it is done.
+    /// </summary>
     void StepBake(bool settling)
     {
         if (_impostorBake is null)
         {
             if (_impostorBakes.Count == 0) return;
+
             // The one whose zones are closest (now or soon) first.
             int best = 0;
             for (int i = 1; i < _impostorBakes.Count; i++)
@@ -940,8 +1129,8 @@ public sealed partial class FoliageRenderer
     }
 
     /// <summary>
-    /// Safety net at an atlas's first upload: room for <paramref name="need"/> more bytes within the limit (and the transient share a refine may use):
-    /// atlases the last scans did not ask for (unused for 3 s) go, least recently used first. The plan has already counted what fits, so this
+    /// Safety net at an atlas's first upload: room for <paramref name="need"/> more bytes within the limit (and the transient share a refine may
+    /// use): atlases the last scans did not ask for (unused for 3 s) go, least recently used first. The plan has already counted what fits, so this
     /// only acts when refines or coarsenings are still in flight. False when it does not fit.
     /// </summary>
     bool MakeImpostorRoom(long need, MeshAsset except)
@@ -995,15 +1184,19 @@ public sealed partial class FoliageRenderer
         _impostorDraw?.Dispose();
     }
 
-    /// <summary>Frees a read atlas's native levels (docs/engine.md, "Native buffers") and clears the reference: wherever the state lets go of one.</summary>
+    /// <summary>
+    /// Frees a read atlas's native levels (docs/engine.md, "Native buffers") and clears the reference: wherever the state lets go of one.
+    /// </summary>
     static void Free(ref ImpostorAtlas? atlas)
     {
         atlas?.Dispose();
         atlas = null;
     }
 
-    /// <summary>Waits for the state's loads in flight and frees every atlas it holds (after its <see cref="ImpostorState.Next"/> textures, which read the refine's),
-    /// and the textures made for it on a worker that were never used.</summary>
+    /// <summary>
+    /// Waits for the state's loads in flight and frees every atlas it holds (after its <see cref="ImpostorState.Next"/> textures, which read the
+    /// refine's), and the textures made for it on a worker that were never used.
+    /// </summary>
     static void FreeLoads(ImpostorState s)
     {
         if (s.Making is { } making)
@@ -1027,9 +1220,13 @@ public sealed partial class FoliageRenderer
 
     // ---- drawing ----
 
-    /// <summary>The impostor batches of the current view, in work-list order (the GPU path: after the mesh and rock batches).</summary>
+    /// <summary>
+    /// The impostor batches of the current view, in work-list order (the GPU path: after the mesh and rock batches).
+    /// </summary>
     readonly List<MeshAsset> _gpuImpostorOrder = [];
-    /// <summary>The CPU path's impostor batches (the cull's emission order), and its batches by mesh.</summary>
+    /// <summary>
+    /// The CPU path's impostor batches (the cull's emission order), and its batches by mesh.
+    /// </summary>
     readonly List<Batch> _impostorActive = [];
     readonly Dictionary<MeshAsset, Batch> _impostorBatches = [];
 
@@ -1040,7 +1237,9 @@ public sealed partial class FoliageRenderer
         public uint FirstInstance, Instances;
     }
 
-    /// <summary>The current view's impostor draws: one per impostor batch shown (the GPU path) or with instances (the CPU path).</summary>
+    /// <summary>
+    /// The current view's impostor draws: one per impostor batch shown (the GPU path) or with instances (the CPU path).
+    /// </summary>
     readonly List<ImpostorDrawItem> _impostorDraws = [];
 
     Batch ImpostorBatchOf(MeshAsset a)
@@ -1061,12 +1260,15 @@ public sealed partial class FoliageRenderer
         if (visible.Length == 0) return;
         DrawnInstances += visible.Length;
         var batch = ImpostorBatchOf(a);
-        if (batch.Count + visible.Length > batch.Data.Length) Array.Resize(ref batch.Data, Math.Max(batch.Data.Length * 2, batch.Count + visible.Length));
+        if (batch.Count + visible.Length > batch.Data.Length)
+            Array.Resize(ref batch.Data, Math.Max(batch.Data.Length * 2, batch.Count + visible.Length));
         visible.CopyTo(batch.Data.AsSpan(batch.Count));
         batch.Count += visible.Length;
     }
 
-    /// <summary>The impostor draws: per impostor batch shown (GPU) or not empty (CPU).</summary>
+    /// <summary>
+    /// The impostor draws: per impostor batch shown (GPU) or not empty (CPU).
+    /// </summary>
     void PrepareImpostors(bool gpu)
     {
         _impostorDraws.Clear();
@@ -1078,7 +1280,8 @@ public sealed partial class FoliageRenderer
         }
         else
             foreach (var b in _impostorActive)
-                if (b.Count > 0) _impostorDraws.Add(new ImpostorDrawItem { Asset = b.Asset, Batch = b.Index, FirstInstance = (uint)b.Offset, Instances = (uint)b.Count });
+                if (b.Count > 0) _impostorDraws.Add(new ImpostorDrawItem { Asset = b.Asset, Batch = b.Index, FirstInstance = (uint)b.Offset,
+                        Instances = (uint)b.Count });
         DrawCalls += _impostorDraws.Count;
     }
 
@@ -1093,7 +1296,8 @@ public sealed partial class FoliageRenderer
         if (_impostorDraw is null || !Impostors) return;
         var state = Gpu.CurrentState() with { Cull = CullMode.None, AlphaToCoverage = coverage };
         _impostorDraw.Pipeline(depth ? ImpostorProgram.Caster : ImpostorProgram.Plain, state, Gpu.CurrentTargets().Formats);
-        if (!depth && RockImpostorsActive) _impostorDraw.Pipeline(ImpostorProgram.Rock, state, Gpu.CurrentTargets().Formats);
+        if (!depth && RockImpostorsActive)
+            _impostorDraw.Pipeline(ImpostorProgram.Rock, state, Gpu.CurrentTargets().Formats);
         if (!depth && PrepassView && ImpostorPrepass.Enabled && FoliagePrepass.Enabled && !coverage)
         {
             _impostorDraw.Pipeline(ImpostorProgram.Prepass, state with { ColourMask = 0 }, Gpu.CurrentTargets().Formats);
@@ -1101,16 +1305,25 @@ public sealed partial class FoliageRenderer
         }
     }
 
-    /// <summary>Which billboards an <see cref="AddImpostorDraws"/> call draws and with which program: the scene's (all, the colour program with its discards), the depth prepass (the plain ones), the colour after it (the plain ones, no discards) or the rocks' alone.</summary>
+    /// <summary>
+    /// Which billboards an <see cref="AddImpostorDraws"/> call draws and with which program: the scene's (all, the colour program with its discards),
+    /// the depth prepass (the plain ones), the colour after it (the plain ones, no discards) or the rocks' alone.
+    /// </summary>
     enum ImpostorPass { Scene, Prepass, AfterPrepass, RocksOnly }
 
-    /// <summary>The impostor draws appended to a mesh segment's job (after its mesh draws; no culling, the rows already bound): a colour view's
-    /// lit program, or a cascade's caster facing the sun (the direction towards it from the cascade's matrix).</summary>
-    void AddImpostorDraws(MeshJob job, bool depth, Matrix4x4 viewProjection, PassTargets targets, DrawState state, bool coverage, bool indirect, int argsFirst, ImpostorPass pass = ImpostorPass.Scene)
+    /// <summary>
+    /// The impostor draws appended to a mesh segment's job (after its mesh draws; no culling, the rows already bound): a colour view's lit program,
+    /// or a cascade's caster facing the sun (the direction towards it from the cascade's matrix).
+    /// </summary>
+    void AddImpostorDraws(MeshJob job, bool depth, Matrix4x4 viewProjection, PassTargets targets, DrawState state, bool coverage, bool indirect,
+        int argsFirst, ImpostorPass pass = ImpostorPass.Scene)
     {
         _impostorDraw ??= new ImpostorDraw(Gpu, _nativeFrame);
         var drawState = state with { Cull = CullMode.None };
-        var program = depth ? ImpostorProgram.Caster : pass == ImpostorPass.Prepass ? ImpostorProgram.Prepass : pass == ImpostorPass.AfterPrepass ? ImpostorProgram.AfterPrepass : ImpostorProgram.Plain;
+        var program = depth ? ImpostorProgram.Caster
+            : pass == ImpostorPass.Prepass ? ImpostorProgram.Prepass
+            : pass == ImpostorPass.AfterPrepass ? ImpostorProgram.AfterPrepass
+            : ImpostorProgram.Plain;
         var pipeline = _impostorDraw.Pipeline(program, drawState, targets.Formats);
         var up = new Vector3(viewProjection.M12, viewProjection.M22, viewProjection.M32);
         up = up.LengthSquared() > 0 ? Vector3.Normalize(up) : Vector3.UnitY;
@@ -1118,7 +1331,9 @@ public sealed partial class FoliageRenderer
         var view = depth && forward.LengthSquared() > 0 ? new Vector4(-Vector3.Normalize(forward), 1) : Vector4.Zero;
         var quad = _impostorDraw.Quad;
         GpuBufferBinding[] none = [];
-        // A TERRAIN-mode rock's colour draws fade to the ground colour with distance as the terrain's mesh shader does (its own program, the terrain's maps in the push).
+
+        // A TERRAIN-mode rock's colour draws fade to the ground colour with distance as the terrain's mesh shader does (its own program, the
+        // terrain's maps in the push).
         GpuPipeline? rockPipeline = null;
         (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd, uint Flags) far = default;
         bool firstDraw = true;
@@ -1126,7 +1341,8 @@ public sealed partial class FoliageRenderer
         {
             var d = _impostorDraws[k];
             bool rockDraw = d.Asset.RockOf is not null && !depth && _rockTerrain is not null;
-            if (pass is ImpostorPass.Prepass or ImpostorPass.AfterPrepass ? rockDraw : pass == ImpostorPass.RocksOnly && !rockDraw) continue;   // the prepass draws the plain billboards, the rocks' go after it
+            bool skipDraw = pass is ImpostorPass.Prepass or ImpostorPass.AfterPrepass ? rockDraw : pass == ImpostorPass.RocksOnly && !rockDraw;
+            if (skipDraw) continue;   // the prepass draws the plain billboards, the rocks' go after it
             var t = d.Asset.Impostor!.Textures!;
             var atlas = t.Atlas;
             var push = new ImpostorPush
@@ -1139,13 +1355,16 @@ public sealed partial class FoliageRenderer
                 Gloss = atlas.Gloss,
                 Coverage = coverage ? 1u : 0u,
                 View = view,
-                Spare = depth || !ImpostorQuad.Enabled || Vector3.DistanceSquared(d.Asset.Centre, atlas.Centre) > 1e-4f * atlas.Radius * atlas.Radius ? 0 : ImpostorQuad.Pack(d.Asset.HalfExtent, atlas.Radius),
+                Spare = depth || !ImpostorQuad.Enabled || Vector3.DistanceSquared(d.Asset.Centre, atlas.Centre) > 1e-4f * atlas.Radius * atlas.Radius
+                    ? 0
+                    : ImpostorQuad.Pack(d.Asset.HalfExtent, atlas.Radius),
             };
             MeshPush bytes = default;
             var drawPipeline = pipeline;
             if (rockDraw)
             {
-                if (rockPipeline is null) { rockPipeline = _impostorDraw.Pipeline(ImpostorProgram.Rock, drawState, targets.Formats); far = _rockTerrain!.RockFarView(_drawMaterialDistance); }
+                if (rockPipeline is null) { rockPipeline = _impostorDraw.Pipeline(ImpostorProgram.Rock, drawState,
+                        targets.Formats); far = _rockTerrain!.RockFarView(_drawMaterialDistance); }
                 var rockPush = new ImpostorRockPush
                 {
                     Sphere = push.Sphere,

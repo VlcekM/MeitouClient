@@ -1,7 +1,9 @@
 using Meitou.Content;
 using Meitou.Data.Ogre;
 
-/// <summary>Reads every .skeleton under data/ and reports failures and what the files contain.</summary>
+/// <summary>
+/// Reads every .skeleton under data/ and reports failures and what the files contain.
+/// </summary>
 static class SkeletonSurvey
 {
     public static int Run(GameInstall install)
@@ -59,11 +61,14 @@ static class SkeletonSurvey
         Console.WriteLine($"{files.Count} skeletons, {failures.Count} failed");
         foreach (var (k, v) in versions) Console.WriteLine($"  {k}: {v}");
         Console.WriteLine("  blend modes: " + string.Join(", ", blendModes.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} x{kv.Value}")));
-        Console.WriteLine($"  {bones} bones (max {maxBones} per skeleton), {scaledBones} with a stored scale ({nonUnitBoneScale} not 1,1,1); {roots} roots, {multiRoot} skeletons with several roots");
-        Console.WriteLine($"  {animations} animations in {withAnimations} skeletons ({emptyAnimations} without tracks, {withBase} with base info, longest {maxLength:0.###} s)");
+        Console.WriteLine($"  {bones} bones (max {maxBones} per skeleton), {scaledBones} with a stored scale ({nonUnitBoneScale} not 1,1,1); "
+            + $"{roots} roots, {multiRoot} skeletons with several roots");
+        Console.WriteLine($"  {animations} animations in {withAnimations} skeletons ({emptyAnimations} without tracks, {withBase} with base info, "
+            + $"longest {maxLength:0.###} s)");
         Console.WriteLine($"  {tracks} tracks, {keyFrames} keyframes, {scaledKeyFrames} with a stored scale ({nonUnitKeyScale} not 1,1,1)");
         var names = files.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Console.WriteLine($"  {links} animation links to {linkTargets.Count} skeletons, {linkTargets.Keys.Count(names.Contains)} of them under data/");
+        Console.WriteLine($"  {links} animation links to {linkTargets.Count} skeletons, "
+            + $"{linkTargets.Keys.Count(names.Contains)} of them under data/");
         Console.WriteLine($"  chunk length mismatches (animation/track/keyframe): {lengthMismatches} in {mismatchFiles} files");
         foreach (var (file, error) in failures.Take(20)) Console.WriteLine($"  FAIL {file}: {error}");
         return failures.Count == 0 ? 0 : 1;

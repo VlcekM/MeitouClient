@@ -10,7 +10,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class BuildingTowns
 {
-    /// <summary>TownType.TOWN_NEST_MARKER, skipped by the game's nearest-town lookup.</summary>
+    /// <summary>
+    /// TownType.TOWN_NEST_MARKER, skipped by the game's nearest-town lookup.
+    /// </summary>
     public const int NestMarkerType = 8;
 
     readonly GameDatabase _db;
@@ -33,15 +35,21 @@ public sealed class BuildingTowns
                 _byHandle[(state.GetInt("handC"), state.GetInt("handCS"))] = t;
     }
 
-    /// <summary>The town of a building with state <paramref name="state"/> (or none) at <paramref name="position"/>, or null when there are no towns.</summary>
+    /// <summary>
+    /// The town of a building with state <paramref name="state"/> (or none) at <paramref name="position"/>, or null when there are no towns.
+    /// </summary>
     public TownPlacement? TownOf(GameRecord? state, Vector3 position) => TownByHandle(state) ?? NearestTown(position);
 
-    /// <summary>The town a GAMESTATE_BUILDING's <c>town*</c> handle names, or null when it has none or no town state matches.</summary>
+    /// <summary>
+    /// The town a GAMESTATE_BUILDING's <c>town*</c> handle names, or null when it has none or no town state matches.
+    /// </summary>
     public TownPlacement? TownByHandle(GameRecord? state) =>
         state is not null && state.GetInt("townTYPE") == (int)FcsRecordType.Town && state.Ints.ContainsKey("townC") &&
         _byHandle.TryGetValue((state.GetInt("townC"), state.GetInt("townCS")), out var town) ? town : null;
 
-    /// <summary>The nearest town by X/Z that is not a nest marker.</summary>
+    /// <summary>
+    /// The nearest town by X/Z that is not a nest marker.
+    /// </summary>
     public TownPlacement? NearestTown(Vector3 position)
     {
         var at = new Vector2(position.X, position.Z);
@@ -55,7 +63,9 @@ public sealed class BuildingTowns
         return best;
     }
 
-    /// <summary>The material of a town (cached per town placement), see <see cref="WorldObjectLayout.TownMaterial"/>.</summary>
+    /// <summary>
+    /// The material of a town (cached per town placement), see <see cref="WorldObjectLayout.TownMaterial"/>.
+    /// </summary>
     public GameRecord? MaterialOf(TownPlacement? town)
     {
         if (town is null) return null;

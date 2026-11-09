@@ -4,7 +4,9 @@ using Meitou.Data.Fcs;
 
 namespace Meitou.Data.World;
 
-/// <summary>A town with a baked distant mesh: one low-poly batch of its buildings, drawn when the town is far away.</summary>
+/// <summary>
+/// A town with a baked distant mesh: one low-poly batch of its buildings, drawn when the town is far away.
+/// </summary>
 /// <param name="Handle">The <c>handC</c> of the town's GAMESTATE_TOWN, which names the file.</param>
 /// <param name="MeshPath">Full path of <c>data/meshes/distant/distant_&lt;Handle&gt;.mesh</c>.</param>
 /// <param name="Position">The town's placement position; the mesh's vertices are relative to it (Y included).</param>
@@ -17,18 +19,26 @@ public sealed record DistantTown(string InstanceId, string TownId, string Name, 
 /// </summary>
 public static class DistantTowns
 {
-    /// <summary>Folder of the baked meshes below the install's <c>data/</c> folder.</summary>
+    /// <summary>
+    /// Folder of the baked meshes below the install's <c>data/</c> folder.
+    /// </summary>
     public const string RelativeDirectory = "meshes/distant";
 
-    /// <summary>The texture of the game's <c>DistantTown</c> material (in <c>data/buildings/distant/</c>).</summary>
+    /// <summary>
+    /// The texture of the game's <c>DistantTown</c> material (in <c>data/buildings/distant/</c>).
+    /// </summary>
     public const string DiffuseTexture = "distant_diffuse.dds";
 
-    /// <summary>Factor the game's <c>DistantTown</c> shader multiplies vertex colour × texture by.</summary>
+    /// <summary>
+    /// Factor the game's <c>DistantTown</c> shader multiplies vertex colour × texture by.
+    /// </summary>
     public const float AlbedoScale = 1.5f;
 
     public static string MeshFileName(int handle) => $"distant_{handle}.mesh";
 
-    /// <summary>The placed towns whose record has <c>distant mesh</c> set and whose baked mesh exists in the install.</summary>
+    /// <summary>
+    /// The placed towns whose record has <c>distant mesh</c> set and whose baked mesh exists in the install.
+    /// </summary>
     public static List<DistantTown> Find(GameInstall install, GameDatabase db, WorldLevelData world)
     {
         var handles = new Dictionary<string, int>(StringComparer.Ordinal);

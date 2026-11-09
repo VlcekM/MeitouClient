@@ -4,9 +4,9 @@ using static Meitou.Data.Ogre.OgreMeshChunk;
 namespace Meitou.Data.Ogre;
 
 /// <summary>
-/// Reads Ogre <c>.mesh</c> files, serializer versions 1.100, 1.8 and 1.41 (everything Kenshi ships) and 1.40 (common in mods).
-/// Follows the structure of Ogre's own MeshSerializerImpl (MIT): sections are parsed field by field,
-/// not by trusting chunk lengths, which old exporters sometimes got wrong.
+/// Reads Ogre <c>.mesh</c> files, serializer versions 1.100, 1.8 and 1.41 (everything Kenshi ships) and 1.40 (common in mods). Follows the structure
+/// of Ogre's own MeshSerializerImpl (MIT): sections are parsed field by field, not by trusting chunk lengths, which old exporters sometimes got
+/// wrong.
 /// </summary>
 public static class OgreMeshReader
 {
@@ -18,9 +18,9 @@ public static class OgreMeshReader
     public static OgreMesh ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
-    /// The mesh's bounds box without reading its geometry: walks the <c>M_MESH</c> sub-chunks by their length fields (seeking over the vertex and index
-    /// data) to <c>M_MESH_BOUNDS</c>. False when the walk meets a chunk it does not know, runs off the file, or the file has no bounds: the lengths of
-    /// old exporters can be wrong (see the class comment), so the caller then reads the whole file with <see cref="ReadFile"/>.
+    /// The mesh's bounds box without reading its geometry: walks the <c>M_MESH</c> sub-chunks by their length fields (seeking over the vertex and
+    /// index data) to <c>M_MESH_BOUNDS</c>. False when the walk meets a chunk it does not know, runs off the file, or the file has no bounds: the
+    /// lengths of old exporters can be wrong (see the class comment), so the caller then reads the whole file with <see cref="ReadFile"/>.
     /// </summary>
     public static bool TryReadBounds(string path, out OgreBounds bounds)
     {
@@ -56,15 +56,19 @@ public static class OgreMeshReader
                     bounds = new OgreBounds(min, max, BitConverter.ToSingle(box[24..]));
                     return float.IsFinite(min.X + min.Y + min.Z + max.X + max.Y + max.Z);
                 }
-                if (id is not ((ushort)Geometry or (ushort)SubMesh or (ushort)MeshSkeletonLink or (ushort)MeshBoneAssignment or (ushort)OgreMeshChunk.MeshLodLevel
-                    or (ushort)SubMeshNameTable or (ushort)EdgeLists or (ushort)Poses or (ushort)Animations or (ushort)TableExtremes)) return false;
+                if (id is not ((ushort)Geometry or (ushort)SubMesh or (ushort)MeshSkeletonLink or (ushort)MeshBoneAssignment
+                    or (ushort)OgreMeshChunk.MeshLodLevel or (ushort)SubMeshNameTable or (ushort)EdgeLists or (ushort)Poses or (ushort)Animations
+                    or (ushort)TableExtremes)) return false;
                 long next = f.Position + length - 6;
                 if (length < 6 || next > f.Length) return false;
                 f.Position = next;
             }
             return false;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     public static OgreMesh Read(byte[] data)
@@ -341,7 +345,9 @@ public static class OgreMeshReader
     }
 }
 
-/// <summary>Little-endian cursor over an Ogre serializer stream.</summary>
+/// <summary>
+/// Little-endian cursor over an Ogre serializer stream.
+/// </summary>
 sealed class OgreStream(byte[] data)
 {
     public const int ChunkHeaderSize = 6;
@@ -349,7 +355,9 @@ sealed class OgreStream(byte[] data)
     public int Position { get; private set; }
     public bool Eof => Position >= data.Length;
 
-    /// <summary>Reads the 0x1000 header id and the version string.</summary>
+    /// <summary>
+    /// Reads the 0x1000 header id and the version string.
+    /// </summary>
     public string ReadHeader()
     {
         ushort id = ReadUInt16();
@@ -363,8 +371,8 @@ sealed class OgreStream(byte[] data)
     public (ushort Id, int Length) ReadChunk() => (ReadUInt16(), checked((int)ReadUInt32()));
 
     /// <summary>
-    /// Reads the next chunk header if it is one of <paramref name="allowed"/>; otherwise leaves the position
-    /// unchanged (Ogre's "backpedal") so the parent can handle it.
+    /// Reads the next chunk header if it is one of <paramref name="allowed"/>; otherwise leaves the position unchanged (Ogre's "backpedal") so the
+    /// parent can handle it.
     /// </summary>
     public bool TryReadChunk(ReadOnlySpan<OgreMeshChunk> allowed, out OgreMeshChunk chunk, out int length)
     {
@@ -418,7 +426,9 @@ sealed class OgreStream(byte[] data)
 
     public Vector3 ReadVector3() => new(ReadFloat(), ReadFloat(), ReadFloat());
 
-    /// <summary>Ogre writes quaternions as x, y, z, w (its in-memory order is w first; the serializer reorders).</summary>
+    /// <summary>
+    /// Ogre writes quaternions as x, y, z, w (its in-memory order is w first; the serializer reorders).
+    /// </summary>
     public Quaternion ReadQuaternion() => new(ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat());
 
     public byte[] ReadBytes(int count)
@@ -435,7 +445,9 @@ sealed class OgreStream(byte[] data)
         Position += count;
     }
 
-    /// <summary>Ogre strings end at a newline (a trailing carriage return is dropped).</summary>
+    /// <summary>
+    /// Ogre strings end at a newline (a trailing carriage return is dropped).
+    /// </summary>
     public string ReadString()
     {
         int end = Array.IndexOf(data, (byte)'\n', Position);

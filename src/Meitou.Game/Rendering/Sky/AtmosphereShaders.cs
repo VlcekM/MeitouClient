@@ -6,17 +6,19 @@ using Meitou.Game.Rendering.Shadows;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// GLSL of the world view's sky, light and haze in the game's own terms (docs/formats/sky.md, docs/formats/lighting.md): SkyX's
-/// scattering integral evaluated per pixel with the game's options (<c>atmoSky</c>), the deferred lighting pass's sun, image-based
-/// ambient and specular light (<c>kenshiLight</c>), and the haze every world shader ends with (<c>atmoApply</c>). Colours are the game's
-/// HDR values; the post-processing applies the game's exposure. A program reads its uniforms and textures from the frame globals <see cref="SkyRenderer"/> publishes.
+/// GLSL of the world view's sky, light and haze in the game's own terms (docs/formats/sky.md, docs/formats/lighting.md): SkyX's scattering integral
+/// evaluated per pixel with the game's options (<c>atmoSky</c>), the deferred lighting pass's sun, image-based ambient and specular light
+/// (<c>kenshiLight</c>), and the haze every world shader ends with (<c>atmoApply</c>). Colours are the game's HDR values; the post-processing applies
+/// the game's exposure. A program reads its uniforms and textures from the frame globals <see cref="SkyRenderer"/> publishes.
 /// </summary>
 static class AtmosphereShaders
 {
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
     static string V3(System.Numerics.Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
 
-    /// <summary>The water and shafts share the fade before the rendered water's far clip.</summary>
+    /// <summary>
+    /// The water and shafts share the fade before the rendered water's far clip.
+    /// </summary>
     internal const string WaterHorizonFunctions = """
 
         float atmoWaterWeight(float dist, float farClip) { return 1.0 - smoothstep(0.5, 0.9, dist / max(farClip, 1.0)); }
@@ -35,7 +37,9 @@ static class AtmosphereShaders
         }
         """;
 
-    /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
+    /// <summary>
+    /// What every world shader includes (fragment stage, or the grass's vertex stage).
+    /// </summary>
     public static readonly string Functions = $$"""
 
         const float ATMO_PI = 3.14159265358979;

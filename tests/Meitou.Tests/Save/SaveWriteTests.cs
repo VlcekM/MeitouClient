@@ -7,7 +7,9 @@ using static Meitou.Tests.Save.SaveSamples;
 
 namespace Meitou.Tests.Save;
 
-/// <summary>Writing saves: new records, derived data, and the temp-folder commit (docs/formats/save.md).</summary>
+/// <summary>
+/// Writing saves: new records, derived data, and the temp-folder commit (docs/formats/save.md).
+/// </summary>
 public partial class SaveWriteTests
 {
     static SaveGame Small(out SavePlatoon platoon)
@@ -17,8 +19,11 @@ public partial class SaveWriteTests
         b.Game.Camera.Hour = 9;
         b.Game.Camera.Minute = 41;
         b.AddFaction("204-gamedata.base", "Nameless", true, 1000);
-        var other = b.AddFaction("10-x", "Other", false, 1000, [new SaveRelation("10-x", 100, 0, 0), new SaveRelation("204-gamedata.base", -20, 0, 0)], platoonCounter: 1);
+        var other = b.AddFaction("10-x", "Other", false, 1000,
+                [new SaveRelation("10-x", 100, 0, 0), new SaveRelation("204-gamedata.base", -20, 0, 0)], platoonCounter: 1);
+
         Assert.Equal(-20, other.Relations[1].Relation);
+
         b.AddTown("Town state A", "9-x-INGAME", "10-x", false, new ZoneCoordinate(20, 30));
         b.AddEmptyWorldState();
         platoon = b.AddPlatoon("Nameless_0", "Nameless", "204-gamedata.base", "5-x", new Vector3(100, 20, 300), money: 12);
@@ -40,12 +45,16 @@ public partial class SaveWriteTests
             game.Write(folder);
             var before = File.ReadAllBytes(Path.Combine(folder, "quick.save"));
             game.Camera.Day = 99;
+
             Assert.Throws<IOException>(() => game.Write(folder, () => throw new IOException("locked")));
+
             // Between the two renames the old folder was moved aside; it must be back, whole, and nothing else left.
             Assert.Equal(before, File.ReadAllBytes(Path.Combine(folder, "quick.save")));
             Assert.False(Directory.Exists(folder + ".old"));
             Assert.DoesNotContain(Directory.GetDirectories(root), d => Path.GetFileName(d).StartsWith("_current"));
+
             game.Write(folder);
+
             Assert.Equal(99, SaveGame.Load(folder).Camera.Day);
         }
         finally { Directory.Delete(root, recursive: true); }

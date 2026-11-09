@@ -9,26 +9,37 @@ namespace Meitou.Simulation.Production;
 
 public sealed partial class ProductionSystem
 {
-    /// <summary>The seconds of game time a prospecting takes (<b>Verified</b>: the progress adds the character's update time up to 1, <c>Task_Prospecting</c> update, docs/game/ai-tasks.md "Prospecting").</summary>
+    /// <summary>
+    /// The seconds of game time a prospecting takes (<b>Verified</b>: the progress adds the character's update time up to 1, <c>Task_Prospecting</c>
+    /// update, docs/game/ai-tasks.md "Prospecting").
+    /// </summary>
     public const float ProspectSeconds = 1;
 
-    /// <summary>The results window's resources in its order, with the names of <c>FUN_140a0c300</c> (<b>Verified</b>; carbon is not listed).</summary>
+    /// <summary>
+    /// The results window's resources in its order, with the names of <c>FUN_140a0c300</c> (<b>Verified</b>; carbon is not listed).
+    /// </summary>
     static readonly (int Resource, string Name)[] ProspectResources =
     [
         (MachineData.WaterResource, "Water"), (MachineData.GroundResource, "Fertility"), (ResourceField.StoneResource, "Stone"),
         (ResourceField.IronResource, "Iron"), (ResourceField.CopperResource, "Copper"),
     ];
 
-    /// <summary>Characters mid-prospecting; <see cref="ProspectStep"/> looks for them only while this is above 0.</summary>
+    /// <summary>
+    /// Characters mid-prospecting; <see cref="ProspectStep"/> looks for them only while this is above 0.
+    /// </summary>
     int _prospectors;
 
-    /// <summary>The order: the character stops where it stands and starts the task (serial phase). A character already at it keeps its progress.</summary>
+    /// <summary>
+    /// The order: the character stops where it stands and starts the task (serial phase). A character already at it keeps its progress.
+    /// </summary>
     void ProspectBegin(World world, ProspectOrder order)
     {
         if (world.Characters.TryResolveNext(order.Character, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.Prospecting, this), order.Queued);
     }
 
-    /// <summary>The prospecting's start: the character stops where it stands.</summary>
+    /// <summary>
+    /// The prospecting's start: the character stops where it stands.
+    /// </summary>
     void ProspectStart(World world, int slot)
     {
         var table = world.Characters;

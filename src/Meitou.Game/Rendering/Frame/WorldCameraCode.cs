@@ -33,7 +33,9 @@ public static class WorldCameraCode
         return Convert.ToHexString(b);
     }
 
-    /// <summary>The pose in <paramref name="text"/>, a code (spaces ignored) or a location as text; null when it is neither.</summary>
+    /// <summary>
+    /// The pose in <paramref name="text"/>, a code (spaces ignored) or a location as text; null when it is neither.
+    /// </summary>
     public static Pose? Decode(string? text) => DecodeHex(text) ?? DecodeLocation(text);
 
     static Pose? DecodeHex(string? text)
@@ -50,7 +52,9 @@ public static class WorldCameraCode
         return new Pose(new Vector3(v[0], v[1], v[2]), v[3], v[4], v[5]);
     }
 
-    /// <summary>The pose in a location as text (angles in degrees); null when <paramref name="text"/> holds none.</summary>
+    /// <summary>
+    /// The pose in a location as text (angles in degrees); null when <paramref name="text"/> holds none.
+    /// </summary>
     static Pose? DecodeLocation(string? text)
     {
         if (Location.Match(text ?? "") is not { Success: true } m) return null;
@@ -64,7 +68,9 @@ public static class WorldCameraCode
     public static void Apply(Pose pose, WorldCamera camera) =>
         (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (pose.Target, pose.Yaw, pose.Pitch, pose.Distance);
 
-    /// <summary>Moves <paramref name="camera"/> to the code in <paramref name="text"/>; false when it is not a camera code.</summary>
+    /// <summary>
+    /// Moves <paramref name="camera"/> to the code in <paramref name="text"/>; false when it is not a camera code.
+    /// </summary>
     public static bool TryApply(string? text, WorldCamera camera)
     {
         if (Decode(text) is not { } pose) return false;
@@ -73,5 +79,6 @@ public static class WorldCameraCode
     }
 
     public static string Describe(WorldCamera c) =>
-        $"target {c.Target.X:0}, {c.Target.Y:0}, {c.Target.Z:0}, yaw {c.Yaw * 180 / MathF.PI:0.#}, pitch {c.Pitch * 180 / MathF.PI:0.#}, distance {c.Distance:0}";
+        $"target {c.Target.X:0}, {c.Target.Y:0}, {c.Target.Z:0}, yaw {c.Yaw * 180 / MathF.PI:0.#}, "
+        + $"pitch {c.Pitch * 180 / MathF.PI:0.#}, distance {c.Distance:0}";
 }

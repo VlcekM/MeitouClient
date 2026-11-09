@@ -15,16 +15,22 @@ public static class AbToggles
 
     public static IEnumerable<Toggle> All => Toggles.Values;
 
-    /// <summary>Adds (or replaces) a switch; <paramref name="set"/>(true) is side A, <paramref name="set"/>(false) side B.</summary>
+    /// <summary>
+    /// Adds (or replaces) a switch; <paramref name="set"/>(true) is side A, <paramref name="set"/>(false) side B.
+    /// </summary>
     public static void Register(string name, Func<bool> get, Action<bool> set, string note = "") => Toggles[name] = new Toggle(name, get, set, note);
 
-    /// <summary>Registers every Faithful / Meitou switch under its id (A = Meitou, B = Faithful).</summary>
+    /// <summary>
+    /// Registers every Faithful / Meitou switch under its id (A = Meitou, B = Faithful).
+    /// </summary>
     public static void RegisterEnhancements(IEnumerable<Enhancement> switches)
     {
         foreach (var e in switches)
         {
             var enhancement = e;
-            Register(enhancement.Id, () => enhancement.IsMeitou, v => enhancement.IsMeitou = v, $"{enhancement.Name}: A = {enhancement.Meitou}, B = {enhancement.Faithful}");
+            string note = $"{enhancement.Name}: A = {enhancement.Meitou}, B = {enhancement.Faithful}";
+
+            Register(enhancement.Id, () => enhancement.IsMeitou, v => enhancement.IsMeitou = v, note);
         }
     }
 

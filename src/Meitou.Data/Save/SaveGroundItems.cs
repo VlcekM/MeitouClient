@@ -5,16 +5,25 @@ using Meitou.Data.Fcs;
 
 namespace Meitou.Data.Save;
 
-/// <summary>A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item (docs/formats/save.md "Zone files").</summary>
+/// <summary>
+/// A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item (docs/formats/save.md
+/// "Zone files").
+/// </summary>
 public sealed record SaveGroundItem(FcsInstance Instance, FcsRecord Record, SaveItem Item);
 
-/// <summary>Reads and writes the <c>1-itemlist</c> of a zone file (docs/formats/save.md "Zone files", loose items).</summary>
+/// <summary>
+/// Reads and writes the <c>1-itemlist</c> of a zone file (docs/formats/save.md "Zone files", loose items).
+/// </summary>
 public static partial class SaveGroundItems
 {
-    /// <summary>The string id of the list (<b>Observed</b>: every sample zone file with loose items).</summary>
+    /// <summary>
+    /// The string id of the list (<b>Observed</b>: every sample zone file with loose items).
+    /// </summary>
     public const string ListId = "1-itemlist";
 
-    /// <summary>The zone's loose items in list order; entries whose target is missing or no ITEM are skipped.</summary>
+    /// <summary>
+    /// The zone's loose items in list order; entries whose target is missing or no ITEM are skipped.
+    /// </summary>
     public static List<SaveGroundItem> Read(SaveZone zone)
     {
         var found = new List<SaveGroundItem>();

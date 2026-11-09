@@ -2,7 +2,9 @@ using System.Text.Json;
 
 namespace Meitou.Launcher;
 
-/// <summary>The launcher's settings and mod presets, in <c>launcher.json</c> in <see cref="DataDirectory"/>.</summary>
+/// <summary>
+/// The launcher's settings and mod presets, in <c>launcher.json</c> in <see cref="DataDirectory"/>.
+/// </summary>
 public sealed class LauncherConfig
 {
     /// <summary>
@@ -15,7 +17,9 @@ public sealed class LauncherConfig
 
     static string FilePath => Path.Combine(DataDirectory, "launcher.json");
 
-    /// <summary>Where <c>versions/</c> and <c>downloads/</c> go: <see cref="InstallFolder"/>, else <see cref="DataDirectory"/>.</summary>
+    /// <summary>
+    /// Where <c>versions/</c> and <c>downloads/</c> go: <see cref="InstallFolder"/>, else <see cref="DataDirectory"/>.
+    /// </summary>
     public static string InstallDirectory { get; private set; } = DataDirectory;
 
     string? _installFolder;
@@ -29,42 +33,62 @@ public sealed class LauncherConfig
         }
     }
 
-    /// <summary>The user confirmed the install and Kenshi folders in the first-start dialog.</summary>
+    /// <summary>
+    /// The user confirmed the install and Kenshi folders in the first-start dialog.
+    /// </summary>
     public bool FoldersConfirmed { get; set; }
-    /// <summary>The graphics preset was chosen for the hardware once (the first version installed whose game can detect it), or did not need
-    /// to be (the game's settings were already saved); the Graphics page's Detect button runs it again.</summary>
+    /// <summary>
+    /// The graphics preset was chosen for the hardware once (the first version installed whose game can detect it), or did not need to be (the game's
+    /// settings were already saved); the Graphics page's Detect button runs it again.
+    /// </summary>
     public bool PresetDetected { get; set; }
     public string? KenshiPath { get; set; }
     public bool IncludePrereleases { get; set; }
-    /// <summary>macOS only: <c>auto</c> (Vulkan when its loader exists, else Metal), <c>metal</c> or <c>vulkan</c>.
-    /// Other platforms always use Vulkan.</summary>
+    /// <summary>
+    /// macOS only: <c>auto</c> (Vulkan when its loader exists, else Metal), <c>metal</c> or <c>vulkan</c>. Other platforms always use Vulkan.
+    /// </summary>
     public string Renderer
     {
         get => _renderer;
         set => _renderer = value is "auto" or "metal" or "vulkan" ? value : "auto";
     }
     string _renderer = "auto";
-    /// <summary>macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a
-    /// VramGuard ceiling, not a hard reservation; Vulkan ignores it.</summary>
+    /// <summary>
+    /// macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a VramGuard ceiling, not a hard reservation;
+    /// Vulkan ignores it.
+    /// </summary>
     public int MetalMemoryBudget
     {
         get => _metalMemoryBudget;
         set
         {
-            if (value is not (5120 or 6144 or 8120)) { _metalMemoryBudget = 5120; return; }
+            if (value is not (5120 or 6144 or 8120))
+            {
+                _metalMemoryBudget = 5120;
+                return;
+            }
             _metalMemoryBudget = value == 8120 && !MacSupport.CanUseHighBudget ? 5120 : value;
         }
     }
     int _metalMemoryBudget = 5120;
     public string? SelectedVersion { get; set; }
-    /// <summary>A game release the user chose not to be offered as an update; a newer one is offered again.</summary>
+    /// <summary>
+    /// A game release the user chose not to be offered as an update; a newer one is offered again.
+    /// </summary>
     public string? SkippedVersion { get; set; }
     public string LaunchArguments { get; set; } = "";
-    /// <summary>Windows: start the game with Kenshi's Steam App ID (steam_appid.txt and SteamAppId), so Steam sees it as Kenshi.</summary>
+    /// <summary>
+    /// Windows: start the game with Kenshi's Steam App ID (steam_appid.txt and SteamAppId), so Steam sees it as Kenshi.
+    /// </summary>
     public bool LaunchAsSteamKenshi { get; set; } = true;
-    /// <summary>The locale code of the launcher and the game (also written to the Kenshi folder's settings.cfg <c>language</c>); the settings.cfg wins when it has one.</summary>
+    /// <summary>
+    /// The locale code of the launcher and the game (also written to the Kenshi folder's settings.cfg <c>language</c>); the settings.cfg wins when it
+    /// has one.
+    /// </summary>
     public string Language { get; set; } = "en_GB";
-    /// <summary>An installed launcher applies its own update at startup and restarts into it.</summary>
+    /// <summary>
+    /// An installed launcher applies its own update at startup and restarts into it.
+    /// </summary>
     public bool AutoUpdateLauncher { get; set; } = true;
     public List<ModPreset> Presets { get; set; } = [];
 
@@ -86,7 +110,9 @@ public sealed class LauncherConfig
     }
 }
 
-/// <summary>A named mod list: mod names in load order, each enabled or not.</summary>
+/// <summary>
+/// A named mod list: mod names in load order, each enabled or not.
+/// </summary>
 public sealed class ModPreset
 {
     public string Name { get; set; } = "";
@@ -100,7 +126,9 @@ public sealed class PresetMod
     public bool Enabled { get; set; }
 }
 
-/// <summary>Source-generated JSON for the launcher's files, so it works trimmed.</summary>
+/// <summary>
+/// Source-generated JSON for the launcher's files, so it works trimmed.
+/// </summary>
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(LauncherConfig))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(Releases.Cache))]

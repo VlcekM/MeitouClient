@@ -14,11 +14,15 @@ public sealed partial class DialogueSystem
     readonly SortedDictionary<CharacterId, CharacterId> _followers = new(Comparer<CharacterId>.Create(CompareIds));
     // The tick the last "Alarm raised" was posted (DA_CRIME_ALARM; at most one per 30 s, FUN_1409335e0); hashed.
 
-    /// <summary>The original's <c>Task_Runaway</c> first run (task 280, DA 34): 2000 + 400 x random units away from the threat (as <see cref="FleeSystem.FirstRun"/>).</summary>
+    /// <summary>
+    /// The original's <c>Task_Runaway</c> first run (task 280, DA 34): 2000 + 400 x random units away from the threat (as
+    /// <see cref="FleeSystem.FirstRun"/>).
+    /// </summary>
     const float RunAwayDistance = FleeSystem.FirstRun, RunAwaySpread = FleeSystem.RunSpread;
 
     /// <summary>
-    /// The short-term tag a character's squad sets on another (<c>FUN_1406744a0</c>): TEMP_ENEMY is not set on a character of an allied faction or one the speaker regards as friendly.
+    /// The short-term tag a character's squad sets on another (<c>FUN_1406744a0</c>): TEMP_ENEMY is not set on a character of an allied faction or
+    /// one the speaker regards as friendly.
     /// </summary>
     void FlagFrom(World world, CharacterCold mc, CharacterId me, CharacterId who, CharacterCold wc, int tag)
     {
@@ -28,9 +32,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// <paramref name="by"/>'s squad tags <paramref name="who"/> TEMP_ENEMY, so every mate takes it for an enemy whatever the relations say (docs/game/dialogue.md "Squad memory"): an
-    /// attacked character on its attacker (<c>AI::underMeleeAttack</c> / <c>underRangedAttack</c>, <c>Character::hitByMeleeAttack</c>, <c>iShotYou</c>), and a character that
-    /// <c>Character::attackTarget</c> sends at someone on its target.
+    /// <paramref name="by"/>'s squad tags <paramref name="who"/> TEMP_ENEMY, so every mate takes it for an enemy whatever the relations say
+    /// (docs/game/dialogue.md "Squad memory"): an attacked character on its attacker (<c>AI::underMeleeAttack</c> / <c>underRangedAttack</c>,
+    /// <c>Character::hitByMeleeAttack</c>, <c>iShotYou</c>), and a character that <c>Character::attackTarget</c> sends at someone on its target.
     /// </summary>
     internal void TagEnemy(World world, int by, int who)
     {
@@ -40,9 +44,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// "A regards B as friendly" (Character slot 126, <c>FUN_1407923d0</c>): the same faction; never when A's squad holds TEMP_ENEMY on B (or, for a player-faction A, B's squad on A);
-    /// always when B's squad holds TEMP_ALLY on a player-faction A, A's squad TEMP_ALLY on B, or A loves B (DC 52); else A's faction is allied to B's. Engine: the uniform disguise
-    /// the original can substitute for B's faction is not read.
+    /// "A regards B as friendly" (Character slot 126, <c>FUN_1407923d0</c>): the same faction; never when A's squad holds TEMP_ENEMY on B (or, for a
+    /// player-faction A, B's squad on A); always when B's squad holds TEMP_ALLY on a player-faction A, A's squad TEMP_ALLY on B, or A loves B (DC
+    /// 52); else A's faction is allied to B's. Engine: the uniform disguise the original can substitute for B's faction is not read.
     /// </summary>
     bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc)
     {
@@ -61,8 +65,8 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// A character put <paramref name="captive"/> in a cage (<c>Task_PutInSomething</c> for the cage, <c>FUN_140358670</c>, <b>Observed</b>): the captive's squad remembers the captor with
-    /// the long-term tag 5 MY_CAPTOR. Wired to <see cref="FactionDeeds.CagedHook"/>.
+    /// A character put <paramref name="captive"/> in a cage (<c>Task_PutInSomething</c> for the cage, <c>FUN_140358670</c>, <b>Observed</b>): the
+    /// captive's squad remembers the captor with the long-term tag 5 MY_CAPTOR. Wired to <see cref="FactionDeeds.CagedHook"/>.
     /// </summary>
     public void Captured(World world, int captor, int captive)
     {
@@ -72,11 +76,13 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// <c>FUN_14067aca0</c> over <c>FUN_140289400</c> (<b>Verified</b>): the short-term tags TEMP_ENEMY, criminal and aggressor on <paramref name="target"/> are cleared in the memory of the observer's
-    /// squad, of the squads of the allies it senses (stand-in: allied characters within sight) and of every squad of its faction. Run by the end of processing a slave (observer: the worker), by
-    /// <c>Task_PutInSomething</c> for a cage (<c>FUN_140358670</c>: the putter forgives the captive) and by <c>Task_ReleasePrisoner</c> (<c>FUN_1403570a0</c>: the prisoner forgives the releaser, and when the
-    /// releaser's faction books bounties the releaser forgives the prisoner). The original also clears the ENEMY bit of the target's entry in the observer's sensor (the scan recomputes it here) and
-    /// empties a list of its town (purpose <b>Unknown</b>); neither is modelled.
+    /// <c>FUN_14067aca0</c> over <c>FUN_140289400</c> (<b>Verified</b>): the short-term tags TEMP_ENEMY, criminal and aggressor on
+    /// <paramref name="target"/> are cleared in the memory of the observer's squad, of the squads of the allies it senses (stand-in: allied
+    /// characters within sight) and of every squad of its faction. Run by the end of processing a slave (observer: the worker), by
+    /// <c>Task_PutInSomething</c> for a cage (<c>FUN_140358670</c>: the putter forgives the captive) and by <c>Task_ReleasePrisoner</c>
+    /// (<c>FUN_1403570a0</c>: the prisoner forgives the releaser, and when the releaser's faction books bounties the releaser forgives the prisoner).
+    /// The original also clears the ENEMY bit of the target's entry in the observer's sensor (the scan recomputes it here) and empties a list of its
+    /// town (purpose <b>Unknown</b>); neither is modelled.
     /// </summary>
     public void Forgive(World world, int observer, CharacterId target)
     {
@@ -102,9 +108,10 @@ public sealed partial class DialogueSystem
     bool AlliedFactions(int a, int b) => a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
 
     /// <summary>
-    /// Event 13 UNLOCK_MY_CAGE_OR_SHACKLES fired by a freed prisoner at its liberator (<c>FUN_140684990</c>, <b>Observed</b>): unless the speaker's squad already remembers the liberator as its captor,
-    /// it remembers it with the long-term tag 3 FREED_ME and the short-term TEMP_ALLY. The original does this before choosing a line, whether or not one is said; only a speaker that is
-    /// awake gets that far (a dead or unconscious one only for the events of a mask that excludes 13).
+    /// Event 13 UNLOCK_MY_CAGE_OR_SHACKLES fired by a freed prisoner at its liberator (<c>FUN_140684990</c>, <b>Observed</b>): unless the speaker's
+    /// squad already remembers the liberator as its captor, it remembers it with the long-term tag 3 FREED_ME and the short-term TEMP_ALLY. The
+    /// original does this before choosing a line, whether or not one is said; only a speaker that is awake gets that far (a dead or unconscious one
+    /// only for the events of a mask that excludes 13).
     /// </summary>
     void Freed(World world, CharacterId speaker, CharacterId liberator)
     {
@@ -115,21 +122,29 @@ public sealed partial class DialogueSystem
         Memory.Flag(world, sc.SquadId, liberator, MemoryTag.TempAlly);
     }
 
-    /// <summary>The medic finders' slot 126 (<c>isAlly</c>, <see cref="RegardsFriendly(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for two characters by slot.</summary>
+    /// <summary>
+    /// The medic finders' slot 126 (<c>isAlly</c>, <see cref="RegardsFriendly(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for
+    /// two characters by slot.
+    /// </summary>
     public bool RegardsFriendly(World world, int a, int b)
     {
         var table = world.Characters;
         return table.Cold(a) is { } ac && table.Cold(b) is { } bc && RegardsFriendly(world, table.IdOf(a), ac, table.IdOf(b), bc);
     }
 
-    /// <summary>The loot finder's <c>FUN_14059a7b0</c> (DC 54, <see cref="ScrewOver(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for two characters by slot.</summary>
+    /// <summary>
+    /// The loot finder's <c>FUN_14059a7b0</c> (DC 54, <see cref="ScrewOver(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for two
+    /// characters by slot.
+    /// </summary>
     public bool ScrewOver(World world, int a, int b)
     {
         var table = world.Characters;
         return table.Cold(a) is { } ac && table.Cold(b) is { } bc && ScrewOver(world, table.IdOf(a), ac, table.IdOf(b), bc);
     }
 
-    /// <summary>The medic finders' <c>FUN_14059a670</c> (DC 55, <see cref="Helps"/>) for two characters by slot.</summary>
+    /// <summary>
+    /// The medic finders' <c>FUN_14059a670</c> (DC 55, <see cref="Helps"/>) for two characters by slot.
+    /// </summary>
     public bool Helps(World world, int a, int b)
     {
         var table = world.Characters;
@@ -137,8 +152,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// What the squad memory says to slot 125 (<c>isEnemy</c>, <c>FUN_14079c950</c>): 1 when a's squad holds TEMP_ENEMY on b (or, for a player-faction a, b's squad on a), -1 when it holds TEMP_ALLY on b, else 0
-    /// (the faction relation decides). Another faction's squads only; the same faction is never an enemy.
+    /// What the squad memory says to slot 125 (<c>isEnemy</c>, <c>FUN_14079c950</c>): 1 when a's squad holds TEMP_ENEMY on b (or, for a
+    /// player-faction a, b's squad on a), -1 when it holds TEMP_ALLY on b, else 0 (the faction relation decides). Another faction's squads only; the
+    /// same faction is never an enemy.
     /// </summary>
     public int EnemyMemory(World world, int a, int b)
     {
@@ -152,15 +168,20 @@ public sealed partial class DialogueSystem
 
     static bool Has(uint tags, int tag) => (tags >> tag & 1) != 0;
 
-    /// <summary>DC 52 I_LOVE_THIS_GUY (<c>FUN_140599590</c>): the squad's long-term tags on the character hold LIFESAVER or FREED_ME.</summary>
+    /// <summary>
+    /// DC 52 I_LOVE_THIS_GUY (<c>FUN_140599590</c>): the squad's long-term tags on the character hold LIFESAVER or FREED_ME.
+    /// </summary>
     bool Loves(World world, CharacterCold mc, CharacterId who) => (Memory.Find(world, mc.SquadId, who)?.Long & MemoryTag.LoveMask) is > 0;
 
-    /// <summary>DC 53 I_HATE_THIS_GUY (<c>FUN_1405995d0</c>): STOLE_FROM_ME, MY_CAPTOR, DEFEATED_MY_SQUAD_ONCE or KILLED_MY_FRIEND.</summary>
+    /// <summary>
+    /// DC 53 I_HATE_THIS_GUY (<c>FUN_1405995d0</c>): STOLE_FROM_ME, MY_CAPTOR, DEFEATED_MY_SQUAD_ONCE or KILLED_MY_FRIEND.
+    /// </summary>
     bool Hates(World world, CharacterCold mc, CharacterId who) => (Memory.Find(world, mc.SquadId, who)?.Long & MemoryTag.HateMask) is > 0;
 
     /// <summary>
-    /// DC 54 I_SHOULD_SCREW_THIS_GUY_OVER (<c>FUN_14059a7b0</c>), each rule overriding the ones before: either is a bandit; not when both have the same NPC class; yes for a traitorous
-    /// speaker; not when it regards S as friendly; not for an honourable speaker; yes when S's faction owns the speaker as a slave; not when it loves S; yes when it hates S; yes when S is dead.
+    /// DC 54 I_SHOULD_SCREW_THIS_GUY_OVER (<c>FUN_14059a7b0</c>), each rule overriding the ones before: either is a bandit; not when both have the
+    /// same NPC class; yes for a traitorous speaker; not when it regards S as friendly; not for an honourable speaker; yes when S's faction owns the
+    /// speaker as a slave; not when it loves S; yes when it hates S; yes when S is dead.
     /// </summary>
     bool ScrewOver(World world, CharacterId me, CharacterCold mc, CharacterId s, CharacterCold sc)
     {
@@ -178,8 +199,8 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DC 55 I_SHOULD_HELP_THIS_GUY (<c>FUN_14059a670</c>), each rule overriding the ones before: the same NPC class; not for a traitorous or bandit speaker; yes when it regards S as
-    /// friendly; yes when both are honourable; yes when it loves S; not when it hates S.
+    /// DC 55 I_SHOULD_HELP_THIS_GUY (<c>FUN_14059a670</c>), each rule overriding the ones before: the same NPC class; not for a traitorous or bandit
+    /// speaker; yes when it regards S as friendly; yes when both are honourable; yes when it loves S; not when it hates S.
     /// </summary>
     bool Helps(World world, CharacterId me, CharacterCold mc, CharacterId s, CharacterCold sc)
     {
@@ -194,8 +215,8 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_RUN_AWAY (34): the speaker drops what it does and runs from the target (task 280, <c>Task_Runaway</c>'s first run; engine: one run at full speed, then its AI takes over), and its
-    /// squad tags the target AGGRESSOR.
+    /// DA_RUN_AWAY (34): the speaker drops what it does and runs from the target (task 280, <c>Task_Runaway</c>'s first run; engine: one run at full
+    /// speed, then its AI takes over), and its squad tags the target AGGRESSOR.
     /// </summary>
     void RunAway(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
@@ -210,8 +231,8 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_GO_HOME (7): the speaker walks home (task 19; Meitou: its squad's home building, else its town, else its home centre, as the AI's going home) and its squad tags the target
-    /// AGGRESSOR.
+    /// DA_GO_HOME (7): the speaker walks home (task 19; Meitou: its squad's home building, else its town, else its home centre, as the AI's going
+    /// home) and its squad tags the target AGGRESSOR.
     /// </summary>
     void GoHome(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold? tc)
     {
@@ -224,7 +245,9 @@ public sealed partial class DialogueSystem
         TaskStart.Walk(world, s, home, SpeedMode.Walk, TaskType.GoHomebuilding, TaskSource.Npc);
     }
 
-    /// <summary>DA_SUMMON_MY_SQUAD (52): the speaker's squadmates run to it (task 67, "Running").</summary>
+    /// <summary>
+    /// DA_SUMMON_MY_SQUAD (52): the speaker's squadmates run to it (task 67, "Running").
+    /// </summary>
     void Summon(World world, CharacterId me)
     {
         var table = world.Characters;
@@ -235,9 +258,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_SEPARATE_TO_MY_OWN_SQUAD (28, <c>FUN_1405ce4e0</c>): the speaker (the target when the speaker is of the player's faction) leaves for a new squad of its faction made where it
-    /// stands, which takes a copy of the old squad's memory; nothing when it is alone already. Engine: the new NPC squad keeps the old one's template and home radius, no town, and the
-    /// AI makes it a fresh mind.
+    /// DA_SEPARATE_TO_MY_OWN_SQUAD (28, <c>FUN_1405ce4e0</c>): the speaker (the target when the speaker is of the player's faction) leaves for a new
+    /// squad of its faction made where it stands, which takes a copy of the old squad's memory; nothing when it is alone already. Engine: the new NPC
+    /// squad keeps the old one's template and home radius, no town, and the AI makes it a fresh mind.
     /// </summary>
     void Separate(World world, CharacterId who)
     {
@@ -262,8 +285,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_MASSIVE_ALARM (56): when the speaker is in a town, every member of its faction's squads tags the target TEMP_ENEMY, fires event 66 at it and goes for it (task 29 to its
-    /// position; Meitou: an attack order), and its hearing of the target is alarmed for 5 s (<c>FUN_1405cb0a0</c> over <c>FUN_140858f40</c>). Engine: only loaded squads.
+    /// DA_MASSIVE_ALARM (56): when the speaker is in a town, every member of its faction's squads tags the target TEMP_ENEMY, fires event 66 at it
+    /// and goes for it (task 29 to its position; Meitou: an attack order), and its hearing of the target is alarmed for 5 s (<c>FUN_1405cb0a0</c>
+    /// over <c>FUN_140858f40</c>). Engine: only loaded squads.
     /// </summary>
     void MassiveAlarm(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
@@ -285,7 +309,9 @@ public sealed partial class DialogueSystem
         if (fighters.Count > 0) world.Defer(new Combat.AttackOrder(fighters, target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
     }
 
-    /// <summary>DA_OPEN_NEAREST_GATE (54): the wall gate of the speaker's town nearest it starts opening (<c>FUN_140297040</c>, which tests no lock).</summary>
+    /// <summary>
+    /// DA_OPEN_NEAREST_GATE (54): the wall gate of the speaker's town nearest it starts opening (<c>FUN_140297040</c>, which tests no lock).
+    /// </summary>
     void OpenNearestGate(World world, CharacterId me)
     {
         if (Position(world, me) is not { } at || TownAt(at) is not (>= 0 and var town)) return;
@@ -301,8 +327,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_FOLLOW_WHILE_TALKING (16, Task_FollowAndTalk 164): the speaker follows the target with the shared follow task (FUN_140333400 / FUN_140333500, the same as a follow order: stand-off 20 to 40 on
-    /// the follower's side, the follow speed profile; <b>Verified</b>), a character in a fight excepted (engine choice: no walk to end a fight).
+    /// DA_FOLLOW_WHILE_TALKING (16, Task_FollowAndTalk 164): the speaker follows the target with the shared follow task (FUN_140333400 /
+    /// FUN_140333500, the same as a follow order: stand-off 20 to 40 on the follower's side, the follow speed profile; <b>Verified</b>), a character
+    /// in a fight excepted (engine choice: no walk to end a fight).
     /// </summary>
     void StartFollowing(World world, CharacterId who, CharacterId whom)
     {
@@ -311,7 +338,9 @@ public sealed partial class DialogueSystem
         TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, TaskType.FollowWhileTalking, TaskSource.Npc) { Target = whom });
     }
 
-    /// <summary>The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.</summary>
+    /// <summary>
+    /// The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.
+    /// </summary>
     void StepFollowers(World world)
     {
         if (_followers.Count == 0) return;
@@ -329,7 +358,10 @@ public sealed partial class DialogueSystem
         }
     }
 
-    /// <summary>A town stalker's state (<c>Task_TownStalker</c>, 165): its victim, the waypoint past the town gate once picked, and whether it has harassed / found no gate.</summary>
+    /// <summary>
+    /// A town stalker's state (<c>Task_TownStalker</c>, 165): its victim, the waypoint past the town gate once picked, and whether it has harassed /
+    /// found no gate.
+    /// </summary>
     sealed class Stalk(CharacterId target)
     {
         public CharacterId Target { get; } = target;
@@ -340,15 +372,19 @@ public sealed partial class DialogueSystem
 
     readonly SortedDictionary<CharacterId, Stalk> _stalkers = new(Comparer<CharacterId>.Create(CompareIds));
 
-    /// <summary>EV_HARASSMENT, what a stalker opens on its victim outside town; how far past the gate it waits (<c>Task_TownStalker</c>, <b>Verified</b> constant).</summary>
+    /// <summary>
+    /// EV_HARASSMENT, what a stalker opens on its victim outside town; how far past the gate it waits (<c>Task_TownStalker</c>, <b>Verified</b>
+    /// constant).
+    /// </summary>
     const int Harassment = 26;
     const float StalkPastGate = 300;
 
     /// <summary>
-    /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): in a town, the stalker waits <see cref="StalkPastGate"/> outside the town's first gate (on the line
-    /// from the town centre through it), facing its victim, while the victim is no farther from the centre than that point; with no gate it just stays. Once the victim is farther
-    /// out, or anywhere outside a town, it follows it and, once, when it is not talking, sends it event 26. It is done when, after that, neither is talking. Engine choices: re-aimed
-    /// every 15 ticks; the first gate is the town's first gate door in fixture order; the gate-code test on the gate's outside is not made.
+    /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): in a town, the stalker waits <see cref="StalkPastGate"/>
+    /// outside the town's first gate (on the line from the town centre through it), facing its victim, while the victim is no farther from the centre
+    /// than that point; with no gate it just stays. Once the victim is farther out, or anywhere outside a town, it follows it and, once, when it is
+    /// not talking, sends it event 26. It is done when, after that, neither is talking. Engine choices: re-aimed every 15 ticks; the first gate is
+    /// the town's first gate door in fixture order; the gate-code test on the gate's outside is not made.
     /// </summary>
     void StepStalkers(World world)
     {

@@ -7,13 +7,16 @@ using Meitou.Game.Rendering.Sky;
 namespace Meitou.Game.Rendering.Overlays;
 
 /// <summary>
-/// A debug view of the navigation mesh (Meitou only, docs/game/pathfinding.md "Meitou debug view"): translucent polygons and their edges over the finished picture,
-/// fainter where the scene hides them (sorted against the scene's depth like <see cref="MarkerRenderer"/>). The host hands it the geometry with
+/// A debug view of the navigation mesh (Meitou only, docs/game/pathfinding.md "Meitou debug view"): translucent polygons and their edges over the
+/// finished picture, fainter where the scene hides them (sorted against the scene's depth like <see cref="MarkerRenderer"/>). The host hands it the
+/// geometry with
 /// <see cref="SetMesh"/>, camera-independent, relative to an origin; nothing is drawn until then or while <see cref="Visible"/> is false.
 /// </summary>
 public sealed unsafe class NavmeshOverlayRenderer : IDisposable
 {
-    /// <summary>Floats per vertex: position relative to the origin, then RGBA.</summary>
+    /// <summary>
+    /// Floats per vertex: position relative to the origin, then RGBA.
+    /// </summary>
     public const int Stride = 7;
 
     const string Vertex = """
@@ -56,7 +59,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
     int _fillCount, _edgeCount;
     Vector3 _origin;
 
-    /// <summary>Drawn while true (and a mesh was set).</summary>
+    /// <summary>
+    /// Drawn while true (and a mesh was set).
+    /// </summary>
     public bool Visible { get; set; }
 
     public NavmeshOverlayRenderer(IGpuContext gpu)
@@ -76,7 +81,10 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         ], default);
     }
 
-    /// <summary>The mesh to show: <paramref name="fillData"/> a triangle list and <paramref name="edgeData"/> a line list, <see cref="Stride"/> floats a vertex, positions relative to <paramref name="at"/>.</summary>
+    /// <summary>
+    /// The mesh to show: <paramref name="fillData"/> a triangle list and <paramref name="edgeData"/> a line list, <see cref="Stride"/> floats a
+    /// vertex, positions relative to <paramref name="at"/>.
+    /// </summary>
     public void SetMesh(Vector3 at, float[] fillData, float[] edgeData)
     {
         _fill?.Dispose(); _edges?.Dispose();
@@ -85,7 +93,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         _origin = at;
     }
 
-    /// <summary>Frees the geometry (the view was hidden: tens of MB over a town); nothing is drawn until the next <see cref="SetMesh"/>.</summary>
+    /// <summary>
+    /// Frees the geometry (the view was hidden: tens of MB over a town); nothing is drawn until the next <see cref="SetMesh"/>.
+    /// </summary>
     public void Clear()
     {
         _fill?.Dispose(); _edges?.Dispose();
@@ -100,8 +110,11 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         return (buffer, data.Length / Stride);
     }
 
-    /// <summary>Draws over the finished <paramref name="picture"/>, each fragment sorted against the scene's <paramref name="sceneDepthTexture"/>
-    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> in <see cref="DepthConvention"/>).</summary>
+    /// <summary>
+    /// Draws over the finished <paramref name="picture"/>, each fragment sorted against the scene's <paramref name="sceneDepthTexture"/>
+    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> in
+    /// <see cref="DepthConvention"/>).
+    /// </summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
         Matrix4x4 sceneViewProjection, Vector3 eye)
     {
@@ -113,7 +126,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         _program.Set(_viewProjection, in vp);
         _program.Set(_offset, _origin - eye);
         _program.Set(_depthScale, renderWidth / (float)width, renderHeight / (float)height);
-        _program.Bind(_sceneDepth, new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+        _program.Bind(_sceneDepth,
+            new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), sceneDepthTexture.View()));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
             depthClamp: _gpu.DepthClamp);

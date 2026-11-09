@@ -1,6 +1,8 @@
 namespace Meitou.Data.Ogre;
 
-/// <summary>Ogre's ScriptCompiler error codes (CE_*), plus a few Meitou-only checks marked below.</summary>
+/// <summary>
+/// Ogre's ScriptCompiler error codes (CE_*), plus a few Meitou-only checks marked below.
+/// </summary>
 public enum OgreScriptError
 {
     StringExpected,
@@ -17,19 +19,29 @@ public enum OgreScriptError
     UnsupportedByRenderSystem,
     ReferenceToANonExistingObject,
 
-    /// <summary>Meitou only: an <c>import</c> names a file that cannot be found (Ogre ignores this silently).</summary>
+    /// <summary>
+    /// Meitou only: an <c>import</c> names a file that cannot be found (Ogre ignores this silently).
+    /// </summary>
     ImportNotFound,
 
-    /// <summary>Meitou only: a <c>{</c> without its <c>}</c> (Ogre then reads the object as a property and ignores it).</summary>
+    /// <summary>
+    /// Meitou only: a <c>{</c> without its <c>}</c> (Ogre then reads the object as a property and ignores it).
+    /// </summary>
     UnclosedBrace,
 
-    /// <summary>Meitou only: a <c>}</c> with no open block.</summary>
+    /// <summary>
+    /// Meitou only: a <c>}</c> with no open block.
+    /// </summary>
     UnmatchedBrace,
 
-    /// <summary>Meitou only: a material, program etc. whose name is already defined (see docs: winner Unknown).</summary>
+    /// <summary>
+    /// Meitou only: a material, program etc. whose name is already defined (see docs: winner Unknown).
+    /// </summary>
     DuplicateDefinition,
 
-    /// <summary>Meitou only: the file stopped compiling with an exception (lexer/parser error).</summary>
+    /// <summary>
+    /// Meitou only: the file stopped compiling with an exception (lexer/parser error).
+    /// </summary>
     Fatal,
 }
 
@@ -38,21 +50,25 @@ public sealed record OgreScriptDiagnostic(OgreScriptError Code, string File, int
     public override string ToString() => $"{File}({Line}): {Code}{(Message.Length > 0 ? ": " + Message : "")}";
 }
 
-/// <summary>One compiled script file: its top-level nodes after imports, inheritance and variables are processed.</summary>
+/// <summary>
+/// One compiled script file: its top-level nodes after imports, inheritance and variables are processed.
+/// </summary>
 public sealed class OgreScriptFile
 {
     public string Name { get; init; } = "";
     public List<OgreScriptNode> Nodes { get; init; } = [];
     public List<OgreScriptDiagnostic> Diagnostics { get; init; } = [];
 
-    /// <summary>Top-level objects Ogre would translate (abstract ones are skipped).</summary>
+    /// <summary>
+    /// Top-level objects Ogre would translate (abstract ones are skipped).
+    /// </summary>
     public IEnumerable<OgreScriptObject> Objects => Nodes.OfType<OgreScriptObject>().Where(o => !o.IsAbstract);
 }
 
 /// <summary>
-/// Compiles Ogre scripts the way Ogre's ScriptCompiler (MIT) does before translation: concrete tree to objects and
-/// properties, then <c>import</c>, then <c>:</c> inheritance (overlaying base objects), then <c>$variable</c>
-/// expansion. One instance per file, like Ogre's compile(), whose import and variable state is per call.
+/// Compiles Ogre scripts the way Ogre's ScriptCompiler (MIT) does before translation: concrete tree to objects and properties, then <c>import</c>,
+/// then <c>:</c> inheritance (overlaying base objects), then <c>$variable</c> expansion. One instance per file, like Ogre's compile(), whose import
+/// and variable state is per call.
 /// </summary>
 public sealed class OgreScriptCompiler
 {
@@ -70,8 +86,8 @@ public sealed class OgreScriptCompiler
     OgreScriptCompiler(Func<string, string?> importResolver) => this._importResolver = importResolver;
 
     /// <summary>
-    /// Compiles one file. Lexer and parser errors throw <see cref="OgreScriptException"/> (in Ogre they abort the file);
-    /// everything else is reported in <see cref="OgreScriptFile.Diagnostics"/>.
+    /// Compiles one file. Lexer and parser errors throw <see cref="OgreScriptException"/> (in Ogre they abort the file); everything else is reported
+    /// in <see cref="OgreScriptFile.Diagnostics"/>.
     /// </summary>
     public static OgreScriptFile Compile(string text, string file, Func<string, string?>? importResolver = null)
     {
@@ -118,14 +134,30 @@ public sealed class OgreScriptCompiler
 
         if (node.Type == OgreConcreteNodeType.Import && current is null)
         {
-            if (node.Children.Count > 2) { AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line); return; }
-            if (node.Children.Count < 2) { AddError(OgreScriptError.StringExpected, node.File, node.Line); return; }
+            if (node.Children.Count > 2)
+            {
+                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+                return;
+            }
+            if (node.Children.Count < 2)
+            {
+                AddError(OgreScriptError.StringExpected, node.File, node.Line);
+                return;
+            }
             created = new OgreScriptImport(node.Children[0].Token, node.Children[1].Token) { File = node.File, Line = node.Line };
         }
         else if (node.Type == OgreConcreteNodeType.VariableAssign)
         {
-            if (node.Children.Count > 2) { AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line); return; }
-            if (node.Children.Count < 2) { AddError(OgreScriptError.StringExpected, node.File, node.Line); return; }
+            if (node.Children.Count > 2)
+            {
+                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+                return;
+            }
+            if (node.Children.Count < 2)
+            {
+                AddError(OgreScriptError.StringExpected, node.File, node.Line);
+                return;
+            }
             if (node.Children[0].Type != OgreConcreteNodeType.Variable)
             {
                 AddError(OgreScriptError.VariableExpected, node.Children[0].File, node.Children[0].Line);
@@ -137,7 +169,11 @@ public sealed class OgreScriptCompiler
         }
         else if (node.Type == OgreConcreteNodeType.Variable)
         {
-            if (node.Children.Count > 0) { AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line); return; }
+            if (node.Children.Count > 0)
+            {
+                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+                return;
+            }
             created = new OgreScriptVariableAccess(node.Token) { File = node.File, Line = node.Line, Parent = current };
         }
         else if (node.Children.Count > 0)
@@ -187,13 +223,21 @@ public sealed class OgreScriptCompiler
         if (created is null) return;
         switch (current)
         {
-            case OgreScriptProperty p: p.Values.Add(created); break;
-            case OgreScriptObject o: o.Children.Add(created); break;
-            default: top.Add(created); break;
+            case OgreScriptProperty p:
+                p.Values.Add(created);
+                break;
+            case OgreScriptObject o:
+                o.Children.Add(created);
+                break;
+            default:
+                top.Add(created);
+                break;
         }
     }
 
-    /// <summary>Object types whose first word is not a name in some contexts (Ogre's isNameExcluded).</summary>
+    /// <summary>
+    /// Object types whose first word is not a name in some contexts (Ogre's isNameExcluded).
+    /// </summary>
     static bool IsNameExcluded(string cls, OgreScriptNode? parent)
     {
         string? container = cls switch
@@ -215,7 +259,11 @@ public sealed class OgreScriptCompiler
     {
         for (int i = 0; i < nodes.Count;)
         {
-            if (nodes[i] is not OgreScriptImport import) { i++; continue; }
+            if (nodes[i] is not OgreScriptImport import)
+            {
+                i++;
+                continue;
+            }
 
             if (!_imports.ContainsKey(import.Source) && _loading.Add(import.Source))
             {
@@ -271,7 +319,9 @@ public sealed class OgreScriptCompiler
         return ConvertToAst(OgreScriptParser.Parse(text, import.Source));
     }
 
-    /// <summary>The last top-level object with this name (Ogre keeps the last match).</summary>
+    /// <summary>
+    /// The last top-level object with this name (Ogre keeps the last match).
+    /// </summary>
     static OgreScriptObject? LocateTarget(List<OgreScriptNode> nodes, string name) =>
         nodes.OfType<OgreScriptObject>().LastOrDefault(o => o.Name == name);
 
@@ -288,7 +338,8 @@ public sealed class OgreScriptCompiler
                 // The current file first, then whatever was imported. Nothing else: other files are not searched.
                 var source = LocateTarget(top, name) ?? LocateTarget(_importTable, name);
                 if (source is not null) Overlay(source, obj);
-                else AddError(OgreScriptError.ObjectBaseNotFound, obj.File, obj.Line, $"base object named \"{name}\" not found in script definition");
+                else
+                    AddError(OgreScriptError.ObjectBaseNotFound, obj.File, obj.Line, $"base object named \"{name}\" not found in script definition");
             }
 
             ProcessObjects(obj.Children, top);
@@ -300,39 +351,73 @@ public sealed class OgreScriptCompiler
     }
 
     /// <summary>
-    /// Copies <paramref name="src"/> (the base) into <paramref name="dest"/> as Ogre's overlayObject does: base properties
-    /// become pending overrides; child objects are paired by class and name, then unnamed base objects by position;
-    /// paired ones are overlaid recursively and unpaired base objects are inserted as copies.
+    /// Copies <paramref name="src"/> (the base) into <paramref name="dest"/> as Ogre's overlayObject does: base properties become pending overrides;
+    /// child objects are paired by class and name, then unnamed base objects by position; paired ones are overlaid recursively and unpaired base
+    /// objects are inserted as copies.
     /// </summary>
     void Overlay(OgreScriptObject src, OgreScriptObject dest)
+    {
+        CopyMissingVariables(src, dest);
+        var overrides = CollectOverrides(src, dest);
+        var minIndex = new Dictionary<OgreScriptObject, int>(ReferenceEqualityComparer.Instance);
+        var matched = new HashSet<OgreScriptObject>(ReferenceEqualityComparer.Instance);
+
+        PairByName(dest, overrides, minIndex, matched);
+        PairByPosition(dest, overrides, minIndex, matched);
+        OverlayPairs(dest, overrides);
+    }
+
+    /// <summary>
+    /// The base's properties the destination does not set become its pending overrides.
+    /// </summary>
+    static void CopyMissingVariables(OgreScriptObject src, OgreScriptObject dest)
     {
         foreach (var (k, v) in src.Variables)
             if (dest.GetVariable(k) is null)
                 dest.Variables[k] = v;
+    }
 
+    /// <summary>
+    /// The base's child objects that overlay the destination: named ones are listed to be paired; the others are added to the destination's
+    /// overrides as copies.
+    /// </summary>
+    static List<(OgreScriptObject Source, OgreScriptObject? Target)> CollectOverrides(OgreScriptObject src, OgreScriptObject dest)
+    {
         var overrides = new List<(OgreScriptObject Source, OgreScriptObject? Target)>();
         foreach (var child in src.Children)
         {
-            if (child is OgreScriptObject o) overrides.Add((o, null));
-            else
+            if (child is OgreScriptObject o)
             {
-                var copy = child.Clone();
-                copy.Parent = dest;
-                dest.Overrides.Add(copy);
+                overrides.Add((o, null));
+                continue;
             }
+
+            var copy = child.Clone();
+            copy.Parent = dest;
+            dest.Overrides.Add(copy);
         }
 
-        var minIndex = new Dictionary<OgreScriptObject, int>(ReferenceEqualityComparer.Instance);
-        var matched = new HashSet<OgreScriptObject>(ReferenceEqualityComparer.Instance);
+        return overrides;
+    }
 
-        // Pair by name.
+    /// <summary>
+    /// Pairs the destination's named child objects with the overrides by class and name (a wildcard name matches several).
+    /// </summary>
+    void PairByName(
+        OgreScriptObject dest, List<(OgreScriptObject Source, OgreScriptObject? Target)> overrides,
+        Dictionary<OgreScriptObject, int> minIndex, HashSet<OgreScriptObject> matched)
+    {
         int maxOverrideIndex = 0;
         for (int i = 0; i < dest.Children.Count;)
         {
-            if (dest.Children[i] is not OgreScriptObject node) { i++; continue; }
+            if (dest.Children[i] is not OgreScriptObject node)
+            {
+                i++;
+                continue;
+            }
+
             minIndex[node] = maxOverrideIndex;
             bool hasWildcard = node.Name.Contains('*');
-
             for (int j = 0; j < overrides.Count; j++)
             {
                 var temp = overrides[j].Source;
@@ -353,6 +438,7 @@ public sealed class OgreScriptCompiler
                         dest.Children.Insert(i, current);
                         i++;
                     }
+
                     overrides[j] = (temp, current);
                     maxOverrideIndex = Math.Max(j, maxOverrideIndex);
                     minIndex[current] = maxOverrideIndex;
@@ -369,11 +455,19 @@ public sealed class OgreScriptCompiler
             if (hasWildcard) dest.Children.RemoveAt(i);
             else i++;
         }
+    }
 
-        // Pair the rest by position, with unnamed base objects of the same class only.
+    /// <summary>
+    /// Pairs the rest by position, with unnamed base objects of the same class only.
+    /// </summary>
+    static void PairByPosition(
+        OgreScriptObject dest, List<(OgreScriptObject Source, OgreScriptObject? Target)> overrides,
+        Dictionary<OgreScriptObject, int> minIndex, HashSet<OgreScriptObject> matched)
+    {
         foreach (var child in dest.Children)
         {
             if (child is not OgreScriptObject node || matched.Contains(node)) continue;
+
             for (int j = minIndex.GetValueOrDefault(node); j < overrides.Count; j++)
             {
                 var temp = overrides[j].Source;
@@ -384,8 +478,13 @@ public sealed class OgreScriptCompiler
                 }
             }
         }
+    }
 
-        // Overlay the pairs; insert copies of unpaired base objects after the last paired one.
+    /// <summary>
+    /// Overlays the pairs; copies of unpaired base objects are inserted after the last paired one.
+    /// </summary>
+    void OverlayPairs(OgreScriptObject dest, List<(OgreScriptObject Source, OgreScriptObject? Target)> overrides)
+    {
         int insertAt = 0;
         foreach (var (source, target) in overrides)
         {
@@ -393,25 +492,38 @@ public sealed class OgreScriptCompiler
             {
                 Overlay(source, target);
                 insertAt = dest.Children.IndexOf(target) + 1;
+                continue;
             }
-            else
-            {
-                var copy = source.Clone();
-                copy.Parent = dest;
-                dest.Children.Insert(insertAt++, copy);
-            }
+
+            var copy = source.Clone();
+            copy.Parent = dest;
+            dest.Children.Insert(insertAt++, copy);
         }
     }
 
-    /// <summary>Ogre's StringUtil::match, case-sensitive: <c>*</c> matches any run of characters.</summary>
+    /// <summary>
+    /// Ogre's StringUtil::match, case-sensitive: <c>*</c> matches any run of characters.
+    /// </summary>
     public static bool WildcardMatch(string text, string pattern)
     {
         int t = 0, p = 0, star = -1, mark = 0;
         while (t < text.Length)
         {
-            if (p < pattern.Length && pattern[p] == '*') { star = p++; mark = t; }
-            else if (p < pattern.Length && pattern[p] == text[t]) { p++; t++; }
-            else if (star >= 0) { p = star + 1; t = ++mark; }
+            if (p < pattern.Length && pattern[p] == '*')
+            {
+                star = p++;
+                mark = t;
+            }
+            else if (p < pattern.Length && pattern[p] == text[t])
+            {
+                p++;
+                t++;
+            }
+            else if (star >= 0)
+            {
+                p = star + 1;
+                t = ++mark;
+            }
             else return false;
         }
         while (p < pattern.Length && pattern[p] == '*') p++;

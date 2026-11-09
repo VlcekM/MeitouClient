@@ -10,10 +10,14 @@ namespace Meitou.Content;
 /// </summary>
 public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : IComparable<CodeModVersion>
 {
-    /// <summary>The pre-release identifiers after <c>-</c>, dot-separated; empty for a release.</summary>
+    /// <summary>
+    /// The pre-release identifiers after <c>-</c>, dot-separated; empty for a release.
+    /// </summary>
     public string Prerelease { get => field ?? ""; init; }
 
-    /// <summary>The build metadata after <c>+</c>; empty when none. Kept for display, ignored when comparing.</summary>
+    /// <summary>
+    /// The build metadata after <c>+</c>; empty when none. Kept for display, ignored when comparing.
+    /// </summary>
     public string Build { get => field ?? ""; init; }
 
     public bool IsPrerelease => Prerelease.Length > 0;
@@ -44,7 +48,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
             && int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out patch);
     }
 
-    /// <summary>Dot-separated, non-empty identifiers of ASCII letters, digits and <c>-</c>; pre-release numbers may not have leading zeros.</summary>
+    /// <summary>
+    /// Dot-separated, non-empty identifiers of ASCII letters, digits and <c>-</c>; pre-release numbers may not have leading zeros.
+    /// </summary>
     static bool Identifiers(string text, bool numericRule)
     {
         foreach (var part in text.Split('.'))
@@ -55,7 +61,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
         return true;
     }
 
-    /// <summary>Digits without a leading zero (a lone <c>0</c> is fine).</summary>
+    /// <summary>
+    /// Digits without a leading zero (a lone <c>0</c> is fine).
+    /// </summary>
     static bool IsNumber(string part) => part.Length > 0 && part.All(char.IsAsciiDigit) && (part.Length == 1 || part[0] != '0');
 
     public int CompareTo(CodeModVersion other)
@@ -66,7 +74,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
         return order != 0 ? order : ComparePrerelease(Prerelease, other.Prerelease);
     }
 
-    /// <summary>SemVer 11.3/11.4: a release beats any pre-release; otherwise identifier by identifier, and more identifiers win a tie.</summary>
+    /// <summary>
+    /// SemVer 11.3/11.4: a release beats any pre-release; otherwise identifier by identifier, and more identifiers win a tie.
+    /// </summary>
     static int ComparePrerelease(string a, string b)
     {
         if (a.Length == 0 || b.Length == 0) return b.Length.CompareTo(a.Length);
@@ -81,17 +91,22 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
     {
         bool aNumber = a.All(char.IsAsciiDigit);
         bool bNumber = b.All(char.IsAsciiDigit);
-        if (aNumber && bNumber) return a.Length != b.Length ? a.Length.CompareTo(b.Length) : string.CompareOrdinal(a, b);
+        if (aNumber && bNumber)
+            return a.Length != b.Length ? a.Length.CompareTo(b.Length) : string.CompareOrdinal(a, b);
         if (aNumber != bNumber) return aNumber ? -1 : 1;
         return Math.Sign(string.CompareOrdinal(a, b));
     }
 
-    /// <summary>Same precedence: build metadata does not count.</summary>
+    /// <summary>
+    /// Same precedence: build metadata does not count.
+    /// </summary>
     public bool Equals(CodeModVersion other) => CompareTo(other) == 0;
 
     public override int GetHashCode() => HashCode.Combine(Major, Minor, Patch, Prerelease);
 
-    /// <summary>Same major, minor and patch, whatever the pre-release.</summary>
+    /// <summary>
+    /// Same major, minor and patch, whatever the pre-release.
+    /// </summary>
     public bool SameRelease(CodeModVersion other) => Major == other.Major && Minor == other.Minor && Patch == other.Patch;
 
     /// <summary>
@@ -121,7 +136,9 @@ public sealed class CodeModVersionRange
 
     public string Text { get; }
 
-    /// <summary>Reads a range; throws <see cref="InvalidDataException"/> with the reason when it is not one.</summary>
+    /// <summary>
+    /// Reads a range; throws <see cref="InvalidDataException"/> with the reason when it is not one.
+    /// </summary>
     public static CodeModVersionRange Parse(string text)
     {
         var list = new List<(string, CodeModVersion)>();
@@ -133,14 +150,17 @@ public sealed class CodeModVersionRange
                 throw new InvalidDataException($"'{token}' is not a version comparator (e.g. >=1.2.0)");
             list.Add((op, version));
         }
-        if (list.Count == 0) throw new InvalidDataException("an empty version range; leave \"version\" out to accept any version");
+        if (list.Count == 0)
+            throw new InvalidDataException("an empty version range; leave \"version\" out to accept any version");
         return new CodeModVersionRange(text.Trim(), list);
     }
 
     public bool Contains(CodeModVersion version) =>
         _comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
 
-    /// <summary>Whether a comparator names a pre-release; <c>gameVersion</c> refuses such a range, as it compares releases only.</summary>
+    /// <summary>
+    /// Whether a comparator names a pre-release; <c>gameVersion</c> refuses such a range, as it compares releases only.
+    /// </summary>
     public bool NamesPrerelease => _comparators.Any(c => c.Version.IsPrerelease);
 
     bool OptsIntoPrerelease(CodeModVersion version) => _comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));

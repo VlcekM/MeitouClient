@@ -14,11 +14,12 @@ namespace Meitou.ModelViewer;
 static partial class WorldApp
 {
     /// <summary>
-    /// <c>--fly-benchmark &lt;frames&gt;</c>: flies the camera round a circle (radius <c>--fly-radius</c>, <c>--fly-speed</c> units per frame) around the
-    /// loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames with the
-    /// time each streaming stage took on the render thread, and the resident memory.
+    /// <c>--fly-benchmark &lt;frames&gt;</c>: flies the camera round a circle (radius <c>--fly-radius</c>, <c>--fly-speed</c> units per frame) around
+    /// the loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames
+    /// with the time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int FlyBenchmark(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
+            WorldOptions o, int w, int h)
     {
         var context = display.Context;
         var centre = camera.Target;
@@ -46,10 +47,13 @@ static partial class WorldApp
         var owners = o.FlyCsv is null ? null : new StringBuilder("frame,owner,mb,device_local_mb,count\n");
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
-        // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user dragging the view.
-        float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), NumberStyles.Float, CultureInfo.InvariantCulture, out float orbit) ? orbit : 0;
+        // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user
+        // dragging the view.
+        float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float orbit) ? orbit : 0;
         var motion = CameraMotion.Fly(o, camera, gpu, FlyTurn, benchOrbit);
-        var spikeProfiler = SpikeLog.Enabled ? new FrameProfiler(context, () => context.GpuFrameMs) : null;   // --log-spikes: the stage times the spike lines print
+        var spikeProfiler = SpikeLog.Enabled ? new FrameProfiler(context, () => context.GpuFrameMs)
+                : null;   // --log-spikes: the stage times the spike lines print
         // Draw counts over the flight (docs/render-distance-benchmark.md): the objects' totals per kind, the main view's grass blades, foliage
         // instances and terrain triangles summed per frame.
         var objectTotals0 = gpu.Objects is { } ot0 ? (long[,])ot0.Totals.Clone() : null;
@@ -62,7 +66,8 @@ static partial class WorldApp
             motion.Step(i);
             if (spikeProfiler is not null) { context.EnsureFrame(); spikeProfiler.BeginFrame(); } else StageClock.Start();
             frameWatch.Restart();
-            // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0 as before.
+            // With weather particles the frame clock runs (1/60 s a frame, in the draw's time units of 600 s) so they simulate; without, it stays 0
+            // as before.
             float clock = gpu.Particles is { Groups.Count: > 0 } ? (float)(i / 60.0 / 600) : 0;
             // --time-speed: the hour runs on as in the viewer (game hours per real minute), at 1/60 s a frame.
             float hour = o.TimeSpeed > 0 ? (o.Hour + o.TimeSpeed * i / 3600f) % 24 : o.Hour;
@@ -73,11 +78,28 @@ static partial class WorldApp
             double cpuMs = frameWatch.Elapsed.TotalMilliseconds;
             if (i % 500 == 0 || i <= 4) Console.WriteLine($"gpu       frame {i}: {context.Frame.Stats}");
             cpu.Add(cpuMs);
-            if (gpu.Foliage is { } counted) { bladeSum += counted.DrawnBlades; foliageSum += counted.DrawnInstances; }
+            if (gpu.Foliage is { } counted)
+            {
+                bladeSum += counted.DrawnBlades;
+                foliageSum += counted.DrawnInstances;
+            }
             terrainTriSum += gpu.Terrain.DrawnTriangles;
-            if (i > 30) { preFrameSum += context.PreFrameGpuMs; gpuFrameSum += context.GpuFrameMs; gpuFrames++; }
-            if (gpu.Foliage is { } fol) { gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass)); impostorPop.Add(fol.ImpostorPopIn); }
-            if (gpu.Objects is { } objs) { var (untextured, refining, held, coarse) = objs.TakePopStats(); objectPop.Add((untextured, refining, held, coarse, objs.MeshesAwaitingDetail)); }
+            if (i > 30)
+            {
+                preFrameSum += context.PreFrameGpuMs;
+                gpuFrameSum += context.GpuFrameMs;
+                gpuFrames++;
+            }
+            if (gpu.Foliage is { } fol)
+            {
+                gaps.Add((fol.NearestIncompleteZone, fol.NearestUnlaidZone, fol.NearestMissingMesh, fol.NearestMissingGrass));
+                impostorPop.Add(fol.ImpostorPopIn);
+            }
+            if (gpu.Objects is { } objs)
+            {
+                var (untextured, refining, held, coarse) = objs.TakePopStats();
+                objectPop.Add((untextured, refining, held, coarse, objs.MeshesAwaitingDetail));
+            }
             if (!pipelined) context.Finish();
             if (spikeProfiler is null) StageClock.EndFrame();
             spikeProfiler?.EndFrame();
@@ -91,22 +113,27 @@ static partial class WorldApp
                 // every live resource under the allocator's lock) only every 30 frames, after the frame's time is taken.
                 var (used, budget) = device.VideoMemory();
                 vramPeak = Math.Max(vramPeak, used);
-                csv.AppendLine(string.Create(CultureInfo.InvariantCulture, $"{i},{ms:0.000},{cpuMs:0.000},{used / 1048576.0:0.0},{budget / 1048576.0:0.0},{device.Allocator.TotalAllocatedBytes / 1048576.0:0.0},{device.Allocator.TotalUsedBytes / 1048576.0:0.0}"));
+                csv.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                        $"{i},{ms:0.000},{cpuMs:0.000},{used / 1048576.0:0.0},{budget / 1048576.0:0.0},{device.Allocator.TotalAllocatedBytes / 1048576.0:0.0},{device.Allocator.TotalUsedBytes / 1048576.0:0.0}"));
                 if (i % 30 == 0)
                     foreach (var b in device.Allocator.Breakdown())
-                        owners!.AppendLine(string.Create(CultureInfo.InvariantCulture, $"{i},\"{b.Name}\",{b.Bytes / 1048576.0:0.00},{b.DeviceLocal / 1048576.0:0.00},{b.Count}"));
+                        owners!.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                                $"{i},\"{b.Name}\",{b.Bytes / 1048576.0:0.00},{b.DeviceLocal / 1048576.0:0.00},{b.Count}"));
             }
             else if (i % 30 == 0) vramPeak = Math.Max(vramPeak, device.VideoMemory().Used);
             for (int k = 0; k < stageSums.Length; k++) { stageSums[k] += StageClock.Ms[k]; jobSums[k] += StageClock.JobMs[k]; }
             if (gpu.Shadow is { } shadowStats) for (int k = 0; k < 3; k++) shadowSums[k] += shadowStats.PhaseMs[k];
             long gcNow = GC.CollectionCount(2);
-            worst.Add((ms, i, ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5 ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "") + (GC.GetTotalPauseDuration() - pausePrev is { TotalMilliseconds: >= 0.5 } pause ? $"GC pause {pause.TotalMilliseconds:0.0}, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
+            worst.Add((ms, i,
+                    ((gpu.Reflection is { Valid: true } rr && rr.CpuMs >= 5
+                        ? $"reflection[{rr.DescribeLast()}], " : "") + (gcNow != gcPrev ? "gen2 GC, " : "") + (GC.GetTotalPauseDuration() - pausePrev is { TotalMilliseconds: >= 0.5 } pause ? $"GC pause {pause.TotalMilliseconds:0.0}, " : "")) + string.Join(", ", StageClock.Names.Select((n, k) => (n, v: StageClock.Ms[k])).Where(s => s.v >= 1).Select(s => $"{s.n} {s.v:0.0}"))));
             gcPrev = gcNow;
             pausePrev = GC.GetTotalPauseDuration();
             int sleep = 16 - (int)ms;
             if (sleep > 0 && !pipelined) Thread.Sleep(sleep);
         }
-        // MEITOU_BENCH_SKIP=<n>: leave the first n frames out of the percentiles and the worst list (default 1: shader compilation; the start of a cold run also loads the first zones).
+        // MEITOU_BENCH_SKIP=<n>: leave the first n frames out of the percentiles and the worst list (default 1: shader compilation; the start of a
+        // cold run also loads the first zones).
         int skipFrames = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_SKIP"), out int skipValue) && skipValue >= 1 ? skipValue : 1;
         var sorted = times.Skip(skipFrames).OrderBy(t => t).ToList();
         var cpuSorted = cpu.Skip(skipFrames).OrderBy(t => t).ToList();
@@ -145,7 +172,8 @@ static partial class WorldApp
         }
         Console.WriteLine($"resident  every 150 frames (objects + foliage, MB): {string.Join(" ", resident)}");
         Console.WriteLine($"resident  {Resident(gpu)}; working set {Environment.WorkingSet / 1048576} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
-        // The F11 VRAM lines: the process's use of the driver's budget (peak sampled every 30 frames), then every allocator owner (GpuAllocator.Breakdown), largest first.
+        // The F11 VRAM lines: the process's use of the driver's budget (peak sampled every 30 frames), then every allocator owner
+        // (GpuAllocator.Breakdown), largest first.
         var (vramUsed, vramBudget) = device.VideoMemory();
         Console.WriteLine($"vram      {vramUsed / 1048576.0:0} MB of {vramBudget / 1048576.0:0} MB budget at the end, peak {Math.Max(vramPeak, vramUsed) / 1048576.0:0} MB; our blocks {device.Allocator.TotalAllocatedBytes / 1048576.0:0} MB, {device.Allocator.TotalUsedBytes / 1048576.0:0} used");
         Console.WriteLine($"vram      owners (MB, device-local MB, count): {string.Join(", ", device.Allocator.Breakdown().OrderByDescending(b => b.Bytes).Select(b => $"{b.Name} {b.Bytes / 1048576.0:0.0} ({b.DeviceLocal / 1048576.0:0.0}) x{b.Count}"))}");
@@ -164,7 +192,8 @@ static partial class WorldApp
         Console.WriteLine($"counts    per frame (main view, last slice for terrain): grass blades {bladeSum / frames:N0}, foliage instances {foliageSum / frames:N0}, terrain triangles {terrainTriSum / frames:N0}");
         if (gpu.Objects is { } ot && objectTotals0 is not null)
         {
-            string Kind(int k, string name) => $"{name} {(ot.Totals[k, 0] - objectTotals0[k, 0]) / (double)frames:0} instances, {(ot.Totals[k, 1] - objectTotals0[k, 1]) / (double)frames / 1e3:0.0}k triangles, {(ot.Totals[k, 2] - objectTotals0[k, 2]) / (double)frames:0} calls, {(ot.Totals[k, 3] - objectTotals0[k, 3]) / (double)frames:0} part-limited in {(ot.Totals[k, 4] - objectTotals0[k, 4]) / (double)frames:0.0} passes";
+            string Kind(int k,
+                    string name) => $"{name} {(ot.Totals[k, 0] - objectTotals0[k, 0]) / (double)frames:0} instances, {(ot.Totals[k, 1] - objectTotals0[k, 1]) / (double)frames / 1e3:0.0}k triangles, {(ot.Totals[k, 2] - objectTotals0[k, 2]) / (double)frames:0} calls, {(ot.Totals[k, 3] - objectTotals0[k, 3]) / (double)frames:0} part-limited in {(ot.Totals[k, 4] - objectTotals0[k, 4]) / (double)frames:0.0} passes";
             Console.WriteLine($"counts    objects per frame: {Kind(0, "colour (slices + reflection)")}; {Kind(1, "shadow")}");
             Console.WriteLine($"sizes     objects: {ot.SizeSurvey()}");
         }
@@ -184,7 +213,8 @@ static partial class WorldApp
     /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
     /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
     /// </summary>
-    static void ReportPasses(PassMeter meter, Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static void ReportPasses(PassMeter meter, Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera,
+            WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
         meter.Dispose();
@@ -199,10 +229,16 @@ static partial class WorldApp
         DetailedStats = false;
     }
 
-    /// <summary><c>MEITOU_FLY_TURN=&lt;radians&gt;</c>: the fly benchmark turns the camera by that much each frame about its eye instead of flying (the occlusion cull's turn test).</summary>
-    static readonly float FlyTurn = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_FLY_TURN"), NumberStyles.Float, CultureInfo.InvariantCulture, out float turn) ? turn : 0;
+    /// <summary>
+    /// <c>MEITOU_FLY_TURN=&lt;radians&gt;</c>: the fly benchmark turns the camera by that much each frame about its eye instead of flying (the
+    /// occlusion cull's turn test).
+    /// </summary>
+    static readonly float FlyTurn = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_FLY_TURN"), NumberStyles.Float,
+            CultureInfo.InvariantCulture, out float turn) ? turn : 0;
 
-    /// <summary>One line on the GPU memory the streamed meshes and textures hold.</summary>
+    /// <summary>
+    /// One line on the GPU memory the streamed meshes and textures hold.
+    /// </summary>
     static string Resident(Gpu gpu) =>
         (gpu.Objects is { } objects ? $"objects {objects.ResidentDescription}" : "objects off") +
         (gpu.Foliage is { } foliage ? $"; foliage {foliage.ResidentDescription}" : "");

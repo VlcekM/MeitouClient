@@ -2,12 +2,16 @@ using System.Numerics;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day.</summary>
+/// <summary>
+/// A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day.
+/// </summary>
 public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour)
 {
     public static CameraShot Of(WorldCamera c, float hour) => new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour);
 
-    /// <summary>Puts the camera here: the same eye and view direction, the target <see cref="Distance"/> in front.</summary>
+    /// <summary>
+    /// Puts the camera here: the same eye and view direction, the target <see cref="Distance"/> in front.
+    /// </summary>
     public void Apply(WorldCamera c)
     {
         (c.Yaw, c.Pitch, c.Distance, c.FieldOfView) = (Yaw, Pitch, Distance, FieldOfView);
@@ -15,7 +19,9 @@ public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, fl
     }
 }
 
-/// <summary>A shot on the timeline: reached at <see cref="Time"/> seconds; with <see cref="Ease"/> the camera slows to a stop there.</summary>
+/// <summary>
+/// A shot on the timeline: reached at <see cref="Time"/> seconds; with <see cref="Ease"/> the camera slows to a stop there.
+/// </summary>
 public readonly record struct CameraKey(CameraShot Shot, float Time, bool Ease = false);
 
 /// <summary>
@@ -36,10 +42,14 @@ public static class CameraPath
         return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour);
     }
 
-    /// <summary>Moves <paramref name="value"/> by whole periods to within half a period of <paramref name="near"/>.</summary>
+    /// <summary>
+    /// Moves <paramref name="value"/> by whole periods to within half a period of <paramref name="near"/>.
+    /// </summary>
     static float Unwrap(float value, float near, float period) => value - period * MathF.Round((value - near) / period);
 
-    /// <summary><paramref name="v"/> with its yaw and hour moved by whole turns (days) to within half of <paramref name="near"/>'s.</summary>
+    /// <summary>
+    /// <paramref name="v"/> with its yaw and hour moved by whole turns (days) to within half of <paramref name="near"/>'s.
+    /// </summary>
     static float[] Continue(float[] v, float[] near)
     {
         v[3] = Unwrap(v[3], near[3], MathF.Tau);
@@ -47,7 +57,9 @@ public static class CameraPath
         return v;
     }
 
-    /// <summary>How long a flight lasts: to the last key, or with <paramref name="loopBack"/> seconds more back to the first (one lap).</summary>
+    /// <summary>
+    /// How long a flight lasts: to the last key, or with <paramref name="loopBack"/> seconds more back to the first (one lap).
+    /// </summary>
     public static float Duration(IReadOnlyList<CameraKey> keys, float? loopBack) =>
         keys.Count == 0 ? 0 : keys[^1].Time - keys[0].Time + (keys.Count > 1 && loopBack is { } back ? back : 0);
 
@@ -64,8 +76,10 @@ public static class CameraPath
         float start = keys[0].Time, back = MathF.Max(loopBack ?? 0, 0.01f);
         // The key times on one lap, with the first key again at the lap's end.
         float T(int i) => i < n ? keys[i].Time : keys[0].Time + Duration(keys, back);
-        if (loop) time = start + ((time - start) % Duration(keys, back) + Duration(keys, back)) % Duration(keys, back);
-        else time = Math.Clamp(time, start, keys[^1].Time);
+        if (loop)
+            time = start + ((time - start) % Duration(keys, back) + Duration(keys, back)) % Duration(keys, back);
+        else
+            time = Math.Clamp(time, start, keys[^1].Time);
 
         int segments = loop ? n : n - 1, i = 0;
         while (i < segments - 1 && time >= T(i + 1)) i++;
@@ -75,7 +89,8 @@ public static class CameraPath
         float[] p1 = Values(keys[i].Shot), p2 = Continue(Values(keys[(i + 1) % n].Shot), p1);
         float[]? p0 = loop || i > 0 ? Continue(Values(keys[(i - 1 + n) % n].Shot), p1) : null;
         float[]? p3 = loop || i + 2 < n ? Continue(Values(keys[(i + 2) % n].Shot), p2) : null;
-        float tPrev = i > 0 ? T(i - 1) : T(n - 1) - Duration(keys, back), tNext = loop && i + 2 > n ? T(1) + Duration(keys, back) : i + 2 <= n ? T(i + 2) : 0;
+        float tPrev = i > 0 ? T(i - 1) : T(n - 1) - Duration(keys, back);
+        float tNext = loop && i + 2 > n ? T(1) + Duration(keys, back) : i + 2 <= n ? T(i + 2) : 0;
         bool ease1 = keys[i].Ease || p0 is null, ease2 = keys[(i + 1) % n].Ease || p3 is null;
 
         float h = MathF.Max(t1 - t0, 1e-4f), s = Math.Clamp((time - t0) / h, 0, 1);

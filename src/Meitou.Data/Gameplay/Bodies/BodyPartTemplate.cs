@@ -1,6 +1,8 @@
 namespace Meitou.Data.Gameplay.Bodies;
 
-/// <summary><c>BodyPartType</c> of a LOCATIONAL_DAMAGE record (docs/game/character-stats.md, <b>Verified</b>).</summary>
+/// <summary>
+/// <c>BodyPartType</c> of a LOCATIONAL_DAMAGE record (docs/game/character-stats.md, <b>Verified</b>).
+/// </summary>
 public enum BodyPartType
 {
     Torso = 0,
@@ -9,7 +11,9 @@ public enum BodyPartType
     Head = 3,
 }
 
-/// <summary>Which side of the body a part is on, from its <c>collapse part</c> bits (4 and 0x20 left, 2 and 0x10 right).</summary>
+/// <summary>
+/// Which side of the body a part is on, from its <c>collapse part</c> bits (4 and 0x20 left, 2 and 0x10 right).
+/// </summary>
 public enum BodySide
 {
     None = 0,
@@ -26,35 +30,70 @@ public sealed record BodyPartTemplate
     public required string StringId { get; init; }
     public string Name { get; init; } = "";
     public BodyPartType Type { get; init; }
-    /// <summary><c>collapses</c>: a part that is down makes its limb go limp.</summary>
+
+    /// <summary>
+    /// <c>collapses</c>: a part that is down makes its limb go limp.
+    /// </summary>
     public bool Collapses { get; init; }
-    /// <summary><c>death</c>: a vital part. Down means knocked out, destroyed means dead.</summary>
+
+    /// <summary>
+    /// <c>death</c>: a vital part. Down means knocked out, destroyed means dead.
+    /// </summary>
     public bool Vital { get; init; }
-    /// <summary><c>severance</c>: the part can be cut off.</summary>
+
+    /// <summary>
+    /// <c>severance</c>: the part can be cut off.
+    /// </summary>
     public bool Severance { get; init; }
-    /// <summary><c>collapse part</c> bit mask: 1 whole body, 2 right arm, 4 left arm, 0x10 right leg, 0x20 left leg.</summary>
+
+    /// <summary>
+    /// <c>collapse part</c> bit mask: 1 whole body, 2 right arm, 4 left arm, 0x10 right leg, 0x20 left leg.
+    /// </summary>
     public int CollapsePart { get; init; }
-    /// <summary><c>affects move speed</c> (consumer <b>Unknown</b>).</summary>
+
+    /// <summary>
+    /// <c>affects move speed</c> (consumer <b>Unknown</b>).
+    /// </summary>
     public float AffectsMoveSpeed { get; init; }
-    /// <summary><c>affects skills</c> (consumer <b>Unknown</b>).</summary>
+
+    /// <summary>
+    /// <c>affects skills</c> (consumer <b>Unknown</b>).
+    /// </summary>
     public float AffectsSkills { get; init; }
-    /// <summary><c>KO mult</c>: weight of this part's damage in the knock-out time.</summary>
+
+    /// <summary>
+    /// <c>KO mult</c>: weight of this part's damage in the knock-out time.
+    /// </summary>
     public float KoMult { get; init; } = 1;
-    /// <summary><c>bone name</c> and <c>bone name 2</c>: the skeleton bones of the part (a bolt sticks in one, docs/game/combat.md "Bolt visuals").</summary>
+
+    /// <summary>
+    /// <c>bone name</c> and <c>bone name 2</c>: the skeleton bones of the part (a bolt sticks in one, docs/game/combat.md "Bolt visuals").
+    /// </summary>
     public string BoneName { get; init; } = "";
     public string BoneName2 { get; init; } = "";
-    /// <summary><c>pain anim</c>: the ANIMATION record (string id) a hurt character holds this part with, and the reference's first value, the health per cent under which it does (<c>FUN_14064a100</c>, docs/animation.md "Injury holds"); null when the record has none.</summary>
+
+    /// <summary>
+    /// <c>pain anim</c>: the ANIMATION record (string id) a hurt character holds this part with, and the reference's first value, the health per cent
+    /// under which it does (<c>FUN_14064a100</c>, docs/animation.md "Injury holds"); null when the record has none.
+    /// </summary>
     public string? PainAnim { get; init; }
     public int PainThreshold { get; init; }
 
     public BodySide Side => CollapsePart is 4 or 0x20 ? BodySide.Left : CollapsePart is 2 or 0x10 ? BodySide.Right : BodySide.None;
 
     /// <summary>
-    /// The part's place in the original's medical part list (<c>FUN_14064e410</c>, <b>Verified</b> by decompilation; docs/game/character-stats.md "Part order"): a
-    /// table by type (head 0, torso 10, arm 20, leg 30) plus 1 for a right part (<c>collapse part</c> 2 or 0x10), sorted ascending. Other types (none in the data)
-    /// go last (engine choice: the original reads past its table).
+    /// The part's place in the original's medical part list (<c>FUN_14064e410</c>, <b>Verified</b> by decompilation; docs/game/character-stats.md
+    /// "Part order"): a table by type (head 0, torso 10, arm 20, leg 30) plus 1 for a right part (<c>collapse part</c> 2 or 0x10), sorted ascending.
+    /// Other types (none in the data) go last (engine choice: the original reads past its table).
     /// </summary>
-    public int MedicalOrder => Type switch { BodyPartType.Head => 0, BodyPartType.Torso => 10, BodyPartType.Arm => 20, BodyPartType.Leg => 30, _ => 255 }
+    public int MedicalOrder => Type switch
+    {
+        BodyPartType.Head => 0,
+        BodyPartType.Torso => 10,
+        BodyPartType.Arm => 20,
+        BodyPartType.Leg => 30,
+        _ => 255
+    }
         + (CollapsePart is 2 or 0x10 ? 1 : 0);
 
     /// <summary>

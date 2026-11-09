@@ -8,17 +8,22 @@ using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Overlays;
 
-/// <summary>One outline mask: what is outlined in one colour, drawn alone (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>).</summary>
+/// <summary>
+/// One outline mask: what is outlined in one colour, drawn alone (<see cref="CharacterRenderer.DrawHoverMasks"/>,
+/// <see cref="WorldObjectRenderer.DrawSelectionMask"/>).
+/// </summary>
 /// <param name="Colour">Its colour target, alpha 1 where something outlined is.</param>
 /// <param name="Depth">Its depth, from the projection <paramref name="Near"/>..<paramref name="Far"/>.</param>
 /// <param name="Tint">The outline's and tint's colour (alpha: their strength).</param>
 /// <param name="Spheres">The bounding spheres of what is in it.</param>
-public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint, IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
+public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint,
+    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
 
 /// <summary>
-/// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those
-/// near) and the selected building, drawn alone into masks (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>), are outlined
-/// in their colours and their visible parts tinted in them, over the finished picture. The outline shows through walls; the tint only where the scene's depth does not cover them.
+/// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those near) and the
+/// selected building, drawn alone into masks (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>),
+/// are outlined in their colours and their visible parts tinted in them, over the finished picture. The outline shows through walls; the tint only
+/// where the scene's depth does not cover them.
 /// </summary>
 public sealed class HoverOutlineRenderer
 {
@@ -94,9 +99,10 @@ public sealed class HoverOutlineRenderer
     }
 
     /// <summary>
-    /// Blends the outline of each of <paramref name="masks"/> over <paramref name="picture"/> (<paramref name="width"/> × <paramref name="height"/>) in its tint, only
-    /// inside its characters' projected bounding spheres (<paramref name="viewProjection"/>, unjittered) widened by the outline, the overlapping ones joined so no pixel
-    /// is blended twice. <paramref name="sceneDepthTexture"/> is the scene's depth (planes <paramref name="sceneNear"/>..<paramref name="sceneFar"/>),
+    /// Blends the outline of each of <paramref name="masks"/> over <paramref name="picture"/> (<paramref name="width"/> × <paramref name="height"/>)
+    /// in its tint, only inside its characters' projected bounding spheres (<paramref name="viewProjection"/>, unjittered) widened by the outline,
+    /// the overlapping ones joined so no pixel is blended twice. <paramref name="sceneDepthTexture"/> is the scene's depth (planes
+    /// <paramref name="sceneNear"/>..<paramref name="sceneFar"/>),
     /// <paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used.
     /// </summary>
     internal void Record(GpuTexture picture, int width, int height, IReadOnlyList<HoverMask> masks,
@@ -125,7 +131,8 @@ public sealed class HoverOutlineRenderer
                 _program.Set(_scenePlanes, sceneNear, sceneFar);
                 _program.Set(_colour, hover.Tint.X, hover.Tint.Y, hover.Tint.Z, hover.Tint.W);
                 _program.Set(_radius, outline);
-                var state = DrawState.For(over.Formats, _gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
+                var state = DrawState.For(over.Formats, _gpu.DepthClamp,
+                    blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, over);
                 cmd.BindPipeline(_segment.Get(state, over.Formats, null));
                 _program.Flush(cmd);
@@ -136,7 +143,9 @@ public sealed class HoverOutlineRenderer
         }
     }
 
-    /// <summary>Replaces overlapping rectangles by their bounding rectangle until none overlap.</summary>
+    /// <summary>
+    /// Replaces overlapping rectangles by their bounding rectangle until none overlap.
+    /// </summary>
     static void Join(List<PixelRect> rects, int height)
     {
         for (bool joined = true; joined;)
@@ -158,15 +167,16 @@ public sealed class HoverOutlineRenderer
     }
 
     /// <summary>
-    /// The scissor round the sphere's projection, <paramref name="pad"/> pixels wider, in the picture's attachment rows (the UI's top-left rectangle turned
-    /// as the overlay turns it); the whole picture when the sphere reaches behind the eye, null when it is off screen.
+    /// The scissor round the sphere's projection, <paramref name="pad"/> pixels wider, in the picture's attachment rows (the UI's top-left rectangle
+    /// turned as the overlay turns it); the whole picture when the sphere reaches behind the eye, null when it is off screen.
     /// </summary>
     internal static PixelRect? Bounds(Vector3 centre, float radius, Matrix4x4 viewProjection, int width, int height, int pad)
     {
         float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
         for (int corner = 0; corner < 8; corner++)
         {
-            var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius, (corner & 4) == 0 ? -radius : radius);
+            var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius,
+                (corner & 4) == 0 ? -radius : radius);
             var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
             if (clip.W <= 0.01f) return new PixelRect(0, 0, (uint)width, (uint)height);
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;   // top-left pixels

@@ -76,7 +76,9 @@ static class Bc7
         15, 15, 15, 15, 3, 15, 15, 8,
     ];
 
-    /// <summary>Decodes one 16-byte block into 16 RGBA pixels (<paramref name="rgba"/>, 64 bytes, row by row).</summary>
+    /// <summary>
+    /// Decodes one 16-byte block into 16 RGBA pixels (<paramref name="rgba"/>, 64 bytes, row by row).
+    /// </summary>
     public static void DecodeBlock(ReadOnlySpan<byte> src, Span<byte> rgba)
     {
         ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src), hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);

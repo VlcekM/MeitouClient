@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Textures;
@@ -8,23 +9,45 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Ui;
 
-/// <summary>Native alpha-composited MyGUI atlas slices and styled native control frames.</summary>
+/// <summary>
+/// Native alpha-composited MyGUI atlas slices and styled native control frames.
+/// </summary>
 public sealed partial class UiPainter : IDisposable
 {
-    /// <summary>The game's standard face (Exo2 SemiBold): the fallback for text whose font resource is not found, and the debug overlay's when no monospace system font is.</summary>
+    /// <summary>
+    /// The game's standard face (Exo2 SemiBold): the fallback for text whose font resource is not found, and the debug overlay's when no monospace
+    /// system font is.
+    /// </summary>
     internal const string StandardFontFile = "Exo2-SemiBold.ttf";
 
     readonly DebugOverlay _overlay;
     readonly MyGuiResources _resources;
     readonly Func<string, string?> _resolve;
+
+    #region Fonts
+
+    /// <summary>
+    /// The most glyph-cache fonts kept (each holds an atlas of 0.25 to 4 MiB): beyond it a size already made, the nearest, is used instead.
+    /// </summary>
+    const int MaxUiFonts = 48;
+
+    const float LargePixels = 48;
+
     DebugOverlay? _standardFont, _paintedFont, _titleFont;
-    /// <summary>The one-line edit boxes the last <see cref="Draw"/> laid out: where each one's text starts and how it was measured, for <see cref="EditCaretAt"/>.</summary>
-    readonly List<(UiRect Box, DebugOverlay Font, float Scale, float X, string Text)> _editBoxes = [];
+
+    /// <summary>
+    /// The standard and painted faces baked at <see cref="LargePixels"/>: lettering scaled well past the 16 px atlases is drawn from these, so it
+    /// stays sharp.
+    /// </summary>
+    DebugOverlay? _standardLarge, _paintedLarge;
+
     readonly Dictionary<UiFontKey, DebugOverlay> _uiFonts = [];
     readonly Dictionary<string, MyGuiTrueTypeFont?> _fontSpecs = new(StringComparer.Ordinal);
     readonly Dictionary<(string Path, float Size, float Resolution), float> _fontSizes = [];
     bool _freeTypeWarned, _standardSourceKnown;
     (string Path, MyGuiTrueTypeFont? Spec)? _standardSource;
+    float _fontSizeSetting = KenshiFontSize.DefaultSetting;
+    readonly Dictionary<string, string?> _fontPaths = new(StringComparer.Ordinal);
 
     /// <summary>
     /// How text is drawn (docs/formats/mygui.md "Fonts"). <see cref="UiMode.Faithful"/>: MyGUI's own rendering of the font resources (FreeType native
@@ -33,27 +56,35 @@ public sealed partial class UiPainter : IDisposable
     /// </summary>
     public UiMode Mode { get; set; } = UiMode.Meitou;
 
-    /// <summary>A font made for one resource, file, size, dpi and look.</summary>
+    /// <summary>
+    /// A font made for one resource, file, size, dpi and look.
+    /// </summary>
     readonly record struct UiFontKey(string Resource, string Path, long Size64, uint Dpi, bool Faithful, bool Snapped);
-
-    /// <summary>The most glyph-cache fonts kept (each holds an atlas of 0.25 to 4 MiB): beyond it a size already made, the nearest, is used instead.</summary>
-    const int MaxUiFonts = 48;
 
     MyGuiTrueTypeFont? FontSpec(string name)
     {
         if (!_fontSpecs.TryGetValue(name, out var spec))
-            _fontSpecs[name] = spec = _resources.Resources.TryGetValue(name, out var resource) ? MyGuiTrueTypeFont.Read(resource) : null;
+        {
+            var read = _resources.Resources.TryGetValue(name, out var resource) ? MyGuiTrueTypeFont.Read(resource) : null;
+            _fontSpecs[name] = spec = read;
+        }
+
         return spec;
     }
 
-    /// <summary>The file and resource that standard-face text of an explicit pixel size (<c>FontPixels</c>) is drawn from: the standard font resource (a locale's own font), else Exo2.</summary>
+    /// <summary>
+    /// The file and resource that standard-face text of an explicit pixel size (<c>FontPixels</c>) is drawn from: the standard font resource (a
+    /// locale's own font), else Exo2.
+    /// </summary>
     (string Path, MyGuiTrueTypeFont? Spec)? StandardSource()
     {
         if (_standardSourceKnown) return _standardSource;
+
         _standardSourceKnown = true;
         var spec = FontSpec("Kenshi_StandardFont_Medium");
         if (spec is not null && FontPath(spec.Source) is { } path) _standardSource = (path, spec);
         else if (FontPath(StandardFontFile) is { } exo) _standardSource = (exo, null);
+
         return _standardSource;
     }
 
@@ -61,23 +92,43 @@ public sealed partial class UiPainter : IDisposable
     {
         var key = new UiFontKey(resource, path, size64, dpi, faithful, snapped);
         if (_uiFonts.TryGetValue(key, out var known)) return known;
+
         if (_uiFonts.Count >= MaxUiFonts)
         {
-            // Continuous resizing asks for ever new sizes: reuse the nearest one made (fonts are never freed while the UI runs).
-            DebugOverlay? nearest = null;
-            long distance = long.MaxValue;
-            foreach (var (other, font) in _uiFonts)
-                if (other.Resource == resource && other.Path == path && other.Dpi == dpi && other.Faithful == faithful && other.Snapped == snapped
-                    && Math.Abs(other.Size64 - size64) is var gap && gap < distance) (nearest, distance) = (font, gap);
+            var nearest = NearestUiFont(resource, path, size64, dpi, faithful, snapped);
             if (nearest is not null) return nearest;
         }
+
         return _uiFonts[key] = CreateUiOverlay(new UiFontOptions(path, size64, dpi, faithful, snapped, spec));
     }
 
-    /// <summary>A glyph-cache overlay; if FreeType cannot be used on this machine, a Latin-only stb_truetype one (once reported).</summary>
+    /// <summary>
+    /// The font made already for the same resource, file, dpi and look whose size is nearest <paramref name="size64"/>, or null.
+    /// </summary>
+    DebugOverlay? NearestUiFont(string resource, string path, long size64, uint dpi, bool faithful, bool snapped)
+    {
+        // Continuous resizing asks for ever new sizes: reuse the nearest one made (fonts are never freed while the UI runs).
+        DebugOverlay? nearest = null;
+        long distance = long.MaxValue;
+
+        foreach (var (other, font) in _uiFonts)
+        {
+            bool same = other.Resource == resource && other.Path == path && other.Dpi == dpi && other.Faithful == faithful && other.Snapped == snapped;
+            if (same && Math.Abs(other.Size64 - size64) is var gap && gap < distance) (nearest, distance) = (font, gap);
+        }
+
+        return nearest;
+    }
+
+    /// <summary>
+    /// A glyph-cache overlay; if FreeType cannot be used on this machine, a Latin-only stb_truetype one (once reported).
+    /// </summary>
     DebugOverlay CreateUiOverlay(UiFontOptions options)
     {
-        try { return DebugOverlay.FromUiFont(_overlay.Gpu, new UiFont(_overlay.Gpu, options)); }
+        try
+        {
+            return DebugOverlay.FromUiFont(_overlay.Gpu, new UiFont(_overlay.Gpu, options));
+        }
         catch (Exception e) when (e is DllNotFoundException or FileLoadException or BadImageFormatException or EntryPointNotFoundException
             or InvalidOperationException or InvalidDataException)
         {
@@ -91,15 +142,15 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// The points a TrueType font resource is drawn at for the UI scale <paramref name="scale"/> (docs/formats/mygui.md): its size scaled and cut to whole points,
-    /// then resized as the original does on load (<see cref="KenshiFontSize"/>). At 1080 lines the resource's own size, resized.
+    /// The points a TrueType font resource is drawn at for the UI scale <paramref name="scale"/> (docs/formats/mygui.md): its size scaled and cut to
+    /// whole points, then resized as the original does on load (<see cref="KenshiFontSize"/>). At 1080 lines the resource's own size, resized.
     /// </summary>
     float ScaledFontSize(string path, MyGuiTrueTypeFont spec, float scale) =>
         EffectiveFontSize(path, MathF.Floor((spec.Size > 0 ? spec.Size : 20) * scale + 1e-3f), spec.Resolution > 0 ? spec.Resolution : 50);
 
     /// <summary>
-    /// The em pixels of the original's standard text (<c>Kenshi_StandardFont_Medium</c>) at <paramref name="viewportHeight"/> lines, as <see cref="ScaledFontSize"/> sizes it
-    /// (13.9 at 1080, 17.4 at 1440); the linear 13.9 per 1080 lines without the resource.
+    /// The em pixels of the original's standard text (<c>Kenshi_StandardFont_Medium</c>) at <paramref name="viewportHeight"/> lines, as <see
+    /// cref="ScaledFontSize"/> sizes it (13.9 at 1080, 17.4 at 1440); the linear 13.9 per 1080 lines without the resource.
     /// </summary>
     public float StandardTextPixels(int viewportHeight)
     {
@@ -108,7 +159,9 @@ public sealed partial class UiPainter : IDisposable
         return 20 * 50 / 72f * viewportHeight / 1080f;
     }
 
-    /// <summary>The point size the original draws font resource <paramref name="path"/> at (<see cref="KenshiFontSize"/>).</summary>
+    /// <summary>
+    /// The point size the original draws font resource <paramref name="path"/> at (<see cref="KenshiFontSize"/>).
+    /// </summary>
     float EffectiveFontSize(string path, float size, float resolution)
     {
         if (!_fontSizes.TryGetValue((path, size, resolution), out float effective))
@@ -116,48 +169,54 @@ public sealed partial class UiPainter : IDisposable
         return effective;
     }
 
-    /// <summary>The <c>font size2</c> option (points added to every font's default height); a change takes effect on the next frames.</summary>
+    /// <summary>
+    /// The <c>font size2</c> option (points added to every font's default height); a change takes effect on the next frames.
+    /// </summary>
     public float FontSizeSetting
     {
         get => _fontSizeSetting;
-        set { if (_fontSizeSetting == value) return; _fontSizeSetting = value; _fontSizes.Clear(); }
+        set
+        {
+            if (_fontSizeSetting == value) return;
+
+            _fontSizeSetting = value;
+            _fontSizes.Clear();
+        }
     }
-    float _fontSizeSetting = KenshiFontSize.DefaultSetting;
-    readonly Dictionary<string, string?> _fontPaths = new(StringComparer.Ordinal);
 
     string? FontPath(string name)
     {
         if (!_fontPaths.TryGetValue(name, out var path)) _fontPaths[name] = path = _resolve(name);
         return path;
     }
-    /// <summary>The standard and painted faces baked at <see cref="LargePixels"/>: lettering scaled well past the 16 px atlases is drawn from these, so it stays sharp.</summary>
-    DebugOverlay? _standardLarge, _paintedLarge;
-    const float LargePixels = 48;
+
+    #endregion
+
+    #region Textures
+
     readonly Dictionary<string, (GpuTexture Texture, SampledTexture Sampled)> _textures = new(StringComparer.Ordinal);
-    /// <summary>Textures the host draws at run time (the squad portraits), shown by an ImageBox's <c>ImageTexture</c> under their name; not owned.</summary>
+
+    /// <summary>
+    /// Textures the host draws at run time (the squad portraits), shown by an ImageBox's <c>ImageTexture</c> under their name; not owned.
+    /// </summary>
     readonly Dictionary<string, (GpuTexture Texture, SampledTexture Sampled)> _external = new(StringComparer.Ordinal);
-    /// <summary>Which texels of each uploaded texture are fully opaque, by name (<see cref="OpaqueCoverage"/>); textures given on the GPU have none and never count.</summary>
+
+    /// <summary>
+    /// Which texels of each uploaded texture are fully opaque, by name (<see cref="OpaqueCoverage"/>); textures given on the GPU have none and never
+    /// count.
+    /// </summary>
     readonly Dictionary<string, OpacityMask> _masks = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The skins' atlases went with <see cref="ReleaseTextures"/>: skin parts are drawn only from loaded atlases, so the next <see cref="Draw"/>
+    /// loads them again.
+    /// </summary>
+    bool _skinsReleased;
+
     readonly List<UiRect> _opaqueRects = new();
     readonly List<UiRect> _previousOpaqueRects = new();
     double? _opaqueArea;
     int _coverageWidth, _coverageHeight;
-    DebugOverlay.OverlayPass? _overlayPass;
-    /// <summary>A caption's parsed colour tags, lines and their widths, by everything they are made from; entries not used for <see cref="TextLayoutLife"/> frames are dropped.</summary>
-    readonly Dictionary<TextLayoutKey, TextLayout> _textLayouts = new();
-    /// <summary>The <c>FontName</c> a skin template sets, by skin (null: none, or no such template).</summary>
-    readonly Dictionary<string, string?> _templateFonts = new(StringComparer.Ordinal);
-    long _textFrame;
-    const int TextLayoutLife = 120;
-    readonly record struct TextLayoutKey(DebugOverlay Font, string Caption, float Width, float Scale, int Mode);
-    sealed class TextLayout(string text, IReadOnlyList<TextColourRun> runs, IReadOnlyList<string> lines, float[] widths)
-    {
-        public readonly string Text = text;
-        public readonly IReadOnlyList<TextColourRun> Runs = runs;
-        public readonly IReadOnlyList<string> Lines = lines;
-        public readonly float[] Widths = widths;
-        public long Used;
-    }
 
     /// <summary>
     /// The share of the viewport (0..1) under fully opaque pieces of the last <see cref="Draw"/>: solid backgrounds and atlas slices whose
@@ -174,7 +233,9 @@ public sealed partial class UiPainter : IDisposable
         }
     }
 
-    /// <summary>Makes <paramref name="texture"/> the image an ImageBox shows for <c>ImageTexture</c> <paramref name="name"/> (the caller keeps and frees it).</summary>
+    /// <summary>
+    /// Makes <paramref name="texture"/> the image an ImageBox shows for <c>ImageTexture</c> <paramref name="name"/> (the caller keeps and frees it).
+    /// </summary>
     public void SetTexture(string name, GpuTexture texture, SampledTexture sampled)
     {
         if (_external.TryGetValue(name, out var given) && given.Texture == texture && given.Sampled == sampled) return;
@@ -183,12 +244,15 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Uploads <paramref name="image"/> (made by the host) as <c>ImageTexture</c> <paramref name="name"/>, between frames; the painter owns the copy. <paramref name="srgb"/>
-    /// false stores the bytes as they are, as the game's atlas textures are (art baked from them then draws in their colours).
+    /// Uploads <paramref name="image"/> (made by the host) as <c>ImageTexture</c> <paramref name="name"/>, between frames; the painter owns the copy.
+    /// <paramref name="srgb"/> false stores the bytes as they are, as the game's atlas textures are (art baked from them then draws in their
+    /// colours).
     /// </summary>
     public void SetImage(string name, RgbaImage image, bool srgb = true) => Upload(name, image, srgb);
 
-    /// <summary>Frees texture <paramref name="name"/> (after the frames in flight); a later draw that names it loads it again.</summary>
+    /// <summary>
+    /// Frees texture <paramref name="name"/> (after the frames in flight); a later draw that names it loads it again.
+    /// </summary>
     public void Forget(string name)
     {
         if (_textures.Remove(name, out var t)) t.Texture.Dispose();
@@ -196,7 +260,9 @@ public sealed partial class UiPainter : IDisposable
         _textureVersion++;
     }
 
-    /// <summary>Frees every texture loaded from files or images (not the fonts, nor those given with <see cref="SetTexture"/>); later draws load them again.</summary>
+    /// <summary>
+    /// Frees every texture loaded from files or images (not the fonts, nor those given with <see cref="SetTexture"/>); later draws load them again.
+    /// </summary>
     public void ReleaseTextures()
     {
         foreach (var t in _textures.Values) t.Texture.Dispose();
@@ -206,17 +272,55 @@ public sealed partial class UiPainter : IDisposable
         _textureVersion++;
     }
 
-    /// <summary>The skins' atlases went with <see cref="ReleaseTextures"/>: skin parts are drawn only from loaded atlases, so the next <see cref="Draw"/> loads them again.</summary>
-    bool _skinsReleased;
-
     void LoadSkinTextures()
     {
-        foreach (string name in _resources.Skins.Values.Select(s => s.Texture).Where(s => s.Length > 0).Distinct()) LoadTexture(name);
+        var names = _resources.Skins.Values.Select(s => s.Texture).Where(s => s.Length > 0).Distinct();
+        foreach (string name in names) LoadTexture(name);
+
         _skinsReleased = false;
     }
 
-    /// <summary>Whether <c>ImageTexture</c> <paramref name="name"/> is on the GPU.</summary>
+    /// <summary>
+    /// Whether <c>ImageTexture</c> <paramref name="name"/> is on the GPU.
+    /// </summary>
     public bool HasTexture(string name) => _textures.ContainsKey(name) || _external.ContainsKey(name);
+
+    #endregion
+
+    #region Painting
+
+    /// <summary>
+    /// The one-line edit boxes the last <see cref="Draw"/> laid out: where each one's text starts and how it was measured, for <see
+    /// cref="EditCaretAt"/>.
+    /// </summary>
+    readonly List<(UiRect Box, DebugOverlay Font, float Scale, float X, string Text)> _editBoxes = [];
+
+    DebugOverlay.OverlayPass? _overlayPass;
+
+    /// <summary>
+    /// A caption's parsed colour tags, lines and their widths, by everything they are made from; entries not used for <see cref="TextLayoutLife"/>
+    /// frames are dropped.
+    /// </summary>
+    readonly Dictionary<TextLayoutKey, TextLayout> _textLayouts = new();
+
+    /// <summary>
+    /// The <c>FontName</c> a skin template sets, by skin (null: none, or no such template).
+    /// </summary>
+    readonly Dictionary<string, string?> _templateFonts = new(StringComparer.Ordinal);
+
+    long _textFrame;
+    const int TextLayoutLife = 120;
+
+    readonly record struct TextLayoutKey(DebugOverlay Font, string Caption, float Width, float Scale, int Mode);
+
+    sealed class TextLayout(string text, IReadOnlyList<TextColourRun> runs, IReadOnlyList<string> lines, float[] widths)
+    {
+        public readonly string Text = text;
+        public readonly IReadOnlyList<TextColourRun> Runs = runs;
+        public readonly IReadOnlyList<string> Lines = lines;
+        public readonly float[] Widths = widths;
+        public long Used;
+    }
 
     public UiPainter(DebugOverlay overlay, MyGuiResources resources, Func<string, string?> resolve)
     {
@@ -226,39 +330,54 @@ public sealed partial class UiPainter : IDisposable
         // Upload before rendering starts. Missing atlas files remain an explicit diagnostic.
         try
         {
-            // The fallback faces (a control whose font is not a TrueType resource): glyph-cache fonts in Meitou's look, 2x oversampled so that scaled text stays smooth.
+            // The fallback faces (a control whose font is not a TrueType resource): glyph-cache fonts in Meitou's look, 2x oversampled so that
+            // scaled text stays smooth.
             DebugOverlay Fallback(string path, int pixels) => CreateUiOverlay(new UiFontOptions(path, pixels * 64L, 72, false, false, null));
+
             if (resolve(StandardFontFile) is { } standard)
             {
                 _standardFont = Fallback(standard, 16);
                 _standardLarge = Fallback(standard, (int)LargePixels);
             }
+
             if (resolve("Sentencia_1.ttf") is { } painted)
             {
                 _paintedFont = Fallback(painted, 16);
                 _paintedLarge = Fallback(painted, (int)LargePixels);
                 _titleFont = DebugOverlay.FromFont(overlay.Gpu, painted, 144);   // a stamp of Latin capitals, baked large for the title
             }
+
             LoadSkinTextures();
         }
-        catch { Dispose(); throw; }
+        catch
+        {
+            Dispose();
+            throw;
+        }
     }
 
-    /// <summary>The width in pixels of <paramref name="text"/> in the standard face at <paramref name="emPixels"/> (to fit a panel to its text before it is drawn).</summary>
+    /// <summary>
+    /// The width in pixels of <paramref name="text"/> in the standard face at <paramref name="emPixels"/> (to fit a panel to its text before it is
+    /// drawn).
+    /// </summary>
     public float MeasureStandard(string text, float emPixels) => (_standardFont ?? _overlay).MeasureText(text, emPixels / 16f);
 
     public void Draw(IReadOnlyList<UiControl> controls, int width, int height, Vector2 mouse, string? active, float minimumTextPixels = 0,
         DebugOverlay.OverlayPass? pass = null)
     {
-        for (int uploads = 0; uploads < IconUploadsPerFrame && _decodedIcons.TryDequeue(out var icon); uploads++) Upload(icon.Name, icon.Image);
+        for (int uploads = 0; uploads < IconUploadsPerFrame && _decodedIcons.TryDequeue(out var icon); uploads++)
+            Upload(icon.Name, icon.Image);
         if (_skinsReleased) LoadSkinTextures();
+
         bool owns = pass is null;
         pass ??= (_overlayPass ??= new DebugOverlay.OverlayPass(_overlay.Gpu, width, height)).Reset(width, height);
         using var owned = owns ? pass : null;
         _editBoxes.Clear();
         _overlay.Flush(width, height, null, pass);   // what was queued before goes first, not into the first control's recording
         BeginPaintFrame(width, height, minimumTextPixels);
+
         foreach (var c in controls) PaintCached(c, width, height, mouse, active, minimumTextPixels, pass);
+
         _overlay.Flush(width, height, null, pass);
         if (!CollectionsMarshal.AsSpan(_opaqueRects).SequenceEqual(CollectionsMarshal.AsSpan(_previousOpaqueRects)))
         {
@@ -266,22 +385,31 @@ public sealed partial class UiPainter : IDisposable
             _previousOpaqueRects.AddRange(_opaqueRects);
             _opaqueArea = null;
         }
+
         (_coverageWidth, _coverageHeight) = (width, height);
         _opaqueRects.Clear();
-        if (++_textFrame % TextLayoutLife == 0)
-            foreach (var (key, laid) in _textLayouts)
-                if (laid.Used < _textFrame - TextLayoutLife) _textLayouts.Remove(key);
+        if (++_textFrame % TextLayoutLife == 0) DropStaleTextLayouts();
     }
 
-    /// <summary>One control: its background, image, skin, the pushed button's accent and its caption.</summary>
+    void DropStaleTextLayouts()
+    {
+        foreach (var (key, laid) in _textLayouts)
+        {
+            if (laid.Used < _textFrame - TextLayoutLife) _textLayouts.Remove(key);
+        }
+    }
+
+    /// <summary>
+    /// One control: its background, image, skin, the pushed button's accent and its caption.
+    /// </summary>
     void PaintControl(UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels, DebugOverlay.OverlayPass pass)
     {
         var b = c.Bounds;
-        string widgetState = c.Properties.GetValueOrDefault("State")
-            ?? (!c.Enabled ? "disabled" : active == c.Action && active is not null ? "pushed" : b.Contains(mouse.X, mouse.Y) && c.Action.Length > 0 ? "highlighted" : "normal");
+        string widgetState = c.Properties.GetValueOrDefault("State") ?? DefaultWidgetState(c, b, mouse, active);
         var clip = (c.Clip ?? new(0, 0, width, height)).Intersect(new(0, 0, width, height));
         if (b.Intersect(clip).Width <= 0 || b.Intersect(clip).Height <= 0) return;
         if (b.Width <= 0 || b.Height <= 0) return;
+
         PaintBackground(c, b, clip, mouse, active, width, height, pass);
         PaintImage(c, b, clip, width, height, pass);
         PaintSkin(c, b, clip, widgetState, width, height, pass);
@@ -291,12 +419,24 @@ public sealed partial class UiPainter : IDisposable
         PaintCaption(c, b, clip, widgetState, width, height, minimumTextPixels, pass);
     }
 
+    /// <summary>
+    /// The state a control without a <c>State</c> property is in: disabled, pushed (the active action), highlighted (under the mouse) or normal.
+    /// </summary>
+    static string DefaultWidgetState(UiControl c, UiRect b, Vector2 mouse, string? active)
+    {
+        if (!c.Enabled) return "disabled";
+        if (active == c.Action && active is not null) return "pushed";
+
+        return b.Contains(mouse.X, mouse.Y) && c.Action.Length > 0 ? "highlighted" : "normal";
+    }
+
     void PaintBackground(UiControl c, UiRect b, UiRect clip, Vector2 mouse, string? active, int width, int height, DebugOverlay.OverlayPass pass)
     {
         if (c.Background.W > 0)
         {
             var colour = c.Type == "Button" && c.Action == active ? c.ActiveColour ?? new Vector4(0.25f, 0.5f, 0.4f, c.Background.W)
                 : c.Type == "Button" && b.Contains(mouse.X, mouse.Y) ? c.HoverColour ?? c.Background : c.Background;
+
             if (!c.Enabled) colour = c.DisabledColour ?? colour * new Vector4(0.6f, 0.6f, 0.6f, 1);
             colour.W *= Alpha(c.Properties);
             _overlay.Rect(b.X, b.Y, b.X + b.Width, b.Y + b.Height, colour);
@@ -305,57 +445,101 @@ public sealed partial class UiPainter : IDisposable
         _overlay.Flush(width, height, clip, pass);
     }
 
-    /// <summary>An ImageBox's picture (rotated, nine-sliced or stretched); one whose icon is not loaded or is drawn by the renderer marks the control <see cref="_paintVolatile"/>.</summary>
+    /// <summary>
+    /// An ImageBox's picture (rotated, nine-sliced or stretched); one whose icon is not loaded or is drawn by the renderer marks the control <see
+    /// cref="_paintVolatile"/>.
+    /// </summary>
     void PaintImage(UiControl c, UiRect b, UiRect clip, int width, int height, DebugOverlay.OverlayPass pass)
     {
-        if (c.Type == "ImageBox" && MyGuiImages.Resolve(_resources, c.Properties) is { } shown && (shown.Texture.StartsWith(RenderedIconPrefix, StringComparison.Ordinal)
-            || shown.Texture.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal) || shown.Texture.StartsWith(IconPrefix, StringComparison.Ordinal) && !_textures.ContainsKey(shown.Texture)))
+        if (c.Type == "ImageBox" && MyGuiImages.Resolve(_resources, c.Properties) is { } shown && IsVolatileIcon(shown.Texture))
             _paintVolatile = true;
-        if (c.Type == "ImageBox" && MyGuiImages.Resolve(_resources, c.Properties) is { } image && (!image.Texture.StartsWith(IconPrefix, StringComparison.Ordinal) || _textures.ContainsKey(image.Texture)) && (!image.Texture.StartsWith(RenderedIconPrefix, StringComparison.Ordinal) || RenderedIconReady(image.Texture)))
+
+        if (c.Type == "ImageBox" && MyGuiImages.Resolve(_resources, c.Properties) is { } image && IsImageReady(image.Texture))
+            DrawImageBox(c, image, b, clip, width, height, pass);
+    }
+
+    /// <summary>
+    /// Whether the texture is an icon that is not loaded yet or is drawn by the renderer, so the control's picture changes without its properties.
+    /// </summary>
+    bool IsVolatileIcon(string texture) =>
+        texture.StartsWith(RenderedIconPrefix, StringComparison.Ordinal)
+        || texture.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal)
+        || texture.StartsWith(IconPrefix, StringComparison.Ordinal) && !_textures.ContainsKey(texture);
+
+    /// <summary>
+    /// Whether an ImageBox's texture can be drawn now: a file icon only once loaded, a rendered icon once the host has made it (this asks for it).
+    /// </summary>
+    bool IsImageReady(string texture) =>
+        (!texture.StartsWith(IconPrefix, StringComparison.Ordinal) || _textures.ContainsKey(texture))
+        && (!texture.StartsWith(RenderedIconPrefix, StringComparison.Ordinal) || RenderedIconReady(texture));
+
+    void DrawImageBox(UiControl c, MyGuiImage image, UiRect b, UiRect clip, int width, int height, DebugOverlay.OverlayPass pass)
+    {
+        var loaded = LoadTexture(image.Texture);
+        float textureWidth = loaded.Texture.Desc.Width, textureHeight = loaded.Texture.Desc.Height;
+        var source = image.Source.Width > 0 && image.Source.Height > 0 ? image.Source : new UiRect(0, 0, textureWidth, textureHeight);
+
+        // ImageFlipV: an image drawn by the renderer. Both backends draw it with the engine's y-up clip space; Metal's
+        // targets keep row 0 at the top but its viewport maps that clip space top-down, so the stored picture is upside
+        // down in both cases and the sampled V is flipped on both.
+        bool flip = c.Properties.GetValueOrDefault("ImageFlipV") == "true";
+        float v0 = source.Y / textureHeight, v1 = (source.Y + source.Height) / textureHeight;
+        if (flip) (v0, v1) = (v1, v0);
+
+        var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
+        float border = 0;
+        var invariant = CultureInfo.InvariantCulture;
+        bool bordered = !flip && float.TryParse(c.Properties.GetValueOrDefault("ImageBorder"), NumberStyles.Float, invariant, out border)
+            && border > 0;
+
+        // ImageAngle: radians clockwise about the box's centre (MyGUI's RotatingSkin, the map's camera marker).
+        bool rotated = float.TryParse(c.Properties.GetValueOrDefault("ImageAngle"), NumberStyles.Float, invariant, out float angle)
+            && angle != 0;
+        var uv = new Vector4(source.X / textureWidth, v0, (source.X + source.Width) / textureWidth, v1);
+        var destination = new Vector4(b.X, b.Y, b.X + b.Width, b.Y + b.Height);
+        if (rotated)
+            _overlay.ImageRotated(loaded.Sampled, destination, uv, tint, angle);
+        else if (bordered)
+            DrawBorderedImage(c, loaded, source, b, border, tint);
+        else
+            _overlay.Image(loaded.Sampled, destination, uv, tint);
+
+        if (angle == 0 && tint.W >= 1 && _masks.TryGetValue(image.Texture, out var imageMask))
+            AddOpaque(imageMask, source, b, clip, allowCore: !flip && !bordered);
+        _overlay.Flush(width, height, clip, pass);
+    }
+
+    /// <summary>
+    /// An image cut into nine pieces by a border of <paramref name="border"/> texels: the corners keep their size (times <c>ImageBorderScale</c>),
+    /// the edges and the middle stretch.
+    /// </summary>
+    void DrawBorderedImage(UiControl c, (GpuTexture Texture, SampledTexture Sampled) loaded, UiRect source, UiRect b, float border, Vector4 tint)
+    {
+        var invariant = CultureInfo.InvariantCulture;
+        float borderScale = float.TryParse(c.Properties.GetValueOrDefault("ImageBorderScale"), NumberStyles.Float, invariant, out float parsed)
+            ? Math.Max(0, parsed) : 1;
+        float bx = Math.Min(border, source.Width / 2), by = Math.Min(border, source.Height / 2);
+        float dx = Math.Min(bx * borderScale, b.Width / 2), dy = Math.Min(by * borderScale, b.Height / 2);
+        Span<float> xs = [b.X, b.X + dx, b.X + b.Width - dx, b.X + b.Width];
+        Span<float> ys = [b.Y, b.Y + dy, b.Y + b.Height - dy, b.Y + b.Height];
+        Span<float> us = [source.X, source.X + bx, source.X + source.Width - bx, source.X + source.Width];
+        Span<float> vs = [source.Y, source.Y + by, source.Y + source.Height - by, source.Y + source.Height];
+        float textureWidth = loaded.Texture.Desc.Width, textureHeight = loaded.Texture.Desc.Height;
+
+        for (int row = 0; row < 3; row++)
         {
-            var loaded = LoadTexture(image.Texture);
-            var source = image.Source.Width > 0 && image.Source.Height > 0 ? image.Source : new UiRect(0, 0, loaded.Texture.Desc.Width, loaded.Texture.Desc.Height);
-            // ImageFlipV: an image drawn by the renderer. Both backends draw it with the engine's y-up clip space; Metal's
-            // targets keep row 0 at the top but its viewport maps that clip space top-down, so the stored picture is upside
-            // down in both cases and the sampled V is flipped on both.
-            bool flip = c.Properties.GetValueOrDefault("ImageFlipV") == "true";
-            float v0 = source.Y / loaded.Texture.Desc.Height, v1 = (source.Y + source.Height) / loaded.Texture.Desc.Height;
-            if (flip) (v0, v1) = (v1, v0);
-            var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
-            float border = 0;
-            bool bordered = !flip && float.TryParse(c.Properties.GetValueOrDefault("ImageBorder"), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out border) && border > 0;
-            // ImageAngle: radians clockwise about the box's centre (MyGUI's RotatingSkin, the map's camera marker).
-            if (float.TryParse(c.Properties.GetValueOrDefault("ImageAngle"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float angle) && angle != 0)
+            for (int column = 0; column < 3; column++)
             {
-                _overlay.ImageRotated(loaded.Sampled, new(b.X, b.Y, b.X + b.Width, b.Y + b.Height),
-                    new(source.X / loaded.Texture.Desc.Width, v0, (source.X + source.Width) / loaded.Texture.Desc.Width, v1), tint, angle);
+                var destination = new Vector4(xs[column], ys[row], xs[column + 1], ys[row + 1]);
+                var uv = new Vector4(us[column] / textureWidth, vs[row] / textureHeight, us[column + 1] / textureWidth, vs[row + 1] / textureHeight);
+                _overlay.Image(loaded.Sampled, destination, uv, tint);
             }
-            else if (bordered)
-            {
-                float borderScale = float.TryParse(c.Properties.GetValueOrDefault("ImageBorderScale"), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out float parsed) ? Math.Max(0, parsed) : 1;
-                float bx = Math.Min(border, source.Width / 2), by = Math.Min(border, source.Height / 2);
-                float dx = Math.Min(bx * borderScale, b.Width / 2), dy = Math.Min(by * borderScale, b.Height / 2);
-                Span<float> xs = [b.X, b.X + dx, b.X + b.Width - dx, b.X + b.Width];
-                Span<float> ys = [b.Y, b.Y + dy, b.Y + b.Height - dy, b.Y + b.Height];
-                Span<float> us = [source.X, source.X + bx, source.X + source.Width - bx, source.X + source.Width];
-                Span<float> vs = [source.Y, source.Y + by, source.Y + source.Height - by, source.Y + source.Height];
-                for (int row = 0; row < 3; row++)
-                    for (int column = 0; column < 3; column++)
-                        _overlay.Image(loaded.Sampled, new(xs[column], ys[row], xs[column + 1], ys[row + 1]),
-                            new(us[column] / loaded.Texture.Desc.Width, vs[row] / loaded.Texture.Desc.Height,
-                                us[column + 1] / loaded.Texture.Desc.Width, vs[row + 1] / loaded.Texture.Desc.Height), tint);
-            }
-            else
-                _overlay.Image(loaded.Sampled, new(b.X, b.Y, b.X + b.Width, b.Y + b.Height),
-                    new(source.X / loaded.Texture.Desc.Width, v0, (source.X + source.Width) / loaded.Texture.Desc.Width, v1), tint);
-            if (angle == 0 && tint.W >= 1 && _masks.TryGetValue(image.Texture, out var imageMask)) AddOpaque(imageMask, source, b, clip, allowCore: !flip && !bordered);
-            _overlay.Flush(width, height, clip, pass);
         }
     }
 
-    /// <summary>The skin's image parts in the widget's state (MyGUI's SubSkin, MainSkin and TileRect).</summary>
+    /// <summary>
+    /// The skin's image parts in the widget's state (MyGUI's SubSkin, MainSkin and TileRect).
+    /// </summary>
     void PaintSkin(UiControl c, UiRect b, UiRect clip, string widgetState, int width, int height, DebugOverlay.OverlayPass pass)
     {
         if (_resources.Skins.TryGetValue(c.Skin, out var skin) && _textures.TryGetValue(skin.Texture, out var atlas))
@@ -367,46 +551,72 @@ public sealed partial class UiPainter : IDisposable
             foreach (var part in skin.Parts)
             {
                 if (part.Type is not ("SubSkin" or "MainSkin" or "TileRect")) continue;
-                if (!part.States.TryGetValue(state, out var source) && !(on && part.States.TryGetValue("pushed", out source)) && !part.States.TryGetValue("normal", out source)) continue;
+                if (!part.States.TryGetValue(state, out var source) && !(on && part.States.TryGetValue("pushed", out source))
+                    && !part.States.TryGetValue("normal", out source))
+                    continue;
+
                 var dest = part.Offset.AlignTo(b, skin.Width, skin.Height, part.Align);
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
                 if (part.Type == "TileRect")
-                {
-                    var properties = part.StateProperties?.GetValueOrDefault(state) ?? part.StateProperties?.GetValueOrDefault("normal");
-                    string? tileSize = c.Properties.GetValueOrDefault("TileSize") ?? properties?.GetValueOrDefault("TileSize");
-                    var size = tileSize?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    float tileW = size?.Length == 2 ? float.Parse(size[0], System.Globalization.CultureInfo.InvariantCulture) : source.Width;
-                    float tileH = size?.Length == 2 ? float.Parse(size[1], System.Globalization.CultureInfo.InvariantCulture) : source.Height;
-                    if (properties?.GetValueOrDefault("TileH") != "true") tileW = dest.Width;
-                    if (properties?.GetValueOrDefault("TileV") != "true") tileH = dest.Height;
-                    if (tileW > 0 && tileH > 0 && tint.W >= 1 && atlasMask?.Covers(source) == true) _opaqueRects.Add(dest.Intersect(clip));
-                    if (tileW > 0 && tileH > 0)
-                        for (float tileY = dest.Y; tileY < dest.Y + dest.Height; tileY += tileH)
-                            for (float tileX = dest.X; tileX < dest.X + dest.Width; tileX += tileW)
-                            {
-                                float pieceW = Math.Min(tileW, dest.X + dest.Width - tileX), pieceH = Math.Min(tileH, dest.Y + dest.Height - tileY);
-                                _overlay.Image(atlas.Sampled, new(tileX, tileY, tileX + pieceW, tileY + pieceH),
-                                    new(source.X / atlas.Texture.Desc.Width, source.Y / atlas.Texture.Desc.Height,
-                                        (source.X + source.Width * pieceW / tileW) / atlas.Texture.Desc.Width, (source.Y + source.Height * pieceH / tileH) / atlas.Texture.Desc.Height), tint);
-                            }
-                    continue;
-                }
-                // Crop the image and UVs to the viewport together.
-                float x0 = Math.Max(0, dest.X), y0 = Math.Max(0, dest.Y), x1 = Math.Min(width, dest.X + dest.Width), y1 = Math.Min(height, dest.Y + dest.Height);
-                if (x1 <= x0 || y1 <= y0 || dest.Width <= 0 || dest.Height <= 0) continue;
-                float tw = atlas.Texture.Desc.Width, th = atlas.Texture.Desc.Height;
-                _overlay.Image(atlas.Sampled, new(x0, y0, x1, y1), new(
-                    (source.X + (x0 - dest.X) / dest.Width * source.Width) / tw,
-                    (source.Y + (y0 - dest.Y) / dest.Height * source.Height) / th,
-                    (source.X + (x1 - dest.X) / dest.Width * source.Width) / tw,
-                    (source.Y + (y1 - dest.Y) / dest.Height * source.Height) / th), tint);
-                if (tint.W >= 1 && atlasMask is not null) AddOpaque(atlasMask, source, dest, clip, allowCore: true);
+                    PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint);
+                else
+                    PaintSkinPart(atlas, atlasMask, source, dest, clip, width, height, tint);
             }
+
             _overlay.Flush(width, height, clip, pass);
         }
     }
 
-    /// <summary>The caption: its font and size, the edit caret and selection, then its lines.</summary>
+    /// <summary>
+    /// A TileRect part: the source repeated at its tile size (the control's <c>TileSize</c>, else the state's) over <paramref name="dest"/>.
+    /// </summary>
+    void PaintTileRect(UiControl c, MyGuiSkinPart part, string state, (GpuTexture Texture, SampledTexture Sampled) atlas, OpacityMask? atlasMask,
+        UiRect source, UiRect dest, UiRect clip, Vector4 tint)
+    {
+        var properties = part.StateProperties?.GetValueOrDefault(state) ?? part.StateProperties?.GetValueOrDefault("normal");
+        string? tileSize = c.Properties.GetValueOrDefault("TileSize") ?? properties?.GetValueOrDefault("TileSize");
+        var size = tileSize?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        float tileW = size?.Length == 2 ? float.Parse(size[0], CultureInfo.InvariantCulture) : source.Width;
+        float tileH = size?.Length == 2 ? float.Parse(size[1], CultureInfo.InvariantCulture) : source.Height;
+        if (properties?.GetValueOrDefault("TileH") != "true") tileW = dest.Width;
+        if (properties?.GetValueOrDefault("TileV") != "true") tileH = dest.Height;
+        if (tileW > 0 && tileH > 0 && tint.W >= 1 && atlasMask?.Covers(source) == true) _opaqueRects.Add(dest.Intersect(clip));
+        if (tileW <= 0 || tileH <= 0) return;
+
+        float atlasWidth = atlas.Texture.Desc.Width, atlasHeight = atlas.Texture.Desc.Height;
+        for (float tileY = dest.Y; tileY < dest.Y + dest.Height; tileY += tileH)
+        {
+            for (float tileX = dest.X; tileX < dest.X + dest.Width; tileX += tileW)
+            {
+                float pieceW = Math.Min(tileW, dest.X + dest.Width - tileX), pieceH = Math.Min(tileH, dest.Y + dest.Height - tileY);
+                float u1 = (source.X + source.Width * pieceW / tileW) / atlasWidth, v1 = (source.Y + source.Height * pieceH / tileH) / atlasHeight;
+                _overlay.Image(atlas.Sampled, new(tileX, tileY, tileX + pieceW, tileY + pieceH),
+                    new(source.X / atlasWidth, source.Y / atlasHeight, u1, v1), tint);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A SubSkin or MainSkin part stretched over <paramref name="dest"/>, the image and its UVs cropped to the viewport together.
+    /// </summary>
+    void PaintSkinPart((GpuTexture Texture, SampledTexture Sampled) atlas, OpacityMask? atlasMask, UiRect source, UiRect dest, UiRect clip,
+        int width, int height, Vector4 tint)
+    {
+        float x0 = Math.Max(0, dest.X), y0 = Math.Max(0, dest.Y), x1 = Math.Min(width, dest.X + dest.Width), y1 = Math.Min(height, dest.Y + dest.Height);
+        if (x1 <= x0 || y1 <= y0 || dest.Width <= 0 || dest.Height <= 0) return;
+
+        float tw = atlas.Texture.Desc.Width, th = atlas.Texture.Desc.Height;
+        _overlay.Image(atlas.Sampled, new(x0, y0, x1, y1), new(
+            (source.X + (x0 - dest.X) / dest.Width * source.Width) / tw,
+            (source.Y + (y0 - dest.Y) / dest.Height * source.Height) / th,
+            (source.X + (x1 - dest.X) / dest.Width * source.Width) / tw,
+            (source.Y + (y1 - dest.Y) / dest.Height * source.Height) / th), tint);
+        if (tint.W >= 1 && atlasMask is not null) AddOpaque(atlasMask, source, dest, clip, allowCore: true);
+    }
+
+    /// <summary>
+    /// The caption: its font and size, the edit caret and selection, then its lines.
+    /// </summary>
     void PaintCaption(UiControl c, UiRect b, UiRect clip, string widgetState, int width, int height, float minimumTextPixels, DebugOverlay.OverlayPass pass)
     {
         bool focused = c.Properties.GetValueOrDefault("Focused") == "true";
@@ -522,8 +732,8 @@ public sealed partial class UiPainter : IDisposable
 
     /// <summary>
     /// <paramref name="caption"/> as drawn: its plain text and colour runs (MyGUI's inline tags; an edited box shows its text as typed), its lines (wrapped, or one per line
-    /// break and shortened with "..." to <paramref name="width"/>; a font resource's long line in the Faithful mode is cropped by the widget instead, as MyGUI does) and
-    /// their widths. Made once per caption, font, width and scale, not every frame.
+    /// break and shortened with "..." to <paramref name="width"/>; a font resource's long line in the Faithful mode is cropped by the widget instead,
+    /// as MyGUI does) and their widths. Made once per caption, font, width and scale, not every frame.
     /// </summary>
     TextLayout LayOutText(string caption, DebugOverlay font, float width, float scale, bool wrap, bool original, bool focused, bool numeric)
     {
@@ -550,7 +760,14 @@ public sealed partial class UiPainter : IDisposable
         return font;
     }
 
-    /// <summary>Records the part of <paramref name="dest"/> that is opaque: all of it when every texel of <paramref name="source"/> is, else (when <paramref name="allowCore"/>) the stretched image of the slice's largest opaque core, so ragged panel edges do not disqualify the solid middle.</summary>
+    #endregion
+
+    #region Opacity
+
+    /// <summary>
+    /// Records the part of <paramref name="dest"/> that is opaque: all of it when every texel of <paramref name="source"/> is, else (when <paramref
+    /// name="allowCore"/>) the stretched image of the slice's largest opaque core, so ragged panel edges do not disqualify the solid middle.
+    /// </summary>
     void AddOpaque(OpacityMask mask, UiRect source, UiRect dest, UiRect clip, bool allowCore)
     {
         if (mask.Covers(source)) { _opaqueRects.Add(dest.Intersect(clip)); return; }
@@ -559,7 +776,9 @@ public sealed partial class UiPainter : IDisposable
         _opaqueRects.Add(new UiRect(dest.X + (core.X - source.X) * fx, dest.Y + (core.Y - source.Y) * fy, core.Width * fx, core.Height * fy).Intersect(clip));
     }
 
-    /// <summary>The area of the union of <paramref name="rects"/> (overlaps once): the cells of the grid their edges make, each in or out.</summary>
+    /// <summary>
+    /// The area of the union of <paramref name="rects"/> (overlaps once): the cells of the grid their edges make, each in or out.
+    /// </summary>
     internal static double UnionArea(List<UiRect> rects)
     {
         rects.RemoveAll(r => r.Width <= 0 || r.Height <= 0);
@@ -578,7 +797,10 @@ public sealed partial class UiPainter : IDisposable
         return area;
     }
 
-    /// <summary>One bit per texel of an uploaded texture: alpha 255. Answers whether a source rectangle (texels) is opaque throughout, remembering each rectangle asked.</summary>
+    /// <summary>
+    /// One bit per texel of an uploaded texture: alpha 255. Answers whether a source rectangle (texels) is opaque throughout, remembering each
+    /// rectangle asked.
+    /// </summary>
     sealed class OpacityMask
     {
         readonly ulong[] _bits;
@@ -609,7 +831,10 @@ public sealed partial class UiPainter : IDisposable
             return _answers[key] = opaque;
         }
 
-        /// <summary>The largest rectangle of opaque texels inside <paramref name="source"/>, inset one texel so bilinear taps never reach a translucent neighbour; null when none is left.</summary>
+        /// <summary>
+        /// The largest rectangle of opaque texels inside <paramref name="source"/>, inset one texel so bilinear taps never reach a translucent
+        /// neighbour; null when none is left.
+        /// </summary>
         public UiRect? Core(UiRect source)
         {
             (int X0, int Y0, int X1, int Y1) key = (Math.Max(0, (int)MathF.Floor(source.X)), Math.Max(0, (int)MathF.Floor(source.Y)), Math.Min(_width, (int)MathF.Ceiling(source.X + source.Width)), Math.Min(_height, (int)MathF.Ceiling(source.Y + source.Height)));
@@ -647,6 +872,8 @@ public sealed partial class UiPainter : IDisposable
         }
     }
 
+    #endregion
+
     // A text's lines and its alignment words, read without the split, query and closure per control per frame they were (docs/bench.md "Play benchmark").
     static readonly System.Buffers.SearchValues<char> LineEnds = System.Buffers.SearchValues.Create("\r\n\f\u0085\u2028\u2029");   // what ReplaceLineEndings breaks at
 
@@ -658,8 +885,9 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Draws <paramref name="line"/> of the plain <paramref name="text"/> in its tags' colours (<see cref="MyGuiTextTags"/>; before the first tag <paramref name="colour"/>, the alpha
-    /// always <paramref name="colour"/>'s). <paramref name="cursor"/> is where the line is looked for in the text, then past it; a line not found there (shortened) starts at it.
+    /// Draws <paramref name="line"/> of the plain <paramref name="text"/> in its tags' colours (<see cref="MyGuiTextTags"/>; before the first tag
+    /// <paramref name="colour"/>, the alpha always <paramref name="colour"/>'s). <paramref name="cursor"/> is where the line is looked for in the
+    /// text, then past it; a line not found there (shortened) starts at it.
     /// </summary>
     static void DrawRuns(DebugOverlay font, string text, string line, ref int cursor, IReadOnlyList<TextColourRun> runs, float x, float y, Vector4 colour, float scale)
     {
@@ -732,8 +960,9 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Whether the image file <paramref name="path"/> (an item icon) is on the GPU and can be shown as an ImageBox's <c>ImageTexture</c> of <see cref="IconTexture"/>.
-    /// The first ask starts decoding it on a worker, <see cref="Draw"/> uploads it when done; a file that cannot be read stays false.
+    /// Whether the image file <paramref name="path"/> (an item icon) is on the GPU and can be shown as an ImageBox's <c>ImageTexture</c> of <see
+    /// cref="IconTexture"/>. The first ask starts decoding it on a worker, <see cref="Draw"/> uploads it when done; a file that cannot be read stays
+    /// false.
     /// </summary>
     public bool IconReady(string path)
     {
@@ -748,26 +977,38 @@ public sealed partial class UiPainter : IDisposable
         return false;
     }
 
-    /// <summary>Icon files asked for (<see cref="IconReady"/>) that are still decoding or waiting for their upload.</summary>
+    /// <summary>
+    /// Icon files asked for (<see cref="IconReady"/>) that are still decoding or waiting for their upload.
+    /// </summary>
     public int PendingIconFiles => _requestedIcons.Count(n => !_textures.ContainsKey(n) && !_failedIcons.ContainsKey(n));
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _failedIcons = new(StringComparer.Ordinal);
 
-    /// <summary>The <c>ImageTexture</c> name of the icon the renderer draws from an item's mesh (<see cref="RenderedIcons"/>), shown once it exists; flip it (<c>ImageFlipV</c>), as the renderer's targets are upside down.</summary>
+    /// <summary>
+    /// The <c>ImageTexture</c> name of the icon the renderer draws from an item's mesh (<see cref="RenderedIcons"/>), shown once it exists; flip it
+    /// (<c>ImageFlipV</c>), as the renderer's targets are upside down.
+    /// </summary>
     public static string RenderedIconTexture(string record, string material, string colour = "") => RenderedIconPrefix + record + "|" + material + "|" + colour;
     public const string RenderedIconPrefix = "meitou:icon:";
 
-    /// <summary>The <c>ImageTexture</c> name of the picture the renderer draws of a BUILDING (<see cref="RenderedIcons"/> looks it up too); flip it like <see cref="RenderedIconTexture"/>.</summary>
+    /// <summary>
+    /// The <c>ImageTexture</c> name of the picture the renderer draws of a BUILDING (<see cref="RenderedIcons"/> looks it up too); flip it like <see
+    /// cref="RenderedIconTexture"/>.
+    /// </summary>
     public static string RenderedBuildingIconTexture(string record) => RenderedBuildingIconPrefix + record;
     public const string RenderedBuildingIconPrefix = "meitou:building-icon:";
 
-    /// <summary>The record of a <see cref="RenderedBuildingIconTexture"/> name.</summary>
+    /// <summary>
+    /// The record of a <see cref="RenderedBuildingIconTexture"/> name.
+    /// </summary>
     public static bool TryParseRenderedBuildingIcon(string name, out string record)
     {
         record = name.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal) ? name[RenderedBuildingIconPrefix.Length..] : "";
         return record.Length > 0;
     }
 
-    /// <summary>The record, material and colour of a <see cref="RenderedIconTexture"/> name.</summary>
+    /// <summary>
+    /// The record, material and colour of a <see cref="RenderedIconTexture"/> name.
+    /// </summary>
     public static bool TryParseRenderedIcon(string name, out string record, out string material, out string colour)
     {
         (record, material, colour) = ("", "", "");
@@ -776,13 +1017,20 @@ public sealed partial class UiPainter : IDisposable
         return record.Length > 0;
     }
 
-    /// <summary>Looks up the texture of a <see cref="RenderedIconTexture"/> or <see cref="RenderedBuildingIconTexture"/> name, asking for it to be made when it is not (the host sets this; null: no icons are drawn).</summary>
+    /// <summary>
+    /// Looks up the texture of a <see cref="RenderedIconTexture"/> or <see cref="RenderedBuildingIconTexture"/> name, asking for it to be made when
+    /// it is not (the host sets this; null: no icons are drawn).
+    /// </summary>
     public Func<string, (GpuTexture Texture, SampledTexture Sampled)?>? RenderedIcons { get; set; }
 
-    /// <summary>Whether the rendered icon <paramref name="name"/> can be drawn now (this asks for it too).</summary>
+    /// <summary>
+    /// Whether the rendered icon <paramref name="name"/> can be drawn now (this asks for it too).
+    /// </summary>
     public bool RenderedIconReady(string name) => RenderedIcons?.Invoke(name) is not null;
 
-    /// <summary>The <c>ImageTexture</c> name under which the image file <paramref name="path"/> is shown once <see cref="IconReady"/>.</summary>
+    /// <summary>
+    /// The <c>ImageTexture</c> name under which the image file <paramref name="path"/> is shown once <see cref="IconReady"/>.
+    /// </summary>
     public static string IconTexture(string path) => IconPrefix + path;
     const string IconPrefix = "file:";
     const int IconUploadsPerFrame = 4;
@@ -792,8 +1040,8 @@ public sealed partial class UiPainter : IDisposable
     readonly Dictionary<string, MyGuiPointer?> _pointers = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The text index nearest <paramref name="p"/> in the one-line edit box under it as the last <see cref="Draw"/> laid it out (the gap between two characters closest to the pointer);
-    /// null when no edit box was drawn there. The screen host places the caret with it.
+    /// The text index nearest <paramref name="p"/> in the one-line edit box under it as the last <see cref="Draw"/> laid it out (the gap between two
+    /// characters closest to the pointer); null when no edit box was drawn there. The screen host places the caret with it.
     /// </summary>
     public int? EditCaretAt(Vector2 p)
     {
@@ -811,8 +1059,8 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Draws the mouse pointer <paramref name="name"/> (kenshi_pointers.xml) with its hot spot on <paramref name="mouse"/>, in screen pixels as MyGUI does; nothing for an unknown name.
-    /// Called last in a frame: the original's <c>Pointer</c> layer is above every other.
+    /// Draws the mouse pointer <paramref name="name"/> (kenshi_pointers.xml) with its hot spot on <paramref name="mouse"/>, in screen pixels as MyGUI
+    /// does; nothing for an unknown name. Called last in a frame: the original's <c>Pointer</c> layer is above every other.
     /// </summary>
     public void DrawPointer(string name, Vector2 mouse, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
@@ -820,8 +1068,8 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Draws the pointer <paramref name="name"/> with the middle of its left edge on <paramref name="leftMiddle"/>, beside a cursor the window system draws (the enhanced
-    /// Hardware mouse); nothing for an unknown name.
+    /// Draws the pointer <paramref name="name"/> with the middle of its left edge on <paramref name="leftMiddle"/>, beside a cursor the window system
+    /// draws (the enhanced Hardware mouse); nothing for an unknown name.
     /// </summary>
     public void DrawPointerBeside(string name, Vector2 leftMiddle, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
@@ -849,8 +1097,8 @@ public sealed partial class UiPainter : IDisposable
     readonly Dictionary<string, (RgbaImage Image, int HotX, int HotY)?> _pointerImages = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The pointer <paramref name="name"/> as a picture of its own at the size it is drawn (<see cref="DrawPointer"/>'s), with its hot spot, for a cursor the
-    /// window system draws (frame generation: FrameGenerationSetup); null for an unknown name or an unreadable texture.
+    /// The pointer <paramref name="name"/> as a picture of its own at the size it is drawn (<see cref="DrawPointer"/>'s), with its hot spot, for a
+    /// cursor the window system draws (frame generation: FrameGenerationSetup); null for an unknown name or an unreadable texture.
     /// </summary>
     public (RgbaImage Image, int HotX, int HotY)? PointerImage(string name)
     {
@@ -867,7 +1115,9 @@ public sealed partial class UiPainter : IDisposable
         return _pointerImages[name] = made;
     }
 
-    /// <summary>The <paramref name="source"/> part of <paramref name="sheet"/> scaled to <paramref name="width"/> × <paramref name="height"/> (nearest texel).</summary>
+    /// <summary>
+    /// The <paramref name="source"/> part of <paramref name="sheet"/> scaled to <paramref name="width"/> × <paramref name="height"/> (nearest texel).
+    /// </summary>
     static RgbaImage Crop(RgbaImage sheet, UiRect source, int width, int height)
     {
         var image = new RgbaImage(Math.Max(width, 1), Math.Max(height, 1));
@@ -894,8 +1144,9 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// The top level of an S3TC (BC1-BC3) DDS file as stored, read without its mips (the overview's map: 32 MB as BC1, 256 MB as RGBA8), or null for any other file
-    /// (or one the reader cannot take: it is loaded decoded, where its error shows). Like <see cref="Prefetch"/>'s files it gets no <see cref="OpacityMask"/>.
+    /// The top level of an S3TC (BC1-BC3) DDS file as stored, read without its mips (the overview's map: 32 MB as BC1, 256 MB as RGBA8), or null for
+    /// any other file (or one the reader cannot take: it is loaded decoded, where its error shows). Like <see cref="Prefetch"/>'s files it gets no
+    /// <see cref="OpacityMask"/>.
     /// </summary>
     static DdsFile? ReadStoredTop(string path)
     {
@@ -908,9 +1159,10 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Starts reading the S3TC (BC1-BC3) DDS files among the ImageBox textures <paramref name="names"/> on workers; the first <see cref="Draw"/> that shows one
-    /// uploads its top level as stored, with no CPU decode and no <see cref="OpacityMask"/> (it never counts in <see cref="OpaqueCoverage"/>). The overview's map,
-    /// an 8192 x 8192 BC1 file, decoded to 256 MB of RGBA8 inside the frame that opened the panel: about 400 ms (docs/bench.md "Play benchmark").
+    /// Starts reading the S3TC (BC1-BC3) DDS files among the ImageBox textures <paramref name="names"/> on workers; the first <see cref="Draw"/> that
+    /// shows one uploads its top level as stored, with no CPU decode and no <see cref="OpacityMask"/> (it never counts in <see
+    /// cref="OpaqueCoverage"/>). The overview's map, an 8192 x 8192 BC1 file, decoded to 256 MB of RGBA8 inside the frame that opened the panel:
+    /// about 400 ms (docs/bench.md "Play benchmark").
     /// </summary>
     public void Prefetch(IEnumerable<string> names)
     {

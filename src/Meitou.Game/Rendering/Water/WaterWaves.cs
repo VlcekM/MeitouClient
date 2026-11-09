@@ -11,41 +11,71 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 public sealed class WaveSet
 {
-    /// <summary>Real seconds per game hour at game speed 1 (docs/game/game-loop.md "Day length").</summary>
+    /// <summary>
+    /// Real seconds per game hour at game speed 1 (docs/game/game-loop.md "Day length").
+    /// </summary>
     public const double SecondsPerGameHour = 1200.0 / 11.0;
 
-    /// <summary>The breakers: one every <see cref="BreakerPeriod"/> seconds, <see cref="BreakerLength"/> units apart.</summary>
+    /// <summary>
+    /// The breakers: one every <see cref="BreakerPeriod"/> seconds, <see cref="BreakerLength"/> units apart.
+    /// </summary>
     public const float BreakerPeriod = 8, BreakerLength = 110;
 
     double? _lastHours;
-    float _wind;   // the smoothed wind factor
+
+    /// <summary>
+    /// The smoothed wind factor.
+    /// </summary>
+    float _wind;
     double _shorePhase;
 
-    /// <summary>The wave count wraps here; the shader's per-wave noise and drift are periodic in it (a wave's number is the count at its place).</summary>
+    /// <summary>
+    /// The wave count wraps here; the shader's per-wave noise and drift are periodic in it (a wave's number is the count at its place).
+    /// </summary>
     public const double PhaseWrap = 4096;
 
-    /// <summary>x the breakers' wave count (cycles since the start, below <see cref="PhaseWrap"/>; the shader takes its fraction as the phase), y the run-up height, z the breakers' wavelength, w their height (units).</summary>
+    /// <summary>
+    /// x the breakers' wave count (cycles since the start, below <see cref="PhaseWrap"/>; the shader takes its fraction as the phase), y the run-up
+    /// height, z the breakers' wavelength, w their height (units).
+    /// </summary>
     public Vector4 Shore;
-    /// <summary>The game-clock time for the normal maps' scrolling, in the unit the Faithful water's time has (seconds / 600).</summary>
+
+    /// <summary>
+    /// The game-clock time for the normal maps' scrolling, in the unit the Faithful water's time has (seconds / 600).
+    /// </summary>
     public float NormalTime;
 
-    /// <summary>The wind factor: 0 calm, 1 at 60 units per second (a stiff breeze), at most 1.5.</summary>
+    /// <summary>
+    /// The wind factor: 0 calm, 1 at 60 units per second (a stiff breeze), at most 1.5.
+    /// </summary>
     public static float WindFactor(float windSpeed) => Math.Clamp(windSpeed / 60f, 0f, 1.5f);
 
-    public WaveSet() { Step(0, Vector2.UnitX, 0); _lastHours = null; }   // usable values before the first frame, which then takes its wind at once
+    /// <summary>
+    /// Usable values before the first frame, which then takes its wind at once.
+    /// </summary>
+    public WaveSet()
+    {
+        Step(0, Vector2.UnitX, 0);
+        _lastHours = null;
+    }
 
     public void Step(double gameHours, Vector2 windDirection, float windSpeed)
     {
         _ = windDirection;
+
         double dt = _lastHours is { } last ? Math.Clamp((gameHours - last) * SecondsPerGameHour, 0, 1) : 0;
         bool first = _lastHours is null;
         _lastHours = gameHours;
+
         double seconds = gameHours * SecondsPerGameHour;
         NormalTime = (float)(seconds / 600 % 1e4);
+
         float target = WindFactor(windSpeed);
         _wind = first ? target : _wind + (target - _wind) * (float)(1 - Math.Exp(-dt / 10));
+
         // The first frame starts from the clock itself (so a still picture shows the same moment every time), later ones integrate.
         _shorePhase = (first ? seconds / BreakerPeriod : _shorePhase + dt / BreakerPeriod) % PhaseWrap;
+
         float swell = 0.6f + 0.6f * MathF.Min(_wind, 1.5f);
         Shore = new Vector4((float)_shorePhase, 2.2f * swell, BreakerLength, 3.5f * swell);
     }

@@ -6,30 +6,41 @@ using Meitou.Data.Textures;
 namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
-/// Where the alpha-tested part of a texture is (docs/render-foliage.md, "Card trimming"): grids of cells, one cell per texel of the decoded level (at most 512 on a side).
-/// Level <c>l</c> of the mask has a cell set when some texel the cut-out can let through lies in it, taking the texture's mips 0 to <c>l</c> into account: a texel of such a
-/// mip with alpha at or above the cut-off, together with the texel around it (the bilinear footprint) and every cell of the grid it overlaps. So level 0 is the opaque part
-/// of the finest mip, and each further level also holds what the next coarser mip lets through, which is what a card sees from further away. A card trimmed to the cells of a
-/// level loses no pixel the sampler can keep from mips up to that level; <see cref="FoliageCardTrimmer"/> picks the level from how big the card is on screen at the smallest.
+/// Where the alpha-tested part of a texture is (docs/render-foliage.md, "Card trimming"): grids of cells, one cell per texel of the decoded level (at
+/// most 512 on a side). Level <c>l</c> of the mask has a cell set when some texel the cut-out can let through lies in it, taking the texture's mips 0
+/// to <c>l</c> into account: a texel of such a mip with alpha at or above the cut-off, together with the texel around it (the bilinear footprint) and
+/// every cell of the grid it overlaps. So level 0 is the opaque part of the finest mip, and each further level also holds what the next coarser mip
+/// lets through, which is what a card sees from further away. A card trimmed to the cells of a level loses no pixel the sampler can keep from mips up
+/// to that level; <see cref="FoliageCardTrimmer"/> picks the level from how big the card is on screen at the smallest.
 /// </summary>
 public sealed class FoliageCardMask
 {
-    /// <summary>Bumped when the mask's rule changes: it is part of the disk cache's key.</summary>
+    /// <summary>
+    /// Bumped when the mask's rule changes: it is part of the disk cache's key.
+    /// </summary>
     public const int Version = 3;
 
-    /// <summary>The grid's largest side in cells.</summary>
+    /// <summary>
+    /// The grid's largest side in cells.
+    /// </summary>
     public const int MaxCells = 512;
 
-    /// <summary>The mip chain stops at this many pixels on the longer side: the mask has a level for each mip down to it.</summary>
+    /// <summary>
+    /// The mip chain stops at this many pixels on the longer side: the mask has a level for each mip down to it.
+    /// </summary>
     public const int CoarsestSize = 16;
 
-    /// <summary>How far below the threshold (0-1) a texel still counts: the alpha-to-coverage ramp of the multisampled targets lets pixels a little under it through.</summary>
+    /// <summary>
+    /// How far below the threshold (0-1) a texel still counts: the alpha-to-coverage ramp of the multisampled targets lets pixels a little under it
+    /// through.
+    /// </summary>
     public const float Slack = 0.1f;
 
     /// <param name="levels">Per level the cells, row-major, row 0 at v = 0 (the top row of the decoded image); each level contains the one before.</param>
     public FoliageCardMask(int width, int height, bool[][] levels)
     {
-        if (levels.Length == 0 || levels.Any(l => l.Length != width * height)) throw new ArgumentException("Wrong cell count.", nameof(levels));
+        if (levels.Length == 0 || levels.Any(l => l.Length != width * height))
+            throw new ArgumentException("Wrong cell count.", nameof(levels));
         Width = width;
         Height = height;
         Levels = levels;
@@ -40,19 +51,25 @@ public sealed class FoliageCardMask
     public bool[][] Levels { get; }
     public int LevelCount => Levels.Length;
 
-    /// <summary>The share of cells set at <paramref name="level"/> (clamped).</summary>
+    /// <summary>
+    /// The share of cells set at <paramref name="level"/> (clamped).
+    /// </summary>
     public double Coverage(int level = 0)
     {
         var cells = Levels[Math.Clamp(level, 0, Levels.Length - 1)];
         return cells.Count(c => c) / (double)cells.Length;
     }
 
-    /// <summary>The cut-off a threshold (0-1) becomes: the threshold less <see cref="Slack"/> (at least 8/255, so a threshold near zero does not set every cell).</summary>
+    /// <summary>
+    /// The cut-off a threshold (0-1) becomes: the threshold less <see cref="Slack"/> (at least 8/255, so a threshold near zero does not set every
+    /// cell).
+    /// </summary>
     public static byte CutoffOf(float threshold) => (byte)Math.Clamp((int)MathF.Floor((threshold - Slack) * 255f), 8, 255);
 
     /// <summary>
-    /// The mask of an alpha plane (<paramref name="alpha"/>, <paramref name="width"/> x <paramref name="height"/>, rows top to bottom): mips of 2 x 2 averages down to
-    /// <paramref name="coarsest"/> pixels, each thresholded at <paramref name="cutoff"/> and widened by one texel, folded onto the cells of the plane (at most <see cref="MaxCells"/> a side).
+    /// The mask of an alpha plane (<paramref name="alpha"/>, <paramref name="width"/> x <paramref name="height"/>, rows top to bottom): mips of 2 x 2
+    /// averages down to <paramref name="coarsest"/> pixels, each thresholded at <paramref name="cutoff"/> and widened by one texel, folded onto the
+    /// cells of the plane (at most <see cref="MaxCells"/> a side).
     /// </summary>
     public static FoliageCardMask FromAlpha(byte[] alpha, int width, int height, byte cutoff, int coarsest)
     {
@@ -69,6 +86,7 @@ public sealed class FoliageCardMask
                 {
                     if (plane[y * w + x] < cutoff) continue;
                     int x0 = Math.Max(x - 1, 0), x1 = Math.Min(x + 1, w - 1), y0 = Math.Max(y - 1, 0), y1 = Math.Min(y + 1, h - 1);
+
                     // The cells a texel run [x0, x1] covers on a grid gw wide: floor(x0 * gw / w) .. ceil((x1 + 1) * gw / w) - 1.
                     int cx0 = (int)((long)x0 * gw / w), cx1 = Math.Max(cx0, (int)(((long)(x1 + 1) * gw + w - 1) / w) - 1);
                     int cy0 = (int)((long)y0 * gh / h), cy1 = Math.Max(cy0, (int)(((long)(y1 + 1) * gh + h - 1) / h) - 1);
@@ -91,7 +109,9 @@ public sealed class FoliageCardMask
         return new FoliageCardMask(gw, gh, [.. levels]);
     }
 
-    /// <summary>The alpha plane of a texture file, from the finest DDS level no larger than 512 pixels (or the image, halved until it is), with its size.</summary>
+    /// <summary>
+    /// The alpha plane of a texture file, from the finest DDS level no larger than 512 pixels (or the image, halved until it is), with its size.
+    /// </summary>
     public static (byte[] Alpha, int Width, int Height) DecodeAlpha(byte[] file)
     {
         RgbaImage image;
@@ -123,18 +143,26 @@ public sealed class FoliageCardMask
 
     // ---- the disk cache and the in-process memo ----
 
-    /// <summary>Where the masks are kept.</summary>
-    public static string CacheRoot { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "cardtrim");
+    /// <summary>
+    /// Where the masks are kept.
+    /// </summary>
+    public static string CacheRoot { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
+        "cardtrim");
 
     const uint Magic = 0x4D52544D;   // "MTRM"
     static readonly ConcurrentDictionary<(string Path, byte Cutoff), Lazy<FoliageCardMask?>> Memo = new();
     static long s_built, s_hits, s_bytesWritten;
     static double s_buildMs, s_loadMs;
 
-    /// <summary>Masks built, read from the cache, and the cache bytes written (for the log).</summary>
+    /// <summary>
+    /// Masks built, read from the cache, and the cache bytes written (for the log).
+    /// </summary>
     public static string Summary => $"{Interlocked.Read(ref s_built)} built ({s_buildMs:0} ms), {Interlocked.Read(ref s_hits)} from the cache ({s_loadMs:0} ms), {Interlocked.Read(ref s_bytesWritten) / 1024} KB written";
 
-    /// <summary>The mask of the texture file at <paramref name="path"/> for a cut-out at <paramref name="threshold"/> (0-1), from the cache or built and cached; null when the file cannot be decoded. Thread-safe.</summary>
+    /// <summary>
+    /// The mask of the texture file at <paramref name="path"/> for a cut-out at <paramref name="threshold"/> (0-1), from the cache or built and
+    /// cached; null when the file cannot be decoded. Thread-safe.
+    /// </summary>
     public static FoliageCardMask? Obtain(string path, float threshold)
     {
         byte cutoff = CutoffOf(threshold);
@@ -173,7 +201,9 @@ public sealed class FoliageCardMask
         return Path.Combine(CacheRoot, $"{safe}_{hash}_c{cutoff}_s{CoarsestSize}_v{Version}.mtrm");
     }
 
-    /// <summary>The cached mask, or null when there is no readable file of this version.</summary>
+    /// <summary>
+    /// The cached mask, or null when there is no readable file of this version.
+    /// </summary>
     public static FoliageCardMask? TryRead(string path)
     {
         try
@@ -197,7 +227,9 @@ public sealed class FoliageCardMask
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException) { return null; }
     }
 
-    /// <summary>Writes a mask (to a temporary file, then renamed); the bytes written, 0 when it could not be.</summary>
+    /// <summary>
+    /// Writes a mask (to a temporary file, then renamed); the bytes written, 0 when it could not be.
+    /// </summary>
     public static long Write(string path, FoliageCardMask mask)
     {
         try

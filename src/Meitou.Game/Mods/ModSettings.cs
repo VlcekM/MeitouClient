@@ -13,18 +13,26 @@ public sealed class SettingAttribute(string label) : Attribute
 {
     public string Label { get; } = label;
 
-    /// <summary>The line under the label: what the setting does.</summary>
+    /// <summary>
+    /// The line under the label: what the setting does.
+    /// </summary>
     public string Hint { get; init; } = "";
 
-    /// <summary>A number's range; both are required for a number.</summary>
+    /// <summary>
+    /// A number's range; both are required for a number.
+    /// </summary>
     public double Min { get; init; } = double.NaN;
 
     public double Max { get; init; } = double.NaN;
 
-    /// <summary>A number's step; 0 means 1 for a whole number, a hundredth of the range otherwise.</summary>
+    /// <summary>
+    /// A number's step; 0 means 1 for a whole number, a hundredth of the range otherwise.
+    /// </summary>
     public double Step { get; init; }
 
-    /// <summary>A string's choices; the chosen string is the value.</summary>
+    /// <summary>
+    /// A string's choices; the chosen string is the value.
+    /// </summary>
     public string[] Options { get; init; } = [];
 }
 
@@ -58,7 +66,9 @@ public sealed class ModSetting
 
     public ModSettingsGroup Group { get; }
 
-    /// <summary>The property's name: keys the saved value.</summary>
+    /// <summary>
+    /// The property's name: keys the saved value.
+    /// </summary>
     public string Key => _property.Name;
 
     public string Label { get; }
@@ -68,13 +78,19 @@ public sealed class ModSetting
     public double Max { get; }
     public double Step { get; }
 
-    /// <summary>A list's choices: an enum's names or the attribute's options.</summary>
+    /// <summary>
+    /// A list's choices: an enum's names or the attribute's options.
+    /// </summary>
     public IReadOnlyList<string> Options => _options;
 
-    /// <summary>The value when the mod registered it, before a saved value: what Reset restores.</summary>
+    /// <summary>
+    /// The value when the mod registered it, before a saved value: what Reset restores.
+    /// </summary>
     public object? Default { get; }
 
-    /// <summary>True for an <c>int</c> slider.</summary>
+    /// <summary>
+    /// True for an <c>int</c> slider.
+    /// </summary>
     public bool Whole => _property.PropertyType == typeof(int);
 
     public object? Get() => _property.GetValue(_target);
@@ -85,7 +101,9 @@ public sealed class ModSetting
     /// </summary>
     public void Set(object value) => Apply(Convert(value));
 
-    /// <summary>Restores <see cref="Default"/> as it was registered, not snapped to the step.</summary>
+    /// <summary>
+    /// Restores <see cref="Default"/> as it was registered, not snapped to the step.
+    /// </summary>
     public void Reset() => Apply(Default);
 
     void Apply(object? next)
@@ -95,15 +113,21 @@ public sealed class ModSetting
         Group.RaiseChanged(this);
     }
 
-    /// <summary>The value as saved: invariant text (true/false, a number, a choice's name).</summary>
+    /// <summary>
+    /// The value as saved: invariant text (true/false, a number, a choice's name).
+    /// </summary>
     public string Text => Format(Get());
 
     public bool IsDefault => Equals(Get(), Default);
 
-    /// <summary>The list's chosen index, -1 when the value is not one of <see cref="Options"/>.</summary>
+    /// <summary>
+    /// The list's chosen index, -1 when the value is not one of <see cref="Options"/>.
+    /// </summary>
     public int Choice => Kind == ModSettingKind.List ? Array.IndexOf(_options, Format(Get())) : -1;
 
-    /// <summary>Sets a saved value; false (nothing changed) when the text is not a value of this setting.</summary>
+    /// <summary>
+    /// Sets a saved value; false (nothing changed) when the text is not a value of this setting.
+    /// </summary>
     internal bool Load(string text)
     {
         object? value = Parse(text);
@@ -132,7 +156,8 @@ public sealed class ModSetting
     object? Parse(string text) => Kind switch
     {
         ModSettingKind.Switch => bool.TryParse(text, out bool b) ? b : null,
-        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) && double.IsFinite(d) ? d : null,
+        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) && double.IsFinite(d) ? d
+            : null,
         _ => _options.FirstOrDefault(o => string.Equals(o, text, StringComparison.Ordinal)),
     };
 
@@ -162,7 +187,9 @@ public sealed class ModSetting
     };
 }
 
-/// <summary>The settings one mod registered, in the order of its properties; shown as one group under the mod on the Mods page.</summary>
+/// <summary>
+/// The settings one mod registered, in the order of its properties; shown as one group under the mod on the Mods page.
+/// </summary>
 public sealed class ModSettingsGroup
 {
     internal ModSettingsGroup(string modId, string name, object target)
@@ -179,12 +206,16 @@ public sealed class ModSettingsGroup
 
     public string ModId { get; }
 
-    /// <summary>The mod's name (its <c>.mod</c> file), the group's title.</summary>
+    /// <summary>
+    /// The mod's name (its <c>.mod</c> file), the group's title.
+    /// </summary>
     public string Name { get; }
 
     public IReadOnlyList<ModSetting> Settings { get; }
 
-    /// <summary>After the player changed a setting (on the interface's thread).</summary>
+    /// <summary>
+    /// After the player changed a setting (on the interface's thread).
+    /// </summary>
     public event Action<ModSetting>? Changed;
 
     internal void RaiseChanged(ModSetting setting) => Changed?.Invoke(setting);
@@ -196,7 +227,9 @@ public sealed class ModSettingsGroup
         return new ModSetting(this, target, property, property.GetCustomAttribute<SettingAttribute>()!);
     }
 
-    /// <summary>Saved values (key to text) onto the settings; returns the keys that were not a value of their setting, for the log.</summary>
+    /// <summary>
+    /// Saved values (key to text) onto the settings; returns the keys that were not a value of their setting, for the log.
+    /// </summary>
     internal List<string> Load(IReadOnlyDictionary<string, string> saved)
     {
         var refused = new List<string>();

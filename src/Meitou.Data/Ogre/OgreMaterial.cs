@@ -4,10 +4,9 @@ using System.Numerics;
 namespace Meitou.Data.Ogre;
 
 /// <summary>
-/// A material from an Ogre <c>.material</c> script, after inheritance. Typed accessors follow Ogre's
-/// MaterialTranslator and friends: properties are applied in order, so the last one wins, and a property Ogre
-/// would reject is ignored (the default stays). <see cref="Source"/> keeps every raw property. Syntax and
-/// defaults: docs/formats/ogre-material.md.
+/// A material from an Ogre <c>.material</c> script, after inheritance. Typed accessors follow Ogre's MaterialTranslator and friends: properties are
+/// applied in order, so the last one wins, and a property Ogre would reject is ignored (the default stays). <see cref="Source"/> keeps every raw
+/// property. Syntax and defaults: docs/formats/ogre-material.md.
 /// </summary>
 public sealed class OgreMaterial
 {
@@ -30,8 +29,8 @@ public sealed class OgreMaterial
     public List<OgreTechnique> Techniques { get; }
 
     /// <summary>
-    /// <c>set_texture_alias alias texture</c>: replaces the texture of every unit whose alias matches. The first one
-    /// of an alias wins, so (base properties coming first) a derived material cannot change a base's alias.
+    /// <c>set_texture_alias alias texture</c>: replaces the texture of every unit whose alias matches. The first one of an alias wins, so (base
+    /// properties coming first) a derived material cannot change a base's alias.
     /// </summary>
     public Dictionary<string, string> TextureAliases { get; } = [];
 
@@ -53,7 +52,9 @@ public sealed class OgreTechnique
     public string Name => Source.Name;
     public List<OgrePass> Passes { get; }
 
-    /// <summary>Material scheme; Ogre's default is <c>Default</c>.</summary>
+    /// <summary>
+    /// Material scheme; Ogre's default is <c>Default</c>.
+    /// </summary>
     public string Scheme => OgreScriptValues.String(Source, "scheme") ?? "Default";
 
     public int LodIndex => OgreScriptValues.Int(Source, "lod_index") ?? 0;
@@ -99,7 +100,9 @@ public sealed class OgrePass
     public Vector4 Diffuse => Colour("diffuse", Vector4.One);
     public Vector4 Emissive => Colour("emissive", new Vector4(0, 0, 0, 1));
 
-    /// <summary><c>specular r g b [a] shininess</c>; alpha defaults to 1.</summary>
+    /// <summary>
+    /// <c>specular r g b [a] shininess</c>; alpha defaults to 1.
+    /// </summary>
     public Vector4 Specular
     {
         get
@@ -133,7 +136,9 @@ public sealed class OgrePass
         }
     }
 
-    /// <summary>Which colours come from the vertex colour (<c>diffuse vertexcolour</c> etc.).</summary>
+    /// <summary>
+    /// Which colours come from the vertex colour (<c>diffuse vertexcolour</c> etc.).
+    /// </summary>
     public OgreTrackVertexColour VertexColourTracking
     {
         get
@@ -147,7 +152,9 @@ public sealed class OgrePass
         }
     }
 
-    /// <summary><c>scene_blend</c>: a shorthand (add, modulate, colour_blend, alpha_blend) or two factors. Default one zero.</summary>
+    /// <summary>
+    /// <c>scene_blend</c>: a shorthand (add, modulate, colour_blend, alpha_blend) or two factors. Default one zero.
+    /// </summary>
     public OgreSceneBlend SceneBlend
     {
         get
@@ -205,7 +212,9 @@ public sealed class OgrePass
         _ => null,
     }) ?? OgrePolygonMode.Solid;
 
-    /// <summary><c>alpha_rejection func [value]</c>; default always_pass 0. A missing value keeps the previous one.</summary>
+    /// <summary>
+    /// <c>alpha_rejection func [value]</c>; default always_pass 0. A missing value keeps the previous one.
+    /// </summary>
     public OgreAlphaRejection AlphaRejection
     {
         get
@@ -229,7 +238,9 @@ public sealed class OgrePass
     public OgreProgramRef? ShadowCasterVertexProgram => ProgramRef("shadow_caster_vertex_program_ref");
     public OgreProgramRef? ShadowCasterFragmentProgram => ProgramRef("shadow_caster_fragment_program_ref");
 
-    /// <summary>The last <paramref name="kind"/> object in the pass (each one replaces the previous program).</summary>
+    /// <summary>
+    /// The last <paramref name="kind"/> object in the pass (each one replaces the previous program).
+    /// </summary>
     public OgreProgramRef? ProgramRef(string kind) =>
         Source.Objects(kind).Select(o => new OgreProgramRef(o)).LastOrDefault();
 
@@ -290,23 +301,31 @@ public sealed class OgrePass
     };
 }
 
-/// <summary>A <c>vertex_program_ref Name { param_named ... }</c> (or fragment, geometry...) inside a pass.</summary>
+/// <summary>
+/// A <c>vertex_program_ref Name { param_named ... }</c> (or fragment, geometry...) inside a pass.
+/// </summary>
 public sealed class OgreProgramRef(OgreScriptObject source)
 {
     public OgreScriptObject Source { get; } = source;
 
-    /// <summary><c>vertex_program_ref</c>, <c>fragment_program_ref</c>...</summary>
+    /// <summary>
+    /// <c>vertex_program_ref</c>, <c>fragment_program_ref</c>...
+    /// </summary>
     public string Kind => Source.Class;
 
     public string Name => Source.Name;
 
-    /// <summary><c>param_named</c>, <c>param_named_auto</c>, <c>param_indexed</c>, <c>shared_params_ref</c>... in order.</summary>
+    /// <summary>
+    /// <c>param_named</c>, <c>param_named_auto</c>, <c>param_indexed</c>, <c>shared_params_ref</c>... in order.
+    /// </summary>
     public IEnumerable<OgreScriptProperty> Parameters => Source.Properties;
 
     public override string ToString() => $"{Kind} {Name}";
 }
 
-/// <summary>Texture type given after the name in <c>texture name [type]</c>.</summary>
+/// <summary>
+/// Texture type given after the name in <c>texture name [type]</c>.
+/// </summary>
 public enum OgreTextureType { Texture1D, Texture2D, Texture3D, CubeMap, Texture2DArray }
 
 public sealed class OgreTextureUnit
@@ -317,19 +336,25 @@ public sealed class OgreTextureUnit
     public string Name => Source.Name;
 
     /// <summary>
-    /// The unit's alias for <c>set_texture_alias</c>: its <c>texture_alias</c>, else its name (Ogre's
-    /// TextureUnitState::setName fills an empty alias with the name).
+    /// The unit's alias for <c>set_texture_alias</c>: its <c>texture_alias</c>, else its name (Ogre's TextureUnitState::setName fills an empty alias
+    /// with the name).
     /// </summary>
     public string Alias => OgreScriptValues.String(Source, "texture_alias") ?? Name;
 
-    /// <summary>Set when the material's <c>set_texture_alias</c> replaced the texture.</summary>
+    /// <summary>
+    /// Set when the material's <c>set_texture_alias</c> replaced the texture.
+    /// </summary>
     public string? AliasTexture { get; internal set; }
 
-    /// <summary>The <c>texture</c> property's arguments (name, then type / mipmaps / alpha / format / gamma).</summary>
+    /// <summary>
+    /// The <c>texture</c> property's arguments (name, then type / mipmaps / alpha / format / gamma).
+    /// </summary>
     public IReadOnlyList<string>? TextureArgs =>
         Source.Properties.LastOrDefault(p => p.Name == "texture" && p.Values.Count is >= 1 and <= 5)?.Args;
 
-    /// <summary>The texture file name to bind, after <c>set_texture_alias</c>; null when the unit sets none.</summary>
+    /// <summary>
+    /// The texture file name to bind, after <c>set_texture_alias</c>; null when the unit sets none.
+    /// </summary>
     public string? Texture => AliasTexture ?? TextureArgs?[0];
 
     public OgreTextureType TextureType => TextureArgs?.Skip(1).Select(a => a switch
@@ -342,16 +367,24 @@ public sealed class OgreTextureUnit
         _ => null,
     }).LastOrDefault(t => t is not null) ?? OgreTextureType.Texture2D;
 
-    /// <summary><c>texture name ... gamma</c>: read as sRGB.</summary>
+    /// <summary>
+    /// <c>texture name ... gamma</c>: read as sRGB.
+    /// </summary>
     public bool Gamma => TextureArgs?.Skip(1).Contains("gamma") ?? false;
 
-    /// <summary><c>cubic_texture</c> arguments: one name + combinedUVW/separateUV, or six names + separateUV.</summary>
+    /// <summary>
+    /// <c>cubic_texture</c> arguments: one name + combinedUVW/separateUV, or six names + separateUV.
+    /// </summary>
     public IReadOnlyList<string>? CubicTexture => Source.Property("cubic_texture")?.Args;
 
-    /// <summary><c>anim_texture</c> arguments: base name, frame count, duration; or frame names then duration.</summary>
+    /// <summary>
+    /// <c>anim_texture</c> arguments: base name, frame count, duration; or frame names then duration.
+    /// </summary>
     public IReadOnlyList<string>? AnimTexture => Source.Property("anim_texture")?.Args;
 
-    /// <summary><c>content_type</c> arguments, e.g. <c>compositor rt_interiormask</c> or <c>shadow</c>; null means named.</summary>
+    /// <summary>
+    /// <c>content_type</c> arguments, e.g. <c>compositor rt_interiormask</c> or <c>shadow</c>; null means named.
+    /// </summary>
     public IReadOnlyList<string>? ContentType => Source.Property("content_type")?.Args;
 
     public IReadOnlyList<string>? AddressMode => Source.Property("tex_address_mode")?.Args;
@@ -359,8 +392,8 @@ public sealed class OgreTextureUnit
     public int TexCoordSet => OgreScriptValues.Int(Source, "tex_coord_set") ?? 0;
 
     /// <summary>
-    /// Every texture file the unit names: the texture (or its alias replacement), the cube map faces and the
-    /// animation frames, expanded the way Ogre derives file names. Units filled by a compositor or shadow name none.
+    /// Every texture file the unit names: the texture (or its alias replacement), the cube map faces and the animation frames, expanded the way Ogre
+    /// derives file names. Units filled by a compositor or shadow name none.
     /// </summary>
     public IEnumerable<string> TextureFiles()
     {
@@ -377,7 +410,8 @@ public sealed class OgreTextureUnit
         if (AnimTexture is { Count: >= 2 } anim)
         {
             if (anim.Count == 3 && int.TryParse(anim[1], CultureInfo.InvariantCulture, out int frames))
-                for (int i = 0; i < frames; i++) yield return InsertSuffix(anim[0], "_" + i.ToString(CultureInfo.InvariantCulture));
+                for (int i = 0; i < frames; i++)
+                    yield return InsertSuffix(anim[0], "_" + i.ToString(CultureInfo.InvariantCulture));
             else foreach (var f in anim.Take(anim.Count - 1)) yield return f;
         }
     }
@@ -389,25 +423,35 @@ public sealed class OgreTextureUnit
     }
 }
 
-/// <summary>A GPU program declared in a script: <c>vertex_program Name hlsl { source x.hlsl ... }</c>.</summary>
+/// <summary>
+/// A GPU program declared in a script: <c>vertex_program Name hlsl { source x.hlsl ... }</c>.
+/// </summary>
 public sealed class OgreGpuProgram(OgreScriptObject source)
 {
     public OgreScriptObject Source { get; } = source;
 
-    /// <summary><c>vertex_program</c>, <c>fragment_program</c>, <c>geometry_program</c>...</summary>
+    /// <summary>
+    /// <c>vertex_program</c>, <c>fragment_program</c>, <c>geometry_program</c>...
+    /// </summary>
     public string Kind => Source.Class;
 
     public string Name => Source.Name;
 
-    /// <summary><c>hlsl</c>, <c>glsl</c>, <c>cg</c>, <c>asm</c>, <c>unified</c>...</summary>
+    /// <summary>
+    /// <c>hlsl</c>, <c>glsl</c>, <c>cg</c>, <c>asm</c>, <c>unified</c>...
+    /// </summary>
     public string? Language => Source.Args.FirstOrDefault();
 
-    /// <summary>The shader source file (<c>source</c>), for non-unified programs.</summary>
+    /// <summary>
+    /// The shader source file (<c>source</c>), for non-unified programs.
+    /// </summary>
     public string? SourceFile => OgreScriptValues.String(Source, "source");
 
     public string? EntryPoint => OgreScriptValues.String(Source, "entry_point");
 
-    /// <summary>For <c>unified</c> programs: the programs it picks from, in order.</summary>
+    /// <summary>
+    /// For <c>unified</c> programs: the programs it picks from, in order.
+    /// </summary>
     public IReadOnlyList<string> Delegates => [.. Source.Properties.Where(p => p.Name == "delegate" && p.Values.Count == 1).Select(p => p.Args[0])];
 
     public OgreScriptObject? DefaultParams => Source.Objects("default_params").LastOrDefault();
@@ -416,12 +460,14 @@ public sealed class OgreGpuProgram(OgreScriptObject source)
 }
 
 /// <summary>
-/// Value parsing as Ogre's ScriptTranslator does (getBoolean, getString, getInt, getFloat). Lookups by property
-/// name return the last valid occurrence: Ogre applies each in order and ignores (logs) invalid ones.
+/// Value parsing as Ogre's ScriptTranslator does (getBoolean, getString, getInt, getFloat). Lookups by property name return the last valid
+/// occurrence: Ogre applies each in order and ignores (logs) invalid ones.
 /// </summary>
 public static class OgreScriptValues
 {
-    /// <summary><c>true/false/yes/no/on/off</c> (exact case) of a one-value property.</summary>
+    /// <summary>
+    /// <c>true/false/yes/no/on/off</c> (exact case) of a one-value property.
+    /// </summary>
     public static bool? Bool(OgreScriptProperty p) => p.Args is [var v] ? v switch
     {
         "true" or "yes" or "on" => true,

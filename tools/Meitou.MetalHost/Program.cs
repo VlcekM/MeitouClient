@@ -140,9 +140,11 @@ if (tri)
         var cube = tableBatch.Create(new TextureDesc(InternalFormat.Rgba8, 1, 1, Kind: TextureKind.Cube,
             Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "table cube"));
         for (int face = 0; face < 6; face++) tableBatch.Write(cube, 0, face, new PixelRect(0, 0, 1, 1), black);
-        var uint2D = tableBatch.Create(new TextureDesc(InternalFormat.R32ui, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "table uint"));
+        var uint2D = tableBatch.Create(new TextureDesc(InternalFormat.R32ui, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
+                Name: "table uint"));
         tableBatch.Write(uint2D, 0, 0, new PixelRect(0, 0, 1, 1), black);
-        var int2D = tableBatch.Create(new TextureDesc(InternalFormat.R32i, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "table int"));
+        var int2D = tableBatch.Create(new TextureDesc(InternalFormat.R32i, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
+                Name: "table int"));
         tableBatch.Write(int2D, 0, 0, new PixelRect(0, 0, 1, 1), black);
         bindlessTable.Register(red.Texture, sampler);                                        // index 0
         bindlessTable.Register(blue.Texture, sampler);                                       // index 1
@@ -193,7 +195,8 @@ display.Window.Render += _ =>
 {
     if (!ctx.BeginFrame()) return;
     var backbuffer = ctx.Backbuffer;
-    var targets = PassTargets.Of(backbuffer, null) with { Colour = new RenderTarget(backbuffer.Attachment(), LoadOp.Clear, new ClearColour(0, 0, 0, 1)) };
+    var targets = PassTargets.Of(backbuffer,
+            null) with { Colour = new RenderTarget(backbuffer.Attachment(), LoadOp.Clear, new ClearColour(0, 0, 0, 1)) };
     var cmd = ctx.Frame.Commands;
     cmd.BeginRendering(targets.Rendering);
     ctx.BeginHostPass(cmd, targets, DrawState.For(targets.Formats, deviceDepthClamp: false));
@@ -241,7 +244,9 @@ display.Window.Render += _ =>
             ]);
             cmd.BindSets(triProgram, 2, new ReadOnlySpan<GpuSet>(in triTintSet), [0]);
             cmd.PushConstants(triProgram, GpuStage.Vertex, Vector2.Zero);
-            cmd.BindVertexBuffers(0, [new GpuBufferBinding(triVertices!.Handle, 0), new GpuBufferBinding(triVertices.Handle, 8)]);   // the colour's offset in the binding, as GL's pointer does
+            // the colour's offset in the binding, as GL's pointer does.
+            cmd.BindVertexBuffers(0,
+                [new GpuBufferBinding(triVertices!.Handle, 0), new GpuBufferBinding(triVertices.Handle, 8)]);
             cmd.BindIndexBuffer(new GpuBufferBinding(triIndices!.Handle, 0), IndexKind.U32);
             cmd.DrawIndexed(6);
         }
@@ -262,7 +267,9 @@ display.Window.Render += _ =>
 display.Window.Run();
 Console.WriteLine($"ok: {drawn} frames");
 
-/// <summary>The backbuffer's picture as a BMP (rows bottom-up, BGRX).</summary>
+/// <summary>
+/// The backbuffer's picture as a BMP (rows bottom-up, BGRX).
+/// </summary>
 static void SaveBmp(MetalContext ctx, string path)
 {
     var backbuffer = ctx.Backbuffer;
@@ -270,14 +277,23 @@ static void SaveBmp(MetalContext ctx, string path)
     var pixels = ctx.Readback(backbuffer);
     int stride = w * 4;
     var rows = new byte[54 + stride * h];
-    rows[0] = (byte)'B'; rows[1] = (byte)'M';
-    WriteInt(rows, 2, 54 + stride * h); WriteInt(rows, 10, 54); WriteInt(rows, 14, 40);
-    WriteInt(rows, 18, w); WriteInt(rows, 22, h); rows[26] = 1; rows[28] = 32;
+    rows[0] = (byte)'B';
+    rows[1] = (byte)'M';
+    WriteInt(rows, 2, 54 + stride * h);
+    WriteInt(rows, 10, 54);
+    WriteInt(rows, 14, 40);
+    WriteInt(rows, 18, w);
+    WriteInt(rows, 22, h);
+    rows[26] = 1;
+    rows[28] = 32;
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
         {
             int src = (h - 1 - y) * stride + x * 4, dst = 54 + y * stride + x * 4;
-            rows[dst] = pixels[src + 2]; rows[dst + 1] = pixels[src + 1]; rows[dst + 2] = pixels[src]; rows[dst + 3] = 255;
+            rows[dst] = pixels[src + 2];
+            rows[dst + 1] = pixels[src + 1];
+            rows[dst + 2] = pixels[src];
+            rows[dst + 3] = 255;
         }
     File.WriteAllBytes(path, rows);
     Console.WriteLine($"shot      {path} ({w}x{h})");
@@ -285,5 +301,8 @@ static void SaveBmp(MetalContext ctx, string path)
 
 static void WriteInt(byte[] b, int at, int value)
 {
-    b[at] = (byte)value; b[at + 1] = (byte)(value >> 8); b[at + 2] = (byte)(value >> 16); b[at + 3] = (byte)(value >> 24);
+    b[at] = (byte)value;
+    b[at + 1] = (byte)(value >> 8);
+    b[at + 2] = (byte)(value >> 16);
+    b[at + 3] = (byte)(value >> 24);
 }

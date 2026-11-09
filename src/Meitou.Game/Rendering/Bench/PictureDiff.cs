@@ -3,7 +3,9 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Bench;
 
-/// <summary>The picture comparison of the A/B mode: counts of differing pixels and a heat map. Pure, tested without a GPU.</summary>
+/// <summary>
+/// The picture comparison of the A/B mode: counts of differing pixels and a heat map. Pure, tested without a GPU.
+/// </summary>
 public static class PictureDiff
 {
     /// <summary>
@@ -12,7 +14,8 @@ public static class PictureDiff
     /// </summary>
     public static (PictureDiffResult Result, byte[] Heat) Compare(byte[] a, byte[] b, int width, int height)
     {
-        if (a.Length != b.Length || a.Length < width * height * 4) throw new ArgumentException("the pictures differ in size");
+        if (a.Length != b.Length || a.Length < width * height * 4)
+            throw new ArgumentException("the pictures differ in size");
         var heat = new byte[width * height * 4];
         long over1 = 0, over4 = 0, over12 = 0, sum = 0;
         int max = 0;
@@ -27,9 +30,13 @@ public static class PictureDiff
             if (d >= 12) over12++;
             if (d > max) max = d;
             var (r, g, bl) = Ramp(d);
-            heat[i] = r; heat[i + 1] = g; heat[i + 2] = bl; heat[i + 3] = 255;
+            heat[i] = r;
+            heat[i + 1] = g;
+            heat[i + 2] = bl;
+            heat[i + 3] = 255;
         }
-        var result = new PictureDiffResult { Width = width, Height = height, Over1 = over1, Over4 = over4, Over12 = over12, MaxDiff = max, MeanDiff = sum / (3.0 * width * height) };
+        var result = new PictureDiffResult { Width = width, Height = height, Over1 = over1, Over4 = over4, Over12 = over12, MaxDiff = max,
+            MeanDiff = sum / (3.0 * width * height) };
         return (result, heat);
     }
 
@@ -37,6 +44,7 @@ public static class PictureDiff
     {
         if (d <= 0) return (0, 0, 0);
         double t = Math.Min(d / 32.0, 1);
+
         // Piecewise linear through blue, cyan, yellow, red, white.
         (double R, double G, double B)[] stops = [(0, 0, 0.6), (0, 0.9, 1), (1, 1, 0), (1, 0, 0), (1, 1, 1)];
         double x = t * (stops.Length - 1);
@@ -47,7 +55,9 @@ public static class PictureDiff
         return ((byte)(255 * (r0 + (r1 - r0) * f)), (byte)(255 * (g0 + (g1 - g0) * f)), (byte)(255 * (b0 + (b1 - b0) * f)));
     }
 
-    /// <summary>Writes RGBA8 rows in the bottom-up order of <see cref="FramebufferCapture.Read"/> as a PNG (rows flipped, alpha opaque).</summary>
+    /// <summary>
+    /// Writes RGBA8 rows in the bottom-up order of <see cref="FramebufferCapture.Read"/> as a PNG (rows flipped, alpha opaque).
+    /// </summary>
     public static void SavePng(string path, byte[] bottomUp, int width, int height)
     {
         var flipped = new byte[width * height * 4];

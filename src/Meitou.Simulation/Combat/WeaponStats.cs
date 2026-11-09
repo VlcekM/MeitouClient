@@ -24,23 +24,34 @@ public readonly record struct WeaponStats(float Quality, float CutMultiplier, fl
         float blunt = Lerp(q, 0f, 2f) * weapon.BluntDamageMultiplier * manufacturer.BluntDamageMod;
         float minCut = weapon.MinCutDamageMult * manufacturer.MinCutDamage;
         float weight = MathF.Max(weapon.WeightKg * manufacturer.WeightMod, 40 * blunt * weapon.WeightMult * constants.WeaponInventoryWeightMult);
+
         return new WeaponStats(q, cut, blunt, minCut, weight, weapon.AttackMod + material.AttackMod, weapon.DefenceMod + material.DefenceMod, weapon.IndoorsMod);
     }
 
-    /// <summary>The game's <c>lerp(t, a, b)</c> (<c>140015b63</c>): the parameter first.</summary>
+    /// <summary>
+    /// The game's <c>lerp(t, a, b)</c> (<c>140015b63</c>): the parameter first.
+    /// </summary>
     public static float Lerp(float t, float a, float b) => a + (b - a) * t;
 }
 
-/// <summary>A weapon in a character's hand: the record, its computed numbers, and the skill and animation kind it uses.</summary>
+/// <summary>
+/// A weapon in a character's hand: the record, its computed numbers, and the skill and animation kind it uses.
+/// </summary>
 public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
 {
     public WeaponData Data { get; } = data;
+
     public WeaponStats Stats { get; } = stats;
 
-    /// <summary>The skill the weapon's category uses (<c>FUN_140897f30</c>, <b>Observed</b>): katanas, sabres, hackers, heavy weapons, blunt, polearms; martial arts for fists and creature attacks.</summary>
+    /// <summary>
+    /// The skill the weapon's category uses (<c>FUN_140897f30</c>, <b>Observed</b>): katanas, sabres, hackers, heavy weapons, blunt, polearms;
+    /// martial arts for fists and creature attacks.
+    /// </summary>
     public StatsEnumerated Skill { get; } = SkillOf(data.SkillCategory);
 
-    /// <summary>The weapon kind the animations and techniques are matched with.</summary>
+    /// <summary>
+    /// The weapon kind the animations and techniques are matched with.
+    /// </summary>
     public WeaponKinds Kind { get; } = KindOf(data.AnimationCategory);
 
     public bool CanBlock => Data.CanBlock;
@@ -61,6 +72,9 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
         _ => StatsEnumerated.MartialArts,
     };
 
-    /// <summary>The weapon type bit of a category, what a technique's validity flags are matched with (a technique's "1 handed" flag is not tested: how it splits one- and two-handed weapons is <b>Unknown</b>).</summary>
+    /// <summary>
+    /// The weapon type bit of a category, what a technique's validity flags are matched with (a technique's "1 handed" flag is not tested: how it
+    /// splits one- and two-handed weapons is <b>Unknown</b>).
+    /// </summary>
     public static WeaponKinds KindOf(int category) => WeaponCategories.TechniqueKind(category);
 }

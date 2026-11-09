@@ -3,15 +3,20 @@ using Meitou.Data.Textures;
 namespace Meitou.Game.Rendering.Particles;
 
 /// <summary>
-/// How many pixels across a particle texture needs on screen to keep its detail (<see cref="ParticleRenderer"/>'s low-resolution targets): its side divided
-/// by the largest reduction (2 to 32) whose premultiplied brightness, box-reduced and scaled back up bilinearly, stays within <see cref="Tolerance"/> of the
-/// texture's. A soft dust blob (<c>Sand-Wisp.png</c>) keeps it at a 32nd of its side, 16 pixels; a crisp twig (<c>Ticker01.png</c>) at none (docs/render-post.md).
+/// How many pixels across a particle texture needs on screen to keep its detail (<see cref="ParticleRenderer"/>'s low-resolution targets): its side
+/// divided by the largest reduction (2 to 32) whose premultiplied brightness, box-reduced and scaled back up bilinearly, stays within
+/// <see cref="Tolerance"/> of the texture's. A soft dust blob (<c>Sand-Wisp.png</c>) keeps it at a 32nd of its side, 16 pixels; a crisp twig
+/// (<c>Ticker01.png</c>) at none (docs/render-post.md).
 /// </summary>
 static class ParticleTextureDetail
 {
-    /// <summary>The share of the texture's premultiplied brightness a reduction may change.</summary>
+    /// <summary>
+    /// The share of the texture's premultiplied brightness a reduction may change.
+    /// </summary>
     const float Tolerance = 0.1f;
-    /// <summary>A bigger texture is box-reduced to this side first (the measure costs a few passes over it, on a decode worker).</summary>
+    /// <summary>
+    /// A bigger texture is box-reduced to this side first (the measure costs a few passes over it, on a decode worker).
+    /// </summary>
     const int MaxSide = 512;
 
     public static float PixelsNeeded(RgbaImage image)
@@ -30,7 +35,10 @@ static class ParticleTextureDetail
         return Math.Max(w, h) / (float)kept;
     }
 
-    /// <summary>Each texel's alpha times its brightest channel (what an alpha sprite covers, and what an additive one, whose alpha is often 1, adds), at most <see cref="MaxSide"/> across.</summary>
+    /// <summary>
+    /// Each texel's alpha times its brightest channel (what an alpha sprite covers, and what an additive one, whose alpha is often 1, adds), at most
+    /// <see cref="MaxSide"/> across.
+    /// </summary>
     static (float[] V, int W, int H) Coverage(RgbaImage image)
     {
         var v = new float[image.Width * image.Height];
@@ -46,7 +54,9 @@ static class ParticleTextureDetail
         return step == 1 ? (v, image.Width, image.Height) : Box(v, image.Width, image.Height, step);
     }
 
-    /// <summary>The summed difference between <paramref name="v"/> and itself reduced by <paramref name="f"/> and scaled back up.</summary>
+    /// <summary>
+    /// The summed difference between <paramref name="v"/> and itself reduced by <paramref name="f"/> and scaled back up.
+    /// </summary>
     static double Error(float[] v, int w, int h, int f)
     {
         var (small, sw, sh) = Box(v, w, h, f);
@@ -69,7 +79,9 @@ static class ParticleTextureDetail
         return error;
     }
 
-    /// <summary>The mean of each <paramref name="f"/> × <paramref name="f"/> block (the last row and column of blocks take the remainder).</summary>
+    /// <summary>
+    /// The mean of each <paramref name="f"/> × <paramref name="f"/> block (the last row and column of blocks take the remainder).
+    /// </summary>
     static (float[] V, int W, int H) Box(float[] v, int w, int h, int f)
     {
         int sw = Math.Max(1, w / f), sh = Math.Max(1, h / f);

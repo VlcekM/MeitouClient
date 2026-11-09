@@ -5,7 +5,9 @@ namespace Meitou.Tests.Textures;
 
 public class TextureLoaderTests
 {
-    /// <summary>Every base-game <c>.tga</c> and <c>.jpg</c>, and a sample of the <c>.png</c> files, decode to RGBA8.</summary>
+    /// <summary>
+    /// Every base-game <c>.tga</c> and <c>.jpg</c>, and a sample of the <c>.png</c> files, decode to RGBA8.
+    /// </summary>
     [Fact]
     [Slow]
     public void Loads_base_game_png_tga_and_jpg()

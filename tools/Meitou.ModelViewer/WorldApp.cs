@@ -61,10 +61,13 @@ static partial class WorldApp
         if (scene is null) return 1;
         RenderJobs.RaiseRenderThread();
         var assets = new AssetLocator(install);
-        return options.Screenshot is not null || options.FlyBenchmark > 0 || options.BenchFrames > 0 || options.Ab is not null ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
+        return options.Screenshot is not null || options.FlyBenchmark > 0 || options.BenchFrames > 0 || options.Ab is not null
+                ? Screenshot(install, scene, assets, options) : Interactive(install, scene, assets, options);
     }
 
-    /// <summary>Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.</summary>
+    /// <summary>
+    /// Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.
+    /// </summary>
     static Streamline? s_streamline;
     static Ngx? s_ngx;
 
@@ -92,7 +95,9 @@ static partial class WorldApp
         finally { s_streamline = null; s_ngx = null; }
     }
 
-    /// <summary>Ends the frame (submits it).</summary>
+    /// <summary>
+    /// Ends the frame (submits it).
+    /// </summary>
     static void EndFrame(GpuContext context) => context.EndFrame();
 
     static unsafe int Screenshot(VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
@@ -102,7 +107,9 @@ static partial class WorldApp
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
         var (camera, render) = Setup(scene, o);
         Console.WriteLine($"camera    {CameraCode.Encode(camera)} ({CameraCode.Describe(camera)}; --camera-code puts a viewer here)");
-        { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f) : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
+        { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal
+                ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f)
+                    : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
         if (gpu.Streamer is { } streamer)
         {
             var streamWatch = Stopwatch.StartNew();
@@ -120,7 +127,8 @@ static partial class WorldApp
             var foliageWatch = Stopwatch.StartNew();
             foliageRenderer.Settle(camera.Eye);
             Console.WriteLine($"foliage   {foliageRenderer.Describe()} ({foliageWatch.ElapsedMilliseconds} ms)");
-            Console.WriteLine(foliageRenderer.LayoutCache is { } layoutCache ? $"foliage   {layoutCache.Stats.Describe()} (key {layoutCache.KeyName})" : "foliage   layout cache off (--no-load-cache)");
+            Console.WriteLine(foliageRenderer.LayoutCache is { } layoutCache
+                    ? $"foliage   {layoutCache.Stats.Describe()} (key {layoutCache.KeyName})" : "foliage   layout cache off (--no-load-cache)");
             Console.WriteLine($"foliage   {foliageRenderer.SettleTimeline}");
         }
         FinishLoading(context);
@@ -183,7 +191,8 @@ static partial class WorldApp
         }
         DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
-        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(),
+                o.FogDistance); EndFrame(context); }
         var drawWatch = Stopwatch.StartNew();
         { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
         context.Finish();
@@ -224,7 +233,8 @@ static partial class WorldApp
         if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}");
         if (gpu.Gi is { } gi) Console.WriteLine($"gi         {gi.Describe()}");
         if (gpu.Probes is { } probeInfo) Console.WriteLine($"gi probes  {probeInfo.Describe()}");
-        if (gpu.Post is { } occlusionPost && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off")}");
+        if (gpu.Post is { } occlusionPost
+            && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off")}");
         if (gpu.Post is { } shaftsPost) Console.WriteLine($"shafts     {shaftsPost.ShaftsDescribe}");
         if (o.ShowKeys && DebugOverlay.TryCreate(context, assets.Find) is { } keysOverlay)
         {
@@ -241,12 +251,18 @@ static partial class WorldApp
         return 0;
     }
 
-    /// <summary>The <c>\</c> key: the scheduler, then each WEATHER record forced in turn (back to the scheduler after the last).</summary>
+    /// <summary>
+    /// The <c>\</c> key: the scheduler, then each WEATHER record forced in turn (back to the scheduler after the last).
+    /// </summary>
     static void CycleWeather(WeatherWorld world)
     {
         var all = world.Data.Weathers;
         int next = world.ForcedWeather is { } current ? all.ToList().FindIndex(w => ReferenceEquals(w, current)) + 1 : 0;
-        if (next >= all.Count) { world.ForceWeather((WeatherDef?)null); Console.WriteLine("weather   auto (the scheduler)"); }
+        if (next >= all.Count)
+        {
+            world.ForceWeather((WeatherDef?)null);
+            Console.WriteLine("weather   auto (the scheduler)");
+        }
         else world.ForceWeather(all[next]);
     }
 
@@ -267,7 +283,8 @@ static partial class WorldApp
         int day = o.Day ?? 0;
         // The animation clock (clouds, particles, water): real seconds, or exact frame steps while the cinema records.
         double animSeconds = 0;
-        var cinema = new Cinema(() => camera, () => hour, v => hour = v, () => BorderlessFullScreen.IsOn(window), () => BorderlessFullScreen.Toggle(window), Cinema.ViewerFile);
+        var cinema = new Cinema(() => camera, () => hour, v => hour = v, () => BorderlessFullScreen.IsOn(window),
+                () => BorderlessFullScreen.Toggle(window), Cinema.ViewerFile);
         cinema.Load();
         if (o.PlayShots) cinema.PlayLoop();
         Vector2? lastMouse = null;
@@ -294,7 +311,8 @@ static partial class WorldApp
             if (overlay is null) Console.WriteLine("keys      no monospace system font or game font found:the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
             (camera, render) = Setup(scene, o);
-            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync, v => display.VSync = v, switches,
+            if (overlay is not null) panel = CreateSettingsPanel(overlay, gpu, render, () => hour, v => hour = v, () => display.VSync,
+                    v => display.VSync = v, switches,
                 () => o.TimeSpeed, v => o.TimeSpeed = v, () => BorderlessFullScreen.IsOn(window), _ => BorderlessFullScreen.Toggle(window));
             profiler = new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
@@ -302,7 +320,8 @@ static partial class WorldApp
             {
                 audio = Game.Audio.AudioSystem.TryCreate(install, Game.Audio.AudioSystem.AmbientVolumeSetting(install), out var audioError);
                 if (audio is not null) audio.Player.Gain = MathF.Pow(10, o.AudioGainDb / 20);
-                Console.WriteLine(audio is not null ? $"audio     {audio.DeviceName}, ambience and music from the Wwise banks{(o.AudioGainDb != 0 ? $", gain {o.AudioGainDb:+0.#;-0.#} dB" : "")} (--no-audio turns it off)" : $"audio     off: {audioError}");
+                Console.WriteLine(audio is not null
+                    ? $"audio     {audio.DeviceName}, ambience and music from the Wwise banks{(o.AudioGainDb != 0 ? $", gain {o.AudioGainDb:+0.#;-0.#} dB" : "")} (--no-audio turns it off)" : $"audio     off: {audioError}");
             }
             var input = window.CreateInput();
             keyboard = input.Keyboards.FirstOrDefault();
@@ -310,7 +329,8 @@ static partial class WorldApp
             foreach (var mouse in input.Mice)
             {
                 // Window to framebuffer pixels (they differ with display scaling); the panel is laid out in the latter.
-                Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1), window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
+                Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1),
+                        window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
                 mouse.MouseDown += (m, b) =>
                 {
                     if (b == MouseButton.Left && panel?.MouseDown(Pixels(m.Position)) == true) return;
@@ -318,7 +338,8 @@ static partial class WorldApp
                     if (b == MouseButton.Left && cinema.MouseDown(Pixels(m.Position))) return;
                     if (cinema.Contains(Pixels(m.Position))) return;
                     if (panel?.Contains(Pixels(m.Position)) == true) return;
-                    dragging = b; lastMouse = null;
+                    dragging = b;
+                    lastMouse = null;
                 };
                 mouse.MouseUp += (_, _) => { panel?.MouseUp(); cinema.MouseUp(); dragging = null; };
                 mouse.MouseMove += (_, p) =>
@@ -383,7 +404,11 @@ static partial class WorldApp
             }
             bool ctrl = keyboard is not null && (keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
             bool shift = keyboard is not null && (keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
-            if (key == Key.Enter && keyboard is not null && (keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight))) { BorderlessFullScreen.Toggle(window); return; }
+            if (key == Key.Enter && keyboard is not null && (keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight)))
+            {
+                BorderlessFullScreen.Toggle(window);
+                return;
+            }
             if (Enum.TryParse(key.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shift)) return;
             switch (key)
             {
@@ -394,16 +419,20 @@ static partial class WorldApp
                 case Key.Equal: o.Post.Exposure = MathF.Min(o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
                 case Key.T: render.Textures = !render.Textures; break;
                 case Key.N: render.NormalMaps = !render.NormalMaps; break;
-                case Key.K: GroundRelief.ParallaxActive = !GroundRelief.ParallaxActive; Console.WriteLine(GroundRelief.ParallaxActive ? "ground parallax on" : "ground parallax off"); break;
+                case Key.K: GroundRelief.ParallaxActive = !GroundRelief.ParallaxActive; Console.WriteLine(GroundRelief.ParallaxActive
+                        ? "ground parallax on" : "ground parallax off"); break;
                 case Key.O: render.Objects = !render.Objects; break;
-                case Key.F when gpu?.Foliage is { } foliage: foliage.Enabled = !foliage.Enabled; Console.WriteLine(foliage.Enabled ? "foliage   on" : "foliage   off"); break;
+                case Key.F when gpu?.Foliage is { } foliage: foliage.Enabled = !foliage.Enabled; Console.WriteLine(foliage.Enabled ? "foliage   on"
+                        : "foliage   off"); break;
                 case Key.X: render.Wireframe = (render.Wireframe + 1) % 3; break;
                 case Key.V: render.Debug = (render.Debug + 1) % 4; break;
                 case Key.G: render.Water = !render.Water; break;
                 case Key.R: render.Reflections = !render.Reflections; break;
-                case Key.Comma: if (hour < 1) day = Math.Max(day - 1, 0); hour = (hour + 23) % 24; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
+                case Key.Comma: if (hour < 1) day = Math.Max(day - 1, 0); hour = (hour
+                        + 23) % 24; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
                 case Key.Period: if (hour + 1 >= 24) day++; hour = (hour + 1) % 24; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
-                // The weather schedule only moves forward (it catches up through a jump hour by hour); going back changes the clock, not the weather already rolled.
+                // The weather schedule only moves forward (it catches up through a jump hour by hour); going back changes the clock, not the weather
+                // already rolled.
                 case Key.LeftBracket: day = Math.Max(day - 1, 0); Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
                 case Key.RightBracket: day++; Console.WriteLine($"time {TimeText(hour)}, day {day}"); break;
                 case Key.BackSlash when gpu?.Weather is { } weather: CycleWeather(weather.World); break;
@@ -418,7 +447,9 @@ static partial class WorldApp
                 case Key.F10 when overlay is not null: overlay.Visible = !overlay.Visible; break;
                 case Key.F11 when overlay is not null: statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; break;
                 case Key.F12 when shift && profiler is not null && overlay is not null: profiler.ShowVram = !profiler.ShowVram; break;
-                case Key.F12 when profiler is not null && overlay is not null: profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); break;
+                case Key.F12 when profiler is not null
+                        && overlay is not null: profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3);
+                        break;
             }
         }
 
@@ -465,7 +496,8 @@ static partial class WorldApp
                 long objectTotal = gpu.Objects?.Totals[0, 1] ?? 0;
                 int counted = Math.Max(frames, 1);
                 var tris = new WorldStats.Triangles(gpu.Terrain.DrawnTriangles, (objectTotal - lastObjectTris) / (double)counted,
-                    gpu.Foliage is { Enabled: true } ft ? ft.ColourTrianglesPerFrame : 0, gpu.Characters?.DrawnTriangles ?? 0, gpu.Foliage is { Enabled: true } fg ? fg.DrawnBlades : 0);
+                    gpu.Foliage is { Enabled: true } ft ? ft.ColourTrianglesPerFrame : 0, gpu.Characters?.DrawnTriangles
+                            ?? 0, gpu.Foliage is { Enabled: true } fg ? fg.DrawnBlades : 0);
                 gpu.Foliage?.ResetDrawTally();
                 lastObjectTris = objectTotal;
                 WorldStats.Add(stats, display.Context, gpu, t, in tris);
@@ -503,7 +535,11 @@ static partial class WorldApp
             if (timing)
             {
                 var begin = arena.Allocate();
-                if (begin.IsValid) { context.Interleave(cmd => cmd.Timestamp(arena, begin)); timers[queryIndex].Begin = begin; }
+                if (begin.IsValid)
+                {
+                    context.Interleave(cmd => cmd.Timestamp(arena, begin));
+                    timers[queryIndex].Begin = begin;
+                }
                 else timing = false;
             }
             frameWatch.Restart();
@@ -547,9 +583,9 @@ static partial class WorldApp
                 fpsWindowFrames = 0;
             }
             frameClock.Restart();
-            // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn
-            // without the overlay and the panel, so saved pictures never show them.
-            // A recorded frame is drawn like a screenshot; the cinema's clean picture hides the panels too (its letterbox stays in saved frames, the F6 editor stays open).
+            // The picture is read after the present (framebuffer 0 stays intact until the next frame); the frame that is saved is drawn without the
+            // overlay and the panel, so saved pictures never show them. A recorded frame is drawn like a screenshot; the cinema's clean picture hides
+            // the panels too (its letterbox stays in saved frames, the F6 editor stays open).
             bool shot = screenshotRequested || takeFile is not null;
             screenshotRequested = false;
             bool panels = !shot && !cinema.Clean;
@@ -572,7 +608,11 @@ static partial class WorldApp
                 var lines = keyItems.Select(item => KeyState(item.Split(' ')[0]) is { } state ? item.PadRight(width) + state : item).ToList();
                 overlay.Draw(size.X, size.Y, "Keys   (F10 hides this)", lines, panelsBottom);
             }
-            if (panels && overlay is not null) { profiler?.Draw(overlay, size.X, size.Y); profiler?.DrawVram(overlay, size.X, size.Y); }
+            if (panels && overlay is not null)
+            {
+                profiler?.Draw(overlay, size.X, size.Y);
+                profiler?.DrawVram(overlay, size.X, size.Y);
+            }
             // Last, over the statistics and the profiler: the settings sit at the top left.
             if (panels) panel?.Draw(size.X, size.Y);
             // Over everything: the letterbox, and the timeline editor (F6) or the cinema status line.

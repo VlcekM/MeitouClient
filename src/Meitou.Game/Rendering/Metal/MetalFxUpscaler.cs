@@ -15,18 +15,20 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalFxUpscaler : IUpscaler
 {
-    readonly MetalContext ctx;
-    MTLFXTemporalScaler scaler;
-    int inputWidth, inputHeight, outputWidth, outputHeight;
-    bool failed;
+    readonly MetalContext _ctx;
+    MTLFXTemporalScaler _scaler;
+    int _inputWidth, _inputHeight, _outputWidth, _outputHeight;
+    bool _failed;
 
-    MetalFxUpscaler(MetalContext ctx) => this.ctx = ctx;
+    MetalFxUpscaler(MetalContext ctx) => this._ctx = ctx;
 
     public UpscalerKind Kind => UpscalerKind.MetalFx;
-    public string Name => inputWidth == 0 ? "metalfx" : $"metalfx {inputWidth}x{inputHeight} -> {outputWidth}x{outputHeight}";
+    public string Name => _inputWidth == 0 ? "metalfx" : $"metalfx {_inputWidth}x{_inputHeight} -> {_outputWidth}x{_outputHeight}";
 
-    /// <summary>Whether MetalFX can be loaded and created on this machine. The real scaler is made on the first dispatch,
-    /// when the render and display sizes are known.</summary>
+    /// <summary>
+    /// Whether MetalFX can be loaded and created on this machine. The real scaler is made on the first dispatch,
+    /// when the render and display sizes are known.
+    /// </summary>
     public static MetalFxUpscaler? TryCreate(MetalContext ctx)
     {
         if (!MetalFxRuntime.Available) return null;
@@ -35,16 +37,17 @@ public sealed class MetalFxUpscaler : IUpscaler
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed) return false;
+        if (_failed) return false;
         if (i.RenderWidth <= 0 || i.RenderHeight <= 0 || i.DisplayWidth <= 0 || i.DisplayHeight <= 0) return false;
         if (!EnsureScaler(i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight)) return false;
 
-        var s = scaler;
-        s.ColorTexture = ctx.TextureAt(i.Colour);
-        s.DepthTexture = ctx.TextureAt(i.Depth);
-        s.MotionTexture = ctx.TextureAt(i.Motion);
-        s.OutputTexture = ctx.TextureAt(i.Output);
-        if (i.Reactive is { } reactive) s.ReactiveMaskTexture = ctx.TextureAt(reactive);
+        var s = _scaler;
+        s.ColorTexture = _ctx.TextureAt(i.Colour);
+        s.DepthTexture = _ctx.TextureAt(i.Depth);
+        s.MotionTexture = _ctx.TextureAt(i.Motion);
+        s.OutputTexture = _ctx.TextureAt(i.Output);
+        if (i.Reactive is { } reactive) s.ReactiveMaskTexture = _ctx.TextureAt(reactive);
+
         // Our motion is UV from current to previous; MetalFX takes render pixels towards the previous position.
         // MetalFX's motion space is y-down (the standard Metal framebuffer), while the velocity shader's NDC is y-up,
         // so X flips and Y does not. (Apple's example: a +1 NDC step uses motion scale (-width, +height).)
@@ -60,12 +63,12 @@ public sealed class MetalFxUpscaler : IUpscaler
         {
             // PostTaa is already inside its native segment and has closed the velocity encoder. MetalFX is a command
             // buffer stage, like a compute dispatch: encoding it directly keeps the pass labels and the single list.
-            s.EncodeToCommandBuffer(ctx.Frame.Command);
+            s.EncodeToCommandBuffer(_ctx.Frame.Command);
         }
         catch (Exception e)
         {
             Console.WriteLine($"metal     MetalFX encode failed: {e.Message}");
-            failed = true;
+            _failed = true;
             return false;
         }
         return true;
@@ -78,17 +81,18 @@ public sealed class MetalFxUpscaler : IUpscaler
         if (displayWidth * 10L > width * 26L || displayHeight * 10L > height * 26L)
         {
             Console.WriteLine($"metal     MetalFX refuses {width}x{height} -> {displayWidth}x{displayHeight} (below 0.40); using TAA");
-            failed = true;
+            _failed = true;
             return false;
         }
-        if (scaler.NativePtr != IntPtr.Zero && inputWidth == width && inputHeight == height &&
-            outputWidth == displayWidth && outputHeight == displayHeight) return true;
+        if (_scaler.NativePtr != IntPtr.Zero && _inputWidth == width && _inputHeight == height &&
+            _outputWidth == displayWidth && _outputHeight == displayHeight) return true;
+
         // A resize replaces the scaler while the previous frame ring may still name it. Disposing it here can
         // fault the GPU and make every following submission fail; hold it until the ring has passed.
-        if (scaler.NativePtr != IntPtr.Zero)
+        if (_scaler.NativePtr != IntPtr.Zero)
         {
-            var previous = scaler;
-            ctx.DeferDelete(() => previous.Dispose());
+            var previous = _scaler;
+            _ctx.DeferDelete(() => previous.Dispose());
         }
         var d = new MTLFXTemporalScalerDescriptor
         {
@@ -105,68 +109,71 @@ public sealed class MetalFxUpscaler : IUpscaler
         };
         try
         {
-            scaler = d.NewTemporalScaler(ctx.Device);
+            _scaler = d.NewTemporalScaler(_ctx.Device);
         }
         catch (Exception e)
         {
             Console.WriteLine($"metal     MetalFX create failed: {e.Message}");
-            failed = true;
+            _failed = true;
             return false;
         }
-        if (scaler.NativePtr == IntPtr.Zero)
+        if (_scaler.NativePtr == IntPtr.Zero)
         {
             Console.WriteLine("metal     MetalFX is unavailable on this device");
-            failed = true;
+            _failed = true;
             return false;
         }
+
         // The content region is the whole render target (no letterboxing); MetalFX otherwise leaves its content
         // scale at the descriptor's 0-sized default on the larger upscale ratios.
-        scaler.InputContentWidth = (ulong)width;
-        scaler.InputContentHeight = (ulong)height;
-        inputWidth = width;
-        inputHeight = height;
-        outputWidth = displayWidth;
-        outputHeight = displayHeight;
+        _scaler.InputContentWidth = (ulong)width;
+        _scaler.InputContentHeight = (ulong)height;
+        _inputWidth = width;
+        _inputHeight = height;
+        _outputWidth = displayWidth;
+        _outputHeight = displayHeight;
         Console.WriteLine($"metal     MetalFX temporal {width}x{height} -> {displayWidth}x{displayHeight}{(displayWidth > 2 * width || displayHeight > 2 * height ? " (below 0.50)" : "")}");
         return true;
     }
 
     public void Dispose()
     {
-        if (scaler.NativePtr != IntPtr.Zero) scaler.Dispose();
-        scaler = default;
+        if (_scaler.NativePtr != IntPtr.Zero) _scaler.Dispose();
+        _scaler = default;
     }
 }
 
-/// <summary>Loads the MetalFX framework once. SharpMetal's <c>ObjectiveC.LinkMetal()</c> links Metal, not MetalFX,
-/// so without this the descriptor's Objective-C class does not exist.</summary>
+/// <summary>
+/// Loads the MetalFX framework once. SharpMetal's <c>ObjectiveC.LinkMetal()</c> links Metal, not MetalFX,
+/// so without this the descriptor's Objective-C class does not exist.
+/// </summary>
 static class MetalFxRuntime
 {
-    static nint framework;
-    static bool looked;
+    static nint s_framework;
+    static bool s_looked;
 
     public static bool Available
     {
         get
         {
-            if (looked) return framework != IntPtr.Zero;
-            looked = true;
+            if (s_looked) return s_framework != IntPtr.Zero;
+            s_looked = true;
             if (!OperatingSystem.IsMacOSVersionAtLeast(13)) return false;
             try
             {
-                framework = NativeLibrary.Load("/System/Library/Frameworks/MetalFX.framework/MetalFX");
+                s_framework = NativeLibrary.Load("/System/Library/Frameworks/MetalFX.framework/MetalFX");
                 if (ObjectiveC.objc_getClass("MTLFXTemporalScalerDescriptor") == IntPtr.Zero)
                 {
-                    framework = IntPtr.Zero;
+                    s_framework = IntPtr.Zero;
                     return false;
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine($"metal     MetalFX framework unavailable: {e.Message}");
-                framework = IntPtr.Zero;
+                s_framework = IntPtr.Zero;
             }
-            return framework != IntPtr.Zero;
+            return s_framework != IntPtr.Zero;
         }
     }
 }

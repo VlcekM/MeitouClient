@@ -14,7 +14,9 @@ namespace Meitou.Game.Host.Cameras;
 public readonly record struct CameraState(
     Vector3 Eye, Vector3 Forward, Vector3 Up, Vector3 Target, float Yaw, float Pitch, float Distance, bool IsFree)
 {
-    /// <summary>Right handed look-at view matrix (as <c>Matrix4x4.CreateLookAt</c>).</summary>
+    /// <summary>
+    /// Right handed look-at view matrix (as <c>Matrix4x4.CreateLookAt</c>).
+    /// </summary>
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Eye + Forward, Up);
 
     /// <summary>
@@ -31,7 +33,9 @@ public readonly record struct CameraState(
             Interp.LerpAngle(a.Yaw, b.Yaw, t), Interp.LerpAngle(a.Pitch, b.Pitch, t), Interp.Lerp(a.Distance, b.Distance, t), b.IsFree);
     }
 
-    /// <summary>The eye for yaw, pitch and distance round a target (the formula in the type's summary).</summary>
+    /// <summary>
+    /// The eye for yaw, pitch and distance round a target (the formula in the type's summary).
+    /// </summary>
     public static Vector3 EyeFor(Vector3 target, float yaw, float pitch, float distance) =>
         target + new Vector3(MathF.Cos(pitch) * MathF.Sin(yaw), MathF.Sin(pitch), MathF.Cos(pitch) * MathF.Cos(yaw)) * distance;
 }

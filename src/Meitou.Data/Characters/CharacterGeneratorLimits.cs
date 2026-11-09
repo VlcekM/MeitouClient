@@ -4,7 +4,9 @@ using System.Xml.Linq;
 
 namespace Meitou.Data.Characters;
 
-/// <summary>Character editor category of a slider (editor_data.xsd <c>configType</c>).</summary>
+/// <summary>
+/// Character editor category of a slider (editor_data.xsd <c>configType</c>).
+/// </summary>
 public enum AppearanceCategory { Face, Body, Hair, Personality }
 
 /// <summary>
@@ -18,10 +20,15 @@ public sealed record AppearanceRange(string Name, AppearanceCategory Category, i
     public string? TargetOpposite { get; init; }
 }
 
-/// <summary>A colour slider (<c>ColourRange</c>, e.g. <c>Skin Tone</c>): value 0..(n−1)×10 blends between the n colours.</summary>
-public sealed record AppearanceColourRange(string Name, AppearanceCategory Category, IReadOnlyList<Vector3> Colours, int Min, int Max, int Mid, int Group, int Variation)
+/// <summary>
+/// A colour slider (<c>ColourRange</c>, e.g. <c>Skin Tone</c>): value 0..(n−1)×10 blends between the n colours.
+/// </summary>
+public sealed record AppearanceColourRange(string Name, AppearanceCategory Category, IReadOnlyList<Vector3> Colours, int Min, int Max, int Mid,
+        int Group, int Variation)
 {
-    /// <summary>The colour of a slider value: colour index value × 0.1, blended linearly with the next (docs/characters.md).</summary>
+    /// <summary>
+    /// The colour of a slider value: colour index value × 0.1, blended linearly with the next (docs/characters.md).
+    /// </summary>
     public Vector3 ColourAt(int value)
     {
         if (Colours.Count == 1) return Colours[0];
@@ -32,7 +39,9 @@ public sealed record AppearanceColourRange(string Name, AppearanceCategory Categ
     }
 }
 
-/// <summary>The sliders of one gender in a race's <c>editor limits</c> XML (<c>data/editor/editor_data_*.xml</c>).</summary>
+/// <summary>
+/// The sliders of one gender in a race's <c>editor limits</c> XML (<c>data/editor/editor_data_*.xml</c>).
+/// </summary>
 public sealed class AppearanceLimits
 {
     public List<AppearanceRange> Ranges { get; } = [];
@@ -74,7 +83,8 @@ public sealed class AppearanceLimits
                     var colours = e.Elements("Colour").Select(c => new Vector3(Int(c, "r", 0), Int(c, "g", 0), Int(c, "b", 0)) / 255f).ToList();
                     if (colours.Count == 0) continue;
                     int max = (colours.Count - 1) * 10;
-                    limits.Colours.Add(new AppearanceColourRange(name, cat, colours, 0, max, Mid(e, 0, max), group, Variation(e, 0, max, defaultDeviation)));
+                    limits.Colours.Add(new AppearanceColourRange(name, cat, colours, 0, max, Mid(e, 0, max), group, Variation(e, 0, max,
+                            defaultDeviation)));
                 }
             }
         }

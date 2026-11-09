@@ -35,11 +35,16 @@ public static class BackgroundWork
         public override int MaximumConcurrencyLevel => Math.Max(2, Environment.ProcessorCount - 3);
     }
 
-    /// <summary>The state object that marks a job as urgent (<see cref="RunUrgent"/>).</summary>
+    /// <summary>
+    /// The state object that marks a job as urgent (<see cref="RunUrgent"/>).
+    /// </summary>
     sealed class UrgentMark;
+
     static readonly UrgentMark Urgent = new();
 
-    /// <summary>The streaming threads.</summary>
+    /// <summary>
+    /// The streaming threads.
+    /// </summary>
     public static readonly int Threads = Math.Max(2, Environment.ProcessorCount - 3);
 
     static readonly Scheduler WorkScheduler = new(Threads);

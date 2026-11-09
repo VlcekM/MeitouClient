@@ -7,11 +7,15 @@ using Meitou.Data.Physics;
 
 namespace Meitou.Tests.Physics;
 
-/// <summary>The collision reader against the Kenshi install (docs/formats/collision.md): decoding and the placement convention.</summary>
+/// <summary>
+/// The collision reader against the Kenshi install (docs/formats/collision.md): decoding and the placement convention.
+/// </summary>
 [Slow]
 public class CollisionInstallTests
 {
-    /// <summary>The BUILDING_PART records reachable from the base game's BUILDING records through parts, interior, interior mask and doors.</summary>
+    /// <summary>
+    /// The BUILDING_PART records reachable from the base game's BUILDING records through parts, interior, interior mask and doors.
+    /// </summary>
     static List<GameRecord> Parts(GameDatabase db)
     {
         var seen = new HashSet<string>();
@@ -19,12 +23,16 @@ public class CollisionInstallTests
         void Visit(GameRecord holder)
         {
             foreach (var list in new[] { "parts", "interior" })
+            {
                 foreach (var r in holder.GetReferences(list))
+                {
                     if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingPart } part && seen.Add(part.StringId))
                     {
                         result.Add(part);
                         Visit(part);
                     }
+                }
+            }
         }
         foreach (var b in db.OfType(FcsRecordType.Building)) Visit(b);
         return result;
@@ -35,8 +43,11 @@ public class CollisionInstallTests
     {
         var install = InstallData.Install;
         Assert.SkipWhen(install is null, "Kenshi install not found");
+        string gui = $"{Path.DirectorySeparatorChar}gui{Path.DirectorySeparatorChar}";
+        string editor = $"{Path.DirectorySeparatorChar}editor{Path.DirectorySeparatorChar}";
         var files = Directory.EnumerateFiles(install!.DataDirectory, "*.xml", SearchOption.AllDirectories)
-            .Where(f => Path.GetExtension(f).Equals(".xml", StringComparison.OrdinalIgnoreCase)).Where(f => !f.Contains($"{Path.DirectorySeparatorChar}gui{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}editor{Path.DirectorySeparatorChar}"))
+            .Where(f => Path.GetExtension(f).Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !f.Contains(gui) && !f.Contains(editor))
             .Where(f => File.ReadLines(f).Take(3).Any(l => l.Contains("<NXUSTREAM2>", StringComparison.Ordinal)))
             .ToList();
         Assert.NotEmpty(files);
@@ -49,8 +60,14 @@ public class CollisionInstallTests
                 if (s.Mesh is { } m)
                 {
                     Assert.NotEmpty(m.Vertices);
-                    if (s.Kind == CollisionShapeKind.TriangleMesh) Assert.All(m.Indices, i => Assert.InRange(i, 0, m.Vertices.Length - 1));
-                    else Assert.NotEmpty(ConvexHull.Triangles(m.Vertices));
+                    if (s.Kind == CollisionShapeKind.TriangleMesh)
+                    {
+                        Assert.All(m.Indices, i => Assert.InRange(i, 0, m.Vertices.Length - 1));
+                    }
+                    else
+                    {
+                        Assert.NotEmpty(ConvexHull.Triangles(m.Vertices));
+                    }
                 }
                 var v = new List<Vector3>();
                 var idx = new List<int>();
@@ -80,7 +97,10 @@ public class CollisionInstallTests
         Assert.True(flipped.Average() < mean - 0.15f, $"flipped {flipped.Average()} vs {mean}");
     }
 
-    /// <summary>IoU of each part's collision AABB (under <paramref name="axes"/>) with its render mesh's bounds, sorted ascending; parts with a mesh, a collision file and no offset.</summary>
+    /// <summary>
+    /// IoU of each part's collision AABB (under <paramref name="axes"/>) with its render mesh's bounds, sorted ascending;
+    /// parts with a mesh, a collision file and no offset.
+    /// </summary>
     static List<float> MeshOverlap(GameInstall install, Func<Vector3, Vector3> axes)
     {
         var db = InstallData.BaseGame!;

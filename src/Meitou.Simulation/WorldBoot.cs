@@ -13,20 +13,29 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 
-/// <summary>What <see cref="WorldBoot.Load"/> reads a world from.</summary>
+/// <summary>
+/// What <see cref="WorldBoot.Load"/> reads a world from.
+/// </summary>
 /// <param name="Heights">The CPU heightmap the world walks and stands on (immutable, any thread), never the renderer's terrain.</param>
 /// <param name="Assets">Finds the art files the ragdolls' skeletons, the animations and the mineable rocks are read from.</param>
 public sealed record WorldBootOptions(GameInstall Install, GameDatabase Database, GroundHeights Heights, AssetLocator Assets)
 {
-    /// <summary>The world's level data with its building swaps applied (<see cref="WorldBoot.LoadLevels"/>); null: open ground with no towns (the sandbox, a duel).</summary>
+    /// <summary>
+    /// The world's level data with its building swaps applied (<see cref="WorldBoot.LoadLevels"/>); null: open ground with no towns (the sandbox, a
+    /// duel).
+    /// </summary>
     public WorldLevelData? Levels { get; init; }
 
-    /// <summary>The buildings' layouts when the caller has read them already (the renderer shares its own); null: read here.</summary>
+    /// <summary>
+    /// The buildings' layouts when the caller has read them already (the renderer shares its own); null: read here.
+    /// </summary>
     public BuildingLayouts? Layouts { get; init; }
 
     public BodyOptions Bodies { get; init; } = BodyOptions.Default;
 
-    /// <summary>Subscribed to <see cref="NavSystem.ZoneReady"/> before the navmesh starts building zones.</summary>
+    /// <summary>
+    /// Subscribed to <see cref="NavSystem.ZoneReady"/> before the navmesh starts building zones.
+    /// </summary>
     public Action<NavZoneReady>? ZoneReady { get; init; }
 }
 
@@ -39,24 +48,32 @@ public sealed class WorldBoot
 {
     public required IWalkability Walkability { get; init; }
 
-    /// <summary>The navmesh, when the world has levels.</summary>
+    /// <summary>
+    /// The navmesh, when the world has levels.
+    /// </summary>
     public NavSystem? Nav { get; init; }
 
-    /// <summary>The terrain and buildings ragdolls land on, when the world has levels.</summary>
+    /// <summary>
+    /// The terrain and buildings ragdolls land on, when the world has levels.
+    /// </summary>
     public RagdollGeometry? RagdollGeometry { get; init; }
 
     public required PopulationData Data { get; init; }
 
     public required IReadOnlyList<TownPlacement> Towns { get; init; }
 
-    /// <summary>The skeleton rigs, shared with the renderer so a ragdoll starts from the drawn pose.</summary>
+    /// <summary>
+    /// The skeleton rigs, shared with the renderer so a ragdoll starts from the drawn pose.
+    /// </summary>
     public required CharacterRigs Rigs { get; init; }
 
     public required AnimationLengths AnimationLengths { get; init; }
 
     public required AnimationLibrary AnimationLibrary { get; init; }
 
-    /// <summary>The level data read afresh, with the factions' building swaps applied as a scene's are.</summary>
+    /// <summary>
+    /// The level data read afresh, with the factions' building swaps applied as a scene's are.
+    /// </summary>
     public static WorldLevelData LoadLevels(GameInstall install, GameDatabase db)
     {
         var levels = WorldLevelData.Load(install, includeInteriors: true);
@@ -64,7 +81,9 @@ public sealed class WorldBoot
         return levels;
     }
 
-    /// <summary>Layouts of <paramref name="levels"/> read afresh, their furniture swapped as the placements were.</summary>
+    /// <summary>
+    /// Layouts of <paramref name="levels"/> read afresh, their furniture swapped as the placements were.
+    /// </summary>
     public static BuildingLayouts LevelLayouts(GameDatabase db, WorldLevelData levels)
     {
         var layouts = new BuildingLayouts(db, levels.Interiors);
@@ -114,6 +133,7 @@ public sealed class WorldBoot
     static NavSystem StartNav(WorldBootOptions o, WorldLevelData levels)
     {
         var nav = new NavSystem(o.Install, o.Database, levels, o.Heights.HeightAt);
+
         if (o.ZoneReady is { } ready)
         {
             nav.ZoneReady += ready;
@@ -130,6 +150,7 @@ public sealed class WorldBoot
         var buildings = levels is null ? null : ReadTownBuildings(o, levels, layouts!);
         var data = PopulationData.Create(o.Database, towns, new GeneratedAppearances(o.Database, o.Install.Root), bodyOptions: o.Bodies,
             biomes: biomes, buildings: buildings, roads: levels?.Roads(), townZones: levels?.TownZones(), level: levels?.Level);
+
         if (levels is not null)
         {
             data.Layouts = layouts;
@@ -140,7 +161,9 @@ public sealed class WorldBoot
         return data;
     }
 
-    /// <summary>The wild (homeless squads and nests) needs the world's area sectors.</summary>
+    /// <summary>
+    /// The wild (homeless squads and nests) needs the world's area sectors.
+    /// </summary>
     static BiomeMap? Biomes(WorldBootOptions o)
     {
         try
@@ -154,7 +177,9 @@ public sealed class WorldBoot
         }
     }
 
-    /// <summary>The towns' buildings with their beds and nodes: the AI's homes (docs/simulation.md "AI").</summary>
+    /// <summary>
+    /// The towns' buildings with their beds and nodes: the AI's homes (docs/simulation.md "AI").
+    /// </summary>
     static Dictionary<string, List<TownBuilding>> ReadTownBuildings(WorldBootOptions o, WorldLevelData levels, BuildingLayouts layouts)
     {
         var watch = Stopwatch.StartNew();
@@ -165,11 +190,14 @@ public sealed class WorldBoot
         return buildings;
     }
 
-    /// <summary>The mineable rocks for ore mines, from the foliage placement (read through the renderer's layout cache when it has the zone).</summary>
+    /// <summary>
+    /// The mineable rocks for ore mines, from the foliage placement (read through the renderer's layout cache when it has the zone).
+    /// </summary>
     static FoliageResourceNodes ResourceNodes(WorldBootOptions o, WorldLevelData levels)
     {
         var catalog = FoliageCatalog.Load(o.Database);
         FoliageLayoutCache? cache = null;
+
         try
         {
             cache = new FoliageLayoutCache(o.Install, catalog, FoliageWorld.ReadTowns(o.Database, levels));

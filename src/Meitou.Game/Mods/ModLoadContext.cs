@@ -17,10 +17,14 @@ sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<stri
 
     public string Folder { get; } = folder;
 
-    /// <summary>The assemblies the mod's dependencies export, by simple name (case ignored); resolved before the mod folder.</summary>
+    /// <summary>
+    /// The assemblies the mod's dependencies export, by simple name (case ignored); resolved before the mod folder.
+    /// </summary>
     public IReadOnlyDictionary<string, Assembly> Imports { get; } = imports ?? new Dictionary<string, Assembly>();
 
-    /// <summary>Whether the game ships an assembly of this simple name, so the default context resolves it.</summary>
+    /// <summary>
+    /// Whether the game ships an assembly of this simple name, so the default context resolves it.
+    /// </summary>
     public static bool IsShipped(string simpleName) => Shipped.Value.Contains(simpleName);
 
     protected override Assembly? Load(AssemblyName assemblyName)
@@ -49,7 +53,9 @@ sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<stri
         else { yield return name + ".so"; yield return "lib" + name + ".so"; }
     }
 
-    /// <summary>The simple names on the trusted platform assembly list: the game's own assemblies and the runtime's, self-contained or not.</summary>
+    /// <summary>
+    /// The simple names on the trusted platform assembly list: the game's own assemblies and the runtime's, self-contained or not.
+    /// </summary>
     static HashSet<string> ReadShipped()
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

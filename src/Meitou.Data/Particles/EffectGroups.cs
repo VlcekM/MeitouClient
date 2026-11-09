@@ -3,16 +3,22 @@ using Meitou.Data.World;
 
 namespace Meitou.Data.Particles;
 
-/// <summary>The camera as the groups see it each frame: where the eye is and which way it looks.</summary>
+/// <summary>
+/// The camera as the groups see it each frame: where the eye is and which way it looks.
+/// </summary>
 public readonly record struct EffectCamera(Vector3 Eye, Vector3 Forward);
 
-/// <summary>Where an effect may be placed: a random point of an area (the weather region's cells, or a disc round the camera).</summary>
+/// <summary>
+/// Where an effect may be placed: a random point of an area (the weather region's cells, or a disc round the camera).
+/// </summary>
 public interface IEffectArea
 {
     bool TryPick(Random random, out float x, out float z);
 }
 
-/// <summary>A disc (sqrt-uniform): the viewer's test override <c>--particle-area</c>, and the fallback when no region is known.</summary>
+/// <summary>
+/// A disc (sqrt-uniform): the viewer's test override <c>--particle-area</c>, and the fallback when no region is known.
+/// </summary>
 public sealed class DiscArea(float centreX, float centreZ, float radius) : IEffectArea
 {
     public bool TryPick(Random random, out float x, out float z)
@@ -26,7 +32,8 @@ public sealed class DiscArea(float centreX, float centreZ, float radius) : IEffe
 
 /// <summary>
 /// A weather region's cells (docs/formats/weather.md "Where"): a random point is taken in a uniformly chosen cell, inside the middle 80 % of it
-/// (Verified (decompiled), FUN_1408fc3c0: a margin of 0.2 · 0.5 of the width on each side; the margin's sign in z is not resolved in the decompile, both axes use it here).
+/// (Verified (decompiled), FUN_1408fc3c0: a margin of 0.2 · 0.5 of the width on each side; the margin's sign in z is not resolved in the decompile,
+/// both axes use it here).
 /// </summary>
 public sealed class RegionArea : IEffectArea
 {
@@ -35,7 +42,9 @@ public sealed class RegionArea : IEffectArea
     public RegionArea(IEnumerable<(float X0, float Z0, float X1, float Z1)> rects) => this._rects = [.. rects];
     public int Count => _rects.Length;
 
-    /// <summary>The cells that have the colour of the cell at (<paramref name="x"/>, <paramref name="z"/>) (the game's region cells), or null off the map.</summary>
+    /// <summary>
+    /// The cells that have the colour of the cell at (<paramref name="x"/>, <paramref name="z"/>) (the game's region cells), or null off the map.
+    /// </summary>
     public static RegionArea? At(WeatherAreas areas, float x, float z)
     {
         var (cx, cz) = WeatherAreas.CellOf(x, z);
@@ -61,8 +70,8 @@ public sealed class RegionArea : IEffectArea
 }
 
 /// <summary>
-/// What the groups need of the world besides the camera: the ground height (called on the main thread only: the renderer's height grid swaps as
-/// the terrain streams), the area effects are placed in, and how far from the camera effects are simulated.
+/// What the groups need of the world besides the camera: the ground height (called on the main thread only: the renderer's height grid swaps as the
+/// terrain streams), the area effects are placed in, and how far from the camera effects are simulated.
 /// </summary>
 public sealed class EffectWorld
 {
@@ -72,7 +81,11 @@ public sealed class EffectWorld
     /// function over the heights as they are now that any thread may call (the viewer: a snapshot of the terrain's height grids).
     /// </summary>
     public Func<Func<float, float, float>>? FreezeGroundHeight { get; set; }
-    /// <summary>A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now (<see cref="FreezeGroundHeight"/>), the rest as it is (<see cref="GroundColour"/> too, so it must be callable from any thread when set; the viewer leaves it unset). Call it on the render thread.</summary>
+    /// <summary>
+    /// A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now
+    /// (<see cref="FreezeGroundHeight"/>), the rest as it is (<see cref="GroundColour"/> too, so it must be callable from any thread when set; the
+    /// viewer leaves it unset). Call it on the render thread.
+    /// </summary>
     public EffectWorld Frozen() => new()
     {
         GroundHeight = FreezeGroundHeight?.Invoke() ?? GroundHeight,
@@ -82,21 +95,30 @@ public sealed class EffectWorld
         GroundColour = GroundColour,
         Density = Density,
     };
-    /// <summary>Null: a disc round the camera of <see cref="FallbackRadius"/>.</summary>
+    /// <summary>
+    /// Null: a disc round the camera of <see cref="FallbackRadius"/>.
+    /// </summary>
     public IEffectArea? Area { get; set; }
     /// <summary>
-    /// How far from the camera effects exist for us (Observed: the game simulates the active zones, 3 × 3 of 4608 units, and an effect in an
-    /// inactive zone only within its <c>maximum view distance</c> of them): an effect is simulated while the camera is within this plus its view
-    /// distance of its bounds.
+    /// How far from the camera effects exist for us (Observed: the game simulates the active zones, 3 × 3 of 4608 units, and an effect in an inactive
+    /// zone only within its <c>maximum view distance</c> of them): an effect is simulated while the camera is within this plus its view distance of
+    /// its bounds.
     /// </summary>
     public float ActiveRadius { get; set; } = 6912;
     public float FallbackRadius { get; set; } = 8000;
-    /// <summary>The biome's ground colour at a place (for <c>ground colour</c> effects); null: not used.</summary>
+    /// <summary>
+    /// The biome's ground colour at a place (for <c>ground colour</c> effects); null: not used.
+    /// </summary>
     public Func<float, float, Vector3>? GroundColour { get; set; }
-    /// <summary>The Tab panel's "Particle density x" (Meitou setting, not in the game): multiplies every effect's emission rate, so fewer particles exist and are drawn (a storm gets thinner, not cheaper per particle).</summary>
+    /// <summary>
+    /// The Tab panel's "Particle density x" (Meitou setting, not in the game): multiplies every effect's emission rate, so fewer particles exist and
+    /// are drawn (a storm gets thinner, not cheaper per particle).
+    /// </summary>
     public float Density { get; set; } = 1;
 
-    /// <summary>The y of the terrain normal at a point, by finite differences of the height (the game's own terrain query returns the normal).</summary>
+    /// <summary>
+    /// The y of the terrain normal at a point, by finite differences of the height (the game's own terrain query returns the normal).
+    /// </summary>
     public float NormalY(float x, float z)
     {
         const float s = 12;
@@ -105,9 +127,9 @@ public sealed class EffectWorld
     }
 
     /// <summary>
-    /// A place for an effect (Verified (decompiled), FUN_1408fc3c0): a random point of the area, the ground height there, up to 10 tries for
-    /// one whose height is within <c>min/max altitude</c> (skipped when both are 0) and whose terrain normal y is within <c>min/max slope</c>;
-    /// after 10 tries the last stands.
+    /// A place for an effect (Verified (decompiled), FUN_1408fc3c0): a random point of the area, the ground height there, up to 10 tries for one
+    /// whose height is within <c>min/max altitude</c> (skipped when both are 0) and whose terrain normal y is within <c>min/max slope</c>; after 10
+    /// tries the last stands.
     /// </summary>
     public Vector3 Place(EffectRecord e, Random random, in EffectCamera camera)
     {
@@ -115,7 +137,11 @@ public sealed class EffectWorld
         float x = camera.Eye.X, z = camera.Eye.Z, y = 0;
         for (int tries = 10; tries > 0; tries--)
         {
-            if (!area.TryPick(random, out x, out z)) { x = camera.Eye.X; z = camera.Eye.Z; }
+            if (!area.TryPick(random, out x, out z))
+            {
+                x = camera.Eye.X;
+                z = camera.Eye.Z;
+            }
             y = GroundHeight(x, z);
             bool altitude = (e.MinAltitude == 0 && e.MaxAltitude == 0) || (y >= e.MinAltitude && y <= e.MaxAltitude);
             float ny = NormalY(x, z);
@@ -125,7 +151,9 @@ public sealed class EffectWorld
     }
 }
 
-/// <summary>How an effect's particles are kept near its node.</summary>
+/// <summary>
+/// How an effect's particles are kept near its node.
+/// </summary>
 public enum UnitWrap { None, Cube, Sphere }
 
 /// <summary>
@@ -149,24 +177,40 @@ public sealed class EffectUnit
     public int Seed { get; }
     public float LongestLife { get; }
     public ParticleSimulation? Simulation { get; set; }
-    /// <summary>The node's place in the world.</summary>
+    /// <summary>
+    /// The node's place in the world.
+    /// </summary>
     public Vector3 Position { get; set; }
-    /// <summary>Where the simulation's coordinates start in the world (kept near the node so a far-off place does not cost the particles precision).</summary>
+    /// <summary>
+    /// Where the simulation's coordinates start in the world (kept near the node so a far-off place does not cost the particles precision).
+    /// </summary>
     public Vector3 Anchor { get; set; }
     public Vector3 Tint { get; set; } = Vector3.One;
     public float Alpha { get; set; } = 1;
-    /// <summary>The node's turn (<see cref="ParticleSimulation.Orientation"/>).</summary>
+    /// <summary>
+    /// The node's turn (<see cref="ParticleSimulation.Orientation"/>).
+    /// </summary>
     public Quaternion Orientation { get; set; } = Quaternion.Identity;
-    /// <summary>The particles' size and life factors (<see cref="ParticleSimulation.Size"/>, <see cref="ParticleSimulation.LifeScale"/>).</summary>
+    /// <summary>
+    /// The particles' size and life factors (<see cref="ParticleSimulation.Size"/>, <see cref="ParticleSimulation.LifeScale"/>).
+    /// </summary>
     public float Size { get; set; } = 1;
     public float LifeScale { get; set; } = 1;
-    /// <summary>The node's bounding sphere for culling (<see cref="float.PositiveInfinity"/>: always drawn).</summary>
+    /// <summary>
+    /// The node's bounding sphere for culling (<see cref="float.PositiveInfinity"/>: always drawn).
+    /// </summary>
     public float Radius { get; set; }
-    /// <summary>Seconds of life left (<see cref="float.PositiveInfinity"/>: never ends).</summary>
+    /// <summary>
+    /// Seconds of life left (<see cref="float.PositiveInfinity"/>: never ends).
+    /// </summary>
     public float Life { get; set; } = float.PositiveInfinity;
-    /// <summary>Seconds since the unit was made.</summary>
+    /// <summary>
+    /// Seconds since the unit was made.
+    /// </summary>
     public float Age { get; set; }
-    /// <summary>The life is over: the emitters make nothing more, the particles live out (Verified (decompiled), the handlers' stop).</summary>
+    /// <summary>
+    /// The life is over: the emitters make nothing more, the particles live out (Verified (decompiled), the handlers' stop).
+    /// </summary>
     public bool Stopped { get; set; }
     public float StoppedFor { get; set; }
     public ParticleEnvironment Environment { get; set; } = ParticleEnvironment.None;
@@ -180,18 +224,25 @@ public sealed class EffectUnit
     public Vector3 WrapCentre { get; set; }
     public float WrapSize { get; set; }
     public float WrapMaxHeight { get; set; } = float.PositiveInfinity;
-    /// <summary>Sphere wrap: the camera's direction of movement this frame (unit length, zero when it stands still); a particle that leaves the sphere is first moved along it.</summary>
+    /// <summary>
+    /// Sphere wrap: the camera's direction of movement this frame (unit length, zero when it stands still); a particle that leaves the sphere is
+    /// first moved along it.
+    /// </summary>
     public Vector3 WrapAhead { get; set; }
-    /// <summary>Seconds of simulation to run on the next <see cref="Advance"/>.</summary>
+    /// <summary>
+    /// Seconds of simulation to run on the next <see cref="Advance"/>.
+    /// </summary>
     public float Pending { get; set; }
     int _wrapSalt;
 
     public bool Active => Simulation is not null;
     public bool Done => Stopped && (Simulation is null || Simulation.ParticleCount == 0);
 
-    /// <summary>The fog volumes' fade fraction: up over <c>fog fade in duration</c> from the unit's start, down over <c>fog fade out duration</c> from its stop
-    /// (0 = no fade). The game scales the volume with it, not its opacity: the radius from 0 and the density distance from 10 radii (a cylinder: 4 times
-    /// its own) linearly (FogController's FogFadeSphere / FogFadeCylinder; <c>FogVolumes.Faded</c>).</summary>
+    /// <summary>
+    /// The fog volumes' fade fraction: up over <c>fog fade in duration</c> from the unit's start, down over <c>fog fade out duration</c> from its
+    /// stop (0 = no fade). The game scales the volume with it, not its opacity: the radius from 0 and the density distance from 10 radii (a cylinder:
+    /// 4 times its own) linearly (FogController's FogFadeSphere / FogFadeCylinder; <c>FogVolumes.Faded</c>).
+    /// </summary>
     public float FogFade
     {
         get
@@ -203,24 +254,41 @@ public sealed class EffectUnit
     }
 
     /// <summary>
-    /// How much of the unit is shown by its distance (Meitou, <c>ParticleRenderer.RangeFade</c>): 1 out to 85 % of the distance it is simulated within, falling
-    /// to 0 at that distance, so it is out of sight when it starts being simulated (a cloud of its whole age at once) and when it stops (all its particles gone).
+    /// How much of the unit is shown by its distance (Meitou, <c>ParticleRenderer.RangeFade</c>): 1 out to 85 % of the distance it is simulated
+    /// within, falling to 0 at that distance, so it is out of sight when it starts being simulated (a cloud of its whole age at once) and when it
+    /// stops (all its particles gone).
     /// </summary>
     public float RangeFade { get; set; } = 1;
 
     public void Activate()
     {
-        Simulation = new ParticleSimulation(System, Seed) { EmissionStopped = Stopped, Orientation = Orientation, Size = Size, LifeScale = LifeScale };
+        Simulation = new ParticleSimulation(System, Seed)
+        {
+            EmissionStopped = Stopped,
+            Orientation = Orientation,
+            Size = Size,
+            LifeScale = LifeScale,
+        };
         Anchor = Position;
     }
 
-    public void Deactivate() { Simulation = null; Pending = 0; }
+    public void Deactivate()
+    {
+        Simulation = null;
+        Pending = 0;
+    }
 
-    /// <summary>Runs the queued time: <see cref="Pending"/> in steps of at most 1/30 s, wrapping the particles after each.</summary>
+    /// <summary>
+    /// Runs the queued time: <see cref="Pending"/> in steps of at most 1/30 s, wrapping the particles after each.
+    /// </summary>
     public void Advance()
     {
         var sim = Simulation;
-        if (sim is null) { Pending = 0; return; }
+        if (sim is null)
+        {
+            Pending = 0;
+            return;
+        }
         var local = Position - Anchor;
         if (local.LengthSquared() > 1500f * 1500f)
         {
@@ -239,7 +307,11 @@ public sealed class EffectUnit
         const float substep = 1f / 30;
         for (int steps = 0; left > 1e-5f; steps++)
         {
-            if (steps >= MaxStepsPerFrame) { Pending = left; break; }
+            if (steps >= MaxStepsPerFrame)
+            {
+                Pending = left;
+                break;
+            }
             float s = Math.Min(left, left > 3f ? 0.1f : substep);
             left -= s;
             sim.Advance(s, Environment);
@@ -247,18 +319,26 @@ public sealed class EffectUnit
         }
     }
 
-    /// <summary>Simulation steps one <see cref="Advance"/> call runs at most.</summary>
+    /// <summary>
+    /// Simulation steps one <see cref="Advance"/> call runs at most.
+    /// </summary>
     public const int MaxStepsPerFrame = 40;
 
-    /// <summary>True while the unit is still catching up on a backlog of more than a second (it is not drawn until it has).</summary>
+    /// <summary>
+    /// True while the unit is still catching up on a backlog of more than a second (it is not drawn until it has).
+    /// </summary>
     public bool CatchingUp => Pending > 1f;
 
     void ApplyWrap(ParticleSimulation sim)
     {
         switch (Wrap)
         {
-            case UnitWrap.Cube: sim.Wrap(WrapCentre - Anchor, WrapSize / 2); break;
-            case UnitWrap.Sphere: sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, WrapAhead, _wrapSalt++); break;
+            case UnitWrap.Cube:
+                sim.Wrap(WrapCentre - Anchor, WrapSize / 2);
+                break;
+            case UnitWrap.Sphere:
+                sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, WrapAhead, _wrapSalt++);
+                break;
         }
     }
 }
@@ -287,20 +367,28 @@ public abstract class EffectGroup
         Tint = TintOf(effect);
     }
 
-    /// <summary>Hands the group to another world (the live one, after a worker warmed it with a <see cref="EffectWorld.Frozen"/> copy); while nobody else touches the group.</summary>
+    /// <summary>
+    /// Hands the group to another world (the live one, after a worker warmed it with a <see cref="EffectWorld.Frozen"/> copy); while nobody else
+    /// touches the group.
+    /// </summary>
     internal void Rebind(EffectWorld to) => _world = to;
 
     public EffectRecord Effect { get; }
     public WeatherEffectEntry? Entry { get; }
     public PuSystemDef System { get; }
     public IReadOnlyList<EffectUnit> Units => _units;
-    /// <summary>The EFFECT's <c>colour multiplier</c> applied to the particles' rgb (Observed: "for weather effects only"; a black multiplier, which would blank the particles, is ignored: <c>Sand-Stream any altitude</c> has one next to <c>ground colour</c>).</summary>
+    /// <summary>
+    /// The EFFECT's <c>colour multiplier</c> applied to the particles' rgb (Observed: "for weather effects only"; a black multiplier, which would
+    /// blank the particles, is ignored: <c>Sand-Stream any altitude</c> has one next to <c>ground colour</c>).
+    /// </summary>
     public Vector3 Tint { get; }
     public int ParticleCount => _units.Sum(u => u.Simulation?.ParticleCount ?? 0);
 
     static Vector3 TintOf(EffectRecord e) => e.ColourMultiplier.LengthSquared() < 1e-4f ? Vector3.One : e.ColourMultiplier;
 
-    /// <summary>Steps the group by <paramref name="dt"/> seconds of the frame clock (0: not at all, a held-still frame): the main-thread part.</summary>
+    /// <summary>
+    /// Steps the group by <paramref name="dt"/> seconds of the frame clock (0: not at all, a held-still frame): the main-thread part.
+    /// </summary>
     public abstract void Update(float dt, in EffectCamera camera, WeatherEffectInput weather);
 
     /// <summary>
@@ -314,14 +402,16 @@ public abstract class EffectGroup
     }
 
     /// <summary>
-    /// The first half of <see cref="Prewarm"/>, which is cheap: the schedule runs in steps (places the units, which asks the world for the ground height: on a
-    /// worker thread the group must have a world whose functions any thread may call, <see cref="EffectWorld.Frozen"/>) and every unit that is near enough is woken with the
-    /// time it has to run queued in <see cref="EffectUnit.Pending"/>. Nothing is simulated yet: <see cref="Simulate"/> or
-    /// <see cref="SimulateSerial"/> does that, on any thread, while nothing else touches the group.
+    /// The first half of <see cref="Prewarm"/>, which is cheap: the schedule runs in steps (places the units, which asks the world for the ground
+    /// height: on a worker thread the group must have a world whose functions any thread may call, <see cref="EffectWorld.Frozen"/>) and every unit
+    /// that is near enough is woken with the time it has to run queued in <see cref="EffectUnit.Pending"/>. Nothing is simulated yet:
+    /// <see cref="Simulate"/> or <see cref="SimulateSerial"/> does that, on any thread, while nothing else touches the group.
     /// </summary>
     public abstract void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather);
 
-    /// <summary>Runs every unit's queued time (the units are independent: in parallel when there are several).</summary>
+    /// <summary>
+    /// Runs every unit's queued time (the units are independent: in parallel when there are several).
+    /// </summary>
     public void Simulate()
     {
         while (true)
@@ -334,8 +424,9 @@ public abstract class EffectGroup
     }
 
     /// <summary>
-    /// <see cref="Simulate"/> on the calling thread alone, one unit after the other, checking <paramref name="cancel"/> between the steps: for a group that is
-    /// being made in the background, where the thread pool is not to be taken from the frame's own work. Returns false when it was cancelled.
+    /// <see cref="Simulate"/> on the calling thread alone, one unit after the other, checking <paramref name="cancel"/> between the steps: for a
+    /// group that is being made in the background, where the thread pool is not to be taken from the frame's own work. Returns false when it was
+    /// cancelled.
     /// </summary>
     public bool SimulateSerial(CancellationToken cancel)
     {
@@ -348,7 +439,10 @@ public abstract class EffectGroup
         return true;
     }
 
-    /// <summary>The emission multiplier from the wind: <c>min wind span rate</c> is the wind speed needed for any particles, <c>max wind span rate</c> for all of them.</summary>
+    /// <summary>
+    /// The emission multiplier from the wind: <c>min wind span rate</c> is the wind speed needed for any particles, <c>max wind span rate</c> for all
+    /// of them.
+    /// </summary>
     public static float WindSpanScale(EffectRecord effect, float windSpeed)
     {
         float lo = effect.MinWindSpan, hi = effect.MaxWindSpan;
@@ -359,15 +453,23 @@ public abstract class EffectGroup
     protected ParticleEnvironment Environment(WeatherEffectInput weather)
     {
         var e = Effect;
-        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, WindSpanScale(e, weather.Wind.Length()) * _world.Density, e.WindAffected, e.WindDirectionEmission);
+        float windSpan = WindSpanScale(e, weather.Wind.Length()) * _world.Density;
+        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, windSpan, e.WindAffected, e.WindDirectionEmission);
     }
 
     protected EffectUnit NewUnit(Vector3 position)
     {
-        var u = new EffectUnit(Effect, System, _seed * 31 + _made++) { Position = position, Anchor = position, Tint = Tint, Radius = System.BoundingRadius };
+        var u = new EffectUnit(Effect, System, _seed * 31 + _made++)
+        {
+            Position = position,
+            Anchor = position,
+            Tint = Tint,
+            Radius = System.BoundingRadius,
+        };
         if (Effect.GroundColour && _world.GroundColour is { } ground) u.Tint = Tint * ground(position.X, position.Z);
         // The life: random between min and max time to live, none when the maximum is 0 (Verified (decompiled), FUN_1401034f0).
-        if (!Effect.Immortal) u.Life = Effect.MinTimeToLive + (Effect.MaxTimeToLive - Effect.MinTimeToLive) * _random.NextSingle();
+        if (!Effect.Immortal)
+            u.Life = Effect.MinTimeToLive + (Effect.MaxTimeToLive - Effect.MinTimeToLive) * _random.NextSingle();
         _units.Add(u);
         return u;
     }
@@ -411,12 +513,12 @@ public abstract class EffectGroup
 }
 
 /// <summary>
-/// CAMERA, CAMERA_RAIN and CAMERA_ACID_RAIN (docs/formats/weather.md "Spawning", Verified (decompiled): the camera group's functions): the
-/// system's node sits at the camera's position and moves with it; its particles live in world space and a wrapping rule keeps them in a
-/// cube of edge <c>2d / 1.5</c> centred <c>d</c> ahead of the camera along its view direction, where <c>d</c> is the effect's size, the EFFECT
-/// loader's 0.75 × the largest Box extent (or Circle radius) times the system's scale (so the cube's edge is that extent: 120 for
-/// <c>Kenshi_Heavy_Rain</c>, which is its emitter's box). Particles are emitted round the camera and wrapped into the cube in front of it.
-/// There is exactly one handler whatever the entry's count (Verified (decompiled), FUN_140102ff0 sets the group's count to 1).
+/// CAMERA, CAMERA_RAIN and CAMERA_ACID_RAIN (docs/formats/weather.md "Spawning", Verified (decompiled): the camera group's functions): the system's
+/// node sits at the camera's position and moves with it; its particles live in world space and a wrapping rule keeps them in a cube of edge <c>2d /
+/// 1.5</c> centred <c>d</c> ahead of the camera along its view direction, where <c>d</c> is the effect's size, the EFFECT loader's 0.75 × the largest
+/// Box extent (or Circle radius) times the system's scale (so the cube's edge is that extent: 120 for <c>Kenshi_Heavy_Rain</c>, which is its
+/// emitter's box). Particles are emitted round the camera and wrapped into the cube in front of it. There is exactly one handler whatever the entry's
+/// count (Verified (decompiled), FUN_140102ff0 sets the group's count to 1).
 /// </summary>
 public sealed class CameraEffectGroup : EffectGroup
 {
@@ -424,7 +526,8 @@ public sealed class CameraEffectGroup : EffectGroup
     readonly float _distance;
     bool _started;
 
-    public CameraEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld? world = null) : base(entry.Effect, entry, system, seed, world ?? new EffectWorld())
+    public CameraEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld? world = null)
+        : base(entry.Effect, entry, system, seed, world ?? new EffectWorld())
     {
         float size = system.LargestEmitterExtent * 0.75f;
         _distance = size > 0 ? size : 100;
@@ -434,17 +537,25 @@ public sealed class CameraEffectGroup : EffectGroup
         _unit.WrapSize = Edge;
     }
 
-    /// <summary>The cube's centre's distance ahead of the camera, <c>d</c>.</summary>
+    /// <summary>
+    /// The cube's centre's distance ahead of the camera, <c>d</c>.
+    /// </summary>
     public float Distance => _distance;
-    /// <summary>The cube's edge, <c>2d / 1.5</c>.</summary>
+    /// <summary>
+    /// The cube's edge, <c>2d / 1.5</c>.
+    /// </summary>
     public float Edge => _distance * 2 / 1.5f;
     public ParticleSimulation Simulation => _unit.Simulation!;
-    /// <summary>Where the simulation's own coordinate origin is in the world: add it to <see cref="ParticleSimulation.Collect"/>'s positions.</summary>
+    /// <summary>
+    /// Where the simulation's own coordinate origin is in the world: add it to <see cref="ParticleSimulation.Collect"/>'s positions.
+    /// </summary>
     public Vector3 Anchor => _unit.Anchor;
 
     static Vector3 Forward(in EffectCamera camera) => camera.Forward.LengthSquared() > 1e-6f ? Vector3.Normalize(camera.Forward) : -Vector3.UnitZ;
 
-    /// <summary>The cube's centre in the world.</summary>
+    /// <summary>
+    /// The cube's centre in the world.
+    /// </summary>
     public Vector3 Centre(in EffectCamera camera) => camera.Eye + Forward(camera) * _distance;
 
     void Follow(in EffectCamera camera)
@@ -479,9 +590,9 @@ public sealed class CameraEffectGroup : EffectGroup
 
 /// <summary>
 /// POINT (2), POINT_LIGHTING (7) and WANDERING (3, 8, 9) groups (docs/formats/weather.md "Spawning"; Verified (decompiled): FUN_140102370 the
-/// schedule, FUN_1401039a0 / FUN_140103ca0 the spawns, FUN_140102b50 the wandering). A timer starts at the entry's minimum respawn time, counts
-/// down in frame-clock seconds and, at 0 and while fewer than <c>count</c> units exist (<c>count</c> 0: no limit), makes a unit and adds a
-/// random time between the respawn minimum and maximum (0 / 0: all at once).
+/// schedule, FUN_1401039a0 / FUN_140103ca0 the spawns, FUN_140102b50 the wandering). A timer starts at the entry's minimum respawn time, counts down
+/// in frame-clock seconds and, at 0 and while fewer than <c>count</c> units exist (<c>count</c> 0: no limit), makes a unit and adds a random time
+/// between the respawn minimum and maximum (0 / 0: all at once).
 /// </summary>
 public sealed class RespawningEffectGroup : EffectGroup
 {
@@ -489,7 +600,8 @@ public sealed class RespawningEffectGroup : EffectGroup
     readonly bool _wandering, _lightning;
     float _timer;
 
-    public RespawningEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
+    public RespawningEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
+        : base(entry.Effect, entry, system, seed, world)
     {
         _wandering = entry.Effect.Type is EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas;
         _lightning = entry.Effect.Type == EffectType.PointLighting;
@@ -513,7 +625,8 @@ public sealed class RespawningEffectGroup : EffectGroup
         var u = NewUnit(p);
         if (_wandering)
         {
-            // A random direction in the ground plane (x and z in [-1, 1], normalised at the first turn), turned by up to ±90° every random(time to live) / 10 seconds.
+            // A random direction in the ground plane (x and z in [-1, 1], normalised at the first turn),
+            // turned by up to ±90° every random(time to live) / 10 seconds.
             u.Heading = new Vector2(Range(-1, 1), Range(-1, 1));
             if (u.Heading.LengthSquared() < 1e-4f) u.Heading = Vector2.UnitX;
             u.Heading = Vector2.Normalize(u.Heading);
@@ -582,17 +695,18 @@ public sealed class RespawningEffectGroup : EffectGroup
 }
 
 /// <summary>
-/// GLOBAL (4): one handler per unit of <c>count</c>, all made at once (Verified (decompiled), FUN_140102040: while fewer than <c>count</c> exist
-/// they are made, whatever the respawn times; <c>count</c> 0 makes none, so <c>fog islands</c> never appears in the base game). Each follows the
-/// camera: its node is at the camera's x and z, the ground there + 100 limited to <c>min/max altitude</c> when either is non-zero (FUN_140101dc0);
-/// its particles are kept within <c>d</c> of the node, moved ahead of a moving camera first (<see cref="ParticleSimulation.WrapSphere"/>).
+/// GLOBAL (4): one handler per unit of <c>count</c>, all made at once (Verified (decompiled), FUN_140102040: while fewer than <c>count</c> exist they
+/// are made, whatever the respawn times; <c>count</c> 0 makes none, so <c>fog islands</c> never appears in the base game). Each follows the camera:
+/// its node is at the camera's x and z, the ground there + 100 limited to <c>min/max altitude</c> when either is non-zero (FUN_140101dc0); its
+/// particles are kept within <c>d</c> of the node, moved ahead of a moving camera first (<see cref="ParticleSimulation.WrapSphere"/>).
 /// </summary>
 public sealed class GlobalEffectGroup : EffectGroup
 {
     readonly float _size;
     Vector3? _lastEye;
 
-    public GlobalEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
+    public GlobalEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
+        : base(entry.Effect, entry, system, seed, world)
     {
         float s = system.LargestEmitterExtent * 0.75f;
         _size = s > 0 ? s : 100;
@@ -646,14 +760,15 @@ public sealed class GlobalEffectGroup : EffectGroup
 /// <summary>
 /// GLOBAL_POINT (10): points round the camera (Verified (decompiled), FUN_140103160 / FUN_1401048b0 / FUN_140104610). <c>R</c> is the effect's
 /// <c>maximum view distance</c> (1000 when 0); the group keeps <c>count</c> units within R of the camera and <c>count</c> between R and 2R (3 ×
-/// <c>count</c> at most), each at a sqrt-uniform random distance in its ring on the ground, and stops the ones farther than 4R. Respawn times
-/// are not used. A unit lives <c>min..max time to live</c>.
+/// <c>count</c> at most), each at a sqrt-uniform random distance in its ring on the ground, and stops the ones farther than 4R. Respawn times are not
+/// used. A unit lives <c>min..max time to live</c>.
 /// </summary>
 public sealed class GlobalPointEffectGroup : EffectGroup
 {
     readonly float _radius;
 
-    public GlobalPointEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
+    public GlobalPointEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
+        : base(entry.Effect, entry, system, seed, world)
     {
         _radius = entry.Effect.MaximumViewDistance > 0 ? entry.Effect.MaximumViewDistance : 1000;
     }
@@ -668,7 +783,8 @@ public sealed class GlobalPointEffectGroup : EffectGroup
             p = new Vector3(camera.Eye.X + MathF.Cos(a) * r, 0, camera.Eye.Z + MathF.Sin(a) * r);
             p.Y = _world.GroundHeight(p.X, p.Z);
             float ny = _world.NormalY(p.X, p.Z);
-            if ((e.MaxAltitude == 0 || (p.Y >= e.MinAltitude && p.Y <= e.MaxAltitude)) && ny >= e.MinSlope && ny <= e.MaxSlope) break;
+            if ((e.MaxAltitude == 0 || (p.Y >= e.MinAltitude && p.Y <= e.MaxAltitude)) && ny >= e.MinSlope && ny <= e.MaxSlope)
+                break;
         }
         NewUnit(p);
     }
@@ -681,7 +797,8 @@ public sealed class GlobalPointEffectGroup : EffectGroup
         foreach (var u in _units)
         {
             Tick(u, dt, camera, env, alwaysActive: true);
-            // Horizontal distance (Observed choice): the unit sits on the ground and the eye may be hundreds of units up, which a 50-unit ring would never reach.
+            // Horizontal distance (Observed choice): the unit sits on the ground and the eye may be hundreds of units up, which a 50-unit ring would
+            // never reach.
             float dx = u.Position.X - camera.Eye.X, dz = u.Position.Z - camera.Eye.Z, d2 = dx * dx + dz * dz;
             if (d2 >= far2) u.Stopped = true;
             else if (d2 <= r2) inner++;
@@ -707,18 +824,21 @@ public sealed class GlobalPointEffectGroup : EffectGroup
 }
 
 /// <summary>
-/// The map-feature placers (docs/formats/zones.md): effects that belong to a MAP_FEATURES record (hidden or not) and are
-/// always on, at fixed places. Not a weather group: they are made once from <c>features.dat</c> (<see cref="MapEffectPlacers"/>) and live as
-/// static POINT effects (Observed: the game's handler lives <c>min..max time to live</c> and is made again; the viewer keeps it).
-/// A unit is simulated while the camera is within <see cref="EffectWorld.ActiveRadius"/> plus the effect's <c>maximum view distance</c> of it.
+/// The map-feature placers (docs/formats/zones.md): effects that belong to a MAP_FEATURES record (hidden or not) and are always on, at fixed places.
+/// Not a weather group: they are made once from <c>features.dat</c> (<see cref="MapEffectPlacers"/>) and live as static POINT effects (Observed: the
+/// game's handler lives <c>min..max time to live</c> and is made again; the viewer keeps it). A unit is simulated while the camera is within
+/// <see cref="EffectWorld.ActiveRadius"/> plus the effect's <c>maximum view distance</c> of it.
 /// </summary>
 public sealed class PlacerEffectGroup : EffectGroup
 {
     public PlacerEffectGroup(EffectRecord effect, PuSystemDef system, IEnumerable<Vector3> positions, int seed, EffectWorld world)
         : this(effect, system, positions.Select(p => (p, Quaternion.Identity)), seed, world) { }
 
-    /// <summary>A unit at every position, turned by its orientation (the effects on buildings).</summary>
-    public PlacerEffectGroup(EffectRecord effect, PuSystemDef system, IEnumerable<(Vector3 Position, Quaternion Orientation)> placements, int seed, EffectWorld world)
+    /// <summary>
+    /// A unit at every position, turned by its orientation (the effects on buildings).
+    /// </summary>
+    public PlacerEffectGroup(
+        EffectRecord effect, PuSystemDef system, IEnumerable<(Vector3 Position, Quaternion Orientation)> placements, int seed, EffectWorld world)
         : base(effect, null, system, seed, world)
     {
         foreach (var (p, orientation) in placements)
@@ -743,14 +863,20 @@ public sealed class PlacerEffectGroup : EffectGroup
 }
 
 /// <summary>
-/// One-shot effects the host fires (luckyren Mode's blood, docs/game/luckyren.md): each <see cref="Spawn"/> is a unit that emits for its life, then lives out its
-/// particles and is dropped. Not an EFFECT record of the game: the record is made up from the system's name.
+/// One-shot effects the host fires (luckyren Mode's blood, docs/game/luckyren.md): each <see cref="Spawn"/> is a unit that emits for its life, then
+/// lives out its particles and is dropped. Not an EFFECT record of the game: the record is made up from the system's name.
 /// </summary>
 public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld world)
-    : EffectGroup(new EffectRecord(system.Name, EffectType.Point, system.Name, false, false, 1, 0, 0, Vector3.One, 1, false, 0, 0, 0, 0, 0), null, system, seed, world)
+    : EffectGroup(
+        new EffectRecord(system.Name, EffectType.Point, system.Name, false, false, 1, 0, 0, Vector3.One, 1, false, 0, 0, 0, 0, 0),
+        null, system, seed, world)
 {
-    /// <summary>A unit at <paramref name="position"/>, turned by <paramref name="orientation"/>, emitting for <paramref name="seconds"/>, its particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived.</summary>
-    /// <param name="recolour">A colour the particles take in place of their texture's hue: kept as a negative tint, which the renderer's fragment program reads as that.</param>
+    /// <summary>
+    /// A unit at <paramref name="position"/>, turned by <paramref name="orientation"/>, emitting for <paramref name="seconds"/>, its particles
+    /// <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived.
+    /// </summary>
+    /// <param name="recolour">A colour the particles take in place of their texture's hue: kept as a negative tint, which the renderer's fragment
+    /// program reads as that.</param>
     /// <returns>The unit, which its owner may move while it emits (its particles stay in the world where they were thrown).</returns>
     public EffectUnit Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null)
     {
@@ -801,8 +927,8 @@ public static class EffectGroups
 
     /// <summary>
     /// Makes, warms and updates one small group of every kind once, so the methods are compiled before a weather change needs them: the viewer runs
-    /// without tiered compilation, and the first group of a kind made in the middle of a flight took 2 to 4 ms of compiling on the render thread (Observed,
-    /// 2026-10-10). Meant for a worker at start-up; harmless anywhere.
+    /// without tiered compilation, and the first group of a kind made in the middle of a flight took 2 to 4 ms of compiling on the render thread
+    /// (Observed, 2026-10-10). Meant for a worker at start-up; harmless anywhere.
     /// </summary>
     public static void PrimeJit()
     {
@@ -813,9 +939,15 @@ public static class EffectGroups
             var world = new EffectWorld { GroundHeight = static (_, _) => 0, Area = new DiscArea(0, 0, 100) };
             var camera = new EffectCamera(new Vector3(0, 100, 0), Vector3.UnitZ);
             var input = new WeatherEffectInput();
-            foreach (var type in (ReadOnlySpan<EffectType>)[EffectType.CameraRain, EffectType.Point, EffectType.Wandering, EffectType.PointLighting, EffectType.Global, EffectType.GlobalPoint])
+            ReadOnlySpan<EffectType> types =
+            [EffectType.CameraRain, EffectType.Point, EffectType.Wandering, EffectType.PointLighting, EffectType.Global, EffectType.GlobalPoint,];
+            foreach (var type in types)
             {
-                var record = new EffectRecord("prime", type, "prime", true, false, 1, 0, 0, Vector3.One, 1, false, 100, 0, 0, 5, 10) { MinAltitude = 0, MaxAltitude = 0 };
+                var record = new EffectRecord("prime", type, "prime", true, false, 1, 0, 0, Vector3.One, 1, false, 100, 0, 0, 5, 10)
+                {
+                    MinAltitude = 0,
+                    MaxAltitude = 0,
+                };
                 if (Create(new WeatherEffectEntry(record, 1, 0, 0), library, 1, world) is not { } group) continue;
                 group.BeginWarm(1, camera, input);
                 group.SimulateSerial(CancellationToken.None);
@@ -826,7 +958,9 @@ public static class EffectGroups
         catch (Exception) { }   // only a head start
     }
 
-    /// <summary>The group for an entry, or null when its particle system is unknown.</summary>
+    /// <summary>
+    /// The group for an entry, or null when its particle system is unknown.
+    /// </summary>
     public static EffectGroup? Create(WeatherEffectEntry entry, ParticleLibrary library, int seed, EffectWorld? world = null)
     {
         if (library.FindSystem(entry.Effect.ParticleSystem) is not { } system) return null;
@@ -834,7 +968,8 @@ public static class EffectGroups
         return entry.Effect.Type switch
         {
             EffectType.Camera or EffectType.CameraRain or EffectType.CameraAcidRain => new CameraEffectGroup(entry, system, seed, world),
-            EffectType.Point or EffectType.PointLighting or EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas => new RespawningEffectGroup(entry, system, seed, world),
+            EffectType.Point or EffectType.PointLighting or EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas
+                => new RespawningEffectGroup(entry, system, seed, world),
             EffectType.Global => new GlobalEffectGroup(entry, system, seed, world),
             EffectType.GlobalPoint => new GlobalPointEffectGroup(entry, system, seed, world),
             _ => null,

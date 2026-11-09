@@ -43,7 +43,9 @@ public sealed class TerrainHeightBounds
         Rebuild(0, 0, cells - 1, cells - 1);
     }
 
-    /// <summary>Recomputes the levels above 0 over the level-0 cell rectangle (inclusive) and what depends on it.</summary>
+    /// <summary>
+    /// Recomputes the levels above 0 over the level-0 cell rectangle (inclusive) and what depends on it.
+    /// </summary>
     void Rebuild(int cx0, int cz0, int cx1, int cz1)
     {
         for (int l = 1; l < _min.Length; l++)
@@ -60,7 +62,9 @@ public sealed class TerrainHeightBounds
         }
     }
 
-    /// <summary>The height range of a fine window's samples per level-0 cell, ready for <see cref="Apply"/>.</summary>
+    /// <summary>
+    /// The height range of a fine window's samples per level-0 cell, ready for <see cref="Apply"/>.
+    /// </summary>
     /// <param name="Cx0">First level-0 cell column of the patch.</param>
     public sealed record Patch(int Cx0, int Cz0, int Width, int Height, float[] Min, float[] Max);
 
@@ -124,11 +128,15 @@ public sealed class TerrainHeightBounds
         if (rebuildAll) Rebuild(patch.Cx0, patch.Cz0, patch.Cx0 + patch.Width - 1, patch.Cz0 + patch.Height - 1);
     }
 
-    /// <summary>Level-0 cells per side and their edge length in world units.</summary>
+    /// <summary>
+    /// Level-0 cells per side and their edge length in world units.
+    /// </summary>
     public int Cells { get; }
     public double CellSize { get; }
 
-    /// <summary>Height range over the square from (<paramref name="x0"/>, <paramref name="z0"/>) with edge <paramref name="size"/>.</summary>
+    /// <summary>
+    /// Height range over the square from (<paramref name="x0"/>, <paramref name="z0"/>) with edge <paramref name="size"/>.
+    /// </summary>
     public (float Min, float Max) Range(double x0, double z0, double size)
     {
         int level = Math.Clamp((int)Math.Floor(Math.Log2(Math.Max(size / CellSize, 1))), 0, _min.Length - 1);
@@ -149,7 +157,9 @@ public sealed class TerrainHeightBounds
     }
 }
 
-/// <summary>A node chosen for drawing: a square of the quadtree drawn with one LOD level's grid.</summary>
+/// <summary>
+/// A node chosen for drawing: a square of the quadtree drawn with one LOD level's grid.
+/// </summary>
 /// <param name="Quadrant">-1: the whole node; 0..3: only that quarter (bit 0 = +X half, bit 1 = +Z half).</param>
 public readonly record struct TerrainNode(int Level, double X0, double Z0, double Size, int Quadrant);
 
@@ -187,12 +197,16 @@ public sealed class TerrainQuadtree
         SetRanges(ranges);
     }
 
-    /// <summary>A tree whose level ranges come from a screen-space error rule (<see cref="TerrainLod.Ranges"/>).</summary>
+    /// <summary>
+    /// A tree whose level ranges come from a screen-space error rule (<see cref="TerrainLod.Ranges"/>).
+    /// </summary>
     public TerrainQuadtree(float finestSpacing, int gridCells, TerrainLod lod) : this(finestSpacing, gridCells) => SetRanges(lod);
 
     readonly float _morphFraction;
 
-    /// <summary>Takes the level ranges of <paramref name="lod"/>; false when they are the ones in use already.</summary>
+    /// <summary>
+    /// Takes the level ranges of <paramref name="lod"/>; false when they are the ones in use already.
+    /// </summary>
     public bool SetRanges(TerrainLod lod)
     {
         if (lod == _lastLod) return false;   // the frame's passes ask every time; the rule rarely changes
@@ -241,11 +255,16 @@ public sealed class TerrainQuadtree
     public float[] MorphStart { get; }
     public float[] MorphEnd { get; }
 
-    /// <summary>Nodes of this level or finer are never split: a node at this level is drawn whole wherever the distance rule would have split it (the shadow cascades' coarser casters, ShadowLod). 0: the distance rule alone.</summary>
+    /// <summary>
+    /// Nodes of this level or finer are never split: a node at this level is drawn whole wherever the distance rule would have split it (the shadow
+    /// cascades' coarser casters, ShadowLod). 0: the distance rule alone.
+    /// </summary>
     public int FloorLevel { get => _floorLevel; set => _floorLevel = Math.Max(value, 0); }
     int _floorLevel;
 
-    /// <summary>The nodes to draw for an eye position, skipping those <paramref name="visible"/> rejects (box min, max).</summary>
+    /// <summary>
+    /// The nodes to draw for an eye position, skipping those <paramref name="visible"/> rejects (box min, max).
+    /// </summary>
     public void Select(Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible, List<TerrainNode> result)
     {
         result.Clear();
@@ -282,7 +301,9 @@ public sealed class TerrainQuadtree
         return d.LengthSquared() <= radius * radius;
     }
 
-    /// <summary>How far a vertex of <paramref name="level"/> at <paramref name="distance"/> from the eye has slid onto the coarser grid (0..1).</summary>
+    /// <summary>
+    /// How far a vertex of <paramref name="level"/> at <paramref name="distance"/> from the eye has slid onto the coarser grid (0..1).
+    /// </summary>
     public float Morph(int level, float distance) =>
         MorphStart[level] == float.MaxValue ? 0 : Math.Clamp((distance - MorphStart[level]) / Math.Max(MorphEnd[level] - MorphStart[level], 1e-3f), 0, 1);
 

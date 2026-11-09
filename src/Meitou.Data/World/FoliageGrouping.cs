@@ -2,7 +2,10 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
-/// <summary>A zone's instances of one mesh from one layer, as the culls' records (<see cref="FoliageInstanceRecord"/>: transform, and in <c>Ground</c> the ground position, scale and the group's index in its zone).</summary>
+/// <summary>
+/// A zone's instances of one mesh from one layer, as the culls' records (<see cref="FoliageInstanceRecord"/>: transform, and in <c>Ground</c> the
+/// ground position, scale and the group's index in its zone).
+/// </summary>
 /// <param name="MaxScale">The largest instance scale in the group.</param>
 public sealed record FoliageInstanceGroup(FoliageMesh Mesh, FoliageLayer Layer, FoliageInstanceRecord[] Instances, float MaxScale);
 
@@ -17,17 +20,26 @@ public sealed class GroupedFoliageZone
     public required FoliageZone Zone { get; init; }
     public required FoliageGround? Ground { get; init; }
     public required List<FoliageInstanceGroup> Groups { get; init; }
-    /// <summary>The number of instances over all groups.</summary>
+    /// <summary>
+    /// The number of instances over all groups.
+    /// </summary>
     public required int InstanceCount { get; init; }
-    /// <summary>Lowest and highest placed instance (0 and 0 when there are none).</summary>
+    /// <summary>
+    /// Lowest and highest placed instance (0 and 0 when there are none).
+    /// </summary>
     public required float MinY { get; init; }
     public required float MaxY { get; init; }
 }
 
-/// <summary>Groups a zone's instances for the renderer.</summary>
+/// <summary>
+/// Groups a zone's instances for the renderer.
+/// </summary>
 public static class FoliageGrouping
 {
-    /// <summary>Groups <paramref name="zone"/>'s instances (two passes: count per group, then fill exact-size arrays). The zone's own instance list is left alone.</summary>
+    /// <summary>
+    /// Groups <paramref name="zone"/>'s instances (two passes: count per group, then fill exact-size arrays). The zone's own instance list is left
+    /// alone.
+    /// </summary>
     public static GroupedFoliageZone Group(FoliageZone zone, FoliageGround? ground)
     {
         var list = zone.Instances;

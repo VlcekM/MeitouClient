@@ -10,7 +10,9 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public static unsafe class MslTranslator
 {
-    /// <summary>The MSL version the shaders are written for (Metal 3).</summary>
+    /// <summary>
+    /// The MSL version the shaders are written for (Metal 3).
+    /// </summary>
     public const uint MslVersion = 30000;
 
     /// <summary>
@@ -32,7 +34,8 @@ public static unsafe class MslTranslator
     /// The MSL for one SPIR-V module, with its entry point renamed (the MSL entry point names have to be unique per stage:
     /// spirv-cross names the stages' entry points the same).
     /// </summary>
-    public static string Translate(byte[] spirv, string entryPoint, ExecutionModel stage, uint mslVersion = MslVersion, uint? argumentBufferSet = null)
+    public static string Translate(byte[] spirv, string entryPoint, ExecutionModel stage, uint mslVersion = MslVersion,
+        uint? argumentBufferSet = null)
     {
         ArgumentNullException.ThrowIfNull(spirv);
         var cross = Cross.GetApi();
@@ -54,11 +57,13 @@ public static unsafe class MslTranslator
 
             CompilerOptions* options = null;
             cross.CompilerCreateCompilerOptions(compiler, &options);
+
             // The MSL resource indices then equal the SPIR-V binding numbers, so a Metal backend can mirror the engine's
             // binding scheme instead of carrying a per-shader mapping table.
             cross.CompilerOptionsSetUint(options, CompilerOption.MslVersion, mslVersion);
             cross.CompilerOptionsSetUint(options, CompilerOption.MslPlatform, (uint)MslPlatform.Macos);
             cross.CompilerOptionsSetBool(options, CompilerOption.MslEnableDecorationBinding, 1);
+
             // Push constants: this spirv-cross has no binding option for them, so the block takes whatever the compiler
             // assigns (buffer 0); MetalShaders moves it to the stage's top index after the translation.
             if (argumentBufferSet is not null)
@@ -79,18 +84,21 @@ public static unsafe class MslTranslator
             if (cross.CompilerCompile(compiler, &source) != Result.Success)
                 throw new InvalidOperationException($"spirv-cross could not compile the module: {Error(cross, context)}");
             var msl = Marshal.PtrToStringUTF8((nint)source) ?? "";
+
             // Every descriptor set is an argument buffer in this mode: each takes its stage's flattened set index (the vertex stage's
             // above the vertex buffers), the table's the fixed free one.
             if (argumentBufferSet is { } table)
                 msl = ArgumentBuffer.Replace(msl, m =>
                 {
                     uint set = uint.Parse(m.Groups[2].Value);
+
                     // The vertex stage's sets start above its vertex buffers; Metal's buffer table ends at 30.
                     uint index = set == table ? TableBinding
                         : stage == ExecutionModel.Vertex ? MetalShaders.VertexBlockBase + set
                         : set;
                     return $"constant {m.Groups[1].Value} [[buffer({index})]]";
                 });
+
             // This spirv-cross has no binding option for push constants: the block comes out at [[buffer(0)]] — the stage's
             // low indices belong to the flattened resources and the vertex buffers (MetalShaders's numbers), the top index
             // to the push constants. The block is identifiable by the engine's name for it (NativeShaders.PushBlock's "Push").

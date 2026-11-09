@@ -4,50 +4,97 @@ using Meitou.Data.Gameplay.Construction;
 
 namespace Meitou.Data.World;
 
-/// <summary>What a spot inside a building is for: a bed, or one of the invisible <c>is node</c> markers of an interior layout, by its record's name.</summary>
+/// <summary>
+/// What a spot inside a building is for: a bed, or one of the invisible <c>is node</c> markers of an interior layout, by its record's name.
+/// </summary>
 public enum HomeSpotKind : byte
 {
     Bed = 0,
-    /// <summary>A node whose name holds "shop" ("Node Shopkeeper").</summary>
+    /// <summary>
+    /// A node whose name holds "shop" ("Node Shopkeeper").
+    /// </summary>
     Shopkeeper = 1,
-    /// <summary>A node whose name holds "guard".</summary>
+    /// <summary>
+    /// A node whose name holds "guard".
+    /// </summary>
     Guard = 2,
-    /// <summary>A node whose name holds "bar".</summary>
+    /// <summary>
+    /// A node whose name holds "bar".
+    /// </summary>
     Bar = 3,
-    /// <summary>A node whose name holds "throne".</summary>
+    /// <summary>
+    /// A node whose name holds "throne".
+    /// </summary>
     Throne = 4,
-    /// <summary>Any other node.</summary>
+    /// <summary>
+    /// Any other node.
+    /// </summary>
     General = 5,
-    /// <summary>A seat: interior furniture with a BF_CHAIR functionality (stools, benches, sitting pillows); <see cref="HomeSpot.SitClip"/> is how it is sat on.</summary>
+    /// <summary>
+    /// A seat: interior furniture with a BF_CHAIR functionality (stools, benches, sitting pillows); <see cref="HomeSpot.SitClip"/> is how it is sat
+    /// on.
+    /// </summary>
     Chair = 6,
-    /// <summary>A seat: furniture with a BF_THRONE functionality ("throne chair"); sat on like a <see cref="Chair"/>. Not the <see cref="Throne"/> node.</summary>
+    /// <summary>
+    /// A seat: furniture with a BF_THRONE functionality ("throne chair"); sat on like a <see cref="Chair"/>. Not the <see cref="Throne"/> node.
+    /// </summary>
     ThroneSeat = 7,
-    /// <summary>Furniture with a BF_TRAINING functionality (a training dummy): stood at, not sat on.</summary>
+    /// <summary>
+    /// Furniture with a BF_TRAINING functionality (a training dummy): stood at, not sat on.
+    /// </summary>
     Training = 8,
-    /// <summary>Interior furniture with a BF_MINE, BF_RESEARCH, BF_REFINERY or BF_CRAFTING functionality: pretend-operated by a squad member staying home (43, docs/game/ai-tasks.md "Town goals").</summary>
+    /// <summary>
+    /// Interior furniture with a BF_MINE, BF_RESEARCH, BF_REFINERY or BF_CRAFTING functionality: pretend-operated by a squad member staying home (43,
+    /// docs/game/ai-tasks.md "Town goals").
+    /// </summary>
     Workstation = 9,
-    /// <summary>A node of type 3 (turret), 4 (use) or 5 (light) not named as a bar or throne: no goal stands at it (the general-node finder asks for type 1 only, <c>FUN_14038c2f0</c>).</summary>
+    /// <summary>
+    /// A node of type 3 (turret), 4 (use) or 5 (light) not named as a bar or throne: no goal stands at it (the general-node finder asks for type 1
+    /// only, <c>FUN_14038c2f0</c>).
+    /// </summary>
     Other = 10,
 }
 
-/// <summary>A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).</summary>
+/// <summary>
+/// A spot inside a building in world space; <paramref name="Yaw"/> as the simulation measures it (0 along +Z, turning towards +X).
+/// </summary>
 public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, float Yaw)
 {
-    /// <summary>The furniture's placed rotation, before the sitter turns towards a table; collision and picking keep this facing.</summary>
+    /// <summary>
+    /// The furniture's placed rotation, before the sitter turns towards a table; collision and picking keep this facing.
+    /// </summary>
     public float PlacementYaw { get; init; } = Yaw;
-    /// <summary>The sitter's facing as the game has it; differs from <see cref="Yaw"/> only for a bench with its table behind (<see cref="TownBuildings.SeatYaw"/>).</summary>
+    /// <summary>
+    /// The sitter's facing as the game has it; differs from <see cref="Yaw"/> only for a bench with its table behind
+    /// (<see cref="TownBuildings.SeatYaw"/>).
+    /// </summary>
     public float FaithfulYaw { get; init; } = Yaw;
-    /// <summary>A node's BUILDING <c>node type</c> (NodeType: 0 NODE_SHOPKEEPER, 1 NODE_GENERAL, 2 NODE_GUARD_POST, 3 NODE_TURRET, 4 NODE_USE, 5 NODE_LIGHT); -1 for a bed.</summary>
+    /// <summary>
+    /// A node's BUILDING <c>node type</c> (NodeType: 0 NODE_SHOPKEEPER, 1 NODE_GENERAL, 2 NODE_GUARD_POST, 3 NODE_TURRET, 4 NODE_USE, 5 NODE_LIGHT);
+    /// -1 for a bed.
+    /// </summary>
     public int NodeType { get; init; } = -1;
-    /// <summary>A chair's sitting clip: the ANIMATION record its functionality's <c>animation</c> names ("sitting chair", "sitting idle" for floor seats); null otherwise.</summary>
+    /// <summary>
+    /// A chair's sitting clip: the ANIMATION record its functionality's <c>animation</c> names ("sitting chair", "sitting idle" for floor seats);
+    /// null otherwise.
+    /// </summary>
     public string? SitClip { get; init; }
-    /// <summary>The seat's functionality <c>hunger rate</c> (chairs 0.66, sit on floor 0.75; 1 by default).</summary>
+    /// <summary>
+    /// The seat's functionality <c>hunger rate</c> (chairs 0.66, sit on floor 0.75; 1 by default).
+    /// </summary>
     public float HungerRate { get; init; } = 1;
-    /// <summary>The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing (docs/game/character-stats.md "Beds").</summary>
+    /// <summary>
+    /// The BUILDING string id of a bed, seat or training dummy; null for other spots. A bed's output rate controls healing
+    /// (docs/game/character-stats.md "Beds").
+    /// </summary>
     public string? Record { get; init; }
-    /// <summary>A bed's position marker (<see cref="WorldObjectLayout.PositionMarker"/>) when its record flags a part for it; null: the bed's own position.</summary>
+    /// <summary>
+    /// A bed's position marker (<see cref="WorldObjectLayout.PositionMarker"/>) when its record flags a part for it; null: the bed's own position.
+    /// </summary>
     public Vector3? Marker { get; init; }
-    /// <summary>A node a goal may stand at: neither a bed, a seat nor a dummy.</summary>
+    /// <summary>
+    /// A node a goal may stand at: neither a bed, a seat nor a dummy.
+    /// </summary>
     public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
 
@@ -70,20 +117,34 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// origin and yaw): the pieces sitting around (275) can take besides the chairs in <see cref="Spots"/> (<see cref="SeatAt"/>). Kept apart from <see cref="Spots"/>, which are the home's nodes.
     /// </summary>
     public IReadOnlyList<HomeSpot> Furniture { get; init; } = [];
-    /// <summary>The seats of the building: <see cref="Spots"/> then <see cref="Furniture"/>, indexed together (what a seat claim names).</summary>
+    /// <summary>
+    /// The seats of the building: <see cref="Spots"/> then <see cref="Furniture"/>, indexed together (what a seat claim names).
+    /// </summary>
     public int SeatCount => Spots.Count + Furniture.Count;
     public HomeSpot SeatAt(int index) => index < Spots.Count ? Spots[index] : Furniture[index - Spots.Count];
-    /// <summary>The placement state's <c>owner faction ID</c> (a FACTION string id); null when the state names none (the town's faction owns it).</summary>
+    /// <summary>
+    /// The placement state's <c>owner faction ID</c> (a FACTION string id); null when the state names none (the town's faction owns it).
+    /// </summary>
     public string? OwnerFactionId { get; init; }
-    /// <summary>The cages, lockable containers and containers with an inventory of its interior layout (docs/game/locks.md "Data"), in layout order.</summary>
+    /// <summary>
+    /// The cages, lockable containers and containers with an inventory of its interior layout (docs/game/locks.md "Data"), in layout order.
+    /// </summary>
     public IReadOnlyList<TownFixture> Fixtures { get; init; } = [];
-    /// <summary>The loose-item slots of its interior layout (docs/game/factions-squads-towns.md "Loose items in buildings"), in layout order.</summary>
+    /// <summary>
+    /// The loose-item slots of its interior layout (docs/game/factions-squads-towns.md "Loose items in buildings"), in layout order.
+    /// </summary>
     public IReadOnlyList<TownItemSlot> ItemSlots { get; init; } = [];
-    /// <summary>The zone whose building list places it (instance ids repeat between zones).</summary>
+    /// <summary>
+    /// The zone whose building list places it (instance ids repeat between zones).
+    /// </summary>
     public ZoneCoordinate Zone { get; init; }
-    /// <summary>Its run-time name (<see cref="BuildingKey"/>): what fixtures, doors and the renderer's placements know it by.</summary>
+    /// <summary>
+    /// Its run-time name (<see cref="BuildingKey"/>): what fixtures, doors and the renderer's placements know it by.
+    /// </summary>
     public string Key => BuildingKey.Of(Zone, InstanceId);
-    /// <summary>The level placement it was resolved from (full rotation, record, state): what its indoor volume and lights are built from.</summary>
+    /// <summary>
+    /// The level placement it was resolved from (full rotation, record, state): what its indoor volume and lights are built from.
+    /// </summary>
     public ResolvedBuilding? Resolved { get; init; }
     /// <summary>
     /// Whether residents can be housed in it (docs/game/factions-squads-towns.md "Town residents"): a BUILDING with <c>interior</c> parts that does not
@@ -95,41 +156,78 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// docs/game/economy.md "Artifacts"; the name is its residents' since <see cref="ResidentRuins.Apply"/>). Without contents laid out: it has <c>interior</c> parts.
     /// </summary>
     public bool Furnished { get; init; }
-    /// <summary><c>is wall gate</c>: a town gate, housing only resident entries that name it in <c>building</c>.</summary>
+    /// <summary>
+    /// <c>is wall gate</c>: a town gate, housing only resident entries that name it in <c>building</c>.
+    /// </summary>
     public bool IsGate { get; init; }
-    /// <summary><c>links together</c>: a wall.</summary>
+    /// <summary>
+    /// <c>links together</c>: a wall.
+    /// </summary>
     public bool IsWall { get; init; }
-    /// <summary>The record lists <c>interior</c> references (the original's <c>Building::setup</c> makes <c>myInterior</c> only then).</summary>
+    /// <summary>
+    /// The record lists <c>interior</c> references (the original's <c>Building::setup</c> makes <c>myInterior</c> only then).
+    /// </summary>
     public bool HasInterior { get; init; }
-    /// <summary>The level-data state's <c>destroyed</c>: a ruin, which has no doors (docs/game/locks.md "Doors").</summary>
+    /// <summary>
+    /// The level-data state's <c>destroyed</c>: a ruin, which has no doors (docs/game/locks.md "Doors").
+    /// </summary>
     public bool Destroyed { get; init; }
-    /// <summary>A ruin only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it standing.</summary>
+    /// <summary>
+    /// A ruin only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it standing.
+    /// </summary>
     public bool RuinedByResidents { get; init; }
-    /// <summary>The level data's <c>residents template</c> of its state (a SQUAD_TEMPLATE id; empty when none).</summary>
+    /// <summary>
+    /// The level data's <c>residents template</c> of its state (a SQUAD_TEMPLATE id; empty when none).
+    /// </summary>
     public string ResidentsTemplate { get; init; } = "";
-    /// <summary>Its level-data GAMESTATE_BUILDING (null when it has none): the lock and door state it starts with when no save has one (docs/game/locks.md "Save keys").</summary>
+    /// <summary>
+    /// Its level-data GAMESTATE_BUILDING (null when it has none): the lock and door state it starts with when no save has one (docs/game/locks.md
+    /// "Save keys").
+    /// </summary>
     public GameRecord? LevelState { get; init; }
-    /// <summary>Its turret, when its record has a <c>BUILDING_FUNCTIONALITY</c> function BF_TURRET (a mounted harpoon turret or crossbow); null otherwise.</summary>
+    /// <summary>
+    /// Its turret, when its record has a <c>BUILDING_FUNCTIONALITY</c> function BF_TURRET (a mounted harpoon turret or crossbow); null otherwise.
+    /// </summary>
     public TurretPost? Turret { get; init; }
-    /// <summary>Its interior layout's name (the one its <see cref="Spots"/> come from: its residents', <see cref="LayoutName"/>); empty when none.</summary>
+    /// <summary>
+    /// Its interior layout's name (the one its <see cref="Spots"/> come from: its residents', <see cref="LayoutName"/>); empty when none.
+    /// </summary>
     public string InteriorLayout { get; init; } = "";
-    /// <summary>The interior and exterior layout names its level files give it, before any residents named theirs (<see cref="WorldLevelData.LevelLayoutNames"/>).</summary>
+    /// <summary>
+    /// The interior and exterior layout names its level files give it, before any residents named theirs
+    /// (<see cref="WorldLevelData.LevelLayoutNames"/>).
+    /// </summary>
     public (string Interior, string Exterior) LevelLayouts { get; init; } = ("", "");
-    /// <summary>The name and squad template its level files give it, before any residents named theirs (<see cref="WorldLevelData.LevelNames"/>).</summary>
+    /// <summary>
+    /// The name and squad template its level files give it, before any residents named theirs (<see cref="WorldLevelData.LevelNames"/>).
+    /// </summary>
     public BuildingNaming LevelNaming { get; init; } = new("", "");
-    /// <summary>The name and squad template a town override's housing gave it (<see cref="TownBuildings.Relay"/>); null leaves its state's.</summary>
+    /// <summary>
+    /// The name and squad template a town override's housing gave it (<see cref="TownBuildings.Relay"/>); null leaves its state's.
+    /// </summary>
     public BuildingNaming? Naming { get; init; }
-    /// <summary>The name of its interior or exterior layout now: its placement's (<see cref="TownBuildings.Relay"/>), else its level state's; "" for none.</summary>
+    /// <summary>
+    /// The name of its interior or exterior layout now: its placement's (<see cref="TownBuildings.Relay"/>), else its level state's; "" for none.
+    /// </summary>
     public string LayoutName(bool exterior) =>
         Resolved?.Placement.LayoutName(LevelState, exterior) ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
-    /// <summary>The names of the interior and exterior layouts its record can take (its own and those of <c>shares interiors with</c>), case ignored.</summary>
+    /// <summary>
+    /// The names of the interior and exterior layouts its record can take (its own and those of <c>shares interiors with</c>), case ignored.
+    /// </summary>
     public IReadOnlySet<string> InteriorLayouts { get; init; } = EmptyNames;
     public IReadOnlySet<string> ExteriorLayouts { get; init; } = EmptyNames;
-    /// <summary>Its interior layout's furniture of function BF_TABLE, BF_CORPSE_DISPOSAL or BF_REFINERY (the original's tables to sit at, docs/game/ai-tasks.md "Town goals"), in layout order.</summary>
+    /// <summary>
+    /// Its interior layout's furniture of function BF_TABLE, BF_CORPSE_DISPOSAL or BF_REFINERY (the original's tables to sit at,
+    /// docs/game/ai-tasks.md "Town goals"), in layout order.
+    /// </summary>
     public IReadOnlyList<Vector3> Tables { get; init; } = [];
-    /// <summary>Its own record's BUILDING_FUNCTIONALITY <c>function</c> (-1: none); a placed table is an outdoor table to sit at.</summary>
+    /// <summary>
+    /// Its own record's BUILDING_FUNCTIONALITY <c>function</c> (-1: none); a placed table is an outdoor table to sit at.
+    /// </summary>
     public int Function { get; init; } = -1;
-    /// <summary>A table placed on its own in the town (not inside a building): one squad's outdoor table to hang around at.</summary>
+    /// <summary>
+    /// A table placed on its own in the town (not inside a building): one squad's outdoor table to hang around at.
+    /// </summary>
     public bool IsOutdoorTable => Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction
         && !(LevelState?.GetBool("is inside building") ?? false);
     /// <summary>
@@ -148,12 +246,19 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
 /// </summary>
 public sealed record TownFixture(string Id, string RecordId, bool IsCage, Vector3 Position, float Yaw)
 {
-    /// <summary>Its BUILDING_FUNCTIONALITY <c>function</c> (-1: none).</summary>
+    /// <summary>
+    /// Its BUILDING_FUNCTIONALITY <c>function</c> (-1: none).
+    /// </summary>
     public int Function { get; init; } = -1;
-    /// <summary>A container with its own inventory (<c>has inventory</c>): its cells (<see cref="MachineData.StorageGrid"/>); 0 x 0 otherwise.</summary>
+    /// <summary>
+    /// A container with its own inventory (<c>has inventory</c>): its cells (<see cref="MachineData.StorageGrid"/>); 0 x 0 otherwise.
+    /// </summary>
     public int StorageWidth { get; init; }
     public int StorageHeight { get; init; }
-    /// <summary>Its stock is a building shop's (functions 2 BF_RESOURCE_STORAGE, 9 BF_SHOP, 13 BF_GENERAL_STORAGE with an inventory; <c>FUN_1409562f0</c>, docs/game/economy.md "Building shops").</summary>
+    /// <summary>
+    /// Its stock is a building shop's (functions 2 BF_RESOURCE_STORAGE, 9 BF_SHOP, 13 BF_GENERAL_STORAGE with an inventory; <c>FUN_1409562f0</c>,
+    /// docs/game/economy.md "Building shops").
+    /// </summary>
     public bool HoldsShopStock => StorageWidth > 0 && StorageHeight > 0 && Function is TownBuildings.ResourceStorageFunction or TownBuildings.ShopFunction or TownBuildings.GeneralStorageFunction;
 }
 
@@ -173,7 +278,9 @@ public sealed record TownItemSlot(string Id, string GroupId, Vector3 Position, Q
 public static class TownBuildings
 {
     public const int BedFunction = 6, SkeletonBedFunction = 25;
-    /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 8, BF_CAGE: cages, the prisoner pole, the peeler (docs/game/locks.md "Data").</summary>
+    /// <summary>
+    /// BUILDING_FUNCTIONALITY <c>function</c> 8, BF_CAGE: cages, the prisoner pole, the peeler (docs/game/locks.md "Data").
+    /// </summary>
     public const int CageFunction = 8;
 
     /// <summary>
@@ -182,7 +289,9 @@ public static class TownBuildings
     /// </summary>
     public static bool IsRack(GameRecord functionality) =>
         functionality.GetInt("function") == CageFunction && (functionality.GetReferences("produces").Count > 0 || functionality.GetInt("flags") != 0);
-    /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 21, BF_GATE (docs/game/buildings-production.md "Classes and functions").</summary>
+    /// <summary>
+    /// BUILDING_FUNCTIONALITY <c>function</c> 21, BF_GATE (docs/game/buildings-production.md "Classes and functions").
+    /// </summary>
     public const int GateFunction = 21;
 
     /// <summary>
@@ -191,15 +300,27 @@ public static class TownBuildings
     /// </summary>
     public static bool IsGate(GameDatabase db, GameRecord building, Dictionary<string, GameRecord?> cache) =>
         building.GetBool("is wall gate") || FunctionOf(db, building, cache)?.GetInt("function") == GateFunction;
-    /// <summary>BUILDING_FUNCTIONALITY <c>function</c> 17, BF_CHAIR: stools, benches, sitting pillows and spots (docs/game/ai-tasks.md "Town goals").</summary>
+    /// <summary>
+    /// BUILDING_FUNCTIONALITY <c>function</c> 17, BF_CHAIR: stools, benches, sitting pillows and spots (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
     public const int ChairFunction = 17;
-    /// <summary>BF_THRONE ("throne chair", sat on like a chair) and BF_TRAINING (a training dummy): the other furniture sitting around (275) takes (docs/game/ai-tasks.md "Town goals").</summary>
+    /// <summary>
+    /// BF_THRONE ("throne chair", sat on like a chair) and BF_TRAINING (a training dummy): the other furniture sitting around (275) takes
+    /// (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
     public const int ThroneFunction = 24, TrainingFunction = 7;
-    /// <summary>BF_MINE, BF_RESEARCH, BF_CRAFTING: with <see cref="RefineryFunction"/> and the chair and training function, the furniture staying home (43) operates in pretence (mask 0x2049a of <c>FUN_1408cbc00</c>).</summary>
+    /// <summary>
+    /// BF_MINE, BF_RESEARCH, BF_CRAFTING: with <see cref="RefineryFunction"/> and the chair and training function, the furniture staying home (43)
+    /// operates in pretence (mask 0x2049a of <c>FUN_1408cbc00</c>).
+    /// </summary>
     public const int MineFunction = 1, ResearchFunction = 3, CraftingFunction = 10;
-    /// <summary>BF_TABLE, BF_CORPSE_DISPOSAL, BF_REFINERY: what a free seat faces (<see cref="SeatYaw"/>).</summary>
+    /// <summary>
+    /// BF_TABLE, BF_CORPSE_DISPOSAL, BF_REFINERY: what a free seat faces (<see cref="SeatYaw"/>).
+    /// </summary>
     public const int TableFunction = 16, CorpseDisposalFunction = 11, RefineryFunction = 4;
-    /// <summary>BF_RESOURCE_STORAGE, BF_SHOP, BF_GENERAL_STORAGE: the containers a building shop's stock goes into (<see cref="TownFixture.HoldsShopStock"/>).</summary>
+    /// <summary>
+    /// BF_RESOURCE_STORAGE, BF_SHOP, BF_GENERAL_STORAGE: the containers a building shop's stock goes into (<see cref="TownFixture.HoldsShopStock"/>).
+    /// </summary>
     public const int ResourceStorageFunction = 2, ShopFunction = 9, GeneralStorageFunction = 13;
 
     /// <summary>
@@ -248,7 +369,10 @@ public static class TownBuildings
                     _instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
         }
 
-        /// <summary>The town building of a level building and the placement id of its town; null for a node marker, a resource building or one no town takes (<see cref="MemberOf"/>).</summary>
+        /// <summary>
+        /// The town building of a level building and the placement id of its town; null for a node marker, a resource building or one no town takes
+        /// (<see cref="MemberOf"/>).
+        /// </summary>
         public (string Town, TownBuilding Building)? Build(BuildingPlacement b)
         {
             if (BuildingPlacements.Resolve(b, _db, _levels, _terrainHeight) is not { } resolved) return null;
@@ -327,7 +451,9 @@ public static class TownBuildings
         };
     }
 
-    /// <summary>What a building's layouts put in it (<see cref="TownBuilding"/>'s spots, fixtures, item slots, tables, furniture, shop and bar flags).</summary>
+    /// <summary>
+    /// What a building's layouts put in it (<see cref="TownBuilding"/>'s spots, fixtures, item slots, tables, furniture, shop and bar flags).
+    /// </summary>
     sealed class Contents
     {
         public List<HomeSpot> Spots = [];
@@ -410,7 +536,9 @@ public static class TownBuildings
             };
     }
 
-    /// <summary>A cage, a lockable object or a container with an inventory of the interior layout (<see cref="TownFixture"/>); nothing for anything else.</summary>
+    /// <summary>
+    /// A cage, a lockable object or a container with an inventory of the interior layout (<see cref="TownFixture"/>); nothing for anything else.
+    /// </summary>
     static void AddFixture(GameDatabase db, Dictionary<string, GameRecord?> functions, LayoutItem item, string id, Vector3 at, Quaternion rotation, Contents c)
     {
         var itemFn = FunctionOf(db, item.Building, functions)?.GetInt("function");
@@ -424,7 +552,9 @@ public static class TownBuildings
         });
     }
 
-    /// <summary>Standing alone in the town, a chair, throne or dummy is a piece of furniture itself.</summary>
+    /// <summary>
+    /// Standing alone in the town, a chair, throne or dummy is a piece of furniture itself.
+    /// </summary>
     static void AddAlone(GameDatabase db, ResolvedBuilding resolved, GameRecord? functionality, Contents c)
     {
         if (functionality is not null && FurnitureOf(db, resolved.Record, functionality, resolved.Position, YawOf(resolved.Placement.Rotation)) is { } alone)
@@ -480,10 +610,14 @@ public static class TownBuildings
         return best;
     }
 
-    /// <summary>A building with an interior outside every town's radius goes to the nearest town within this distance (the import's squared bound 1e8).</summary>
+    /// <summary>
+    /// A building with an interior outside every town's radius goes to the nearest town within this distance (the import's squared bound 1e8).
+    /// </summary>
     const float InteriorReach = 10000;
 
-    /// <summary>The key of the building a state's <c>mounted</c> handle names; null when the handle is null, not a building, or unknown.</summary>
+    /// <summary>
+    /// The key of the building a state's <c>mounted</c> handle names; null when the handle is null, not a building, or unknown.
+    /// </summary>
     static string? MountedOn(Dictionary<(int C, int I), string> instances, GameRecord? state) =>
         state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("mountedI") &&
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
@@ -500,7 +634,9 @@ public static class TownBuildings
         _ => NodeKind(node.Name) is var named && named is HomeSpotKind.Bar or HomeSpotKind.Throne ? named : HomeSpotKind.Other,
     };
 
-    /// <summary>The layout names a building record can take (case ignored), cached by record and side; empty without layouts.</summary>
+    /// <summary>
+    /// The layout names a building record can take (case ignored), cached by record and side; empty without layouts.
+    /// </summary>
     static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior, Dictionary<(string, bool), IReadOnlySet<string>> cache)
     {
         if (layouts is null) return new HashSet<string>();
@@ -509,7 +645,9 @@ public static class TownBuildings
         return set;
     }
 
-    /// <summary>The kind of a node from its record's name (case ignored).</summary>
+    /// <summary>
+    /// The kind of a node from its record's name (case ignored).
+    /// </summary>
     public static HomeSpotKind NodeKind(string name) =>
         name.Contains("shop", StringComparison.OrdinalIgnoreCase) ? HomeSpotKind.Shopkeeper
         : name.Contains("guard", StringComparison.OrdinalIgnoreCase) ? HomeSpotKind.Guard
@@ -517,7 +655,9 @@ public static class TownBuildings
         : name.Contains("bar", StringComparison.OrdinalIgnoreCase) ? HomeSpotKind.Bar
         : HomeSpotKind.General;
 
-    /// <summary>A BUILDING with a BUILDING_FUNCTIONALITY record of function BED or SKELETON_BED in any of its reference lists (cached by id).</summary>
+    /// <summary>
+    /// A BUILDING with a BUILDING_FUNCTIONALITY record of function BED or SKELETON_BED in any of its reference lists (cached by id).
+    /// </summary>
     public static bool IsBed(GameDatabase db, GameRecord building, Dictionary<string, bool> cache)
     {
         if (cache.TryGetValue(building.StringId, out bool known)) return known;
@@ -573,7 +713,9 @@ public static class TownBuildings
         return MathF.Atan2(reflected.X, reflected.Z);
     }
 
-    /// <summary>The simulation's yaw (0 along +Z, turning towards +X) of a rotation.</summary>
+    /// <summary>
+    /// The simulation's yaw (0 along +Z, turning towards +X) of a rotation.
+    /// </summary>
     public static float YawOf(Quaternion rotation)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);

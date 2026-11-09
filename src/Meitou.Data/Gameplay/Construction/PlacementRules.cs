@@ -2,44 +2,65 @@ using System.Numerics;
 
 namespace Meitou.Data.Gameplay.Construction;
 
-/// <summary>Why a ghost may not be placed: one value per message of docs/game/buildings-production.md "Placement", plus the data checks of the engine.</summary>
+/// <summary>
+/// Why a ghost may not be placed: one value per message of docs/game/buildings-production.md "Placement", plus the data checks of the engine.
+/// </summary>
 public enum PlacementFailure : byte
 {
     None,
     TooCloseToTown, NotOwnedBuilding, NoResources, CropWillNotGrow, InsideIncomplete, MustBeOutside, MustBeInside, NeedsSnapNode,
     TooCloseToBuilding, NoValidUsageNodes, CharactersInTheWay, BlocksUseNodes, InvalidGround, InvalidFloor, NotLevel,
-    /// <summary>Engine: the record is not a BUILDING or not research-unlocked.</summary>
+
+    /// <summary>
+    /// Engine: the record is not a BUILDING or not research-unlocked.
+    /// </summary>
     NotAvailable,
 }
 
 /// <summary>
-/// A ghost's resource reading (<see cref="PlacementRules.Readout"/>): the MiningResource, its value 0..1, and for a farm the crop yield and the environment's names (empty indoors).
+/// A ghost's resource reading (<see cref="PlacementRules.Readout"/>): the MiningResource, its value 0..1, and for a farm the crop yield and the
+/// environment's names (empty indoors).
 /// </summary>
 public sealed record PlacementReadout(int Resource, float Value, float? CropYield = null, IReadOnlyList<string>? Environment = null);
 
-/// <summary>A placed town as the placement rules see it.</summary>
+/// <summary>
+/// A placed town as the placement rules see it.
+/// </summary>
 public readonly record struct PlacementTown(TownData Town, Vector2 Position);
 
 /// <summary>
-/// The deterministic half of the placement checks (docs/simulation.md "Buildings"): pure functions of the data, run by the host for the ghost and again by the
-/// simulation on <c>PlaceBuildings</c> (the town block; <see cref="ResourceBlock"/> is the host's only). The geometric half lives in the host.
+/// The deterministic half of the placement checks (docs/simulation.md "Buildings"): pure functions of the data, run by the host for the ghost and
+/// again by the simulation on <c>PlaceBuildings</c> (the town block; <see cref="ResourceBlock"/> is the host's only). The geometric half lives in the
+/// host.
 /// </summary>
 public static class PlacementRules
 {
-    /// <summary>A building that creates a player town keeps at least this far from any town centre (<b>Verified</b>, <c>FUN_140926eb0</c>).</summary>
+    /// <summary>
+    /// A building that creates a player town keeps at least this far from any town centre (<b>Verified</b>, <c>FUN_140926eb0</c>).
+    /// </summary>
     public const float OutpostMinimumDistance = 2000;
 
-    /// <summary>The block radius multiple of a building that creates a player town: 2.5 of the town's radius, 1 for ruins and points of interest.</summary>
+    /// <summary>
+    /// The block radius multiple of a building that creates a player town: 2.5 of the town's radius, 1 for ruins and points of interest.
+    /// </summary>
     public const float OutpostRadiusFactor = 2.5f;
 
     /// <summary>
-    /// The town block of docs/game/buildings-production.md "Placement" (Towns): a town of another faction blocks within its radius (<see cref="TownData.Radius"/>, 0 for a null town
-    /// which then blocks only outposts); a building that creates a player town within 2.5 x that radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/>
-    /// of the centre. Nest markers (never a candidate, <c>FUN_140927f10</c>) and towns of the player's faction never block, nor does any town for interior furniture or a node
-    /// standing in a building it may be built in (<paramref name="inOwnedBuilding"/>, <see cref="MayBuildIn"/>; <c>FUN_1404dba40</c>). <see cref="PlacementFailure.NotOwnedBuilding"/>
-    /// (the second text of the first row) is the host's: it needs the building under the ghost.
+    /// The minimum resource value or crop yield below which a mine or farm is refused (<b>Verified</b>, docs/game/buildings-production.md
+    /// "Placement").
     /// </summary>
-    public static PlacementFailure TownBlock(BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId, bool inOwnedBuilding = false)
+    public const float MinimumYield = 0.01f;
+
+    /// <summary>
+    /// The town block of docs/game/buildings-production.md "Placement" (Towns): a town of another faction blocks within its radius
+    /// (<see cref="TownData.Radius"/>, 0 for a null town which then blocks only outposts); a building that creates a player town within 2.5 x that
+    /// radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/> of the centre. Nest markers (never a candidate,
+    /// <c>FUN_140927f10</c>) and towns of the player's faction never block, nor does any town for interior furniture or a node standing in a building
+    /// it may be built in (<paramref name="inOwnedBuilding"/>, <see cref="MayBuildIn"/>; <c>FUN_1404dba40</c>).
+    /// <see cref="PlacementFailure.NotOwnedBuilding"/> (the second text of the first row) is the host's: it needs the building under the ghost.
+    /// </summary>
+    public static PlacementFailure TownBlock(
+        BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId, bool inOwnedBuilding = false)
     {
         ArgumentNullException.ThrowIfNull(building);
         ArgumentNullException.ThrowIfNull(towns);
@@ -50,21 +71,31 @@ public static class PlacementRules
             var town = placed.Town;
             if (town.Type == TownType.NestMarker) continue;
             if (playerFactionId.Length > 0 && town.Faction == playerFactionId) continue;
-            float radius = town.Radius;
-            float limit = radius;
-            if (building.CreatesPlayerTown)
-            {
-                float factor = town.Type is TownType.Ruins or TownType.PointOfInterest ? 1 : OutpostRadiusFactor;
-                limit = MathF.Max(factor * radius, OutpostMinimumDistance);
-            }
+
+            float limit = OutpostLimit(building, town);
             if (Vector2.DistanceSquared(at, placed.Position) < limit * limit) return PlacementFailure.TooCloseToTown;
         }
+
         return PlacementFailure.None;
     }
 
     /// <summary>
-    /// Whether a ghost may stand in a level building (<b>Verified</b> by decompile, <c>FUN_1404d69c0</c>): one a player faction owns; else, for a ghost that does not create a
-    /// player town, a ruin or one whose owner faction is <c>not real</c> (a building without an owner has "nofac", which is).
+    /// The distance a town blocks at for a building: its radius, or for an outpost the larger of its scaled radius and
+    /// <see cref="OutpostMinimumDistance"/>.
+    /// </summary>
+    static float OutpostLimit(BuildingBuildData building, TownData town)
+    {
+        float radius = town.Radius;
+        if (!building.CreatesPlayerTown) return radius;
+
+        float factor = town.Type is TownType.Ruins or TownType.PointOfInterest ? 1 : OutpostRadiusFactor;
+        return MathF.Max(factor * radius, OutpostMinimumDistance);
+    }
+
+    /// <summary>
+    /// Whether a ghost may stand in a level building (<b>Verified</b> by decompile, <c>FUN_1404d69c0</c>): one a player faction owns; else, for a
+    /// ghost that does not create a player town, a ruin or one whose owner faction is <c>not real</c> (a building without an owner has "nofac", which
+    /// is).
     /// </summary>
     public static bool MayBuildIn(BuildingBuildData building, bool playerOwned, bool destroyed, bool ownerNotReal)
     {
@@ -72,45 +103,56 @@ public static class PlacementRules
         return playerOwned || !building.CreatesPlayerTown && (destroyed || ownerNotReal);
     }
 
-    /// <summary>The resource value or crop yield below which a mine or farm is refused (<b>Verified</b>, docs/game/buildings-production.md "Placement").</summary>
-    public const float MinimumYield = 0.01f;
-
     /// <summary>
-    /// What the ghost of a mine, well or farm reads at <paramref name="at"/> (docs/game/buildings-production.md "Placement", the resource popup): the resource's value clamped to 0..1
-    /// (<see cref="ResourceField.Yield"/>; a farm's the fertility factor of the ground's), and for a farm the crop yield (fertility factor x crop match) and its environment.
-    /// Null for other buildings, without an areas map, or for IRON, COPPER and CARBON without known rocks (nothing is shown or refused then).
+    /// What the ghost of a mine, well or farm reads at <paramref name="at"/> (docs/game/buildings-production.md "Placement", the resource popup): the
+    /// resource's value clamped to 0..1 (<see cref="ResourceField.Yield"/>; a farm's the fertility factor of the ground's), and for a farm the crop
+    /// yield (fertility factor x crop match) and its environment. Null for other buildings, without an areas map, or for IRON, COPPER and CARBON
+    /// without known rocks (nothing is shown or refused then).
     /// </summary>
     public static PlacementReadout? Readout(MachineData? machine, ResourceField field, Vector3 at)
     {
         ArgumentNullException.ThrowIfNull(field);
         if (machine is null || !field.HasMap) return null;
+
         if (machine.Farm is { } farm)
         {
-            float fertility = farm.FertilityFactor(Math.Clamp(field.Value(MachineData.GroundResource, at.X, at.Y, at.Z), 0, 1));
-            return new(MachineData.GroundResource, fertility, fertility * field.CropMatch(farm, at.X, at.Z, farm.Indoor), farm.Indoor ? [] : Environment(field.Coverage(at.X, at.Z)));
+            float ground = Math.Clamp(field.Value(MachineData.GroundResource, at.X, at.Y, at.Z), 0, 1);
+            float fertility = farm.FertilityFactor(ground);
+            float cropYield = fertility * field.CropMatch(farm, at.X, at.Z, farm.Indoor);
+            IReadOnlyList<string>? environment = farm.Indoor ? [] : Environment(field.Coverage(at.X, at.Z));
+            return new(MachineData.GroundResource, fertility, cropYield, environment);
         }
+
         if (machine.Resource == 0 || machine.Function == MachineData.NaturalMineFunction) return null;
-        if (!field.HasNodes && machine.Resource is ResourceField.IronResource or ResourceField.CopperResource or ResourceField.CarbonResource) return null;
+
+        bool rockResource = machine.Resource is ResourceField.IronResource or ResourceField.CopperResource or ResourceField.CarbonResource;
+        if (!field.HasNodes && rockResource) return null;
+
         return new(machine.Resource, Math.Clamp(field.Yield(machine.Resource, at), 0, 1));
     }
 
     /// <summary>
-    /// The environment line's names (<b>Observed</b>, <c>FUN_1404d9ea0</c>): of Green, Arid and Swamp (map keys 1, 2, 3) the first with the largest coverage, and the next with the
-    /// same coverage after it; "Dead" when the largest is below 0.1.
+    /// The environment line's names (<b>Observed</b>, <c>FUN_1404d9ea0</c>): of Green, Arid and Swamp (map keys 1, 2, 3) the first with the largest
+    /// coverage, and the next with the same coverage after it; "Dead" when the largest is below 0.1.
     /// </summary>
     static string[] Environment((float Green, float Arid, float Swamp) c)
     {
         (string Name, float Value)[] all = [("Green", c.Green), ("Arid", c.Arid), ("Swamp", c.Swamp)];
         int top = 0;
-        for (int i = 1; i < all.Length; i++) if (all[i].Value > all[top].Value) top = i;
+        for (int i = 1; i < all.Length; i++)
+            if (all[i].Value > all[top].Value) top = i;
+
         if (all[top].Value < 0.1f) return ["Dead"];
-        for (int i = top + 1; i < all.Length; i++) if (all[i].Value == all[top].Value) return [all[top].Name, all[i].Name];
+
+        for (int i = top + 1; i < all.Length; i++)
+            if (all[i].Value == all[top].Value) return [all[top].Name, all[i].Name];
+
         return [all[top].Name];
     }
 
     /// <summary>
-    /// The resource row of docs/game/buildings-production.md "Placement": a farm whose fertility or crop yield, or another building whose resource value, is below
-    /// <see cref="MinimumYield"/>. None without a readout.
+    /// The resource row of docs/game/buildings-production.md "Placement": a farm whose fertility or crop yield, or another building whose resource
+    /// value, is below <see cref="MinimumYield"/>. None without a readout.
     /// </summary>
     public static PlacementFailure ResourceBlock(PlacementReadout? readout) => readout switch
     {
@@ -119,7 +161,10 @@ public static class PlacementRules
         _ => PlacementFailure.None,
     };
 
-    /// <summary>The text the original shows for a failure ("" for <see cref="PlacementFailure.None"/>); the engine's own for <see cref="PlacementFailure.NotAvailable"/>.</summary>
+    /// <summary>
+    /// The text the original shows for a failure ("" for <see cref="PlacementFailure.None"/>); the engine's own for
+    /// <see cref="PlacementFailure.NotAvailable"/>.
+    /// </summary>
     public static string Message(PlacementFailure failure) => failure switch
     {
         PlacementFailure.None => "",

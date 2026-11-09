@@ -2,29 +2,38 @@ using Meitou.Content;
 
 namespace Meitou.Data.Ogre;
 
-/// <summary>One resource location: <c>FileSystem=./data/materials</c> under a <c>[Group]</c> of <c>resources.cfg</c>, or a mod folder.</summary>
+/// <summary>
+/// One resource location: <c>FileSystem=./data/materials</c> under a <c>[Group]</c> of <c>resources.cfg</c>, or a mod folder.
+/// </summary>
 public sealed record OgreResourceLocation(string Group, string Type, string Path);
 
 /// <summary>
-/// Ogre's resource locations as Kenshi registers them (docs/formats/ogre-material.md, "Resource locations"), with a
-/// by-name index per resource group. Ogre looks resources up by bare file name (case-insensitive on Windows'
-/// FileSystem archive); locations are not recursive; within a group the last-added location wins a name.
+/// Ogre's resource locations as Kenshi registers them (docs/formats/ogre-material.md, "Resource locations"), with a by-name index per resource group.
+/// Ogre looks resources up by bare file name (case-insensitive on Windows' FileSystem archive); locations are not recursive; within a group the
+/// last-added location wins a name.
 /// </summary>
 public sealed class OgreScriptResources
 {
-    /// <summary>Script patterns in the order Ogre's ScriptCompilerManager registers them (all files of one, then the next).</summary>
+    /// <summary>
+    /// Script patterns in the order Ogre's ScriptCompilerManager registers them (all files of one, then the next).
+    /// </summary>
     public static readonly string[] ScriptPatterns = ["*.program", "*.material", "*.particle", "*.compositor", "*.os"];
 
-    /// <summary>Ogre's own groups, which exist besides the configured ones (normally empty).</summary>
+    /// <summary>
+    /// Ogre's own groups, which exist besides the configured ones (normally empty).
+    /// </summary>
     static readonly string[] BuiltInGroups = ["Autodetect", "Internal"];
 
-    /// <summary>Mod sub-folders Kenshi does not register (relative to the mod folder).</summary>
+    /// <summary>
+    /// Mod sub-folders Kenshi does not register (relative to the mod folder).
+    /// </summary>
     static readonly string[] SkippedModFolders = ["leveldata", "newland/leveldata", "locale", "LC_MESSAGES"];
 
     // Group -> bare name -> path. Groups in ordinal order, as Ogre's std::map keeps them.
     readonly SortedDictionary<string, Dictionary<string, string>> _groups = new(StringComparer.Ordinal);
 
-    // The same files by exact-case name (Ogre's case-sensitive index, which a lookup tries before the lower-case one: OgreMain ResourceGroupManager::openResource);
+    // The same files by exact-case name (Ogre's case-sensitive index, which a lookup tries before the lower-case one: OgreMain
+    // ResourceGroupManager::openResource);
     // a name registered later overwrites an earlier one, as in the other index.
     readonly Dictionary<string, Dictionary<string, string>> _exact = new(StringComparer.Ordinal);
 
@@ -32,25 +41,31 @@ public sealed class OgreScriptResources
     readonly Dictionary<string, string> _folderGroups = new(StringComparer.OrdinalIgnoreCase);
     bool _recursive;
 
-    /// <summary>Folder that script names in diagnostics are relative to (the install, or the indexed folder).</summary>
+    /// <summary>
+    /// Folder that script names in diagnostics are relative to (the install, or the indexed folder).
+    /// </summary>
     public string Root { get; private init; } = "";
 
-    /// <summary>Indexed locations in registration order.</summary>
+    /// <summary>
+    /// Indexed locations in registration order.
+    /// </summary>
     public List<OgreResourceLocation> Locations { get; } = [];
 
     /// <summary>
-    /// Locations Kenshi registers that are not indexed here: folders missing on disk (empty for Ogre too) and
-    /// non-FileSystem locations (<c>Zip=./data/meshes/OgreCore.zip</c>, Ogre's own overlay media).
+    /// Locations Kenshi registers that are not indexed here: folders missing on disk (empty for Ogre too) and non-FileSystem locations
+    /// (<c>Zip=./data/meshes/OgreCore.zip</c>, Ogre's own overlay media).
     /// </summary>
     public List<OgreResourceLocation> Skipped { get; } = [];
 
-    /// <summary>Resource groups in ordinal order (Ogre's search order for a name not in the requested group).</summary>
+    /// <summary>
+    /// Resource groups in ordinal order (Ogre's search order for a name not in the requested group).
+    /// </summary>
     public IEnumerable<string> Groups => _groups.Keys;
 
     /// <summary>
-    /// Reads <c>resources.cfg</c> the way Kenshi registers it: sections in ordinal name order, lines within a section
-    /// by type then file order, and the first <c>/land</c> of a path rewritten to <c>/newland/land</c>. Relative
-    /// paths are resolved against <paramref name="root"/> (the install folder).
+    /// Reads <c>resources.cfg</c> the way Kenshi registers it: sections in ordinal name order, lines within a section by type then file order, and
+    /// the first <c>/land</c> of a path rewritten to <c>/newland/land</c>. Relative paths are resolved against <paramref name="root"/> (the install
+    /// folder).
     /// </summary>
     public static OgreScriptResources ReadConfig(string configFile, string root)
     {
@@ -63,7 +78,11 @@ public sealed class OgreScriptResources
         {
             var line = raw.Trim();
             if (line.Length == 0 || line[0] == '#') continue;
-            if (line[0] == '[' && line[^1] == ']') { section = line[1..^1]; continue; }
+            if (line[0] == '[' && line[^1] == ']')
+            {
+                section = line[1..^1];
+                continue;
+            }
             int sep = line.IndexOfAny(['\t', ':', '=']);
             if (sep <= 0) continue;
             if (!sections.TryGetValue(section, out var lines)) sections[section] = lines = [];
@@ -84,9 +103,9 @@ public sealed class OgreScriptResources
     }
 
     /// <summary>
-    /// <c>resources.cfg</c>, then the active language's folder <c>locale/&lt;code&gt;</c> (<b>Verified</b> <c>Ogre_RegisterResourceLocations</c>: it heads
-    /// the list of mod folders, so its fonts, <c>tips.txt</c> and <c>names*.txt</c> replace the base game's and a mod's replace its own), then the folders of
-    /// the mods in <paramref name="loadOrder"/> (core files excluded), as <see cref="AddModFolder"/> registers them.
+    /// <c>resources.cfg</c>, then the active language's folder <c>locale/&lt;code&gt;</c> (<b>Verified</b> <c>Ogre_RegisterResourceLocations</c>: it
+    /// heads the list of mod folders, so its fonts, <c>tips.txt</c> and <c>names*.txt</c> replace the base game's and a mod's replace its own), then
+    /// the folders of the mods in <paramref name="loadOrder"/> (core files excluded), as <see cref="AddModFolder"/> registers them.
     /// </summary>
     public static OgreScriptResources ForInstall(GameInstall install, LoadOrder loadOrder)
     {
@@ -99,32 +118,35 @@ public sealed class OgreScriptResources
     }
 
     /// <summary>
-    /// Registers a mod folder like Kenshi: every sub-folder (any depth, sorted) that directly holds a file becomes a
-    /// location in the group of the matching <c>resources.cfg</c> folder (or its nearest listed parent; else
-    /// <c>General</c>), skipping <c>leveldata</c>, <c>newland/leveldata</c>, <c>locale</c> and <c>LC_MESSAGES</c>; the
-    /// mod folder itself joins <c>General</c> if it directly holds a file other than <c>_*</c>, <c>*.mod</c> and
-    /// <c>*.translation</c>.
+    /// Registers a mod folder like Kenshi: every sub-folder (any depth, sorted) that directly holds a file becomes a location in the group of the
+    /// matching <c>resources.cfg</c> folder (or its nearest listed parent; else <c>General</c>), skipping <c>leveldata</c>, <c>newland/leveldata</c>,
+    /// <c>locale</c> and <c>LC_MESSAGES</c>; the mod folder itself joins <c>General</c> if it directly holds a file other than <c>_*</c>,
+    /// <c>*.mod</c> and <c>*.translation</c>.
     /// </summary>
     public void AddModFolder(string modRoot)
     {
         modRoot = Path.GetFullPath(modRoot);
         if (!Directory.Exists(modRoot)) return;
         bool rootHasResources = Directory.EnumerateFiles(modRoot).Select(Path.GetFileName).Any(f =>
-            !f!.StartsWith('_') && !f.EndsWith(".mod", StringComparison.OrdinalIgnoreCase) && !f.EndsWith(".translation", StringComparison.OrdinalIgnoreCase));
+            !f!.StartsWith('_') && !f.EndsWith(".mod", StringComparison.OrdinalIgnoreCase)
+                && !f.EndsWith(".translation", StringComparison.OrdinalIgnoreCase));
         if (rootHasResources)
             Add(new OgreResourceLocation("General", "FileSystem", modRoot));
 
         foreach (var folder in Directory.EnumerateDirectories(modRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
         {
             var relative = Normalize(Path.GetRelativePath(modRoot, folder));
-            if (SkippedModFolders.Any(s => relative.Equals(s, StringComparison.OrdinalIgnoreCase) || relative.StartsWith(s + "/", StringComparison.OrdinalIgnoreCase)))
+            if (SkippedModFolders.Any(s => relative.Equals(s, StringComparison.OrdinalIgnoreCase)
+                || relative.StartsWith(s + "/", StringComparison.OrdinalIgnoreCase)))
                 continue;
             if (!Directory.EnumerateFiles(folder).Any()) continue;
             Add(new OgreResourceLocation(GroupOf(relative), "FileSystem", folder));
         }
     }
 
-    /// <summary>An index over every file below <paramref name="directory"/> in one group (first path wins for a repeated name).</summary>
+    /// <summary>
+    /// An index over every file below <paramref name="directory"/> in one group (first path wins for a repeated name).
+    /// </summary>
     public static OgreScriptResources FromDirectory(string directory)
     {
         var result = new OgreScriptResources { _recursive = true, Root = Path.GetFullPath(directory) };
@@ -140,8 +162,8 @@ public sealed class OgreScriptResources
     }
 
     /// <summary>
-    /// The path of a resource by bare file name, or null: from <paramref name="group"/> if it has it, else from the
-    /// first group (ordinal order) that does, as Ogre's <c>openResource</c> searches.
+    /// The path of a resource by bare file name, or null: from <paramref name="group"/> if it has it, else from the first group (ordinal order) that
+    /// does, as Ogre's <c>openResource</c> searches.
     /// </summary>
     public string? Find(string name, string? group = null)
     {
@@ -153,14 +175,18 @@ public sealed class OgreScriptResources
         return null;
     }
 
-    /// <summary>One group's index: the exact-case name first, then the case-insensitive one (<b>Verified</b> OgreMain <c>openResource</c>, <c>addToIndex</c>).</summary>
+    /// <summary>
+    /// One group's index: the exact-case name first, then the case-insensitive one (<b>Verified</b> OgreMain <c>openResource</c>, <c>addToIndex</c>).
+    /// </summary>
     string? Lookup(string group, Dictionary<string, string> insensitive, string name) =>
         _exact.TryGetValue(group, out var sensitive) && sensitive.TryGetValue(name, out var hit) ? hit
         : insensitive.TryGetValue(name, out hit) ? hit : null;
 
     public bool Contains(string name) => Find(name) is not null;
 
-    /// <summary>Whether <paramref name="group"/> itself has <paramref name="name"/> (Ogre's <c>resourceExists(group, name)</c>, no other group searched).</summary>
+    /// <summary>
+    /// Whether <paramref name="group"/> itself has <paramref name="name"/> (Ogre's <c>resourceExists(group, name)</c>, no other group searched).
+    /// </summary>
     public bool Contains(string name, string group) => _groups.TryGetValue(group, out var index) && Lookup(group, index, name) is not null;
 
     /// <summary>
@@ -178,9 +204,9 @@ public sealed class OgreScriptResources
     }
 
     /// <summary>
-    /// Script files in Kenshi's parse order: group <c>GUI</c> first, then the other groups in ordinal order; within a
-    /// group pattern by pattern, then location by location, then by file name. A file in two locations is returned
-    /// for each. For <see cref="FromDirectory"/> indexes the folder is searched recursively.
+    /// Script files in Kenshi's parse order: group <c>GUI</c> first, then the other groups in ordinal order; within a group pattern by pattern, then
+    /// location by location, then by file name. A file in two locations is returned for each. For <see cref="FromDirectory"/> indexes the folder is
+    /// searched recursively.
     /// </summary>
     public IEnumerable<string> ScriptFiles(params string[] patterns)
     {
@@ -192,7 +218,9 @@ public sealed class OgreScriptResources
                         yield return file;
     }
 
-    /// <summary>Text of a script by bare name, for <c>import</c> (searched across groups; Ogre would try the importing script's group first).</summary>
+    /// <summary>
+    /// Text of a script by bare name, for <c>import</c> (searched across groups; Ogre would try the importing script's group first).
+    /// </summary>
     public string? ReadScript(string name) => Find(name) is { } path ? OgreScriptLexer.ReadText(path) : null;
 
     void Add(OgreResourceLocation location)
@@ -223,7 +251,9 @@ public sealed class OgreScriptResources
         return "General";
     }
 
-    /// <summary>Kenshi's rewrite of <c>resources.cfg</c> paths: <c>newland/</c> inserted after the first <c>/land</c>'s slash.</summary>
+    /// <summary>
+    /// Kenshi's rewrite of <c>resources.cfg</c> paths: <c>newland/</c> inserted after the first <c>/land</c>'s slash.
+    /// </summary>
     static string RewriteLand(string path)
     {
         int at = path.Length > 4 ? path.IndexOf("/land", StringComparison.Ordinal) : -1;

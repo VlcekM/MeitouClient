@@ -12,10 +12,15 @@ namespace Meitou.Data.Save;
 /// </summary>
 public sealed partial class SaveGame
 {
-    /// <summary>The game version the saves are written as (<see cref="SaveCamera.Version"/>); the original refuses nothing at or above 0.99.99.</summary>
+    /// <summary>
+    /// The game version the saves are written as (<see cref="SaveCamera.Version"/>); the original refuses nothing at or above 0.99.99.
+    /// </summary>
     public const string GameVersion = "1.0.68";
 
-    /// <summary>The first slot lists 2 and 3 of a new <c>quick.save</c>: every zone container 1..4096 (all saves seen hold at least these, docs/formats/save.md).</summary>
+    /// <summary>
+    /// The first slot lists 2 and 3 of a new <c>quick.save</c>: every zone container 1..4096 (all saves seen hold at least these,
+    /// docs/formats/save.md).
+    /// </summary>
     public const int ZoneContainerCount = WorldLayout.ZoneCount * WorldLayout.ZoneCount;
 
     public SaveFile Quick { get; }
@@ -25,18 +30,27 @@ public sealed partial class SaveGame
     public List<SavePlatoon> Platoons { get; } = [];
     public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
 
-    /// <summary>The two INSTANCE_COLLECTIONs of <c>quick.save</c>: the player's faction, then every other faction (each instance targets a GAMESTATE_FACTION).</summary>
+    /// <summary>
+    /// The two INSTANCE_COLLECTIONs of <c>quick.save</c>: the player's faction, then every other faction (each instance targets a GAMESTATE_FACTION).
+    /// </summary>
     public List<FcsRecord> FactionCollections { get; } = [];
-    /// <summary>The GAMESTATE_TOWN_INSTANCE_LIST of <c>quick.save</c>: the towns made in play (nests, player outposts), each with its GAMESTATE_TOWN state. Set by a writer that adds one.</summary>
+    /// <summary>
+    /// The GAMESTATE_TOWN_INSTANCE_LIST of <c>quick.save</c>: the towns made in play (nests, player outposts), each with its GAMESTATE_TOWN state.
+    /// Set by a writer that adds one.
+    /// </summary>
     public FcsRecord? TownInstanceList { get; set; }
     public FcsRecord? Biomes { get; private set; }
     public FcsRecord? Research { get; private set; }
     public FcsRecord? Decals { get; private set; }
 
-    /// <summary>The <c>5-redirect</c> SAVED_STATE (old and new character handles), when the save has one.</summary>
+    /// <summary>
+    /// The <c>5-redirect</c> SAVED_STATE (old and new character handles), when the save has one.
+    /// </summary>
     public FcsRecord? Redirect { get; private set; }
 
-    /// <summary>The bytes of <c>portraits_texture.png</c>, if the save has one.</summary>
+    /// <summary>
+    /// The bytes of <c>portraits_texture.png</c>, if the save has one.
+    /// </summary>
     public byte[]? Portraits { get; set; }
 
     /// <summary>
@@ -55,7 +69,9 @@ public sealed partial class SaveGame
     /// </summary>
     public byte[]? ModEnvironment { get; set; }
 
-    /// <summary>What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.</summary>
+    /// <summary>
+    /// What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.
+    /// </summary>
     public List<string> Problems { get; } = [];
 
     public SaveGame(SaveFile quick)
@@ -64,10 +80,14 @@ public sealed partial class SaveGame
         Reindex();
     }
 
-    /// <summary>Opens a save folder.</summary>
+    /// <summary>
+    /// Opens a save folder.
+    /// </summary>
     public static SaveGame Load(string folder) => Load(SaveFolder.Open(folder));
 
-    /// <summary>Opens a save folder; <paramref name="cameraRead"/> is told the CAMERA as soon as <c>quick.save</c> is read, before the platoon and zone files.</summary>
+    /// <summary>
+    /// Opens a save folder; <paramref name="cameraRead"/> is told the CAMERA as soon as <c>quick.save</c> is read, before the platoon and zone files.
+    /// </summary>
     public static SaveGame Load(SaveFolder folder, Action<SaveCamera>? cameraRead = null)
     {
         if (!folder.HasQuickSave) throw new FileNotFoundException($"'{folder.TopLayer}' has no {SaveFolder.QuickSaveName}.");
@@ -94,7 +114,9 @@ public sealed partial class SaveGame
         return game;
     }
 
-    /// <summary>Sorts the records of <c>quick.save</c> into the views, and builds the platoons' character lists.</summary>
+    /// <summary>
+    /// Sorts the records of <c>quick.save</c> into the views, and builds the platoons' character lists.
+    /// </summary>
     public void Reindex()
     {
         Factions.Clear();
@@ -129,7 +151,9 @@ public sealed partial class SaveGame
         foreach (var p in Platoons) BuildCharacters(p);
     }
 
-    /// <summary>Reads the characters of a platoon file: one instance per character in the file's collection, each pointing at its state records by id.</summary>
+    /// <summary>
+    /// Reads the characters of a platoon file: one instance per character in the file's collection, each pointing at its state records by id.
+    /// </summary>
     public static void BuildCharacters(SavePlatoon platoon)
     {
         platoon.Characters.Clear();
@@ -156,10 +180,14 @@ public sealed partial class SaveGame
         }
     }
 
-    /// <summary>All characters of all loaded platoons.</summary>
+    /// <summary>
+    /// All characters of all loaded platoons.
+    /// </summary>
     public IEnumerable<SaveCharacter> Characters => Platoons.SelectMany(p => p.Characters);
 
-    /// <summary>The player's faction: the one with a <c>known</c> list, else the one whose id is <c>204-gamedata.base</c>.</summary>
+    /// <summary>
+    /// The player's faction: the one with a <c>known</c> list, else the one whose id is <c>204-gamedata.base</c>.
+    /// </summary>
     public SaveFaction? PlayerFaction =>
         Factions.FirstOrDefault(f => f.Record.References.ContainsKey("known")) ?? Factions.FirstOrDefault(f => f.Id == Gameplay.FactionData.PlayerId);
 
@@ -174,7 +202,9 @@ public sealed partial class SaveGame
         foreach (var z in Zones.Keys.Where(z => !listed.Contains(z))) Problems.Add($"Extra zone file: zone.{z.X}.{z.Y}.zone");
     }
 
-    /// <summary>A deep copy made by writing every file to memory and reading it back: nothing is shared with the original.</summary>
+    /// <summary>
+    /// A deep copy made by writing every file to memory and reading it back: nothing is shared with the original.
+    /// </summary>
     public SaveGame Clone()
     {
         var copy = new SaveGame(SaveFile.Read(Quick.ToBytes()));
@@ -195,7 +225,9 @@ public sealed partial class SaveGame
 
     // ------------------------------------------------------------------ handles
 
-    /// <summary>An index for resolving handles against this save's platoons, characters, towns and zone buildings (rebuild it after changing them).</summary>
+    /// <summary>
+    /// An index for resolving handles against this save's platoons, characters, towns and zone buildings (rebuild it after changing them).
+    /// </summary>
     public SaveHandles BuildHandles() => new(this);
 
     // ------------------------------------------------------------------ derived data
@@ -268,7 +300,9 @@ public sealed partial class SaveGame
 
     // ------------------------------------------------------------------ writing
 
-    /// <summary>Every file of the save as (relative name, file): <c>quick.save</c>, then the platoon files, then the zone files.</summary>
+    /// <summary>
+    /// Every file of the save as (relative name, file): <c>quick.save</c>, then the platoon files, then the zone files.
+    /// </summary>
     public IEnumerable<(string Name, SaveFile File)> AllFiles()
     {
         yield return (SaveFolder.QuickSaveName, Quick);
@@ -349,7 +383,9 @@ public sealed partial class SaveGame
     [GeneratedRegex(@"^(\d+)-")]
     private static partial Regex NumberPrefix();
 
-    /// <summary>The number in the front of a record's string id (<c>12-quick.save-INGAME</c> is 12), or -1 when it has none.</summary>
+    /// <summary>
+    /// The number in the front of a record's string id (<c>12-quick.save-INGAME</c> is 12), or -1 when it has none.
+    /// </summary>
     public static int NumberOf(FcsRecord r) => NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(m.Groups[1].Value, out int v) ? v : -1;
 }
 
@@ -384,7 +420,9 @@ public sealed class SaveHandles
     public SaveTown? Town(Hand h) => h.Type is (int)FcsRecordType.Town or 85 ? _towns.GetValueOrDefault(h.C) : null;
     public FcsRecord? Building(Hand h) => h.Type == (int)FcsRecordType.Building ? _buildings.GetValueOrDefault((h.C, h.I)) : null;
 
-    /// <summary>The object a non-null handle names, or null when this save does not hold it.</summary>
+    /// <summary>
+    /// The object a non-null handle names, or null when this save does not hold it.
+    /// </summary>
     public object? Resolve(Hand h) =>
         h.IsNull ? null : h.Type switch
         {

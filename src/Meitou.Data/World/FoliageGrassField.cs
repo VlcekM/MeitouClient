@@ -10,15 +10,24 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class FoliageGrassField
 {
-    /// <summary>Floats per blade: x, y, z, scale (0..1), yaw (radians).</summary>
+    /// <summary>
+    /// Floats per blade: x, y, z, scale (0..1), yaw (radians).
+    /// </summary>
     public const int Stride = 5;
 
-    /// <summary>Each worker thread's blade buffer: a page's blades are collected here and copied out at their exact size (a list sized for the candidates was mostly empty and on the large object heap).</summary>
+    /// <summary>
+    /// Each worker thread's blade buffer: a page's blades are collected here and copied out at their exact size (a list sized for the candidates was
+    /// mostly empty and on the large object heap).
+    /// </summary>
     [ThreadStatic] static List<float>? s_scratch;
-    /// <summary>Each worker thread's generator, reseeded per page and patch (its 2.5 KB state was a new array every call).</summary>
+    /// <summary>
+    /// Each worker thread's generator, reseeded per page and patch (its 2.5 KB state was a new array every call).
+    /// </summary>
     [ThreadStatic] static FoliageRandom? s_random;
 
-    /// <summary>Checkpoints in <see cref="BladesWithPrefixes"/>: the blade count after each 1/<see cref="PrefixSteps"/> of the candidates.</summary>
+    /// <summary>
+    /// Checkpoints in <see cref="BladesWithPrefixes"/>: the blade count after each 1/<see cref="PrefixSteps"/> of the candidates.
+    /// </summary>
     public const int PrefixSteps = 64;
 
     /// <summary>
@@ -90,7 +99,9 @@ public static class FoliageGrassField
         return result;
     }
 
-    /// <summary>The number of leading blades that a density setting of <paramref name="fraction"/> (0..1) of the generated one shows.</summary>
+    /// <summary>
+    /// The number of leading blades that a density setting of <paramref name="fraction"/> (0..1) of the generated one shows.
+    /// </summary>
     public static int PrefixCount(int[] prefixes, float fraction)
     {
         float at = Math.Clamp(fraction, 0, 1) * PrefixSteps;
@@ -98,7 +109,10 @@ public static class FoliageGrassField
         return prefixes[i] + (int)((prefixes[i + 1] - prefixes[i]) * (at - i));
     }
 
-    /// <summary>Whether a sample of the patch's density map that <see cref="DensityAt"/> can read anywhere in the square is above 0 (a cell's margin on each side).</summary>
+    /// <summary>
+    /// Whether a sample of the patch's density map that <see cref="DensityAt"/> can read anywhere in the square is above 0 (a cell's margin on each
+    /// side).
+    /// </summary>
     static bool AnyDensity(FoliageGrassPatch patch, float x0, float z0, float size)
     {
         const int n = FoliageGround.Size;
@@ -113,7 +127,9 @@ public static class FoliageGrassField
         return false;
     }
 
-    /// <summary>The patch's density (0..1) at a world point, bilinear over its 129² map; 0 outside the zone.</summary>
+    /// <summary>
+    /// The patch's density (0..1) at a world point, bilinear over its 129² map; 0 outside the zone.
+    /// </summary>
     public static float DensityAt(FoliageGrassPatch patch, float x, float z)
     {
         const int n = FoliageGround.Size;

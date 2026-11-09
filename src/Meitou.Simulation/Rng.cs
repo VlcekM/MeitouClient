@@ -5,11 +5,16 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation;
 
-/// <summary>What a random roll is for; part of the stream key so two systems never share a stream (docs/simulation.md, "Threading": randomness).</summary>
+/// <summary>
+/// What a random roll is for; part of the stream key so two systems never share a stream (docs/simulation.md, "Threading": randomness).
+/// </summary>
 public enum RngPurpose : uint
 {
     Test = 0,
-    /// <summary>The body rolls (production stats, medical rolls, hits) use this; it has the value of <see cref="Test"/> on purpose, as a distinct value would re-roll every body (changes every state hash).</summary>
+    /// <summary>
+    /// The body rolls (production stats, medical rolls, hits) use this; it has the value of <see cref="Test"/> on purpose, as a distinct value would
+    /// re-roll every body (changes every state hash).
+    /// </summary>
     Body = 0,
     Wander = 1,
     Think = 2,
@@ -20,45 +25,88 @@ public enum RngPurpose : uint
     Animation = 7,
     Flee = 8,
     Sense = 9,
-    /// <summary>Crossbow shots: the deviation cone, the damage roll and the friendly-fire pass (docs/simulation.md "Combat", ranged).</summary>
+    /// <summary>
+    /// Crossbow shots: the deviation cone, the damage roll and the friendly-fire pass (docs/simulation.md "Combat", ranged).
+    /// </summary>
     Ranged = 10,
-    /// <summary>The economy: town market factors, shop stock, shop purses, fencing (docs/simulation.md "Trade").</summary>
+    /// <summary>
+    /// The economy: town market factors, shop stock, shop purses, fencing (docs/simulation.md "Trade").
+    /// </summary>
     Trade = 11,
-    /// <summary>Which towns a map item reveals (<see cref="Items.MapItems"/>).</summary>
+    /// <summary>
+    /// Which towns a map item reveals (<see cref="Items.MapItems"/>).
+    /// </summary>
     MapItem = 12,
-    /// <summary>The stealth knock-out roll (<see cref="Carrying.CarrySystem.StealthKoChance"/>).</summary>
+    /// <summary>
+    /// The stealth knock-out roll (<see cref="Carrying.CarrySystem.StealthKoChance"/>).
+    /// </summary>
     StealthKo = 13,
-    /// <summary>Lock levels at creation and the pick rolls (<see cref="Locks.FixtureRegistry"/>, <see cref="Locks.Lockpicking"/>), keyed by the fixture's id.</summary>
+    /// <summary>
+    /// Lock levels at creation and the pick rolls (<see cref="Locks.FixtureRegistry"/>, <see cref="Locks.Lockpicking"/>), keyed by the fixture's id.
+    /// </summary>
     Lock = 14,
-    /// <summary>The refund counts of a dismantled site (<see cref="Construction.ConstructionSystem"/>), keyed by the site's id and the material entry.</summary>
+    /// <summary>
+    /// The refund counts of a dismantled site (<see cref="Construction.ConstructionSystem"/>), keyed by the site's id and the material entry.
+    /// </summary>
     Build = 15,
-    /// <summary>The faction campaigns (<c>PopulationCampaigns.cs</c>): rolls, follow-ups, request delays and the campaign squads' places, keyed by the faction.</summary>
+    /// <summary>
+    /// The faction campaigns (<c>PopulationCampaigns.cs</c>): rolls, follow-ups, request delays and the campaign squads' places, keyed by the
+    /// faction.
+    /// </summary>
     Campaign = 16,
-    /// <summary>Dialogue: line and text picks, chance rolls, interjectors, personalities (<see cref="Dialogue.DialogueSystem"/>).</summary>
+    /// <summary>
+    /// Dialogue: line and text picks, chance rolls, interjectors, personalities (<see cref="Dialogue.DialogueSystem"/>).
+    /// </summary>
     Dialogue = 17,
-    /// <summary>Farms: the planting draws and the harvest rolls (<see cref="Production.ProductionSystem"/>), keyed by the building.</summary>
+    /// <summary>
+    /// Farms: the planting draws and the harvest rolls (<see cref="Production.ProductionSystem"/>), keyed by the building.
+    /// </summary>
     Farm = 18,
-    /// <summary>Crafting: the critical (one tier better) roll of each craft, keyed by the bench.</summary>
+    /// <summary>
+    /// Crafting: the critical (one tier better) roll of each craft, keyed by the bench.
+    /// </summary>
     Craft = 19,
-    /// <summary>The random name of a <c>named</c> character at its spawn, keyed like its spawn rolls.</summary>
+    /// <summary>
+    /// The random name of a <c>named</c> character at its spawn, keyed like its spawn rolls.
+    /// </summary>
     Name = 20,
-    /// <summary>The blood trail's drips (<see cref="BodySystem"/>; display only).</summary>
+    /// <summary>
+    /// The blood trail's drips (<see cref="BodySystem"/>; display only).
+    /// </summary>
     BloodTrail = 21,
-    /// <summary>luckyren Mode: where a burst character's gear falls (<see cref="BodySystem"/>).</summary>
+    /// <summary>
+    /// luckyren Mode: where a burst character's gear falls (<see cref="BodySystem"/>).
+    /// </summary>
     Luckyren = 22,
-    /// <summary>A <c>malnourished</c> squad's hunger floor (<see cref="BodySystem"/>), keyed by the squad id.</summary>
+    /// <summary>
+    /// A <c>malnourished</c> squad's hunger floor (<see cref="BodySystem"/>), keyed by the squad id.
+    /// </summary>
     Malnourished = 23,
-    /// <summary>A chaser's hearing roll on its fleeing target (<see cref="AggroSystem"/>, the chase give-up).</summary>
+    /// <summary>
+    /// A chaser's hearing roll on its fleeing target (<see cref="AggroSystem"/>, the chase give-up).
+    /// </summary>
     ChaseSense = 24,
-    /// <summary>Squad formations: a layout's draws (keyed by the squad) and a plain follower's distance (keyed by the follower) (<see cref="MovementSystem"/>).</summary>
+    /// <summary>
+    /// Squad formations: a layout's draws (keyed by the squad) and a plain follower's distance (keyed by the follower)
+    /// (<see cref="MovementSystem"/>).
+    /// </summary>
     Formation = 25,
-    /// <summary>A stealth KO target's hearing roll on the creeping attacker's last step (<see cref="Carrying.CarrySystem"/>).</summary>
+    /// <summary>
+    /// A stealth KO target's hearing roll on the creeping attacker's last step (<see cref="Carrying.CarrySystem"/>).
+    /// </summary>
     KnockoutHear = 26,
-    /// <summary>The kidnap roll (<see cref="Carrying.CarrySystem.KidnapChance"/>).</summary>
+    /// <summary>
+    /// The kidnap roll (<see cref="Carrying.CarrySystem.KidnapChance"/>).
+    /// </summary>
     Kidnap = 27,
-    /// <summary>The steal roll (<see cref="Crime.CrimeSystem.StealChance"/>) and its in-bed coin flip.</summary>
+    /// <summary>
+    /// The steal roll (<see cref="Crime.CrimeSystem.StealChance"/>) and its in-bed coin flip.
+    /// </summary>
     Steal = 28,
-    /// <summary>Advanced ragdolls: the spin a downing blow gives each arm and leg (<see cref="Ragdolls.RagdollSystem"/>), keyed by the character, counter the body.</summary>
+    /// <summary>
+    /// Advanced ragdolls: the spin a downing blow gives each arm and leg (<see cref="Ragdolls.RagdollSystem"/>), keyed by the character, counter the
+    /// body.
+    /// </summary>
     RagdollSpin = 29,
 }
 
@@ -71,7 +119,9 @@ public static class Rng
 {
     const ulong Golden = 0x9E3779B97F4A7C15UL;
 
-    /// <summary>SplitMix64's output function: a bijective, well-mixed 64 bit hash.</summary>
+    /// <summary>
+    /// SplitMix64's output function: a bijective, well-mixed 64 bit hash.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ulong Mix(ulong x)
     {
@@ -81,7 +131,9 @@ public static class Rng
         return x ^ (x >> 31);
     }
 
-    /// <summary>The roll for a (seed, entity key, purpose, counter) key.</summary>
+    /// <summary>
+    /// The roll for a (seed, entity key, purpose, counter) key.
+    /// </summary>
     public static ulong Hash(ulong seed, ulong entity, RngPurpose purpose, ulong counter = 0)
     {
         ulong h = Mix(seed);
@@ -90,18 +142,27 @@ public static class Rng
         return Mix(h ^ counter);
     }
 
-    /// <summary>The key of a character for its streams: slot and generation, so a reused slot gets new rolls.</summary>
+    /// <summary>
+    /// The key of a character for its streams: slot and generation, so a reused slot gets new rolls.
+    /// </summary>
     public static ulong Key(CharacterId id) => (uint)id.Slot | ((ulong)(uint)id.Generation << 32);
 
-    /// <summary>A float in [0, 1) from a roll (24 bits).</summary>
+    /// <summary>
+    /// A float in [0, 1) from a roll (24 bits).
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Float(ulong roll) => (roll >> 40) * (1f / (1 << 24));
 
-    /// <summary>An integer in [0, <paramref name="bound"/>) from a roll (the tiny modulo bias is irrelevant at these bounds).</summary>
+    /// <summary>
+    /// An integer in [0, <paramref name="bound"/>) from a roll (the tiny modulo bias is irrelevant at these bounds).
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Int(ulong roll, int bound) => (int)((roll >> 11) % (ulong)bound);
 
-    /// <summary>A stable 64 bit hash of a string (FNV-1a over its UTF-16 chars, the same basis and prime as <see cref="StateHasher"/>), for keys made from record ids and names.</summary>
+    /// <summary>
+    /// A stable 64 bit hash of a string (FNV-1a over its UTF-16 chars, the same basis and prime as <see cref="StateHasher"/>), for keys made from
+    /// record ids and names.
+    /// </summary>
     public static ulong StableHash(string s)
     {
         ulong h = 0xCBF29CE484222325UL;
@@ -134,7 +195,9 @@ public struct RandomStream(ulong seed, ulong entity, RngPurpose purpose)
     public readonly ulong At(ulong index) => Rng.Hash(seed, entity, purpose, index);
 }
 
-/// <summary>An order-sensitive 64 bit hash of the values added, for <see cref="World.StateHash"/>. Written here, no packages.</summary>
+/// <summary>
+/// An order-sensitive 64 bit hash of the values added, for <see cref="World.StateHash"/>. Written here, no packages.
+/// </summary>
 public struct StateHasher
 {
     ulong _h;

@@ -9,8 +9,9 @@ using Meitou.Simulation;
 namespace Meitou.Game.DevTools.Agents;
 
 /// <summary>
-/// Agent-playtest control channel, play API (docs/procedures/agent-play-api.md): <c>observe</c> and the order commands an agent needs to play. The commands only parse, check and hand over to
-/// <see cref="PlayerInterface"/> (AgentOrders), which gives the game's own command objects to the selected characters.
+/// Agent-playtest control channel, play API (docs/procedures/agent-play-api.md): <c>observe</c> and the order commands an agent needs to play. The
+/// commands only parse, check and hand over to <see cref="PlayerInterface"/> (AgentOrders), which gives the game's own command objects to the
+/// selected characters.
 /// </summary>
 sealed class AgentPlay(GameHost host)
 {
@@ -159,7 +160,10 @@ sealed class AgentPlay(GameHost host)
         RegisterControlPersonaCommands(add, loaded);
     }
 
-    /// <summary>The <c>research</c> arguments: <c>research list</c> (JSON) and <c>research queue &lt;tech&gt;</c>; no argument is the dev console's finish-all.</summary>
+    /// <summary>
+    /// The <c>research</c> arguments: <c>research list</c> (JSON) and <c>research queue &lt;tech&gt;</c>; no argument is the dev console's
+    /// finish-all.
+    /// </summary>
     internal void ControlResearch(IReadOnlyList<string> args, DevConsole con)
     {
         if (host.Covered || host.Player.TitleOpen) { con.Error("no world is loaded yet"); return; }
@@ -174,7 +178,9 @@ sealed class AgentPlay(GameHost host)
     }
 
     // <summary>More commands of the agent control channel's play API (docs/procedures/agent-play-api.md): work, prospect, equip, carry, trade, spawn-at, ko, and the --id target of hurt and kill.</summary>
-    /// <summary>A <c>spawn-at</c> waiting for its character to show up in the snapshot (a running game) and, with --ko or --dead, to go down.</summary>
+    /// <summary>
+    /// A <c>spawn-at</c> waiting for its character to show up in the snapshot (a running game) and, with --ko or --dead, to go down.
+    /// </summary>
     sealed class ControlSpawn(string id, HashSet<CharacterId> before, float x, float z, bool ko, bool dead, long deadline)
     {
         public string Id = id; public HashSet<CharacterId> Before = before; public float X = x, Z = z; public bool Ko = ko, Dead = dead, Downed; public long Deadline = deadline; public CharacterId Found = CharacterId.None; public string? Weapon; public bool Aggro, Armed;
@@ -182,7 +188,9 @@ sealed class AgentPlay(GameHost host)
 
     readonly List<ControlSpawn> _controlSpawns = [];
 
-    /// <summary>The characters a command with an optional <c>--id &lt;c:slot.gen&gt;</c> means: that one, else the selection. False with an error printed.</summary>
+    /// <summary>
+    /// The characters a command with an optional <c>--id &lt;c:slot.gen&gt;</c> means: that one, else the selection. False with an error printed.
+    /// </summary>
     internal bool ControlTargets(IReadOnlyList<string> args, DevConsole con, string verb, out CharacterId[] who, out List<string> rest)
     {
         who = [];
@@ -208,7 +216,10 @@ sealed class AgentPlay(GameHost host)
         return true;
     }
 
-    /// <summary><c>kill --radius &lt;m&gt; [&lt;x&gt; &lt;z&gt;] [--animals]</c>: one DebugKill for every living, non-player character within the radius of the centre (the given point, else the selected or first squad member), from one pass over the snapshot.</summary>
+    /// <summary>
+    /// <c>kill --radius &lt;m&gt; [&lt;x&gt; &lt;z&gt;] [--animals]</c>: one DebugKill for every living, non-player character within the radius of
+    /// the centre (the given point, else the selected or first squad member), from one pass over the snapshot.
+    /// </summary>
     internal void ControlKillArea(IReadOnlyList<string> args, DevConsole con)
     {
         const string usage = "usage: kill --radius <m> [<x> <z>] [--animals]";
@@ -423,7 +434,8 @@ sealed class AgentPlay(GameHost host)
     }
 
     /// <summary>
-    /// Moves a spawn along: find the new character, send it down when asked; true (with its JSON) once it is there and down as asked. <paramref name="error"/> is the reason while it is not.
+    /// Moves a spawn along: find the new character, send it down when asked; true (with its JSON) once it is there and down as asked.
+    /// <paramref name="error"/> is the reason while it is not.
     /// </summary>
     bool ControlSpawnProgress(ControlSpawn s, out string json, out string error)
     {
@@ -454,7 +466,9 @@ sealed class AgentPlay(GameHost host)
         return json.Length > 0;
     }
 
-    /// <summary>Every poll: finishes the pending spawn-at replies (a running game), or fails them after 5 real seconds.</summary>
+    /// <summary>
+    /// Every poll: finishes the pending spawn-at replies (a running game), or fails them after 5 real seconds.
+    /// </summary>
     internal void ControlSpawnPoll()
     {
         for (int i = _controlSpawns.Count - 1; i >= 0; i--)
@@ -600,14 +614,22 @@ sealed class AgentPlay(GameHost host)
     }
 
     // <summary><c>order move &lt;x&gt; &lt;z&gt; --wait &lt;s&gt; [--stuck &lt;s&gt;]</c>: one reply when the first ordered character arrives, makes no progress, or the time is up (docs/procedures/playtest/agent-play-api.md).</summary>
-    /// <summary>Within this many metres of the target counts as arrived.</summary>
+    /// <summary>
+    /// Within this many metres of the target counts as arrived.
+    /// </summary>
     const float MoveWaitArriveRadius = 4f;
-    /// <summary>Default game seconds without progress that make a waited move "stuck" (override with <c>--stuck</c>).</summary>
+    /// <summary>
+    /// Default game seconds without progress that make a waited move "stuck" (override with <c>--stuck</c>).
+    /// </summary>
     internal const float MoveWaitStuckSeconds = 10f;
-    /// <summary>Progress means the distance to the target fell by at least this many metres since the last progress.</summary>
+    /// <summary>
+    /// Progress means the distance to the target fell by at least this many metres since the last progress.
+    /// </summary>
     const float MoveWaitProgressStep = 1f;
     const int MoveWaitTicksPerSecond = 30;
-    /// <summary>Most ticks a paused waited move steps in one frame (the same cap as <c>step</c>).</summary>
+    /// <summary>
+    /// Most ticks a paused waited move steps in one frame (the same cap as <c>step</c>).
+    /// </summary>
     const int MoveWaitPausedTickCap = 3000;
 
     sealed class ControlMoveWait(string id, CharacterId who, float x, float z, long startTick, int timeoutTicks, int stuckTicks, float dist0)
@@ -619,7 +641,9 @@ sealed class AgentPlay(GameHost host)
 
     readonly List<ControlMoveWait> _controlMoveWaits = [];
 
-    /// <summary>Starts a waited move after the order was given; true when the reply is deferred or already written into <paramref name="con"/>.</summary>
+    /// <summary>
+    /// Starts a waited move after the order was given; true when the reply is deferred or already written into <paramref name="con"/>.
+    /// </summary>
     internal void ControlMoveWaitStart(DevConsole con, float x, float z, float waitSeconds, float stuckSeconds)
     {
         var who = host.Player.AgentOrders.ControlOrderers();
@@ -648,7 +672,9 @@ sealed class AgentPlay(GameHost host)
 
     string _controlMoveWaitLast = "";
 
-    /// <summary>One check; true (reply JSON in <see cref="_controlMoveWaitLast"/>) once arrived, stuck or timed out.</summary>
+    /// <summary>
+    /// One check; true (reply JSON in <see cref="_controlMoveWaitLast"/>) once arrived, stuck or timed out.
+    /// </summary>
     bool ControlMoveWaitProgress(ControlMoveWait w, out string json)
     {
         json = "";
@@ -677,7 +703,9 @@ sealed class AgentPlay(GameHost host)
         return true;
     }
 
-    /// <summary>Every poll: finish the pending waited moves.</summary>
+    /// <summary>
+    /// Every poll: finish the pending waited moves.
+    /// </summary>
     internal void ControlMoveWaitPoll()
     {
         for (int i = _controlMoveWaits.Count - 1; i >= 0; i--)

@@ -20,7 +20,9 @@ public static class MyGuiColours
         s_palette = read;
     }
 
-    /// <summary>The colour named <paramref name="key"/> in the palette, else <paramref name="gameHex"/> (the game's own value, as "rrggbb").</summary>
+    /// <summary>
+    /// The colour named <paramref name="key"/> in the palette, else <paramref name="gameHex"/> (the game's own value, as "rrggbb").
+    /// </summary>
     public static string Named(string key, string gameHex) => s_palette.GetValueOrDefault(key) ?? Hex(gameHex)!;
 
     static string? Hex(string value)
@@ -36,7 +38,9 @@ public static class MyGuiColours
         return string.Join(' ', n.Select(f => f.ToString("0.###", CultureInfo.InvariantCulture)));
     }
 
-    /// <summary>The palette's Secondary: the text default (dark ink on the game's parchment, grey in Dark UI).</summary>
+    /// <summary>
+    /// The palette's Secondary: the text default (dark ink on the game's parchment, grey in Dark UI).
+    /// </summary>
     public static string InkText => Named("Secondary", "140806");
     public static Vector4 Ink => Parse(InkText, default);
     public static Vector4 Parse(string? value, Vector4 fallback)

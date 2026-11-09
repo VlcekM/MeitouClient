@@ -10,10 +10,10 @@ public sealed partial class CaptiveSystem
     long _slaversSeenSpawns = -1;
 
     /// <summary>
-    /// A loaded slave whose save names its owner character (<see cref="Saving.SavedCharacterLink.Slaver"/>) takes it once that character is
-    /// in the world: the owner's faction when it has none (Meitou's own key wins), and the owner's squad as the squad it obeys
-    /// (<see cref="CharacterCold.SlaveMaster"/>). One waits while its owner is not loaded; a free one drops the handle.
-    /// Nothing is looked at again until a character has been added since the last pass.
+    /// A loaded slave whose save names its owner character (<see cref="Saving.SavedCharacterLink.Slaver"/>) takes it once that character is in the
+    /// world: the owner's faction when it has none (Meitou's own key wins), and the owner's squad as the squad it obeys
+    /// (<see cref="CharacterCold.SlaveMaster"/>). One waits while its owner is not loaded; a free one drops the handle. Nothing is looked at again
+    /// until a character has been added since the last pass.
     /// </summary>
     void RestoreSlavers(World world)
     {
@@ -38,12 +38,15 @@ public sealed partial class CaptiveSystem
         }
     }
 
-    /// <summary>The slot of every character in the world loaded from the save, by its handle's container and slot.</summary>
+    /// <summary>
+    /// The slot of every character in the world loaded from the save, by its handle's container and slot.
+    /// </summary>
     static Dictionary<(int C, int I), int> SavedSlots(CharacterTable table)
     {
         var slots = new Dictionary<(int C, int I), int>();
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s)?.Save is { } saved) slots[(saved.Source.Handle.C, saved.Source.Handle.I)] = s;
+            if (table.Next[s].Alive && table.Cold(s)?.Save is { } saved)
+                slots[(saved.Source.Handle.C, saved.Source.Handle.I)] = s;
         return slots;
     }
 

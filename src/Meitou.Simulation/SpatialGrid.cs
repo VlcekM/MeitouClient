@@ -17,6 +17,7 @@ public sealed class SpatialGrid
     public SpatialGrid(float cellSize)
     {
         if (!(cellSize > 0)) throw new ArgumentOutOfRangeException(nameof(cellSize));
+
         this._cellSize = cellSize;
     }
 
@@ -25,24 +26,33 @@ public sealed class SpatialGrid
     internal void Build(ReadOnlySpan<CharacterHot> state)
     {
         if (_entries.Length < state.Length) _entries = new (long, int)[Math.Max(state.Length, _entries.Length * 2)];
+
         _count = 0;
+
         for (int i = 0; i < state.Length; i++)
         {
             if (!state[i].Alive) continue;
+
             _entries[_count++] = (CellOf(state[i].Position.X, state[i].Position.Z), i);
         }
+
         // (cell, slot) pairs are unique, so the sort is total and its result does not depend on the algorithm.
         Array.Sort(_entries, 0, _count);
     }
 
     long CellOf(float x, float z) => Pack((int)MathF.Floor(x / _cellSize), (int)MathF.Floor(z / _cellSize));
 
-    /// <summary>The cell column and row of a point (the cell <see cref="Build"/> files it in).</summary>
+    /// <summary>
+    /// The cell column and row of a point (the cell <see cref="Build"/> files it in).
+    /// </summary>
     internal (int X, int Z) Cell(Vector3 at) => ((int)MathF.Floor(at.X / _cellSize), (int)MathF.Floor(at.Z / _cellSize));
 
-    /// <summary>The cells <see cref="Query"/> visits for a circle: a character is visited exactly when its <see cref="Cell"/> lies in this range.</summary>
+    /// <summary>
+    /// The cells <see cref="Query"/> visits for a circle: a character is visited exactly when its <see cref="Cell"/> lies in this range.
+    /// </summary>
     internal CellRange Range(float x, float z, float radius) =>
-        new((int)MathF.Floor((x - radius) / _cellSize), (int)MathF.Floor((x + radius) / _cellSize), (int)MathF.Floor((z - radius) / _cellSize), (int)MathF.Floor((z + radius) / _cellSize));
+        new((int)MathF.Floor((x - radius) / _cellSize), (int)MathF.Floor((x + radius) / _cellSize), (int)MathF.Floor((z - radius) / _cellSize),
+            (int)MathF.Floor((z + radius) / _cellSize));
 
     internal readonly record struct CellRange(int X0, int X1, int Z0, int Z1)
     {
@@ -60,6 +70,7 @@ public sealed class SpatialGrid
     {
         int x0 = (int)MathF.Floor((x - radius) / _cellSize), x1 = (int)MathF.Floor((x + radius) / _cellSize);
         int z0 = (int)MathF.Floor((z - radius) / _cellSize), z1 = (int)MathF.Floor((z + radius) / _cellSize);
+
         // The cells of one column (cx) with cz ascending are adjacent in the sorted entries, so one search per run finds the first and a scan to
         // the last visits them in the same order as a search per cell would. The packed cz is unsigned, so negative rows sort after the others:
         // a column crossing cz = 0 is two runs, the negative one first.
@@ -84,11 +95,13 @@ public sealed class SpatialGrid
     int FirstOf(long key)
     {
         int lo = 0, hi = _count;
+
         while (lo < hi)
         {
             int mid = (lo + hi) >>> 1;
             if (_entries[mid].Cell < key) lo = mid + 1; else hi = mid;
         }
+
         return lo;
     }
 }

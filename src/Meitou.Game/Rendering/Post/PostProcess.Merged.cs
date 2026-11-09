@@ -9,22 +9,29 @@ using Vk = Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// The merged post passes (<c>post-merge</c>, docs/render-post.md "Merged passes"): the per-pixel full-screen passes that only read a depth or a colour and write a small
-/// target are each a render pass with its own barrier; compute kernels do several of them in one dispatch. The velocity kernel makes the motion, the upscalers' depth and the
-/// water's reactivity in one pass over the depth buffers (three full-screen passes before), the exposure kernel measures the luminance, reduces it and adapts in one dispatch
-/// (a 256 x 256 pass, eight mip blits with their barriers and the adaptation pass before). Both are on the same arithmetic as the passes they replace.
+/// The merged post passes (<c>post-merge</c>, docs/render-post.md "Merged passes"): the per-pixel full-screen passes that only read a depth or a
+/// colour and write a small target are each a render pass with its own barrier; compute kernels do several of them in one dispatch. The velocity
+/// kernel makes the motion, the upscalers' depth and the water's reactivity in one pass over the depth buffers (three full-screen passes before), the
+/// exposure kernel measures the luminance, reduces it and adapts in one dispatch (a 256 x 256 pass, eight mip blits with their barriers and the
+/// adaptation pass before). Both are on the same arithmetic as the passes they replace.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
-    /// <summary>The merged velocity and exposure kernels (Meitou default); off runs the separate full-screen passes (<c>--ab post-merge</c>).</summary>
+    /// <summary>
+    /// The merged velocity and exposure kernels (Meitou default); off runs the separate full-screen passes (<c>--ab post-merge</c>).
+    /// </summary>
     public bool MergePasses
     {
         get => MergeVelocity && MergeExposure;
         set => MergeVelocity = MergeExposure = value;
     }
-    /// <summary>The velocity kernel alone.</summary>
+    /// <summary>
+    /// The velocity kernel alone.
+    /// </summary>
     public bool MergeVelocity { get; set; } = true;
-    /// <summary>The exposure kernel alone.</summary>
+    /// <summary>
+    /// The exposure kernel alone.
+    /// </summary>
     public bool MergeExposure { get; set; } = true;
 
     GpuProgram? _velocityProgram, _exposureProgram;
@@ -33,10 +40,13 @@ public sealed unsafe partial class PostProcess
     bool _exposureStateZeroed;
     GpuSampler _pointSampler;
 
-    GpuSampler Point() => _pointSampler.Index != 0 ? _pointSampler : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+    GpuSampler Point() => _pointSampler.Index != 0 ? _pointSampler : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest,
+        TextureMagFilter.Nearest,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
 
-    /// <summary>Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).</summary>
+    /// <summary>
+    /// Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).
+    /// </summary>
     public bool MergeSupported => SupportsStorage(InternalFormat.Rgba16F) && SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rg32F);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -49,14 +59,17 @@ public sealed unsafe partial class PostProcess
         public Vector4 Right;      // xyz, the water's reactivity
         public Vector4 Up;         // xyz (w unused)
         public Vector4 Back;       // xyz, the outputs: bit 0 the upscalers' depth, bit 1 the reactivity
-        public Vector4 Sun;        // the direction to the sun, cos of the angle within which the sky takes all of its motion (PostProcess.SunMotion.cs)
+        // the direction to the sun, cos of the angle within which the sky takes all of its motion (PostProcess.SunMotion.cs)
+        public Vector4 Sun;
         public Vector4 SunMotion;  // the sun's motion in the motion target's units, cos of the angle past which none, 1 when on
     }
 
     /// <summary>
-    /// The motion target (RG motion, B the upscalers' depth, A the reactivity), and where asked the upscalers' depth image and the reactivity image, in one pass over the depth
-    /// buffers: <see cref="Velocity"/> with its three modes in one dispatch. <paramref name="depthOut"/> and <paramref name="reactiveOut"/> may be null. With
-    /// <paramref name="cleanColour"/> the scene colour's NaN and Inf become 0 in place, for the vendor upscalers (TAA cleans its own taps; FSR keeps a NaN in its history).
+    /// The motion target (RG motion, B the upscalers' depth, A the reactivity), and where asked the upscalers' depth image and the reactivity image,
+    /// in one pass over the depth buffers: <see cref="Velocity"/> with its three modes in one dispatch. <paramref name="depthOut"/> and
+    /// <paramref name="reactiveOut"/> may be null. With
+    /// <paramref name="cleanColour"/> the scene colour's NaN and Inf become 0 in place, for the vendor upscalers (TAA cleans its own taps; FSR keeps
+    /// a NaN in its history).
     /// </summary>
     void VelocityMerged(Target2D motionOut, Target2D? depthOut, Target2D? reactiveOut, bool cleanColour = false)
     {
@@ -75,7 +88,8 @@ public sealed unsafe partial class PostProcess
             TanEye = new Vector4(ViewWindow.Tan(tanY * _aspectNow, tanY), _eyeNow.Y, WaterHeight ?? float.MinValue),
             Right = new Vector4(r.M11, r.M21, r.M31, WaterReactive),
             Up = new Vector4(r.M12, r.M22, r.M32, 0),
-            Back = new Vector4(ViewWindow.BackFor(r, _fovNow, _aspectNow), (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
+            Back = new Vector4(ViewWindow.BackFor(r, _fovNow, _aspectNow),
+                    (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
             Sun = _sunMotion.Sun,
             SunMotion = _sunMotion.Motion,
         };
@@ -105,8 +119,9 @@ public sealed unsafe partial class PostProcess
     }
 
     /// <summary>
-    /// The game's exposure measure and adaptation in one dispatch: <see cref="RunExposure"/>'s luminance pass, mip chain and adaptation pass. 256 workgroups of 16 x 16 make one
-    /// cell of the 256 x 256 luminance each (the same 16 taps), reduce their tile by the mip chain's 2 x 2 means, and the last to finish reduces the 256 tiles and adapts.
+    /// The game's exposure measure and adaptation in one dispatch: <see cref="RunExposure"/>'s luminance pass, mip chain and adaptation pass. 256
+    /// workgroups of 16 x 16 make one cell of the 256 x 256 luminance each (the same 16 taps), reduce their tile by the mip chain's 2 x 2 means, and
+    /// the last to finish reduces the 256 tiles and adapts.
     /// </summary>
     void ExposureMerged(float blend, (float Min, float Max) band)
     {
@@ -145,11 +160,15 @@ public sealed unsafe partial class PostProcess
     }
 }
 
-/// <summary>The merged post kernels (<see cref="PostProcess.MergePasses"/>).</summary>
+/// <summary>
+/// The merged post kernels (<see cref="PostProcess.MergePasses"/>).
+/// </summary>
 static class MergedShaders
 {
-    /// <summary><see cref="UpscaleShaders.Velocity"/>'s three modes in one dispatch (bit 0 of the outputs: the upscalers' depth image, bit 1: the reactivity image, bit 2: the
-    /// scene colour's NaN and Inf to 0 in place; the motion image always, its NaN and Inf as 0).</summary>
+    /// <summary>
+    /// <see cref="UpscaleShaders.Velocity"/>'s three modes in one dispatch (bit 0 of the outputs: the upscalers' depth image, bit 1: the reactivity
+    /// image, bit 2: the scene colour's NaN and Inf to 0 in place; the motion image always, its NaN and Inf as 0).
+    /// </summary>
     public const string Velocity = """
         #version 450
         layout(local_size_x = 16, local_size_y = 16) in;
@@ -198,8 +217,9 @@ static class MergedShaders
         """;
 
     /// <summary>
-    /// <see cref="PostProcessShaders.Luminance"/>, its mip chain and <see cref="PostProcessShaders.Adapt"/>: one thread per cell of the 256 x 256 luminance (the same 16 taps, in the
-    /// same order), a 16 x 16 tile reduced by 2 x 2 means as the mip chain does, the last tile to finish (an atomic counter, reset by it) reducing the 256 tile means and adapting.
+    /// <see cref="PostProcessShaders.Luminance"/>, its mip chain and <see cref="PostProcessShaders.Adapt"/>: one thread per cell of the 256 x 256
+    /// luminance (the same 16 taps, in the same order), a 16 x 16 tile reduced by 2 x 2 means as the mip chain does, the last tile to finish (an
+    /// atomic counter, reset by it) reducing the 256 tile means and adapting.
     /// </summary>
     public const string Exposure = """
         #version 450

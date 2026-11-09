@@ -12,7 +12,9 @@ static partial class GameConsole
 {
     const uint AttachParentProcess = unchecked((uint)-1);
 
-    /// <summary>Joins the console of the terminal that started the game, if any. Call before anything is written.</summary>
+    /// <summary>
+    /// Joins the console of the terminal that started the game, if any. Call before anything is written.
+    /// </summary>
     public static void AttachToParent()
     {
         if (!OperatingSystem.IsWindows() || OutputRedirected() || GetConsoleWindow() != 0) return;
@@ -34,7 +36,9 @@ static partial class GameConsole
 
     static TextWriter? s_log;
 
-    /// <summary>Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.</summary>
+    /// <summary>
+    /// Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.
+    /// </summary>
     public static void StartLog()
     {
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ExplainBlocked(e.ExceptionObject as Exception);
@@ -77,7 +81,9 @@ static partial class GameConsole
         Console.SetError(s_log is null ? error : new TeeWriter(s_log, error));
     }
 
-    /// <summary>A console to ask a question on: the attached one, else a new window that closes again when this is disposed.</summary>
+    /// <summary>
+    /// A console to ask a question on: the attached one, else a new window that closes again when this is disposed.
+    /// </summary>
     public static IDisposable ForPrompt()
     {
         if (!OperatingSystem.IsWindows() || GetConsoleWindow() != 0 || AllocConsole() == 0) return new Release(false);
@@ -90,7 +96,8 @@ static partial class GameConsole
     {
         // Console's own writers never write a byte-order mark; a StreamWriter over UTF-8 would.
         var encoding = Console.OutputEncoding.CodePage == 65001 ? new UTF8Encoding(false) : Console.OutputEncoding;
-        Bind(new StreamWriter(Console.OpenStandardOutput(), encoding) { AutoFlush = true }, new StreamWriter(Console.OpenStandardError(), encoding) { AutoFlush = true });
+        Bind(new StreamWriter(Console.OpenStandardOutput(), encoding) { AutoFlush = true },
+            new StreamWriter(Console.OpenStandardError(), encoding) { AutoFlush = true });
         Console.SetIn(new StreamReader(Console.OpenStandardInput(), Console.InputEncoding));
     }
 
@@ -112,5 +119,6 @@ static partial class GameConsole
     [LibraryImport("kernel32.dll")] private static partial int FreeConsole();
     [LibraryImport("kernel32.dll")] private static partial nint GetStdHandle(int handle);
     [LibraryImport("kernel32.dll")] private static partial uint GetFileType(nint file);
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int MessageBoxW(nint owner, string text, string caption, uint type);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int MessageBoxW(nint owner, string text,
+        string caption, uint type);
 }

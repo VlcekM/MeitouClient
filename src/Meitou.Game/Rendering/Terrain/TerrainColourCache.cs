@@ -15,17 +15,23 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 static class TerrainColourCache
 {
-    /// <summary>Levels kept per tile: the window's.</summary>
+    /// <summary>
+    /// Levels kept per tile: the window's.
+    /// </summary>
     public const int Levels = 7;
 
-    /// <summary>A tile's side must be a multiple of this: its last level is still whole 4 × 4 blocks.</summary>
+    /// <summary>
+    /// A tile's side must be a multiple of this: its last level is still whole 4 × 4 blocks.
+    /// </summary>
     public const int Granule = 4 << (Levels - 1);
 
     const string Version = "terrain colour bc3 v1";
     const int Magic = 0x3343544D;   // "MTC3"
     static readonly ConcurrentDictionary<string, object> Gates = new();
 
-    /// <summary>A tile's side and its levels' BC3 blocks, rows of blocks top first.</summary>
+    /// <summary>
+    /// A tile's side and its levels' BC3 blocks, rows of blocks top first.
+    /// </summary>
     public sealed record Tile(int Size, byte[][] Levels);
 
     static IEnumerable<string> TilePaths(GameInstall install) =>
@@ -35,10 +41,14 @@ static class TerrainColourCache
     static string[] Uncached(GameInstall install) =>
         LoadCaches.Disabled ? [] : [.. TilePaths(install).Where(p => File.Exists(p) && !File.Exists(CachePath(p)))];
 
-    /// <summary>Whether a tile has no cache file yet (the first start, or a mod's new tile).</summary>
+    /// <summary>
+    /// Whether a tile has no cache file yet (the first start, or a mod's new tile).
+    /// </summary>
     public static bool Missing(GameInstall install) => Uncached(install).Length > 0;
 
-    /// <summary>Encodes and writes every tile without a cache file (worker thread); returns how many. A tile unfit for blocks is left to the window to report.</summary>
+    /// <summary>
+    /// Encodes and writes every tile without a cache file (worker thread); returns how many. A tile unfit for blocks is left to the window to report.
+    /// </summary>
     public static int EncodeMissing(GameInstall install)
     {
         var missing = Uncached(install);
@@ -51,7 +61,9 @@ static class TerrainColourCache
         return missing.Length;
     }
 
-    /// <summary>A tile's levels, read from its cache file or encoded (and written); null when the tile does not exist.</summary>
+    /// <summary>
+    /// A tile's levels, read from its cache file or encoded (and written); null when the tile does not exist.
+    /// </summary>
     public static Tile? Get(string path)
     {
         if (!File.Exists(path)) return null;
@@ -65,12 +77,14 @@ static class TerrainColourCache
         }
     }
 
-    /// <summary>A tile's valid cache file and its side: a window reads the block rows it needs from it (<see cref="ReadBlocks"/>) instead of the whole tile.</summary>
+    /// <summary>
+    /// A tile's valid cache file and its side: a window reads the block rows it needs from it (<see cref="ReadBlocks"/>) instead of the whole tile.
+    /// </summary>
     public sealed record Stored(string Path, int Size);
 
     /// <summary>
-    /// The tile's cache file, encoded and written first when it has none; null when the tile does not exist, the caches are off or the file could not be
-    /// written (the caller takes <see cref="Get"/>'s levels).
+    /// The tile's cache file, encoded and written first when it has none; null when the tile does not exist, the caches are off or the file could not
+    /// be written (the caller takes <see cref="Get"/>'s levels).
     /// </summary>
     public static Stored? Locate(string path)
     {
@@ -85,7 +99,9 @@ static class TerrainColourCache
         }
     }
 
-    /// <summary>Reads <paramref name="into"/>'s length of level <paramref name="level"/>'s blocks from <paramref name="offset"/> bytes into that level.</summary>
+    /// <summary>
+    /// Reads <paramref name="into"/>'s length of level <paramref name="level"/>'s blocks from <paramref name="offset"/> bytes into that level.
+    /// </summary>
     public static void ReadBlocks(Microsoft.Win32.SafeHandles.SafeFileHandle file, Stored tile, int level, long offset, Span<byte> into)
     {
         long at = 8 + LevelBytes(tile.Size, level) + offset;
@@ -120,7 +136,8 @@ static class TerrainColourCache
             throw new InvalidDataException($"{Path.GetFileName(path)} is {img.Width}x{img.Height}, not square with a side a multiple of {Granule}");
         var mips = TerrainTextures.Mips(img.Pixels, img.Width, img.Height, Levels);
         var levels = new byte[Levels][];
-        for (int l = 0; l < Levels; l++) levels[l] = BlockCompression.EncodeBc3(mips[l], img.Width >> l, img.Width >> l);
+        for (int l = 0; l < Levels; l++)
+            levels[l] = BlockCompression.EncodeBc3(mips[l], img.Width >> l, img.Width >> l);
         return new Tile(img.Width, levels);
     }
 
@@ -143,7 +160,8 @@ static class TerrainColourCache
             int size = BitConverter.ToInt32(bytes, 4);
             if (size <= 0 || size % Granule != 0 || bytes.Length != 8 + LevelBytes(size, Levels)) return null;
             var levels = new byte[Levels][];
-            for (int l = 0, at = 8; l < Levels; at += levels[l].Length, l++) levels[l] = bytes.AsSpan(at, LevelBytes(size >> l, 1)).ToArray();
+            for (int l = 0, at = 8; l < Levels; at += levels[l].Length, l++)
+                levels[l] = bytes.AsSpan(at, LevelBytes(size >> l, 1)).ToArray();
             return new Tile(size, levels);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
@@ -166,7 +184,9 @@ static class TerrainColourCache
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    /// <summary>BC3 bytes of <paramref name="levels"/> levels from a side of <paramref name="size"/>.</summary>
+    /// <summary>
+    /// BC3 bytes of <paramref name="levels"/> levels from a side of <paramref name="size"/>.
+    /// </summary>
     static int LevelBytes(int size, int levels)
     {
         int bytes = 0;

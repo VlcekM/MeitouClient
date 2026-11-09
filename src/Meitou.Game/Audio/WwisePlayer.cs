@@ -40,41 +40,56 @@ public sealed partial class WwisePlayer : IDisposable
     // The block being mixed covers [blockStart, time); runTime is when the action being run takes effect (music starts at that point).
     double _time, _blockStart, _runTime;
 
-    /// <summary>Overall gain, linear (the ambience slider's).</summary>
+    /// <summary>
+    /// Overall gain, linear (the ambience slider's).
+    /// </summary>
     public float Gain { get; set; } = 1;
 
-    /// <summary>Instances and voices last mixed, banks loaded (for the overlay).</summary>
+    /// <summary>
+    /// Instances and voices last mixed, banks loaded (for the overlay).
+    /// </summary>
     public (int Instances, int Voices, int Banks, int Clips) Stats { get; private set; }
 
-    /// <summary>The voices of music clips last mixed (part of <see cref="Stats"/>' voices).</summary>
+    /// <summary>
+    /// The voices of music clips last mixed (part of <see cref="Stats"/>' voices).
+    /// </summary>
     public int MusicVoices { get; private set; }
 
     /// <summary>
-    /// Meitou's voice cap (docs/audio.md "Voice cap", the Audio settings' Sound voices slider, <see cref="AudioSettings.VoiceCap"/>): at most this many sounds besides the music are mixed in a block, the loudest at the listener; the others run on
-    /// silently (no decoding) and come back in place when they are among the loudest again. 0: every sound is mixed. Set from any thread.
+    /// Meitou's voice cap (docs/audio.md "Voice cap", the Audio settings' Sound voices slider, <see cref="AudioSettings.VoiceCap"/>): at most this
+    /// many sounds besides the music are mixed in a block, the loudest at the listener; the others run on silently (no decoding) and come back in
+    /// place when they are among the loudest again. 0: every sound is mixed. Set from any thread.
     /// </summary>
     public int VoiceCap { get; set; } = AudioSettings.MeitouVoices;
 
     /// <summary>
-    /// Meitou's hearing range (docs/audio.md "Hearing range", the Audio settings' Sound range slider): every attenuation curve and every game-side distance limit is read at the
-    /// distance divided by this, so 2 hears everything twice as far. 1 is the original. Set from any thread.
+    /// Meitou's hearing range (docs/audio.md "Hearing range", the Audio settings' Sound range slider): every attenuation curve and every game-side
+    /// distance limit is read at the distance divided by this, so 2 hears everything twice as far. 1 is the original. Set from any thread.
     /// </summary>
     public float Reach { get; set; } = 1;
 
-    /// <summary>The squared distance from <paramref name="eye"/> as the game's distance limits see it under <see cref="Reach"/>.</summary>
+    /// <summary>
+    /// The squared distance from <paramref name="eye"/> as the game's distance limits see it under <see cref="Reach"/>.
+    /// </summary>
     public float HeardDistanceSquared(Vector3 at, Vector3 eye) => Vector3.DistanceSquared(at, eye) / (Reach * Reach);
 
-    /// <summary>The sounds the cap left silent in the last block.</summary>
+    /// <summary>
+    /// The sounds the cap left silent in the last block.
+    /// </summary>
     public int Silenced { get; private set; }
 
-    /// <summary>How much louder a sound mixed in the last block counts for the cap (a factor on its level).</summary>
+    /// <summary>
+    /// How much louder a sound mixed in the last block counts for the cap (a factor on its level).
+    /// </summary>
     const float CapHysteresis = 1.5f;
 
     float[] _loudness = new float[64];
     int[] _order = new int[64];
     readonly HashSet<int> _silenced = [];
 
-    /// <summary>True once the bank has been read and handed to the audio thread (and not unloaded since).</summary>
+    /// <summary>
+    /// True once the bank has been read and handed to the audio thread (and not unloaded since).
+    /// </summary>
     public bool IsBankLoaded(string name) => _loadedBanks.ContainsKey(Normalize(name));
 
     readonly ConcurrentDictionary<string, bool> _loadedBanks = new(StringComparer.OrdinalIgnoreCase);
@@ -147,7 +162,9 @@ public sealed partial class WwisePlayer : IDisposable
         });
     }
 
-    /// <summary>Posts an event on the default game object (0); see the overloads with a game object.</summary>
+    /// <summary>
+    /// Posts an event on the default game object (0); see the overloads with a game object.
+    /// </summary>
     public void Post(string eventName) => Post(WwiseHash.Id(eventName), 0);
     public void Post(uint eventId) => Post(eventId, 0);
     public void SetParameter(string name, float value) => SetParameter(WwiseHash.Id(name), value);
@@ -155,10 +172,14 @@ public sealed partial class WwisePlayer : IDisposable
     public void SetState(string group, string state) => SetState(WwiseHash.Id(group), WwiseHash.Id(state));
     public void SetState(uint group, uint state) => _commands.Enqueue(() => ChangeState(group, state));
 
-    /// <summary>Sets a switch group (<c>Biomes</c>, <c>General</c>): switches and states share the ids of their groups, so it is a state change.</summary>
+    /// <summary>
+    /// Sets a switch group (<c>Biomes</c>, <c>General</c>): switches and states share the ids of their groups, so it is a state change.
+    /// </summary>
     public void SetSwitch(string group, string value) => SetState(group, value);
 
-    /// <summary>Called by the output: runs the queued commands, advances every instance and adds the voices to <paramref name="mix"/>.</summary>
+    /// <summary>
+    /// Called by the output: runs the queued commands, advances every instance and adds the voices to <paramref name="mix"/>.
+    /// </summary>
     public void Mix(float[] mix, int frames)
     {
         _blockStart = _runTime = _time;
@@ -190,7 +211,8 @@ public sealed partial class WwisePlayer : IDisposable
                 _sounds[i].Dispose();
                 _sounds.RemoveAt(i);
             }
-        // The voice cap (Meitou's rule, docs/audio.md "Voice cap"): past VoiceCap sounds, only the loudest at the listener are mixed; the rest keep their place silently.
+        // The voice cap (Meitou's rule, docs/audio.md "Voice cap"): past VoiceCap sounds, only the loudest at the listener are mixed; the rest keep
+        // their place silently.
         int cap = VoiceCap, cappable = 0;
         if (_loudness.Length < _sounds.Count) (_loudness, _order) = (new float[_sounds.Count * 2], new int[_sounds.Count * 2]);
         for (int i = 0; i < _sounds.Count; i++)
@@ -254,7 +276,8 @@ public sealed partial class WwisePlayer : IDisposable
     /// <summary>
     /// Whether an action is limited to the game object the event was posted on. The scope (the action type's low byte) follows the Wwise action
     /// numbering: 2 is global (the "master" forms), 3 is the posting object only (the "object" forms; Observed: <c>Stop_Emitter</c> uses it, a global
-    /// stop would silence every emitter), 5 and 7 are the object forms of "all" and "all except"; 4 and 6 are global. Play always plays on the object.
+    /// stop would silence every emitter), 5 and 7 are the object forms of "all" and "all except"; 4 and 6 are global. Play always plays on the
+    /// object.
     /// </summary>
     static bool ObjectScoped(WwiseAction action) => action.Scope is 3 or 5 or 7;
 
@@ -283,14 +306,30 @@ public sealed partial class WwisePlayer : IDisposable
             case WwiseActionKind.SetState:
                 ChangeState(action.GroupId, action.StateId);
                 break;
-            case WwiseActionKind.SetVolume: _volumeOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetVolume: _volumeOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetPitch: _pitchOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetPitch: _pitchOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetLowPass: _lowPassOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetLowPass: _lowPassOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetBusVolume: _busVolumes.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetBusVolume: _busVolumes.Reset(action.Target, scopeObject, fade); break;
+            case WwiseActionKind.SetVolume:
+                _volumeOffsets.Set(action.Target, scopeObject, action.Value, fade);
+                break;
+            case WwiseActionKind.ResetVolume:
+                _volumeOffsets.Reset(action.Target, scopeObject, fade);
+                break;
+            case WwiseActionKind.SetPitch:
+                _pitchOffsets.Set(action.Target, scopeObject, action.Value, fade);
+                break;
+            case WwiseActionKind.ResetPitch:
+                _pitchOffsets.Reset(action.Target, scopeObject, fade);
+                break;
+            case WwiseActionKind.SetLowPass:
+                _lowPassOffsets.Set(action.Target, scopeObject, action.Value, fade);
+                break;
+            case WwiseActionKind.ResetLowPass:
+                _lowPassOffsets.Reset(action.Target, scopeObject, fade);
+                break;
+            case WwiseActionKind.SetBusVolume:
+                _busVolumes.Set(action.Target, scopeObject, action.Value, fade);
+                break;
+            case WwiseActionKind.ResetBusVolume:
+                _busVolumes.Reset(action.Target, scopeObject, fade);
+                break;
             case WwiseActionKind.BypassFx:
                 if (action.TargetIsBus) ApplyBypass(action.Target, action.Bypass, action.BypassMask);
                 break;
@@ -331,7 +370,9 @@ public sealed partial class WwisePlayer : IDisposable
         _ => null,
     };
 
-    /// <summary>The node and its parents up the hierarchy (as far as the loaded banks reach).</summary>
+    /// <summary>
+    /// The node and its parents up the hierarchy (as far as the loaded banks reach).
+    /// </summary>
     IEnumerable<WwiseObject> Chain(WwiseObject node)
     {
         for (var o = node; o is not null;)
@@ -350,14 +391,18 @@ public sealed partial class WwisePlayer : IDisposable
         _sounds.Clear();
     }
 
-    /// <summary>A played node. Gains multiply down the instance tree (fades); a stopped instance fades out and ends.</summary>
+    /// <summary>
+    /// A played node. Gains multiply down the instance tree (fades); a stopped instance fades out and ends.
+    /// </summary>
     abstract class Instance(WwisePlayer player, WwiseObject node, Instance? parent)
     {
         protected readonly WwisePlayer _player = player;
         public readonly WwiseObject Node = node;
         public readonly Instance? Parent = parent;
 
-        /// <summary>The game object this plays on: the one the event was posted on (inherited from the parent).</summary>
+        /// <summary>
+        /// The game object this plays on: the one the event was posted on (inherited from the parent).
+        /// </summary>
         public readonly ulong GameObject = parent?.GameObject ?? player._postingObject;
         protected readonly List<Instance> _children = [];
         float _fade = 1, _fadeTarget = 1, _fadeRate;
@@ -365,12 +410,16 @@ public sealed partial class WwisePlayer : IDisposable
 
         public bool Done { get; protected set; }
 
-        /// <summary>When this instance starts (player time, seconds): the point in the block being mixed that music aligns to.</summary>
+        /// <summary>
+        /// When this instance starts (player time, seconds): the point in the block being mixed that music aligns to.
+        /// </summary>
         public double StartTime = player._runTime;
 
         protected bool Stopping => _stopping;
 
-        /// <summary>This instance's fade times its parents'.</summary>
+        /// <summary>
+        /// This instance's fade times its parents'.
+        /// </summary>
         public float Fade => _fade * (Parent?.Fade ?? 1);
 
         public void FadeIn(float seconds)
@@ -462,7 +511,9 @@ public sealed partial class WwisePlayer : IDisposable
         }
     }
 
-    /// <summary>Plays all children at once (layer containers; an actor-mixer played directly).</summary>
+    /// <summary>
+    /// Plays all children at once (layer containers; an actor-mixer played directly).
+    /// </summary>
     sealed class GroupInstance(WwisePlayer player, WwiseObject node, uint[] children, Instance? parent) : Instance(player, node, parent)
     {
         public override void Start()
@@ -548,7 +599,9 @@ public sealed partial class WwisePlayer : IDisposable
         }
     }
 
-    /// <summary>A switch container on a state group: plays the children of the current state, swapping them (with the fades) when it changes.</summary>
+    /// <summary>
+    /// A switch container on a state group: plays the children of the current state, swapping them (with the fades) when it changes.
+    /// </summary>
     sealed class SwitchInstance(WwisePlayer player, WwiseSwitchContainer node, Instance? parent) : Instance(player, node, parent)
     {
         uint _current;
@@ -618,13 +671,22 @@ public sealed partial class WwisePlayer : IDisposable
         {
         }
 
-        /// <summary>A clip of <paramref name="track"/> beginning at <paramref name="startTime"/> (player seconds).</summary>
+        /// <summary>
+        /// A clip of <paramref name="track"/> beginning at <paramref name="startTime"/> (player seconds).
+        /// </summary>
         public SoundInstance(WwisePlayer player, WwiseMusicTrack track, WwiseMusicClip clip, WwiseSource source, double startTime, Instance parent)
             : this(player, track, parent, source, 1, clip, startTime)
         {
         }
 
-        SoundInstance(WwisePlayer player, WwiseObject node, Instance? parent, WwiseSource source, int plays, WwiseMusicClip? musicClip, double startTime)
+        SoundInstance(
+            WwisePlayer player,
+            WwiseObject node,
+            Instance? parent,
+            WwiseSource source,
+            int plays,
+            WwiseMusicClip? musicClip,
+            double startTime)
             : base(player, node, parent)
         {
             IsMusic = musicClip is not null;
@@ -647,10 +709,12 @@ public sealed partial class WwisePlayer : IDisposable
             else if (positioning is { IsGameDefined: true })
             {
                 _placed3D = true;
-                if (positioning.AttenuationId != 0 && player._objects.TryGetValue(positioning.AttenuationId, out var a)) _attenuation = a as WwiseAttenuation;
+                if (positioning.AttenuationId != 0 && player._objects.TryGetValue(positioning.AttenuationId, out var a))
+                    _attenuation = a as WwiseAttenuation;
                 player._gameObjects.TryGetValue(GameObject, out _objectState);
             }
-            // The sends: the nearest node that sets user-defined sends (bit 2 overrides, bit 3 lists the buses) decides; a node that overrides with no buses sends nowhere.
+            // The sends: the nearest node that sets user-defined sends (bit 2 overrides, bit 3 lists the buses) decides; a node that overrides with
+            // no buses sends nowhere.
             var sender = _chain.Select(n => NodeOf(n)!).FirstOrDefault(n => (n.AuxBits & 0x0C) != 0);
             if (sender is not null)
                 _sends = [.. sender.AuxBuses.Where(b => b != 0).Take(Voice.MaxSends).Select(b => player.AuxBus(b)).OfType<AuxBusState>()];
@@ -663,8 +727,13 @@ public sealed partial class WwisePlayer : IDisposable
                 {
                     skip = (long)Math.Round(Math.Max(0, musicClip.BeginTrim) / 1000 * clip.SampleRate);
                     if (musicClip.BeginTrim > 0.5 || musicClip.EndTrim < -0.5)
-                        limit = (long)Math.Round(Math.Max(0, musicClip.SourceDuration + musicClip.EndTrim - musicClip.BeginTrim) / 1000 * clip.SampleRate);
-                    // Starts at the first output frame at or after the start time; the clip's position there is the part of a frame the start is early.
+                    {
+                        double playable = musicClip.SourceDuration + musicClip.EndTrim - musicClip.BeginTrim;
+                        limit = (long)Math.Round(Math.Max(0, playable) / 1000 * clip.SampleRate);
+                    }
+
+                    // Starts at the first output frame at or after the start time; the clip's position there is the part of a frame the start is
+                    // early.
                     double at = Math.Max(0, (StartTime - player._blockStart) * player._outputRate);
                     _delayFrames = Math.Ceiling(at - 1e-6);
                     phase = Math.Max(0, _delayFrames - at) * clip.SampleRate / player._outputRate;
@@ -696,10 +765,15 @@ public sealed partial class WwisePlayer : IDisposable
         float _level, _dry, _send, _panLeft, _panRight, _lowPassCoefficient;
         double _rate;
 
-        /// <summary>Whether the player may leave this sound silent for a block (<see cref="VoiceCap"/>): any but a music clip, while its voice can keep its place.</summary>
+        /// <summary>
+        /// Whether the player may leave this sound silent for a block (<see cref="VoiceCap"/>): any but a music clip, while its voice can keep its
+        /// place.
+        /// </summary>
         public bool Cappable => !IsMusic && _voice is { CanSkip: true };
 
-        /// <summary>The frames of this block before the sound starts (a music clip starting inside it), taken off the pending delay.</summary>
+        /// <summary>
+        /// The frames of this block before the sound starts (a music clip starting inside it), taken off the pending delay.
+        /// </summary>
         bool Start(int frames, out int first)
         {
             first = 0;
@@ -714,33 +788,46 @@ public sealed partial class WwisePlayer : IDisposable
             return true;
         }
 
-        /// <summary>Mixes the block with the gains <see cref="Prepare"/> worked out.</summary>
+        /// <summary>
+        /// Mixes the block with the gains <see cref="Prepare"/> worked out.
+        /// </summary>
         public void Mix(float[] mix, int frames)
         {
             if (_voice is null || Done || !Start(frames, out int first)) return;
             for (int i = 0; i < _sends.Length; i++)
                 _targets[i] = new VoiceSend(_sends[i].Prepare(frames), _level * _send * _panLeft, _level * _send * _panRight);
-            _voice.Mix(mix, frames, _rate, _level * _dry * _panLeft, _level * _dry * _panRight, _lowPassCoefficient, first, _targets.AsSpan(0, _sends.Length));
+            float left = _level * _dry * _panLeft;
+            float right = _level * _dry * _panRight;
+            _voice.Mix(mix, frames, _rate, left, right, _lowPassCoefficient, first, _targets.AsSpan(0, _sends.Length));
         }
 
-        /// <summary>Mixed in the last block (the voice cap's hysteresis and fade-out).</summary>
+        /// <summary>
+        /// Mixed in the last block (the voice cap's hysteresis and fade-out).
+        /// </summary>
         public bool Heard;
 
-        /// <summary>Mixes the block ramping from the last gains to silence: a sound the cap silences fades out over one block instead of cutting.</summary>
+        /// <summary>
+        /// Mixes the block ramping from the last gains to silence: a sound the cap silences fades out over one block instead of cutting.
+        /// </summary>
         public void FadeOut(float[] mix, int frames)
         {
             (_level, _dry, _send) = (0, 0, 0);
             Mix(mix, frames);
         }
 
-        /// <summary>Leaves the block silent: the voice's clock runs on (<see cref="Voice.Skip"/>).</summary>
+        /// <summary>
+        /// Leaves the block silent: the voice's clock runs on (<see cref="Voice.Skip"/>).
+        /// </summary>
         public void Skip(int frames)
         {
             if (_voice is null || Done || !Start(frames, out int first)) return;
             _voice.Skip(frames, _rate, first);
         }
 
-        /// <summary>Works out the block's gains (the node chain, the buses, the place); returns how loud the sound is at the listener, dry or sent, for the voice cap.</summary>
+        /// <summary>
+        /// Works out the block's gains (the node chain, the buses, the place); returns how loud the sound is at the listener, dry or sent, for the
+        /// voice cap.
+        /// </summary>
         public float Prepare(float masterGain)
         {
             if (_voice is null || Done) return 0;
@@ -761,7 +848,12 @@ public sealed partial class WwisePlayer : IDisposable
                         foreach (var (childId, curve) in layer.Associations)
                         {
                             if (childId != child.Id) continue;
-                            if (layer.CrossfadeParameterId != 0 && curve.Length > 0) linear *= Math.Max(0, WwiseCurves.Evaluate(curve, _player.Parameter(layer.CrossfadeParameterId, GameObject)));
+                            if (layer.CrossfadeParameterId != 0 && curve.Length > 0)
+                            {
+                                float crossfade = _player.Parameter(layer.CrossfadeParameterId, GameObject);
+                                linear *= Math.Max(0, WwiseCurves.Evaluate(curve, crossfade));
+                            }
+
                             foreach (var rtpc in layer.Rtpcs) Apply(rtpc, ref db, ref linear, ref cents, ref lowPass);
                         }
                 child = n;
@@ -788,7 +880,8 @@ public sealed partial class WwisePlayer : IDisposable
                     distance /= _player.Reach;
                     dry = Spatial.VolumeGain(_attenuation.Curve(WwiseAttenuation.VolumeDry), distance);
                     send = Spatial.VolumeGain(_attenuation.Curve(WwiseAttenuation.AuxUserDefined), distance);
-                    if (_attenuation.Curve(WwiseAttenuation.LowPass) is { } lp && lp.Points.Length > 0) lowPass += WwiseCurves.Evaluate(lp.Points, distance);
+                    if (_attenuation.Curve(WwiseAttenuation.LowPass) is { } lp && lp.Points.Length > 0)
+                        lowPass += WwiseCurves.Evaluate(lp.Points, distance);
                     var (coneGain, coneLowPass) = Spatial.Cone(_attenuation.Cone, front, position, ears.Position);
                     dry *= coneGain;
                     send *= coneGain;
@@ -812,10 +905,18 @@ public sealed partial class WwisePlayer : IDisposable
             float y = WwiseCurves.Evaluate(rtpc.Points, _player.Parameter(rtpc.GameParameterId, GameObject));
             switch (rtpc.ParameterId)
             {
-                case WwisePropertyId.Volume when rtpc.Scaling == 2: linear *= Math.Max(0, 1 + y); break;
-                case WwisePropertyId.Volume: db += y; break;
-                case WwisePropertyId.Pitch: cents += y; break;
-                case WwisePropertyId.LowPass: lowPass += y; break;
+                case WwisePropertyId.Volume when rtpc.Scaling == 2:
+                    linear *= Math.Max(0, 1 + y);
+                    break;
+                case WwisePropertyId.Volume:
+                    db += y;
+                    break;
+                case WwisePropertyId.Pitch:
+                    cents += y;
+                    break;
+                case WwisePropertyId.LowPass:
+                    lowPass += y;
+                    break;
             }
         }
 
@@ -830,7 +931,9 @@ public sealed partial class WwisePlayer : IDisposable
             return 1 - MathF.Exp(-2 * MathF.PI * cutoff / _player._outputRate);
         }
 
-        /// <summary>Where the sound is on its path now: the vertices in order, each reached after its duration; listener-relative x (right) and z.</summary>
+        /// <summary>
+        /// Where the sound is on its path now: the vertices in order, each reached after its duration; listener-relative x (right) and z.
+        /// </summary>
         (float X, float Z) PathPosition()
         {
             var (first, count) = _path!.Paths[_pathIndex];

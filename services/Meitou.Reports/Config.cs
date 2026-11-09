@@ -2,7 +2,9 @@ using Npgsql;
 
 namespace Meitou.Reports;
 
-/// <summary>The service's settings, from environment variables (README.md lists them).</summary>
+/// <summary>
+/// The service's settings, from environment variables (README.md lists them).
+/// </summary>
 sealed record Config(
     string ConnectionString,
     byte[] Salt,
@@ -28,7 +30,8 @@ sealed record Config(
 
         string connection = Get("ConnectionStrings:Reports") ?? FromUrl(Get("DATABASE_URL"))
             ?? throw new InvalidOperationException("Set ConnectionStrings__Reports (ADO.NET) or DATABASE_URL (postgresql://...).");
-        string salt = Get("REPORTS_SALT") ?? throw new InvalidOperationException("Set REPORTS_SALT: a long random string that keeps reporter hashes unguessable.");
+        string salt = Get("REPORTS_SALT")
+                ?? throw new InvalidOperationException("Set REPORTS_SALT: a long random string that keeps reporter hashes unguessable.");
         return new Config(
             connection,
             System.Text.Encoding.UTF8.GetBytes(salt),
@@ -49,7 +52,9 @@ sealed record Config(
             new Uri(Get("PUBLIC_URL") ?? "https://gear-pastry-chorus.cloudovna.app"));
     }
 
-    /// <summary>A <c>postgresql://user:pass@host:port/db?sslmode=...</c> URL as an Npgsql connection string.</summary>
+    /// <summary>
+    /// A <c>postgresql://user:pass@host:port/db?sslmode=...</c> URL as an Npgsql connection string.
+    /// </summary>
     static string? FromUrl(string? url)
     {
         if (url is null) return null;
@@ -68,7 +73,8 @@ sealed record Config(
         {
             var kv = part.Split('=', 2);
             if (kv[0] == "sslmode" && kv.Length == 2)
-                b.SslMode = kv[1] switch { "disable" => SslMode.Disable, "require" => SslMode.Require, "verify-ca" => SslMode.VerifyCA, "prefer" => SslMode.Prefer, _ => SslMode.VerifyFull };
+                b.SslMode = kv[1] switch { "disable" => SslMode.Disable, "require" => SslMode.Require, "verify-ca" => SslMode.VerifyCA,
+                        "prefer" => SslMode.Prefer, _ => SslMode.VerifyFull };
         }
         return b.ConnectionString;
     }

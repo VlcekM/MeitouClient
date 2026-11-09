@@ -3,15 +3,17 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
-/// The Meitou <c>skin</c> switch's table (docs/character-renderer.md "Skin"): Penner's pre-integrated skin diffuse, the sun's N·L term of a sphere of skin of radius r
-/// once light has spread under it by the six-Gaussian skin diffusion profile (d'Eon and Luebke, GPU Gems 3 ch. 14), per colour channel. u: N·L from -1 to 1;
-/// v: the square root of the curvature 1/r over <see cref="MaxInverseRadiusMm"/> (0: flat, Lambert), so the gentle curves of faces and limbs get most rows.
-/// RGBA16F, linear, sampled with clamped bilinear filtering.
+/// The Meitou <c>skin</c> switch's table (docs/character-renderer.md "Skin"): Penner's pre-integrated skin diffuse, the sun's N·L term of a sphere of
+/// skin of radius r once light has spread under it by the six-Gaussian skin diffusion profile (d'Eon and Luebke, GPU Gems 3 ch. 14), per colour
+/// channel. u: N·L from -1 to 1; v: the square root of the curvature 1/r over <see cref="MaxInverseRadiusMm"/> (0: flat, Lambert), so the gentle
+/// curves of faces and limbs get most rows. RGBA16F, linear, sampled with clamped bilinear filtering.
 /// </summary>
 sealed class SkinScattering : IDisposable
 {
     public const int Width = 64, Height = 64;
-    /// <summary>The table's last row: a radius of 1 mm; anything curved more tightly reads that row.</summary>
+    /// <summary>
+    /// The table's last row: a radius of 1 mm; anything curved more tightly reads that row.
+    /// </summary>
     public const float MaxInverseRadiusMm = 1f;
 
     // The profile: variance (mm²) and the weights of red, green and blue (GPU Gems 3, ch. 14, table 14-1).
@@ -28,7 +30,9 @@ sealed class SkinScattering : IDisposable
     readonly IGpuContext _gpu;
     readonly GpuTexture _texture;
 
-    /// <summary>The table's index in the bindless 2D array.</summary>
+    /// <summary>
+    /// The table's index in the bindless 2D array.
+    /// </summary>
     public uint Index { get; }
 
     public SkinScattering(IGpuContext gpu)
@@ -48,8 +52,8 @@ sealed class SkinScattering : IDisposable
     }
 
     /// <summary>
-    /// The table, RGBA by row (v) then column (u): for a ring of the sphere through the lit point, the light each point of the ring receives (clamped cos) weighted by
-    /// the profile at the chord between them, over the profile's total along the ring. Row 0 is a flat surface: plain clamped N·L.
+    /// The table, RGBA by row (v) then column (u): for a ring of the sphere through the lit point, the light each point of the ring receives (clamped
+    /// cos) weighted by the profile at the chord between them, over the profile's total along the ring. Row 0 is a flat surface: plain clamped N·L.
     /// </summary>
     public static float[] Bake(int steps = 1024)
     {
@@ -64,7 +68,9 @@ sealed class SkinScattering : IDisposable
         for (int y = 1; y < Height; y++)
         {
             float v = (float)y / (Height - 1), inverseRadius = MaxInverseRadiusMm * v * v;
-            // Only the arc whose chord is within 8 deviations of the widest Gaussian weighs (beyond, the profile is nothing), so a gentle curve still gets fine steps.
+
+            // Only the arc whose chord is within 8 deviations of the widest Gaussian weighs (beyond, the profile is nothing), so a gentle curve still
+            // gets fine steps.
             float span = MathF.Min(MathF.PI, 2f * MathF.Asin(MathF.Min(1f, 4f * MathF.Sqrt(Profile[^1].Variance) * inverseRadius)));
             float totalR = 0, totalG = 0, totalB = 0;
             for (int k = 0; k < steps; k++)
@@ -75,12 +81,19 @@ sealed class SkinScattering : IDisposable
                 float r = 0, g = 0, b = 0;
                 foreach (var p in Profile)
                 {
-                    // Normalised along the ring (1D), so each layer weighs by its share of the light: a 2D normalisation lets the narrowest layer swamp the ring.
+                    // Normalised along the ring (1D), so each layer weighs by its share of the light: a 2D normalisation lets the narrowest layer
+                    // swamp the ring.
                     float gauss = MathF.Exp(-d * d / (2f * p.Variance)) / MathF.Sqrt(2f * MathF.PI * p.Variance);
-                    r += p.R * gauss; g += p.G * gauss; b += p.B * gauss;
+                    r += p.R * gauss;
+                    g += p.G * gauss;
+                    b += p.B * gauss;
                 }
-                weight[3 * k] = r; weight[3 * k + 1] = g; weight[3 * k + 2] = b;
-                totalR += r; totalG += g; totalB += b;
+                weight[3 * k] = r;
+                weight[3 * k + 1] = g;
+                weight[3 * k + 2] = b;
+                totalR += r;
+                totalG += g;
+                totalB += b;
             }
             for (int x = 0; x < Width; x++)
             {
@@ -89,7 +102,9 @@ sealed class SkinScattering : IDisposable
                 for (int k = 0; k < steps; k++)
                 {
                     float lit = MathF.Max(0, MathF.Cos(theta + angles[k]));
-                    r += lit * weight[3 * k]; g += lit * weight[3 * k + 1]; b += lit * weight[3 * k + 2];
+                    r += lit * weight[3 * k];
+                    g += lit * weight[3 * k + 1];
+                    b += lit * weight[3 * k + 2];
                 }
                 int o = 4 * (y * Width + x);
                 (texels[o], texels[o + 1], texels[o + 2], texels[o + 3]) = (r / totalR, g / totalG, b / totalB, 1);

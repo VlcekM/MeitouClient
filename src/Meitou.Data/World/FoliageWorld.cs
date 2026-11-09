@@ -42,10 +42,14 @@ public sealed class FoliageWorld : IDisposable
     /// </summary>
     public static IReadOnlySet<(int X, int Z)> PlayerTowns { get; set; } = new HashSet<(int, int)>();
 
-    /// <summary>A town's key in <see cref="PlayerTowns"/>: its X/Z rounded to whole units.</summary>
+    /// <summary>
+    /// A town's key in <see cref="PlayerTowns"/>: its X/Z rounded to whole units.
+    /// </summary>
     public static (int X, int Z) TownKey(float x, float z) => ((int)MathF.Round(x), (int)MathF.Round(z));
 
-    /// <summary>The towns that keep foliage away (not nest markers): X/Z and <c>no-foliage range</c>.</summary>
+    /// <summary>
+    /// The towns that keep foliage away (not nest markers): X/Z and <c>no-foliage range</c>.
+    /// </summary>
     public static List<FoliageTown> ReadTowns(GameDatabase db, WorldLevelData world)
     {
         var list = new List<FoliageTown>();
@@ -55,7 +59,9 @@ public sealed class FoliageWorld : IDisposable
         return list;
     }
 
-    /// <summary>Opens the files the placer reads (the first time a zone is placed).</summary>
+    /// <summary>
+    /// Opens the files the placer reads (the first time a zone is placed).
+    /// </summary>
     void Open()
     {
         if (_map is not null) return;
@@ -65,7 +71,9 @@ public sealed class FoliageWorld : IDisposable
         _map = TerrainHeightmap.Open(_install);
     }
 
-    /// <summary>The biome colours of a zone, in blend slot order: the slots with weight anywhere in the zone's box.</summary>
+    /// <summary>
+    /// The biome colours of a zone, in blend slot order: the slots with weight anywhere in the zone's box.
+    /// </summary>
     public List<uint> ZoneBiomes(ZoneCoordinate zone)
     {
         Open();
@@ -95,12 +103,16 @@ public sealed class FoliageWorld : IDisposable
         return best;
     }
 
-    /// <summary>The foliage of one zone: placed meshes and grass patches. Zones outside the grid are empty.</summary>
+    /// <summary>
+    /// The foliage of one zone: placed meshes and grass patches. Zones outside the grid are empty.
+    /// </summary>
     public FoliageZone Zone(ZoneCoordinate zone) => Load(zone).Zone;
 
-    /// <summary>The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid.
+    /// <summary>
+    /// The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid.
     /// <paramref name="farOnly"/>: only the far layers when that is exact (<see cref="FoliageLayout.Place"/>).
-    /// With a layout cache a zone placed before (same data and code) is read back instead.</summary>
+    /// With a layout cache a zone placed before (same data and code) is read back instead.
+    /// </summary>
     public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);

@@ -10,9 +10,10 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
-/// The impostor bake of TERRAIN-mode rocks (docs/impostors.md section 13): the terrain's own mesh material, drawn into the baker's targets. The rock's
-/// biome is a row of the terrain's parameter texture; the program is the terrain mesh program with an output switch (<see cref="TerrainShaders.RockBakeFragmentNative"/>),
-/// the rock is one identity-scaled placement whose row 0 w is the biome row, as the foliage's GPU cull writes them.
+/// The impostor bake of TERRAIN-mode rocks (docs/impostors.md section 13): the terrain's own mesh material, drawn into the baker's targets. The
+/// rock's biome is a row of the terrain's parameter texture; the program is the terrain mesh program with an output switch (<see
+/// cref="TerrainShaders.RockBakeFragmentNative"/>), the rock is one identity-scaled placement whose row 0 w is the biome row, as the foliage's GPU
+/// cull writes them.
 /// </summary>
 public sealed unsafe partial class TerrainRenderer
 {
@@ -22,16 +23,23 @@ public sealed unsafe partial class TerrainRenderer
     {
         if (_rockBake is not null) return _rockBake;
         GpuSetLayout[] sets = [_nativeFrame.SetLayout, GpuSetLayout.Bindless, _constantsLayout];
-        return _rockBake = new TerrainProgram(_gpu, sets, TerrainShaders.RockBakeVertexNative(), TerrainShaders.RockBakeFragmentNative(), "terrain rock bake");
+        return _rockBake = new TerrainProgram(_gpu, sets, TerrainShaders.RockBakeVertexNative(), TerrainShaders.RockBakeFragmentNative(),
+            "terrain rock bake");
     }
 
-    /// <summary>True when the biome of parameter row <paramref name="row"/> has its layer textures resident now (the bake waits for it).</summary>
+    /// <summary>
+    /// True when the biome of parameter row <paramref name="row"/> has its layer textures resident now (the bake waits for it).
+    /// </summary>
     internal bool CanBakeRock(int row) => _textures is { HasBiomes: true } t && t.IsResident(row);
 
-    /// <summary>The identity of the biome's material for the atlas cache key (null: none). See <see cref="TerrainTextures.BiomeKey"/>.</summary>
+    /// <summary>
+    /// The identity of the biome's material for the atlas cache key (null: none). See <see cref="TerrainTextures.BiomeKey"/>.
+    /// </summary>
     internal string? RockBiomeKey(int row) => _textures?.BiomeKey(row);
 
-    /// <summary>The vertex layout and buffers of a rock's mesh part for the bake program (positions at 0, normals at 1, the placement's rows at 7 to 10).</summary>
+    /// <summary>
+    /// The vertex layout and buffers of a rock's mesh part for the bake program (positions at 0, normals at 1, the placement's rows at 7 to 10).
+    /// </summary>
     internal (VertexLayout Layout, GpuBufferBinding[] Bindings) RockBakeVertices(DeviceBuffer vertices)
     {
         var p = RockBakeProgram();
@@ -44,11 +52,35 @@ public sealed unsafe partial class TerrainRenderer
         return (p.VertexLayout(attributes), bindings);
     }
 
-    /// <summary>The terrain's constants for a bake: the mesh material of the feature's biome <paramref name="row"/>, textured with normal maps, without the overlay
-    /// and colour maps, the window or the far fade, nothing underwater.</summary>
+    /// <summary>
+    /// The terrain's constants for a bake: the mesh material of the feature's biome <paramref name="row"/>, textured with normal maps, without the
+    /// overlay and colour maps, the window or the far fade, nothing underwater.
+    /// </summary>
     TerrainConstants BakeConstants(int row)
     {
-        var c = new TerrainConstants
+        var c = BakeDefaults(row);
+        if (_textures is { } t)
+        {
+            c.CellGrid = new Vector2(t.CellsX, t.CellsZ);
+            var set = t.Textures;
+            c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, _standInArray);
+            c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, _standInArray);
+            c.DiffuseFar = Index(set.DiffuseFar, BindlessKind.Texture2DArray, _standInArray);
+            c.NormalFar = Index(set.NormalFar, BindlessKind.Texture2DArray, _standInArray);
+            c.FarLod = set.FarLod;
+            c.Params = Index(set.Params, BindlessKind.Texture2D, _standIn2D);
+            c.Cells = Index(set.Cells, BindlessKind.UintTexture2D, _standInUInt);
+            c.BlendMap = Index(set.BlendMap, BindlessKind.Texture2D, _standIn2D);
+        }
+        return c;
+    }
+
+    /// <summary>
+    /// The bake's constants before the terrain's textures are bound: the stand-ins, the rock's biome row and the bake's switches.
+    /// </summary>
+    TerrainConstants BakeDefaults(int row)
+    {
+        return new TerrainConstants
         {
             CoarseRect = CoarseRect,
             CoarseCells = new Vector2(_coarseSize - 1f, _coarseSize - 1f),
@@ -90,25 +122,15 @@ public sealed unsafe partial class TerrainRenderer
             ReliefQuality = GroundRelief.Quality,
             FieldTiles = _standInUInt,
         };
-        if (_textures is { } t)
-        {
-            c.CellGrid = new Vector2(t.CellsX, t.CellsZ);
-            var set = t.Textures;
-            c.Diffuse = Index(set.Diffuse, BindlessKind.Texture2DArray, _standInArray);
-            c.Normal = Index(set.Normal, BindlessKind.Texture2DArray, _standInArray);
-            c.DiffuseFar = Index(set.DiffuseFar, BindlessKind.Texture2DArray, _standInArray);
-            c.NormalFar = Index(set.NormalFar, BindlessKind.Texture2DArray, _standInArray);
-            c.FarLod = set.FarLod;
-            c.Params = Index(set.Params, BindlessKind.Texture2D, _standIn2D);
-            c.Cells = Index(set.Cells, BindlessKind.UintTexture2D, _standInUInt);
-            c.BlendMap = Index(set.BlendMap, BindlessKind.Texture2D, _standIn2D);
-        }
-        return c;
     }
 
-    /// <summary>What a rock's impostor needs of the terrain to fade as the terrain's mesh shader fades (<see cref="ImpostorRockPush"/>): the maps' bindless indices, the
-    /// colour window, the world's half size and the two distances (80% and 100% of <paramref name="materialDistance"/>). <c>Flags</c> bit 0 ground map, 1 whole-world colour, 2 colour map.</summary>
-    internal (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd, uint Flags) RockFarView(float materialDistance)
+    /// <summary>
+    /// What a rock's impostor needs of the terrain to fade as the terrain's mesh shader fades (<see cref="ImpostorRockPush"/>): the maps'
+    /// bindless indices, the colour window, the world's half size and the two distances (80% and 100% of <paramref name="materialDistance"/>).
+    /// <c>Flags</c> bit 0 ground map, 1 whole-world colour, 2 colour map.
+    /// </summary>
+    internal (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd,
+        uint Flags) RockFarView(float materialDistance)
     {
         uint flags = 0, ground = _standIn2D, worldColour = _standIn2D, colour = _standIn2D;
         var region = Vector4.Zero;
@@ -122,22 +144,25 @@ public sealed unsafe partial class TerrainRenderer
         return (region, ground, worldColour, colour, (float)WorldLayout.HalfWorldSize, materialDistance * 0.8f, materialDistance, flags);
     }
 
-    /// <summary>The placement of a bake: <paramref name="scale"/> uniformly, the biome row in row 0 w (the layout of the foliage cull's compact kernel).</summary>
+    /// <summary>
+    /// The placement of a bake: <paramref name="scale"/> uniformly, the biome row in row 0 w (the layout of the foliage cull's compact kernel).
+    /// </summary>
     static Matrix4x4 BakePlacement(float scale, int row) => new(scale, 0, 0, row, 0, scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1);
 
     /// <summary>
     /// Records one frame of a rock bake into <paramref name="cmd"/> (inside the baker's open rendering): the rock's parts drawn orthographically along
-    /// <paramref name="dir"/> with the biome's material, writing the output of <paramref name="pass"/> (0 albedo, 1 normal in the frame's basis, 2 gloss).
-    /// <paramref name="distance"/> is the distance the material is shaded for (its fade with distance), <paramref name="scale"/> the placement's.
+    /// <paramref name="dir"/> with the biome's material, writing the output of <paramref name="pass"/> (0 albedo, 1 normal in the frame's basis, 2
+    /// gloss). <paramref name="distance"/> is the distance the material is shaded for (its fade with distance), <paramref name="scale"/> the placement's.
     /// </summary>
-    internal void RecordRockBake(IGpuCommandList cmd, AttachmentFormats formats, DrawState state, int row, float scale, float distance, in Matrix4x4 viewProjection, Vector3 eye,
-        Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
+    internal void RecordRockBake(IGpuCommandList cmd, AttachmentFormats formats, DrawState state, int row, float scale, float distance,
+        in Matrix4x4 viewProjection, Vector3 eye, Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
     {
         var p = RockBakeProgram();
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
         var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
-        var constantsSlice = _gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([BakeConstants(row)])), _uniformAlign);
+        var constants = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([BakeConstants(row)]));
+        var constantsSlice = _gpu.Frame.WriteConstants(constants, _uniformAlign);
         ulong key = (ulong)constantsSlice.Handle.Index;
         if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(constantsSlice.Handle);
         uint offset = (uint)constantsSlice.Offset;

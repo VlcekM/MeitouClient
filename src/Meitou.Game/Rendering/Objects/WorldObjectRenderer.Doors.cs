@@ -12,12 +12,15 @@ public sealed partial class WorldObjectRenderer
     readonly ConcurrentDictionary<string, DoorFrame> _doorFrames = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The open amount (0..1) of each door that is not closed, by (placement id, index in the building's <c>doors</c> list); a door missing is drawn closed. Read on the
-    /// render thread; the host replaces it as it likes (docs/render-objects.md "Doors").
+    /// The open amount (0..1) of each door that is not closed, by (placement id, index in the building's <c>doors</c> list); a door missing is drawn
+    /// closed. Read on the render thread; the host replaces it as it likes (docs/render-objects.md "Doors").
     /// </summary>
     public IReadOnlyDictionary<(string Placement, int Door), float>? Doors { get; set; }
 
-    /// <summary>Moves a door part to its open amount (<see cref="DoorLeaf.LocalOffset"/>, along its collision box's axes in world units), from its closed placement.</summary>
+    /// <summary>
+    /// Moves a door part to its open amount (<see cref="DoorLeaf.LocalOffset"/>, along its collision box's axes in world units), from its closed
+    /// placement.
+    /// </summary>
     void PoseDoor(ObjectStreamer.Instance inst, GpuObjectMesh gpu)
     {
         float doa = Doors is { } doors && doors.TryGetValue((inst.Placed.PlacementId, inst.Placed.DoorIndex), out float d) ? Math.Clamp(d, 0, 1) : 0;
@@ -34,17 +37,22 @@ public sealed partial class WorldObjectRenderer
         inst.Transform = m;
         inst.Centre = Vector3.Transform(gpu.Centre, m);
 
-        static Vector3 Unit(float x, float y, float z) => new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+        static Vector3 Unit(float x, float y, float z) => new Vector3(x, y,
+            z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
     }
 
-    /// <summary>A mesh's local bounds from its file's bounds chunk (empty when the file is not found).</summary>
+    /// <summary>
+    /// A mesh's local bounds from its file's bounds chunk (empty when the file is not found).
+    /// </summary>
     (Vector3, Vector3) MeshBounds(string name)
     {
         var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         return path is not null && OgreMeshReader.TryReadBounds(path, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : default;
     }
 
-    /// <summary>A door part's collision box frame from its <c>xml collision</c> file (<see cref="DoorFrame.Default"/> when the file is missing or unreadable).</summary>
+    /// <summary>
+    /// A door part's collision box frame from its <c>xml collision</c> file (<see cref="DoorFrame.Default"/> when the file is missing or unreadable).
+    /// </summary>
     DoorFrame DoorFrameOf(string recordPath)
     {
         if (string.IsNullOrWhiteSpace(recordPath) || FindRecordFile(recordPath) is not { } path) return DoorFrame.Default;

@@ -5,12 +5,12 @@ using Meitou.Simulation.Session;
 namespace Meitou.Game.Host.Cameras;
 
 /// <summary>
-/// The free camera (the game's <c>toggle_fps_camera</c>, docs/formats/camera.md: flies with a velocity, only kept a little above
-/// the ground, no ceiling found; Observed). Everything about its feel is an engine choice: the velocity follows the wished
-/// direction (along the view for forward and back, sideways, straight up and down) with an exponential response; the speed grows
-/// with the height above the ground like the viewer's free flight (<see cref="CameraSettings.FreeSpeedPerHeight"/> per unit of
-/// height, between the minimum and maximum speed), doubled while Shift is held; the eye is kept <see cref="CameraSettings.FreeClearance"/> above the ground
-/// under it. The mouse drag and the rotate and pitch keys turn the view; pitch is limited to +-1.5 radians as in the viewer.
+/// The free camera (the game's <c>toggle_fps_camera</c>, docs/formats/camera.md: flies with a velocity, only kept a little above the ground, no
+/// ceiling found; Observed). Everything about its feel is an engine choice: the velocity follows the wished direction (along the view for forward and
+/// back, sideways, straight up and down) with an exponential response; the speed grows with the height above the ground like the viewer's free flight
+/// (<see cref="CameraSettings.FreeSpeedPerHeight"/> per unit of height, between the minimum and maximum speed), doubled while Shift is held; the eye
+/// is kept <see cref="CameraSettings.FreeClearance"/> above the ground under it. The mouse drag and the rotate and pitch keys turn the view; pitch is
+/// limited to +-1.5 radians as in the viewer.
 /// </summary>
 public sealed class FreeCamera
 {
@@ -28,17 +28,26 @@ public sealed class FreeCamera
     public Vector3 Position { get; private set; }
     public Vector3 Velocity { get; private set; }
     public float Yaw { get; private set; }
-    /// <summary>Radians; positive looks down (the strategy camera's convention).</summary>
+    /// <summary>
+    /// Radians; positive looks down (the strategy camera's convention).
+    /// </summary>
     public float Pitch { get; private set; }
-    /// <summary>What <see cref="State"/> reports as <see cref="CameraState.Distance"/>: the boom of the strategy camera it came from.</summary>
+    /// <summary>
+    /// What <see cref="State"/> reports as <see cref="CameraState.Distance"/>: the boom of the strategy camera it came from.
+    /// </summary>
     public float ReportedDistance { get; set; } = Data.World.KenshiCamera.InitialDistance;
 
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
-    /// <summary>The speed at the current height above the ground, units per second.</summary>
-    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight, _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
+    /// <summary>
+    /// The speed at the current height above the ground, units per second.
+    /// </summary>
+    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight,
+        _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
 
-    /// <summary>Starts flying from a camera state, at rest, looking the same way.</summary>
+    /// <summary>
+    /// Starts flying from a camera state, at rest, looking the same way.
+    /// </summary>
     public void Enter(CameraState from)
     {
         Position = from.Eye;

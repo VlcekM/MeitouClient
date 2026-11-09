@@ -18,7 +18,9 @@ public sealed record RotorSpec(int Function, float SpeedMin, float SpeedMax, flo
     /// </summary>
     public static float WindShare(float wind, float min, float max) => wind < min ? 0 : wind >= max ? 1 : (wind - min) / (max - min);
 
-    /// <summary>A ROTATION_WIND_SPEED part's speed: <c>lerp(speed min, speed max, share)</c>, 0 below the minimum wind.</summary>
+    /// <summary>
+    /// A ROTATION_WIND_SPEED part's speed: <c>lerp(speed min, speed max, share)</c>, 0 below the minimum wind.
+    /// </summary>
     public float WindSpeedAt(float wind) => wind < WindMin ? 0 : SpeedMin + (SpeedMax - SpeedMin) * WindShare(wind, WindMin, WindMax);
 
     /// <summary>

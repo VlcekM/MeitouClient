@@ -10,18 +10,23 @@ namespace Meitou.Localisation;
 /// </summary>
 public sealed class GettextCatalog
 {
-    /// <summary>Separator of a message context and its text in a key (<c>msgctxt</c> + 0x04 + <c>msgid</c>).</summary>
+    /// <summary>
+    /// Separator of a message context and its text in a key (<c>msgctxt</c> + 0x04 + <c>msgid</c>).
+    /// </summary>
     const char ContextSeparator = '\u0004';
 
     // Key (msgid, or msgctxt 0x04 msgid) -> translated forms; a message without plural has one form.
     readonly Dictionary<string, string[]> _messages = new(StringComparer.Ordinal);
 
-    // The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key is "Skills".
+    // The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key is
+    // "Skills".
     Dictionary<string, string[]>? _byCase;
     int _byCaseVersion = -1;
     int _version;
 
-    /// <summary>Stores one message and marks the case-free index stale.</summary>
+    /// <summary>
+    /// Stores one message and marks the case-free index stale.
+    /// </summary>
     void Set(string key, string[] forms)
     {
         _messages[key] = forms;
@@ -30,10 +35,14 @@ public sealed class GettextCatalog
 
     public PluralRule Plurals { get; private set; } = PluralRule.Germanic;
 
-    /// <summary>How many messages have a translation.</summary>
+    /// <summary>
+    /// How many messages have a translation.
+    /// </summary>
     public int Count => _messages.Count;
 
-    /// <summary>A catalog with no messages: every lookup returns null.</summary>
+    /// <summary>
+    /// A catalog with no messages: every lookup returns null.
+    /// </summary>
     public static GettextCatalog Empty { get; } = new();
 
     /// <summary>
@@ -57,16 +66,22 @@ public sealed class GettextCatalog
         return Empty;
     }
 
-    /// <summary>Every message's key and first form.</summary>
+    /// <summary>
+    /// Every message's key and first form.
+    /// </summary>
     public IEnumerable<KeyValuePair<string, string>> Messages => _messages.Select(m => new KeyValuePair<string, string>(m.Key, m.Value[0]));
 
-    /// <summary>Puts <paramref name="later"/>'s messages over this catalog's (a later file overrides an earlier one); the plural rule stays.</summary>
+    /// <summary>
+    /// Puts <paramref name="later"/>'s messages over this catalog's (a later file overrides an earlier one); the plural rule stays.
+    /// </summary>
     public void Add(GettextCatalog later)
     {
         foreach (var (key, forms) in later._messages) Set(key, forms);
     }
 
-    /// <summary>The translation of <paramref name="msgid"/> (first form), or null when the catalog has none.</summary>
+    /// <summary>
+    /// The translation of <paramref name="msgid"/> (first form), or null when the catalog has none.
+    /// </summary>
     public string? Find(string msgid, string? context = null) =>
         _messages.TryGetValue(context is null ? msgid : context + ContextSeparator + msgid, out var forms) ? forms[0] : null;
 
@@ -86,15 +101,20 @@ public sealed class GettextCatalog
         return _byCase.TryGetValue(msgid, out var forms) ? forms[0] : null;
     }
 
-    /// <summary>The translated plural form for <paramref name="n"/> of the message whose singular source text is <paramref name="singular"/>, or null.</summary>
+    /// <summary>
+    /// The translated plural form for <paramref name="n"/> of the message whose singular source text is <paramref name="singular"/>, or null.
+    /// </summary>
     public string? FindPlural(string singular, long n, string? context = null)
     {
-        if (!_messages.TryGetValue(context is null ? singular : context + ContextSeparator + singular, out var forms)) return null;
+        if (!_messages.TryGetValue(context is null ? singular : context + ContextSeparator + singular, out var forms))
+            return null;
         int index = Plurals.Index(n);
         return forms[index < forms.Length ? index : forms.Length - 1];
     }
 
-    /// <summary>The catalog of a <c>.mo</c> file (either byte order; revision 0 or 1).</summary>
+    /// <summary>
+    /// The catalog of a <c>.mo</c> file (either byte order; revision 0 or 1).
+    /// </summary>
     public static GettextCatalog ReadMo(byte[] data)
     {
         if (data.Length < 28) throw new InvalidDataException("not a .mo file (too short)");
@@ -106,7 +126,8 @@ public sealed class GettextCatalog
         if (U32(4) >> 16 > 1) throw new InvalidDataException("unsupported .mo revision");
         long count = U32(8);
         long originals = U32(12), translations = U32(16);
-        if (originals + count * 8 > data.Length || translations + count * 8 > data.Length) throw new InvalidDataException("truncated .mo file");
+        if (originals + count * 8 > data.Length || translations + count * 8 > data.Length)
+            throw new InvalidDataException("truncated .mo file");
 
         ReadOnlySpan<byte> String(long table, long i)
         {
@@ -129,7 +150,8 @@ public sealed class GettextCatalog
             int zero = original.IndexOf((byte)0);
             string key = Encoding.UTF8.GetString(zero < 0 ? original : original[..zero]);
             var forms = Encoding.UTF8.GetString(translated).Split('\0');
-            if (forms.Length == 0 || forms[0].Length == 0) continue;   // untranslated: msgfmt leaves these out, a hand-made file might not
+            if (forms.Length == 0 || forms[0].Length == 0)
+                continue;   // untranslated: msgfmt leaves these out, a hand-made file might not
             catalog.Set(key, forms);
         }
         return catalog;
@@ -195,13 +217,18 @@ public sealed class GettextCatalog
         foreach (var raw in text.Split('\n'))
         {
             var line = raw.Trim();
-            if (line.Length == 0) { Finish(); continue; }
+            if (line.Length == 0)
+            {
+                Finish();
+                continue;
+            }
             if (line.StartsWith("#~", StringComparison.Ordinal)) continue;   // obsolete entry
             if (line[0] == '#')
             {
                 // A comment after the entry's text starts the next entry.
                 if (field is not null || id is not null) Finish();
-                if (line.StartsWith("#,", StringComparison.Ordinal) && line.Contains("fuzzy", StringComparison.Ordinal)) fuzzy = true;
+                if (line.StartsWith("#,", StringComparison.Ordinal) && line.Contains("fuzzy", StringComparison.Ordinal))
+                    fuzzy = true;
                 continue;
             }
             if (line[0] == '"')
@@ -253,7 +280,11 @@ public sealed class GettextCatalog
         for (int i = 0; i < inner.Length; i++)
         {
             char c = inner[i];
-            if (c != '\\' || i + 1 >= inner.Length) { result.Append(c); continue; }
+            if (c != '\\' || i + 1 >= inner.Length)
+            {
+                result.Append(c);
+                continue;
+            }
             char next = inner[++i];
             result.Append(next switch
             {
