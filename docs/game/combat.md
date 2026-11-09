@@ -943,7 +943,7 @@ fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no use
 **Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up) (read through the decompiler's garbled Ogre operators: the feet-to-feet
 line), mask `0x87f9e04` (no characters); it passes when it meets something
 farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.
-Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character has no hull (every Meitou knock-out is ragdolled).
+Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character has no hull (every Meitou knock-out is ragdolled), nor a carried one, awake too (every pick-up requests CARRY_MODE, [ragdolls](ragdolls.md)).
 
 ### Arms
 

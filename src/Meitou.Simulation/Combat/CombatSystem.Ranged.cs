@@ -256,7 +256,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// ragdoll runs, <c>FUN_1405d0db0</c> → <c>FUN_14065fe40</c>, <b>Observed</b>; Meitou counts every down character as ragdolled).
     /// </summary>
     internal static bool Shootable(ReadOnlySpan<CharacterHot> state, CharacterTable table, int slot) =>
-        state[slot].Alive && table.Cold(slot) is { Medical.Incapacitated: false, Race: not null };
+        state[slot].Alive && table.Cold(slot) is { Medical.Incapacitated: false, CarriedBy.IsNone: true, Race: not null };
 
     /// <summary>
     /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from
