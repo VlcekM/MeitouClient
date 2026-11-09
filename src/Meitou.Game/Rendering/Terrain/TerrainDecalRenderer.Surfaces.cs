@@ -187,7 +187,9 @@ public sealed unsafe partial class TerrainDecalRenderer
     // The scene colour times the decal's colour (red, green and blue; the alpha is the characters' mask).
     static readonly BlendState Multiply = new(true, BlendingFactor.DstColor, BlendingFactor.Zero);
 
-    /// <summary>One decal on the surfaces: where it is in 3D, how it is turned and how big.</summary>
+    /// <summary>
+    /// One decal on the surfaces: where it is in 3D, how it is turned and how big.
+    /// </summary>
     sealed class SurfaceDecal
     {
         public TerrainDecalType Type;
@@ -248,7 +250,9 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// </summary>
     public Func<float, float, float>? GroundHeight { get; set; }
 
-    /// <summary>The decals kept for the surfaces now.</summary>
+    /// <summary>
+    /// The decals kept for the surfaces now.
+    /// </summary>
     public int SurfaceCount => _surfaces.Count;
 
     /// <summary>
@@ -268,7 +272,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         return false;
     }
 
-    /// <summary>Drops every decal kept for the surfaces (a new world).</summary>
+    /// <summary>
+    /// Drops every decal kept for the surfaces (a new world).
+    /// </summary>
     public void ClearSurfaces()
     {
         _surfaces.Clear();
@@ -310,7 +316,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         }
     }
 
-    /// <summary>Ages the decals by <paramref name="dt"/> seconds of game time; those whose life ran out go.</summary>
+    /// <summary>
+    /// Ages the decals by <paramref name="dt"/> seconds of game time; those whose life ran out go.
+    /// </summary>
     public void AgeSurfaces(float dt)
     {
         if (dt <= 0 || _surfaces.Count == 0) return;
@@ -415,7 +423,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         _surfaces.Add(decal);
     }
 
-    /// <summary>The half sizes of a decal in world units (the terrain's rule: size × texels × 288 / 4096).</summary>
+    /// <summary>
+    /// The half sizes of a decal in world units (the terrain's rule: size × texels × 288 / 4096).
+    /// </summary>
     (float Width, float Height) Half(SurfaceDecal d)
     {
         var image = _sprites[(int)d.Type][d.Variant];
@@ -487,8 +497,10 @@ public sealed unsafe partial class TerrainDecalRenderer
         DrawSurfaces(colour, program, n, near, far, rotation, tanX, tanY, back, jitterNdc);
     }
 
-    /// <summary>The decals within the range of the eye and in front of it (<paramref name="back"/> is the view's back), at most <see cref="MaxSurfaceDraws"/>
-    /// of them, the nearest, into <see cref="_surfaceNear"/>.</summary>
+    /// <summary>
+    /// The decals within the range of the eye and in front of it (<paramref name="back"/> is the view's back), at most
+    /// <see cref="MaxSurfaceDraws"/> of them, the nearest, into <see cref="_surfaceNear"/>.
+    /// </summary>
     void CollectSurfaceNear(Vector3 eye, Vector3 back)
     {
         _surfaceNear.Clear();
@@ -510,7 +522,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         }
     }
 
-    /// <summary>Writes the instance row of each near decal that has a sprite and width into <see cref="_surfaceInstances"/>; returns how many.</summary>
+    /// <summary>
+    /// Writes the instance row of each near decal that has a sprite and width into <see cref="_surfaceInstances"/>; returns how many.
+    /// </summary>
     int FillSurfaceInstances(Vector3 eye)
     {
         if (_surfaceInstances.Length < _surfaceNear.Count)
@@ -535,7 +549,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         return n;
     }
 
-    /// <summary>Registers the scene's depth as the bindless texture the surfaces read, again when the depth texture changed.</summary>
+    /// <summary>
+    /// Registers the scene's depth as the bindless texture the surfaces read, again when the depth texture changed.
+    /// </summary>
     void BindSurfaceDepth(GpuTexture depth)
     {
         if (_surfaceDepth == depth) return;
@@ -544,7 +560,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         _surfaceDepth = depth;
     }
 
-    /// <summary>Draws the first <paramref name="n"/> instance rows over <paramref name="colour"/> in one native pass.</summary>
+    /// <summary>
+    /// Draws the first <paramref name="n"/> instance rows over <paramref name="colour"/> in one native pass.
+    /// </summary>
     void DrawSurfaces(GpuTexture colour, GpuProgram program, int n, float near, float far, Matrix4x4 rotation, float tanX, float tanY,
         Vector3 back, Vector2 jitterNdc)
     {
@@ -556,7 +574,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * SurfaceInstance.Size));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: Multiply, mask: DrawState.Rgb);
         state.Record(cmd, t);
-        var pipeline = _surfacePipeline ??= _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces"));
+        var pipeline = _surfacePipeline ??=
+            _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces"));
         cmd.BindPipeline(pipeline);
         _frame.Bind(cmd, program, default);
         var push = new SurfacePush

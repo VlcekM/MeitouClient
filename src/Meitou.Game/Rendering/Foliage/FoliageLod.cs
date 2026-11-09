@@ -254,7 +254,11 @@ public static class FoliageLodBuilder
                 var q = Vector3.Max(Vector3.Zero, Vector3.Max(t.Min - p, p - t.Max));
                 if (q.LengthSquared() >= best) continue;
                 float d = DistanceSquared(p, t.A, t.B, t.C);
-                if (d < best) { best = d; bestTriangle = i; }
+                if (d < best)
+                {
+                    best = d;
+                    bestTriangle = i;
+                }
             }
             if (best > worst) worst = best;
             if (n != Vector3.Zero && bestTriangle >= 0)
@@ -362,7 +366,10 @@ public static class FoliageLodCache
             }
             return (true, new FoliageLodSet { Indices = indices, Errors = errors, NormalAngles = normals, Triangles = triangles });
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException) { return (false, null); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException)
+        {
+            return (false, null);
+        }
     }
 
     public static long Save(string path, FoliageLodSet? set, int partCount, int version = FoliageLodBuilder.Version)
@@ -389,7 +396,11 @@ public static class FoliageLodCache
                         foreach (var list in part)
                         {
                             writer.Write(list.Length);
-                            foreach (uint i in list) { if (wide) writer.Write(i); else writer.Write((ushort)i); }
+                            foreach (uint i in list)
+                            {
+                                if (wide) writer.Write(i);
+                                else writer.Write((ushort)i);
+                            }
                         }
                     }
                 }

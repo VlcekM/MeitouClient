@@ -218,13 +218,24 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         {
             layerOf[i] = -1;
             for (int s = 0; s < _layers; s++)
-                if (!taken[s] && _slots[s].Version != 0 && _slots[s].Key == _near[i].Key) { layerOf[i] = s; taken[s] = true; break; }
+                if (!taken[s] && _slots[s].Version != 0 && _slots[s].Key == _near[i].Key)
+                {
+                    layerOf[i] = s;
+                    taken[s] = true;
+                    break;
+                }
         }
         for (int i = 0; i < _near.Count; i++)
         {
             if (layerOf[i] >= 0) continue;
             for (int s = 0; s < _layers; s++)
-                if (!taken[s]) { layerOf[i] = s; taken[s] = true; _slots[s] = (_near[i].Key, 0, 0, 0); break; }
+                if (!taken[s])
+                {
+                    layerOf[i] = s;
+                    taken[s] = true;
+                    _slots[s] = (_near[i].Key, 0, 0, 0);
+                    break;
+                }
         }
     }
 

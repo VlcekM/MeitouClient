@@ -251,7 +251,12 @@ public sealed unsafe partial class ShadowPass : IDisposable
         g.Publish(ShadowShaders.ReceiverBlock, _receiver.Binding);
         g.Publish(ShadowShaders.CasterBlock, _casterBias.Binding);
         g.Publish("uShadowMap", () => _atlasPublished ? _atlasShadow : default);
-        g.Publish("uShadowNoise", () => { UploadNoise(); return _noiseSampled; });   // a segment being prepared: a frame is open
+        // a segment being prepared: a frame is open
+        g.Publish("uShadowNoise", () =>
+        {
+            UploadNoise();
+            return _noiseSampled;
+        });
         g.Publish(MeitouShadowShaders.Block, _meitouBlock.Binding);
 
         // The terrain shadow map with its own sampler (linear, clamped; TerrainShadowMap).

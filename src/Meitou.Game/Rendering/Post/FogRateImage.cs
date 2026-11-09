@@ -209,7 +209,8 @@ sealed unsafe class FogRateImage(PostProcess post)
         int width = post.RenderWidth, height = post.RenderHeight;
         int tw = FogShadingRate.Tiles(width, texel), th = FogShadingRate.Tiles(height, texel);
         int dw = FogShadingRate.Tiles(width, 4), dh = FogShadingRate.Tiles(height, 4);
-        if (_rateImage is null || _rateImage.Width != tw || _rateImage.Height != th || _rateDistance is null || _rateDistance.Width != dw || _rateDistance.Height != dh)
+        if (_rateImage is null || _rateImage.Width != tw || _rateImage.Height != th
+            || _rateDistance is null || _rateDistance.Width != dw || _rateDistance.Height != dh)
         {
             foreach (var t in new[] { _rateDistance, _rateImage }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
             using var batch = post.Gpu.Uploads.Begin();

@@ -129,7 +129,12 @@ sealed class FoliageGrassStore
         if (StoreScale(grassRange, areas, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused))
             return;
         int scale = StoreScale(grassRange, areas, guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : _gpu.VideoMemoryBudget);
-        if (scale <= _grassStoreScale) { _grassStoreRefused = wanted; return; }   // the budget caps it where it is
+        // the budget caps it where it is
+        if (scale <= _grassStoreScale)
+        {
+            _grassStoreRefused = wanted;
+            return;
+        }
         if (guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
         {
             _grassStoreRefused = wanted;
@@ -138,7 +143,8 @@ sealed class FoliageGrassStore
         }
         DropAllPages(zones);
         Replace(scale);
-        Console.WriteLine($"foliage   grass store grown to {GrassArenaBytes * (ulong)scale >> 20} MB for grass distance x {grassRange / FoliageRenderer.DefaultGrassRange:0.##}");
+        Console.WriteLine($"foliage   grass store grown to {GrassArenaBytes * (ulong)scale >> 20} MB " +
+            $"for grass distance x {grassRange / FoliageRenderer.DefaultGrassRange:0.##}");
     }
 
     /// <summary>
@@ -396,7 +402,11 @@ sealed class FoliageGrassStore
             if (b.Count == 0) continue;
             b.Store = store;
             b.Range = store.AllocateBlades(b.Count);
-            if (b.Range.IsEmpty) { room = false; break; }
+            if (b.Range.IsEmpty)
+            {
+                room = false;
+                break;
+            }
             b.FirstBlade = FoliageGrassGpu.FirstBlade(b.Range);
             b.Slot = store.AllocateSlot();
             if (b.Slot < 0) room = false;

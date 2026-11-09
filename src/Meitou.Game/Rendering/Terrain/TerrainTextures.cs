@@ -201,7 +201,11 @@ public sealed unsafe class TerrainTextures : IDisposable
         foreach (var t in new[] { _diffuseArray, _normalArray, _diffuseFar, _normalFar, _heightArray, _reliefTexture, _paramTexture, _cellTexture,
             _blendTexture, _overlayTexture, _colourTexture, _groundTexture, _worldColourTexture, _fieldTexture })
             t?.Dispose();
-        foreach (var m in _mapStandbys) { m.Overlay.Dispose(); m.Colour.Dispose(); }
+        foreach (var m in _mapStandbys)
+        {
+            m.Overlay.Dispose();
+            m.Colour.Dispose();
+        }
     }
 
     void BuildBiomes(RgbaImage blend)
@@ -219,6 +223,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         _diffuseFar = AllocateArray(true, FarSlots, _farSize, _farLevels, "terrain textures diffuse far");
         _normalFar = AllocateArray(false, FarSlots, _farSize, _farLevels, "terrain textures normal far");
         if (GroundRelief.Enabled)
+        {
             try
             {
                 _heightArray = MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, FarSlots, 1, "terrain textures height");
@@ -227,6 +232,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             {
                 Messages.Add($"terrain height array allocation: {e.Message}; the ground has no relief");
             }
+        }
+
         // Each pair's steepness factor (1 / (side × its height's steepness); 0: flat), read by its far index: its depth (GroundRelief.LayerDepthCm).
         if (GroundRelief.Enabled)
         {
@@ -483,7 +490,11 @@ public sealed unsafe class TerrainTextures : IDisposable
             UpdateBiomes(eye, materialDistance, ahead, kept);
         }
         UpdateMaps(eye, uploads, kept);
-        if (_cellsDirty) { UploadCells(); _fieldDirty = true; }
+        if (_cellsDirty)
+        {
+            UploadCells();
+            _fieldDirty = true;
+        }
         if (_fieldDirty) UploadField();
     }
 
@@ -762,7 +773,11 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         var (oldDiffuse, oldNormal) = (_diffuseArray, _normalArray);
         (_diffuseArray, _normalArray) = (diffuse, normal);
-        Gpu.DeferDelete(() => { oldDiffuse.Dispose(); oldNormal.Dispose(); });
+        Gpu.DeferDelete(() =>
+        {
+            oldDiffuse.Dispose();
+            oldNormal.Dispose();
+        });
         foreach (var p in _owner) if (p is not null) p.Slot = -1;
         _owner = new Pair?[want];
         _nextFree = 0;
@@ -866,7 +881,11 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     static long Bytes(int size, int levels, int slots) =>
-        Enumerable.Range(0, levels).Sum(l => { long s = Math.Max(size >> l, 1); return (s + 3) / 4 * ((s + 3) / 4) * 24; }) * Math.Max(slots, 1);
+        Enumerable.Range(0, levels).Sum(l =>
+        {
+            long s = Math.Max(size >> l, 1);
+            return (s + 3) / 4 * ((s + 3) / 4) * 24;
+        }) * Math.Max(slots, 1);
 
     #endregion
 
@@ -904,7 +923,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         var b = _biomes[row];
         var sb = new System.Text.StringBuilder();
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        sb.Append(inv, $"{b.StringId}|{_layerSize}|{b.BrightnessFix:R}|{b.DistortWavelength:R}|{b.DistortAmplitude:R}|{b.SlopeMin}|{b.SlopeMax}|{b.SlopeBlend}|{b.OverlayMult}|{b.GroundColour}|{b.FadeDistance:R}\n");
+        sb.Append(inv, $"{b.StringId}|{_layerSize}|{b.BrightnessFix:R}|{b.DistortWavelength:R}|{b.DistortAmplitude:R}|{b.SlopeMin}|" +
+            $"{b.SlopeMax}|{b.SlopeBlend}|{b.OverlayMult}|{b.GroundColour}|{b.FadeDistance:R}\n");
         for (int l = 0; l < 6; l++)
         {
             sb.Append(inv, $"{b.Tiling[l]}");
@@ -912,7 +932,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             {
                 string? path = name is null ? null : _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
                 var info = path is null ? null : new FileInfo(path);
-                sb.Append(inv, $"|{name}|{(info is { Exists: true } ? info.Length : -1)}|{(info is { Exists: true } ? info.LastWriteTimeUtc.Ticks : 0)}");
+                sb.Append(inv, $"|{name}|{(info is { Exists: true } ? info.Length : -1)}|" +
+                    $"{(info is { Exists: true } ? info.LastWriteTimeUtc.Ticks : 0)}");
             }
             sb.Append('\n');
         }
@@ -948,6 +969,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
             if (path is null) problems.Add($"terrain texture not found: {name}");
             else
+            {
                 try
                 {
                     if (ReadLayerFile(path, size, levelCount, diffuse, out image) is { } stored) return stored;
@@ -956,6 +978,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                 {
                     problems.Add($"terrain texture {name}: {e.Message}");
                 }
+            }
         }
         if (image is null) return ConstantLayer(fallback, size, levelCount, diffuse);
         return EncodeLayer(image, size, diffuse);
@@ -1041,8 +1064,10 @@ public sealed unsafe class TerrainTextures : IDisposable
             levels[l] = new byte[s * s];
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
+                {
                     levels[l][y * s + x] = (byte)((src[2 * y * p + 2 * x] + src[2 * y * p + 2 * x + 1] + src[(2 * y + 1) * p + 2 * x]
                         + src[(2 * y + 1) * p + 2 * x + 1] + 2) / 4);
+                }
         }
         return levels;
     }
@@ -1104,7 +1129,11 @@ public sealed unsafe class TerrainTextures : IDisposable
                     for (int sx = sx0; sx < sx1; sx++)
                     {
                         int o = (sy * image.Width + sx) * 4;
-                        r += image.Pixels[o]; g += image.Pixels[o + 1]; b += image.Pixels[o + 2]; a += image.Pixels[o + 3]; n++;
+                        r += image.Pixels[o];
+                        g += image.Pixels[o + 1];
+                        b += image.Pixels[o + 2];
+                        a += image.Pixels[o + 3];
+                        n++;
                     }
                 int d = (y * size + x) * 4;
                 (result[d], result[d + 1], result[d + 2], result[d + 3]) = ((byte)(r / n), (byte)(g / n), (byte)(b / n), (byte)(a / n));
@@ -1170,8 +1199,10 @@ public sealed unsafe class TerrainTextures : IDisposable
                 {
                     int x1 = Math.Min(2 * x + 1, pw - 1);
                     for (int c = 0; c < 4; c++)
+                    {
                         dst[(y * w + x) * 4 + c] = (byte)((src[(2 * y * pw + 2 * x) * 4 + c] + src[(2 * y * pw + x1) * 4 + c] +
                             src[(y1 * pw + 2 * x) * 4 + c] + src[(y1 * pw + x1) * 4 + c] + 2) / 4);
+                    }
                 }
             });
             levels[l] = dst;
@@ -1466,7 +1497,10 @@ public sealed unsafe class TerrainTextures : IDisposable
                         for (int sx = x * f; sx < Math.Min((x + 1) * f, img.Width); sx++)
                         {
                             int o = (sy * img.Width + sx) * 4;
-                            r += img.Pixels[o]; g += img.Pixels[o + 1]; b += img.Pixels[o + 2]; n++;
+                            r += img.Pixels[o];
+                            g += img.Pixels[o + 1];
+                            b += img.Pixels[o + 2];
+                            n++;
                         }
                     if (n == 0) continue;
                     int d = ((tz * part + y) * colourSize + tx * part + x) * 4;
@@ -1591,8 +1625,8 @@ public sealed unsafe class TerrainTextures : IDisposable
             TextureWrapMode.ClampToEdge, "terrain texture field");
         _fieldDirty = true;
         int needed = _pinned.SelectMany(b => _state[b].Pairs).Distinct().Count();
-        Console.WriteLine($"field     {_tiles.Length} ground textures from {_pinned.Length} biomes ({needed} texture pairs kept resident, {Capacity} near slots), {FieldColumns} a row, tiles {tile:0} units, " +
-            $"from {FieldOrigin.X:0}, {FieldOrigin.Y:0}");
+        Console.WriteLine($"field     {_tiles.Length} ground textures from {_pinned.Length} biomes ({needed} texture pairs kept resident, " +
+            $"{Capacity} near slots), {FieldColumns} a row, tiles {tile:0} units, from {FieldOrigin.X:0}, {FieldOrigin.Y:0}");
     }
 
     /// <summary>
@@ -1608,7 +1642,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         var pair = _state[e.Row].Pairs[(int)e.Layer];
         float tile = 5000 / Math.Max((_biomes[e.Row].Tiling[(int)e.Layer].X + _biomes[e.Row].Tiling[(int)e.Layer].Y) / 2, 1e-3f);
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{i + 1}/{_tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile) * GroundRelief.BiomeFactor(_biomes[e.Row].StringId) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
+            $"{i + 1}/{_tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile)
+                * GroundRelief.BiomeFactor(_biomes[e.Row].StringId) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
     }
 
     /// <summary>
@@ -1620,8 +1655,10 @@ public sealed unsafe class TerrainTextures : IDisposable
         if (_fieldTexture is null || _tiles.Length == 0) return;
         var texels = new byte[_tiles.Length * 4];
         for (int i = 0; i < _tiles.Length; i++)
+        {
             (texels[i * 4], texels[i * 4 + 1], texels[i * 4 + 2]) = ((byte)_tiles[i].Row, (byte)_tiles[i].Layer,
                 (byte)(_state[_tiles[i].Row].Resident ? 1 : 0));
+        }
         using var batch = Gpu.Uploads.Begin();
         batch.Write(_fieldTexture.Texture, 0, 0, Rect(0, 0, _tiles.Length, 1), texels);
     }
@@ -1727,12 +1764,16 @@ sealed class MapWindows
         this._colourTile = colourTile;
         _overlayUnit = (double)WorldLayout.WorldSize / (overlayTile * TerrainMaps.OverlayTiles);
         _ratio = Math.Max((int)Math.Round((double)colourTile / overlayTile), 1);
-        if (_ratio * overlayTile != colourTile) throw new InvalidDataException($"colour tiles ({colourTile}) are not a whole multiple of overlay tiles ({overlayTile})");
+        if (_ratio * overlayTile != colourTile)
+            throw new InvalidDataException($"colour tiles ({colourTile}) are not a whole multiple of overlay tiles ({overlayTile})");
         _align = 64;
         if (colourBlocks is null) return;
         while (_align * _ratio % TerrainColourCache.Granule != 0) _align += 64;
         if (OverlayPixels % _align != 0 || overlayTile * TerrainMaps.OverlayTiles % _align != 0)
-            throw new InvalidDataException($"the window ({OverlayPixels}) or the overlay map ({overlayTile * TerrainMaps.OverlayTiles}) is not a multiple of {_align}");
+        {
+            throw new InvalidDataException($"the window ({OverlayPixels}) or the overlay map ({overlayTile * TerrainMaps.OverlayTiles}) " +
+                $"is not a multiple of {_align}");
+        }
     }
 
     public static MapWindows Open(GameInstall install, List<string> messages)
@@ -1954,7 +1995,11 @@ sealed class MapWindows
             var path = TerrainMaps.OverlayTile(install, "colour", tx, tz);
             try
             {
-                if (TerrainColourCache.Locate(path) is { } found) { lock (_stored) _stored[(tx, tz)] = found; return (found, null); }
+                if (TerrainColourCache.Locate(path) is { } found)
+                {
+                    lock (_stored) _stored[(tx, tz)] = found;
+                    return (found, null);
+                }
                 var tile = TerrainColourCache.Get(path);
                 lock (_stored) _memory[(tx, tz)] = tile;
                 return (null, tile);

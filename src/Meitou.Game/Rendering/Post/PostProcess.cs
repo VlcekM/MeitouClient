@@ -462,7 +462,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _occlusion.A, _occlusion.B, _occlusion.Mask,
                 _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth,
                 _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _fogRate.Distance, _fogRate.Image,
-                _fogRate.Neutral, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History }.OfType<Target2D>();
+                _fogRate.Neutral, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History }
+            .OfType<Target2D>();
 
     void Free()
     {
@@ -521,7 +522,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).
     /// </summary>
-    public bool MergeSupported => SupportsStorage(InternalFormat.Rgba16F) && SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rg32F);
+    public bool MergeSupported =>
+        SupportsStorage(InternalFormat.Rgba16F) && SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rg32F);
 
     /// <summary>
     /// The point sampler the kernels read their inputs with (made with the first use).
@@ -541,8 +543,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
     {
-        var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
-        if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat)) use |= TextureUse.Storage;
+        var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst
+            | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
+        if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat))
+            use |= TextureUse.Storage;
         var texture = batch.Create(new TextureDesc(glFormat, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
@@ -565,7 +569,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             Free();
             (_displayWidth, _displayHeight, Unallocated) = (0, 0, true);
-            if (!_unallocatedLogged) Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
+            if (!_unallocatedLogged)
+                Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
             _unallocatedLogged = true;
         }
     }
@@ -577,7 +582,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         (_allocatedKind, _allocatedScale) = (up.Kind, up.EffectiveScale);
         (_displayWidth, _displayHeight) = (displayW, displayH);
         var (w, h) = up.RenderSize(displayW, displayH);
-        _width = w; _height = h;
+        _width = w;
+        _height = h;
 
         using (var batch = Gpu.Uploads.Begin())
         {
@@ -627,7 +633,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         else
         {
-            _stampWriter ??= c => { _written = Gpu.Frame.Timestamps.Allocate(); c.Timestamp(Gpu.Frame.Timestamps, _written); };
+            _stampWriter ??= c =>
+            {
+                _written = Gpu.Frame.Timestamps.Allocate();
+                c.Timestamp(Gpu.Frame.Timestamps, _written);
+            };
             _written = default;
             Gpu.Interleave(_stampWriter);
             slot = _written;
@@ -930,7 +940,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void BeginScene(float near, float far, float fieldOfView, float aspectRatio)
     {
         SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget);
-        _nearPlane = near; _farPlane = far; _fovY = fieldOfView; _aspect = aspectRatio;
+        _nearPlane = near;
+        _farPlane = far;
+        _fovY = fieldOfView;
+        _aspect = aspectRatio;
         _planes = new Vector2(near, far);
         if (Temporal) _toPrevious = ToPrevious(near, far);
         _haveScene = true;
@@ -987,8 +1000,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
         cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
         if (!_pipelines.TryGetValue((p, format, depthFormat, s), out var pipeline))
+        {
             _pipelines[(p, format, depthFormat, s)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles,
                 new AttachmentFormats(format, depthFormat), p.Name));
+        }
         cmd.BindPipeline(pipeline);
         p.Flush(cmd);
         cmd.Draw(3);
@@ -1036,18 +1051,63 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         _postColour = _sceneColour!;
-        if (Temporal) { _postColour = RunUpscale(); Stamp("upscale"); }
+        if (Temporal)
+        {
+            _postColour = RunUpscale();
+            Stamp("upscale");
+        }
         else ActiveUpscaler = "off";
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
         var bloom = _bloom.Run(_postColour);
 
+        RunCompositeChain(o, final, ao, auto, bloom);
+        CloseSegment();
+        BuildHiz();
+        QueueStamps();
+        (_previousRotation, _previousEye, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _fovNow, _aspectNow, Temporal);
+    }
+
+    /// <summary>
+    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// </summary>
+    void RunCompositeChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
+    {
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         MakeLdrTargets(o.Smaa && !Temporal, o.Fxaa && !Temporal, HeatHazeWanted);
         bool smaa = o.Smaa && !Temporal && _smaaWeights is not null;
         bool fxaa = o.Fxaa && !smaa && !Temporal && _ldr is not null;
         bool haze = HeatHazeRuns && (!(fxaa || smaa) || _ldrFxaa is not null);
+        var c = _compositePass;
+        SetComposite(o, ao, auto, bloom);
+        if (fxaa || smaa || haze) Draw(c.P, _ldr!);
+        else DrawFinal(c.P, final);
+        Stamp("composite");
+        var picture = _ldr;
+        if (fxaa)
+        {
+            var f = _fxaaPass;
+            Bind(f.P, f.Image, _ldr);
+            f.P.Set(f.Texel, 1f / _displayWidth, 1f / _displayHeight);
+            if (haze) Draw(f.P, _ldrFxaa!);
+            else DrawFinal(f.P, final);
+            Stamp("fxaa");
+            picture = _ldrFxaa;
+        }
+        if (smaa)
+        {
+            RunSmaa(haze, final);
+            picture = _ldrFxaa;
+        }
+        if (haze) RunHeatHaze(picture!, final);
+    }
+
+    /// <summary>
+    /// Binds the composite's inputs and sets its uniforms: the scale, sharpening, exposure, occlusion, tone map, grade and bloom.
+    /// </summary>
+    void SetComposite(PostOptions o, bool ao, bool auto, Target2D? bloom)
+    {
         var c = _compositePass;
         Bind(c.P, c.Scene, _postColour);
         Bind(c.P, c.Ao, _occlusion.B);
@@ -1070,27 +1130,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Balance, o.Balance);
         Bind(c.P, c.Bloom, bloom);
         c.P.Set(c.BloomStrength, bloom is null ? 0f : Math.Clamp(o.BloomAmount, 0, 1));
-        if (fxaa || smaa || haze) Draw(c.P, _ldr!); else DrawFinal(c.P, final);
-        Stamp("composite");
-        var picture = _ldr;
-        if (fxaa)
-        {
-            var f = _fxaaPass;
-            Bind(f.P, f.Image, _ldr);
-            f.P.Set(f.Texel, 1f / _displayWidth, 1f / _displayHeight);
-            if (haze) Draw(f.P, _ldrFxaa!); else DrawFinal(f.P, final);
-            Stamp("fxaa");
-            picture = _ldrFxaa;
-        }
-        if (smaa)
-        {
-            RunSmaa(haze, final);
-            picture = _ldrFxaa;
-        }
-        if (haze) RunHeatHaze(picture!, final);
-        CloseSegment();
+    }
 
-        // The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it).
+    /// <summary>
+    /// The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it); invalidated when the frame makes none.
+    /// </summary>
+    void BuildHiz()
+    {
         if (OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)
         {
             Hiz ??= new HizPyramid(Gpu);
@@ -1100,14 +1146,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Stamp("hiz");
         }
         else Hiz?.Invalidate();
+    }
 
+    /// <summary>
+    /// Queues this frame's GPU time stamps (if it took any) to be read once the frame has finished.
+    /// </summary>
+    void QueueStamps()
+    {
         if (_stamps is { } set)
         {
             set.Frame = Gpu.Frame.Number;
             _pendingStamps.Enqueue(set);
             _stamps = null;
         }
-        (_previousRotation, _previousEye, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _fovNow, _aspectNow, Temporal);
     }
 
     /// <summary>
@@ -1118,7 +1169,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void MakeLdrTargets(bool smaa, bool fxaa, bool haze)
     {
         bool wantLdr = smaa || fxaa || haze, wantSecond = haze && (smaa || fxaa);
-        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null) && (!smaa || _smaaWeights is not null)) return;
+        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null)
+            && (!smaa || _smaaWeights is not null))
+            return;
         try
         {
             using var batch = Gpu.Uploads.Begin();
@@ -1146,7 +1199,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Draw(s.Weights, _smaaWeights!);
         Bind(s.Blend, s.BlendImage, _ldr);
         Bind(s.Blend, s.BlendWeights, _smaaWeights);
-        if (haze) Draw(s.Blend, _ldrFxaa!); else DrawFinal(s.Blend, final);
+        if (haze) Draw(s.Blend, _ldrFxaa!);
+        else DrawFinal(s.Blend, final);
         Stamp("smaa");
     }
 
@@ -1543,7 +1597,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void CompositeParticlesLow(int divisor)
     {
         var low = LowFor(divisor);
-        if (ParticlesAfterUpscale) { low.Drawn = low.Late = true; return; }
+        if (ParticlesAfterUpscale)
+        {
+            low.Drawn = low.Late = true;
+            return;
+        }
         CompositeLow(low, _sceneColour!, _width, _height);
         low.Drawn = true;
     }
@@ -1555,7 +1613,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void CompositeLateParticles(Target2D target, int targetWidth, int targetHeight)
     {
         foreach (var low in _lowTargets)
-            if (low.Late) { CompositeLow(low, target, targetWidth, targetHeight); low.Late = false; }
+            if (low.Late)
+            {
+                CompositeLow(low, target, targetWidth, targetHeight);
+                low.Late = false;
+            }
     }
 
     void CompositeLow(LowTarget low, Target2D target, int targetWidth, int targetHeight)
@@ -1580,8 +1642,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// Premultiplied "over": the accumulation's colour added, the scene kept by one minus its opacity; red, green and blue only (the alpha is the
     /// characters' mask).
     /// </summary>
-    internal static readonly DrawState ParticleLowState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
-        ColourMask = DrawState.Rgb };
+    internal static readonly DrawState ParticleLowState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
+        ColourMask = DrawState.Rgb,
+    };
 
     void DrawFinal(LegacyProgram p, PassTargets final) =>
         Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, _displayWidth, _displayHeight);
@@ -1622,112 +1687,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var external = ExternalFor(Options.Upscale.Kind);
         bool merged = MergeVelocity && MergeSupported;
         PrepareSunMotion();
-        if (merged) _merged.Velocity(_motion!, _upscaleDepth!, external is null || WaterHeight is null ? null : _reactive!,
-                cleanColour: external is not null);
-        else { Velocity(_motion!, 0); if (external is null) Velocity(_upscaleDepth!, 1); }
-        if (ObjectMotion is { } objectMotion)
-        {
-            // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
-            CloseSegment();
-            var targets = PassTargets.Of(_motion!.Texture, null);
-            var cmd = Gpu.BeginNative("object motion");
-            cmd.BeginRendering(targets.Rendering);
-            Gpu.BeginHostPass((CommandList)cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
-                mask: ColorMask.R | ColorMask.G));
-            var jitterNdc = new Vector2(2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
-            objectMotion(new MotionTargets(Sampled(_sceneDepth!), _planes, jitterNdc, _height / (2 * MathF.Tan(_fovNow * 0.5f))));
-            cmd.EndRendering();
-            Gpu.EndHostPass(cmd);
-            Gpu.EndNative(cmd);
-        }
+        RunVelocity(external, merged);
+        if (ObjectMotion is { } objectMotion) RunObjectMotion(objectMotion);
         if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
         if (_historyA is not null) (_historyA, _historyB) = (_historyB, _historyA);
         var output = _historyB!;
         bool done = false;
         _sharpenAfter = true;
-        if (external is not null)
-        {
-            if (!merged) Velocity(_upscaleDepth!, 1);
-            if (!merged && WaterHeight is not null) Velocity(_reactive!, 2);
-            bool covered = Particles is { HasCoverage: true };
-            if (covered) Stamp("velocity");
-            if (covered) RunCoverage(_reactive!, ColorMask.R, clear: WaterHeight is null);
-            bool adaptedOn = AutoExposure is not null && _adaptedValid;
-            var exposure = external.Kind == UpscalerKind.Dlss ? _upscaleExposure.Write(_adaptB, adaptedOn) : null;
-            CloseSegment();   // the vendor upscaler records its own segment
-            if (covered) Stamp("particle coverage");
-            done = external.Dispatch(new UpscaleInputs
-            {
-                Colour = _sceneColour!.Texture,
-                Depth = _upscaleDepth!.Texture,
-                Motion = _motion!.Texture,
-                Output = output.Texture,
-                Reactive = WaterHeight is null && !covered ? null : _reactive!.Texture,
-                Exposure = exposure?.Texture,
-                Preset = Options.Upscale.DlssPreset,
-                RenderWidth = _width,
-                RenderHeight = _height,
-                DisplayWidth = _displayWidth,
-                DisplayHeight = _displayHeight,
-                JitterPixels = JitterPixels,
-                Near = UpscaleNear,
-                Far = UpscaleFar,
-                FieldOfView = ViewWindow.FieldOfView(_fovNow),
-                DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
-                Sharpness = Options.Upscale.Sharpness,
-                Reset = reset,
-                ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
-                Eye = _eyeNow,
-                Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
-                Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
-                Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
-                Aspect = _aspectNow,
-            });
-            if (done) (ActiveUpscaler, _sharpenAfter) = (external.Name, external.Kind != UpscalerKind.Fsr);   // FSR sharpens itself (RCAS)
-            else
-            {
-                Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
-                _unavailable.Add(external.Kind);
-                external.Dispose();
-                External = null;
-                _warnedFallback = true;
-            }
-        }
-        if (!done)
-        {
-            if (Options.Upscale.Kind is UpscalerKind.Fsr or UpscalerKind.Dlss or UpscalerKind.MetalFx && !_warnedFallback)
-            {
-                Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
-                _warnedFallback = true;
-            }
-
-            // A vendor upscaler that failed this frame left its late particles undrawn: into the scene before the TAA (its output is its next
-            // history).
-            CompositeLateParticles(_sceneColour!, _width, _height);
-
-            // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
-            if (Particles is { HasCoverage: true }) RunCoverage(_motion!, ColorMask.A, clear: false);
-            if (_historyA is null)
-            {
-                // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
-                using (var batch = Gpu.Uploads.Begin())
-                    _historyA = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
-                reset = true;
-            }
-            var t = _taaPass;
-            Bind(t.P, t.Colour, _sceneColour);
-            Bind(t.P, t.Motion, _motion);
-            Bind(t.P, t.History, _historyA);
-            t.P.Set(t.RenderSize, (float)_width, (float)_height);
-            t.P.Set(t.DisplaySize, (float)_displayWidth, (float)_displayHeight);
-            t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
-            t.P.Set(t.Blend, 0.1f);
-            t.P.Set(t.Reset, reset ? 1 : 0);
-            Draw(t.P, output);
-            ActiveUpscaler = _width == _displayWidth && _height == _displayHeight ? "taa" : $"taa {_width}x{_height}";
-        }
+        if (external is not null) done = RunExternalUpscaler(external, merged, output, reset, dt);
+        if (!done) reset = RunTaa(output, reset);
 
         // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it, through their own temporal filter.
         _lateParticles.CompositeFiltered(_lowTargets[0], _lowTargets[1], output, _displayWidth, _displayHeight, reset);
@@ -1735,33 +1703,171 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
         // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no
         // segment is open.
-        if (FrameGen is { Wanted: true } frameGen && _upscaleDepth is not null && _motion is not null)
-        {
-            CloseSegment();
-            frameGen.Prepare(new Upscalers.FrameGenInputs
-            {
-                Depth = _upscaleDepth.Texture,
-                Motion = _motion.Texture,
-                RenderWidth = _width,
-                RenderHeight = _height,
-                JitterPixels = JitterPixels,
-                Near = UpscaleNear,
-                Far = UpscaleFar,
-                FieldOfView = ViewWindow.FieldOfView(_fovNow),
-                DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
-                Reset = reset,
-                Eye = _eyeNow,
-                Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
-                Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
-                Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
-                Aspect = _aspectNow,
-                ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, _previousEye,
-                    FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
-            });
-        }
+        if (FrameGen is { Wanted: true } frameGen && _upscaleDepth is not null && _motion is not null) PrepareFrameGen(frameGen, reset, dt);
         return output;
+    }
+
+    /// <summary>
+    /// The motion target, and the upscalers' depth and the water's reactivity where the merged kernel makes them with it.
+    /// </summary>
+    void RunVelocity(IUpscaler? external, bool merged)
+    {
+        if (merged)
+        {
+            _merged.Velocity(_motion!, _upscaleDepth!, external is null || WaterHeight is null ? null : _reactive!,
+                    cleanColour: external is not null);
+        }
+        else
+        {
+            Velocity(_motion!, 0);
+            if (external is null) Velocity(_upscaleDepth!, 1);
+        }
+    }
+
+    /// <summary>
+    /// The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
+    /// </summary>
+    void RunObjectMotion(Action<MotionTargets> objectMotion)
+    {
+        CloseSegment();
+        var targets = PassTargets.Of(_motion!.Texture, null);
+        var cmd = Gpu.BeginNative("object motion");
+        cmd.BeginRendering(targets.Rendering);
+        Gpu.BeginHostPass((CommandList)cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
+            mask: ColorMask.R | ColorMask.G));
+        var jitterNdc = new Vector2(2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
+        objectMotion(new MotionTargets(Sampled(_sceneDepth!), _planes, jitterNdc, _height / (2 * MathF.Tan(_fovNow * 0.5f))));
+        cmd.EndRendering();
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The vendor upscaler into <paramref name="output"/>; false when it failed (it is dropped for TAA from then on).
+    /// </summary>
+    bool RunExternalUpscaler(IUpscaler external, bool merged, Target2D output, bool reset, float dt)
+    {
+        if (!merged) Velocity(_upscaleDepth!, 1);
+        if (!merged && WaterHeight is not null) Velocity(_reactive!, 2);
+        bool covered = Particles is { HasCoverage: true };
+        if (covered) Stamp("velocity");
+        if (covered) RunCoverage(_reactive!, ColorMask.R, clear: WaterHeight is null);
+        bool adaptedOn = AutoExposure is not null && _adaptedValid;
+        var exposure = external.Kind == UpscalerKind.Dlss ? _upscaleExposure.Write(_adaptB, adaptedOn) : null;
+        CloseSegment();   // the vendor upscaler records its own segment
+        if (covered) Stamp("particle coverage");
+        bool done = external.Dispatch(UpscaleInputsFor(output, covered, exposure, reset, dt));
+        if (done) (ActiveUpscaler, _sharpenAfter) = (external.Name, external.Kind != UpscalerKind.Fsr);   // FSR sharpens itself (RCAS)
+        else
+        {
+            Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
+            _unavailable.Add(external.Kind);
+            external.Dispose();
+            External = null;
+            _warnedFallback = true;
+        }
+        return done;
+    }
+
+    /// <summary>
+    /// What the vendor upscaler reads this frame: the scene, its depth, motion and reactivity, and the camera now and last frame.
+    /// </summary>
+    UpscaleInputs UpscaleInputsFor(Target2D output, bool covered, Target2D? exposure, bool reset, float dt) => new()
+    {
+        Colour = _sceneColour!.Texture,
+        Depth = _upscaleDepth!.Texture,
+        Motion = _motion!.Texture,
+        Output = output.Texture,
+        Reactive = WaterHeight is null && !covered ? null : _reactive!.Texture,
+        Exposure = exposure?.Texture,
+        Preset = Options.Upscale.DlssPreset,
+        RenderWidth = _width,
+        RenderHeight = _height,
+        DisplayWidth = _displayWidth,
+        DisplayHeight = _displayHeight,
+        JitterPixels = JitterPixels,
+        Near = UpscaleNear,
+        Far = UpscaleFar,
+        FieldOfView = ViewWindow.FieldOfView(_fovNow),
+        DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
+        Sharpness = Options.Upscale.Sharpness,
+        Reset = reset,
+        ViewToClip = FullProjection(_fovNow, _aspectNow),
+        ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
+                _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+        Eye = _eyeNow,
+        Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
+        Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
+        Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
+        Aspect = _aspectNow,
+    };
+
+    /// <summary>
+    /// TAA into <paramref name="output"/> (no vendor upscaler, or it failed this frame); returns the reset flag, set on the TAA's first frame.
+    /// </summary>
+    bool RunTaa(Target2D output, bool reset)
+    {
+        if (Options.Upscale.Kind is UpscalerKind.Fsr or UpscalerKind.Dlss or UpscalerKind.MetalFx && !_warnedFallback)
+        {
+            Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
+            _warnedFallback = true;
+        }
+
+        // A vendor upscaler that failed this frame left its late particles undrawn: into the scene before the TAA (its output is its next
+        // history).
+        CompositeLateParticles(_sceneColour!, _width, _height);
+
+        // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
+        if (Particles is { HasCoverage: true }) RunCoverage(_motion!, ColorMask.A, clear: false);
+        if (_historyA is null)
+        {
+            // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
+            using (var batch = Gpu.Uploads.Begin())
+                _historyA = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
+            reset = true;
+        }
+
+        var t = _taaPass;
+        Bind(t.P, t.Colour, _sceneColour);
+        Bind(t.P, t.Motion, _motion);
+        Bind(t.P, t.History, _historyA);
+        t.P.Set(t.RenderSize, (float)_width, (float)_height);
+        t.P.Set(t.DisplaySize, (float)_displayWidth, (float)_displayHeight);
+        t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
+        t.P.Set(t.Blend, 0.1f);
+        t.P.Set(t.Reset, reset ? 1 : 0);
+        Draw(t.P, output);
+        ActiveUpscaler = _width == _displayWidth && _height == _displayHeight ? "taa" : $"taa {_width}x{_height}";
+        return reset;
+    }
+
+    /// <summary>
+    /// Hands frame generation this frame's depth and motion and the camera now and last frame.
+    /// </summary>
+    void PrepareFrameGen(Upscalers.IFrameGenerator frameGen, bool reset, float dt)
+    {
+        CloseSegment();
+        frameGen.Prepare(new Upscalers.FrameGenInputs
+        {
+            Depth = _upscaleDepth!.Texture,
+            Motion = _motion!.Texture,
+            RenderWidth = _width,
+            RenderHeight = _height,
+            JitterPixels = JitterPixels,
+            Near = UpscaleNear,
+            Far = UpscaleFar,
+            FieldOfView = ViewWindow.FieldOfView(_fovNow),
+            DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
+            Reset = reset,
+            Eye = _eyeNow,
+            Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
+            Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
+            Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
+            Aspect = _aspectNow,
+            ViewToClip = FullProjection(_fovNow, _aspectNow),
+            ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
+                    _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+        });
     }
 
     /// <summary>

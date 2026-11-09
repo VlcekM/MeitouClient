@@ -214,7 +214,12 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         if (r.IsEmpty && bytes > 0)
         {
             // A refused growth (the video memory is nearly used up, VramGuard) leaves the range empty: the caller leaves the group out of the frame.
-            if (MayGrow is { } may && !may(GrowSize(bytes))) { GrowRefusals++; (range, generation) = (default, 0); return true; }
+            if (MayGrow is { } may && !may(GrowSize(bytes)))
+        {
+            GrowRefusals++;
+            (range, generation) = (default, 0);
+            return true;
+        }
             Grow(bytes);
             return false;
         }
@@ -262,7 +267,11 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     public Func<ulong, bool>? MayGrow
     {
         get => _mayGrow;
-        set { _mayGrow = value; _scratch.MayGrow = value; }
+        set
+        {
+            _mayGrow = value;
+            _scratch.MayGrow = value;
+        }
     }
     Func<ulong, bool>? _mayGrow;
     /// <summary>
@@ -392,8 +401,16 @@ public sealed unsafe class FoliageGpuCull : IDisposable
                 {
                     long indices = args[i * 5], instances = args[i * 5 + 1];
                     TallyHistogram[kind, instances == 0 ? 0 : instances <= 2 ? 1 : instances <= 15 ? 2 : 3]++;
-                    if (i < rocks) { Tally[kind, 0] += indices / 3 * instances; Tally[kind, 1] += instances; }
-                    else if (i < impostors) { Tally[kind, 2] += indices / 3 * instances; Tally[kind, 3] += instances; }
+                    if (i < rocks)
+                    {
+                        Tally[kind, 0] += indices / 3 * instances;
+                        Tally[kind, 1] += instances;
+                    }
+                    else if (i < impostors)
+                    {
+                        Tally[kind, 2] += indices / 3 * instances;
+                        Tally[kind, 3] += instances;
+                    }
                     else Tally[kind, 4] += instances;
                 }
                 Tally[kind, 5]++;
@@ -440,11 +457,20 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         for (int i = 0; i < _pendingTimes.Count; i++)
         {
             var (b, e, cls) = _pendingTimes[i];
-            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number) { _pendingTimes.RemoveAt(i--); continue; }   // never collected
+            // never collected
+            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number)
+            {
+                _pendingTimes.RemoveAt(i--);
+                continue;
+            }
             if (!arenaQ.TryRead(b, out ulong tb) || !arenaQ.TryRead(e, out ulong te)) continue;
             GpuMicroseconds += (te - tb) / 1000.0;
             GpuTimedViews++;
-            if (cls > 0) { MainMicroseconds[cls - 1] += (te - tb) / 1000.0; MainViews[cls - 1]++; }
+            if (cls > 0)
+            {
+                MainMicroseconds[cls - 1] += (te - tb) / 1000.0;
+                MainViews[cls - 1]++;
+            }
             _pendingTimes.RemoveAt(i--);
         }
     }
@@ -463,8 +489,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// </summary>
     public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock,
         float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default, FoliageLodView lod = default,
-        bool split = false,
-        IReadOnlyList<(Vector2 Min, Vector2 Max)>? interior = null)
+        bool split = false, IReadOnlyList<(Vector2 Min, Vector2 Max)>? interior = null)
     {
         if (work.ChunkCount == 0) return default;
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
@@ -486,32 +511,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var offsets = (Buffer: offsetsBuffer, Offset: offsetsOffset);
         var args = (Buffer: argsBuffer, Offset: argsOffset);
         var rows = (Buffer: rowsBuffer, Offset: rowsOffset);
-        var viewData = _ctx.Frame.AllocateConstants(ViewBytes, Align);
-        var planes = (Vector4*)viewData.Pointer;
-        var lengths = (float*)(viewData.Pointer + 128);
-        for (int i = 0; i < 8; i++) planes[i] = i < view.Planes.Length ? view.Planes[i] : default;
-        for (int i = 0; i < 8; i++) lengths[i] = i < view.Planes.Length ? view.NormalLengths[i] : 0;
-        var resident = (uint*)(viewData.Pointer + 160);
-        for (int i = 0; i < 8; i++) resident[i] = rock.Resident[i];
-        var mode = (uint*)(viewData.Pointer + 192);
-        (mode[0], mode[1], mode[2], mode[3]) = (rock.BiomeRows ? 1u : 0u, fogCull.Length == FogVolumes.CullVectors ? 1u : 0u,
-            occlusion.IsEmpty ? 0u : 1u, (uint)Math.Min(interior?.Count ?? 0, MaxInteriorBoxes));
-        var fogData = (Vector4*)(viewData.Pointer + 208);
-        for (int i = 0; i < FogVolumes.CullVectors; i++) fogData[i] = fogCull.Length == FogVolumes.CullVectors ? fogCull[i] : default;
-        var hzData = fogData + FogVolumes.CullVectors;
-        for (int i = 0; i < HizPyramid.ViewVectors; i++) hzData[i] = occlusion.IsEmpty ? default : occlusion.Vectors[i];
-        hzData[HizPyramid.ViewVectors] = new Vector4(lod.EyeY, lod.Scale, lod.Tolerance, lod.Ortho ? 1 : -lod.FarDistance);
-
-        // The interior masks (a mesh instance over one is drawn with the cut: docs/render-interior-cut.md); past the last slot each box widens the last.
-        var boxes = (Vector4*)(viewData.Pointer + InteriorOffset);
-        for (int i = 0; i < (interior?.Count ?? 0); i++)
-        {
-            var (min, max) = interior![i];
-            int at = Math.Min(i, MaxInteriorBoxes - 1);
-            boxes[at] = i < MaxInteriorBoxes ? new Vector4(min.X, min.Y, max.X, max.Y)
-                : new Vector4(MathF.Min(boxes[at].X, min.X), MathF.Min(boxes[at].Y, min.Y), MathF.Max(boxes[at].Z, max.X), MathF.Max(boxes[at].W,
-                        max.Y));
-        }
+        var viewData = WriteViewData(view, rock, fogCull, occlusion, lod, interior);
 
         Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[10];
         b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, ViewBytes);
@@ -546,38 +546,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         // The draws read the arguments and the rows (the upload buffer's closing full barrier orders them too; this one says what for).
         Barrier(cmd, Access.StorageWrite, Access.IndirectRead | Access.VertexRead | Access.TransferSrc);
         cmd.Timestamp(_ctx.Frame.Timestamps, stamps.Item2, GpuStage.Compute);
-
-        // The total for the CPU's statistics, a frame ring later (the slot's previous frame has completed: its fence was waited for).
-        LateFogCulled = 0;
-        if (fogCull.Length == FogVolumes.CullVectors && _fogIndex < MaxFogViews)
-        {
-            var fogRead = _fogTotals[_scratchSlot] ??= _ctx.CreateReadback(MaxFogViews * 4, $"foliage fog cull totals {_scratchSlot}");
-            if (_fogIndex == 0 && _fogWritten[_scratchSlot] > 0)
-                foreach (uint v in MemoryMarshal.Cast<byte, uint>(fogRead.Read(0, (ulong)_fogWritten[_scratchSlot] * 4))) LateFogCulled += (int)v;
-            cmd.CopyBuffer(offsets.Buffer, fogRead.Handle, new GpuBufferCopy(offsets.Offset + (ulong)(n + 1) * 4, (ulong)_fogIndex * 4, 4));
-            _fogIndex++;
-        }
-        if (!occlusion.IsEmpty && _occIndex < MaxFogViews)
-        {
-            var occRead = _occTotals[_scratchSlot] ??= _ctx.CreateReadback(MaxFogViews * 4, $"foliage occlusion cull totals {_scratchSlot}");
-            OccludedIsFresh = _occIndex == 0;
-            if (_occIndex == 0)   // the first view of the frame reads the slot's previous frame: the sum over its views (the later ones leave it)
-            {
-                LateOccluded = 0;
-                if (_occWritten[_scratchSlot] > 0)
-                    foreach (uint v in MemoryMarshal.Cast<byte, uint>(occRead.Read(0, (ulong)_occWritten[_scratchSlot] * 4))) LateOccluded += (int)v;
-            }
-            cmd.CopyBuffer(offsets.Buffer, occRead.Handle, new GpuBufferCopy(offsets.Offset + (ulong)(n + 2) * 4, (ulong)_occIndex * 4, 4));
-            _occIndex++;
-        }
-        var counter = _visible[_scratchSlot] ??= _ctx.CreateReadback(MaxViews * 4, $"foliage cull totals {_scratchSlot}");
-        if (_viewIndex < MaxViews)
-        {
-            LateVisible = _viewIndex < _visibleWritten[_scratchSlot] ? (int)MemoryMarshal.Read<uint>(counter.Read((ulong)_viewIndex * 4, 4)) : 0;
-            cmd.CopyBuffer(offsets.Buffer, counter.Handle, new GpuBufferCopy(offsets.Offset + (ulong)(2 * n + 4) * 4, (ulong)_viewIndex * 4,
-                4));   // the visible total (solid and fading)
-            _viewIndex++;
-        }
+        CopyTotals(cmd, offsets.Buffer, offsets.Offset, n, fogCull, occlusion);
         if (CountTriangles) CopyTally(cmd, args.Buffer, args.Offset, work.DrawCount);
         cmd.EndLabel();
         FrameProfiler.PreStamp(cmd, StageClock.Cull);
@@ -585,6 +554,84 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         Dispatched++;
         return new FoliageCullResult(rows.Buffer, rows.Offset, rowsBytes, args.Buffer, args.Offset, offsets.Buffer, offsets.Offset, n, work.DrawCount,
             split);
+    }
+
+    /// <summary>
+    /// The view's constants in this frame's constants: the planes and their normals' lengths, the rocks' resident rows, the modes, the fog and
+    /// occlusion vectors, the level view and the interior boxes.
+    /// </summary>
+    Transient WriteViewData(FoliageCullView view, in FoliageRockView rock, ReadOnlySpan<Vector4> fogCull, in OcclusionView occlusion,
+        FoliageLodView lod, IReadOnlyList<(Vector2 Min, Vector2 Max)>? interior)
+    {
+        var viewData = _ctx.Frame.AllocateConstants(ViewBytes, Align);
+        var planes = (Vector4*)viewData.Pointer;
+        var lengths = (float*)(viewData.Pointer + 128);
+        for (int i = 0; i < 8; i++) planes[i] = i < view.Planes.Length ? view.Planes[i] : default;
+        for (int i = 0; i < 8; i++) lengths[i] = i < view.Planes.Length ? view.NormalLengths[i] : 0;
+        var resident = (uint*)(viewData.Pointer + 160);
+        for (int i = 0; i < 8; i++) resident[i] = rock.Resident[i];
+        var mode = (uint*)(viewData.Pointer + 192);
+        (mode[0], mode[1], mode[2], mode[3]) = (rock.BiomeRows ? 1u : 0u, fogCull.Length == FogVolumes.CullVectors ? 1u : 0u,
+            occlusion.IsEmpty ? 0u : 1u, (uint)Math.Min(interior?.Count ?? 0, MaxInteriorBoxes));
+        var fogData = (Vector4*)(viewData.Pointer + 208);
+        for (int i = 0; i < FogVolumes.CullVectors; i++) fogData[i] = fogCull.Length == FogVolumes.CullVectors ? fogCull[i] : default;
+        var hzData = fogData + FogVolumes.CullVectors;
+        for (int i = 0; i < HizPyramid.ViewVectors; i++) hzData[i] = occlusion.IsEmpty ? default : occlusion.Vectors[i];
+        hzData[HizPyramid.ViewVectors] = new Vector4(lod.EyeY, lod.Scale, lod.Tolerance, lod.Ortho ? 1 : -lod.FarDistance);
+
+        // The interior masks (a mesh instance over one is drawn with the cut: docs/render-interior-cut.md); past the last slot each box widens the
+        // last.
+        var boxes = (Vector4*)(viewData.Pointer + InteriorOffset);
+        for (int i = 0; i < (interior?.Count ?? 0); i++)
+        {
+            var (min, max) = interior![i];
+            int at = Math.Min(i, MaxInteriorBoxes - 1);
+            boxes[at] = i < MaxInteriorBoxes ? new Vector4(min.X, min.Y, max.X, max.Y)
+                : new Vector4(MathF.Min(boxes[at].X, min.X), MathF.Min(boxes[at].Y, min.Y), MathF.Max(boxes[at].Z, max.X), MathF.Max(boxes[at].W,
+                        max.Y));
+        }
+        return viewData;
+    }
+
+    /// <summary>
+    /// The totals for the CPU's statistics (fog-culled, occluded, visible), copied out of the offsets and read a frame ring later (the slot's
+    /// previous frame has completed: its fence was waited for).
+    /// </summary>
+    void CopyTotals(IGpuCommandList cmd, GpuBuffer offsetsBuffer, ulong offsetsOffset, int n, ReadOnlySpan<Vector4> fogCull, in OcclusionView occlusion)
+    {
+        LateFogCulled = 0;
+        if (fogCull.Length == FogVolumes.CullVectors && _fogIndex < MaxFogViews)
+        {
+            var fogRead = _fogTotals[_scratchSlot] ??= _ctx.CreateReadback(MaxFogViews * 4, $"foliage fog cull totals {_scratchSlot}");
+            if (_fogIndex == 0 && _fogWritten[_scratchSlot] > 0)
+                foreach (uint v in MemoryMarshal.Cast<byte, uint>(fogRead.Read(0, (ulong)_fogWritten[_scratchSlot] * 4))) LateFogCulled += (int)v;
+            cmd.CopyBuffer(offsetsBuffer, fogRead.Handle, new GpuBufferCopy(offsetsOffset + (ulong)(n + 1) * 4, (ulong)_fogIndex * 4, 4));
+            _fogIndex++;
+        }
+        if (!occlusion.IsEmpty && _occIndex < MaxFogViews)
+        {
+            var occRead = _occTotals[_scratchSlot] ??= _ctx.CreateReadback(MaxFogViews * 4, $"foliage occlusion cull totals {_scratchSlot}");
+            OccludedIsFresh = _occIndex == 0;
+
+            // the first view of the frame reads the slot's previous frame: the sum over its views (the later ones leave it)
+            if (_occIndex == 0)
+            {
+                LateOccluded = 0;
+                if (_occWritten[_scratchSlot] > 0)
+                    foreach (uint v in MemoryMarshal.Cast<byte, uint>(occRead.Read(0, (ulong)_occWritten[_scratchSlot] * 4))) LateOccluded += (int)v;
+            }
+            cmd.CopyBuffer(offsetsBuffer, occRead.Handle, new GpuBufferCopy(offsetsOffset + (ulong)(n + 2) * 4, (ulong)_occIndex * 4, 4));
+            _occIndex++;
+        }
+        var counter = _visible[_scratchSlot] ??= _ctx.CreateReadback(MaxViews * 4, $"foliage cull totals {_scratchSlot}");
+        if (_viewIndex < MaxViews)
+        {
+            LateVisible = _viewIndex < _visibleWritten[_scratchSlot] ? (int)MemoryMarshal.Read<uint>(counter.Read((ulong)_viewIndex * 4, 4)) : 0;
+
+            // the visible total (solid and fading)
+            cmd.CopyBuffer(offsetsBuffer, counter.Handle, new GpuBufferCopy(offsetsOffset + (ulong)(2 * n + 4) * 4, (ulong)_viewIndex * 4, 4));
+            _viewIndex++;
+        }
     }
 
     void Run(IGpuCommandList cmd, GpuProgram p, GpuComputePipeline pipe, uint[] bindings, ReadOnlySpan<GpuBufferBinding> b, in FoliageCullPush push,
@@ -612,7 +659,8 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// Copies a result (offsets, arguments, rows) into <paramref name="target"/> at 0, (ChunkCount + 1) × 4 and then the arguments' end (16-aligned),
     /// after the dispatches (the tests read them back). Returns the bytes needed when <paramref name="target"/> is null.
     /// </summary>
-    public static ulong ReadbackBytes(in FoliageCullResult r) => Align16((ulong)(r.ChunkCount + 1) * 4) + Align16((ulong)r.DrawCount * 20) + r.RowsBytes;
+    public static ulong ReadbackBytes(in FoliageCullResult r) =>
+        Align16((ulong)(r.ChunkCount + 1) * 4) + Align16((ulong)r.DrawCount * 20) + r.RowsBytes;
 
     public static ulong Align16(ulong v) => (v + 15) / 16 * 16;
 

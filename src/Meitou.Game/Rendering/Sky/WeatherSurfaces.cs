@@ -49,8 +49,10 @@ internal sealed class WeatherSurfaces : IDisposable
     public WeatherSurfaces(IGpuContext gpu, AssetLocator assets)
     {
         if (assets.Find(NoiseFile) is { } path)
+        {
             _noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true,
                     "weather dust noise");
+        }
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)

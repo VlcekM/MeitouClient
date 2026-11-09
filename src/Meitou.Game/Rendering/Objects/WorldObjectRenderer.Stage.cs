@@ -47,7 +47,11 @@ public sealed unsafe partial class WorldObjectRenderer
         // Relative to the eye: at world coordinates (tens of thousands of units) the plates and bolts a hair above the planks would fight for depth.
         Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-eye), 0, 2, 0);
         int total = 0;
-        foreach (var b in _active) { b.Offset = total; total += b.Count; }
+        foreach (var b in _active)
+        {
+            b.Offset = total;
+            total += b.Count;
+        }
         if (total == 0) return;
         _instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
         var target = new Span<byte>(_instances.Pointer, total * InstanceStride);

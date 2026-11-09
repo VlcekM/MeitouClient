@@ -97,7 +97,11 @@ sealed unsafe class TerrainMeshGroups
                 var key = (item.Mesh, item.IndexCount, mirrored);
                 if (!_byKey.TryGetValue(key, out g))
                     _byKey[key] = g = new MeshGroup { Mesh = item.Mesh, IndexCount = item.IndexCount, Mirrored = mirrored };
-                if (g.Count == 0) { g.Index = Groups.Count; Groups.Add(g); }
+                if (g.Count == 0)
+                {
+                    g.Index = Groups.Count;
+                    Groups.Add(g);
+                }
                 last = g;
             }
             g.Count++;
@@ -113,7 +117,12 @@ sealed unsafe class TerrainMeshGroups
         int total = 0;
         if (_cursors.Length < Groups.Count)
             _cursors = new int[Math.Max(Groups.Count, _cursors.Length * 2)];
-        for (int k = 0; k < Groups.Count; k++) { var g = Groups[k]; _cursors[k] = g.Offset = total; total += g.Count; }
+        for (int k = 0; k < Groups.Count; k++)
+        {
+            var g = Groups[k];
+            _cursors[k] = g.Offset = total;
+            total += g.Count;
+        }
         return total;
     }
 

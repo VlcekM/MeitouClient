@@ -208,8 +208,11 @@ public static class FoliageCull
             if (fog is not null && (mesh > Hidden || impostor > Hidden))
             {
                 var s = r.Sphere;
-                if (fog.Covers(new Vector3(s.X - s.W, s.Y - s.W, s.Z - s.W), new Vector3(s.X + s.W, s.Y + s.W,
-                        s.Z + s.W))) { output.FogCulled++; continue; }
+                if (fog.Covers(new Vector3(s.X - s.W, s.Y - s.W, s.Z - s.W), new Vector3(s.X + s.W, s.Y + s.W, s.Z + s.W)))
+                {
+                    output.FogCulled++;
+                    continue;
+                }
             }
             if (mesh > Hidden)
             {

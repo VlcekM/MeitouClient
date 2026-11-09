@@ -82,14 +82,18 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     {
         var backend = ctx.Shaders.Backend(p);
         if (!backend.PushDescriptors) throw new InvalidOperationException($"{p.Name}: the grass cull pushes its descriptors, the device cannot");
-        return [.. backend.ComputeReflection!.Blocks.Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
+        return [.. backend.ComputeReflection!.Blocks
+            .Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0)
+            .Select(b => (uint)b.Binding)
+            .Order()];
     }
 
     /// <summary>
     /// Whether the device can run the GPU grass (push descriptors, indirect draws with a count and a first instance).
     /// </summary>
     public static bool Supported(IGpuContext ctx) =>
-        ctx is GpuContext vk && vk.Device.HasPushDescriptor && vk.Device.DrawIndirectCount && vk.Device.DrawIndirectFirstInstance && vk.Device.MultiDrawIndirect;
+        ctx is GpuContext vk && vk.Device.HasPushDescriptor && vk.Device.DrawIndirectCount && vk.Device.DrawIndirectFirstInstance
+            && vk.Device.MultiDrawIndirect;
 
     // ---- the blade arena ----
 
@@ -142,7 +146,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         lock (_gate)
         {
             int slot;
-            if (_freeSlots.Count > 0) { slot = _freeSlots[^1]; _freeSlots.RemoveAt(_freeSlots.Count - 1); }
+            if (_freeSlots.Count > 0)
+            {
+                slot = _freeSlots[^1];
+                _freeSlots.RemoveAt(_freeSlots.Count - 1);
+            }
             else if (SlotHigh < SlotCapacity) slot = SlotHigh++;
             else return -1;
             SlotsUsed++;
@@ -201,7 +209,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         }
         _ctx.DeferDelete(() =>
         {
-            lock (_gate) { _freeSlots.Add(slot); SlotsUsed--; }
+            lock (_gate)
+            {
+                _freeSlots.Add(slot);
+                SlotsUsed--;
+            }
         });
     }
 
@@ -257,7 +269,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         for (int i = 0; i < _pendingTimes.Count; i++)
         {
             var (b, e) = _pendingTimes[i];
-            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number) { _pendingTimes.RemoveAt(i--); continue; }
+            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number)
+            {
+                _pendingTimes.RemoveAt(i--);
+                continue;
+            }
             if (!q.TryRead(b, out ulong tb) || !q.TryRead(e, out ulong te)) continue;
             GpuMicroseconds += (te - tb) / 1000.0;
             GpuTimedViews++;

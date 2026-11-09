@@ -376,7 +376,8 @@ static class FoliageShaders
     /// The blades' colour program, with the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>; the cut-out already has a <c>discard</c>).
     /// </summary>
     public static string GrassFragmentNative() =>
-        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers),
+            inShader: true);
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 
@@ -471,9 +472,11 @@ static class FoliageShaders
         }
         """;
 
-    /// <summary>Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count. A rock chunk
-    /// (TERRAIN-mode meshes, drawn through the terrain's mesh path) also needs a fade of at least 0.5 (the terrain shader has no dither:
-    /// <c>FoliageRenderer.Emit</c>) and the chunk's mirroring.</summary>
+    /// <summary>
+    /// Kernel 1: per chunk (one workgroup), each instance's packed fade (-1: not drawn) and the chunk's visible count. A rock chunk (TERRAIN-mode
+    /// meshes, drawn through the terrain's mesh path) also needs a fade of at least 0.5 (the terrain shader has no dither:
+    /// <c>FoliageRenderer.Emit</c>) and the chunk's mirroring.
+    /// </summary>
     public static readonly string CullCompute = CullCommon + CrSqrt + """
         layout(std430, set = 0, binding = 0) readonly buffer View { ViewData view; };
         layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };
@@ -699,10 +702,11 @@ static class FoliageShaders
         }
         """;
 
-    /// <summary>Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the offsets <see cref="ScanCompute"/> describes
-    /// (the chunk's offset plus their rank among the solid ones, or among the fading ones). A rock's
-    /// row 0 w is what <see cref="TerrainRenderer.DrawMeshes"/> writes there: with the view's biome rows its biome row when resident, else -1;
-    /// without them 0.</summary>
+    /// <summary>
+    /// Kernel 3: per chunk, the visible instances' matrices (row 0 w = the packed fade) at the offsets <see cref="ScanCompute"/> describes (the
+    /// chunk's offset plus their rank among the solid ones, or among the fading ones). A rock's row 0 w is what
+    /// <see cref="TerrainRenderer.DrawMeshes"/> writes there: with the view's biome rows its biome row when resident, else -1; without them 0.
+    /// </summary>
     public static readonly string CompactCompute = CullCommon + """
         layout(std430, set = 0, binding = 0) readonly buffer View { ViewData view; };
         layout(std430, set = 0, binding = 1) readonly buffer Instances { Instance instances[]; };

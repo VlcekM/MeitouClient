@@ -142,7 +142,8 @@ public sealed class TerrainStreamer : IDisposable
     public Vector3? Ahead { get; set; }
 
     /// <summary>
-    /// Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at characters").
+    /// Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at
+    /// characters").
     /// </summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
 

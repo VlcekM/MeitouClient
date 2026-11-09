@@ -135,7 +135,11 @@ public sealed class VolumetricCloudRenderer : IDisposable
         var timer = reflection ? _mirrorTimer : _mainTimer;
         if (!reflection) MainMotion = null;
         _samples.Clear();
-        if (timer.Poll(_samples) is { } ms) { if (reflection) ReflectionGpuMs = ms; else MainGpuMs = ms; }
+        if (timer.Poll(_samples) is { } ms)
+        {
+            if (reflection) ReflectionGpuMs = ms;
+            else MainGpuMs = ms;
+        }
         timer.Begin();
         int w = Math.Max(1, (width + 1) / 2), ht = Math.Max(1, (height + 1) / 2);
         EnsureHistory(h, w, ht);

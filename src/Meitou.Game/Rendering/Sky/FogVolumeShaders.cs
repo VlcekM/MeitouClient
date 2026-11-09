@@ -29,7 +29,13 @@ static class FogVolumeShaders
     public const int BlockType = 1, SphereType = 2, BeamType = 3;
     public const int BlockLength = 10, SphereLength = 3, BeamLength = 4;
 
-    public static int Length(int type) => type switch { BlockType => BlockLength, SphereType => SphereLength, BeamType => BeamLength, _ => throw new ArgumentOutOfRangeException(nameof(type)) };
+    public static int Length(int type) => type switch
+    {
+        BlockType => BlockLength,
+        SphereType => SphereLength,
+        BeamType => BeamLength,
+        _ => throw new ArgumentOutOfRangeException(nameof(type)),
+    };
 
     /// <summary>
     /// The shader's sphere radius over the stored one: the hull is <c>unit_sphere.mesh</c> (radius 0.5) scaled by 2r, and

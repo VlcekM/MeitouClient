@@ -138,7 +138,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var library = assets.Materials;
         _resolver = new MaterialResolver(objects.Database, library, assets);
         _meshes = new ObjectMeshCache(gpu, assets, _uploads);
-        _meshes.Unloaded = gpu => { _unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
+        _meshes.Unloaded = gpu =>
+        {
+            _unloadedMeshes.Add(gpu);
+            RemoveBatches(gpu);
+        };
         _streamer = new ObjectStreamer(objects, _meshes);
         Doors = new DoorPoses(this);
         Joints = new JointPoses(Rotors);
@@ -148,7 +152,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             _landmarkClass = new LandmarkClass(assets);
             _streamer.WaitForLandmarks = true;
             var collectWatch = Stopwatch.StartNew();
-            _landmarkTask = Task.Run(() => { var found = _landmarkClass.Collect(objects); _landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
+            _landmarkTask = Task.Run(() =>
+            {
+                var found = _landmarkClass.Collect(objects);
+                _landmarkMs = collectWatch.Elapsed.TotalMilliseconds;
+                return found;
+            });
         }
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture,
             VertexColours = true, SpecularMult = 0 };
@@ -225,7 +234,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int limited = _streamer.AllZones.SelectMany(z => z.Real).Count(i => i.Gpu is not null && i.Limit < float.MaxValue / 2);
         float P(double q) => radii[Math.Min((int)(radii.Length * q), radii.Length - 1)];
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{radii.Length} resolved real instances, radius p10 {P(0.1):0} / p25 {P(0.25):0} / p50 {P(0.5):0} / p75 {P(0.75):0} / p90 {P(0.9):0} / max {radii[^1]:0}; {limited} with a part distance (<= {ObjectRanges.ObjectsViewRange:0} units)");
+            $"{radii.Length} resolved real instances, radius p10 {P(0.1):0} / p25 {P(0.25):0} / p50 {P(0.5):0} / p75 {P(0.75):0} / p90 {P(0.9):0} " +
+            $"/ max {radii[^1]:0}; {limited} with a part distance (<= {ObjectRanges.ObjectsViewRange:0} units)");
     }
     public double LastDrawCpuMs { get; private set; }
     public double LastUpdateMs { get; private set; }
@@ -273,7 +283,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public VramGuard? Guard
     {
         get => _guard;
-        set { _guard = value; _textureCache.Guard = value; _meshes.Guard = value; }
+        set
+        {
+            _guard = value;
+            _textureCache.Guard = value;
+            _meshes.Guard = value;
+        }
     }
     VramGuard? _guard;
     /// <summary>
@@ -423,7 +438,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             foreach (var inst in slot.Instances)
             {
                 if (inst.Gpu is not { } gpu) continue;
-                if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(_streamer.Loose, inst); continue; }
+                if (!ReferenceEquals(inst.Mesh.Gpu, gpu))
+                {
+                    Unresolve(_streamer.Loose, inst);
+                    continue;
+                }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
                 if (!SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
                 inst.Mesh.LastUsed = now;
@@ -481,13 +500,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>
     /// Requested work: zone layouts, meshes and textures, including used textures deferred by memory pressure.
     /// </summary>
-    public int Pending => _streamer.Pending + _meshes.Pending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
+    public int Pending => _streamer.Pending + _meshes.Pending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount
+        + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
 
     int _unresolvedInRange;
     /// <summary>
     /// What <see cref="Pending"/> is made of, for the loading log.
     /// </summary>
-    public string PendingDetail => $"zones {_streamer.Pending}, meshes {_meshes.Pending}, uploads {_uploads.Count}, textures {_textureCache.AwaitedCount} loading {_textureCache.UnresidentUsedCount} deferred, unresolved {_unresolvedInRange}, landmarks {(_landmarkTask is not null ? 1 : 0)}";
+    public string PendingDetail => $"zones {_streamer.Pending}, meshes {_meshes.Pending}, uploads {_uploads.Count}, " +
+        $"textures {_textureCache.AwaitedCount} loading {_textureCache.UnresidentUsedCount} deferred, unresolved {_unresolvedInRange}, " +
+        $"landmarks {(_landmarkTask is not null ? 1 : 0)}";
     public List<string> Messages { get; } = [];
 
     /// <summary>
@@ -501,9 +523,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// The objects' texture cache (the VRAM dump lists it).
     /// </summary>
     public WorldTextureCache Textures => _textureCache;
-    public string ResidentDescription => $"{_meshes.Bytes / 1048576.0:0} MB in {_meshes.Resident} meshes ({_meshes.Unloads} unloaded, {_meshes.Reloads} reloaded, {_meshes.Refined} remade finer, {_meshes.Coarsened} coarser), {_textureCache.Describe()}";
+    public string ResidentDescription => $"{_meshes.Bytes / 1048576.0:0} MB in {_meshes.Resident} meshes ({_meshes.Unloads} unloaded, " +
+        $"{_meshes.Reloads} reloaded, {_meshes.Refined} remade finer, {_meshes.Coarsened} coarser), {_textureCache.Describe()}";
     public string Describe() =>
-        $"{_streamer.Loaded} zones, {_streamer.Instances:N0} instances ({_streamer.Resolved:N0} resolved{(_streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {_meshes.Resident}/{_meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
+        $"{_streamer.Loaded} zones, {_streamer.Instances:N0} instances ({_streamer.Resolved:N0} resolved" +
+        $"{(_streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), " +
+        $"{_meshes.Resident}/{_meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
         $"{_towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{_towns.Count} distant towns; {_objects.Describe()}";
 
     // ------------------------------------------------------------------ streaming
@@ -529,7 +554,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public Vector3? Ahead
     {
         get => _streamer.Ahead;
-        set { if (value is not null && _streamer.Ahead is null) _lastMark = 0; _streamer.Ahead = value; }
+        set
+        {
+            if (value is not null && _streamer.Ahead is null) _lastMark = 0;
+            _streamer.Ahead = value;
+        }
     }
 
     /// <summary>
@@ -556,8 +585,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public void WriteViewReport(TextWriter w)
     {
         static string P(Vector3 v) => $"{v.X:0}, {v.Y:0}, {v.Z:0}";
-        w.WriteLine($"object needs measured from: eye {P(_lastMarkEye)}, speed margin {_needMargin:0}{(_streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
-        w.WriteLine($"  kept points ({_streamer.Kept.Count}, merged, detail from at least {_streamer.KeptViewDistance:0}): {string.Join("; ", _streamer.Kept.Select(P))}");
+        w.WriteLine($"object needs measured from: eye {P(_lastMarkEye)}, speed margin {_needMargin:0}" +
+            $"{(_streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
+        w.WriteLine($"  kept points ({_streamer.Kept.Count}, merged, detail from at least {_streamer.KeptViewDistance:0}): " +
+            $"{string.Join("; ", _streamer.Kept.Select(P))}");
         w.WriteLine();
     }
 
@@ -619,7 +650,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             {
                 _streamer.Landmarks = _landmarkClass;
                 _streamer.SetLandmarks(collected.Result);
-                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({_landmarkMs:0} ms on the workers)");
+                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones " +
+                    $"({_landmarkMs:0} ms on the workers)");
             }
             else
             {
@@ -681,75 +713,22 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         long now = Environment.TickCount64;
         if (!force && now - _lastMark < 1000) return;
 
-        // How far the camera goes in the half second a finer texture takes to arrive: nearer than that counts as nearer. A flight or a cut is no
-        // camera speed: its arrival is known (Ahead), and a margin from it would ask the whole path, or all around the landing, for full detail.
-        bool cut = _streamer.Ahead is not null || _lastMarkTime != 0 && Vector3.Distance(eye, _lastMarkEye) > CutDistance;
-        if (force || cut) _needMargin = 0;
-        else if (_lastMarkTime != 0) _needMargin = Math.Min(Vector3.Distance(eye, _lastMarkEye) / Math.Max((now - _lastMarkTime) / 1000f,
-                0.05f) * 0.5f, 30000f);
+        UpdateNeedMargin(eye, now, force);
         (_lastMarkEye, _lastMarkTime) = (eye, now);
         _lastMark = now;
         _markStamp++;
         _markedSets.Clear();
         _markedMeshes.Clear();
-        void Mark(ObjectStreamer.Instance inst, float range)
-        {
-            if (inst.Gpu is null) return;
-            // or from the arrival point (Ahead)
-            float distance = _streamer.Near(eye, inst.Centre), value = distance - inst.Radius, limit = Math.Min(range, inst.Limit);
-            if (value >= limit)
-            {
-                // Not drawn, but still within what Scan asks meshes for: kept, or it would be unloaded and asked for again.
-                if (distance - ObjectStreamer.RequestMargin <= limit) inst.Mesh.LastUsed = now;
-                return;
-            }
-            inst.Mesh.LastUsed = now;
-            if (inst.Materials is not { } set) return;
-            if (set.Stamp != _markStamp) { set.Stamp = _markStamp; set.Touch(); }
-            if (inst.Stand) return;
-
-            // During a flight the path asks for nothing finer: needs and mesh levels count only the arrival and the kept points (it keeps what it
-            // has).
-            if (_streamer.Ahead is not null && (value = _streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
-            if (set.NeedStamp != _markStamp) { set.NeedStamp = _markStamp; set.Near = set.NearScaled = float.PositiveInfinity; _markedSets.Add(set); }
-            value = _streamer.DetailNear(eye, inst.Centre) - inst.Radius;
-            float near = Math.Max(value - _needMargin, 0);
-            if (near < set.Near) set.Near = near;
-
-            // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second
-            // (its two levels of margin do the rest).
-            float meshNear = Math.Max(value - MeshMargin, 0);
-            var mesh = inst.Mesh;
-            if (mesh.NearStamp != _markStamp) { mesh.NearStamp = _markStamp; mesh.NearPass = meshNear; _markedMeshes.Add(mesh); }
-            else if (meshNear < mesh.NearPass) mesh.NearPass = meshNear;
-            float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
-            if (scaled < set.NearScaled) set.NearScaled = scaled;
-        }
-        if (_streamer.Ahead is { } arrival)
-        {
-            // A flight: what the arrival view draws is marked first, its textures loaded ahead of the other streaming work (the flight path's after).
-            _textureCache.Urgent = true;
-            try
-            {
-                foreach (var zone in _streamer.AllZones)
-                {
-                    foreach (var inst in zone.Real) if (Vector3.Distance(arrival, inst.Centre) - inst.Radius < Math.Min(RealRange,
-                            inst.Limit)) Mark(inst, RealRange);
-                    if (!NoDistant) foreach (var inst in zone.Stand) if (Vector3.Distance(arrival,
-                            inst.Centre) - inst.Radius < DistantReach) Mark(inst, DistantReach);
-                }
-            }
-            finally { _textureCache.Urgent = false; }
-        }
+        if (_streamer.Ahead is { } arrival) MarkArrival(arrival, eye, now);
         foreach (var zone in _streamer.AllZones)
         {
-            foreach (var inst in zone.Real) Mark(inst, RealRange);
-            if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantReach);
+            foreach (var inst in zone.Real) MarkInstance(inst, RealRange, eye, now);
+            if (!NoDistant) foreach (var inst in zone.Stand) MarkInstance(inst, DistantReach, eye, now);
         }
         if (_streamer.LandmarkZone is { } landmarkZone)
         {
             float reach = LandmarkReach;
-            foreach (var inst in landmarkZone.Real) Mark(inst, reach);
+            foreach (var inst in landmarkZone.Real) MarkInstance(inst, reach, eye, now);
         }
 
         // Mip streaming: each texture's nearest user, over how large a texel is there.
@@ -766,6 +745,99 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         foreach (var t in _towns)
             if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantReach) t.Mesh.LastUsed = now;
         _ = _distantMaterial.Parts[0].Diffuse;
+    }
+
+    /// <summary>
+    /// How far the camera goes in the half second a finer texture takes to arrive: nearer than that counts as nearer. A flight or a cut is no
+    /// camera speed: its arrival is known (Ahead), and a margin from it would ask the whole path, or all around the landing, for full detail.
+    /// </summary>
+    void UpdateNeedMargin(Vector3 eye, long now, bool force)
+    {
+        bool cut = _streamer.Ahead is not null || _lastMarkTime != 0 && Vector3.Distance(eye, _lastMarkEye) > CutDistance;
+        if (force || cut) _needMargin = 0;
+        else if (_lastMarkTime != 0)
+            _needMargin = Math.Min(Vector3.Distance(eye, _lastMarkEye) / Math.Max((now - _lastMarkTime) / 1000f, 0.05f) * 0.5f, 30000f);
+    }
+
+    /// <summary>
+    /// A flight: what the arrival view draws is marked first, its textures loaded ahead of the other streaming work (the flight path's after).
+    /// </summary>
+    void MarkArrival(Vector3 arrival, Vector3 eye, long now)
+    {
+        _textureCache.Urgent = true;
+        try
+        {
+            foreach (var zone in _streamer.AllZones)
+            {
+                foreach (var inst in zone.Real)
+                {
+                    if (Vector3.Distance(arrival, inst.Centre) - inst.Radius < Math.Min(RealRange, inst.Limit)) MarkInstance(inst, RealRange, eye, now);
+                }
+                if (!NoDistant)
+                {
+                    foreach (var inst in zone.Stand)
+                    {
+                        if (Vector3.Distance(arrival, inst.Centre) - inst.Radius < DistantReach) MarkInstance(inst, DistantReach, eye, now);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _textureCache.Urgent = false;
+        }
+    }
+
+    /// <summary>
+    /// Marks an instance within <paramref name="range"/> of the eye as in use (its mesh, its materials' textures) and records how near its
+    /// materials and mesh are needed.
+    /// </summary>
+    void MarkInstance(ObjectStreamer.Instance inst, float range, Vector3 eye, long now)
+    {
+        if (inst.Gpu is null) return;
+        // or from the arrival point (Ahead)
+        float distance = _streamer.Near(eye, inst.Centre), value = distance - inst.Radius, limit = Math.Min(range, inst.Limit);
+        if (value >= limit)
+        {
+            // Not drawn, but still within what Scan asks meshes for: kept, or it would be unloaded and asked for again.
+            if (distance - ObjectStreamer.RequestMargin <= limit) inst.Mesh.LastUsed = now;
+            return;
+        }
+        inst.Mesh.LastUsed = now;
+        if (inst.Materials is not { } set) return;
+        if (set.Stamp != _markStamp)
+        {
+            set.Stamp = _markStamp;
+            set.Touch();
+        }
+        if (inst.Stand) return;
+
+        // During a flight the path asks for nothing finer: needs and mesh levels count only the arrival and the kept points (it keeps what it
+        // has).
+        if (_streamer.Ahead is not null && (value = _streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
+        if (set.NeedStamp != _markStamp)
+        {
+            set.NeedStamp = _markStamp;
+            set.Near = set.NearScaled = float.PositiveInfinity;
+            _markedSets.Add(set);
+        }
+        value = _streamer.DetailNear(eye, inst.Centre) - inst.Radius;
+        float near = Math.Max(value - _needMargin, 0);
+        if (near < set.Near) set.Near = near;
+
+        // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second
+        // (its two levels of margin do the rest).
+        float meshNear = Math.Max(value - MeshMargin, 0);
+        var mesh = inst.Mesh;
+        if (mesh.NearStamp != _markStamp)
+        {
+            mesh.NearStamp = _markStamp;
+            mesh.NearPass = meshNear;
+            _markedMeshes.Add(mesh);
+        }
+        else if (meshNear < mesh.NearPass) mesh.NearPass = meshNear;
+        float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
+        if (scaled < set.NearScaled) set.NearScaled = scaled;
     }
 
     /// <summary>
@@ -822,7 +894,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
             // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
             pressureSince = _guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
-            if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   object streaming stopped waiting: memory pressure (VramGuard)"); return; }
+            if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5)
+            {
+                Console.WriteLine("warning   object streaming stopped waiting: memory pressure (VramGuard)");
+                return;
+            }
             Thread.Sleep(1);
         }
         Console.WriteLine($"warning   object streaming did not finish in {timeoutMs / 1000} s");
@@ -865,7 +941,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange)
             : float.MaxValue;
-        if (inst.Stand) { inst.Materials = _distantMaterial; return true; }
+        if (inst.Stand)
+        {
+            inst.Materials = _distantMaterial;
+            return true;
+        }
 
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
         var key = inst.Placed.MeshPath;
@@ -1054,7 +1134,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var p = inst.Placed;
         if (p.Kind == PlacedKind.Item) return !AllFloors && HiddenItems.Contains(p.PlacementId);
-        if (InteriorView.Count == 0 || AllFloors || p.Kind != PlacedKind.BuildingPart || p.ParentPlacementId is not null || InteriorView.ContainsKey(p.PlacementId)) return false;
+        if (InteriorView.Count == 0 || AllFloors || p.Kind != PlacedKind.BuildingPart || p.ParentPlacementId is not null
+            || InteriorView.ContainsKey(p.PlacementId)) return false;
         var answer = InteriorOf(inst);
         return answer.Building is { } building && InteriorView.TryGetValue(building, out int floor) && answer.Floor > floor;
     }
@@ -1067,7 +1148,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     bool ClosedAround(ObjectStreamer.Instance inst)
     {
         if (!inst.Placed.Contained) return false;
-        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder) && _construction?.ContainsKey(holder) != true;
+        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder)
+            && _construction?.ContainsKey(holder) != true;
     }
 
     /// <summary>
@@ -1162,7 +1244,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 foreach (var v in zone.Interiors)
                 {
                     clear = MathF.Min(clear, v.Distance(p));
-                    if (zoneDistance <= InteriorOver && v.Contains(p)) { found = v; break; }
+                    if (zoneDistance <= InteriorOver && v.Contains(p))
+                    {
+                        found = v;
+                        break;
+                    }
                 }
             }
         memo = new InteriorMemo { Set = true, Version = _streamer.InteriorVersion, At = p, Clear = found is null ? clear : 0, Volume = found };
@@ -1312,20 +1398,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var cpu = Stopwatch.StartNew();
         long now = Environment.TickCount64;
         float real = RealRange;
-        DrawnInstances = 0;
-        PartLimited = 0;
-        _untexturedMax = Math.Max(_untexturedMax, _untexturedDraws);
-        _untexturedDraws = 0;
-        _coarseMax = Math.Max(_coarseMax, _coarseDraws);
-        _coarseDraws = 0;
-        DrawnTriangles = 0;
-        DrawCalls = 0;
-        foreach (var b in _batchMap.Values) b.Count = 0;
-        _active.Clear();
-        _terrainMeshes.Clear();
-        _terrainMeshesCut.Clear();
-        if (_depthPass) ShadowCut(ref _cutConstants);
-        BeginSelection();
+        BeginDraw();
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
@@ -1335,19 +1408,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
                 foreach (var inst in zone.Real) DrawReal(zone, inst, real, eye, frustum, options, now);
             if (NoDistant) continue;
-            foreach (var inst in zone.Stand)
-            {
-                if (inst.Gpu is not { } gpu) continue;
-                if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); continue; }
-                float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre,
-                        inst.Radius) == false || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) continue;
-                float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
-                if (w <= 0) continue;
-                inst.Mesh.LastUsed = now;
-                DrawnInstances++;
-                Emit(inst, gpu, value, w);
-            }
+            foreach (var inst in zone.Stand) DrawDistant(zone, inst, eye, frustum, now, real, realBand, distantBand);
         }
 
         // The landmarks (a few hundred, kept apart from the zones): the same test with their own reach, the part distance still applying.
@@ -1362,19 +1423,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // The placement ghost (Build mode): its parts at the cursor, dithered and tinted green or red; not in a shadow or the landmarks-only pass.
         if (_ghostsDrawn && !_depthPass && !_landmarksOnly) DrawGhosts(eye, frustum, now);
-        if (!NoDistant && !_landmarksOnly)
-            foreach (var t in _towns)
-            {
-                if (t.Mesh.Gpu is not { } gpu) continue;
-                float value = Vector3.Distance(t.Centre, eye) - t.Radius;
-                if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre,
-                        t.Radius) == false || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
-                t.Mesh.LastUsed = now;
-                var batch = BatchFor(gpu, _distantMaterial, 0, BatchKind.Town);
-                if (batch.Count == 0) { _active.Add(batch); batch.Near = 0; }
-                batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
-                DrawnInstances++;
-            }
+        if (!NoDistant && !_landmarksOnly) DrawTowns(eye, frustum, now);
 
         // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no
         // shading to save).
@@ -1407,11 +1456,85 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (_terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(_terrainMeshes, _depthPass);
         if (_terrainMeshesCut.Count > 0) DrawCalls += terrain.DrawMeshes(_terrainMeshesCut, cut: InteriorCut);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
+        AddTotals();
+        _selecting.Clear();
+    }
+
+    /// <summary>
+    /// Starts a pass: the counters zeroed (their maxima kept), the batches emptied, the shadow pass's cut and the selection begun.
+    /// </summary>
+    void BeginDraw()
+    {
+        DrawnInstances = 0;
+        PartLimited = 0;
+        _untexturedMax = Math.Max(_untexturedMax, _untexturedDraws);
+        _untexturedDraws = 0;
+        _coarseMax = Math.Max(_coarseMax, _coarseDraws);
+        _coarseDraws = 0;
+        DrawnTriangles = 0;
+        DrawCalls = 0;
+        foreach (var b in _batchMap.Values) b.Count = 0;
+        _active.Clear();
+        _terrainMeshes.Clear();
+        _terrainMeshesCut.Clear();
+        if (_depthPass) ShadowCut(ref _cutConstants);
+        BeginSelection();
+    }
+
+    /// <summary>
+    /// A zone's distant stand-in: drawn within the distant reach when visible, faded in past the real range and out at the reach's edge.
+    /// </summary>
+    void DrawDistant(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst, Vector3 eye, Vector4[] frustum, long now, float real, float realBand,
+        float distantBand)
+    {
+        if (inst.Gpu is not { } gpu) return;
+        if (!ReferenceEquals(inst.Mesh.Gpu, gpu))
+        {
+            Unresolve(zone, inst);
+            return;
+        }
+        float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
+        if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false
+            || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) return;
+        float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
+        if (w <= 0) return;
+        inst.Mesh.LastUsed = now;
+        DrawnInstances++;
+        Emit(inst, gpu, value, w);
+    }
+
+    /// <summary>
+    /// The towns' distant meshes within the distant reach and visible, into the town batch.
+    /// </summary>
+    void DrawTowns(Vector3 eye, Vector4[] frustum, long now)
+    {
+        foreach (var t in _towns)
+        {
+            if (t.Mesh.Gpu is not { } gpu) continue;
+            float value = Vector3.Distance(t.Centre, eye) - t.Radius;
+            if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre, t.Radius) == false
+                || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
+            t.Mesh.LastUsed = now;
+            var batch = BatchFor(gpu, _distantMaterial, 0, BatchKind.Town);
+            if (batch.Count == 0)
+            {
+                _active.Add(batch);
+                batch.Near = 0;
+            }
+            batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
+            DrawnInstances++;
+        }
+    }
+
+    /// <summary>
+    /// Adds this pass's instances, triangles, draw calls and part-limited instances to <see cref="Totals"/> (row 0 colour, 1 depth) and counts it.
+    /// </summary>
+    void AddTotals()
+    {
         int kind = _depthPass ? 1 : 0;
         (Totals[kind, 0], Totals[kind, 1], Totals[kind, 2], Totals[kind, 3], Totals[kind, 4]) =
             (Totals[kind, 0] + DrawnInstances, Totals[kind, 1] + DrawnTriangles, Totals[kind, 2] + DrawCalls, Totals[kind, 3] + PartLimited,
                     Totals[kind, 4] + 1);
-        _selecting.Clear();
     }
 
     /// <summary>
@@ -1420,7 +1543,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     void UploadInstances()
     {
         int total = 0;
-        foreach (var b in _active) { b.Offset = total; total += b.Count; }
+        foreach (var b in _active)
+        {
+            b.Offset = total;
+            total += b.Count;
+        }
         if (total == 0) return;
 
         _instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
@@ -1438,7 +1565,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         long now)
     {
         if (inst.Gpu is not { } gpu) return;
-        if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
+        if (!ReferenceEquals(inst.Mesh.Gpu, gpu))
+        {
+            Unresolve(zone, inst);
+            return;
+        }
 
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling
         // (docs/render-objects.md "Closed interiors"): only a closed building's interior parts stay out.
@@ -1510,7 +1641,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // Spare instance-matrix component: room GI gain without splitting shared furniture batches (1), plus 2 when its building's lights are off,
         // which darkens its EMISSIVE materials (BuildingLodShaders).
-        m.M34 = (IndoorFurniture(inst) ? 1 : 0) + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
+        m.M34 = (IndoorFurniture(inst) ? 1 : 0)
+            + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
 
         // Another spare component, M44: 1, or for a construction site BuildingLodShaders.ScaffoldBase + its look's f, or a negative packed tint
         // (FarmPlants.PackTint). A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
@@ -1533,8 +1665,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             : InteriorCut is { Active: true } mask
                 && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
         if (_selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
+        {
             _selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre,
                     inst.Radius));
+        }
         AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
     }
 
@@ -1623,9 +1757,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // the old merging. A construction site discards the fragments above its clip plane, so it needs the program with a discard as well.
         bool fading = !EarlyDepth.Enabled || lo > 0 || hi < 1 || site;
         var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0,
-            (fading ? BatchKind.Fading : BatchKind.Solid) | (backCull ? BatchKind.BackCull : 0) | ghost | (highlight ? BatchKind.Highlight : 0) | (cut ? BatchKind.Cut : 0));
+            (fading ? BatchKind.Fading : BatchKind.Solid) | (backCull ? BatchKind.BackCull : 0) | ghost | (highlight ? BatchKind.Highlight : 0)
+            | (cut ? BatchKind.Cut : 0));
         batch.Manual = manual is not null;
-        if (batch.Count == 0) { _active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
+        if (batch.Count == 0)
+        {
+            _active.Add(batch);
+            batch.Near = near;
+        }
+        else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
         m.M24 = hi;
         batch.Add(m);
@@ -1657,18 +1797,21 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var key = (gpu, materials, level, kind);
         if (!_batchMap.TryGetValue(key, out var batch))
+        {
             _batchMap[key] = batch = new Batch
             {
                 Mesh = gpu,
                 Materials = materials,
                 Level = level,
                 Town = kind == BatchKind.Town,
-                Fading = (kind & ~(BatchKind.BackCull | BatchKind.Ghost | BatchKind.GhostBad | BatchKind.GhostQueued | BatchKind.Highlight | BatchKind.Cut)) != BatchKind.Solid,
+                Fading = (kind & ~(BatchKind.BackCull | BatchKind.Ghost | BatchKind.GhostBad | BatchKind.GhostQueued | BatchKind.Highlight
+                    | BatchKind.Cut)) != BatchKind.Solid,
                 BackCull = (kind & BatchKind.BackCull) != 0,
                 Highlight = (kind & BatchKind.Highlight) != 0,
                 Cut = (kind & BatchKind.Cut) != 0,
                 Ghost = (kind & BatchKind.GhostQueued) != 0 ? 3 : (kind & BatchKind.GhostBad) != 0 ? 2 : (kind & BatchKind.Ghost) != 0 ? 1 : 0
             };
+        }
         return batch;
     }
 
@@ -1874,7 +2017,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 if (_drawCount == _draws.Length) Array.Resize(ref _draws, _drawCount * 2);
                 ref var d = ref _draws[_drawCount++];
                 d = default;
-                d.Part = gp; d.Level = b.Level; d.FirstInstance = (uint)b.Offset; d.Instances = (uint)b.Count;
+                d.Part = gp;
+                d.Level = b.Level;
+                d.FirstInstance = (uint)b.Offset;
+                d.Instances = (uint)b.Count;
                 d.Push.TriplanarScale = 1f / 5000;
                 d.Push.FadeMode = fade | (b.Cut ? 2 : 0);
                 if (wire || _debugLevels == 1)
@@ -1956,7 +2102,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;
-        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u) | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u);
+        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u)
+            | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u);
     }
 
     /// <summary>
@@ -2070,7 +2217,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 if (d.Cull != cull) cmd.SetRaster(cull = d.Cull, state.Front);
                 cmd.BindVertexBuffers(0, d.Vertices);
                 cmd.BindIndexBuffer(d.Elements, IndexKind.U32);
-                if (!pushed || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in d.Push)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in last))))
+                if (!pushed || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in d.Push))
+                    .SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<ObjectPush>(in last))))
                 {
                     cmd.PushConstants(Program, GpuStage.Vertex | GpuStage.Fragment, in d.Push);
                     last = d.Push;
@@ -2109,7 +2257,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _depthPass = true;
         _shadowLodFloor = ShadowLod.ObjectLodFloor(coarseTexel, options.TerrainPixelScale);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
-        finally { _depthPass = false; _shadowLodFloor = 0; }
+        finally
+        {
+            _depthPass = false;
+            _shadowLodFloor = 0;
+        }
     }
 
     bool _landmarksOnly;
@@ -2147,7 +2299,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     public void Dispose()
     {
-        if (ObjectLodGen.Built + ObjectLodGen.Cached > 0) Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated ({Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), {ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
+        if (ObjectLodGen.Built + ObjectLodGen.Cached > 0)
+        {
+            Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated " +
+                $"({Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), " +
+                $"{ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
+        }
         DisposeBuildingIcons();
         DisposeSelection();
         _colourProg.Dispose();

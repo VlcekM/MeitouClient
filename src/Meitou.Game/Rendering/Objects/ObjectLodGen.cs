@@ -103,9 +103,17 @@ public static class ObjectLodGen
     static Plan? Make(string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian, string variant)
     {
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
-        if (parts.Count == 0 || parts.Any(p => p.Skinned) || fileLevels.Any(l => l.ManualMesh is not null)) { Interlocked.Increment(ref Skipped); return null; }
+        if (parts.Count == 0 || parts.Any(p => p.Skinned) || fileLevels.Any(l => l.ManualMesh is not null))
+        {
+            Interlocked.Increment(ref Skipped);
+            return null;
+        }
         int full = parts.Sum(p => p.Indices.Length / 3);
-        if (full < MinTriangles) { Interlocked.Increment(ref Skipped); return null; }
+        if (full < MinTriangles)
+        {
+            Interlocked.Increment(ref Skipped);
+            return null;
+        }
         var set = Load(path, model, radius, variant);
         if (set is null) return null;
         var file = FileTriangles(model, fileLevels);
@@ -120,7 +128,11 @@ public static class ObjectLodGen
         catch (IOException) { return null; }
         var parts = model.Parts.Count(p => p.Indices.Length > 0);
         var (hit, cached) = FoliageLodCache.TryLoad(file, parts, Version);
-        if (hit) { Interlocked.Increment(ref Cached); return cached; }
+        if (hit)
+        {
+            Interlocked.Increment(ref Cached);
+            return cached;
+        }
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         var built = FoliageLodBuilder.Build(model, radius, Settings);
         Interlocked.Add(ref BuildTicks, System.Diagnostics.Stopwatch.GetTimestamp() - start);
@@ -211,7 +223,11 @@ public static class ObjectLodGen
         var viaGenerated = new HashSet<Entry>();
         int last = fileTriangles[0];
         foreach (var c in candidates)
-            if (c.Generated ? c.Triangles <= last * 0.85 : c.Triangles < last) { viaGenerated.Add(c); last = c.Triangles; }
+            if (c.Generated ? c.Triangles <= last * 0.85 : c.Triangles < last)
+            {
+                viaGenerated.Add(c);
+                last = c.Triangles;
+            }
         var merged = new List<Entry> { new(false, 0, 0, fileTriangles[0]) };
         merged.AddRange(candidates.Where(c => !c.Generated || viaGenerated.Contains(c)));
         var mapGenerated = new List<int> { 0 };
@@ -242,7 +258,11 @@ public static class ObjectLodGen
         for (int i = 1; i < plan.Levels.Length; i++)
         {
             var e = plan.Levels[i];
-            if (!e.Generated) { result.Add(fileLevels[e.Source]); continue; }
+            if (!e.Generated)
+            {
+                result.Add(fileLevels[e.Source]);
+                continue;
+            }
             var indices = new uint[]?[submeshes];
             for (int p = 0; p < parts.Count; p++) indices[parts[p].SubMeshIndex] = plan.Set.Indices[p][e.Source - 1];
             result.Add(new MeshLodLevel(e.Distance, indices));

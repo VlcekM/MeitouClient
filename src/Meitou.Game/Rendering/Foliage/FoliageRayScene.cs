@@ -134,7 +134,8 @@ sealed class FoliageRayScene(IGpuContext gpu, WorldTextureCache textures, Dictio
             foreach (var p in leaves.Parts)
             {
                 // Leaves without a threshold still cut out at a half: an opaque card would shade like a wall.
-                parts.Add(new FoliageRayPart(p.Vertices, p.Indices, p.Count, a.LeavesMaterial is { AlphaThreshold: > 0 } lm ? lm.AlphaThreshold : 0.5f));
+                parts.Add(new FoliageRayPart(p.Vertices, p.Indices, p.Count,
+                    a.LeavesMaterial is { AlphaThreshold: > 0 } lm ? lm.AlphaThreshold : 0.5f));
                 maps.Add((a.LeavesMaterial?.Diffuse, a.LeavesMaterial?.Normal));
             }
         m = new FoliageRayMesh { Key = main, Parts = [.. parts], Rock = a.Terrain, Textures = new (uint, uint)[parts.Count], Maps = [.. maps] };

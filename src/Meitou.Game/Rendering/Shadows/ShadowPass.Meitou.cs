@@ -332,20 +332,7 @@ public sealed unsafe partial class ShadowPass
         if (_phases.Length != count) _phases = Phases(count);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
-
-        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
-        // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is
-        // drawn again when the
-        // new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them all.
-        bool splitsChanged = _storedSplits is null || _storedSplits.Length != splits.Length ||
-            Math.Abs(splits[^1] - _storedSplits[^1]) > RangeTolerance * _storedSplits[^1];
-        bool sunJumped = Vector3.Dot(toSun, _storedSun) < MathF.Cos(SunJump);
-        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped;
-        if (_meitouValid && all)
-        {
-            if (splitsChanged) AllReasons[0]++;
-            if (sunJumped) AllReasons[1]++;
-        }
+        bool all = RedrawAll(splits, toSun);
 
         var gridAnchor = Anchor(view.Focus > 0 ? view.Eye + Vector3.Normalize(view.Forward) * view.Focus : view.Eye, toSun);
         int frame = _meitouFrame++;
@@ -353,23 +340,7 @@ public sealed unsafe partial class ShadowPass
         Span<bool> drawNow = stackalloc bool[ShadowSettings.MaxCascades];
         Span<bool> want = stackalloc bool[ShadowSettings.MaxCascades];
         Span<bool> mustDraw = stackalloc bool[ShadowSettings.MaxCascades];
-        for (int i = 0; i < count; i++)
-        {
-            // A cascade is drawn again when its slice no longer fits its box (the camera moved or turned), when the sun has turned further than
-            // its texels allow, and at the latest after its cadence (casters stream in and move; docs/formats/shadows.md "Cached far cascades").
-            bool due = frame % Cadence(i, count) == _phases[i];
-            bool stale = _stored[i] is not null && !all && !due;
-            bool uncovered = _stored[i] is not null
-                && !MeitouShadowFit.Covers(_stored[i]!, view, splits, SearchRadius(_stored[i]!) + 2 * _stored[i]!.Texel);
-            bool sunTurned = _stored[i] is not null && Vector3.Dot(toSun, _storedSunDir[i]) < MathF.Cos(SunTolerance(_stored[i]!));
-            // Stale: drawn before a flight, wherever its box is now.
-            want[i] = all || _stored[i] is null || due || uncovered || sunTurned || _owed[i] || this._stale[i];
-            mustDraw[i] = _stored[i] is null;
-            if (stale && uncovered) RedrawReasons[i, 0]++;
-            if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
-            if (due && !all) RedrawReasons[i, 2]++;
-            if (all) RedrawReasons[i, 3]++;
-        }
+        MarkWanted(view, toSun, splits, count, frame, all, want, mustDraw);
 
         // At most FarBudget far cascades are drawn per frame; the others wait (longest first) and are owed, forced after MaxWait frames. The far
         // cascades are the last three (the costly ones); the nearer ones are never deferred (ShadowSchedule.NearCascades).
@@ -380,29 +351,12 @@ public sealed unsafe partial class ShadowPass
         // ground the next frame, and the ones drawn before the flight shadow the ground kilometres back, so they are stale and not published until
         // drawn again, once the camera lands (uncovered, over the budget's frames).
         bool flying = CameraFlying;
-        if (flying)
-        {
-            FlightFrames++;
-            for (int i = nearCount; i < count; i++)
-            {
-                _stale[i] = true;
-                if (mustDraw[i]) continue;
-
-                drawNow[i] = false;
-                _waited[i] = 0;
-            }
-        }
+        if (flying) HoldFarCascades(drawNow, mustDraw, nearCount, count);
 
         for (int i = 0; i < count; i++) _owed[i] = want[i] && !drawNow[i] && !flying;
 
         _timer.Begin();
-        int drawn = 0;
-        for (int i = 0; i < count; i++)
-        {
-            if (drawNow[i] && MeitouShadowFit.Fit(view, toSun, Effective, splits, i, gridAnchor) is var fitted)
-                _casterViews[drawn++] = new CasterView(fitted, fitted.WorldToClip(), fitted.CullPlanes(), view.Eye);
-        }
-
+        int drawn = FitCascades(view, toSun, splits, gridAnchor, drawNow, count);
         prepare?.Invoke(_casterViews.AsSpan(0, drawn));
         DrawCascades(drawn, draw, toSun);
         Array.Clear(_casterViews);
@@ -427,6 +381,81 @@ public sealed unsafe partial class ShadowPass
         PublishFrame(view, toSun, blockers, count);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         _cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// Whether every cascade is drawn again this frame (the first frame, other splits or map size, a sun that jumped); counts the reason.
+    /// </summary>
+    bool RedrawAll(float[] splits, Vector3 toSun)
+    {
+        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
+        // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is
+        // drawn again when the new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them
+        // all.
+        bool splitsChanged = _storedSplits is null || _storedSplits.Length != splits.Length ||
+            Math.Abs(splits[^1] - _storedSplits[^1]) > RangeTolerance * _storedSplits[^1];
+        bool sunJumped = Vector3.Dot(toSun, _storedSun) < MathF.Cos(SunJump);
+        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped;
+        if (_meitouValid && all)
+        {
+            if (splitsChanged) AllReasons[0]++;
+            if (sunJumped) AllReasons[1]++;
+        }
+        return all;
+    }
+
+    /// <summary>
+    /// Marks the cascades that want drawing this frame and the ones that must be (never drawn yet), and counts each redraw's reason.
+    /// </summary>
+    void MarkWanted(ShadowView view, Vector3 toSun, float[] splits, int count, int frame, bool all, Span<bool> want, Span<bool> mustDraw)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            // A cascade is drawn again when its slice no longer fits its box (the camera moved or turned), when the sun has turned further than
+            // its texels allow, and at the latest after its cadence (casters stream in and move; docs/formats/shadows.md "Cached far cascades").
+            bool due = frame % Cadence(i, count) == _phases[i];
+            bool stale = _stored[i] is not null && !all && !due;
+            bool uncovered = _stored[i] is not null
+                && !MeitouShadowFit.Covers(_stored[i]!, view, splits, SearchRadius(_stored[i]!) + 2 * _stored[i]!.Texel);
+            bool sunTurned = _stored[i] is not null && Vector3.Dot(toSun, _storedSunDir[i]) < MathF.Cos(SunTolerance(_stored[i]!));
+            // Stale: drawn before a flight, wherever its box is now.
+            want[i] = all || _stored[i] is null || due || uncovered || sunTurned || _owed[i] || this._stale[i];
+            mustDraw[i] = _stored[i] is null;
+            if (stale && uncovered) RedrawReasons[i, 0]++;
+            if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
+            if (due && !all) RedrawReasons[i, 2]++;
+            if (all) RedrawReasons[i, 3]++;
+        }
+    }
+
+    /// <summary>
+    /// During a camera flight: the far cascades marked stale and not drawn (unless never drawn at all), their wait reset.
+    /// </summary>
+    void HoldFarCascades(Span<bool> drawNow, Span<bool> mustDraw, int nearCount, int count)
+    {
+        FlightFrames++;
+        for (int i = nearCount; i < count; i++)
+        {
+            _stale[i] = true;
+            if (mustDraw[i]) continue;
+
+            drawNow[i] = false;
+            _waited[i] = 0;
+        }
+    }
+
+    /// <summary>
+    /// Fits each cascade drawn this frame into <see cref="_casterViews"/>; returns how many.
+    /// </summary>
+    int FitCascades(ShadowView view, Vector3 toSun, float[] splits, (double X, double Y, double Z) gridAnchor, Span<bool> drawNow, int count)
+    {
+        int drawn = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (drawNow[i] && MeitouShadowFit.Fit(view, toSun, Effective, splits, i, gridAnchor) is var fitted)
+                _casterViews[drawn++] = new CasterView(fitted, fitted.WorldToClip(), fitted.CullPlanes(), view.Eye);
+        }
+        return drawn;
     }
 
     /// <summary>

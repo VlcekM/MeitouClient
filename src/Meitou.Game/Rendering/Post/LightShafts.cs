@@ -261,7 +261,11 @@ sealed unsafe class LightShafts(PostProcess post)
         if (!o.LightShafts || darkening <= 0 || post.SceneColourTarget is null || !post.HaveScene) return;
 
         var (across, down, slices, aw, ah) = Layout();
-        Describe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({o.ShaftSamples} samples), {PostOptions.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0 ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} (scale height {PostOptions.ShaftAirHeight:0}, g {PostOptions.ShaftAirPhase:0.##})" : "off")}";
+        Describe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({o.ShaftSamples} samples), " +
+            $"{PostOptions.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0
+                ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} " +
+                    $"(scale height {PostOptions.ShaftAirHeight:0}, g {PostOptions.ShaftAirPhase:0.##})"
+                : "off")}";
         EnsureAtlases(aw, ah);
         var gpu = post.Gpu;
         _inject ??= new ShaftInjectPass(gpu);

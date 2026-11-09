@@ -242,7 +242,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         _frameNumber++;
         // A replaced window is let go a few frames after the swap (its image and bindless entry are freed after the frames in flight).
         for (int i = _retired.Count - 1; i >= 0; i--)
-            if (_frameNumber - _retired[i].Frame >= 4) { _retired[i].Texture.Dispose(); _retired.RemoveAt(i); }
+            if (_frameNumber - _retired[i].Frame >= 4)
+            {
+                _retired[i].Texture.Dispose();
+                _retired.RemoveAt(i);
+            }
     }
 
     /// <summary>
@@ -261,7 +265,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public void BeginFineUpload(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action? done = null) =>
         UploadFine(window, patch, uploads,
-                texture => { _retired.Add((_fineTexture, _frameNumber)); Swap(new FineStandby(texture, window, patch)); }, done);
+            texture =>
+            {
+                _retired.Add((_fineTexture, _frameNumber));
+                Swap(new FineStandby(texture, window, patch));
+            },
+            done);
 
     /// <summary>
     /// A fine window uploaded but not drawn ("Keep textures at characters": one round a character far from the eye), ready for <see
@@ -645,8 +654,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
             float x0 = d.Push.Node.X, z0 = d.Push.Node.Y, s = d.Push.Node.Z;
             bool overlaps = false;
             foreach (var (min, max) in boxes)
-                if (x0 <= max.X && x0 + s >= min.X && z0 <= max.Y && z0 + s >= min.Y) { overlaps = true; break; }
-            if (!overlaps) { _patchDraws[kept++] = d; continue; }
+                if (x0 <= max.X && x0 + s >= min.X && z0 <= max.Y && z0 + s >= min.Y)
+                {
+                    overlaps = true;
+                    break;
+                }
+            if (!overlaps)
+            {
+                _patchDraws[kept++] = d;
+                continue;
+            }
             if (_cutCount == _cutDraws.Length) Array.Resize(ref _cutDraws, _cutDraws.Length * 2);
             _cutDraws[_cutCount++] = d;
         }
@@ -682,7 +699,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
             var d = draws[i];
             float x0 = d.Push.Node.X, z0 = d.Push.Node.Y, s = d.Push.Node.Z;
             float dx = MathF.Max(MathF.Max(x0 - eye.X, eye.X - (x0 + s)), 0), dz = MathF.Max(MathF.Max(z0 - eye.Z, eye.Z - (z0 + s)), 0);
-            if (dx * dx + dz * dz > r2) { draws[kept++] = d; continue; }
+            if (dx * dx + dz * dz > r2)
+            {
+                draws[kept++] = d;
+                continue;
+            }
             if (nearCount == near.Length) Array.Resize(ref near, near.Length * 2);
             near[nearCount++] = d;
         }
@@ -1423,7 +1444,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
             {
                 ref readonly var d = ref Draws[i];
                 cmd.BindPipeline(d.Pipeline);
-                if (d.Front != front) { cmd.SetFrontFace(d.Front); front = d.Front; }
+                if (d.Front != front)
+                {
+                    cmd.SetFrontFace(d.Front);
+                    front = d.Front;
+                }
                 cmd.BindVertexBuffers(0, ((ReadOnlySpan<GpuBufferBinding>)d.Vertices)[..d.VertexCount]);
                 cmd.BindIndexBuffer(d.Elements, IndexKind.U32);
                 if (!d.Args.IsNull) cmd.DrawIndexedIndirect(d.Args, d.ArgsOffset, 1);
@@ -1490,7 +1515,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
     GpuPipeline PipelineFor(ref NativeMesh n, TerrainProgram p, int segment, DrawState state, AttachmentFormats formats, string label)
     {
         if (n.SegA == segment) return n.PipeA!.Value;
-        if (n.SegB == segment) { (n.SegA, n.PipeA, n.SegB, n.PipeB) = (n.SegB, n.PipeB, n.SegA, n.PipeA); return n.PipeA!.Value; }
+        if (n.SegB == segment)
+        {
+            (n.SegA, n.PipeA, n.SegB, n.PipeB) = (n.SegB, n.PipeB, n.SegA, n.PipeA);
+            return n.PipeA!.Value;
+        }
         var topology = p.P.Tessellated ? PrimitiveType.PatchList : PrimitiveType.Triangles;
         var pipeline = _gpu.Pipelines.Get(state.Pipeline(p.P, n.Layout!, topology, formats, label));
         (n.SegB, n.PipeB) = (n.SegA, n.PipeA);
@@ -1614,9 +1643,22 @@ public sealed unsafe class TerrainRenderer : IDisposable
         if (_textures is { HasBiomes: true } t)
         {
             var set = t.Textures;
-            if (t.HasGround) { flags |= 1; ground = Index(set.Ground, BindlessKind.Texture2D, _standIn2D); }
-            if (t.HasWorldColour) { flags |= 2; worldColour = Index(set.WorldColour, BindlessKind.Texture2D, _standIn2D); }
-            if (t.MapState == 2) { flags |= 4; colour = Index(set.Colour, BindlessKind.Texture2D, _standIn2D); region = t.Region; }
+            if (t.HasGround)
+            {
+                flags |= 1;
+                ground = Index(set.Ground, BindlessKind.Texture2D, _standIn2D);
+            }
+            if (t.HasWorldColour)
+            {
+                flags |= 2;
+                worldColour = Index(set.WorldColour, BindlessKind.Texture2D, _standIn2D);
+            }
+            if (t.MapState == 2)
+            {
+                flags |= 4;
+                colour = Index(set.Colour, BindlessKind.Texture2D, _standIn2D);
+                region = t.Region;
+            }
         }
         return (region, ground, worldColour, colour, (float)WorldLayout.HalfWorldSize, materialDistance * 0.8f, materialDistance, flags);
     }

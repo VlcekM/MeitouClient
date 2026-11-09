@@ -83,7 +83,11 @@ public sealed class WorldWeather
         }
         // The clock moved back (the viewer's time slider or its camera keys set the hour, not the day): nothing to replay, the sky and fog snap as
         // for a long jump.
-        if (now.Minutes - from > 60 || (_last is not null && now.Minutes < from)) { World.Snap(); times = default; }
+        if (now.Minutes - from > 60 || (_last is not null && now.Minutes < from))
+        {
+            World.Snap();
+            times = default;
+        }
         _last = now;
         var state = World.Update(eye, now, times, sunHeight);
         LogChange(state);

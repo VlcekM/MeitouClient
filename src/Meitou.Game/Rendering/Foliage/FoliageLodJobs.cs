@@ -64,7 +64,8 @@ sealed class FoliageLodJobs(AssetLocator assets, List<string> messages, Func<str
     /// Generated levels: the meshes built, read from the cache, found to need none; the cache bytes written; CPU time on the workers (building,
     /// reading).
     /// </summary>
-    public string Summary => $"{_lodBuilt} built ({_lodBuildMs:0} ms), {_lodCacheHits} from the cache ({_lodLoadMs:0} ms), {_lodNone} without a level; {_lodFileBytes / 1024} KB written";
+    public string Summary => $"{_lodBuilt} built ({_lodBuildMs:0} ms), {_lodCacheHits} from the cache ({_lodLoadMs:0} ms), " +
+        $"{_lodNone} without a level; {_lodFileBytes / 1024} KB written";
 
     /// <summary>
     /// Every job made (for waiting on them at the end).
@@ -94,7 +95,11 @@ sealed class FoliageLodJobs(AssetLocator assets, List<string> messages, Func<str
             string name = a.Mesh.MeshPath, key = name + MeshWeld.CacheVariant(a.Weld);
             if (!_lodTasks.TryGetValue(key, out var task))
             {
-                if (_lodRunning >= 3) { _lodWaiting++; continue; }
+                if (_lodRunning >= 3)
+                {
+                    _lodWaiting++;
+                    continue;
+                }
                 _lodRunning++;
                 _lodTasks[key] = task = StartLods(name, a.Radius, a.Weld);
             }
@@ -136,8 +141,17 @@ sealed class FoliageLodJobs(AssetLocator assets, List<string> messages, Func<str
         double ms = watch.Elapsed.TotalMilliseconds;
         lock (this)
         {
-            if (hit) { _lodCacheHits++; _lodLoadMs += ms; }
-            else { _lodBuilt++; _lodBuildMs += ms; _lodFileBytes += bytes; }
+            if (hit)
+            {
+                _lodCacheHits++;
+                _lodLoadMs += ms;
+            }
+            else
+            {
+                _lodBuilt++;
+                _lodBuildMs += ms;
+                _lodFileBytes += bytes;
+            }
             if (set is null) _lodNone++;
         }
         return new LodResult(set, hit, ms, bytes);

@@ -20,7 +20,11 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Horizon, Vector3 SunColour, float Twilight)
 {
-    static float Smooth(float a, float b, float x) { float t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+    static float Smooth(float a, float b, float x)
+    {
+        float t = Math.Clamp((x - a) / (b - a), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
 
     public static SkyColours For(Vector3 sun)
     {
@@ -791,7 +795,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public void SetFlightHeight(float height)
     {
-        if (!float.IsFinite(height)) { WeatherFogScale = 1; return; }
+        if (!float.IsFinite(height))
+        {
+            WeatherFogScale = 1;
+            return;
+        }
         float t = Math.Clamp((KenshiCamera.FlightHeight - height) / FlightFogFade, 0, 1);
         WeatherFogScale = t * t * (3 - 2 * t);
     }
@@ -1310,7 +1318,11 @@ public sealed unsafe class SkyRenderer : IDisposable
             if (ms <= 0 || ms >= 1000) continue;
             _gpuTotal += ms;
             _gpuCount++;
-            if (_gpuCount > 120) { _gpuTotal *= 0.5; _gpuCount /= 2; }
+            if (_gpuCount > 120)
+            {
+                _gpuTotal *= 0.5;
+                _gpuCount /= 2;
+            }
         }
     }
 

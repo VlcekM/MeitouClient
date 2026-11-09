@@ -303,7 +303,11 @@ internal sealed class FogVolumes
                     var corners = f.Corners();
                     float top = high is not null ? HighHeight : corners.Count > 0 ? corners.Max(c => c.Y) : HighHeight;
                     var (min, max) = first;
-                    if (high is { } h) { min = Vector2.Min(min, h.Min); max = Vector2.Max(max, h.Max); }
+                    if (high is { } h)
+            {
+                min = Vector2.Min(min, h.Min);
+                max = Vector2.Max(max, h.Max);
+            }
                     var v = new Volume(f.Name, FogVolumeShaders.BlockType)
                     {
                         BoxMin = new Vector3(min.X, SectionHeight, min.Y),
@@ -525,7 +529,12 @@ internal sealed class FogVolumes
         readonly Vector2 _left, _right;   // outward normals of the two edges, in (x, z)
         readonly bool _all;
 
-        Wedge(Vector2 left, Vector2 right, bool all) { this._left = left; this._right = right; this._all = all; }
+        Wedge(Vector2 left, Vector2 right, bool all)
+        {
+            this._left = left;
+            this._right = right;
+            this._all = all;
+        }
 
         public static Wedge From(Vector3 forward, float fieldOfView, float aspect)
         {

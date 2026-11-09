@@ -995,7 +995,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
-    static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + MeitouMotion + MeitouBody;
+    static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions
+        + MeitouMotion + MeitouBody;
 
     /// <summary>
     /// The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.
@@ -1082,7 +1083,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly DeviceBuffer _quad;
     readonly DeviceBuffer? _grid, _gridIndices;
     readonly uint _gridIndexCount;
-    readonly SampledImage[] _maps;   // colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order of WaterProgram.MapNames
+    // colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order of WaterProgram.MapNames
+    readonly SampledImage[] _maps;
     readonly Vector4 _seaA, _seaB;
     readonly Vector3 _seaColour;
     readonly NativeFrame _frame;
@@ -1239,11 +1241,17 @@ public sealed unsafe class WaterRenderer : IDisposable
     public void Dispose()
     {
         if (_ocean is { Dispatched: > 0 } waves)
+        {
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     ocean: {waves.Dispatched} passes ({waves.Size}²), gpu us per pass {(waves.GpuTimed > 0 ? waves.GpuMicroseconds / waves.GpuTimed : 0):F1} ({waves.GpuTimed} timed)"));
+                $"water     ocean: {waves.Dispatched} passes ({waves.Size}²), " +
+                $"gpu us per pass {(waves.GpuTimed > 0 ? waves.GpuMicroseconds / waves.GpuTimed : 0):F1} ({waves.GpuTimed} timed)"));
+        }
         if (_shore is { } field)
+        {
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     shore bake {field.LastBakeMs:F0} ms, {field.UploadedFields} fields uploaded and {field.UniformFields} uniform (one texel)"));
+                $"water     shore bake {field.LastBakeMs:F0} ms, {field.UploadedFields} fields uploaded and " +
+                $"{field.UniformFields} uniform (one texel)"));
+        }
         _faithful.Dispose();
         _meitou?.Dispose();
         _frame.Dispose();
@@ -1349,7 +1357,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         s.B = BiomeField.Bake(info, blend.Width, blend.Height, blend.Pixels, c => water.TryGetValue(c, out var w) ? B(w) : null, B(fallback));
 
         s.Sea = OpenSea(s.A, s.B, blend.Width, blend.Height, s.Colour);
-        Console.WriteLine($"sea       open-sea water: scale {s.Sea.A.X * 5000:0.#}, {s.Sea.A.Y * 5000:0.#}, gloss {s.Sea.B.X:0.##}, colour {s.Sea.Colour.X:0.##} {s.Sea.Colour.Y:0.##} {s.Sea.Colour.Z:0.##}");
+        Console.WriteLine($"sea       open-sea water: scale {s.Sea.A.X * 5000:0.#}, {s.Sea.A.Y * 5000:0.#}, gloss {s.Sea.B.X:0.##}, " +
+            $"colour {s.Sea.Colour.X:0.##} {s.Sea.Colour.Y:0.##} {s.Sea.Colour.Z:0.##}");
         // The river map: baked from the whole-world heights at the flow map's size (the game's flow map does not follow the rivers); none without them.
         var riverWatch = System.Diagnostics.Stopwatch.StartNew();
         int riverSize = s.Flow?.Width ?? 0;
@@ -1366,8 +1375,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
     /// <param name="source">What <see cref="Prepare"/> made (made here when null).</param>
     public static WaterRenderer Create(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky,
-        List<string> messages, ushort[]? coarseHeights = null,
-        int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize, Source? source = null, bool meitouWaves = true, bool shoreField = true)
+        List<string> messages, ushort[]? coarseHeights = null, int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize,
+        Source? source = null, bool meitouWaves = true, bool shoreField = true)
     {
         _ = sky;
         var s = source ?? Prepare(install, db, assets, coarseHeights);
@@ -1401,7 +1410,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                if (x >= ring && x < width - ring && y >= ring && y < height - ring) { x = width - ring - 1; continue; }
+                if (x >= ring && x < width - ring && y >= ring && y < height - ring)
+                {
+                    x = width - ring - 1;
+                    continue;
+                }
                 int i = y * width + x;
                 var key = (a[i], b[i]);
                 counts[key] = counts.TryGetValue(key, out var c) ? (c.Count + 1, c.Pixel) : (1, i);
