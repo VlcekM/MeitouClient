@@ -10,22 +10,35 @@ namespace Meitou.Simulation.Production;
 /// </summary>
 public sealed partial class ProductionSystem
 {
-    /// <summary>Per town, whether batteries covered a shortfall last tick (the original's town <c>+0x470</c>, read the frame after it is set; not saved).</summary>
+    /// <summary>
+    /// Per town, whether batteries covered a shortfall last tick (the original's town <c>+0x470</c>, read the frame after it is set; not saved).
+    /// </summary>
     readonly Dictionary<int, bool> _batteryMode = [];
     readonly Dictionary<int, List<Machine>> _grids = [];
-    /// <summary>Per town, whether its generators give power and its batteries can (the town object's <c>+0x474</c> and <c>+0x480</c> above 0 after <c>Town::vfunc_87</c>); what <see cref="HasPower"/> reads. Not saved.</summary>
+    /// <summary>
+    /// Per town, whether its generators give power and its batteries can (the town object's <c>+0x474</c> and <c>+0x480</c> above 0 after
+    /// <c>Town::vfunc_87</c>); what <see cref="HasPower"/> reads. Not saved.
+    /// </summary>
     readonly Dictionary<int, (bool Generators, bool Batteries)> _townSupply = [];
-    /// <summary>Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.</summary>
+    /// <summary>
+    /// Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.
+    /// </summary>
     readonly Dictionary<int, TownPower> _townPower = [];
 
-    /// <summary>The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).</summary>
+    /// <summary>
+    /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
+    /// </summary>
     BuildingUpgrade UpgradeOf(World world, Machine m) => world.Research.Upgrade(world, m.Data.Id, Site(world, m.Site)?.Owner ?? -1);
 
     float Rated(World world, Machine m) => m.Data.PowerOutput + UpgradeOf(world, m).PowerIncrease;
-    /// <summary>A battery's capacity now (<c>FUN_140297650</c>, <b>Verified</b>): the construction fraction x (capacity + research increase).</summary>
+    /// <summary>
+    /// A battery's capacity now (<c>FUN_140297650</c>, <b>Verified</b>): the construction fraction x (capacity + research increase).
+    /// </summary>
     float Capacity(World world, Machine m) => m.Health * (m.Data.PowerCapacity + UpgradeOf(world, m).CapacityIncrease);
 
-    /// <summary>Whether a generator has fuel: no fuel sections (wind), or something left in one.</summary>
+    /// <summary>
+    /// Whether a generator has fuel: no fuel sections (wind), or something left in one.
+    /// </summary>
     static bool Fueled(Machine m) => m.Inputs.Length == 0 || Array.Exists(m.Inputs, i => i.Level > 0 || i.Count > 0);
 
     /// <summary>
@@ -40,11 +53,15 @@ public sealed partial class ProductionSystem
         return output;
     }
 
-    /// <summary>The player outposts with their grids' totals, for the town panel (docs/game/ui-screens.md "Town panel").</summary>
+    /// <summary>
+    /// The player outposts with their grids' totals, for the town panel (docs/game/ui-screens.md "Town panel").
+    /// </summary>
     public IReadOnlyList<OutpostSnapshot> OutpostView(World world) => world.Buildings.Towns.Count == 0 ? []
         : [.. world.Buildings.Towns.Select(t => new OutpostSnapshot(t.Number, t.Name, t.Position, t.Radius, t.Owner, t.Public, _townPower.GetValueOrDefault(t.Number)))];
 
-    /// <summary>The towns' round-robin cursor of the power frame (the static <c>DAT_14213543c</c>, advanced before each use); not saved.</summary>
+    /// <summary>
+    /// The towns' round-robin cursor of the power frame (the static <c>DAT_14213543c</c>, advanced before each use); not saved.
+    /// </summary>
     int _powerCursor;
 
     void PowerTick(World world, float dt)
@@ -264,7 +281,9 @@ public sealed partial class ProductionSystem
         return charged;
     }
 
-    /// <summary>A generator burns fuel as a producer draws inputs (<c>vfunc_183</c>): <c>rate x dt x P x option</c>, times its load.</summary>
+    /// <summary>
+    /// A generator burns fuel as a producer draws inputs (<c>vfunc_183</c>): <c>rate x dt x P x option</c>, times its load.
+    /// </summary>
     void BurnFuel(Machine m, float dt)
     {
         float amount = m.Data.Rate * dt * _constants.ProductionSpeed * Settings.ProductionOption * m.Usage;

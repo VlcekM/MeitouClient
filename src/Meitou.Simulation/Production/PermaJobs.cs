@@ -17,13 +17,20 @@ public sealed record PermaJob(TaskType Type, string? Site, Hand Saved)
 {
     public PermaJob(TaskType type, string site) : this(type, site, Hand.Null) { }
 
-    /// <summary>The character a Bodyguard or Staying close job follows (<see cref="CharacterId.None"/>: none, or a loaded one not matched to its saved handle yet).</summary>
+    /// <summary>
+    /// The character a Bodyguard or Staying close job follows (<see cref="CharacterId.None"/>: none, or a loaded one not matched to its saved handle
+    /// yet).
+    /// </summary>
     public CharacterId Character { get; init; } = CharacterId.None;
 
-    /// <summary>A job on a character.</summary>
+    /// <summary>
+    /// A job on a character.
+    /// </summary>
     public static PermaJob OfCharacter(TaskType type, CharacterId target, Hand? saved = null) => new(type, null, saved ?? Hand.Null) { Character = target };
 
-    /// <summary>A job without a target (the medic and rescue jobs).</summary>
+    /// <summary>
+    /// A job without a target (the medic and rescue jobs).
+    /// </summary>
     public static PermaJob Untargeted(TaskType type) => new(type, null, Hand.Null);
 }
 
@@ -33,7 +40,10 @@ public sealed record PermaJob(TaskType Type, string? Site, Hand Saved)
 /// </summary>
 public static class PermaJobs
 {
-    /// <summary>A TaskData row's job fields: +4 <paramref name="Kind"/> (2: also runs before urgent tasks), +8 <paramref name="PerTarget"/>, +0xc <paramref name="Job"/>, +0x10 <paramref name="Companion"/> (0: none).</summary>
+    /// <summary>
+    /// A TaskData row's job fields: +4 <paramref name="Kind"/> (2: also runs before urgent tasks), +8 <paramref name="PerTarget"/>, +0xc <paramref
+    /// name="Job"/>, +0x10 <paramref name="Companion"/> (0: none).
+    /// </summary>
     readonly record struct Rule(int Kind, bool PerTarget, TaskType Job, TaskType Companion);
 
     static readonly Dictionary<TaskType, Rule> Rules = new()
@@ -91,7 +101,9 @@ public static class PermaJobs
     public static RunningTask? ListJob(CharacterCold cold, CharacterTask task) =>
         task != CharacterTask.Attack && cold.Running is { Source: TaskSource.Job } run && run.Runs(task) && (run.Implicit || run.Job >= 0 && (Runs(run.Row) || Follows(run.Row))) ? run : null;
 
-    /// <summary>The index of the first job of <paramref name="type"/> in the list, -1 when none.</summary>
+    /// <summary>
+    /// The index of the first job of <paramref name="type"/> in the list, -1 when none.
+    /// </summary>
     public static int IndexOf(CharacterCold cold, TaskType type) => cold.Jobs.FindIndex(j => j.Type == type);
 
     /// <summary>
@@ -135,14 +147,22 @@ public static class PermaJobs
     static bool SameTarget(PermaJob a, PermaJob b) =>
         !a.Character.IsNone || !b.Character.IsNone ? a.Character == b.Character : a.Site is not null || b.Site is not null ? a.Site == b.Site : a.Saved == b.Saved;
 
-    /// <summary>The jobs that follow their character: Bodyguard 45, Staying close 31 and its animal form 289 (<c>FUN_14032ebd0</c> builds the same <c>Task_Follow</c> for 31 and 289).</summary>
+    /// <summary>
+    /// The jobs that follow their character: Bodyguard 45, Staying close 31 and its animal form 289 (<c>FUN_14032ebd0</c> builds the same
+    /// <c>Task_Follow</c> for 31 and 289).
+    /// </summary>
     public static bool Follows(TaskType type) => type is TaskType.Bodyguard or TaskType.StayCloseToTarget or TaskType.Unnamed289;
 
-    /// <summary>The types that run with the jobs switch off (<b>Verified</b>, <c>FUN_14050c1c0</c>): attacking enemies, staying close, bodyguard, robot repair, medic, splinting. Not 289, the animals' staying close.</summary>
+    /// <summary>
+    /// The types that run with the jobs switch off (<b>Verified</b>, <c>FUN_14050c1c0</c>): attacking enemies, staying close, bodyguard, robot
+    /// repair, medic, splinting. Not 289, the animals' staying close.
+    /// </summary>
     public static bool IgnoresSwitch(TaskType type) =>
         type is TaskType.AttackEnemies or TaskType.StayCloseToTarget or TaskType.Bodyguard or TaskType.JobRepairRobot or TaskType.JobMedic or TaskType.SplintJob;
 
-    /// <summary>The row's display text (TaskData +0x138, <c>FUN_140319a60</c>) for the jobs list; null when Meitou does not know it.</summary>
+    /// <summary>
+    /// The row's display text (TaskData +0x138, <c>FUN_140319a60</c>) for the jobs list; null when Meitou does not know it.
+    /// </summary>
     public static string? Text(TaskType type) => type switch
     {
         TaskType.OperateMachinery or TaskType.PretendToOperateMachinery => "Operating machine",

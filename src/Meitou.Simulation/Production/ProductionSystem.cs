@@ -16,26 +16,51 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Production;
 
-/// <summary>The numbers of <see cref="ProductionSystem"/>; the engine choices say so (docs/simulation.md "Production").</summary>
+/// <summary>
+/// The numbers of <see cref="ProductionSystem"/>; the engine choices say so (docs/simulation.md "Production").
+/// </summary>
 public sealed class ProductionSettings
 {
-    /// <summary>The <i>Production speed</i> option (multiplies production work); its default is Unknown, 1 is neutral.</summary>
+    /// <summary>
+    /// The <i>Production speed</i> option (multiplies production work); its default is Unknown, 1 is neutral.
+    /// </summary>
     public float ProductionOption { get; init; } = 1;
-    /// <summary>The <i>Research speed</i> option (divides research hours); its default is Unknown, 1 is neutral.</summary>
+    /// <summary>
+    /// The <i>Research speed</i> option (divides research hours); its default is Unknown, 1 is neutral.
+    /// </summary>
     public float ResearchOption { get; init; } = 1;
-    /// <summary>A turret's gunner whose path has ended counts as at its spot within this much more (engine choice). Operators work within the machine's <c>use range</c> (<see cref="SiteReach"/>).</summary>
+    /// <summary>
+    /// A turret's gunner whose path has ended counts as at its spot within this much more (engine choice). Operators work within the machine's <c>use
+    /// range</c> (<see cref="SiteReach"/>).
+    /// </summary>
     public float SettleReach { get; init; } = 150;
-    /// <summary>The footprint radius of a BUILDING record (the host knows it); null: 0.</summary>
+    /// <summary>
+    /// The footprint radius of a BUILDING record (the host knows it); null: 0.
+    /// </summary>
     public Func<string, float>? Footprint { get; init; }
-    /// <summary>The X/Z gap from a point to a site's footprint hull, 0 inside; null, or a null answer: the gap to its position (<see cref="SiteReach"/>).</summary>
+    /// <summary>
+    /// The X/Z gap from a point to a site's footprint hull, 0 inside; null, or a null answer: the gap to its position (<see cref="SiteReach"/>).
+    /// </summary>
     public Func<BuildSite, Vector2, float?>? EdgeGap { get; init; }
-    /// <summary>A character gives or takes items from within this far (X/Z) of a building's footprint, else "Out of trading range." (the original: the building's bounds radius + 40 from its position for an item out of it, 60 for one out of a character's inventory, docs/game/economy.md "Trading range"; engine choice: 40 from the footprint both ways).</summary>
+    /// <summary>
+    /// A character gives or takes items from within this far (X/Z) of a building's footprint, else "Out of trading range." (the original: the
+    /// building's bounds radius + 40 from its position for an item out of it, 60 for one out of a character's inventory, docs/game/economy.md
+    /// "Trading range"; engine choice: 40 from the footprint both ways).
+    /// </summary>
     public float TransferReach { get; init; } = 40;
-    /// <summary>Operators empty a full output into storages and fill empty inputs from them (docs/simulation.md "Production"; engine option: the original's wording "put any excess materials ... into storage" is the Ditch items squad AI option's, <see cref="SquadAi.Ditch"/>).</summary>
+    /// <summary>
+    /// Operators empty a full output into storages and fill empty inputs from them (docs/simulation.md "Production"; engine option: the original's
+    /// wording "put any excess materials ... into storage" is the Ditch items squad AI option's, <see cref="SquadAi.Ditch"/>).
+    /// </summary>
     public bool AutoHaul { get; init; } = true;
-    /// <summary>Farms, automatic machines and generators work in unloaded zones too (Meitou default); false: they stop there and farms catch up when their zone loads again, as the game does (docs/game/buildings-production.md "Unloaded zones").</summary>
+    /// <summary>
+    /// Farms, automatic machines and generators work in unloaded zones too (Meitou default); false: they stop there and farms catch up when their
+    /// zone loads again, as the game does (docs/game/buildings-production.md "Unloaded zones").
+    /// </summary>
     public bool UnloadedProduction { get; init; } = true;
-    /// <summary>How far (X/Z) from its machine an operator hauls (engine choice; the original's limit is Unknown).</summary>
+    /// <summary>
+    /// How far (X/Z) from its machine an operator hauls (engine choice; the original's limit is Unknown).
+    /// </summary>
     public float HaulRange { get; init; } = 3000;
 }
 
@@ -51,7 +76,9 @@ public sealed class ProductionSettings
 /// </summary>
 public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
-    /// <summary>The research falloff per earlier contribution in the same tick (<b>Observed</b>, <c>FUN_140836b70</c>).</summary>
+    /// <summary>
+    /// The research falloff per earlier contribution in the same tick (<b>Observed</b>, <c>FUN_140836b70</c>).
+    /// </summary>
     public const float ResearchFalloff = 0.6f;
 
     readonly GameDatabase _db;
@@ -65,11 +92,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     List<ResearchData>? _allResearch;
     ResearchSnapshot? _publishedResearch;
     long _researchVersion = -1, _machinesVersion = -1;
-    /// <summary>Where the camera looks (the last <see cref="FocusCommand"/>; null: not told, as in headless runs): research costs are counted round it. Derived from the commands, not saved or hashed.</summary>
+    /// <summary>
+    /// Where the camera looks (the last <see cref="FocusCommand"/>; null: not told, as in headless runs): research costs are counted round it.
+    /// Derived from the commands, not saved or hashed.
+    /// </summary>
     Vector3? _focus;
-    /// <summary>The focus zone <see cref="_publishedResearch"/> was built for.</summary>
+    /// <summary>
+    /// The focus zone <see cref="_publishedResearch"/> was built for.
+    /// </summary>
     Meitou.Data.World.ZoneCoordinate? _researchZone;
-    /// <summary>The research lists' sizes and the tick <see cref="_publishedResearch"/> was built at (<see cref="ResearchView"/>).</summary>
+    /// <summary>
+    /// The research lists' sizes and the tick <see cref="_publishedResearch"/> was built at (<see cref="ResearchView"/>).
+    /// </summary>
     (int, int, int, int) _researchLists;
     long _researchBuilt;
     const int ResearchRefreshTicks = 30;
@@ -94,13 +128,19 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     public ProductionSettings Settings { get; }
-    /// <summary>See <see cref="ProductionSettings.UnloadedProduction"/>; the host sets it live.</summary>
+    /// <summary>
+    /// See <see cref="ProductionSettings.UnloadedProduction"/>; the host sets it live.
+    /// </summary>
     public bool UnloadedProduction { get; set; }
     public ItemFactory Items => _items;
-    /// <summary>The construction system the engineer job (125) builds through; null: the job never runs.</summary>
+    /// <summary>
+    /// The construction system the engineer job (125) builds through; null: the job never runs.
+    /// </summary>
     public ConstructionSystem? Construction { get; init; }
 
-    /// <summary>What a BUILDING does once built (null for one that neither works nor stores); read once.</summary>
+    /// <summary>
+    /// What a BUILDING does once built (null for one that neither works nor stores); read once.
+    /// </summary>
     public MachineData? Data(string record)
     {
         if (!_machineData.TryGetValue(record, out var data))
@@ -117,7 +157,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     // ------------------------------------------------------------------ machines
 
-    /// <summary>Makes the machine of a complete site (empty, a farm freshly planted) unless it has one; <paramref name="world"/> seeds the planting.</summary>
+    /// <summary>
+    /// Makes the machine of a complete site (empty, a farm freshly planted) unless it has one; <paramref name="world"/> seeds the planting.
+    /// </summary>
     public Machine? Ensure(World world, BuildSite site)
     {
         if (world.Machines.Find(site.Id) is { } existing) return existing;
@@ -164,7 +206,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return m;
     }
 
-    /// <summary>Machines follow the sites: a complete player site gets one, a gone site loses its own (items dropped where it stood).</summary>
+    /// <summary>
+    /// Machines follow the sites: a complete player site gets one, a gone site loses its own (items dropped where it stood).
+    /// </summary>
     void Sync(World world)
     {
         var reg = world.Buildings;
@@ -239,7 +283,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _sweep = true;
     }
 
-    /// <summary>Puts what a removed machine held on the ground at its last position (engine choice: the original's dismantle leaves items too, the details are Unknown).</summary>
+    /// <summary>
+    /// Puts what a removed machine held on the ground at its last position (engine choice: the original's dismantle leaves items too, the details are
+    /// Unknown).
+    /// </summary>
     void DropAll(World world, Machine m)
     {
         var at = m.Position;
@@ -360,7 +407,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
     }
 
-    /// <summary>A player turret's post (its functionality's <c>use range</c> and <c>gun turret</c>), null for a building that is no turret.</summary>
+    /// <summary>
+    /// A player turret's post (its functionality's <c>use range</c> and <c>gun turret</c>), null for a building that is no turret.
+    /// </summary>
     Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site)
     {
         if (_db.Find(site.Record) is not { } record || (record.GetReferences("functionality") is [var link, ..] ? _db.Find(link.TargetStringId) : null) is not { } fn
@@ -385,7 +434,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return new Vector2(at.X, at.Z);
     }
 
-    /// <summary>Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the site's own floor (not a turret's, whose spot may stand above it).</summary>
+    /// <summary>
+    /// Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the site's own floor (not a turret's, whose spot may stand above
+    /// it).
+    /// </summary>
     void WalkToSite(ref CharacterHot n, CharacterCold cold, BuildSite site, Vector2 goal)
     {
         n.Goal = goal;
@@ -427,7 +479,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
-    /// <summary>Building slot 59 (<c>isIndoors</c>, <b>Verified</b>): a machine whose record is interior furniture and which stands in a building. One rule for the power tick, a light's work and a farm's crop match and rain.</summary>
+    /// <summary>
+    /// Building slot 59 (<c>isIndoors</c>, <b>Verified</b>): a machine whose record is interior furniture and which stands in a building. One rule
+    /// for the power tick, a light's work and a farm's crop match and rain.
+    /// </summary>
     static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site?.Parent is not null;
 
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
@@ -466,7 +521,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return MathF.Atan2(at.X - n.Position.X, at.Y - n.Position.Z);
     }
 
-    /// <summary>The clip a turret's gunner holds.</summary>
+    /// <summary>
+    /// The clip a turret's gunner holds.
+    /// </summary>
     public const string TurretClip = "combatstance";
 
     public void RegisterTasks(TaskHandlers tasks)
@@ -493,7 +550,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         else Begin(world, slot, site, m);
     }
 
-    /// <summary>An operator, hauler or prospector that another task replaces or the Stop order ends lets go of its machine, trip or progress (the task it goes back to is the new start's).</summary>
+    /// <summary>
+    /// An operator, hauler or prospector that another task replaces or the Stop order ends lets go of its machine, trip or progress (the task it goes
+    /// back to is the new start's).
+    /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;
@@ -599,7 +659,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (world.Machines.Count == 0) _sweep = false;
     }
 
-    /// <summary>Walks a character to a building: at it, its path is dropped; else a path is asked for, again every <see cref="PursuitSystem.RepathSeconds"/> while it has none.</summary>
+    /// <summary>
+    /// Walks a character to a building: at it, its path is dropped; else a path is asked for, again every <see cref="PursuitSystem.RepathSeconds"/>
+    /// while it has none.
+    /// </summary>
     void Approach(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
         const ushort path = (ushort)MoveFlags.AnyPath;
@@ -788,7 +851,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (cold.Stats is { } stats && cold.Race is { } race) _xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat));
     }
 
-    /// <summary>The operating XP amount of a stat (<b>Observed</b>, <c>FUN_1408c7250</c>): 0.5, stats 10 and 37 0.1, 11 1, 24 3, 35 1.2 (0.8 falling into the farming case), 12 (farming) 0.75.</summary>
+    /// <summary>
+    /// The operating XP amount of a stat (<b>Observed</b>, <c>FUN_1408c7250</c>): 0.5, stats 10 and 37 0.1, 11 1, 24 3, 35 1.2 (0.8 falling into the
+    /// farming case), 12 (farming) 0.75.
+    /// </summary>
     static float OperateXp(int stat) => stat switch { 10 or 37 => 0.1f, 11 => 1, 24 => 3, 35 => 1.2f, 12 => 0.75f, _ => 0.5f };
 
     static float Effective(CharacterCold cold, StatsEnumerated stat) => (cold.Stats?[stat] ?? 0) * (cold.Medical?.StatMultiplier(stat) ?? 1);
@@ -837,7 +903,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     // ------------------------------------------------------------------ farms
 
-    /// <summary>Replants (<b>Observed</b>, <c>FUN_1400e48e0</c>): each plant's growth -0.2 x U[0, 1), the farm's the lowest of them, nothing harvested, no death.</summary>
+    /// <summary>
+    /// Replants (<b>Observed</b>, <c>FUN_1400e48e0</c>): each plant's growth -0.2 x U[0, 1), the farm's the lowest of them, nothing harvested, no
+    /// death.
+    /// </summary>
     static void Replant(World world, Machine m)
     {
         var f = m.Farm!;
@@ -858,7 +927,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         f.HarvestProgress = 0;
     }
 
-    /// <summary>Whether a machine updates: always with <see cref="UnloadedProduction"/>, else only in an active zone (Verified, ZoneManager updates the buildings of its active zones only).</summary>
+    /// <summary>
+    /// Whether a machine updates: always with <see cref="UnloadedProduction"/>, else only in an active zone (Verified, ZoneManager updates the
+    /// buildings of its active zones only).
+    /// </summary>
     bool Live(World world, Machine m) =>
         UnloadedProduction || world.ActiveZones is not { } active || active.Contains(Meitou.Data.World.WorldLayout.ZoneOf(m.Position.X, m.Position.Z));
 
@@ -938,7 +1010,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return (p, death, growthLength);
     }
 
-    /// <summary>How ripe a farm is, 0..1 over its growth (the HUD's figure): the growth while growing, 1 once ripe.</summary>
+    /// <summary>
+    /// How ripe a farm is, 0..1 over its growth (the HUD's figure): the growth while growing, 1 once ripe.
+    /// </summary>
     public static float Ripeness(FarmState f) => Math.Clamp(f.Growth, 0, 1);
 
     /// <summary>
@@ -960,10 +1034,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return true;
     }
 
-    /// <summary>The factor of the rain's water (the exe's constant at <c>14168a254</c>, <b>Verified</b>).</summary>
+    /// <summary>
+    /// The factor of the rain's water (the exe's constant at <c>14168a254</c>, <b>Verified</b>).
+    /// </summary>
     const float RainWaterFactor = 3;
 
-    /// <summary>The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building (<see cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level += wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).</summary>
+    /// <summary>
+    /// The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building (<see
+    /// cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level += wetness
+    /// x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).
+    /// </summary>
     void FarmTick(World world, Machine m, float dt)
     {
         var f = m.Farm!;
@@ -1060,7 +1140,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return false;
     }
 
-    /// <summary>A farm whose crop is still growing and whose every input holds water.</summary>
+    /// <summary>
+    /// A farm whose crop is still growing and whose every input holds water.
+    /// </summary>
     static bool Tended(Machine m) =>
         m.Farm is { Growth: < 1 } f && f.Death < m.Data.Farm!.DeathThreshold && m.Inputs.All(i => i.Rate <= 0 || i.Level + i.Count > 0);
 
@@ -1078,10 +1160,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return true;
     }
 
-    /// <summary>Whether animals may eat a farm (<c>AI::farmHasFood</c> <c>FUN_1408ca350</c>): grown past 0.4, dead under 0.9.</summary>
+    /// <summary>
+    /// Whether animals may eat a farm (<c>AI::farmHasFood</c> <c>FUN_1408ca350</c>): grown past 0.4, dead under 0.9.
+    /// </summary>
     public static bool HasFood(FarmState f) => f.Growth > 0.4f && f.Death < 0.9f && f.Harvested < f.Plants.Length;
 
-    /// <summary>A plant is done (<b>Observed</b>, <c>FUN_1400e4800</c>): its growth -10, one more harvested.</summary>
+    /// <summary>
+    /// A plant is done (<b>Observed</b>, <c>FUN_1400e4800</c>): its growth -10, one more harvested.
+    /// </summary>
     static void NextPlant(FarmState f)
     {
         if (f.Harvested >= f.Plants.Length) return;
@@ -1142,10 +1228,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return true;
     }
 
-    /// <summary><see cref="Learn(World, string)"/> for a blueprint item (false for any other item).</summary>
+    /// <summary>
+    /// <see cref="Learn(World, string)"/> for a blueprint item (false for any other item).
+    /// </summary>
     public bool Learn(World world, ItemInstance blueprint) => _items.ResearchOf(blueprint) is { } research && Learn(world, research.StringId);
 
-    /// <summary>The research the player may queue now (<b>Observed</b>, <c>FUN_1408333b0</c>): not blueprint-only, not exhausted (every repetition done) or queued, <c>level</c> within the tech level, requirements met.</summary>
+    /// <summary>
+    /// The research the player may queue now (<b>Observed</b>, <c>FUN_1408333b0</c>): not blueprint-only, not exhausted (every repetition done) or
+    /// queued, <c>level</c> within the tech level, requirements met.
+    /// </summary>
     public bool Available(World world, ResearchData r) =>
         !r.BlueprintOnly && !world.Research.Exhausted(_db, r.Id) && !world.Research.IsQueued(r.Id) && r.LevelAt(world.Research.Times(r.Id)) <= world.Research.TechLevel && Met(world, r.Requirements, lenient: true);
 
@@ -1167,7 +1258,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         return true;
     }
 
-    /// <summary>The zone of the camera focus, null while none was told.</summary>
+    /// <summary>
+    /// The zone of the camera focus, null while none was told.
+    /// </summary>
     Meitou.Data.World.ZoneCoordinate? FocusZone() => _focus is { } f ? Meitou.Data.World.WorldLayout.ZoneOf(f.X, f.Z) : null;
 
     /// <summary>
@@ -1234,7 +1327,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         world.Machines.Touch();
     }
 
-    /// <summary>The research state for the host (rebuilt when it or the machines changed).</summary>
+    /// <summary>
+    /// The research state for the host (rebuilt when it or the machines changed).
+    /// </summary>
     public ResearchSnapshot ResearchView(World world)
     {
         var zone = FocusZone();
@@ -1335,9 +1430,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (moved > 0) world.Machines.Touch();
     }
 
-    /// <summary>Re-dresses a character that put on something taken out of a storage or container (null: not re-dressed).</summary>
+    /// <summary>
+    /// Re-dresses a character that put on something taken out of a storage or container (null: not re-dressed).
+    /// </summary>
     internal CharacterAssembly? Assembly { get; set; }
-    /// <summary>The beds the "Sleep when injured" option lies in (null: the option does nothing).</summary>
+    /// <summary>
+    /// The beds the "Sleep when injured" option lies in (null: the option does nothing).
+    /// </summary>
     public Locks.BedSystem? Beds { get; set; }
 
     /// <summary>

@@ -7,26 +7,33 @@ namespace Meitou.Simulation.Population;
 
 public sealed partial class PopulationSystem
 {
-    /// <summary>Characters the F10 debug menu has spawned (<see cref="DebugSpawn"/>): each one's look variant.</summary>
+    /// <summary>
+    /// Characters the F10 debug menu has spawned (<see cref="DebugSpawn"/>): each one's look variant.
+    /// </summary>
     int _debugSpawns;
 
     /// <summary>
-    /// The animation sandbox's spawn (the game host's <c>--sandbox</c>): one character made from <paramref name="recordId"/> at a place, alone in a squad of its own, standing idle.
-    /// <paramref name="player"/> makes it one of the player's (the first call also sets the player faction and the factions it knows, as <see cref="StartPlayer"/> does); otherwise it belongs to the
-    /// first faction that is hostile to the player's. A <paramref name="variant"/> above 0 is a bystander with a look of its own: of the faction <paramref name="player"/> picks,
-    /// in a squad of its own that is not the player's. <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes two NPCs of one faction.
-    /// Before the first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug menu call it.
+    /// The look <see cref="SpawnSandbox"/> gives a character (the same arguments, <paramref name="faction"/> the one it ends up with): the duel picks variants
+    /// that wear a helmet.
     /// </summary>
-    /// <summary>The look <see cref="SpawnSandbox"/> gives a character (the same arguments, <paramref name="faction"/> the one it ends up with): the duel picks variants that wear a helmet.</summary>
     public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction)
     {
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(recordId) ^ (player ? 1UL : 2UL) ^ ((ulong)variant << 8));
         return _data.Appearances?.Create(recordId, _data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
     }
 
+    /// <summary>
+    /// The animation sandbox's spawn (the game host's <c>--sandbox</c>): one character made from <paramref name="recordId"/> at a place, alone in a squad of its
+    /// own, standing idle. <paramref name="player"/> makes it one of the player's (the first call also sets the player faction and the factions it knows, as
+    /// <see cref="StartPlayer"/> does); otherwise it belongs to the first faction that is hostile to the player's. A <paramref name="variant"/> above 0 is a
+    /// bystander with a look of its own: of the faction <paramref name="player"/> picks, in a squad of its own that is not the player's.
+    /// <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes two NPCs of one faction. Before the first
+    /// tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug menu call it.
+    /// </summary>
     public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null)
     {
         int chosen = SandboxFaction(player, faction);
+
         // An animal (ANIMAL_CHARACTER) has its species' shared look (nothing rolled); it is an adult (age 1).
         bool animal = _data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.AnimalCharacter };
         CharacterAppearance? look = SandboxLook(world.Seed, recordId, player, variant, chosen);
@@ -44,29 +51,42 @@ public sealed partial class PopulationSystem
             world.Player.Squad = squad.Id;
             world.Player.Selection.Clear();
         }
+
         return id;
     }
 
-    /// <summary><see cref="SpawnSandbox"/>'s faction: <paramref name="faction"/>, else the player's, else (an NPC) the first faction hostile to the player's.</summary>
+    /// <summary>
+    /// <see cref="SpawnSandbox"/>'s faction: <paramref name="faction"/>, else the player's, else (an NPC) the first faction hostile to the player's.
+    /// </summary>
     int SandboxFaction(bool player, int? faction)
     {
         if (_data.PlayerFaction < 0) throw new InvalidOperationException("the game data has no player faction (Nameless)");
+
         int chosen = faction ?? _data.PlayerFaction;
         if (!player && faction is null)
         {
             for (int f = 0; f < _data.Factions.Count; f++)
-                if (f != _data.PlayerFaction && _data.Relations.Get(f, _data.PlayerFaction) <= FactionRelations.HostileThreshold) { chosen = f; break; }
+            {
+                if (f != _data.PlayerFaction && _data.Relations.Get(f, _data.PlayerFaction) <= FactionRelations.HostileThreshold)
+                {
+                    chosen = f;
+                    break;
+                }
+            }
+
             if (chosen == _data.PlayerFaction) chosen = _data.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.i != _data.PlayerFaction).i;
         }
+
         return chosen;
     }
 
     /// <summary>
-    /// The game's <c>--battle</c> side: one NPC squad of characters made from <paramref name="recordId"/>, one at <paramref name="at"/> plus each of <paramref name="offsets"/>
-    /// (the first leads), standing idle facing <paramref name="yaw"/>; member i has the look <see cref="SpawnSandbox"/> gives <paramref name="firstVariant"/> + i, the faction
-    /// as it picks one for an NPC. Before the first tick. Returns the members in order.
+    /// The game's <c>--battle</c> side: one NPC squad of characters made from <paramref name="recordId"/>, one at <paramref name="at"/> plus each of
+    /// <paramref name="offsets"/> (the first leads), standing idle facing <paramref name="yaw"/>; member i has the look <see cref="SpawnSandbox"/> gives
+    /// <paramref name="firstVariant"/> + i, the faction as it picks one for an NPC. Before the first tick. Returns the members in order.
     /// </summary>
-    public IReadOnlyList<CharacterId> SpawnSandboxSquad(World world, string recordId, Vector2 at, IReadOnlyList<Vector2> offsets, float yaw, int firstVariant, int? faction)
+    public IReadOnlyList<CharacterId> SpawnSandboxSquad(
+        World world, string recordId, Vector2 at, IReadOnlyList<Vector2> offsets, float yaw, int firstVariant, int? faction)
     {
         int chosen = SandboxFaction(false, faction);
         bool animal = _data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.AnimalCharacter };
@@ -77,6 +97,7 @@ public sealed partial class PopulationSystem
             members[i] = new MemberPlan(recordId, i == 0 ? SquadRole.Leader : SquadRole.Squad1, i, offsets[i], animal, 1);
             built[i] = new BuiltMember(members[i], SandboxLook(world.Seed, recordId, false, firstVariant + i, chosen));
         }
+
         var template = new SquadTemplate { Id = "sandbox " + recordId, Name = _data.Db.Find(recordId)?.Name ?? recordId };
         var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true, yaw: yaw);
         return squad.Members;

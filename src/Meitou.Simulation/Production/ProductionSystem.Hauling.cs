@@ -8,7 +8,9 @@ namespace Meitou.Simulation.Production;
 // or producer output holding it (NearestSource). The trip is CharacterCold.HaulSite / HaulFetch; Schedule walks there, and the operator walks back to its machine once the items have moved.
 public sealed partial class ProductionSystem
 {
-    /// <summary>The storage (or, fetching, the producer) a hauling operator walks to; one that is gone ends the trip.</summary>
+    /// <summary>
+    /// The storage (or, fetching, the producer) a hauling operator walks to; one that is gone ends the trip.
+    /// </summary>
     (BuildSite Site, Machine Machine)? Hauling(World world, CharacterCold cold)
     {
         if (cold.HaulSite is not { } id) return null;
@@ -18,7 +20,9 @@ public sealed partial class ProductionSystem
         return null;
     }
 
-    /// <summary>What an operator at its machine does before working; true when it set off for a storage.</summary>
+    /// <summary>
+    /// What an operator at its machine does before working; true when it set off for a storage.
+    /// </summary>
     bool StartHaul(World world, CharacterCold cold, BuildSite site, Machine m)
     {
         if (cold.Inventory is not { } inv) return false;
@@ -63,7 +67,10 @@ public sealed partial class ProductionSystem
         return true;
     }
 
-    /// <summary>At the storage: puts the carried output in, or takes what the machine's empty inputs hold room for (from a producer, out of its output); then the trip ends.</summary>
+    /// <summary>
+    /// At the storage: puts the carried output in, or takes what the machine's empty inputs hold room for (from a producer, out of its output); then
+    /// the trip ends.
+    /// </summary>
     void HaulAt(World world, CharacterCold cold, Machine machine, Machine store)
     {
         var inv = cold.Inventory;
@@ -108,18 +115,24 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
-    /// <summary>Puts an item into an inventory; the units placed (<see cref="Inventory.Add"/> leaves the quantity as it was when all fit).</summary>
+    /// <summary>
+    /// Puts an item into an inventory; the units placed (<see cref="Inventory.Add"/> leaves the quantity as it was when all fit).
+    /// </summary>
     internal static int Placed(Inventory into, ItemInstance item)
     {
         int before = item.Quantity;
         return into.Add(item) ? before : before - item.Quantity;
     }
 
-    /// <summary>The loose stacks of an ITEM in a character's main grid and backpack.</summary>
+    /// <summary>
+    /// The loose stacks of an ITEM in a character's main grid and backpack.
+    /// </summary>
     static IEnumerable<ItemInstance> Carried(Inventory inv, string record) =>
         inv.All().Where(i => i.Record == record && i.Section is "main" or "backpack_content" && !i.LockedOn && i.Contents is null);
 
-    /// <summary>Whether some of an item fits: a stack of it with room, or a free cell.</summary>
+    /// <summary>
+    /// Whether some of an item fits: a stack of it with room, or a free cell.
+    /// </summary>
     static bool Fits(Inventory storage, ItemInstance item)
     {
         int limit = storage.LimitOf(item);
@@ -138,7 +151,10 @@ public sealed partial class ProductionSystem
             ? m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main")
             : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
 
-    /// <summary>The player's nearest complete storage within <see cref="ProductionSettings.HaulRange"/> of a machine that passes <paramref name="ok"/> (ties: the lower site id).</summary>
+    /// <summary>
+    /// The player's nearest complete storage within <see cref="ProductionSettings.HaulRange"/> of a machine that passes <paramref name="ok"/> (ties:
+    /// the lower site id).
+    /// </summary>
     string? NearestStorage(World world, BuildSite from, Func<Machine, bool> ok)
     {
         string? best = null;

@@ -16,7 +16,9 @@ using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation.Population;
 
-/// <summary>Makes the drawable half of a character (rolled by <see cref="CharacterGenerator"/>); null when it cannot be made.</summary>
+/// <summary>
+/// Makes the drawable half of a character (rolled by <see cref="CharacterGenerator"/>); null when it cannot be made.
+/// </summary>
 
 /// <summary>
 /// Zone activation and town residents (docs/game/game-loop.md "Update, threads and budget", factions-squads-towns.md 6.4). The active zones are the
@@ -57,11 +59,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         public long UnloadAtTick = -1;
         public long LoadId;
         public readonly List<int> Squads = [];
-        /// <summary>A nest's top-up is being built.</summary>
+        /// <summary>
+        /// A nest's top-up is being built.
+        /// </summary>
         public bool Pending;
-        /// <summary>The nest rolls used since it loaded (a top-up's keys follow them).</summary>
+        /// <summary>
+        /// The nest rolls used since it loaded (a top-up's keys follow them).
+        /// </summary>
         public int Made;
-        /// <summary>Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; not saved, as there).</summary>
+        /// <summary>
+        /// Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; not saved, as there).
+        /// </summary>
         public bool Repopulate;
     }
 
@@ -86,25 +94,42 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         _worker.Start();
     }
 
-    /// <summary>The off-screen switches (<see cref="PopulationSettings.KeepRoamers"/> and the next two), changed live by the host.</summary>
+    /// <summary>
+    /// The off-screen switches (<see cref="PopulationSettings.KeepRoamers"/> and the next two), changed live by the host.
+    /// </summary>
     public bool KeepRoamers { get; set; }
     public bool OffscreenFights { get; set; }
     public bool OffscreenHealing { get; set; }
-    /// <summary>The campaign inheritance switch (<see cref="PopulationSettings.CampaignAncestorsOnce"/>), changed live by the host.</summary>
+    /// <summary>
+    /// The campaign inheritance switch (<see cref="PopulationSettings.CampaignAncestorsOnce"/>), changed live by the host.
+    /// </summary>
     public bool CampaignAncestorsOnce { get; set; }
-    /// <summary>The wild-squad switch (<see cref="PopulationSettings.KeepWild"/>), changed live by the host.</summary>
+    /// <summary>
+    /// The wild-squad switch (<see cref="PopulationSettings.KeepWild"/>), changed live by the host.
+    /// </summary>
     public bool KeepWild { get; set; }
-    /// <summary>The residents' schedule switch (<see cref="PopulationSettings.ResidentSchedule"/>), changed live by the host.</summary>
+    /// <summary>
+    /// The residents' schedule switch (<see cref="PopulationSettings.ResidentSchedule"/>), changed live by the host.
+    /// </summary>
     public bool ResidentSchedule { get; set; }
 
-    /// <summary>Game hours a town must have been unloaded for its residents to come back where their schedule puts them (engine choice: a quick reload changes nothing).</summary>
+    /// <summary>
+    /// Game hours a town must have been unloaded for its residents to come back where their schedule puts them (engine choice: a quick reload changes
+    /// nothing).
+    /// </summary>
     public const double ScheduleAfterHours = 1;
 
     readonly WorldStates _live;
-    /// <summary>The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world (<see cref="WorldStates"/>).</summary>
+    /// <summary>
+    /// The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world (<see
+    /// cref="WorldStates"/>).
+    /// </summary>
     public IWorldStates States => ReferenceEquals(_data.States, IWorldStates.None) ? _live : _data.States;
 
-    /// <summary>The live world states take the unique table and the player's faction (serial; every tick, again after a look's unique refresh, and before the loading screen's builds).</summary>
+    /// <summary>
+    /// The live world states take the unique table and the player's faction (serial; every tick, again after a look's unique refresh, and before the
+    /// loading screen's builds).
+    /// </summary>
     void RefreshStates(World world) => _live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction);
 
     bool _drainAll;
@@ -112,7 +137,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     public PopulationData Data => _data;
     public PopulationSettings Settings => _settings;
     public SiteStatus StatusOf(int site) => _states[site].Status;
-    /// <summary>The zones active as of the last look: the loaded zones (<see cref="RefreshLoaded"/>), where the squads, the items and the navmesh are kept.</summary>
+    /// <summary>
+    /// The zones active as of the last look: the loaded zones (<see cref="RefreshLoaded"/>), where the squads, the items and the navmesh are kept.
+    /// </summary>
     public IReadOnlyCollection<ZoneCoordinate> ActiveZones => _active;
     public Vector3? Focus => _focus;
 
@@ -193,15 +220,24 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.ItemSlots.Step(world, _data);
     }
 
-    /// <summary>The XZ distance at which a player character explores a town (and discovers it).</summary>
+    /// <summary>
+    /// The XZ distance at which a player character explores a town (and discovers it).
+    /// </summary>
     public const float ExploreRange = 400;
-    /// <summary>The XZ distance at which a player character discovers a town: doubled for a TOWN of type Town, halved for Nest and Ruins (docs/game/ui-screens.md "Map").</summary>
+    /// <summary>
+    /// The XZ distance at which a player character discovers a town: doubled for a TOWN of type Town, halved for Nest and Ruins
+    /// (docs/game/ui-screens.md "Map").
+    /// </summary>
     public const float DiscoverRange = 8500;
     static float DiscoverRangeOf(TownType type) => DiscoverRange * (type == TownType.Town ? 2 : type is TownType.Nest or TownType.Ruins ? 0.5f : 1);
 
-    /// <summary>Where each wild nest stood when it last loaded (null before), for the map.</summary>
+    /// <summary>
+    /// Where each wild nest stood when it last loaded (null before), for the map.
+    /// </summary>
     Vector2?[] _wildCentres = [];
-    /// <summary>The player characters of a <see cref="Discover"/> check, with their zones.</summary>
+    /// <summary>
+    /// The player characters of a <see cref="Discover"/> check, with their zones.
+    /// </summary>
     readonly List<(Vector2 At, ZoneCoordinate Zone)> _viewers = [];
 
     void TickDiscover(World world)
@@ -213,7 +249,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         Discover(world);
     }
 
-    /// <summary>Real seconds between two town discovery checks (<c>DAT_14167c308</c>).</summary>
+    /// <summary>
+    /// Real seconds between two town discovery checks (<c>DAT_14167c308</c>).
+    /// </summary>
     public const float DiscoverEverySeconds = 1;
     float _discoverClock;
 
@@ -261,7 +299,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 player.KnowCamp(camp with { Position = new Vector3(c.X, 0, c.Y) }, TownKnowledge.None);
     }
 
-    /// <summary>The farthest the camera focus can be from the nearest player character: <c>FUN_1406ae990</c> pulls the camera back to this (2250).</summary>
+    /// <summary>
+    /// The farthest the camera focus can be from the nearest player character: <c>FUN_1406ae990</c> pulls the camera back to this (2250).
+    /// </summary>
     const float CameraReach = 2250;
 
     /// <summary>
@@ -279,14 +319,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (zone.X is >= 0 and < WorldLayout.ZoneCount && zone.Y is >= 0 and < WorldLayout.ZoneCount) _viewers.Add((at, zone));
     }
 
-    /// <summary>A sense update that finds this many characters in sight range also takes everyone within <see cref="CrowdReach"/> (<c>FUN_1407866d0</c>).</summary>
+    /// <summary>
+    /// A sense update that finds this many characters in sight range also takes everyone within <see cref="CrowdReach"/> (<c>FUN_1407866d0</c>).
+    /// </summary>
     const int CrowdCount = 40;
     const float CrowdReach = 250;
 
     Combat.CombatSystem? _fights;
     Locks.LockSystem? _locks;
 
-    /// <summary>One of the player's characters whose sense update runs, so it meets factions: not unconscious, dead or carried (<c>FUN_140598c20</c>).</summary>
+    /// <summary>
+    /// One of the player's characters whose sense update runs, so it meets factions: not unconscious, dead or carried (<c>FUN_140598c20</c>).
+    /// </summary>
     internal static bool MeetsFactions(CharacterCold c) => c is { IsPlayer: true, DiedTick: < 0, CarriedBy.IsNone: true } && c.Medical?.Incapacitated != true;
 
     /// <summary>
@@ -413,7 +457,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     static float LingerSpeed(World world) => world.PhysicsSpeed > 0 ? world.PhysicsSpeed : 1;
 
-    /// <summary>Keeps a zone of the grid loaded until <paramref name="until"/>, unless a later request already does.</summary>
+    /// <summary>
+    /// Keeps a zone of the grid loaded until <paramref name="until"/>, unless a later request already does.
+    /// </summary>
     void Ask(ZoneCoordinate zone, long until)
     {
         if (!zone.IsInsideGrid) return;
@@ -480,7 +526,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return false;
     }
 
-    /// <summary>Whether a zone may be loaded now: the host holds a town back until its navmesh is ready, so residents are not placed inside buildings of an open-ground stand-in (null: always).</summary>
+    /// <summary>
+    /// Whether a zone may be loaded now: the host holds a town back until its navmesh is ready, so residents are not placed inside buildings of an
+    /// open-ground stand-in (null: always).
+    /// </summary>
     public Func<ZoneCoordinate, bool>? ZoneGate { get; set; }
 
     void Load(World world, TownSite site, SiteState state)
@@ -631,7 +680,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return true;
     }
 
-    /// <summary>A wild site leaves the world: its squads are removed (the population makes them again).</summary>
+    /// <summary>
+    /// A wild site leaves the world: its squads are removed (the population makes them again).
+    /// </summary>
     void Drop(World world, SiteState state)
     {
         var table = world.Characters;
@@ -804,7 +855,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     readonly List<string> _townLog = [];
-    /// <summary>A line for each town whose squads were made since the last call (for the host's log; not part of the state).</summary>
+    /// <summary>
+    /// A line for each town whose squads were made since the last call (for the host's log; not part of the state).
+    /// </summary>
     public List<string> TakeTownLog()
     {
         var list = new List<string>(_townLog);
@@ -913,7 +966,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (state == 2) cold.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
     }
 
-    /// <summary>A <c>named</c> CHARACTER's random name from its look's sex's list (docs/characters.md "Names"); null: the record's name.</summary>
+    /// <summary>
+    /// A <c>named</c> CHARACTER's random name from its look's sex's list (docs/characters.md "Names"); null: the record's name.
+    /// </summary>
     string? SpawnName(World world, GameRecord? record, CharacterAppearance? look, int squadId, int index) =>
         record is not null && record.GetBool("named") && _data.Appearances is { } source
             ? source.RandomName(look?.Female ?? false, Rng.Hash(world.Seed, (ulong)squadId << 8 | (uint)index, RngPurpose.Name))
@@ -965,7 +1020,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 if (!m.Gone) ReleaseUnique(world, m.Source.RecordId, CharacterId.None, m.Dead || killed);
     }
 
-    /// <summary>The same for the characters of a squad in the world.</summary>
+    /// <summary>
+    /// The same for the characters of a squad in the world.
+    /// </summary>
     void ReleaseUniques(World world, Squad squad, bool killed = false)
     {
         var table = world.Characters;
@@ -1044,12 +1101,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return town.Site >= 0 && world.Squads.Find(cold.SquadId)?.Town == town.Site;
     }
 
-    /// <summary>The floor at X/Z: the one under <paramref name="nearY"/> inside a building, else the ground.</summary>
+    /// <summary>
+    /// The floor at X/Z: the one under <paramref name="nearY"/> inside a building, else the ground.
+    /// </summary>
     static float Ground(IWalkability walk, float x, float z, float? nearY) => nearY is { } y ? walk.GroundHeight(x, z, y) : walk.GroundHeight(x, z);
 
     bool _disposed;
 
-    /// <summary>Stops the build thread; safe to call twice.</summary>
+    /// <summary>
+    /// Stops the build thread; safe to call twice.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;

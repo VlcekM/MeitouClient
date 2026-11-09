@@ -23,13 +23,19 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public sealed partial class PopulationSystem
 {
-    /// <summary>Each patrolling homeless squad's point, how many it has picked and the distance to the point at which it picks the next, by squad id.</summary>
+    /// <summary>
+    /// Each patrolling homeless squad's point, how many it has picked and the distance to the point at which it picks the next, by squad id.
+    /// </summary>
     readonly Dictionary<int, (Vector2 Point, int Picks, float Arrive)> _homelessPatrols = [];
     readonly Dictionary<string, bool> _approachesTowns = new(StringComparer.Ordinal);
     readonly HashSet<int> _patrolSeen = [];
-    /// <summary>The homeless squads standing in each zone (living leader), counted at the start of each patrol pass for <see cref="SectorWeight"/>.</summary>
+    /// <summary>
+    /// The homeless squads standing in each zone (living leader), counted at the start of each patrol pass for <see cref="SectorWeight"/>.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, float> _patrolStanding = [];
-    /// <summary>Each homeless squad's home sector, its patrol's tether (<see cref="HomeCell"/>; null: none), by squad id.</summary>
+    /// <summary>
+    /// Each homeless squad's home sector, its patrol's tether (<see cref="HomeCell"/>; null: none), by squad id.
+    /// </summary>
     readonly Dictionary<int, (int X, int Z)?> _homelessHomes = [];
 
     /// <summary>
@@ -89,7 +95,9 @@ public sealed partial class PopulationSystem
     readonly HashSet<int> _sectorSeen = [];
 
     readonly List<(int Squad, int From, int To)> _refiles = [];
-    /// <summary>The tick each homeless squad's leader was first seen outside the active zones, by squad id.</summary>
+    /// <summary>
+    /// The tick each homeless squad's leader was first seen outside the active zones, by squad id.
+    /// </summary>
     readonly Dictionary<int, long> _outsideSince = [];
 
     /// <summary>
@@ -115,7 +123,9 @@ public sealed partial class PopulationSystem
         return true;
     }
 
-    /// <summary>The sector site of a zone, or -1.</summary>
+    /// <summary>
+    /// The sector site of a zone, or -1.
+    /// </summary>
     int SectorAt(ZoneCoordinate zone)
     {
         if (_wildByZone.TryGetValue(zone, out var list))
@@ -170,7 +180,10 @@ public sealed partial class PopulationSystem
         squad.HomeRadius = PointRadius;
     }
 
-    /// <summary>The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal outside a patrol package walk from sector to sector as well (a2-011).</summary>
+    /// <summary>
+    /// The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal outside a patrol package walk from
+    /// sector to sector as well (a2-011).
+    /// </summary>
     void PatrolLoadedSquads(World world)
     {
         var table = world.Characters;
@@ -253,7 +266,10 @@ public sealed partial class PopulationSystem
     /// </summary>
     float SectorWeight(ZoneCoordinate zone) => !_active.Contains(zone) ? 1 : PatrolWeight(_patrolStanding.GetValueOrDefault(zone));
 
-    /// <summary>An active sector's weight for load n: 10 when empty, a flat 5 below 2, 1 at 2, 1 / n above (the constants 10, 2, 5, 1 of <c>FUN_1408f5ad0</c>).</summary>
+    /// <summary>
+    /// An active sector's weight for load n: 10 when empty, a flat 5 below 2, 1 at 2, 1 / n above (the constants 10, 2, 5, 1 of
+    /// <c>FUN_1408f5ad0</c>).
+    /// </summary>
     internal static float PatrolWeight(float n) => n == 0 ? 10 : n < 2 ? 5 : n > 2 ? 1 / n : 1;
 
     /// <summary>
@@ -414,7 +430,10 @@ public sealed partial class PopulationSystem
         else _work.Add(() => { foreach (var b in Build()) _builtWild.Enqueue(b); });
     }
 
-    /// <summary>The loaded squads of a save's persistent platoons (the original's persistent flag +0x115, <c>FUN_1407ec570</c>): filed in a sector's uncounted set, not its load.</summary>
+    /// <summary>
+    /// The loaded squads of a save's persistent platoons (the original's persistent flag +0x115, <c>FUN_1407ec570</c>): filed in a sector's uncounted
+    /// set, not its load.
+    /// </summary>
     static HashSet<int> PersistentSquads(World world)
     {
         HashSet<int> ids = [];
@@ -423,7 +442,9 @@ public sealed partial class PopulationSystem
         return ids;
     }
 
-    /// <summary>Whether the town nearest a sector's centre stands in it (<c>FUN_1408f62e0</c>).</summary>
+    /// <summary>
+    /// Whether the town nearest a sector's centre stands in it (<c>FUN_1408f62e0</c>).
+    /// </summary>
 
     bool OwnTown(WildSite site)
     {

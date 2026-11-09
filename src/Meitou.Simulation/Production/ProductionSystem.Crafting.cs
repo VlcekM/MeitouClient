@@ -10,12 +10,16 @@ namespace Meitou.Simulation.Production;
 /// </summary>
 public sealed partial class ProductionSystem
 {
-    /// <summary>How many crafts a bench's queue holds (engine choice; the original's limit is Unknown).</summary>
+    /// <summary>
+    /// How many crafts a bench's queue holds (engine choice; the original's limit is Unknown).
+    /// </summary>
     public const int MaxCraftQueue = 20;
 
     HashSet<(CraftKind, string)>? _everEnabled;
 
-    /// <summary>Crafts some research unlocks; anything no research lists is craftable from the start (engine reading).</summary>
+    /// <summary>
+    /// Crafts some research unlocks; anything no research lists is craftable from the start (engine reading).
+    /// </summary>
     HashSet<(CraftKind, string)> EverEnabled()
     {
         if (_everEnabled is not null) return _everEnabled;
@@ -25,7 +29,9 @@ public sealed partial class ProductionSystem
 
     bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id)) || !EverEnabled().Contains((kind, id));
 
-    /// <summary>Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level.</summary>
+    /// <summary>
+    /// Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level.
+    /// </summary>
     public bool CanCraft(World world, CraftBench bench, CraftOption option) =>
         Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model)) && option.Level <= bench.TechLevel;
 
@@ -48,7 +54,9 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
-    /// <summary>Units of the first finished stack the output already holds of this option (it stops the bench at the option's store).</summary>
+    /// <summary>
+    /// Units of the first finished stack the output already holds of this option (it stops the bench at the option's store).
+    /// </summary>
     static int Held(CraftState state, CraftOption option) => state.Done.Where(d => d.Record == option.Item).Sum(d => d.Quantity);
 
     /// <summary>
@@ -77,14 +85,18 @@ public sealed partial class ProductionSystem
             else m.Inputs[k].Level = 0;
     }
 
-    /// <summary>Stores a section's level under its item (a level of 0 forgets it).</summary>
+    /// <summary>
+    /// Stores a section's level under its item (a level of 0 forgets it).
+    /// </summary>
     static void Remember(CraftState state, string item, float level)
     {
         if (level > 0) state.Partial[item] = level;
         else state.Partial.Remove(item);
     }
 
-    /// <summary>A remembered level read from a save (an item that is not in the game is dropped).</summary>
+    /// <summary>
+    /// A remembered level read from a save (an item that is not in the game is dropped).
+    /// </summary>
     internal void RestorePartial(Machine m, string item, float level)
     {
         if (m.Craft is { } state && level > 0 && _items.Info(item) is not null) state.Partial[item] = level;
@@ -92,7 +104,9 @@ public sealed partial class ProductionSystem
 
     static string ItemOf(Machine m, CraftJob job, int k) => k < job.Recipe.Inputs.Count ? job.Recipe.Inputs[k].Item : m.Inputs[k].Recipe.Item;
 
-    /// <summary>Sets the sections' items and rates for a craft (also on load, before the saved section items are read back).</summary>
+    /// <summary>
+    /// Sets the sections' items and rates for a craft (also on load, before the saved section items are read back).
+    /// </summary>
     static void Apply(Machine m, CraftState state, CraftJob job)
     {
         state.Bound = job.Option.Key;
@@ -195,7 +209,10 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
-    /// <summary>The model a weapon craft comes out as: the queued one, or below the crafter's skill with no critical the best model of the bench at or below the skill (else its lowest).</summary>
+    /// <summary>
+    /// The model a weapon craft comes out as: the queued one, or below the crafter's skill with no critical the best model of the bench at or below
+    /// the skill (else its lowest).
+    /// </summary>
     static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical) =>
         skill >= option.Level || critical ? option
             : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill).OrderByDescending(o => o.Level).FirstOrDefault()
@@ -254,7 +271,9 @@ public sealed partial class ProductionSystem
     long _craftsResearch = -1;
     int _craftsBenches = -1;
 
-    /// <summary>Every crafting bench's options (rebuilt when research or the set of benches changed).</summary>
+    /// <summary>
+    /// Every crafting bench's options (rebuilt when research or the set of benches changed).
+    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> CraftsView(World world)
     {
         int benches = 0;
@@ -267,7 +286,9 @@ public sealed partial class ProductionSystem
         return _publishedCrafts = map;
     }
 
-    /// <summary>What a bench can craft, for its Craft tab: every option with its recipe and whether it can be queued now.</summary>
+    /// <summary>
+    /// What a bench can craft, for its Craft tab: every option with its recipe and whether it can be queued now.
+    /// </summary>
     public IReadOnlyList<CraftOptionView> CraftOptions(World world, string site)
     {
         if (world.Machines.Find(site) is not { Data.Craft: { } bench } m) return [];
@@ -278,7 +299,9 @@ public sealed partial class ProductionSystem
         })];
     }
 
-    /// <summary>A queued craft read from a save (dropped when the bench no longer offers it).</summary>
+    /// <summary>
+    /// A queued craft read from a save (dropped when the bench no longer offers it).
+    /// </summary>
     internal void RestoreCraft(Machine m, string item, string? model, float progress, byte critical)
     {
         string key = model is null ? item : item + "|" + model;
@@ -287,7 +310,10 @@ public sealed partial class ProductionSystem
         if (state.Queue.Count == 1) Apply(m, state, state.Queue[0]);
     }
 
-    /// <summary>A finished item (at most <paramref name="count"/> units, 0: all) taken from a bench's output into a character's inventory (what does not fit stays).</summary>
+    /// <summary>
+    /// A finished item (at most <paramref name="count"/> units, 0: all) taken from a bench's output into a character's inventory (what does not fit
+    /// stays).
+    /// </summary>
     void TakeCrafted(World world, Machine m, CraftState state, Inventory root, int index, int count = 0)
     {
         if (index < 0 || index >= state.Done.Count) return;

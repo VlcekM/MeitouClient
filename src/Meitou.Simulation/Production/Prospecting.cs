@@ -9,10 +9,14 @@ namespace Meitou.Simulation.Production;
 /// </summary>
 public sealed record ProspectOrder(CharacterId Character) : OrderCommand;
 
-/// <summary>One line of the results window: a resource or crop coverage and its value (1 = 100 %).</summary>
+/// <summary>
+/// One line of the results window: a resource or crop coverage and its value (1 = 100 %).
+/// </summary>
 public readonly record struct ProspectLine(string Name, float Value)
 {
-    /// <summary>The number shown: the value times 100, cut to an int (<b>Verified</b>, <c>FUN_14049d850</c>).</summary>
+    /// <summary>
+    /// The number shown: the value times 100, cut to an int (<b>Verified</b>, <c>FUN_14049d850</c>).
+    /// </summary>
     public int Percent => (int)(Value * 100);
 }
 
@@ -43,9 +47,13 @@ public sealed record ProspectReport(long Serial, Vector3 Position, string Prospe
 /// <param name="Rocks">Per resource row: the rocks within <see cref="RockRange"/> x <see cref="Extent"/> of the spot with their own yields (Iron, Copper); empty for a field resource.</param>
 public sealed record ProspectMap(int Size, float X, float Z, float Extent, float[] Heights, IReadOnlyList<float[]?> Fields, IReadOnlyList<IReadOnlyList<ProspectRock>> Rocks)
 {
-    /// <summary>The rock search radius as a share of the side (<b>Verified</b>: squared 0.6 x side, <c>FUN_14049cd60</c>).</summary>
+    /// <summary>
+    /// The rock search radius as a share of the side (<b>Verified</b>: squared 0.6 x side, <c>FUN_14049cd60</c>).
+    /// </summary>
     public const float RockRange = 0.6f;
 }
 
-/// <summary>A rock on the prospecting map: where it stands and its own yield (the value a mine next to it gets).</summary>
+/// <summary>
+/// A rock on the prospecting map: where it stands and its own yield (the value a mine next to it gets).
+/// </summary>
 public readonly record struct ProspectRock(float X, float Z, float Value);
