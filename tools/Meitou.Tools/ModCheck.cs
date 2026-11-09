@@ -99,7 +99,8 @@ static class ModCheck
         if (options.ModFolders.Count == 0) return ModHost.EnabledCodeMods(install);
         var mods = options.ModFolders.Select(f => new ModInfo(Path.GetFileName(f), Path.Combine(f, Path.GetFileName(f) + ".mod"), ModSource.Local))
             .ToList();
-        foreach (var missing in mods.Where(m => !m.HasCode)) Console.Error.WriteLine($"mods      {missing.Folder} has no {ModList.CodeManifestFile}");
+        foreach (var missing in mods.Where(m => !m.HasCode))
+            Console.Error.WriteLine($"mods      {missing.Folder} has no {ModList.CodeManifestFile}");
         return [.. mods.Where(m => m.HasCode)];
     }
 
@@ -140,8 +141,10 @@ static class ModCheck
     {
         Console.WriteLine($"world     {characters} characters at the end of a run");
         if (characters < 64)
+        {
             Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; "
                 + "use a busier save");
+        }
     }
 
     /// <summary>
@@ -172,8 +175,14 @@ static class ModCheck
         SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
         mods?.RestoreSaveData(world, save.ModData);
         Focus(world);
-        try { return Record(world, options.Ticks, mods); }
-        finally { s_current = null; }
+        try
+        {
+            return Record(world, options.Ticks, mods);
+        }
+        finally
+        {
+            s_current = null;
+        }
     }
 
     static void Focus(World world)

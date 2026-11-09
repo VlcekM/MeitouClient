@@ -68,7 +68,8 @@ static class InteriorSurvey
         foreach (var (type, t) in tallies.OrderByDescending(t => t.Value.Ours))
         {
             float total = Math.Max(1, t.Both + t.Original);
-            Console.WriteLine($"{type,-40} {t.Placements,4} {t.Both * Step * Step,8:0} {t.Ours * Step * Step,8:0} {t.OursUpper * Step * Step,8:0} {t.Original * Step * Step,8:0} "
+            Console.WriteLine($"{type,-40} {t.Placements,4} {t.Both * Step * Step,8:0} "
+                + $"{t.Ours * Step * Step,8:0} {t.OursUpper * Step * Step,8:0} {t.Original * Step * Step,8:0} "
                 + $"{100 * t.Ours / total,6:0.0} {100 * t.Original / total,6:0.0}  {t.Worst}");
         }
         if (Rebuilt.Count > 0)
@@ -143,8 +144,10 @@ static class InteriorSurvey
         var chosen = new Dictionary<string, string>();
         foreach (var site in gatherer.InteriorSites(zone))
         {
-            var faces = owners.Where(o => o.Site?.Key == site.Placement.Key).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3)
-                .Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
+            var faces = owners
+                .Where(o => o.Site?.Key == site.Placement.Key)
+                .SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Select(i => o.Group.Vertices[i]).ToArray()))
+                .ToList();
             if (faces.Count == 0) continue;
             string best = "";
             float bestScore = 0.5f;
@@ -209,7 +212,8 @@ static class InteriorSurvey
         {
             if (poly.Length < 3) continue;
             var f = poly.Select(i => exterior.Vertices[i]).ToArray();
-            if (f.Max(v => v.X) >= x0 && f.Min(v => v.X) <= x1 && f.Max(v => v.Z) >= z0 && f.Min(v => v.Z) <= z1) yield return f;
+            if (f.Max(v => v.X) >= x0 && f.Min(v => v.X) <= x1 && f.Max(v => v.Z) >= z0 && f.Min(v => v.Z) <= z1)
+                yield return f;
         }
     }
 
@@ -251,7 +255,8 @@ static class InteriorSurvey
         int n = 0;
         foreach (var f in polygons)
         {
-            foreach (var v in f) w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"v {v.X:0.##} {v.Y:0.##} {v.Z:0.##}"));
+            foreach (var v in f)
+                w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"v {v.X:0.##} {v.Y:0.##} {v.Z:0.##}"));
             w.WriteLine("f " + string.Join(" ", Enumerable.Range(n + 1, f.Length)));
             n += f.Length;
         }
@@ -272,6 +277,7 @@ static class InteriorSurvey
         var polys = new List<int>();
         var theirs = new List<float>();
         for (float z = z0 + Step / 2; z < z1; z += Step)
+        {
             for (float x = x0 + Step / 2; x < x1; x += Step)
             {
                 if (!NavGeometry.InsideConvex(hull, new Vector2(x, z), 0)) continue;
@@ -295,12 +301,15 @@ static class InteriorSurvey
                     }
                 }
                 foreach (float o in theirs)
+                {
                     if (!polys.Any(p => MathF.Abs(mesh.HeightAt(p, x, z) - o) <= SameSurface))
                     {
                         original++;
                         seen?.Invoke(x, z, 't', o);
                     }
+                }
             }
+        }
         return (both, ours, upper, original);
     }
 
@@ -310,9 +319,11 @@ static class InteriorSurvey
     static float? HeightOn(Vector3[] f, float x, float z)
     {
         for (int k = 1; k + 1 < f.Length; k++)
+        {
             if (NavGeometry.Barycentric(x, z, f[0], f[k], f[k + 1], out float u, out float v, out float w) && u >= -1e-4f && v >= -1e-4f
                     && w >= -1e-4f)
                 return u * f[0].Y + v * f[k].Y + w * f[k + 1].Y;
+        }
         return null;
     }
 
@@ -374,7 +385,8 @@ static class InteriorSurvey
         {
             float y = f.Average(v => v.Y);
             for (int k = 1; k + 1 < f.Length; k++) original.Triangle(f[0], f[k], f[k + 1], Colour(y));
-            for (int k = 0; k < f.Length; k++) original.Line(f[k] + Vector3.UnitY * 50, f[(k + 1) % f.Length] + Vector3.UnitY * 50, (0, 0, 0));
+            for (int k = 0; k < f.Length; k++)
+                original.Line(f[k] + Vector3.UnitY * 50, f[(k + 1) % f.Length] + Vector3.UnitY * 50, (0, 0, 0));
         }
         var ours = new TopDownRenderer(x0, z0, x1, z1, 0.25f, (20, 20, 24));
         for (int p = 0; p < mesh.PolygonCount; p++)
@@ -383,13 +395,17 @@ static class InteriorSurvey
             var poly = mesh.Polygons[p].Select(i => mesh.Vertices[i]).ToArray();
             var c = Colour(mesh.Centre(p).Y);
             for (int k = 1; k + 1 < poly.Length; k++) ours.Triangle(poly[0], poly[k], poly[k + 1], c);
-            for (int k = 0; k < poly.Length; k++) ours.Line(poly[k] + Vector3.UnitY * 50, poly[(k + 1) % poly.Length] + Vector3.UnitY * 50,
-                    (0, 0, 0));
+            for (int k = 0; k < poly.Length; k++)
+                ours.Line(poly[k] + Vector3.UnitY * 50, poly[(k + 1) % poly.Length] + Vector3.UnitY * 50, (0, 0, 0));
         }
         foreach (var r in new[] { original, ours })
+        {
             for (int k = 0; k < hull.Length; k++)
+            {
                 r.Line(new Vector3(hull[k].X, 1e5f, hull[k].Y), new Vector3(hull[(k + 1) % hull.Length].X, 1e5f, hull[(k + 1) % hull.Length].Y),
                         (255, 255, 255));
+            }
+        }
         WorldPng.Write(path + ".orig.png", original.Width, original.Height, original.Rgb);
         WorldPng.Write(path + ".ours.png", ours.Width, ours.Height, ours.Rgb);
     }

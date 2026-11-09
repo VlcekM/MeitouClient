@@ -27,7 +27,10 @@ static class ReleaseCache
         {
             return File.Exists(CacheFile) ? JsonSerializer.Deserialize(File.ReadAllText(CacheFile), LauncherJson.Default.Cache) : null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -42,7 +42,8 @@ static class WeatherTool
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
         var data = WeatherData.Load(db);
         var areas = WeatherAreas.Load(install);
-        Console.WriteLine($"{data.Weathers.Count} weathers, {data.Seasons.Count} seasons, {data.Regions.Count} regions, {data.DaysPerYear} days per year");
+        Console.WriteLine($"{data.Weathers.Count} weathers, {data.Seasons.Count} seasons, "
+            + $"{data.Regions.Count} regions, {data.DaysPerYear} days per year");
         if (extents)
             return PrintExtents(data, areas);
 
@@ -75,12 +76,14 @@ static class WeatherTool
     {
         var byRegion = new Dictionary<string, List<(int X, int Z)>>();
         for (int cz = 0; cz < WeatherAreas.Cells; cz++)
+        {
             for (int cx = 0; cx < WeatherAreas.Cells; cx++)
             {
                 var r = areas.RegionOf(data, cx, cz);
                 if (!byRegion.TryGetValue(r.Name, out var l)) byRegion[r.Name] = l = [];
                 l.Add((cx, cz));
             }
+        }
 
         return byRegion;
     }
@@ -108,7 +111,8 @@ static class WeatherTool
         foreach (var s in region.Seasons)
         {
             string weathers = string.Join(", ", s.Season.Weathers.Select(w => $"{w.Weather.Name} x{w.Weight} ({w.MinMinutes}-{w.MaxMinutes} min)"));
-            Console.WriteLine($"  season {s.Season.Name}: {s.Days} days, strength {s.Season.StrengthLimitMin:0.##}..{s.Season.StrengthLimitMax:0.##}, " + weathers);
+            Console.WriteLine($"  season {s.Season.Name}: {s.Days} days, "
+                + $"strength {s.Season.StrengthLimitMin:0.##}..{s.Season.StrengthLimitMax:0.##}, " + weathers);
         }
 
         int index = data.Regions.ToList().IndexOf(region);

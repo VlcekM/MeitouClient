@@ -47,14 +47,25 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
             var (list, _) = await releases.FetchAsync();
             return [.. list
                 .Where(r => r.Kind == ReleaseKind.Launcher && (includePrereleases || !r.Prerelease))
-                .Select(r => new GithubRelease
-                {
-                    Name = r.Title,
-                    Prerelease = r.Prerelease,
-                    PublishedAt = r.Published.UtcDateTime,
-                    Assets = [.. r.Assets.Select(a => new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url,
-                            ContentType = "application/octet-stream" })],
-                })];
+                .Select(ToGithubRelease)];
         }
+
+        /// <summary>
+        /// <paramref name="r"/> as Velopack's GitHub source lists a release.
+        /// </summary>
+        static GithubRelease ToGithubRelease(Release r) =>
+            new GithubRelease
+            {
+                Name = r.Title,
+                Prerelease = r.Prerelease,
+                PublishedAt = r.Published.UtcDateTime,
+                Assets = [.. r.Assets.Select(ToGithubAsset)],
+            };
+
+        /// <summary>
+        /// <paramref name="a"/> as Velopack's GitHub source lists a release's file.
+        /// </summary>
+        static GithubReleaseAsset ToGithubAsset(ReleaseAsset a) =>
+            new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url, ContentType = "application/octet-stream" };
     }
 }

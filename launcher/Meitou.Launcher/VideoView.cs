@@ -68,16 +68,7 @@ sealed class VideoView : Border
         _image.Source = _poster;
         var shade = new SolidColorBrush(Color.FromArgb(0xB0, 0x11, 0x0F, 0x0D));
         var ink = MarkdownView.Brush("PaperLight");
-        _button = new Border
-        {
-            Width = 56, Height = 56, CornerRadius = new CornerRadius(28), Background = shade,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Child = new Path
-            {
-                Data = Geometry.Parse("M 0,0 L 0,22 L 19,11 Z"), Fill = ink, Margin = new Thickness(5, 0, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
+        _button = PlayButton(shade, ink);
 
         _playPause = new Path { Data = PauseIcon, Fill = ink, VerticalAlignment = VerticalAlignment.Center };
         _fill = new Border { Background = MarkdownView.Brush("BrassLight"), HorizontalAlignment = HorizontalAlignment.Left,
@@ -88,7 +79,38 @@ sealed class VideoView : Border
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0), Child = _fill,
         };
 
-        // A taller transparent strip around the thin track, so it is easy to hit.
+        var seek = SeekStrip();
+        _track.SizeChanged += (_, _) => UpdateBar();
+        _time = new TextBlock { Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+        _bar = Bar(BarRow(seek));
+        _bar.PointerPressed += (_, e) => e.Handled = true; // the bar's gaps are not clicks on the picture
+
+        var layers = new Panel { Children = { _image, _button, _bar } };
+        if (fullVideo is var (page, open)) layers.Children.Add(FullVideoLink(page, open, shade, ink));
+        Child = layers;
+        HookInput();
+    }
+
+    /// <summary>
+    /// The round play button in the middle of the poster.
+    /// </summary>
+    static Border PlayButton(IBrush shade, IBrush ink) =>
+        new Border
+        {
+            Width = 56, Height = 56, CornerRadius = new CornerRadius(28), Background = shade,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Child = new Path
+            {
+                Data = Geometry.Parse("M 0,0 L 0,22 L 19,11 Z"), Fill = ink, Margin = new Thickness(5, 0, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+
+    /// <summary>
+    /// A taller transparent strip around the thin track, so it is easy to hit: pressing or dragging moves the bar, releasing seeks there.
+    /// </summary>
+    Border SeekStrip()
+    {
         var seek = new Border { Background = Brushes.Transparent, Height = 22, Child = _track };
         seek.PointerPressed += (_, e) =>
         {
@@ -113,8 +135,14 @@ sealed class VideoView : Border
             e.Pointer.Capture(null);
             SeekTo(Duration * f);
         };
-        _track.SizeChanged += (_, _) => UpdateBar();
-        _time = new TextBlock { Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+        return seek;
+    }
+
+    /// <summary>
+    /// The bar's row: skip back, play/pause and skip forward on the left, the time on the right, <paramref name="seek"/> between them.
+    /// </summary>
+    DockPanel BarRow(Border seek)
+    {
         var row = new DockPanel();
         foreach (var control in new[]
                  {
@@ -129,7 +157,14 @@ sealed class VideoView : Border
         DockPanel.SetDock(_time, Dock.Right);
         row.Children.Add(_time);
         row.Children.Add(seek);
-        _bar = new Border
+        return row;
+    }
+
+    /// <summary>
+    /// The bar at the bottom holding <paramref name="row"/> over a dark gradient; hidden until <see cref="UpdateBar"/> shows it.
+    /// </summary>
+    static Border Bar(DockPanel row) =>
+        new Border
         {
             VerticalAlignment = VerticalAlignment.Bottom, Padding = new Thickness(8, 4), IsVisible = false, Child = row,
             Background = new LinearGradientBrush
@@ -139,37 +174,44 @@ sealed class VideoView : Border
                         1) },
             },
         };
-        _bar.PointerPressed += (_, e) => e.Handled = true; // the bar's gaps are not clicks on the picture
 
-        var layers = new Panel { Children = { _image, _button, _bar } };
-        if (fullVideo is var (page, open))
+    /// <summary>
+    /// "Full video" in the top right corner: the post's full-quality video on the web (front matter `video`); a click pauses this one and
+    /// opens <paramref name="page"/>.
+    /// </summary>
+    Border FullVideoLink(string page, Action<string> open, IBrush shade, IBrush ink)
+    {
+        var link = new Border
         {
-            // "Full video" in the top right corner: the post's full-quality video on the web (front matter `video`).
-            var link = new Border
+            Background = shade, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 4), Margin = new Thickness(8),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Child = new StackPanel
             {
-                Background = shade, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 4), Margin = new Thickness(8),
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Child = new StackPanel
+                Orientation = Orientation.Horizontal, Spacing = 6,
+                Children =
                 {
-                    Orientation = Orientation.Horizontal, Spacing = 6,
-                    Children =
-                    {
-                        new TextBlock { Text = "Full video", Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
-                        new Path { Data = Geometry.Parse("M 0,3 H 5 V 5 H 2 V 10 H 7 V 7 H 9 V 12 H 0 Z M 6,0 H 12 V 6 L 10,4 L 6,8 L 4,6 L 8,2 Z"),
-                                Fill = ink, VerticalAlignment = VerticalAlignment.Center },
-                    },
+                    new TextBlock { Text = "Full video", Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
+                    new Path { Data = Geometry.Parse("M 0,3 H 5 V 5 H 2 V 10 H 7 V 7 H 9 V 12 H 0 Z M 6,0 H 12 V 6 L 10,4 L 6,8 L 4,6 L 8,2 Z"),
+                            Fill = ink, VerticalAlignment = VerticalAlignment.Center },
                 },
-            };
-            ToolTip.SetTip(link, page);
-            link.PointerPressed += (_, e) =>
-            {
-                e.Handled = true;
-                Pause();
-                open(page);
-            };
-            layers.Children.Add(link);
-        }
-        Child = layers;
+            },
+        };
+        ToolTip.SetTip(link, page);
+        link.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            Pause();
+            open(page);
+        };
+        return link;
+    }
+
+    /// <summary>
+    /// A left click plays the poster or pauses and resumes; Space, Left and Right do the same from the keyboard; the bar shows while the
+    /// pointer is over the video; leaving the screen returns to the poster.
+    /// </summary>
+    void HookInput()
+    {
         PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
@@ -251,10 +293,14 @@ sealed class VideoView : Border
             using var decoder = new VpxDecoder(file.VideoCodec);
             byte[] pixels = [];
             foreach (var f in file.VideoFrames)
+            {
                 if (decoder.Decode(f.Data.Span, ref pixels) is var (width, height))
                     return (file, pixels, width, height);
+            }
         }
-        catch (Exception e) when (e is InvalidDataException or NotSupportedException or InvalidOperationException or ArgumentException) { }
+        catch (Exception e) when (e is InvalidDataException or NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+        }
         return null;
     }
 
@@ -285,7 +331,9 @@ sealed class VideoView : Border
             {
                 if (bytes is not null) loaded = WebmFile.Read(bytes);
             }
-            catch (InvalidDataException) { }
+            catch (InvalidDataException)
+            {
+            }
             Dispatcher.UIThread.Post(() =>
             {
                 _button.Opacity = 1;
@@ -378,7 +426,8 @@ sealed class VideoView : Border
             int target = Math.Max(0, frames.FindLastIndex(f => f.Time <= from));
             int key = Math.Max(0, frames.FindLastIndex(target, f => f.Key));
             byte[] pixels = [];
-            for (int i = key; i < target && !token.IsCancellationRequested; i++) decoder.Decode(frames[i].Data.Span, ref pixels, convert: false);
+            for (int i = key; i < target && !token.IsCancellationRequested; i++)
+                decoder.Decode(frames[i].Data.Span, ref pixels, convert: false);
             if (decoder.Decode(frames[target].Data.Span, ref pixels) is var (w, h))
                 Show(pixels, w, h, frames[target].Time, token);
             if (!play || token.IsCancellationRequested) return;
@@ -410,7 +459,9 @@ sealed class VideoView : Border
             while (audio is { Finished: false } && !token.IsCancellationRequested) Thread.Sleep(20);
             ended = !token.IsCancellationRequested;
         }
-        catch (Exception e) when (e is InvalidOperationException or NotSupportedException or TaskCanceledException) { }
+        catch (Exception e) when (e is InvalidOperationException or NotSupportedException or TaskCanceledException)
+        {
+        }
         if (ended) Dispatcher.UIThread.Post(() => { if (!token.IsCancellationRequested) ToPoster(); });
     }
 

@@ -272,21 +272,29 @@ sealed class PassMeter : IDisposable
     public void Report(TextWriter output)
     {
         for (int s = 0; s < Slots; s++) Collect(s);
-        if (_measuredFrames == 0) { output.WriteLine($"passes    no frames measured (the first {_skip} are skipped)"); return; }
+        if (_measuredFrames == 0)
+        {
+            output.WriteLine($"passes    no frames measured (the first {_skip} are skipped)");
+            return;
+        }
         double f = _measuredFrames;
         // Per frame, like the CPU column: a stage that runs more than once (a capture splitting the scene pass) or a cascade drawn every
         // second frame is summed over the frame, not averaged per run (until 2026-10-07 it was divided by its runs, which under-counted the
         // slices' stages: docs/render-distance-benchmark.md).
         double Gpu(Row r) => r.GpuSamples > 0 && _gpuFrames > 0 ? r.Gpu / _gpuFrames : double.NaN;
         var sb = new StringBuilder();
-        sb.AppendLine($"passes    {Tag}: means per frame over {_measuredFrames} frames (first {_skip} skipped), {_gpuFrames} with GPU times; Stopwatch CPU ms of the render thread; GPU ms between timestamps");
-        sb.AppendLine($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"draws",7}{"indir",6}{"disp",6}{"pipes",6}{"push",6}{"segs",6}{"constKB",8}{"uplKB",7}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
+        sb.AppendLine($"passes    {Tag}: means per frame over {_measuredFrames} frames (first {_skip} skipped), "
+            + $"{_gpuFrames} with GPU times; Stopwatch CPU ms of the render thread; GPU ms between timestamps");
+        sb.Append($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"draws",7}{"indir",6}{"disp",6}{"pipes",6}{"push",6}{"segs",6}");
+        sb.AppendLine($"{"constKB",8}{"uplKB",7}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
         void Line(Row r, string prefix)
         {
             var c = r.C;
             double g = Gpu(r);
-            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}{c[0] / f,7:0}{c[1] / f,6:0}{c[2] / f,6:0}{c[3] / f,6:0}{c[4] / f,6:0}{c[5] / f,6:0}" +
-                $"{c[6] / 1024.0 / f,8:0.0}{c[7] / 1024.0 / f,7:0.0}{Fmt(c[Fence] * TickMs / f),7}{Fmt(c[Submit] * TickMs / f),7}{Fmt(c[Acquire] * TickMs / f),6}{Fmt(c[Present] * TickMs / f),6}");
+            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}"
+                + $"{c[0] / f,7:0}{c[1] / f,6:0}{c[2] / f,6:0}{c[3] / f,6:0}{c[4] / f,6:0}{c[5] / f,6:0}"
+                + $"{c[6] / 1024.0 / f,8:0.0}{c[7] / 1024.0 / f,7:0.0}{Fmt(c[Fence] * TickMs / f),7}{Fmt(c[Submit] * TickMs / f),7}"
+                + $"{Fmt(c[Acquire] * TickMs / f),6}{Fmt(c[Present] * TickMs / f),6}");
         }
         foreach (var r in _order.Where(r => r.Parent is null))
         {
@@ -295,12 +303,19 @@ sealed class PassMeter : IDisposable
         }
         if (_between.Cpu > 0) Line(_between, "");
         var total = new Row("TOTAL", "TOTAL", null);
-        foreach (var r in _order.Where(r => r.Parent is null)) { total.Cpu += r.Cpu; for (int i = 0; i < N; i++) total.C[i] += r.C[i]; if (!double.IsNaN(Gpu(r))) total.Gpu += Gpu(r) * f; }
+        foreach (var r in _order.Where(r => r.Parent is null))
+        {
+            total.Cpu += r.Cpu;
+            for (int i = 0; i < N; i++) total.C[i] += r.C[i];
+            if (!double.IsNaN(Gpu(r))) total.Gpu += Gpu(r) * f;
+        }
         total.GpuSamples = (long)f;
         Line(total, "");
         var sorted = _frameCpu.OrderBy(x => x).ToList();
         double gpuFrame = _gpuFrames > 0 ? _gpuFrameSum / _gpuFrames : double.NaN;
-        sb.AppendLine($"passes    frame render-thread cpu (rows except {EndLabel} and driver-wait): mean {Fmt(_frameCpu.Average())}, p50 {Fmt(sorted[sorted.Count / 2])}, p95 {Fmt(sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)])} ms; gpu frame (first to last timestamp) {Fmt(gpuFrame)} ms");
+        sb.AppendLine($"passes    frame render-thread cpu (rows except {EndLabel} and driver-wait): mean {Fmt(_frameCpu.Average())}, "
+            + $"p50 {Fmt(sorted[sorted.Count / 2])}, p95 {Fmt(sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)])} ms; "
+            + $"gpu frame (first to last timestamp) {Fmt(gpuFrame)} ms");
         output.Write(sb.ToString());
         // For scripts: PASSCSV|tag|row|parent|cpu|gpu|counters... (per-frame means; the tick columns in ms).
         output.WriteLine($"PASSCSVHEAD|{string.Join("|", GpuStats.CounterNames)}|fenceMs|submitMs|acquireMs|presentMs");
@@ -310,12 +325,18 @@ sealed class PassMeter : IDisposable
             for (int i = 0; i < N; i++)
                 parts[i] = (i >= Fence ? r.C[i] * TickMs / f : r.C[i] / f).ToString("0.###", CultureInfo.InvariantCulture);
             double g = Gpu(r);
-            output.WriteLine($"PASSCSV|{Tag}|{r.Key}|{r.Parent}|{r.Cpu / f:0.####}|{(double.IsNaN(g) ? "" : g.ToString("0.####", CultureInfo.InvariantCulture))}|{string.Join("|", parts)}");
+            output.WriteLine($"PASSCSV|{Tag}|{r.Key}|{r.Parent}|{r.Cpu / f:0.####}|"
+                + $"{(double.IsNaN(g) ? "" : g.ToString("0.####", CultureInfo.InvariantCulture))}|{string.Join("|", parts)}");
         }
         foreach (var r in _order) Csv(r);
         if (_between.Cpu > 0) Csv(_between);
-        output.WriteLine($"PASSFRAME|{Tag}|{_measuredFrames}|{_frameCpu.Average():0.####}|{sorted[sorted.Count / 2]:0.####}|{sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)]:0.####}|{gpuFrame:0.####}");
+        output.WriteLine($"PASSFRAME|{Tag}|{_measuredFrames}|{_frameCpu.Average():0.####}|{sorted[sorted.Count / 2]:0.####}|"
+            + $"{sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)]:0.####}|{gpuFrame:0.####}");
     }
 
-    public void Dispose() { StageClock.OnStart = null; StageClock.OnClose = null; }
+    public void Dispose()
+    {
+        StageClock.OnStart = null;
+        StageClock.OnClose = null;
+    }
 }

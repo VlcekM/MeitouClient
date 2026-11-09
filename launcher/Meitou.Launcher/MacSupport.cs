@@ -32,7 +32,10 @@ static class MacSupport
                 ulong value = 0, length = sizeof(ulong);
                 return sysctlbyname("hw.memsize", out value, ref length, IntPtr.Zero, 0) == 0 ? value : 0;
             }
-            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return 0; }
+            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+            {
+                return 0;
+            }
         }
     }
 
@@ -98,7 +101,10 @@ static class MacSupport
                 Link(Path.Combine(directory, "libMoltenVK.dylib"), Path.Combine(molten, "libMoltenVK.dylib"));
             return directory;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     static void Link(string path, string target)
@@ -108,7 +114,9 @@ static class MacSupport
         {
             File.Delete(path);
         }
-        catch (FileNotFoundException) { }
+        catch (FileNotFoundException)
+        {
+        }
         File.CreateSymbolicLink(path, target);
     }
 }

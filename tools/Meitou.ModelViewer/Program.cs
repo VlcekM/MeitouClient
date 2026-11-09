@@ -34,8 +34,14 @@ static class SmokeTest
         var rest = new List<string>();
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--quit-after" && i + 1 < args.Length) s_seconds = double.Parse(args[++i], CultureInfo.InvariantCulture);
-            else rest.Add(args[i]);
+            if (args[i] == "--quit-after" && i + 1 < args.Length)
+            {
+                s_seconds = double.Parse(args[++i], CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                rest.Add(args[i]);
+            }
         }
         return rest.ToArray();
     }

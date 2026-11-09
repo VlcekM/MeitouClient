@@ -57,8 +57,10 @@ public sealed class NewsFeed(HttpClient http)
     static string? FindCheckoutNews()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
             if (File.Exists(Path.Combine(dir.FullName, "MeitouClient.slnx")) && Directory.Exists(Path.Combine(dir.FullName, Folder)))
                 return Path.Combine(dir.FullName, Folder);
+        }
         return null;
     }
 
@@ -196,8 +198,10 @@ public sealed class NewsFeed(HttpClient http)
             if (end > 0)
             {
                 foreach (var line in lines[1..end])
+                {
                     if (line.IndexOf(':') is var colon and > 0)
                         meta[line[..colon].Trim()] = line[(colon + 1)..].Trim().Trim('"');
+                }
                 bodyStart = end + 1;
             }
         }

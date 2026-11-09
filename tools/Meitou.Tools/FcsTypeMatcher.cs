@@ -26,6 +26,7 @@ static class FcsTypeMatcher
         var used = new SortedDictionary<int, Dictionary<string, (string Kind, int Count)>>();
         var recordCounts = new Dictionary<int, int>();
         foreach (var name in BaseFiles)
+        {
             foreach (var record in FcsReader.ReadFile(Path.Combine(install.DataDirectory, name)).Records)
             {
                 recordCounts[record.Type] = recordCounts.GetValueOrDefault(record.Type) + 1;
@@ -33,6 +34,7 @@ static class FcsTypeMatcher
                 foreach (var (key, kind) in KeysOf(record))
                     fields[key] = (kind, fields.GetValueOrDefault(key).Count + 1);
             }
+        }
 
         return (used, recordCounts);
     }
@@ -77,9 +79,11 @@ static class FcsTypeMatcher
         var kindPairs = new Dictionary<(FcsFieldKind, string), int>();
         foreach (var (type, fields) in used)
             if (best.TryGetValue(type, out var typeName))
+            {
                 foreach (var (key, (kind, count)) in fields)
                     if (schema.FindField(typeName, key) is { } def)
                         kindPairs[(def.Kind, kind)] = kindPairs.GetValueOrDefault((def.Kind, kind)) + count;
+            }
         foreach (var ((schemaKind, dataKind), count) in kindPairs.OrderBy(p => p.Key.Item1).ThenByDescending(p => p.Value))
             Console.WriteLine($"  {schemaKind,-10} -> {dataKind,-9} {count,8}");
     }
@@ -117,6 +121,7 @@ static class FcsRecordDump
     {
         int shown = 0;
         foreach (var name in new[] { "gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod" })
+        {
             foreach (var r in FcsReader.ReadFile(Path.Combine(install.DataDirectory, name)).Records.Where(r => r.Type == type))
             {
                 if (shown++ >= limit) return 0;
@@ -126,8 +131,10 @@ static class FcsRecordDump
                 Console.WriteLine($"  int:    {string.Join(", ", r.Ints.Keys)}");
                 Console.WriteLine($"  string: {string.Join(", ", r.Strings.Keys)}  file: {string.Join(", ", r.Filenames.Keys)}");
                 Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3S.Keys.Concat(r.Vector4S.Keys))}");
-                Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: {r.Instances.Count}");
+                Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: "
+                    + $"{r.Instances.Count}");
             }
+        }
         return 0;
     }
 }

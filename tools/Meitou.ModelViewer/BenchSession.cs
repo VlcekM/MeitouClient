@@ -239,7 +239,8 @@ sealed class BenchSession
     void Set(string metric, long k, double v, bool add = false)
     {
         if (k < 0 || k >= _frames) return;
-        if (!_series.TryGetValue(metric, out var s)) _series[metric] = s = Enumerable.Repeat(double.NaN, _frames).ToArray();
+        if (!_series.TryGetValue(metric, out var s))
+            _series[metric] = s = Enumerable.Repeat(double.NaN, _frames).ToArray();
         s[k] = add && !double.IsNaN(s[k]) ? s[k] + v : v;
     }
 
@@ -288,7 +289,8 @@ sealed class BenchSession
         {
             if (_motion.Moves) _motion.Step(++_motionStep);
             _clockFrame++;
-            if (_o.SwayStep > 0 && _gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + _o.SwayStep;
+            if (_o.SwayStep > 0 && _gpu.Foliage is { } swaying)
+                swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + _o.SwayStep;
         }
         _context.EnsureFrame();
         _profiler.Tag = _post.CostTag = tag;
@@ -328,7 +330,10 @@ sealed class BenchSession
     (double MeasuredSeconds, double LockWaited) Measure(GpuLock? gpuLock)
     {
         if (gpuLock is not null)
-            Console.WriteLine($"gpu-lock  waited {gpuLock.Waited.TotalSeconds:0.0} s{(gpuLock.StaleHolder is { } stale ? $" (took over a stale lock of PID {stale})" : "")}");
+        {
+            Console.WriteLine($"gpu-lock  waited {gpuLock.Waited.TotalSeconds:0.0} "
+                + $"s{(gpuLock.StaleHolder is { } stale ? $" (took over a stale lock of PID {stale})" : "")}");
+        }
         double lockWaited = gpuLock?.Waited.TotalSeconds ?? 0;
         var wall = new double[_frames];
         var cpuStages = StageClock.Names.Length;
@@ -337,7 +342,11 @@ sealed class BenchSession
         for (int k = 0; k < _frames; k++) MeasureFrame(k, wall, cpuStages);
         double measuredSeconds = measured.Elapsed.TotalSeconds;
         // The last frames' timestamps arrive when their slots come round: two empty frames bring them in.
-        for (int i = 0; i < 3; i++) { _context.EnsureFrame(); _context.Finish(); }
+        for (int i = 0; i < 3; i++)
+        {
+            _context.EnsureFrame();
+            _context.Finish();
+        }
         _profiler.Flush();
         _post.Flush();
         gpuLock?.Dispose();
@@ -382,7 +391,8 @@ sealed class BenchSession
             if (s != StageClock.DriverWait) cpuSum += StageClock.Ms[s];
         }
         Set("cpu:total", k, cpuSum);
-        for (int p = 0; p < StageClock.PartNames.Length; p++) Set("cpu:upd-chars/" + StageClock.PartNames[p], k, StageClock.PartMs[p]);
+        for (int p = 0; p < StageClock.PartNames.Length; p++)
+            Set("cpu:upd-chars/" + StageClock.PartNames[p], k, StageClock.PartMs[p]);
     }
 
     /// <summary>
@@ -400,8 +410,10 @@ sealed class BenchSession
             result.Configs[labels[s]] = config;
         }
         if (_ab)
+        {
             foreach (var (metric, values) in _series)
                 if (BenchStats.Pair(values, _blockOf, _keep) is { } delta) result.Deltas[metric] = delta;
+        }
     }
 
     /// <summary>
@@ -427,9 +439,17 @@ sealed class BenchSession
             _post.FogVrsStats = true;
             _post.ResetFogVrsStats();
             for (int i = 0; i < 24; i++) Frame(-1, true);
-            for (int i = 0; i < 3; i++) { _context.EnsureFrame(); _context.Finish(); }
+            for (int i = 0; i < 3; i++)
+            {
+                _context.EnsureFrame();
+                _context.Finish();
+            }
             _post.FogVrsStats = false;
-            if (_post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
+            if (_post.FogVrsShare is { Frames: > 0 } share)
+            {
+                result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture,
+                    $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
+            }
         }
     }
 
@@ -449,15 +469,25 @@ sealed class BenchSession
         meta["frameMode"] = _serial ? "serial (each frame waited for)" : "pipelined (frames in flight)";
         meta["frames"] = _frames.ToString(CultureInfo.InvariantCulture);
         if (_gpu.FogVolumes?.DescribeCull() is { } fogText) meta["fogCull"] = fogText;   // what the weather fog hides in this view, and from how far
-        if (_gpu.Shadow is { Cascades: { } casc } shadowNow) meta["shadowRange"] = string.Create(CultureInfo.InvariantCulture, $"range {shadowNow.EffectiveRange:0} (setting {shadowNow.Settings.Range:0}), cascade view depths {string.Join(", ", casc.Select(c => $"{c.NearDepth:0}-{c.FarDepth:0}"))}");
+        if (_gpu.Shadow is { Cascades: { } casc } shadowNow)
+        {
+            meta["shadowRange"] =
+                string.Create(CultureInfo.InvariantCulture, $"range {shadowNow.EffectiveRange:0} (setting {shadowNow.Settings.Range:0}), ")
+                + "cascade view depths " + string.Join(", ", casc.Select(c => $"{c.NearDepth:0}-{c.FarDepth:0}"));
+        }
         meta["profilerStamps"] = _profiler.StampsLastFrame.ToString(CultureInfo.InvariantCulture);   // timestamps a frame, the profiler's cost
         meta["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         meta["measuredSeconds"] = measuredSeconds.ToString("0.0", CultureInfo.InvariantCulture);
         meta["gpuLockWaitedSeconds"] = lockWaited.ToString("0.0", CultureInfo.InvariantCulture);
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
-            if (e.Key is string key && key.StartsWith("MEITOU_", StringComparison.Ordinal)) meta["env." + key] = e.Value?.ToString() ?? "";
+        {
+            if (e.Key is string key && key.StartsWith("MEITOU_", StringComparison.Ordinal))
+                meta["env." + key] = e.Value?.ToString() ?? "";
+        }
         if (_o.Post.Describe() is { } postText) meta["post"] = postText;
-        meta["sky"] = _gpu.Sky.DescribeCost() + (_gpu.Sky.FogCullDistance is { } skyFog ? string.Create(CultureInfo.InvariantCulture, $"; weather fog complete from {skyFog:0}") : "; weather fog never complete");
+        meta["sky"] = _gpu.Sky.DescribeCost() + (_gpu.Sky.FogCullDistance is { } skyFog
+            ? string.Create(CultureInfo.InvariantCulture, $"; weather fog complete from {skyFog:0}")
+            : "; weather fog never complete");
     }
 
     /// <summary>
@@ -466,11 +496,13 @@ sealed class BenchSession
     void MeasureSideTriangles(BenchResult result, string[] labels)
     {
         if (_o.BenchTris)
+        {
             for (int s = 0; s < labels.Length; s++)
             {
                 Side(s);
                 MeasureTriangles(_context, _gpu, _render, Frame, result, labels[s]);
             }
+        }
     }
 
     /// <summary>
@@ -480,8 +512,11 @@ sealed class BenchSession
     {
         string outFile = _o.BenchOut
                 ?? Path.Combine(Path.GetTempPath(), $"meitou-bench-{_o.View ?? "custom"}-{_o.Ab ?? "single"}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
-        if (_ab) result.Picture = StillPictures(_display, _gpu, _scene, _camera, _render, _o, _w, _h, _toggle!, _snapshot, _motion.Moves, Clock(),
+        if (_ab)
+        {
+            result.Picture = StillPictures(_display, _gpu, _scene, _camera, _render, _o, _w, _h, _toggle!, _snapshot, _motion.Moves, Clock(),
                 Path.ChangeExtension(outFile, null), Frame);
+        }
 
         result.Print(Console.Out);
         result.Save(outFile);
@@ -504,10 +539,14 @@ sealed class BenchSession
         // The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
         AbToggles.Clear();
         AbToggles.RegisterEnhancements(LiveSwitches(o, () => gpu, () => camera, () => render));
-        if (gpu.Water is { } water) AbToggles.Register("water-lean", () => water.Lean, v => water.Lean = v,
-            "skip zero-contribution surf, ocean and distant detail work and refraction copies of an opaque view; B: always evaluate/copy");
+        if (gpu.Water is { } water)
+        {
+            AbToggles.Register("water-lean", () => water.Lean, v => water.Lean = v,
+                "skip zero-contribution surf, ocean and distant detail work and refraction copies of an opaque view; B: always evaluate/copy");
+        }
         AbToggles.Register("shadow-zone-box", () => ShadowZoneBox.Enabled, v => ShadowZoneBox.Enabled = v,
-            "each shadow cascade's foliage work list box-tested by zone against the cascade's planes (A) against every zone within 1.2 x the shadow range (B)");
+            "each shadow cascade's foliage work list box-tested by zone against the cascade's planes (A) "
+                + "against every zone within 1.2 x the shadow range (B)");
         AbToggles.Register("char-casters", () => ShadowPass.CharacterCasterCull, v => ShadowPass.CharacterCasterCull = v,
             "character parts under a texel across cast nothing into the coarse shadow cascades (A) against every part in every cascade (B)");
         AbToggles.Register("occlusion", () => post.OcclusionCull, v => post.OcclusionCull = v,
@@ -526,8 +565,12 @@ sealed class BenchSession
     /// </summary>
     static void RegisterPostToggles(PostProcess post)
     {
-        if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v,
-                "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment; B: every pixel shaded");
+        if (post.FogVrsSupported)
+        {
+            AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v,
+                "variable-rate shading where the fog hides the surface: "
+                    + "the opaque scene passes shade 2x2 or 4x4 pixels with one fragment; B: every pixel shaded");
+        }
         AbToggles.Register("layer-merge", () => post.MergeLayers, v => post.MergeLayers = v,
                 "the light shafts' apply, the fog volumes and the SSAO onto the scene in one pass (A) against three passes (B)");
         AbToggles.Register("sun-motion", () => post.SunMotion, v => post.SunMotion = v,
@@ -535,30 +578,54 @@ sealed class BenchSession
         AbToggles.Register("fog-half", () => post.FogHalf, v => post.FogHalf = v,
                 "with the merged layers, the fog volumes at half the render size, upsampled by depth (A) against full size (B)");
         AbToggles.Register("shafts-half", () => post.ShaftsHalf, v => post.ShaftsHalf = v,
-                "with the merged layers, the light shafts' apply at half the render size too, in the fog volumes' texture, upsampled by depth (A) against full size (B)");
+                "with the merged layers, the light shafts' apply at half the render size too, "
+                    + "in the fog volumes' texture, upsampled by depth (A) against full size (B)");
         AbToggles.Register("layers-lean", () => post.LeanLayers, v => post.LeanLayers = v,
-                "with the layers at half size, the merged pass only upsamples and the few pixels no half-size texel fits are drawn by a second pass tested by a mask depth (A) against one pass doing both (B)");
-        AbToggles.Register("layers-all", () => post.ShaftsHalf && post.LeanLayers, v => { post.ShaftsHalf = v; post.LeanLayers = v; },
+                "with the layers at half size, the merged pass only upsamples and the few pixels no half-size texel "
+                    + "fits are drawn by a second pass tested by a mask depth (A) against one pass doing both (B)");
+        AbToggles.Register("layers-all", () => post.ShaftsHalf && post.LeanLayers, SetLayersAll,
                 "shafts-half and layers-lean together (A) against both off (B): the merged layers as they were before the shafts went to half size");
         AbToggles.Register("ssao-mask-skip", () => post.MaskSkip, v => post.MaskSkip = v,
-                "the SSAO blur's read of the character mask (the scene colour's alpha) left out when no character was drawn this frame (A) against always read (B)");
-        AbToggles.Register("ssao-layers", () => post.ShaftsHalf && post.LeanLayers && post.MaskSkip,
-                v => { post.ShaftsHalf = v; post.LeanLayers = v; post.MaskSkip = v; },
-                        "all three of the SSAO and layers change (shafts-half, layers-lean, ssao-mask-skip) on (A) against all off (B): the merged layers and the blur as they were before");
-        if (post.ShaftScanSupported) AbToggles.Register("shafts-scan", () => post.ShaftScan, v => post.ShaftScan = v,
-                "the light shafts' integrate and air-layer scatter as one compute kernel walking each cell column's slices once, A, against the two fragment passes looping over every nearer slice, B");
+                "the SSAO blur's read of the character mask (the scene colour's alpha) "
+                    + "left out when no character was drawn this frame (A) against always read (B)");
+        AbToggles.Register("ssao-layers", () => post.ShaftsHalf && post.LeanLayers && post.MaskSkip, SetSsaoLayers,
+                "all three of the SSAO and layers change (shafts-half, layers-lean, ssao-mask-skip) "
+                    + "on (A) against all off (B): the merged layers and the blur as they were before");
+        if (post.ShaftScanSupported)
+        {
+            AbToggles.Register("shafts-scan", () => post.ShaftScan, v => post.ShaftScan = v,
+                "the light shafts' integrate and air-layer scatter as one compute kernel walking each cell column's slices once, "
+                    + "A, against the two fragment passes looping over every nearer slice, B");
+        }
         float startScale = post.Options.Upscale.EffectiveScale;
-        AbToggles.Register("render-scale", () => post.Options.Upscale.EffectiveScale >= startScale, v => post.Options.Upscale.Scale = v ? startScale
-                : MathF.Round(startScale * 0.67f * 100) / 100,
+        AbToggles.Register("render-scale", () => post.Options.Upscale.EffectiveScale >= startScale,
+            v => post.Options.Upscale.Scale = v ? startScale : MathF.Round(startScale * 0.67f * 100) / 100,
             "the render scale as set (A) against two thirds of it (B), switched at run time like the Tab slider (targets and upscaler made again)");
-        if (post.MergeSupported) AbToggles.Register("post-merge",() => post.MergePasses, v => post.MergePasses = v,
-                "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation; B: the separate full-screen passes");
+        if (post.MergeSupported)
+        {
+            AbToggles.Register("post-merge",() => post.MergePasses, v => post.MergePasses = v,
+                "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, "
+                    + "one for the exposure measure and adaptation; B: the separate full-screen passes");
+        }
         if (post.MergeSupported)
         {
             AbToggles.Register("post-merge-velocity", () => post.MergeVelocity, v => post.MergeVelocity = v,
                     "the velocity kernel alone (see post-merge)");
             AbToggles.Register("post-merge-exposure", () => post.MergeExposure, v => post.MergeExposure = v,
                     "the exposure kernel alone (see post-merge)");
+        }
+
+        void SetLayersAll(bool v)
+        {
+            post.ShaftsHalf = v;
+            post.LeanLayers = v;
+        }
+
+        void SetSsaoLayers(bool v)
+        {
+            post.ShaftsHalf = v;
+            post.LeanLayers = v;
+            post.MaskSkip = v;
         }
     }
 
@@ -567,16 +634,29 @@ sealed class BenchSession
     /// </summary>
     static void RegisterShadowAndFoliageToggles(WorldGpu gpu)
     {
-        if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v,
+        if (gpu.Shadow is { } shadowPass)
+        {
+            AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v,
                 "the whole shadow pass");
-        if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v
-                ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
-        if (gpu.Shadow is { } fogCapPass) AbToggles.Register("shadow-fogcap", () => fogCapPass.FogCapEnabled, v => fogCapPass.FogCapEnabled = v,
+        }
+        if (gpu.Shadow is { } spreadPass)
+        {
+            AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v ? ShadowSchedule.DefaultBudget : 0,
+                "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
+        }
+        if (gpu.Shadow is { } fogCapPass)
+        {
+            AbToggles.Register("shadow-fogcap", () => fogCapPass.FogCapEnabled, v => fogCapPass.FogCapEnabled = v,
                 "the sun shadows' range capped at the placed fog block's hide distance when the block hides the whole view; B: the full range");
+        }
         AbToggles.Register("shadow-coarse", () => ShadowLod.Enabled, v => ShadowLod.Enabled = v,
-                "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
-        if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v,
+                "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage "
+                    + "levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
+        if (gpu.Foliage is { } foliagePass)
+        {
+            AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v,
                 "trees, bushes, rocks and grass (--no-foliage)");
+        }
         if (gpu.Foliage is { } grassPass)
         {
             AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades");
@@ -585,17 +665,24 @@ sealed class BenchSession
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v,
                     "foliage meshes and impostors, not the TERRAIN-mode rocks");
             AbToggles.Register("foliage-prepass", () => FoliagePrepass.Enabled, v => FoliagePrepass.Enabled = v,
-                    "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
+                    "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) "
+                        + "and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
             AbToggles.Register("impostor-prepass", () => Game.Rendering.Impostors.ImpostorPrepass.Enabled,
-                    v => Game.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
+                    v => Game.Rendering.Impostors.ImpostorPrepass.Enabled = v,
+                    "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting "
+                        + "with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
             AbToggles.Register("impostor-quad", () => Game.Rendering.Impostors.ImpostorQuad.Enabled,
-                    v => Game.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
+                    v => Game.Rendering.Impostors.ImpostorQuad.Enabled = v,
+                    "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; "
+                        + "B: the square of the bounding sphere's silhouette, as before");
             AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v,
                     "alpha-tested foliage cards drawn cut to the opaque outline of their texture; B: the whole cards");
             AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v,
-                    "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2; B: levels by deviation, billboards at the impostor distance");
+                    "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where "
+                        + "the triangles are under 1.5 px2; B: levels by deviation, billboards at the impostor distance");
             AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v,
-                    "the grass's own motion vectors only for blades that move 0.5 px a frame or more, the camera reprojection for the rest; B: every blade redrawn in the motion pass");
+                    "the grass's own motion vectors only for blades that move 0.5 px a frame or more, "
+                        + "the camera reprojection for the rest; B: every blade redrawn in the motion pass");
         }
     }
 
@@ -605,19 +692,26 @@ sealed class BenchSession
     static void RegisterSkyAndSceneToggles(WorldGpu gpu, WorldRenderOptions render)
     {
         AbToggles.Register("cloud-fog-skip", () => gpu.Sky.Clouds.CloudFogSkip, v => gpu.Sky.Clouds.CloudFogSkip = v,
-                "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
+                "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, "
+                    + "and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
         AbToggles.Register("sky-fog-skip", () => gpu.Sky.Clouds.SkyFogSkip, v => gpu.Sky.Clouds.SkyFogSkip = v,
-                "the main view's sky pass and cloud march left out where the placed fog block hides the sky in every direction of the view; B: drawn");
-        if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v,
+                "the main view's sky pass and cloud march left out where the placed fog "
+                    + "block hides the sky in every direction of the view; B: drawn");
+        if (gpu.Lamps is { } lamps)
+        {
+            AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v,
                 "the lamps: the game's point and spot lights on the world");
+        }
         AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1,
                 "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
         AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v,
                 "the weather's particles, simulated and drawn (the Tab slider at 0)");
         {
             int threaded = Recording.Mode > 0 ? Recording.Mode : 2;
-            AbToggles.Register("record-threads", () => Recording.Mode == threaded, v => Recording.Mode = v ? threaded : 0, "the native hosts' secondary command buffers recorded on the job threads (A: mode 2); B: mode 0, every segment inline on the render thread");
-            }
+            AbToggles.Register("record-threads", () => Recording.Mode == threaded, v => Recording.Mode = v ? threaded : 0,
+                "the native hosts' secondary command buffers recorded on the job threads (A: mode 2); B: mode 0, every segment inline on the "
+                    + "render thread");
+        }
         AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
     }
 
@@ -631,23 +725,44 @@ sealed class BenchSession
             int giMode = gpu.GiDebug;
             AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v,
                     "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
-            if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v,
+            if (gpu.Probes is { } shadeProbes)
+            {
+                AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v,
                     "the world's shading reading the probes (side B: probes updated, not read)");
-            if (gpu.Gi is { } traceScene) AbToggles.Register("gi-top-trace", () => traceScene.TopFastTrace, v => traceScene.TopFastTrace = v,
+            }
+            if (gpu.Gi is { } traceScene)
+            {
+                AbToggles.Register("gi-top-trace", () => traceScene.TopFastTrace, v => traceScene.TopFastTrace = v,
                     "the traced scene's top level built to trace fast (A) against built fast (B)");
-            if (gpu.Gi is { } lazyScene) AbToggles.Register("gi-lazy-scene", () => lazyScene.LazyScene, v => lazyScene.LazyScene = v,
-                    "the traced scene changing only when the eye crosses into another 1024-unit cell: object selection, foliage block, origin and finished terrain grids together; B: each at its own step");
-            if (gpu.Gi is { } sharedScene) AbToggles.Register("gi-top-shared", () => sharedScene.SharedTop, v => sharedScene.SharedTop = v,
+            }
+            if (gpu.Gi is { } lazyScene)
+            {
+                AbToggles.Register("gi-lazy-scene", () => lazyScene.LazyScene, v => lazyScene.LazyScene = v,
+                    "the traced scene changing only when the eye crosses into another 1024-unit cell: object selection, "
+                        + "foliage block, origin and finished terrain grids together; B: each at its own step");
+            }
+            if (gpu.Gi is { } sharedScene)
+            {
+                AbToggles.Register("gi-top-shared", () => sharedScene.SharedTop, v => sharedScene.SharedTop = v,
                     "one top-level structure for all frame slots, built once per change of the scene; B: one per slot");
-            if (gpu.Gi is { } refitScene) AbToggles.Register("gi-terrain-refit", () => refitScene.RefitTerrain, v => refitScene.RefitTerrain = v,
+            }
+            if (gpu.Gi is { } refitScene)
+            {
+                AbToggles.Register("gi-terrain-refit", () => refitScene.RefitTerrain, v => refitScene.RefitTerrain = v,
                     "the traced terrain grids refitted in place when they follow the eye; B: rebuilt into a new structure");
-            if (gpu.Gi is { } topScene) AbToggles.Register("gi-top-reuse", () => topScene.ReuseTop, v => topScene.ReuseTop = v,
-                    "the traced scene's top level left as it was when its instances are those of its last build, the origin and the object set moving in coarse steps; B: built every frame");
+            }
+            if (gpu.Gi is { } topScene)
+            {
+                AbToggles.Register("gi-top-reuse", () => topScene.ReuseTop, v => topScene.ReuseTop = v,
+                    "the traced scene's top level left as it was when its instances are those of its last build, "
+                        + "the origin and the object set moving in coarse steps; B: built every frame");
+            }
             if (gpu.Probes is { } rayProbes)
             {
                 int rayCount = rayProbes.Rays;
                 AbToggles.Register("gi-rays", () => rayProbes.Rays == rayCount, v => rayProbes.Rays = v ? rayCount : rayCount == 64 ? 32 : 64,
-                        "rays per probe as set (A, default 32) against the other of 32 and 64 (B), the hysteresis scaled so that the noise stays the same");
+                        "rays per probe as set (A, default 32) against the other of 32 and 64 (B), "
+                            + "the hysteresis scaled so that the noise stays the same");
             }
             if (gpu.Probes is { } farProbes)
             {
@@ -655,20 +770,28 @@ sealed class BenchSession
                 AbToggles.Register("gi-far", () => farProbes.FarPeriod > 1, v => farProbes.FarPeriod = v ? farPeriod : 1,
                         "the far cascade's probes traced and blended on every other round only; B: every round");
             }
-            if (gpu.Probes is { } sleepProbes) AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8
-                    : 0, "probes with no surface near sleep (side B: every probe traced)");
+            if (gpu.Probes is { } sleepProbes)
+            {
+                AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8 : 0,
+                    "probes with no surface near sleep (side B: every probe traced)");
+            }
             if (gpu.Probes is { } fogProbes)
             {
                 int hiddenPeriod = fogProbes.HiddenPeriod > 0 ? fogProbes.HiddenPeriod : 16;
                 AbToggles.Register("gi-fog", () => fogProbes.HiddenPeriod > 0, v => fogProbes.HiddenPeriod = v ? hiddenPeriod : 0,
-                        "probes no visible surface can read, because the fog hides everything near them, updated every 16th round (side B: at the normal rate)");
+                        "probes no visible surface can read, because the fog hides everything near them, "
+                            + "updated every 16th round (side B: at the normal rate)");
             }
-            if (gpu.Probes is { } reflectProbes) AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected,
+            if (gpu.Probes is { } reflectProbes)
+            {
+                AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected,
                     v => reflectProbes.Reflected = !v, "the water reflection without the probes (side B: it reads them)");
+            }
             {
                 int resolve = gpu.GiResolve > 0 ? gpu.GiResolve : 2;
-                AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0, "the probes read once per pixel after the scene (side B: in every lit fragment)");
-                }
+                AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0,
+                    "the probes read once per pixel after the scene (side B: in every lit fragment)");
+            }
             AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0,
                     "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
         }
@@ -684,15 +807,20 @@ sealed class BenchSession
             float err = render.TerrainPixelError, materialDistance = render.MaterialDistance;
             AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => render.TerrainPixelError = v ? err : err * 2,
                     "terrain screen-space error doubled on side B (probe)");
-            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v
-                    ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance,
+                    v => render.MaterialDistance = v ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
         }
-        if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst,
+        if (gpu.Objects is { } sortObjects)
+        {
+            AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst,
                 v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        }
         AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v,
-                "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
+                "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); "
+                    + "B: the single program with the discard");
         AbToggles.Register("object-lod-gen", () => ObjectLodGen.Enabled, v => ObjectLodGen.Enabled = v,
-                "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen; B: the file's levels only");
+                "objects and buildings: generated coarser mesh levels among the file's, "
+                    + "picked by the size of their triangles on the screen; B: the file's levels only");
         AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v,
                 "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
         WorldApp.RegisterTerrainAb();
@@ -804,11 +932,23 @@ sealed class BenchSession
         var previousStart = StageClock.OnStart;
         var previousClose = StageClock.OnClose;
         using var meter = new PipelineStatsMeter(context);
-        StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
-        StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+        StageClock.OnStart = () =>
+        {
+            previousStart?.Invoke();
+            meter.BeginFrame();
+        };
+        StageClock.OnClose = (label, sub) =>
+        {
+            previousClose?.Invoke(label, sub);
+            meter.OnClose(label, sub);
+        };
         try
         {
-            for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }
+            for (int i = 0; i < settle; i++)
+            {
+                frame(-1, true);
+                context.Finish();
+            }
             var sum = new Dictionary<string, PassStat>();
             var order = new List<string>();
             var position = new Dictionary<string, (double Sum, int Seen)>();   // where in the frame a row came, to list them in frame order
@@ -836,7 +976,11 @@ sealed class BenchSession
                 mean.Add(sum[key], 1.0 / frames);
                 config.Passes[key] = mean;
             }
-            if (meter.Lost > 0) Console.WriteLine($"bench     pipeline statistics: {meter.Lost} queries lost (pool full or closed in another command buffer); the pass numbers are incomplete");
+            if (meter.Lost > 0)
+            {
+                Console.WriteLine("bench     pipeline statistics: "
+                    + $"{meter.Lost} queries lost (pool full or closed in another command buffer); the pass numbers are incomplete");
+            }
         }
         finally
         {
@@ -859,12 +1003,18 @@ sealed class BenchSession
         try
         {
             counter.Begin();
-            for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }   // the counting pipelines are made at the first draws
+            // The counting pipelines are made at the first draws.
+            for (int i = 0; i < settle; i++)
+            {
+                frame(-1, true);
+                context.Finish();
+            }
             counter.Clear();
             for (int i = 0; i < frames; i++) frame(-1, true);
             foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
             Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
-            if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
+            if (counter.Skipped.Count > 0)
+                Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
             if (PipelineStatsMeter.Supported(context)) CrossCheck(context, counter, frame, result.Meta);
         }
         finally
@@ -888,8 +1038,16 @@ sealed class BenchSession
         var previousStart = StageClock.OnStart;
         var previousClose = StageClock.OnClose;
         using var meter = new PipelineStatsMeter(context);
-        StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
-        StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+        StageClock.OnStart = () =>
+        {
+            previousStart?.Invoke();
+            meter.BeginFrame();
+        };
+        StageClock.OnClose = (label, sub) =>
+        {
+            previousClose?.Invoke(label, sub);
+            meter.OnClose(label, sub);
+        };
         var invocations = new Dictionary<string, double>();
         try
         {
@@ -900,18 +1058,15 @@ sealed class BenchSession
                 context.Finish();
                 foreach (var (key, stat) in meter.Read())
                 {
-                    string category = key.StartsWith("shadow", StringComparison.Ordinal) || key.StartsWith("reflection", StringComparison.Ordinal)
-                            || key.StartsWith("post", StringComparison.Ordinal) ? "" :
-                        key.EndsWith("fol rocks", StringComparison.Ordinal) ? "rocks" : key.EndsWith("fol meshes", StringComparison.Ordinal)
-                                ? "foliage meshes" : key.EndsWith("fol grass", StringComparison.Ordinal) ? "grass" :
-                        key.StartsWith("terrain", StringComparison.Ordinal) ? "terrain" : key.StartsWith("objects", StringComparison.Ordinal)
-                                ? "objects" : "";
-                    if (category.Length > 0) invocations[category] = invocations.GetValueOrDefault(category) + stat.FragmentInvocations / frames;
+                    string category = PassCategory(key);
+                    if (category.Length > 0)
+                        invocations[category] = invocations.GetValueOrDefault(category) + stat.FragmentInvocations / frames;
                 }
             }
             var samples = counter.Read();
-            var parts = TriangleBins.Categories.Where(c => invocations.ContainsKey(c) || samples.ContainsKey(c)).Select(c =>
-                $"{c} {Big(samples.TryGetValue(c, out var h) ? h.TotalPixels / frames : 0)} / {Big(invocations.GetValueOrDefault(c))}");
+            var parts = TriangleBins.Categories
+                .Where(c => invocations.ContainsKey(c) || samples.ContainsKey(c))
+                .Select(c => $"{c} {Big(samples.TryGetValue(c, out var h) ? h.TotalPixels / frames : 0)} / {Big(invocations.GetValueOrDefault(c))}");
             string text = string.Join(", ", parts);
             meta["trisCheck"] = text;
             Console.WriteLine($"bench     check, shaded samples / fragment invocations per frame (same frames): {text}");
@@ -922,6 +1077,24 @@ sealed class BenchSession
             StageClock.OnClose = previousClose;
             Recording.Mode = mode;
         }
+    }
+
+    /// <summary>
+    /// The triangle size category a pass's fragment invocations count for (empty for the shadow, reflection and post passes and the others).
+    /// </summary>
+    static string PassCategory(string key)
+    {
+        if (key.StartsWith("shadow", StringComparison.Ordinal) || key.StartsWith("reflection", StringComparison.Ordinal)
+            || key.StartsWith("post", StringComparison.Ordinal))
+        {
+            return "";
+        }
+        if (key.EndsWith("fol rocks", StringComparison.Ordinal)) return "rocks";
+        if (key.EndsWith("fol meshes", StringComparison.Ordinal)) return "foliage meshes";
+        if (key.EndsWith("fol grass", StringComparison.Ordinal)) return "grass";
+        if (key.StartsWith("terrain", StringComparison.Ordinal)) return "terrain";
+        if (key.StartsWith("objects", StringComparison.Ordinal)) return "objects";
+        return "";
     }
 
     /// <summary>
@@ -950,9 +1123,16 @@ sealed class BenchSession
         using var csv = new StreamWriter(path);
         csv.WriteLine("frame,side,kept," + string.Join(',', metrics));
         for (int k = 0; k < sideOf.Length; k++)
+        {
             csv.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{(sideOf[k] == 0 ? 'A' : 'B')},{(keep[k] ? 1 : 0)},")
-                + string.Join(',', metrics.Select(m => double.IsNaN(series[m][k]) ? "" : series[m][k].ToString("0.####", CultureInfo.InvariantCulture))));
+                + string.Join(',', metrics.Select(m => Cell(series[m][k]))));
+        }
     }
+
+    /// <summary>
+    /// One metric's value in the frames CSV: empty where it never arrived.
+    /// </summary>
+    static string Cell(double value) => double.IsNaN(value) ? "" : value.ToString("0.####", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Print order of the metrics: the frame, the GPU total and stages in frame order, the post sections, the render thread's total and stages.
@@ -1029,7 +1209,10 @@ sealed class BenchSession
             p.WaitForExit(5000);
             return p.ExitCode == 0 && text.Length > 0 ? text : "unknown";
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { return "unknown"; }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return "unknown";
+        }
     }
 
     #endregion

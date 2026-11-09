@@ -21,7 +21,7 @@ static partial class WorldApp
                 "patch pixels near the eye read the layered material from world-space levels baked round it "
                 + "(B: every pixel shades the biomes' layers)");
         AbToggles.Register("terrain-late-colour", () => TerrainLateColour.Enabled, v => TerrainLateColour.Enabled = v,
-                "main view: the terrain colour drawn after the objects and foliage over a depth-only terrain pass, so it is shaded only where it is seen "
-                + "(B: the colour first, as before)");
+                "main view: the terrain colour drawn after the objects and foliage over a depth-only terrain pass, "
+                + "so it is shaded only where it is seen (B: the colour first, as before)");
     }
 }

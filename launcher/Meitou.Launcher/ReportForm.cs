@@ -254,6 +254,9 @@ sealed class ReportForm
             int from = start > 0 ? Array.IndexOf(bytes, (byte)'\n') + 1 : 0;
             return Encoding.UTF8.GetString(bytes, from, bytes.Length - from);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }

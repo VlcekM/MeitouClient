@@ -58,7 +58,11 @@ static class WorldSurvey
                 var file = LevelFile.Read(bytes);
                 if (file.IsLegacy) legacy++;
                 else if (file.ToBytes().AsSpan().SequenceEqual(bytes)) roundTripped++;
-                else { notRoundTripped++; Console.WriteLine($"  does not round-trip: {path}"); }
+                else
+                {
+                    notRoundTripped++;
+                    Console.WriteLine($"  does not round-trip: {path}");
+                }
                 var e = byDir.GetValueOrDefault(dir);
                 var formats = e.Formats is null
                         ? $"{file.Format}" : e.Formats.Split(',').Contains($"{file.Format}") ? e.Formats : $"{e.Formats},{file.Format}";
@@ -77,7 +81,8 @@ static class WorldSurvey
                 Console.WriteLine($"  FAILED {path}: {ex.Message}");
             }
         }
-        Console.WriteLine($"Level files (.zone, .level): {files.Count}, {failures} failed; {roundTripped} round-trip byte for byte, {notRoundTripped} don't, {legacy} legacy (not writable)");
+        Console.WriteLine($"Level files (.zone, .level): {files.Count}, {failures} failed; "
+            + $"{roundTripped} round-trip byte for byte, {notRoundTripped} don't, {legacy} legacy (not writable)");
         Console.WriteLine($"  {"folder",-34} {"files",6} {"records",8} {"instances",10} {"trailer",8}  formats");
         foreach (var (dir, e) in byDir)
             Console.WriteLine($"  {dir,-34} {e.Files,6} {e.Records,8} {e.Instances,10} {e.Trailers,8}  {e.Formats}");
@@ -101,12 +106,16 @@ static class WorldSurvey
         problems += Resolve("building targets", buildings.Select(b => b.BuildingId), db, FcsRecordType.Building);
         var towns = world.Towns().ToList();
         problems += Resolve("town targets", towns.Select(t => t.TownId), db, FcsRecordType.Town);
-        var factions = world.Zones.Values.SelectMany(z => z.OfType(FcsRecordType.GamestateBuilding)).Select(s => s.GetString("owner faction ID")).Where(s => s.Length > 0);
+        var factions = world.Zones.Values
+            .SelectMany(z => z.OfType(FcsRecordType.GamestateBuilding))
+            .Select(s => s.GetString("owner faction ID"))
+            .Where(s => s.Length > 0);
         Resolve("building owner factions", factions, db, FcsRecordType.Faction);
 
         SurveyTownZones(world, towns);
         var roads = world.Roads().ToList();
-        Console.WriteLine($"  roads: {roads.Count} segments, {roads.Sum(r => r.Points.Count)} points, width {roads.Min(r => r.Width):0.#}..{roads.Max(r => r.Width):0.#}");
+        Console.WriteLine($"  roads: {roads.Count} segments, {roads.Sum(r => r.Points.Count)} points, "
+            + $"width {roads.Min(r => r.Width):0.#}..{roads.Max(r => r.Width):0.#}");
         return problems;
     }
 
@@ -117,8 +126,11 @@ static class WorldSurvey
     {
         Console.WriteLine($"World level data: layers {string.Join(", ", world.Layers.Select(l => $"{l} ({l.FileCount} files)"))}");
         var zones = world.Zones.Keys.ToList();
-        Console.WriteLine($"  zones with data: {zones.Count} of {WorldLayout.ZoneCount * WorldLayout.ZoneCount}; X {zones.Min(z => z.X)}..{zones.Max(z => z.X)}, Y {zones.Min(z => z.Y)}..{zones.Max(z => z.Y)}; outside grid {zones.Count(z => !z.IsInsideGrid)}");
-        Console.WriteLine($"  merge issues: {world.Issues.Count} ({string.Join(", ", world.Issues.GroupBy(i => i.Kind).Select(g => $"{g.Key} {g.Count()}"))})");
+        Console.WriteLine($"  zones with data: {zones.Count} of {WorldLayout.ZoneCount * WorldLayout.ZoneCount}; "
+            + $"X {zones.Min(z => z.X)}..{zones.Max(z => z.X)}, Y {zones.Min(z => z.Y)}..{zones.Max(z => z.Y)}; "
+            + $"outside grid {zones.Count(z => !z.IsInsideGrid)}");
+        Console.WriteLine("  merge issues: "
+            + $"{world.Issues.Count} ({string.Join(", ", world.Issues.GroupBy(i => i.Kind).Select(g => $"{g.Key} {g.Count()}"))})");
     }
 
     /// <summary>
@@ -134,7 +146,8 @@ static class WorldSurvey
         buildings = world.Buildings().ToList();
         int inZone = buildings.Count(b => WorldLayout.ZoneOf(b.Position.X, b.Position.Z) == b.Zone);
         int atOrigin = buildings.Count(b => b.Position == Vector3.Zero);
-        Console.WriteLine($"  buildings placed: {buildings.Count}; inside their file's zone {inZone}; at the origin {atOrigin}; elsewhere {buildings.Count - inZone - atOrigin}");
+        Console.WriteLine($"  buildings placed: {buildings.Count}; inside their file's zone {inZone}; "
+            + $"at the origin {atOrigin}; elsewhere {buildings.Count - inZone - atOrigin}");
         foreach (var b in buildings.Where(b => b.Position != Vector3.Zero && WorldLayout.ZoneOf(b.Position.X, b.Position.Z) != b.Zone).Take(5))
             Console.WriteLine($"    {b.Zone} {b.InstanceId} -> {b.BuildingId} at {Fmt(b.Position)}");
         return buildings.Count - inZone - atOrigin > 0 ? 1 : 0;
@@ -166,10 +179,14 @@ static class WorldSurvey
                 continue;
             }
             if (mismatched++ < 5)
-                Console.WriteLine($"    town {t.InstanceId} ({t.TownId}) at {Fmt(t.Position)} is in zone {zone}, its state lists {string.Join(" ", list)}" +
+            {
+                Console.WriteLine($"    town {t.InstanceId} ({t.TownId}) "
+                    + $"at {Fmt(t.Position)} is in zone {zone}, its state lists {string.Join(" ", list)}" +
                     $" (nearest {list.Min(z => Math.Max(Math.Abs(z.X - zone.X), Math.Abs(z.Y - zone.Y)))} zones away)");
+            }
         }
-        Console.WriteLine($"  towns placed: {towns.Count}; position inside a zone of its GAMESTATE_TOWN {matched}, outside {mismatched}, state lists no zones {noZones}, no town state {noState}");
+        Console.WriteLine($"  towns placed: {towns.Count}; position inside a zone of its GAMESTATE_TOWN {matched}, "
+            + $"outside {mismatched}, state lists no zones {noZones}, no town state {noState}");
     }
 
     /// <summary>
@@ -181,7 +198,8 @@ static class WorldSurvey
         var all = ids.ToList();
         var missing = all.Where(id => db.Find(id) is null).ToList();
         var wrongType = all.Where(id => db.Find(id) is { } r && r.Type != expected).ToList();
-        Console.WriteLine($"  {what}: {all.Count} ({all.Distinct().Count()} distinct); not in the game data {missing.Count} ({missing.Distinct().Count()} distinct); not {expected} {wrongType.Count}");
+        Console.WriteLine($"  {what}: {all.Count} ({all.Distinct().Count()} distinct); "
+            + $"not in the game data {missing.Count} ({missing.Distinct().Count()} distinct); not {expected} {wrongType.Count}");
         foreach (var id in missing.Distinct().Take(5)) Console.WriteLine($"    missing: {id}");
         foreach (var id in wrongType.Distinct().Take(5)) Console.WriteLine($"    {id} is {db.Find(id)!.Type}");
         return wrongType.Count; // ids missing from the base game data are a data fact (reported above), not a reader problem
@@ -195,8 +213,13 @@ static class WorldSurvey
         int problems = 0;
         using var map = TerrainHeightmap.Open(install);
         var img = map.Image;
-        Console.WriteLine($"Heightmap {TerrainHeightmap.RelativePath}: {img.Width}x{img.Height}, {img.BitsPerSample}-bit, {(img.LittleEndian ? "little" : "big")}-endian, {img.StripCount} strip(s), data at {img.DataOffset}");
-        if (img.Width != WorldLayout.HeightmapSize) { problems++; Console.WriteLine($"  expected {WorldLayout.HeightmapSize} samples per side"); }
+        Console.WriteLine($"Heightmap {TerrainHeightmap.RelativePath}: {img.Width}x{img.Height}, {img.BitsPerSample}-bit, "
+            + $"{(img.LittleEndian ? "little" : "big")}-endian, {img.StripCount} strip(s), data at {img.DataOffset}");
+        if (img.Width != WorldLayout.HeightmapSize)
+        {
+            problems++;
+            Console.WriteLine($"  expected {WorldLayout.HeightmapSize} samples per side");
+        }
 
         var hist = new long[65536];
         map.ForEachRow((_, row) => { foreach (var v in row) hist[v]++; });
@@ -204,22 +227,30 @@ static class WorldSurvey
         int Percentile(double p)
         {
             long target = (long)(total * p), acc = 0;
-            for (int v = 0; v < hist.Length; v++) { acc += hist[v]; if (acc > target) return v; }
+            for (int v = 0; v < hist.Length; v++)
+            {
+                acc += hist[v];
+                if (acc > target) return v;
+            }
             return 65535;
         }
         int min = Array.FindIndex(hist, h => h > 0), max = Array.FindLastIndex(hist, h => h > 0);
         Console.WriteLine($"  raw min {min}, max {max}, zero samples {hist[0] * 100.0 / total:F1}%, distinct values {hist.Count(h => h > 0)}");
-        Console.WriteLine($"  raw percentiles: p25 {Percentile(0.25)}, p50 {Percentile(0.5)}, p75 {Percentile(0.75)}, p99 {Percentile(0.99)}, p99.9 {Percentile(0.999)}");
-        Console.WriteLine($"  world heights (x {WorldLayout.MaxHeight}/65535): 0..{WorldLayout.RawToHeight((ushort)max):F1}, median {WorldLayout.RawToHeight((ushort)Percentile(0.5)):F1}");
+        Console.WriteLine($"  raw percentiles: p25 {Percentile(0.25)}, p50 {Percentile(0.5)}, "
+            + $"p75 {Percentile(0.75)}, p99 {Percentile(0.99)}, p99.9 {Percentile(0.999)}");
+        Console.WriteLine($"  world heights (x {WorldLayout.MaxHeight}/65535): "
+            + $"0..{WorldLayout.RawToHeight((ushort)max):F1}, median {WorldLayout.RawToHeight((ushort)Percentile(0.5)):F1}");
 
         var placed = world.Buildings().Where(b => b.WorldY is not null && b.Position != Vector3.Zero).ToList();
         var offsetDiff = placed.Select(b => (double)b.WorldY!.Value - (map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y)).ToList();
         var plainDiff = placed.Select(b => (double)b.WorldY!.Value - map.HeightAt(b.Position.X, b.Position.Z)).ToList();
         Console.WriteLine($"  building 'world Y pos' - (terrain + instance Y): {Stats(offsetDiff)}");
         Console.WriteLine($"  building 'world Y pos' - terrain:                {Stats(plainDiff)}");
-        var roadDiff = world.Roads().SelectMany(r => r.Points).Where(p => Math.Abs(p.X) < WorldLayout.HalfWorldSize
-                && Math.Abs(p.Z) < WorldLayout.HalfWorldSize)
-            .Select(p => (double)p.Y - map.HeightAt(p.X, p.Z)).ToList();
+        var roadDiff = world.Roads()
+            .SelectMany(r => r.Points)
+            .Where(p => Math.Abs(p.X) < WorldLayout.HalfWorldSize && Math.Abs(p.Z) < WorldLayout.HalfWorldSize)
+            .Select(p => (double)p.Y - map.HeightAt(p.X, p.Z))
+            .ToList();
         Console.WriteLine($"  road point Y - terrain:                          {Stats(roadDiff)}");
         var townDiff = world.Towns().Select(t => (double)t.Position.Y - map.HeightAt(t.Position.X, t.Position.Z)).ToList();
         Console.WriteLine($"  town Y - terrain:                                {Stats(townDiff)}");
@@ -234,7 +265,8 @@ static class WorldSurvey
         if (values.Count == 0) return "n=0";
         var s = values.Order().ToList();
         double P(double p) => s[(int)Math.Min(s.Count - 1, p * s.Count)];
-        return $"n={s.Count} p5 {P(0.05):F2} p25 {P(0.25):F2} median {P(0.5):F2} p75 {P(0.75):F2} p95 {P(0.95):F2}; |d|<0.05 {s.Count(v => Math.Abs(v) < 0.05)}";
+        return $"n={s.Count} p5 {P(0.05):F2} p25 {P(0.25):F2} median {P(0.5):F2} p75 {P(0.75):F2} p95 {P(0.95):F2}; "
+            + $"|d|<0.05 {s.Count(v => Math.Abs(v) < 0.05)}";
     }
 
     /// <summary>
@@ -246,10 +278,15 @@ static class WorldSurvey
         var all = file.All().ToList();
         int inZone = all.Count(a => WorldLayout.ZoneOf(a.Feature.Position.X, a.Feature.Position.Z) == a.Zone);
         int yaw = all.Count(a => a.Feature.Rotation.X == 0 && a.Feature.Rotation.Z == 0);
-        Console.WriteLine($"Map features {MapFeatureFile.RelativePath}: {file.Zones.Count} zone slots, {file.Zones.Count(z => z.Count > 0)} used, {all.Count} features");
-        Console.WriteLine($"  inside their slot's zone {inZone}; pure yaw rotations (read w first) {yaw}; unit quaternions {all.Count(a => Math.Abs(a.Feature.Rotation.Length() - 1) < 1e-3)}");
+        Console.WriteLine($"Map features {MapFeatureFile.RelativePath}: {file.Zones.Count} zone slots, "
+            + $"{file.Zones.Count(z => z.Count > 0)} used, {all.Count} features");
+        Console.WriteLine($"  inside their slot's zone {inZone}; pure yaw rotations (read w first) {yaw}; "
+            + $"unit quaternions {all.Count(a => Math.Abs(a.Feature.Rotation.Length() - 1) < 1e-3)}");
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-        Console.WriteLine($"  targets: {string.Join(", ", all.GroupBy(a => db.Find(a.Feature.StringId)?.Type.ToString() ?? "not in game data").Select(g => $"{g.Key} {g.Count()} ({g.Select(a => a.Feature.StringId).Distinct().Count()} distinct)"))}");
+        var targets = all
+            .GroupBy(a => db.Find(a.Feature.StringId)?.Type.ToString() ?? "not in game data")
+            .Select(g => $"{g.Key} {g.Count()} ({g.Select(a => a.Feature.StringId).Distinct().Count()} distinct)");
+        Console.WriteLine($"  targets: {string.Join(", ", targets)}");
         return 0;
     }
 
@@ -267,8 +304,10 @@ static class WorldSurvey
         }
         var tiles = new Dictionary<(int X, int Y), RawHeightTile>();
         foreach (var path in Directory.EnumerateFiles(dir, "*.raw"))
+        {
             if (RawHeightTile.TryParseFileName(path, out int x, out int y))
                 tiles[(x, y)] = RawHeightTile.ReadFile(path);
+        }
         var sizes = tiles.Values.Select(t => t.Size).Distinct().ToList();
         int seamX = 0, seamY = 0, edgesX = 0, edgesY = 0;
         foreach (var ((x, y), t) in tiles)
@@ -277,16 +316,32 @@ static class WorldSurvey
             if (tiles.TryGetValue((x + 1, y), out var right))
             {
                 edgesX++;
-                for (int k = 0; k < n; k++) if (t[n - 1, k] != right[0, k]) { seamX++; break; }
+                for (int k = 0; k < n; k++)
+                {
+                    if (t[n - 1, k] != right[0, k])
+                    {
+                        seamX++;
+                        break;
+                    }
+                }
             }
             if (tiles.TryGetValue((x, y + 1), out var below))
             {
                 edgesY++;
-                for (int k = 0; k < n; k++) if (t[k, n - 1] != below[k, 0]) { seamY++; break; }
+                for (int k = 0; k < n; k++)
+                {
+                    if (t[k, n - 1] != below[k, 0])
+                    {
+                        seamY++;
+                        break;
+                    }
+                }
             }
         }
-        Console.WriteLine($"Legacy height tiles land/grasssplits: {tiles.Count}, sizes {string.Join(",", sizes)}; X {tiles.Keys.Min(k => k.X)}..{tiles.Keys.Max(k => k.X)}, Y {tiles.Keys.Min(k => k.Y)}..{tiles.Keys.Max(k => k.Y)}");
-        Console.WriteLine($"  shared edges: X neighbours {edgesX} ({seamX} differ), Y neighbours {edgesY} ({seamY} differ); raw range {tiles.Values.Min(t => t.Samples.Min())}..{tiles.Values.Max(t => t.Samples.Max())}");
+        Console.WriteLine($"Legacy height tiles land/grasssplits: {tiles.Count}, sizes {string.Join(",", sizes)}; "
+            + $"X {tiles.Keys.Min(k => k.X)}..{tiles.Keys.Max(k => k.X)}, Y {tiles.Keys.Min(k => k.Y)}..{tiles.Keys.Max(k => k.Y)}");
+        Console.WriteLine($"  shared edges: X neighbours {edgesX} ({seamX} differ), Y neighbours {edgesY} ({seamY} differ); "
+            + $"raw range {tiles.Values.Min(t => t.Samples.Min())}..{tiles.Values.Max(t => t.Samples.Max())}");
         return seamX + seamY;
     }
 
@@ -349,6 +404,7 @@ static class WorldSurvey
         var rgb = new byte[size * size * 3];
 
         for (int y = 0; y < size; y++)
+        {
             for (int x = 0; x < size; x++)
             {
                 int i = y * size + x;
@@ -365,6 +421,7 @@ static class WorldSurvey
                 rgb[i * 3 + 1] = (byte)Math.Clamp(color.Y, 0, 255);
                 rgb[i * 3 + 2] = (byte)Math.Clamp(color.Z, 0, 255);
             }
+        }
         return rgb;
     }
 
@@ -375,11 +432,13 @@ static class WorldSurvey
     {
         int size = canvas.Size;
         for (int k = 0; k <= WorldLayout.ZoneCount; k++)
+        {
             for (int t = 0; t < size; t++)
             {
                 canvas.Put(k * zonePx, t, (255, 255, 255), k % 8 == 0 ? 0.45f : 0.15f);
                 canvas.Put(t, k * zonePx, (255, 255, 255), k % 8 == 0 ? 0.45f : 0.15f);
             }
+        }
         foreach (var zone in world.Zones.Keys)
         {
             var (ox, oz) = WorldLayout.ZoneOrigin(zone);
@@ -400,6 +459,7 @@ static class WorldSurvey
     static void DrawRoads(MapCanvas canvas, WorldLevelData world)
     {
         foreach (var road in world.Roads())
+        {
             for (int p = 1; p < road.Points.Count; p++)
             {
                 var (a, b) = (road.Points[p - 1], road.Points[p]);
@@ -411,6 +471,7 @@ static class WorldSurvey
                     canvas.Put(x, y, (200, 120, 60), 0.8f);
                 }
             }
+        }
     }
 
     /// <summary>
@@ -432,8 +493,13 @@ static class WorldSurvey
         {
             var (x, y) = canvas.Px(t.Position.X, t.Position.Z);
             for (int dy = -2; dy <= 2; dy++)
+            {
                 for (int dx = -2; dx <= 2; dx++)
-                    canvas.Put(x + dx, y + dy, Math.Abs(dx) == 2 || Math.Abs(dy) == 2 ? ((byte)0, (byte)0, (byte)0) : ((byte)0, (byte)255, (byte)255));
+                {
+                    canvas.Put(x + dx, y + dy,
+                        Math.Abs(dx) == 2 || Math.Abs(dy) == 2 ? ((byte)0, (byte)0, (byte)0) : ((byte)0, (byte)255, (byte)255));
+                }
+            }
         }
     }
 
@@ -511,11 +577,13 @@ static class WorldPng
         Chunk(fs, "IHDR", ihdr);
         var idat = new MemoryStream();
         using (var z = new ZLibStream(idat, CompressionLevel.Optimal, leaveOpen: true))
+        {
             for (int y = 0; y < height; y++)
             {
                 z.WriteByte(0); // filter: none
                 z.Write(rgb, y * width * 3, width * 3);
             }
+        }
         Chunk(fs, "IDAT", idat.ToArray());
         Chunk(fs, "IEND", []);
     }

@@ -73,8 +73,16 @@ sealed record Config(
         {
             var kv = part.Split('=', 2);
             if (kv[0] == "sslmode" && kv.Length == 2)
-                b.SslMode = kv[1] switch { "disable" => SslMode.Disable, "require" => SslMode.Require, "verify-ca" => SslMode.VerifyCA,
-                        "prefer" => SslMode.Prefer, _ => SslMode.VerifyFull };
+            {
+                b.SslMode = kv[1] switch
+                {
+                    "disable" => SslMode.Disable,
+                    "require" => SslMode.Require,
+                    "verify-ca" => SslMode.VerifyCA,
+                    "prefer" => SslMode.Prefer,
+                    _ => SslMode.VerifyFull,
+                };
+            }
         }
         return b.ConnectionString;
     }

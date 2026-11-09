@@ -213,7 +213,10 @@ static class MarkdownView
                     if (index >= offset && index < offset + length) return url;
                     offset += length;
                 }
-                else if (inline is Span span && Find(span.Inlines, LinkUrls.TryGetValue(span, out var own) ? own : url) is { } found) return found;
+                else if (inline is Span span && Find(span.Inlines, LinkUrls.TryGetValue(span, out var own) ? own : url) is { } found)
+                {
+                    return found;
+                }
             }
             return null;
         }
@@ -233,7 +236,10 @@ static class MarkdownView
                 target.Add(span);
                 break;
             case CodeInline code:
-                var run = new Run(code.Content) { FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13, Foreground = Brush("PaperLight") };
+                var run = new Run(code.Content)
+                {
+                    FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13, Foreground = Brush("PaperLight"),
+                };
                 target.Add(run);
                 break;
             case LineBreakInline lineBreak:

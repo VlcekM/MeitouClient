@@ -170,7 +170,10 @@ public sealed partial class MainWindow : Window
     void ConfigureWindowStyle()
     {
         if (OperatingSystem.IsWindows())
-            Win32Properties.AddWindowStylesCallback(this, (style, exStyle) => (style | WsCaption | WsSysmenu | WsMinimizebox | WsMaximizebox, exStyle));
+        {
+            Win32Properties.AddWindowStylesCallback(this,
+                (style, exStyle) => (style | WsCaption | WsSysmenu | WsMinimizebox | WsMaximizebox, exStyle));
+        }
     }
 
     /// <summary>
@@ -381,7 +384,10 @@ public sealed partial class MainWindow : Window
                 ? Directory.EnumerateDirectories(root).Select(Path.GetFileName).OfType<string>().Where(code => !code.StartsWith('_')).ToArray()
                 : [];
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     static string GameLanguageName(string code) => code.Replace('_', '-').ToLowerInvariant() switch
@@ -467,7 +473,8 @@ public sealed partial class MainWindow : Window
         {
             var aside = new TextBlock
             {
-                Classes = { "desc" }, Text = byline, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0),
+                Classes = { "desc" }, Text = byline, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Thickness(16, 0, 0, 0),
             };
             DockPanel.SetDock(aside, Dock.Right);
             heading.Children.Add(aside);
@@ -624,8 +631,9 @@ public sealed partial class MainWindow : Window
         if (NightlyBox.IsChecked == true && !_config.IncludePrereleases)
         {
             bool sure = await AskAsync("Nightly builds",
-                "Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: "
-                + "back up your saves before playing one.\n\nContinue with nightly builds?", "Yes", "No");
+                "Nightly builds are made twice a day from the newest code and are not tested. "
+                + "They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n\n"
+                + "Continue with nightly builds?", "Yes", "No");
             if (!sure)
             {
                 NightlyBox.IsChecked = false;
@@ -756,7 +764,8 @@ public sealed partial class MainWindow : Window
         foreach (var (entry, code) in entries) _mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
 
         // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
-        foreach (var row in _mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
+        foreach (var row in _mods)
+            row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
         _modsReady = true;
         ShowDependencyProblems();
         ModsEmpty.IsVisible = _mods.Count == 0;
@@ -1069,7 +1078,8 @@ public sealed partial class MainWindow : Window
         _versionMenu.Items.Clear();
         _versionMenu.Items.Add(VersionItem(UpdatePending ? Tr("Latest (update to {1})", Releases.Display(LatestRelease!.Version))
             : _installedVersions.FirstOrDefault() is { } newest ? Tr("Latest ({1})", Releases.Display(newest)) : Tr("Latest"), null, picked));
-        foreach (var version in _installedVersions) _versionMenu.Items.Add(VersionItem($"v{Releases.ParseVersion(version).Number}", version, picked));
+        foreach (var version in _installedVersions)
+            _versionMenu.Items.Add(VersionItem($"v{Releases.ParseVersion(version).Number}", version, picked));
 
         // Its settings are the played version's.
         if (GraphicsPage.IsVisible) ShowGraphics();
@@ -1145,7 +1155,8 @@ public sealed partial class MainWindow : Window
                     new TextBlock { Text = header },
                     new TextBlock
                     {
-                        Classes = { "warn" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Text = ("nightly" + date).ToUpperInvariant(),
+                        Classes = { "warn" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                        Text = ("nightly" + date).ToUpperInvariant(),
                     },
                 },
             };
@@ -1193,7 +1204,9 @@ public sealed partial class MainWindow : Window
         InstallLatestButton.IsVisible = none;
         SetText(InstallLatestText, Tr("Install {1}", Tr(Latest)));
         InstallLatestButton.IsEnabled = latest is not null;
-        string latestTip = latest is not null ? Tr("Download and install {1}", latest.Title) : Tr("No release with a {1} build found yet", Releases.Rid);
+        string latestTip = latest is not null
+            ? Tr("Download and install {1}", latest.Title)
+            : Tr("No release with a {1} build found yet", Releases.Rid);
         ToolTip.SetTip(InstallLatestButton, latestTip);
 
         // Playing the latest, Play itself is the update (ShowPlay); playing a picked version, this button beside it.
@@ -1539,11 +1552,7 @@ public sealed partial class MainWindow : Window
         {
             StatusProgress.Value = 0;
             StatusProgress.IsVisible = true;
-            await _updater.UpdateAndRestartAsync(p => Dispatcher.UIThread.Post(() =>
-            {
-                Status(Tr("Updating the launcher: {1}%", p));
-                StatusProgress.Value = p / 100.0;
-            }), CancellationToken.None);
+            await _updater.UpdateAndRestartAsync(ShowLauncherUpdateProgress, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -1551,6 +1560,18 @@ public sealed partial class MainWindow : Window
             Status(Tr("Launcher update failed: {1}", ex.Message));
             LauncherUpdateButton.IsEnabled = TitleLauncherUpdateButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// The launcher update's download progress (<paramref name="p"/> percent), shown on the UI thread.
+    /// </summary>
+    void ShowLauncherUpdateProgress(int p)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            Status(Tr("Updating the launcher: {1}%", p));
+            StatusProgress.Value = p / 100.0;
+        });
     }
 
     #endregion

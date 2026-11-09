@@ -24,8 +24,12 @@ public sealed record Release(ReleaseKind Kind, string Tag, string Version, strin
     /// <summary>
     /// The zip for this machine: <c>Meitou-&lt;version&gt;-&lt;rid&gt;.zip</c> or <c>MeitouLauncher-&lt;version&gt;-&lt;rid&gt;.zip</c>.
     /// </summary>
-    public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name ==
-        $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Rid}.zip");
+    public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name == AssetName);
+
+    /// <summary>
+    /// The name of <see cref="Asset"/>.
+    /// </summary>
+    string AssetName => $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Rid}.zip";
 }
 
 /// <summary>
@@ -158,17 +162,23 @@ public sealed class Releases(HttpClient http)
                 version = tag[1..];
             }
             else continue;
-            var assets = r.GetProperty("assets").EnumerateArray().Select(a => new ReleaseAsset(
-                a.GetProperty("name").GetString() ?? "",
-                a.GetProperty("browser_download_url").GetString() ?? "",
-                a.GetProperty("size").GetInt64(),
-                a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null)).ToList();
+            var assets = r.GetProperty("assets").EnumerateArray().Select(ReadAsset).ToList();
             list.Add(new Release(kind, tag, version, r.GetProperty("name").GetString() ?? tag, r.GetProperty("prerelease").GetBoolean(),
                 r.TryGetProperty("published_at", out var p) && p.ValueKind == JsonValueKind.String ? p.GetDateTimeOffset() : default,
                 r.GetProperty("body").GetString() ?? "", r.GetProperty("html_url").GetString() ?? "", assets));
         }
         return [.. list.OrderByDescending(r => r.Published)];
     }
+
+    /// <summary>
+    /// One entry of a release's <c>assets</c> list.
+    /// </summary>
+    static ReleaseAsset ReadAsset(JsonElement a) =>
+        new ReleaseAsset(
+            a.GetProperty("name").GetString() ?? "",
+            a.GetProperty("browser_download_url").GetString() ?? "",
+            a.GetProperty("size").GetInt64(),
+            a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null);
 
     #endregion
 
@@ -280,7 +290,8 @@ public sealed class Releases(HttpClient http)
     {
         Directory.CreateDirectory(to);
         foreach (var file in Directory.EnumerateFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
-        foreach (var dir in Directory.EnumerateDirectories(from)) CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
+        foreach (var dir in Directory.EnumerateDirectories(from))
+            CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
     }
 
     #endregion

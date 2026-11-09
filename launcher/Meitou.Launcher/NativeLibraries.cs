@@ -48,8 +48,10 @@ static class NativeLibraries
                 _ => [],
             };
             foreach (var candidate in candidates)
+            {
                 if (handles.GetValueOrDefault(candidate) is not 0 and var embedded) return embedded;
                 else if (NativeLibrary.TryLoad(candidate, assembly, search, out var loaded)) return loaded;
+            }
             return 0;
         });
     }
@@ -82,9 +84,18 @@ static class NativeLibraries
         // Named by content, so a launcher update with other libraries never overwrites ones a running launcher has loaded. The build
         // records each library's hash (the csproj's NativeLibraries metadata); without it, the names and sizes stand in.
         var contents = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "NativeLibraries")?.Value
-            ?? string.Join(";", names.Select(n => { using var s = assembly.GetManifestResourceStream(n)!; return $"{n}={s.Length}"; }));
+            ?? string.Join(";", names.Select(n => NameAndSize(assembly, n)));
         string hash = Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(contents)))[..16];
         return Path.Combine(LauncherConfig.DataDirectory, "native", hash);
+    }
+
+    /// <summary>
+    /// <c>name=size</c> of an embedded library, for <see cref="ContentDirectory"/> when the build recorded no hashes.
+    /// </summary>
+    static string NameAndSize(Assembly assembly, string name)
+    {
+        using var s = assembly.GetManifestResourceStream(name)!;
+        return $"{name}={s.Length}";
     }
 
     /// <summary>
