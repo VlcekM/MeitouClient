@@ -15,8 +15,14 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "");
 
+    /// <summary>
+    /// The group of the race switches (every <c>race:</c> setting is in it).
+    /// </summary>
     const string SkinGroup = "Skin";
 
+    /// <summary>
+    /// The features, in the Graphics tabs' order: each group's id, heading setting, members, title and hint.
+    /// </summary>
     internal static readonly FeatureGroup[] FeatureGroups =
     [
         // Lighting
@@ -93,6 +99,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return i < 0 ? FeatureGroups.Length : i;
     }
 
+    /// <summary>
+    /// Whether setting <paramref name="raw"/> is a member of <paramref name="g"/> (a race switch of the Skin group too).
+    /// </summary>
     static bool InGroup(FeatureGroup g, string raw) =>
         g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
 
@@ -105,12 +114,18 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal readonly HashSet<string> OpenGroups = [];
 
+    /// <summary>
+    /// Opens or closes group <paramref name="id"/> and drops the keyboard focus.
+    /// </summary>
     internal void ToggleGroup(string id)
     {
         if (!OpenGroups.Remove(id)) OpenGroups.Add(id);
         menu.Focus = -1;
     }
 
+    /// <summary>
+    /// Opens groups <paramref name="ids"/> (the settings showcase).
+    /// </summary>
     internal void ShowcaseOpen(params string[] ids)
     {
         foreach (var id in ids)
@@ -163,6 +178,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return output;
     }
 
+    /// <summary>
+    /// A member's <paramref name="label"/> without the feature's name it starts with ("Light shafts strength" in Light shafts is "Strength").
+    /// </summary>
     static string WithinGroup(string label, string group) =>
         label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
             ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..]

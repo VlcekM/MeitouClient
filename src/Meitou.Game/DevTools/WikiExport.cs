@@ -21,10 +21,19 @@ static partial class WikiExport
 {
     #region Export
 
+    /// <summary>
+    /// The source the export names when none is given.
+    /// </summary>
     const string DefaultSource = "generated from your game data";
 
+    /// <summary>
+    /// The JSON writer's options: indented, relaxed escaping.
+    /// </summary>
     static readonly JsonWriterOptions WriterOptions = new() { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    /// <summary>
+    /// One exported entry: id, name, kind, faction, zone, position, confidence, notes, record id and its data.
+    /// </summary>
     sealed record Row(string Id, string Name, string Kind, string? Faction, string? Zone, float? X, float? Z, string Confidence, string Notes,
         string? Record, SortedDictionary<string, object?> Data);
 
@@ -40,6 +49,10 @@ static partial class WikiExport
     /// </summary>
     static bool s_factsOnly;
 
+    /// <summary>
+    /// Runs the export: loads the install's data (load order applied) and the world, builds every row list in order (ids are handed out in that
+    /// order) and writes one JSON file per list into <paramref name="outDir"/>. Returns the process exit code (0).
+    /// </summary>
     public static int Run(string outDir, GameInstall install, bool factsOnly = false)
     {
         s_factsOnly = factsOnly;
@@ -48,18 +61,7 @@ static partial class WikiExport
         var db = GameDatabase.Load(order);
         var world = WorldLevelData.Load(Path.Combine(install.DataDirectory, WorldLevelData.RelativeDirectory), order.Entries, includeInteriors: true);
         string source = $"{DefaultSource} by Meitou {BuildVersion.Tag} ({BuildVersion.Commit})";
-        var used = new HashSet<string>(StringComparer.Ordinal);
-        string Id(string name, string recordId)
-        {
-            string slug = Slug(name);
-            if (slug.Length == 0) slug = Slug(recordId);
-            if (slug.Length == 0) slug = "entry";
-            string id = slug;
-            if (used.Contains(id)) id = slug + "-" + Slug(recordId);
-            for (int n = 2; used.Contains(id); n++) id = $"{slug}-{Slug(recordId)}-{n}";
-            used.Add(id);
-            return id;
-        }
+        var ids = new RowIds();
         string FactionName(string? id) => id is not null && db.Find(id) is { } f ? f.Name : "";
 
         // Towns: every placed town record except nest markers and null towns.
@@ -67,78 +69,38 @@ static partial class WikiExport
         var placedTowns = new List<PlacedTown>();
         var townZones = new Dictionary<ZoneCoordinate, List<string>>();
         var townAt = new Dictionary<string, (float X, float Z)>(StringComparer.Ordinal);
-        TownRows(db, world, Id, FactionName, towns, placedTowns, townZones, townAt);
+        TownRows(db, world, ids.Id, FactionName, towns, placedTowns, townZones, townAt);
 
         // Zones: the grid cells that hold at least one town.
-        var zones = new List<Row>();
-        foreach (var (zone, names) in townZones.OrderBy(z => z.Key.Y).ThenBy(z => z.Key.X))
-        {
-            var (ox, oz) = WorldLayout.ZoneOrigin(zone);
-            string zid = $"zone-{zone.X}-{zone.Y}";
-            used.Add(zid);
-            zones.Add(new Row(zid, $"Zone {zone.X}.{zone.Y}", "zone", null, null, (float)(ox + WorldLayout.ZoneSize / 2.0),
-                (float)(oz + WorldLayout.ZoneSize / 2.0), "Observed",
-                $"Grid cell zone.{zone.X}.{zone.Y}.zone, centre given; edge {WorldLayout.ZoneSize} units. "
-                + $"Towns inside: {string.Join(", ", names.Distinct().Take(12))}.", null,
-                new SortedDictionary<string, object?> { ["towns"] = names.Count, ["file"] = zone.FileName }));
-        }
+        var zones = ZoneRows(townZones, ids);
 
         // Biome groups with the squads they spawn (WikiExport.Stats.cs); the zone cells and towns carry their biome.
         var templateById = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
         foreach (var t in SquadTemplate.LoadAll(db)) templateById.TryAdd(t.Id, t);
-        var spawn = Spawns(db, install, placedTowns, templateById, Id);
-        string BiomeAt(float x, float z)
-        {
-            var (cx, cz) = WeatherAreas.CellOf(x, z);
-            return spawn.Map.GroupOf(cx, cz) is >= 0 and var g ? spawn.Map.Groups[g].Name : "";
-        }
-        foreach (var z in zones)
-            if (z.X is { } zx && z.Z is { } zz && BiomeAt(zx, zz) is { Length: > 0 } zb) z.Data["biome"] = zb;
-        foreach (var t in towns)
-            if (t.X is { } tx && t.Z is { } tz && BiomeAt(tx, tz) is { Length: > 0 } tb) t.Data["biome"] = tb;
+        var spawn = Spawns(db, install, placedTowns, templateById, ids.Id);
+        MarkBiomes(spawn, zones);
+        MarkBiomes(spawn, towns);
 
         // Factions.
-        var factions = FactionRows(db, towns, Id);
+        var factions = FactionRows(db, towns, ids.Id);
 
         // Town detail (buildings, shops, houses for sale), town overrides, unique and bounty characters (WikiExport.Detail.cs).
-        var detail = Detail(db, world, placedTowns, Id);
+        var detail = Detail(db, world, placedTowns, ids.Id);
         var characterRecords = detail.Characters.Select(c => c.Record ?? "").ToHashSet(StringComparer.Ordinal);
 
         // Squad templates and the unique characters that live in towns.
-        var (squads, npcs) = SquadRows(db, world, towns, townAt, characterRecords, Id, FactionName);
+        var (squads, npcs) = SquadRows(db, world, towns, townAt, characterRecords, ids.Id, FactionName);
 
         // Character types (humans and animals), without position.
-        var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
-        foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal)
-                .ThenBy(r => r.StringId, StringComparer.Ordinal))
-        {
-            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId))
-                continue;
-            string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
-            bool animal = record.Type == FcsRecordType.AnimalCharacter;
-            npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null,
-                null, null, "Observed",
-                (animal ? "Animal" : "Character") + " record" + (faction.Length == 0 ? "" : $" of faction {faction}")
-                + "; no position (spawned by squads and towns).", record.StringId,
-                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy }));
-        }
+        CharacterTypeRows(db, npcs, characterRecords, ids.Id, FactionName);
 
         // Research tree, items with their stats and blueprints, animals (WikiExport.Stats.cs).
-        var (research, unlocks) = ResearchRows(db, Id);
-        var items = Items(db, Id, unlocks);
-        var animals = Animals(db, Id, templateById, spawn);
+        var (research, unlocks) = ResearchRows(db, ids.Id);
+        var items = Items(db, ids.Id, unlocks);
+        var animals = Animals(db, ids.Id, templateById, spawn);
 
         // Buildings (named records only).
-        var buildings = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.Building).OrderBy(r => r.Name, StringComparer.Ordinal)
-                .ThenBy(r => r.StringId, StringComparer.Ordinal))
-        {
-            if (record.Name.Length == 0) continue;
-            buildings.Add(new Row(Id(record.Name, record.StringId), record.Name, "building", null, null, null, null, "Observed",
-                $"Building record {record.StringId}, defined by {record.DefinedBy}.", record.StringId,
-                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy,
-                    ["value"] = Num(record, "value") }));
-        }
+        var buildings = BuildingRecordRows(db, ids.Id);
 
         var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads),
             ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors),
@@ -146,6 +108,117 @@ static partial class WikiExport
             ("animals", animals), ("spawns", spawn.Rows) };
         WriteFiles(outDir, install, factsOnly, order, source, files);
         return 0;
+    }
+
+    /// <summary>
+    /// The entry ids handed out so far in one export: a name's slug (else the record id's, else "entry"), made unique with the record id and then
+    /// a counter.
+    /// </summary>
+    sealed class RowIds
+    {
+        /// <summary>
+        /// Every id handed out or reserved.
+        /// </summary>
+        readonly HashSet<string> _used = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// A new unique id for the entry named <paramref name="name"/> of record <paramref name="recordId"/>.
+        /// </summary>
+        public string Id(string name, string recordId)
+        {
+            string slug = Slug(name);
+            if (slug.Length == 0) slug = Slug(recordId);
+            if (slug.Length == 0) slug = "entry";
+            string id = slug;
+            if (_used.Contains(id)) id = slug + "-" + Slug(recordId);
+            for (int n = 2; _used.Contains(id); n++) id = $"{slug}-{Slug(recordId)}-{n}";
+            _used.Add(id);
+            return id;
+        }
+
+        /// <summary>
+        /// Marks <paramref name="id"/> as taken (the zone ids, which are fixed).
+        /// </summary>
+        public void Reserve(string id) => _used.Add(id);
+    }
+
+    /// <summary>
+    /// Zones: the grid cells that hold at least one town, by row then column, each with its centre and the towns inside.
+    /// </summary>
+    static List<Row> ZoneRows(Dictionary<ZoneCoordinate, List<string>> townZones, RowIds ids)
+    {
+        var zones = new List<Row>();
+        foreach (var (zone, names) in townZones.OrderBy(z => z.Key.Y).ThenBy(z => z.Key.X))
+        {
+            var (ox, oz) = WorldLayout.ZoneOrigin(zone);
+            string zid = $"zone-{zone.X}-{zone.Y}";
+            ids.Reserve(zid);
+            zones.Add(new Row(zid, $"Zone {zone.X}.{zone.Y}", "zone", null, null, (float)(ox + WorldLayout.ZoneSize / 2.0),
+                (float)(oz + WorldLayout.ZoneSize / 2.0), "Observed",
+                $"Grid cell zone.{zone.X}.{zone.Y}.zone, centre given; edge {WorldLayout.ZoneSize} units. "
+                + $"Towns inside: {string.Join(", ", names.Distinct().Take(12))}.", null,
+                new SortedDictionary<string, object?> { ["towns"] = names.Count, ["file"] = zone.FileName }));
+        }
+        return zones;
+    }
+
+    /// <summary>
+    /// Sets each positioned row's <c>biome</c> to the biome group painted at its position, when there is one.
+    /// </summary>
+    static void MarkBiomes(SpawnIndex spawn, List<Row> rows)
+    {
+        foreach (var r in rows)
+            if (r.X is { } x && r.Z is { } z && BiomeAt(spawn, x, z) is { Length: > 0 } biome) r.Data["biome"] = biome;
+    }
+
+    /// <summary>
+    /// The name of the biome group painted at world position (<paramref name="x"/>, <paramref name="z"/>), "" when none.
+    /// </summary>
+    static string BiomeAt(SpawnIndex spawn, float x, float z)
+    {
+        var (cx, cz) = WeatherAreas.CellOf(x, z);
+        return spawn.Map.GroupOf(cx, cz) is >= 0 and var g ? spawn.Map.Groups[g].Name : "";
+    }
+
+    /// <summary>
+    /// Character types: one npc (or animal) row without position for every named character record not already a squad leader's npc row or a
+    /// unique or bounty character.
+    /// </summary>
+    static void CharacterTypeRows(GameDatabase db, List<Row> npcs, HashSet<string> characterRecords, Func<string, string, string> id,
+        Func<string?, string> factionName)
+    {
+        var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
+        foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal)
+                .ThenBy(r => r.StringId, StringComparer.Ordinal))
+        {
+            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId))
+                continue;
+            string faction = record.GetReferences("faction") is { Count: > 0 } fl ? factionName(fl[0].TargetStringId) : "";
+            bool animal = record.Type == FcsRecordType.AnimalCharacter;
+            npcs.Add(new Row(id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null,
+                null, null, "Observed",
+                (animal ? "Animal" : "Character") + " record" + (faction.Length == 0 ? "" : $" of faction {faction}")
+                + "; no position (spawned by squads and towns).", record.StringId,
+                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy }));
+        }
+    }
+
+    /// <summary>
+    /// Buildings: one row per named building record, by name then id.
+    /// </summary>
+    static List<Row> BuildingRecordRows(GameDatabase db, Func<string, string, string> id)
+    {
+        var buildings = new List<Row>();
+        foreach (var record in db.OfType(FcsRecordType.Building).OrderBy(r => r.Name, StringComparer.Ordinal)
+                .ThenBy(r => r.StringId, StringComparer.Ordinal))
+        {
+            if (record.Name.Length == 0) continue;
+            buildings.Add(new Row(id(record.Name, record.StringId), record.Name, "building", null, null, null, null, "Observed",
+                $"Building record {record.StringId}, defined by {record.DefinedBy}.", record.StringId,
+                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy,
+                    ["value"] = Num(record, "value") }));
+        }
+        return buildings;
     }
 
     /// <summary>
@@ -334,6 +407,10 @@ static partial class WikiExport
     /// </summary>
     sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues, bool FactsOnly);
 
+    /// <summary>
+    /// Writes the export file: the source, data folder, load order, mods, load issues, the facts-only flag and dropped fields, the time and the
+    /// entries.
+    /// </summary>
     static void Write(string path, List<Row> rows, Meta meta)
     {
         using var stream = File.Create(path);
@@ -397,30 +474,43 @@ static partial class WikiExport
         w.WriteEndObject();
     }
 
+    /// <summary>
+    /// Writes <paramref name="value"/> as <paramref name="name"/>, or null.
+    /// </summary>
     static void Nullable(Utf8JsonWriter w, string name, string? value)
     {
         if (value is null) w.WriteNull(name);
         else w.WriteString(name, value);
     }
 
+    /// <summary>
+    /// Writes a data value: null, text, a bool, a number (floats and doubles to three decimals), an object, a list, else its invariant text.
+    /// </summary>
     static void WriteValue(Utf8JsonWriter w, object? v)
     {
         switch (v)
         {
-            case null: w.WriteNullValue();
-            break;
-            case string s: w.WriteStringValue(s);
-            break;
-            case bool b: w.WriteBooleanValue(b);
-            break;
-            case int i: w.WriteNumberValue(i);
-            break;
-            case long l: w.WriteNumberValue(l);
-            break;
-            case float f: w.WriteNumberValue(MathF.Round(f * 1000) / 1000);
-            break;
-            case double dbl: w.WriteNumberValue(Math.Round(dbl, 3));
-            break;
+            case null:
+                w.WriteNullValue();
+                break;
+            case string s:
+                w.WriteStringValue(s);
+                break;
+            case bool b:
+                w.WriteBooleanValue(b);
+                break;
+            case int i:
+                w.WriteNumberValue(i);
+                break;
+            case long l:
+                w.WriteNumberValue(l);
+                break;
+            case float f:
+                w.WriteNumberValue(MathF.Round(f * 1000) / 1000);
+                break;
+            case double dbl:
+                w.WriteNumberValue(Math.Round(dbl, 3));
+                break;
             case IDictionary<string, object?> d:
                 w.WriteStartObject();
                 foreach (var (k, x) in d)
@@ -440,22 +530,31 @@ static partial class WikiExport
                 foreach (var x in items) WriteValue(w, x);
                 w.WriteEndArray();
                 break;
-            default: w.WriteStringValue(Convert.ToString(v, CultureInfo.InvariantCulture));
-            break;
+            default:
+                w.WriteStringValue(Convert.ToString(v, CultureInfo.InvariantCulture));
+                break;
         }
     }
 
-    // A value or float field as a number, null when the record has neither.
     #endregion
 
     #region Value helpers
 
+    /// <summary>
+    /// A float or int field as a number (floats rounded to three decimals), null when the record has neither.
+    /// </summary>
     static object? Num(GameRecord r, string key) =>
         r.Floats.TryGetValue(key, out float f) ? MathF.Round(f * 1000) / 1000 : r.Ints.TryGetValue(key, out int i) ? i : null;
 
+    /// <summary>
+    /// The names of the records <paramref name="ids"/> (the known, distinct, at most 20).
+    /// </summary>
     static List<string> Names(GameDatabase db, IEnumerable<string> ids) =>
         [.. ids.Select(i => db.Find(i)?.Name ?? "").Where(n => n.Length > 0).Distinct().Take(20)];
 
+    /// <summary>
+    /// <paramref name="text"/> as a slug: lower-case letters and digits, accents dropped, every other run a single dash.
+    /// </summary>
     static string Slug(string text)
     {
         var sb = new StringBuilder();
@@ -480,6 +579,6 @@ static partial class WikiExport
         }
         return sb.ToString().Trim('-');
     }
-    #endregion
 
+    #endregion
 }

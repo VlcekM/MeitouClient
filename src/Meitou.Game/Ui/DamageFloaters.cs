@@ -22,6 +22,9 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     const float FloaterHeight = 15, FloaterRiseSpeed = 4, FloaterFadeFrom = 8, FloaterGone = 12;
 
+    /// <summary>
+    /// How far at random a building's damage number starts from the point hit, each axis.
+    /// </summary>
     const float BuildingFloaterJitter = 20;
 
     /// <summary>
@@ -30,11 +33,21 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, long Born, FloaterMode Mode, float Height = FloaterHeight)
     {
+        /// <summary>
+        /// The anchor's last position (the character's as drawn).
+        /// </summary>
         public Vector3 Last { get; set; }
     }
 
+    /// <summary>
+    /// The floaters on screen.
+    /// </summary>
     internal readonly List<Live> Floaters = [];
 
+    /// <summary>
+    /// Takes the world's new floaters (none when off, out of range or without text), keeps the newest 24 still rising, and moves each to its
+    /// character.
+    /// </summary>
     internal void DrawFloaters(DebugOverlay o)
     {
         var queue = player.Session.World.Floaters ??= new();
@@ -79,6 +92,9 @@ sealed class DamageFloaters(PlayerInterface player)
         at + new Vector3(
             Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f) * BuildingFloaterJitter;
 
+    /// <summary>
+    /// How far floater <paramref name="l"/> has risen by <paramref name="now"/>.
+    /// </summary>
     static float Rise(Live l, long now) => (float)((now - l.Born) / (double)System.Diagnostics.Stopwatch.Frequency) * FloaterRiseSpeed;
 
     /// <summary>

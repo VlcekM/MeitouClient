@@ -10,6 +10,9 @@ namespace Meitou.Reports;
 /// </summary>
 sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientFactory http)
 {
+    /// <summary>
+    /// Whether the Discord endpoint is on: a public key (<c>DISCORD_PUBLIC_KEY</c>) is set.
+    /// </summary>
     public bool Enabled => config.DiscordPublicKey is not null;
 
     /// <summary>
@@ -29,6 +32,10 @@ sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientF
         }
     }
 
+    /// <summary>
+    /// Answers one verified interaction: a ping (type 1), the system autocomplete (type 4) or a <c>/works</c> or <c>/broken</c> command, as the JSON
+    /// response Discord expects.
+    /// </summary>
     public async Task<JsonObject> Handle(JsonNode interaction)
     {
         int type = (int)interaction["type"]!;
@@ -78,6 +85,9 @@ sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientF
     /// </summary>
     static JsonObject Reply(string text) => new() { ["type"] = 4, ["data"] = new JsonObject { ["content"] = text, ["flags"] = 64 } };
 
+    /// <summary>
+    /// <paramref name="s"/> cut to <paramref name="max"/> characters, the last one an ellipsis, when longer.
+    /// </summary>
     static string Trim(string s, int max) => s.Length > max ? s[..(max - 1)] + "…" : s;
 
     /// <summary>

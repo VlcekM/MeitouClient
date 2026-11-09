@@ -14,7 +14,14 @@ sealed record Incoming(string? Row, string? Verdict, string? Build, string? Plat
 /// </summary>
 sealed class Intake(Store store, Roadmap roadmap, Config config)
 {
+    /// <summary>
+    /// The platform names a report may give.
+    /// </summary>
     public static readonly string[] Platforms = ["win", "linux", "mac", "proton", "other"];
+
+    /// <summary>
+    /// The longest note and build kept (characters), the largest log (bytes) and the reports one person may make a day.
+    /// </summary>
     const int NoteMax = 300, BuildMax = 64, LogMax = 512 * 1024, PerDay = 30;
 
     /// <summary>
@@ -47,6 +54,9 @@ sealed class Intake(Store store, Roadmap roadmap, Config config)
         return (await store.Add(r.Row, r.Verdict, build, platform, r.Modded, note, source, reporter, trusted, log), null);
     }
 
+    /// <summary>
+    /// <paramref name="s"/> trimmed, without control characters and cut to <paramref name="max"/>; null when empty.
+    /// </summary>
     static string? Clean(string? s, int max)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
@@ -54,6 +64,9 @@ sealed class Intake(Store store, Roadmap roadmap, Config config)
         return s.Length > max ? s[..max] : s;
     }
 
+    /// <summary>
+    /// The text of a gzipped log (UTF-8).
+    /// </summary>
     public static string Unzip(byte[] gz)
     {
         using var input = new GZipStream(new MemoryStream(gz), CompressionMode.Decompress);

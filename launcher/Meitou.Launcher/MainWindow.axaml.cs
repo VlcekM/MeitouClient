@@ -14,6 +14,9 @@ using Meitou.Localisation;
 
 namespace Meitou.Launcher;
 
+/// <summary>
+/// The launcher's window: the Home (news), Mods, Versions, Graphics and Settings pages, the footer with Play, and the custom title bar.
+/// </summary>
 public sealed partial class MainWindow : Window
 {
     #region Window
@@ -229,6 +232,9 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Shows <paramref name="text"/> (translated) in the status line.
+    /// </summary>
     void Status(string text) => SetText(StatusText, text);
 
     /// <summary>
@@ -250,12 +256,18 @@ public sealed partial class MainWindow : Window
         UpdateMetalBudgetHint();
     }
 
+    /// <summary>
+    /// Sets a text block to <paramref name="text"/> translated, as an inline (a language pass then leaves it alone).
+    /// </summary>
     void SetText(TextBlock block, string text) => block.Inlines = [new Run(Tr(text))];
 
     #endregion
 
     #region Title bar and frame
 
+    /// <summary>
+    /// A press on the title bar: a double click maximizes or restores, else the window is dragged.
+    /// </summary>
     void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
@@ -263,20 +275,44 @@ public sealed partial class MainWindow : Window
         else BeginMoveDrag(e);
     }
 
+    /// <summary>
+    /// The title bar's minimize button.
+    /// </summary>
     void Minimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
+    /// <summary>
+    /// The title bar's maximize button.
+    /// </summary>
     void Maximize_Click(object? sender, RoutedEventArgs e) => ToggleMaximize();
 
+    /// <summary>
+    /// The title bar's close button.
+    /// </summary>
     void Close_Click(object? sender, RoutedEventArgs e) => Close();
 
+    /// <summary>
+    /// Maximizes the window, or restores it when maximized.
+    /// </summary>
     void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
+    /// <summary>
+    /// A resize grip pressed (<see cref="WindowResizeGrips"/>).
+    /// </summary>
     void Grip_PointerPressed(object? sender, PointerPressedEventArgs e) => _grips.Pressed(sender, e);
 
+    /// <summary>
+    /// A resize grip dragged.
+    /// </summary>
     void Grip_PointerMoved(object? sender, PointerEventArgs e) => _grips.Moved(sender, e);
 
+    /// <summary>
+    /// A resize grip let go.
+    /// </summary>
     void Grip_PointerReleased(object? sender, PointerReleasedEventArgs e) => _grips.Released(sender, e);
 
+    /// <summary>
+    /// A resize grip lost the pointer.
+    /// </summary>
     void Grip_PointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) => _grips.CaptureLost(sender, e);
 
     /// <summary>
@@ -310,6 +346,9 @@ public sealed partial class MainWindow : Window
     string StartLanguage(GameInstall? found) =>
         (found is null ? null : KenshiLanguageSettings.GetLanguage(found)) is { Length: > 0 } game ? game : _config.Language;
 
+    /// <summary>
+    /// A language picked: saved, applied to the launcher and written to Kenshi's settings.cfg (said in the status).
+    /// </summary>
     void Language_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (!_languageReady || _populatingLanguages) return;
@@ -372,8 +411,14 @@ public sealed partial class MainWindow : Window
         _populatingLanguages = false;
     }
 
+    /// <summary>
+    /// Whether two locale codes are the same language ('_' and '-' alike, any case).
+    /// </summary>
     static bool SameLanguage(string left, string right) => left.Replace('_', '-').Equals(right.Replace('_', '-'), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The locale folders of the Kenshi install (those not starting with '_'); none without an install or when the folder cannot be read.
+    /// </summary>
     static IEnumerable<string> InstalledLocaleCodes(GameInstall? gameInstall)
     {
         if (gameInstall is null) return [];
@@ -390,6 +435,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The English name of a game locale code; the code itself for one not listed.
+    /// </summary>
     static string GameLanguageName(string code) => code.Replace('_', '-').ToLowerInvariant() switch
     {
         "en-gb" => "English",
@@ -409,6 +457,9 @@ public sealed partial class MainWindow : Window
 
     #region Pages
 
+    /// <summary>
+    /// A page button: shows its page and checks it, unchecking the others.
+    /// </summary>
     void Nav_Click(object? sender, RoutedEventArgs e)
     {
         var pages = new (ToggleButton, Control)[]
@@ -442,6 +493,9 @@ public sealed partial class MainWindow : Window
 
     #region Home: news
 
+    /// <summary>
+    /// Fetches the news and shows a card per post (or why there is none) with the count.
+    /// </summary>
     async Task LoadNewsAsync()
     {
         NewsCount.Text = Tr("Loading");
@@ -457,6 +511,9 @@ public sealed partial class MainWindow : Window
             : Tr("{1} posts", posts.Count);
     }
 
+    /// <summary>
+    /// A news post's card: its cover (playing the post's video when it has one), the title with the date and author, and the Markdown body.
+    /// </summary>
     Control PostCard(NewsPost post)
     {
         var card = new StackPanel { Spacing = 8 };
@@ -494,12 +551,19 @@ public sealed partial class MainWindow : Window
             await this.Launcher.LaunchUriAsync(uri);
     }
 
+    /// <summary>
+    /// Opens the Ko-fi page.
+    /// </summary>
     void Kofi_Click(object? sender, RoutedEventArgs e) => OpenLink("https://ko-fi.com/martinvlcek");
 
     #endregion
 
     #region Kenshi folder
 
+    /// <summary>
+    /// Uses <paramref name="found"/> as the Kenshi install: the path box, Continue, the status and badge, the saved path, the language (from its
+    /// settings.cfg) and the mod list.
+    /// </summary>
     void UseKenshi(GameInstall? found)
     {
         _install = found;
@@ -524,8 +588,14 @@ public sealed partial class MainWindow : Window
         LoadMods();
     }
 
+    /// <summary>
+    /// Detect: searches for the Kenshi install again.
+    /// </summary>
     void DetectKenshi_Click(object? sender, RoutedEventArgs e) => UseKenshi(GameInstall.Locate());
 
+    /// <summary>
+    /// Browse for the Kenshi folder.
+    /// </summary>
     async void BrowseKenshi_Click(object? sender, RoutedEventArgs e)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Kenshi folder" });
@@ -533,12 +603,18 @@ public sealed partial class MainWindow : Window
             SetKenshiPath(path);
     }
 
+    /// <summary>
+    /// The typed Kenshi path, when it changed, is used.
+    /// </summary>
     void KenshiPath_LostFocus(object? sender, RoutedEventArgs e)
     {
         if (KenshiPathBox.Text is { } path && path != _install?.Root)
             SetKenshiPath(path.Trim().Trim('"'));
     }
 
+    /// <summary>
+    /// Uses <paramref name="path"/> when it is a Kenshi folder, else says it is not one.
+    /// </summary>
     void SetKenshiPath(string path)
     {
         if (GameInstall.IsValid(path)) UseKenshi(GameInstall.Open(path));
@@ -549,12 +625,18 @@ public sealed partial class MainWindow : Window
 
     #region Settings
 
+    /// <summary>
+    /// Saves the typed launch arguments.
+    /// </summary>
     void Arguments_LostFocus(object? sender, RoutedEventArgs e)
     {
         _config.LaunchArguments = ArgumentsBox.Text ?? "";
         _config.Save();
     }
 
+    /// <summary>
+    /// macOS renderer picked: saved, with its hint and the status.
+    /// </summary>
     void Renderer_Changed(object? sender, SelectionChangedEventArgs e)
     {
         if (RendererBox.SelectedItem is ComboBoxItem { Tag: string renderer } && renderer is "auto" or "metal" or "vulkan")
@@ -566,6 +648,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The macOS renderer hint: which renderer Auto, Metal or Vulkan comes to here, and why.
+    /// </summary>
     void UpdateRendererHint()
     {
         bool vulkan = MacSupport.VulkanAvailable;
@@ -579,6 +664,9 @@ public sealed partial class MainWindow : Window
         SetText(RendererHint, Tr(hint, effective));
     }
 
+    /// <summary>
+    /// macOS Metal memory budget picked: saved, with its hint and the status.
+    /// </summary>
     void MetalBudget_Changed(object? sender, SelectionChangedEventArgs e)
     {
         if (MetalBudgetBox.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out int mb))
@@ -589,6 +677,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The Metal memory budget hint for the chosen budget.
+    /// </summary>
     void UpdateMetalBudgetHint()
     {
         SetText(MetalBudgetHint, _config.MetalMemoryBudget switch
@@ -599,8 +690,14 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    /// <summary>
+    /// The renderer's display name ("Metal" or "Vulkan").
+    /// </summary>
     static string RendererLabel(string renderer) => renderer == "metal" ? "Metal" : "Vulkan";
 
+    /// <summary>
+    /// Vulkan setup: says so when the loader is installed, else copies the Homebrew command and opens brew.sh.
+    /// </summary>
     async void VulkanSetup_Click(object? sender, RoutedEventArgs e)
     {
         if (MacSupport.VulkanAvailable)
@@ -615,6 +712,9 @@ public sealed partial class MainWindow : Window
         Status(Tr("Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check.", MacSupport.HomebrewVulkanCommand));
     }
 
+    /// <summary>
+    /// Vulkan check: looks for the loader again and says whether it was found.
+    /// </summary>
     void VulkanCheck_Click(object? sender, RoutedEventArgs e)
     {
         UpdateRendererHint();
@@ -623,9 +723,15 @@ public sealed partial class MainWindow : Window
             : "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal.");
     }
 
+    /// <summary>
+    /// Opens the guide to running Kenshi's data on macOS.
+    /// </summary>
     async void KenshiHelp_Click(object? sender, RoutedEventArgs e) =>
         await this.Launcher.LaunchUriAsync(new Uri("https://github.com/VlcekM/MeitouClient/blob/master/docs/kenshi-on-macos.md"));
 
+    /// <summary>
+    /// Nightly builds switched: turning them on asks first (they are untested); the version list is shown again.
+    /// </summary>
     async void Nightly_Click(object? sender, RoutedEventArgs e)
     {
         if (NightlyBox.IsChecked == true && !_config.IncludePrereleases)
@@ -645,14 +751,23 @@ public sealed partial class MainWindow : Window
         ShowReleases();
     }
 
+    /// <summary>
+    /// "latest nightly" or "latest", as the version menu names the newest one.
+    /// </summary>
     string Latest => _config.IncludePrereleases ? "latest nightly" : "latest";
 
+    /// <summary>
+    /// Opens the launcher's data folder.
+    /// </summary>
     async void OpenDataFolder_Click(object? sender, RoutedEventArgs e)
     {
         Directory.CreateDirectory(LauncherConfig.DataDirectory);
         await this.Launcher.LaunchUriAsync(new Uri(LauncherConfig.DataDirectory + Path.DirectorySeparatorChar));
     }
 
+    /// <summary>
+    /// Browse for the install folder: the installed versions move there (not during a download).
+    /// </summary>
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
         if (_download is not null)
@@ -683,12 +798,18 @@ public sealed partial class MainWindow : Window
         ShowReleases();
     }
 
+    /// <summary>
+    /// Opens the install folder.
+    /// </summary>
     async void OpenInstallFolder_Click(object? sender, RoutedEventArgs e)
     {
         Directory.CreateDirectory(LauncherConfig.InstallDirectory);
         await this.Launcher.LaunchUriAsync(new Uri(LauncherConfig.InstallDirectory + Path.DirectorySeparatorChar));
     }
 
+    /// <summary>
+    /// Shows the first-start dialog over the window; its Continue saves the folders and uses the Kenshi install chosen.
+    /// </summary>
     void ShowSetup()
     {
         var setup = new SetupOverlay(_config, _install);
@@ -784,6 +905,9 @@ public sealed partial class MainWindow : Window
         foreach (var row in _mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
     }
 
+    /// <summary>
+    /// Every mod as the dependency rules read it: its code entry with the current tick and its .mod header's dependencies.
+    /// </summary>
     List<CodeModEntry> DependencyEntries() =>
         [.. _mods.Select(m => m.Code with { Enabled = m.Enabled, HeaderDependencies = m.Mod.Header?.Dependencies })];
 
@@ -815,6 +939,9 @@ public sealed partial class MainWindow : Window
             : Tr("Mods arranged by their dependencies; {1} still need attention.", left));
     }
 
+    /// <summary>
+    /// Shows the dependencies that contradict each other when Arrange cannot order the mods.
+    /// </summary>
     void ShowArrangeCycle(IReadOnlyList<OrderConstraint> cycle)
     {
         string lines = string.Join("\n", cycle.Select(c => Tr("{1} after {2} ({3})", c.After, c.Before, c.Why)));
@@ -845,6 +972,10 @@ public sealed partial class MainWindow : Window
         return _modsReady;
     }
 
+    /// <summary>
+    /// Writes the mod list to the install's mods.cfg; false (said in the status) without a Kenshi folder, before the list is read or when it cannot
+    /// be written.
+    /// </summary>
     bool SaveMods()
     {
         if (_install is null)
@@ -882,10 +1013,19 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    /// <summary>
+    /// Reads the mod list again.
+    /// </summary>
     void RefreshMods_Click(object? sender, RoutedEventArgs e) => LoadMods();
 
+    /// <summary>
+    /// Ticks every mod.
+    /// </summary>
     void SelectAll_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods) m.Enabled = true; }
 
+    /// <summary>
+    /// Unticks every mod.
+    /// </summary>
     void SelectNone_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods) m.Enabled = false; }
 
     /// <summary>
@@ -908,6 +1048,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     void DragHandle_PointerPressed(object? sender, PointerPressedEventArgs e) => _modDrag.Press(sender, e);
 
+    /// <summary>
+    /// A mod selected: its details (description, the dependencies with those not enabled above it, folder).
+    /// </summary>
     void ModListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (ModListBox.SelectedItem is not ModRow row)
@@ -946,12 +1089,18 @@ public sealed partial class MainWindow : Window
 
     #region Presets
 
+    /// <summary>
+    /// Fills the preset box, by name, selecting <paramref name="select"/>.
+    /// </summary>
     void RefreshPresets(string? select = null)
     {
         PresetBox.ItemsSource = _config.Presets.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         PresetBox.SelectedItem = _config.Presets.FirstOrDefault(p => p.Name == select);
     }
 
+    /// <summary>
+    /// Saves the current mod list as a preset under the typed name (replacing one of that name).
+    /// </summary>
     void SavePreset_Click(object? sender, RoutedEventArgs e)
     {
         var name = PresetName.Text?.Trim();
@@ -969,6 +1118,9 @@ public sealed partial class MainWindow : Window
         Status(Tr("Preset '{1}' saved.", name));
     }
 
+    /// <summary>
+    /// Applies the chosen preset's mods and order; names those not on disk.
+    /// </summary>
     void ApplyPreset_Click(object? sender, RoutedEventArgs e)
     {
         if (PresetBox.SelectedItem is not ModPreset preset || !ModsReady()) return;
@@ -1016,8 +1168,14 @@ public sealed partial class MainWindow : Window
         return missing;
     }
 
+    /// <summary>
+    /// " Not on disk: ..." for the missing mods, empty when none are.
+    /// </summary>
     static string NotOnDisk(List<string> missing) => missing.Count > 0 ? Tr(" Not on disk: {1}.", string.Join(", ", missing)) : "";
 
+    /// <summary>
+    /// Deletes the chosen preset.
+    /// </summary>
     void DeletePreset_Click(object? sender, RoutedEventArgs e)
     {
         if (PresetBox.SelectedItem is not ModPreset preset) return;
@@ -1037,6 +1195,9 @@ public sealed partial class MainWindow : Window
     static readonly Avalonia.Media.Geometry StartIcon = Avalonia.Media.Geometry.Parse("M0,0 L0,18 L15,9 Z"),
         MenuIcon = Avalonia.Media.Geometry.Parse("M0,0 H4 V18 H0 Z M7,0 L7,18 L20,9 Z");
 
+    /// <summary>
+    /// Reads the installed versions again and updates Play, the footer and the preset detection.
+    /// </summary>
     void RefreshInstalled()
     {
         _installedVersions = Releases.Installed();
@@ -1137,6 +1298,9 @@ public sealed partial class MainWindow : Window
         Status(Tr("Skipped {1}: the arrow's menu can still install it.", release.Title));
     }
 
+    /// <summary>
+    /// A version menu item: the header, a nightly's tag with its build date, and the tick on the picked one.
+    /// </summary>
     MenuItem VersionItem(string header, string? version, string? picked)
     {
         object content = header;
@@ -1178,6 +1342,9 @@ public sealed partial class MainWindow : Window
         Status(version is null ? Tr("Play starts the latest installed version.") : Tr("Play starts Meitou {1}.", version));
     }
 
+    /// <summary>
+    /// Select: the chosen installed version becomes the one Play starts (the newest: none picked).
+    /// </summary>
     void SelectVersion_Click(object? sender, RoutedEventArgs e)
     {
         if (ReleaseListBox.SelectedItem is ReleaseRow { Installed: true, Release: var release })
@@ -1258,6 +1425,9 @@ public sealed partial class MainWindow : Window
             await UpdateLauncherAsync();
     }
 
+    /// <summary>
+    /// Shows the game releases (nightlies when offered or installed), keeping the selection.
+    /// </summary>
     void ShowReleases()
     {
         var installed = Releases.Installed();
@@ -1284,8 +1454,14 @@ public sealed partial class MainWindow : Window
     static NewsPost ReleaseNotesPost(Release release) =>
         new("", release.Title, null, null, null, ReleaseNotesMarkdown(release.Notes), release.PageUrl);
 
+    /// <summary>
+    /// Fetches the releases again.
+    /// </summary>
     async void RefreshReleases_Click(object? sender, RoutedEventArgs e) => await RefreshReleasesAsync();
 
+    /// <summary>
+    /// A release selected: its notes and the buttons for it.
+    /// </summary>
     void ReleaseListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         var release = (ReleaseListBox.SelectedItem as ReleaseRow)?.Release;
@@ -1365,6 +1541,9 @@ public sealed partial class MainWindow : Window
         StatusText.Inlines = [new Run(Tr("Downloading {1}", release.Title) + "  "), new Run(size + speed) { FontFamily = Mono }];
     }
 
+    /// <summary>
+    /// Downloads and installs <paramref name="release"/>, showing the progress and speed; cancelled by the download button.
+    /// </summary>
     async Task InstallAsync(Release release)
     {
         using var cts = _download = new CancellationTokenSource();
@@ -1442,6 +1621,9 @@ public sealed partial class MainWindow : Window
         ShowFooter();
     }
 
+    /// <summary>
+    /// Removes the selected installed version's folder (not during a download).
+    /// </summary>
     void Uninstall_Click(object? sender, RoutedEventArgs e)
     {
         if (_download is not null || ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
@@ -1464,6 +1646,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Opens the selected version's folder; says so when it is not installed.
+    /// </summary>
     async void OpenVersionFolder_Click(object? sender, RoutedEventArgs e)
     {
         if (ReleaseListBox.SelectedItem is not ReleaseRow { Release: var release }) return;
@@ -1476,6 +1661,9 @@ public sealed partial class MainWindow : Window
         await this.Launcher.LaunchUriAsync(new Uri(dir + Path.DirectorySeparatorChar));
     }
 
+    /// <summary>
+    /// Opens the selected release's GitHub page.
+    /// </summary>
     async void OpenReleasePage_Click(object? sender, RoutedEventArgs e)
     {
         if (ReleaseListBox.SelectedItem is ReleaseRow row)
@@ -1523,18 +1711,27 @@ public sealed partial class MainWindow : Window
         if (version is not null) Status(Tr("Launcher {1} is available.", version));
     }
 
+    /// <summary>
+    /// Saves whether the game starts as Kenshi on Steam.
+    /// </summary>
     void Steam_Click(object? sender, RoutedEventArgs e)
     {
         _config.LaunchAsSteamKenshi = SteamBox.IsChecked == true;
         _config.Save();
     }
 
+    /// <summary>
+    /// Saves whether the launcher updates itself at startup.
+    /// </summary>
     void AutoUpdate_Click(object? sender, RoutedEventArgs e)
     {
         _config.AutoUpdateLauncher = AutoUpdateBox.IsChecked == true;
         _config.Save();
     }
 
+    /// <summary>
+    /// The launcher update button: opens the release page when the launcher cannot update itself, else updates.
+    /// </summary>
     async void LauncherUpdate_Click(object? sender, RoutedEventArgs e)
     {
         if (LauncherUpdateButton.Tag is string url)
@@ -1545,6 +1742,9 @@ public sealed partial class MainWindow : Window
         await UpdateLauncherAsync();
     }
 
+    /// <summary>
+    /// Downloads and applies the launcher update, showing the progress, and restarts into it; says why when it fails.
+    /// </summary>
     async Task UpdateLauncherAsync()
     {
         LauncherUpdateButton.IsEnabled = TitleLauncherUpdateButton.IsEnabled = false;
@@ -1578,6 +1778,9 @@ public sealed partial class MainWindow : Window
 
     #region Play
 
+    /// <summary>
+    /// Play: installs the latest (or cancels its download) while an update is pending, else starts the game (<see cref="StartGame"/>).
+    /// </summary>
     async void Play_Click(object? sender, RoutedEventArgs e)
     {
         // As the update button: install the latest, or cancel its download.
@@ -1626,7 +1829,9 @@ public sealed partial class MainWindow : Window
         Launch(start, exe, version, started, steamAppIdFiles);
     }
 
-    // The game Play starts and its version; null, with the reason in the status, when there is none.
+    /// <summary>
+    /// The game Play starts and its version; null, with the reason in the status, when there is none.
+    /// </summary>
     (string Exe, string Version)? FindPlayedGame()
     {
 #if DEBUG
@@ -1642,6 +1847,10 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
+    /// <summary>
+    /// The game's start: the executable run from the launcher's data folder (its settings file shared by every version), the install in KENSHI_PATH,
+    /// the Metal GPU cull variables removed.
+    /// </summary>
     static ProcessStartInfo GameStartInfo(string exe, GameInstall gameInstall)
     {
         var start = new ProcessStartInfo(exe)
@@ -1701,12 +1910,18 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
+    /// <summary>
+    /// Why Vulkan cannot start on this Mac: a version without Metal, else how to install the loader.
+    /// </summary>
     static string VulkanLoaderProblem(bool metalSupported) => MacSupport.MetalAvailable && !metalSupported
         ? "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
         : MacSupport.MetalAvailable
             ? "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
             : "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again.";
 
+    /// <summary>
+    /// The launch arguments, then the renderer and the save to load.
+    /// </summary>
     void AddArguments(ProcessStartInfo start, string? renderer, SaveModSlot? save)
     {
         foreach (var arg in SplitArguments(_config.LaunchArguments)) start.ArgumentList.Add(arg);
@@ -1723,6 +1938,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Starts the game process, says so and watches its exit; the Steam App ID files are removed when it cannot start.
+    /// </summary>
     void Launch(ProcessStartInfo start, string exe, string version, string started, List<string> steamAppIdFiles)
     {
         try

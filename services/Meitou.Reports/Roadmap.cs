@@ -8,8 +8,14 @@ namespace Meitou.Reports;
 /// </summary>
 sealed record RoadmapRow(string Id, string System, string Category, string Status);
 
+/// <summary>
+/// The site's <c>/roadmap.json</c>: its rows.
+/// </summary>
 sealed record RoadmapFile(List<RoadmapRow> Rows);
 
+/// <summary>
+/// A GitHub release as the releases API lists it: its tag, whether it is a prerelease or a draft, and when it was published.
+/// </summary>
 sealed record GithubRelease(
     [property: JsonPropertyName("tag_name")] string Tag,
     [property: JsonPropertyName("prerelease")] bool Prerelease,
@@ -35,12 +41,35 @@ sealed record Latest(string? Release, string? Any);
 /// </summary>
 sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> log)
 {
+    /// <summary>
+    /// How long the fetched rows and releases are reused before they are fetched again.
+    /// </summary>
     static readonly TimeSpan RowsFor = TimeSpan.FromMinutes(10), ReleasesFor = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// One fetch at a time.
+    /// </summary>
     readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>
+    /// The roadmap's rows by id, from the last fetch.
+    /// </summary>
     Dictionary<string, RoadmapRow> _rows = [];
+
+    /// <summary>
+    /// When the rows and the releases were last fetched.
+    /// </summary>
     DateTimeOffset _rowsAt = DateTimeOffset.MinValue, _releasesAt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// The report window from the last releases fetch; before one, the last 90 days with no release known.
+    /// </summary>
     Window _window = new(DateTimeOffset.UtcNow.AddDays(-90), null, [], [], new(null, null));
 
+    /// <summary>
+    /// The roadmap's rows by id (from the JSON file or the site's roadmap.ts source), fetched again when older than <see cref="RowsFor"/>; a failed
+    /// fetch keeps the old ones and retries in a minute.
+    /// </summary>
     public async Task<IReadOnlyDictionary<string, RoadmapRow>> Rows()
     {
         if (DateTimeOffset.UtcNow - _rowsAt < RowsFor) return _rows;
@@ -84,9 +113,15 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
         return list;
     }
 
+    /// <summary>
+    /// A category line of the site's <c>roadmap.ts</c>: <c>{ id: "...", name: "</c>.
+    /// </summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\{\s*id:\s*""([^""]+)"",\s*name:\s*""")]
     private static partial System.Text.RegularExpressions.Regex CategoryLine();
 
+    /// <summary>
+    /// A row line of the site's <c>roadmap.ts</c>: its id, system and status.
+    /// </summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\{\s*id:\s*""([^""]+)"",\s*system:\s*""((?:[^""\\]|\\.)*)"",\s*status:\s*""(\w+)""")]
     private static partial System.Text.RegularExpressions.Regex RowLine();
 
@@ -151,4 +186,7 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
     }
 }
 
+/// <summary>
+/// A suggested roadmap change: the row, its system, the status now and the one the reports suggest ("works" or "look"), and why.
+/// </summary>
 sealed record Proposal(string Row, string System, string From, string To, string Why);

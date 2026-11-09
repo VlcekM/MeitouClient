@@ -13,11 +13,20 @@ public sealed partial class MyGuiScreenHost
 {
     #region Widget checks
 
+    /// <summary>
+    /// Whether property <paramref name="key"/> of <paramref name="c"/> is <c>true</c>.
+    /// </summary>
     static bool Is(UiControl c, string key) => c.Properties.GetValueOrDefault(key) == "true";
 
+    /// <summary>
+    /// Whether <paramref name="c"/> has an area and some of it is inside its clip.
+    /// </summary>
     static bool Visible(UiControl c) =>
         c.Bounds.Width > 0 && c.Bounds.Height > 0 && (c.Clip is not { } clip || c.Bounds.Intersect(clip) is { Width: > 0, Height: > 0 });
 
+    /// <summary>
+    /// Whether Tab stops at <paramref name="c"/>: an enabled, visible edit box that is neither static nor read-only.
+    /// </summary>
     static bool IsEditStop(UiControl c) => c.Enabled && c.Type == "EditBox" && !Is(c, "Static") && !Is(c, "ReadOnly") && Visible(c);
 
     /// <summary>
@@ -40,6 +49,9 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     const int DefaultMaxLength = 2048;
 
+    /// <summary>
+    /// The boxes' own clipboard, for when the system's is unavailable.
+    /// </summary>
     string _localClipboard = "";
 
     /// <summary>
@@ -47,6 +59,10 @@ public sealed partial class MyGuiScreenHost
     /// share a clipboard of their own.
     /// </summary>
     public Func<string?>? ClipboardReader { get; set; }
+
+    /// <summary>
+    /// Where copied text goes; null: the boxes' own clipboard only.
+    /// </summary>
     public Action<string>? ClipboardWriter { get; set; }
 
     /// <summary>
@@ -85,6 +101,9 @@ public sealed partial class MyGuiScreenHost
         _edit = NewBuffer(c, readOnly ? c.Caption : s.Text[c.Name]);
     }
 
+    /// <summary>
+    /// The system clipboard's text, else the boxes' own.
+    /// </summary>
     string? ReadClipboard()
     {
         try
@@ -97,6 +116,9 @@ public sealed partial class MyGuiScreenHost
         }
     }
 
+    /// <summary>
+    /// Copies <paramref name="text"/> to the boxes' own clipboard and the system's.
+    /// </summary>
     void WriteClipboard(string text)
     {
         _localClipboard = text;
@@ -165,7 +187,14 @@ public sealed partial class MyGuiScreenHost
 
     #region Focus and buttons
 
+    /// <summary>
+    /// The keyboard focus ring's colour.
+    /// </summary>
     static readonly Vector4 RingColour = new(0.769f, 0.627f, 0.384f, 1);   // brass-light #c4a062
+
+    /// <summary>
+    /// The focus ring's properties: it takes no pointer.
+    /// </summary>
     static readonly Dictionary<string, string> NoMouse = new(StringComparer.Ordinal) { ["NeedMouse"] = "false" };
 
     /// <summary>

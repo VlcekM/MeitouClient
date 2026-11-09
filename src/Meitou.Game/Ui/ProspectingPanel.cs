@@ -15,12 +15,34 @@ sealed class ProspectingPanel(PlayerInterface player)
 {
     #region State
 
+    /// <summary>
+    /// The world the last report belongs to (a new one only takes the baseline).
+    /// </summary>
     object? _prospectWorld;
+
+    /// <summary>
+    /// The serial of the last report seen.
+    /// </summary>
     long _prospectSerial;
+
+    /// <summary>
+    /// The report the window shows; null for none.
+    /// </summary>
     ProspectReport? _prospectReport;
+
+    /// <summary>
+    /// The resource row picked (the map's resource).
+    /// </summary>
     int _prospectRow;
+
+    /// <summary>
+    /// The report and row the map texture was last drawn for (serial times 8 plus the row); -1 for none.
+    /// </summary>
     long _prospectMapDrawn = -1;
 
+    /// <summary>
+    /// The texture name of the results' map.
+    /// </summary>
     const string ProspectMapTexture = "meitou:prospect:map";
 
     #endregion
@@ -79,12 +101,18 @@ sealed class ProspectingPanel(PlayerInterface player)
         player.InterfaceSounds.Sound("Prospect_Results");
     }
 
+    /// <summary>
+    /// The results window's bindings: its caption, the camera marker hidden.
+    /// </summary>
     internal void BindProspectScreen(UiBindings b)
     {
         b.Text["Root"] = "PROSPECTING RESULTS";
         b.Hidden.Add("CameraMarker");
     }
 
+    /// <summary>
+    /// A results row picked: its resource is the map's.
+    /// </summary>
     internal void ProspectScreenAction(MyGuiEvent e)
     {
         if (!e.Action.StartsWith("prospect-row:", StringComparison.Ordinal)) return;
@@ -133,6 +161,9 @@ sealed class ProspectingPanel(PlayerInterface player)
         if (controls.FirstOrDefault(c => c.Name == "ResourcesList") is { } list) AddResourceRows(controls, r, list, valueInk);
     }
 
+    /// <summary>
+    /// <paramref name="v"/> as invariant text.
+    /// </summary>
     static string N(int v) => v.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>

@@ -13,39 +13,88 @@ namespace Meitou.Game.Title;
 /// </summary>
 sealed class FrontendScreens(PlayerInterface player)
 {
+    /// <summary>
+    /// The new-game starts of the game data (<see cref="NewGameStart.LoadAll"/>).
+    /// </summary>
     IReadOnlyList<NewGameStart> _starts = [];
+
+    /// <summary>
+    /// The index of the chosen start in <see cref="_starts"/>.
+    /// </summary>
     int _startIndex;
+
+    /// <summary>
+    /// Lists the save folders (<see cref="ConfigureFrontend"/>).
+    /// </summary>
     Func<IReadOnlyList<SaveSlot>> _saveSlots = () => [];
+
+    /// <summary>
+    /// The saves as last listed.
+    /// </summary>
     internal IReadOnlyList<SaveSlot> Slots = [];
+
+    /// <summary>
+    /// The save selected in the save, load or import window; null for none.
+    /// </summary>
     internal SaveSlot? SelectedSlot;
+
+    /// <summary>
+    /// The selected save's info text (or why it could not be read), and the credits text as the title reads it.
+    /// </summary>
     string _slotDetails = "", _credits = "";
+
+    /// <summary>
+    /// The credits are showing.
+    /// </summary>
     internal bool ShowCredits;
+
     /// <summary>
     /// When the credits were opened (Stopwatch): they scroll by the wall clock.
     /// </summary>
     long _creditsStart;
+
+    /// <summary>
+    /// The selected save's info was read.
+    /// </summary>
     bool _slotReadable;
+
     /// <summary>
     /// The Faithful load window's Load button is live only with a readable save selected (Fixes settings); off, it is always live, as in the game.
     /// </summary>
     public bool FixLoadButton { get; set; } = true;
+
+    /// <summary>
+    /// The selected save's info; null when none is selected or it could not be read.
+    /// </summary>
     SaveSlotInfo? _slotInfo;
+
     /// <summary>
     /// The load and import windows' ticks (ImportGameMenu flags 0x1, 0x4, 0x8, 0x10, 0x20): reset squad positions, buildings, research, dead NPCs,
     /// relations.
     /// </summary>
     readonly bool[] _slotTicks = new bool[5];
+
+    /// <summary>
+    /// The load and import windows' tick widgets, in the order of <see cref="_slotTicks"/>.
+    /// </summary>
     static readonly string[] TickBoxes = ["ResetTickBox", "BuildingsTickBox", "ResearchTickBox", "NPCTickBox", "RelationsTickBox"];
+
     /// <summary>
     /// Meitou's load window tick that leaves the base game's saves out of the list (<see cref="WithSaveFilter"/>).
     /// </summary>
     const string HideKenshiTick = "HideKenshiTickBox";
+
+    /// <summary>
+    /// The load window's tick that leaves the base game's saves out is set.
+    /// </summary>
     bool _hideKenshiSaves;
+
     /// <summary>
     /// The saves the window lists: the save window only Meitou's, the load window without Kenshi's when its tick is set.
     /// </summary>
     SaveSlot[] VisibleSlots(string id) =>
         [.. Slots.Where(s => s.Writable || id != "save" && !(id == "load" && _hideKenshiSaves && player.UiMode == UiMode.Meitou))];
+
     /// <summary>
     /// The import window's ticks as the flag bits of <c>importGame</c> (ticks in the order of <see cref="TickBoxes"/>: 0x1, 0x4, 0x8, 0x10, 0x20).
     /// </summary>
@@ -53,6 +102,7 @@ sealed class FrontendScreens(PlayerInterface player)
         (_slotTicks[0] ? Simulation.Saving.ImportOptions.ResetPositions : 0) | (_slotTicks[1] ? Simulation.Saving.ImportOptions.Buildings : 0)
         | (_slotTicks[2] ? Simulation.Saving.ImportOptions.Research : 0) | (_slotTicks[3] ? Simulation.Saving.ImportOptions.DeadNpcs : 0)
         | (_slotTicks[4] ? Simulation.Saving.ImportOptions.Relations : 0);
+
     /// <summary>
     /// The open message box: ButtonA confirms (captioned <c>Yes</c>), an optional middle choice (ButtonB), and the last button cancels (Esc presses
     /// it).
@@ -65,12 +115,20 @@ sealed class FrontendScreens(PlayerInterface player)
         /// </summary>
         public bool OkOnly { get; init; }
     }
+
+    /// <summary>
+    /// The open message box; null for none.
+    /// </summary>
     internal Confirmation? PendingConfirmation;
+
     /// <summary>
     /// The game data (<see cref="ConfigureFrontend"/>; null without it).
     /// </summary>
     internal GameDatabase? GameData;
 
+    /// <summary>
+    /// Takes the game data (and its new-game starts, the default one chosen), the save lister and the credits text as the title shows it.
+    /// </summary>
     public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText)
     {
         GameData = database;
@@ -86,6 +144,9 @@ sealed class FrontendScreens(PlayerInterface player)
             .Select(l => (l == "-" ? "" : l) + "\n"));
     }
 
+    /// <summary>
+    /// Opens the title screen with the saves listed again.
+    /// </summary>
     public void ShowTitle()
     {
         player.FaithfulScreens.Open("title");
@@ -98,6 +159,9 @@ sealed class FrontendScreens(PlayerInterface player)
     /// </summary>
     public void ShowMainMenu() => ShowTitle();
 
+    /// <summary>
+    /// Closes every front-end window and the character editor and drops the open message box.
+    /// </summary>
     public void CloseFrontend()
     {
         foreach (string id in new[] { "title", "menu", "new-game", "save", "load", "import", "message", "editor", "file" })
@@ -114,6 +178,9 @@ sealed class FrontendScreens(PlayerInterface player)
     /// </summary>
     internal string CancelButton => PendingConfirmation?.Middle is null ? "ButtonB" : "ButtonC";
 
+    /// <summary>
+    /// Lists the saves again, selects the first and reads its info; an unreadable save folder leaves the list empty with the error as the info.
+    /// </summary>
     void RefreshSlots()
     {
         try
@@ -137,6 +204,9 @@ sealed class FrontendScreens(PlayerInterface player)
     bool OldImportSave =>
         _slotInfo is { } info && Simulation.Saving.SaveImport.AllowedFor(Simulation.Saving.ImportOptions.ResetPositions, info.Version) == 0;
 
+    /// <summary>
+    /// Reads the selected save's info into the info text (the original info panel's five labels), or why it could not be read.
+    /// </summary>
     void ReadSlotDetails()
     {
         _slotReadable = false;
@@ -187,6 +257,7 @@ sealed class FrontendScreens(PlayerInterface player)
     /// Whether a save folder is the one the game in play came from or was last saved to (the host's).
     /// </summary>
     public Func<string, bool>? SaveInUse { get; set; }
+
     /// <summary>
     /// Deletes a save folder (the host's); returns an error to show, or null.
     /// </summary>
@@ -214,6 +285,10 @@ sealed class FrontendScreens(PlayerInterface player)
         });
     }
 
+    /// <summary>
+    /// Opens the save, load or import window <paramref name="id"/> with the saves listed again: the first selected (save; Meitou's load), else none,
+    /// and the ticks reset (the first four off for a save too old to import them).
+    /// </summary>
     internal void OpenSlots(string id)
     {
         RefreshSlots();

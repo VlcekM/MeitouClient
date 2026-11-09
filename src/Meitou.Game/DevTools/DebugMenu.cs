@@ -27,9 +27,100 @@ namespace Meitou.Game.DevTools;
 /// </summary>
 sealed class DebugMenu(GameHost host)
 {
-    internal enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch,
-        ClearBounties, Godmode, Guard, ExplodeLevel, Explode, ExplodeClick }
+    /// <summary>
+    /// The cheat rows, by their number (the index into DebugFields and DebugLabels).
+    /// </summary>
+    internal enum DebugRow
+    {
+        /// <summary>
+        /// Teleports the selected characters to the camera's target.
+        /// </summary>
+        Teleport,
 
+        /// <summary>
+        /// Spawns the typed character record at the camera's target.
+        /// </summary>
+        SpawnNpc,
+
+        /// <summary>
+        /// Gives the typed item (name, quantity and quality) to the first selected character.
+        /// </summary>
+        GiveItem,
+
+        /// <summary>
+        /// Adds or takes the typed amount of money.
+        /// </summary>
+        Money,
+
+        /// <summary>
+        /// Heals the targets, lost limbs kept.
+        /// </summary>
+        Heal,
+
+        /// <summary>
+        /// Heals the targets and gives their limbs back.
+        /// </summary>
+        HealFully,
+
+        /// <summary>
+        /// Sets every stat of the targets to 100.
+        /// </summary>
+        MaxSkills,
+
+        /// <summary>
+        /// Cuts the targets for the typed damage, on the picked part or at random.
+        /// </summary>
+        Damage,
+
+        /// <summary>
+        /// Makes every blow land on the picked part, or as usual.
+        /// </summary>
+        ForceHits,
+
+        /// <summary>
+        /// Sets the damage multiplier, 0 to 100.
+        /// </summary>
+        DamageMultiplier,
+
+        /// <summary>
+        /// Finishes every research.
+        /// </summary>
+        UnlockResearch,
+
+        /// <summary>
+        /// Clears the selected characters' (else every player character's) bounties, all or one faction's.
+        /// </summary>
+        ClearBounties,
+
+        /// <summary>
+        /// Switches godmode for every player character.
+        /// </summary>
+        Godmode,
+
+        /// <summary>
+        /// Switches the guard (kills hostiles near the lead and heals the player's characters).
+        /// </summary>
+        Guard,
+
+        /// <summary>
+        /// The explosion level, 1 to 5.
+        /// </summary>
+        ExplodeLevel,
+
+        /// <summary>
+        /// An explosion at the camera's target.
+        /// </summary>
+        Explode,
+
+        /// <summary>
+        /// Switches explode on click.
+        /// </summary>
+        ExplodeClick,
+    }
+
+    /// <summary>
+    /// The cheat rows' labels, in the order of <see cref="DebugRow"/>.
+    /// </summary>
     internal static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)",
@@ -76,21 +167,53 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     const int DebugLabelWidth = 30, DebugKeyWidth = 10;
 
-    // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
+    /// <summary>
+    /// The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
+    /// </summary>
     internal readonly List<string> DebugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
+
+    /// <summary>
+    /// The record each typed name means, by whether a character is wanted and the text; null when none matches.
+    /// </summary>
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> _debugMatches = [];
+
+    /// <summary>
+    /// The menu is open.
+    /// </summary>
     internal bool DebugMenuOpen;
+
+    /// <summary>
+    /// The highlighted row.
+    /// </summary>
     int _debugRow;
+
+    /// <summary>
+    /// The status line: the last action's result.
+    /// </summary>
     string _debugStatus = "";
+
     /// <summary>
     /// The open row's sub-list (Enter or Right opens it, Esc or Left closes it). Damage and Force hits: "Random" or "Off", then the first target's
     /// parts as (template id, name); Clear bounties: "All factions", then each faction with a bounty as (faction index, name and total).
     /// </summary>
     internal (string? Id, string Name)[]? DebugParts;
+
+    /// <summary>
+    /// The highlighted line of the open sub-list.
+    /// </summary>
     int _debugPart;
-    // The overlays the menu's tool rows switch, also on their own keys (F11, Ctrl+F9, F12).
+
+    /// <summary>
+    /// The overlays the menu's tool rows switch, also on their own keys (F11, Ctrl+F9, F12). The frame statistics (F11) and the fps counter
+    /// (Ctrl+F9).
+    /// </summary>
     internal bool StatsVisible, FpsVisible;
+
+    /// <summary>
+    /// The frame profiler (F12) the Profiler and VRAM pie rows switch; null without one.
+    /// </summary>
     internal FrameProfiler? Profiler;
+
     /// <summary>
     /// Whether the Tools section is shown: the Vulkan game loop has these tools, the Metal one does not.
     /// </summary>
@@ -107,6 +230,9 @@ sealed class DebugMenu(GameHost host)
         public bool IsSwitch { get; init; }
     }
 
+    /// <summary>
+    /// "on" or "off".
+    /// </summary>
     static string OnOff(bool on) => on ? "on" : "off";
 
     /// <summary>
@@ -133,6 +259,10 @@ sealed class DebugMenu(GameHost host)
         new("Overlays", "Profiler", "F12", () => (Profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),
             () => { if (Profiler is not null) Profiler.Showing = (FrameProfiler.Mode)(((int)Profiler.Showing + 1) % 3); }),
     ];
+
+    /// <summary>
+    /// The tool rows, made on first use.
+    /// </summary>
     DebugTool[]? _debugTools;
 
     /// <summary>
@@ -148,6 +278,9 @@ sealed class DebugMenu(GameHost host)
         _debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
     }
 
+    /// <summary>
+    /// Flips the "Teleport on map" switch.
+    /// </summary>
     void ToggleMapTeleport() => SetMapTeleport(!host.Player.WorldMap.MapPickSticky);
 
     /// <summary>
@@ -155,6 +288,10 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     string _mapTeleportNote = "";
 
+    /// <summary>
+    /// Teleports the selected characters (else the lead) to the map point <paramref name="at"/> and centres the camera there, the result noted for
+    /// the map's hint.
+    /// </summary>
     void TeleportToMapPoint(Vector3 at)
     {
         var who = host.Player.AgentOrders.ControlOrderers();
@@ -202,12 +339,21 @@ sealed class DebugMenu(GameHost host)
     /// each click.
     /// </summary>
     World? _explodeClickWorld;
+
+    /// <summary>
+    /// The explode flags each click uses.
+    /// </summary>
     string _explodeClickArgs = "";
+
     /// <summary>
     /// The explosion level (1 to 5, F10 "Explosion level" row) used by <c>explode</c>, the F10 row and each click unless a <c>--level</c> says
     /// otherwise; 3 is normal. A click's normal level is larger than a plain explode's (<see cref="ExplodeLevels.Values"/>).
     /// </summary>
     int _explodeLevel = ExplodeLevels.Normal;
+
+    /// <summary>
+    /// Explode on click is on in the running world.
+    /// </summary>
     internal bool ExplodeClickOn => _explodeClickWorld is not null && ReferenceEquals(_explodeClickWorld, host.Session.World);
 
     /// <summary>
@@ -318,8 +464,15 @@ sealed class DebugMenu(GameHost host)
     /// The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.
     /// </summary>
     int DebugMenuRows => host.Modding.DebugRowCount + (DebugToolsOn ? DebugTools.Length : 0);
+
+    /// <summary>
+    /// Whether <paramref name="row"/> is a tool row.
+    /// </summary>
     bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
 
+    /// <summary>
+    /// Whether <paramref name="row"/> takes typed text: a mod row with a field, or a cheat row other than the switches and actions without one.
+    /// </summary>
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode
@@ -340,6 +493,10 @@ sealed class DebugMenu(GameHost host)
         return layout[((at < 0 ? 0 : at) + delta + layout.Count) % layout.Count].Row;
     }
 
+    /// <summary>
+    /// A key while the menu is open: in a sub-list Up and Down pick and Enter applies; otherwise the rows are walked, edited and applied, the tools
+    /// switched.
+    /// </summary>
     internal void DebugMenuKey(EngineKey key)
     {
         host.Modding.EnsureDebugFields();
@@ -404,6 +561,9 @@ sealed class DebugMenu(GameHost host)
         }
     }
 
+    /// <summary>
+    /// The Damage and Force hits list: "Random" or "Off", then the first target's body parts; null (the status says why) without a target.
+    /// </summary>
     (string? Id, string Name)[]? DebugPartList()
     {
         if (DebugTargets() is not [var first, ..])
@@ -442,6 +602,9 @@ sealed class DebugMenu(GameHost host)
         return [(null, "All factions"), .. factions];
     }
 
+    /// <summary>
+    /// Types <paramref name="c"/> into the highlighted row's field (a row with one, not a control character).
+    /// </summary>
     internal void DebugMenuText(char c)
     {
         host.Modding.EnsureDebugFields();
@@ -464,6 +627,9 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     internal bool DebugFailed;
 
+    /// <summary>
+    /// Marks the action as failed (<see cref="DebugFailed"/>) and returns <paramref name="message"/>.
+    /// </summary>
     string DebugFail(string message)
     {
         DebugFailed = true;
@@ -725,6 +891,9 @@ sealed class DebugMenu(GameHost host)
         return (field, quantity, quality);
     }
 
+    /// <summary>
+    /// Whether item record <paramref name="record"/> takes a quality.
+    /// </summary>
     bool DebugHasQuality(string record) => host.Scene.Database?.Find(record) is { } r && DebugGiveItem.QualityTypes.Contains(r.Type);
 
     /// <summary>
@@ -747,6 +916,10 @@ sealed class DebugMenu(GameHost host)
         return found;
     }
 
+    /// <summary>
+    /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): the title with the switches on, the
+    /// rows (scrolled to the highlighted one), the selection, camera target and money, the hint with <paramref name="close"/> and the status.
+    /// </summary>
     internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false)
     {
         var world = host.Session.World;
@@ -975,10 +1148,11 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     static string DebugColumns(string label, string key, string value) => $"{label,-DebugLabelWidth} {key,-DebugKeyWidth} {value}".TrimEnd();
 
-    // The pick & collision inspector's menu (Meitou only, docs/viewer.md "Pick & collision inspector"). The F10 debug menu's Tools row opens it;
-    // it works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc or Enter on Close closes, and while it is open it takes every
-    // key. What was switched on stays on
-    // after it closes, so the camera can fly about with the hulls drawn.
+    /// <summary>
+    /// The pick & collision inspector's menu (Meitou only, docs/viewer.md "Pick & collision inspector"). The F10 debug menu's Tools row opens it; it
+    /// works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc or Enter on Close closes, and while it is open it takes every key.
+    /// What was switched on stays on after it closes, so the camera can fly about with the hulls drawn. Its rows' labels.
+    /// </summary>
     static readonly string[] InspectorLabels =
     [
         "Info panel (under the cursor, what a click selects)",
@@ -989,9 +1163,19 @@ sealed class DebugMenu(GameHost host)
         "Close",
     ];
 
+    /// <summary>
+    /// The inspector's menu is open.
+    /// </summary>
     internal bool InspectorMenuOpen;
+
+    /// <summary>
+    /// The highlighted row.
+    /// </summary>
     int _inspectorRow;
 
+    /// <summary>
+    /// Whether inspector switch <paramref name="row"/> (0 to 3) is on.
+    /// </summary>
     bool InspectorValue(int row) => row switch
     {
         0 => host.Player.Inspector.InspectorPanel,
@@ -1001,6 +1185,9 @@ sealed class DebugMenu(GameHost host)
         _ => false,
     };
 
+    /// <summary>
+    /// A key while the inspector's menu is open: Esc closes, Up and Down walk the rows, Enter, Space, Left and Right switch the highlighted one.
+    /// </summary>
     internal void InspectorMenuKey(EngineKey key)
     {
         switch (key)
@@ -1020,6 +1207,9 @@ sealed class DebugMenu(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Switches row <paramref name="row"/>: one of the four views, the navmesh view's next step, or Close; the inspector is told.
+    /// </summary>
     void InspectorSwitch(int row)
     {
         switch (row)
@@ -1046,6 +1236,9 @@ sealed class DebugMenu(GameHost host)
         host.Player.Inspector.InspectorChanged();
     }
 
+    /// <summary>
+    /// Draws the inspector's menu at <paramref name="top"/>: each row with its state, the highlighted one marked, and the key hint.
+    /// </summary>
     internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top)
     {
         var lines = new List<string>();

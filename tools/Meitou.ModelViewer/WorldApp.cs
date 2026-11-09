@@ -22,8 +22,28 @@ using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
+/// <summary>
+/// The world viewer (<c>--world</c>, <c>--view</c>, <c>--bench-compare</c>): parses the options, loads the scene and runs the interactive viewer, or
+/// headless the screenshot, the benchmarks and the A/B runs.
+/// </summary>
 static partial class WorldApp
 {
+    #region Run and window
+
+    /// <summary>
+    /// Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.
+    /// </summary>
+    static Streamline? s_streamline;
+
+    /// <summary>
+    /// NGX for DLSS, with <see cref="s_streamline"/>.
+    /// </summary>
+    static Ngx? s_ngx;
+
+    /// <summary>
+    /// Parses the options (exit code 2 for bad ones; <c>--bench-compare</c> compares two results and ends), loads the install and the scene and runs
+    /// headless (a screenshot, a benchmark or an A/B run) or interactive; returns the exit code.
+    /// </summary>
     public static int Run(string[] args)
     {
         WorldOptions? options;
@@ -70,16 +90,6 @@ static partial class WorldApp
     }
 
     /// <summary>
-    /// Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.
-    /// </summary>
-    static Streamline? s_streamline;
-
-    /// <summary>
-    /// NGX for DLSS, with <see cref="s_streamline"/>.
-    /// </summary>
-    static Ngx? s_ngx;
-
-    /// <summary>
     /// The renderer the window title and the statistics name: Vulkan, with the upscaler when one is on.
     /// </summary>
     internal static string RendererName(WorldOptions o) =>
@@ -95,6 +105,29 @@ static partial class WorldApp
             Title = $"Meitou world ({RendererName(o)})",
             WindowState = WindowState.Maximized,
         }, o.Monitor);
+
+    /// <summary>
+    /// The interactive viewer: the window and its display, then the session that runs it (<see cref="InteractiveSession"/>).
+    /// </summary>
+    static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    {
+        VulkanDisplay.RayTracing = o.WantsRayTracing;
+        using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, dlss: o.Post.Upscale.Kind == UpscalerKind.Dlss);
+        s_streamline = display.Streamline;
+        s_ngx = display.Ngx;
+        var window = display.Window!;
+        if (!o.Windowed) BorderlessFullScreen.Toggle(window);
+        return new InteractiveSession(install, scene, assets, o, display, window, s_streamline, s_ngx).Run();
+    }
+
+    /// <summary>
+    /// Ends the frame (submits it).
+    /// </summary>
+    internal static void EndFrame(GpuContext context) => context.EndFrame();
+
+    #endregion
+
+    #region Screenshots
 
     /// <summary>
     /// Vulkan headless (no window at all).
@@ -119,10 +152,9 @@ static partial class WorldApp
     }
 
     /// <summary>
-    /// Ends the frame (submits it).
+    /// The headless run on <paramref name="display"/>: builds the renderer, then runs the frame benchmark or A/B session, or the fly benchmark, or
+    /// flies, settles and draws the screenshot (with the keys overlay when asked); returns the exit code.
     /// </summary>
-    internal static void EndFrame(GpuContext context) => context.EndFrame();
-
     static unsafe int Screenshot(VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         var context = display.Context;
@@ -375,17 +407,5 @@ static partial class WorldApp
         keysOverlay.Dispose();
     }
 
-    /// <summary>
-    /// The interactive viewer: the window and its display, then the session that runs it (<see cref="InteractiveSession"/>).
-    /// </summary>
-    static int Interactive(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
-    {
-        VulkanDisplay.RayTracing = o.WantsRayTracing;
-        using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, dlss: o.Post.Upscale.Kind == UpscalerKind.Dlss);
-        s_streamline = display.Streamline;
-        s_ngx = display.Ngx;
-        var window = display.Window!;
-        if (!o.Windowed) BorderlessFullScreen.Toggle(window);
-        return new InteractiveSession(install, scene, assets, o, display, window, s_streamline, s_ngx).Run();
-    }
+    #endregion
 }

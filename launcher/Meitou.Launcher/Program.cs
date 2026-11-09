@@ -2,8 +2,14 @@ using Avalonia;
 
 namespace Meitou.Launcher;
 
+/// <summary>
+/// The launcher's entry point.
+/// </summary>
 static class Program
 {
+    /// <summary>
+    /// Runs Velopack's hooks, loads the native libraries and starts the Avalonia app.
+    /// </summary>
     [STAThread]
     public static void Main(string[] args)
     {

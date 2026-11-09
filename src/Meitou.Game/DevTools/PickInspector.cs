@@ -17,14 +17,17 @@ sealed class PickInspector(PlayerInterface player)
     /// Show the text panel.
     /// </summary>
     public bool InspectorPanel { get; set; }
+
     /// <summary>
     /// Draw the pick hull (the merged one a click is tested against) of the buildings along the ray.
     /// </summary>
     public bool InspectorHull { get; set; }
+
     /// <summary>
     /// Draw each collision shape's own convex hull.
     /// </summary>
     public bool InspectorShapes { get; set; }
+
     /// <summary>
     /// Draw the real collision triangles of the building a click would select.
     /// </summary>
@@ -34,6 +37,7 @@ sealed class PickInspector(PlayerInterface player)
     /// True while anything of the inspector is on (the world is searched under the cursor every frame then).
     /// </summary>
     public bool InspectorOn => InspectorPanel || InspectorDrawing;
+
     /// <summary>
     /// True while something is drawn on the world.
     /// </summary>
@@ -50,6 +54,9 @@ sealed class PickInspector(PlayerInterface player)
     /// </summary>
     public (Vector3 Origin, float[] Fill, float[] Edges) InspectorGeometry { get; private set; } = (Vector3.Zero, [], []);
 
+    /// <summary>
+    /// The key of what was last drawn (the switches, the picked building and those along the ray); empty to rebuild.
+    /// </summary>
     string _inspectorKey = "";
 
     /// <summary>
@@ -65,6 +72,10 @@ sealed class PickInspector(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// A building a click may choose: name, record, key, where the ray meets its hull prism (null: it does not), hull, shapes, ground height, the
+    /// prism's span, position and rotation.
+    /// </summary>
     sealed record InspectedBuilding(string Name, string? Record, string Key, float? Hit, Vector2[] Hull, IReadOnlyList<Vector2[]> Shapes, float Y,
         float YMin, float YMax, Vector3 Position, Quaternion Rotation);
 
@@ -100,8 +111,14 @@ sealed class PickInspector(PlayerInterface player)
         return result;
     }
 
+    /// <summary>
+    /// <paramref name="v"/> as invariant text in <paramref name="format"/>.
+    /// </summary>
     static string N(float v, string format = "0") => v.ToString(format, CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The area of <paramref name="polygon"/>.
+    /// </summary>
     static float Area(Vector2[] polygon)
     {
         float a = 0;
@@ -255,8 +272,14 @@ sealed class PickInspector(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Adds one vertex: position and colour.
+    /// </summary>
     static void Vertex(List<float> data, Vector3 p, Vector4 colour) => data.AddRange([p.X, p.Y, p.Z, colour.X, colour.Y, colour.Z, colour.W]);
 
+    /// <summary>
+    /// Adds a line from <paramref name="a"/> to <paramref name="b"/>.
+    /// </summary>
     static void Segment(List<float> edges, Vector3 a, Vector3 b, Vector4 colour)
     {
         Vertex(edges, a, colour);

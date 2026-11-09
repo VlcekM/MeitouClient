@@ -23,6 +23,10 @@ sealed record Config(
     string FeedbackDir,
     Uri PublicUrl)
 {
+    /// <summary>
+    /// Reads the settings from the environment and configuration (empty values count as unset); throws when the database connection or REPORTS_SALT
+    /// is missing.
+    /// </summary>
     public static Config Load(IConfiguration c)
     {
         string? Get(string key) => c[key] is { Length: > 0 } v ? v : null;

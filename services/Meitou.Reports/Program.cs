@@ -209,6 +209,10 @@ sealed record Summary(DateTimeOffset Since, List<RowSummary> Rows);
 /// <c>POST /reports</c> answers: the stored report's id, or why it was refused.
 /// </summary>
 sealed record Recorded(long? Id);
+
+/// <summary>
+/// A refused report: why.
+/// </summary>
 sealed record Refused(string Error);
 
 /// <summary>

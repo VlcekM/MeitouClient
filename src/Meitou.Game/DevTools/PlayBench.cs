@@ -19,37 +19,96 @@ namespace Meitou.Game.DevTools;
 /// </summary>
 sealed class PlayBench(GameHost host)
 {
-    sealed record BenchSegment(string Name, double Seconds, Action<double, double>? Frame = null, Action? Begin = null);
-
+    /// <summary>
+    /// One recorded frame: its segment, times, ticks, world counts, steps, stages, collections, memory and loop sections.
+    /// </summary>
     sealed class BenchFrame
     {
+        /// <summary>
+        /// The script segment the frame fell in.
+        /// </summary>
         public int Segment;
+
+        /// <summary>
+        /// The bench clock at the frame, the frame interval and the update in milliseconds, and the busy milliseconds the game loop measured to the
+        /// presentation.
+        /// </summary>
         public double T, FrameMs, UpdateMs, Busy;
+
+        /// <summary>
+        /// The world ticks the update ran, the characters in the snapshot and those the far tick skipped.
+        /// </summary>
         public int Ticks, Characters, Far;
+
+        /// <summary>
+        /// The tick phases' milliseconds (<see cref="TickProfile.PhaseNames"/>).
+        /// </summary>
         public double[] Steps = new double[TickProfile.PhaseNames.Length];
+
+        /// <summary>
+        /// The render thread's stages' milliseconds (<see cref="StageClock.Names"/>).
+        /// </summary>
         public double[] Cpu = new double[StageClock.Names.Length];
+
+        /// <summary>
+        /// The GPU stages' milliseconds, once the profiler reads them back; null before.
+        /// </summary>
         public double[]? Gpu;
+
+        /// <summary>
+        /// The GPU's total milliseconds for the frame.
+        /// </summary>
         public double GpuTotal;
+
+        /// <summary>
+        /// The generation 0, 1 and 2 collections since the last frame.
+        /// </summary>
         public int Gc0, Gc1, Gc2;
+
+        /// <summary>
+        /// The megabytes allocated and the collection pause milliseconds since the last frame, and the working set's megabytes.
+        /// </summary>
         public double AllocMb, PauseMs, WorkingSetMb;
+
         /// <summary>
         /// This process's video memory (<c>VulkanDevice.VideoMemory</c>), MB: read every 30 frames (a driver call), carried between; NaN on Metal.
         /// </summary>
         public double VramMb = double.NaN;
+
+        /// <summary>
+        /// The loop sections' milliseconds (<see cref="BenchSections"/>).
+        /// </summary>
         public double[] Sections = new double[BenchSections.Length];
+
+        /// <summary>
+        /// The camera's and the handlers' milliseconds in the update, and the GC listener's time at the frame's start.
+        /// </summary>
         public double CameraMs, HandlersMs, StartMs;
+
         /// <summary>
         /// The frame's slowest system phase ("System.phase") and its time.
         /// </summary>
         public string TopSystem = "";
+
         /// <summary>
         /// Pipelines the frame created while drawing (nothing prepared them at load).
         /// </summary>
         public int LatePipelines;
+
+        /// <summary>
+        /// The slowest system phase's milliseconds.
+        /// </summary>
         public double TopSystemMs;
     }
 
+    /// <summary>
+    /// The GC event listener (collections and allocation samples); null until the script starts.
+    /// </summary>
     BenchGcListener? _benchGc;
+
+    /// <summary>
+    /// The listener's time when the script started.
+    /// </summary>
     double _benchGcStart;
 
     /// <summary>
@@ -57,8 +116,20 @@ sealed class PlayBench(GameHost host)
     /// frame.
     /// </summary>
     static readonly string[] BenchSections = ["events", "update", "host", "camera", "audio", "view", "begin-frame", "render", "tail"];
+
+    /// <summary>
+    /// The index of the tail section (the end of the drawing to the next frame).
+    /// </summary>
     internal const int BenchTail = 8;
+
+    /// <summary>
+    /// The Stopwatch time of the last section's end; 0 before the first.
+    /// </summary>
     long _benchLapAt;
+
+    /// <summary>
+    /// This frame's sections' milliseconds so far.
+    /// </summary>
     readonly double[] _benchLaps = new double[BenchSections.Length];
 
     /// <summary>
@@ -79,18 +150,69 @@ sealed class PlayBench(GameHost host)
         _benchLaps[section] += ms;
     }
 
+    /// <summary>
+    /// The script's segments; null until the world is ready for it.
+    /// </summary>
     BenchSegment[]? _benchScript;
+
+    /// <summary>
+    /// The frames recorded.
+    /// </summary>
     readonly List<BenchFrame> _benchFrames = [];
+
+    /// <summary>
+    /// The summed milliseconds per segment and system.
+    /// </summary>
     readonly Dictionary<(int Segment, string System), double> _benchSystems = [];
+
+    /// <summary>
+    /// The running segment; -1 before the first.
+    /// </summary>
     int _benchSegment = -1;
+
+    /// <summary>
+    /// The bench clock, the running segment's start on it, and how long the world has been ready (the script starts after 1 s).
+    /// </summary>
     double _benchClock, _benchSegmentStart, _benchReadyFor;
+
+    /// <summary>
+    /// The world tick and the allocated bytes at the frame's start and the last frame's.
+    /// </summary>
     long _benchTickAt, _benchAllocAt;
+
+    /// <summary>
+    /// The late pipelines counted at the last frame.
+    /// </summary>
     int _benchLateAt;
+
+    /// <summary>
+    /// The collection counts at the last frame.
+    /// </summary>
     int[] _benchGcAt = new int[3];
+
+    /// <summary>
+    /// The collection pause total at the last frame.
+    /// </summary>
     TimeSpan _benchPauseAt;
+
+    /// <summary>
+    /// The video memory last read, MB (every 30 frames).
+    /// </summary>
     double _benchVramMb = double.NaN;
+
+    /// <summary>
+    /// The frame being recorded; null between frames.
+    /// </summary>
     BenchFrame? _benchCurrent;
+
+    /// <summary>
+    /// The camera pivot when the script started, and the direction from it towards the world's centre.
+    /// </summary>
     Vector2 _benchOrigin, _benchDirection;
+
+    /// <summary>
+    /// The squad leader the script follows.
+    /// </summary>
     CharacterId _benchLeader;
 
     /// <summary>
@@ -113,7 +235,7 @@ sealed class PlayBench(GameHost host)
             _benchLeader = (host.PlayerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
             _benchOrigin = host.Session.Camera.Strategy.PivotXz;
             _benchDirection = _benchOrigin.LengthSquared() > 1 ? Vector2.Normalize(-_benchOrigin) : Vector2.UnitX;
-            _benchScript = BenchScript();
+            _benchScript = new PlayBenchScript(host, _benchLeader, _benchOrigin, _benchDirection).Segments();
             // MEITOU_BENCH_ONLY=settle,zoom: only those segments (iterating on one hitch).
             if (Environment.GetEnvironmentVariable("MEITOU_BENCH_ONLY") is { Length: > 0 } only)
             {
@@ -159,6 +281,9 @@ sealed class PlayBench(GameHost host)
         return true;
     }
 
+    /// <summary>
+    /// Starts segment <paramref name="index"/>: its start on the bench clock, and its begin step.
+    /// </summary>
     void StartBenchSegment(int index)
     {
         _benchSegment = index;
@@ -215,223 +340,6 @@ sealed class PlayBench(GameHost host)
         _benchFrames.Add(f);
         _benchCurrent = null;
     }
-
-    /// <summary>
-    /// The script: each segment's length and what it does each frame (t: seconds into it, dt: the frame's).
-    /// </summary>
-    BenchSegment[] BenchScript()
-    {
-        var strategy = host.Session.Camera.Strategy;
-        float yaw0 = strategy.Yaw, pitch0 = strategy.Pitch, distance0 = strategy.Distance;
-        Vector3 LeaderAt() => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == _benchLeader)?.Position
-            ?? new Vector3(_benchOrigin.X, 0, _benchOrigin.Y);
-        void Look(Vector2 at, float yaw, float pitch, float distance) => strategy.Place(at, yaw, pitch, distance);
-        void OnLeader()
-        {
-            var p = LeaderAt();
-            Look(new Vector2(p.X, p.Z), strategy.Yaw, pitch0, distance0);
-        }
-
-        List<CharacterId> Squad() => [.. host.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
-        void Order(SimCommand command) => host.Session.World.Commands.Enqueue(command with { Tick = host.Session.World.Tick });
-        // The nearest of what the script interacts with, said on the console (or that there is none within reach).
-        T? Nearest<T>(string what, IEnumerable<T> items, Func<T, Vector3> at) where T : class
-        {
-            var leader = LeaderAt();
-            var found = items.OrderBy(i => Vector3.DistanceSquared(at(i), leader)).FirstOrDefault();
-            float d = found is null ? float.NaN : Vector3.Distance(at(found), leader);
-            Console.WriteLine(found is null || d > 1500 ? $"bench     no {what} within reach" : string.Create(CultureInfo.InvariantCulture,
-                $"bench     {what} {d:0} away"));
-            return d <= 1500 ? found : null;
-        }
-        bool Alive(CharacterSnapshot c) => c.Body is not { Dead: true } and not { Unconscious: true };
-        // An interaction asked again now and then (a walk that outlasts the approach gives up), until it opens.
-        Action<double, double> Retry(Func<bool> open, Action again)
-        {
-            double next = 3;
-            return (t, dt) => { OnLeader(); if (t >= next && !open()) { again(); next += 3; } };
-        }
-        Vector2 pan = Vector2.Zero;
-        var random = new Random(1);
-        CharacterSnapshot? talkee = null, trader = null, body = null;
-        Simulation.Locks.ContainerSpot? box = null;
-        return
-        [
-            new("settle", 8),
-            new("idle", 10, Begin: () => { host.Player.Follow = null; Look(_benchOrigin, yaw0, pitch0, distance0); }),
-            new("orbit", 12, (t, dt) => strategy.Rotate((float)(dt * 2 * Math.PI / 12))),
-            new("zoom", 10, (t, dt) =>
-            {
-                float k = (float)(t < 5 ? t / 5 : 1 - (t - 5) / 5);
-                Look(_benchOrigin, strategy.Yaw, pitch0, distance0 + (Data.World.KenshiCamera.MaxDistance - distance0) * k);
-            }),
-            new("pan", 12, (t, dt) => { pan += _benchDirection * (float)(400 * dt); Look(_benchOrigin + pan, strategy.Yaw, pitch0, distance0); },
-                Begin: () => pan = Vector2.Zero),
-            new("travel", 30, (t, dt) => { pan += _benchDirection * (float)(3000 * dt); Look(_benchOrigin + pan, strategy.Yaw, pitch0, distance0); }),
-            new("return", 10, Begin: () => Look(_benchOrigin, yaw0, pitch0, distance0)),
-            new("speed-x2", 10, (t, dt) => OnLeader(), Begin: () => host.Session.Simulation.SetSpeed(2)),
-            new("speed-x5", 15, (t, dt) => OnLeader(), Begin: () => host.Session.Simulation.SetSpeed(5)),
-            new("talk", 10, Retry(() => host.Session.CurrentSnapshot.Conversation is not null,
-                () => { if (talkee is not null) Order(new Simulation.Dialogue.TalkOrder(_benchLeader, talkee.Id) { Tick = 0 }); }), Begin: () =>
-            {
-                host.Session.Simulation.SetSpeed(1);
-                talkee = Nearest("talker", host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Alive(c)
-                    && host.Session.World.CanTalk(c.Id, _benchLeader)).ToList(), c => c.Position);
-                if (talkee is not null) Order(new Simulation.Dialogue.TalkOrder(_benchLeader, talkee.Id) { Tick = 0 });
-            }),
-            new("trade", 12, Retry(() => host.Session.CurrentSnapshot.Trade is not null,
-                () => { if (trader is not null) Order(new Simulation.Trading.OpenTrade(_benchLeader, trader.Id) { Tick = 0 }); }), Begin: () =>
-            {
-                Order(new Simulation.Dialogue.EndConversation { Tick = 0 });
-                trader = Nearest("trader", host.Session.CurrentSnapshot.Characters.Where(c => c.IsTrader && Alive(c)).ToList(), c => c.Position);
-                if (trader is not null) Order(new Simulation.Trading.OpenTrade(_benchLeader, trader.Id) { Tick = 0 });
-            }),
-            new("container", 10, (t, dt) => OnLeader(), Begin: () =>
-            {
-                Order(new Simulation.Trading.CloseTrade { Tick = 0 });
-                box = Nearest("container", host.Session.CurrentSnapshot.Containers.Where(c => !c.Locked).ToList(), c => c.Position);
-                if (box is not null)
-                    Order(new Simulation.Items.OpenContainerOrder([_benchLeader], box.Id) { Tick = 0 });
-            }),
-            new("doors", 8, (t, dt) => OnLeader(), Begin: () =>
-            {
-                Order(new Simulation.Items.CloseContainer { Tick = 0 });
-                var leader = LeaderAt();
-                var doors = host.Session.CurrentSnapshot.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, leader)).Take(3).ToList();
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                    $"bench     doors: {doors.Count}, "
-                    + $"the nearest {(doors.Count > 0 ? Vector3.Distance(doors[0].Position, leader) : float.NaN):0} away"));
-                foreach (var door in doors) Order(new Simulation.Locks.DoorOrder([_benchLeader], door.Id) { Tick = 0 });
-            }),
-            new("pick-up", 8, (t, dt) => OnLeader(), Begin: () =>
-            {
-                var leader = LeaderAt();
-                var items = host.Session.CurrentSnapshot.GroundItems;
-                if (items.Count == 0)
-                {
-                    Console.WriteLine("bench     no ground item");
-                    return;
-                }
-
-                var item = items.MinBy(i => Vector3.DistanceSquared(i.Position, leader));
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                    $"bench     ground item {item.Name} {Vector3.Distance(item.Position, leader):0} away"));
-                Order(new Simulation.Items.PickUpItemOrder([_benchLeader], item.Id) { Tick = 0 });
-            }),
-            // Path requests: every half second the squad, or each member apart, is sent 20 to 200 m away in a random direction (some places it cannot
-            // reach).
-            new("paths", 20, (t, dt) =>
-            {
-                OnLeader();
-                if ((int)((t - dt) * 2) == (int)(t * 2)) return;
-                var at = LeaderAt();
-                Vector3 Somewhere()
-                {
-                    double a = random.NextDouble() * 2 * Math.PI, r = 200 + random.NextDouble() * 1800;
-                    return at + new Vector3((float)(Math.Cos(a) * r), 0, (float)(Math.Sin(a) * r));
-                }
-
-                var squad = Squad();
-                if ((int)(t * 2) % 3 == 0) Order(new MoveOrder(squad, Somewhere()) { Tick = 0 });
-                else foreach (var id in squad) Order(new MoveOrder([id], Somewhere()) { Tick = 0 });
-            }),
-            new("walk", 15, (t, dt) => OnLeader(), Begin: () =>
-            {
-                host.Session.Simulation.SetSpeed(1);
-                var at = LeaderAt();
-                host.Session.World.Commands.Enqueue(new MoveOrder(Squad(),
-                    at + new Vector3(_benchDirection.X * 600, 0, _benchDirection.Y * 600)) { Tick = host.Session.World.Tick });
-            }),
-            new("fight", 25, (t, dt) => OnLeader(), Begin: () =>
-            {
-                var world = host.Session.World;
-                var at = LeaderAt();
-                if (host.DebugMenu.DebugRecord(host.GameOptions.SceneNpc, character: true) is not { } npc)
-                {
-                    Console.WriteLine($"bench     no character record matches '{host.GameOptions.SceneNpc}': no fight");
-                    return;
-                }
-
-                for (int k = 0; k < 6; k++)
-                {
-                    world.Commands.Enqueue(new DebugSpawn(npc.Id,
-                        new Vector2(at.X + 50 + 15 * (k % 3), at.Z - 20 + 20 * (k / 3))) { Tick = world.Tick });
-                }
-                Console.WriteLine($"bench     fight: six {npc.Name} spawned beside the squad");
-            }),
-            new("fight-on", 0.1, Begin: () =>
-            {
-                var at = LeaderAt();
-                if (host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Vector3.Distance(c.Position, at) < 150)
-                    .OrderBy(c => Vector3.DistanceSquared(c.Position, at))
-                    .FirstOrDefault() is { } enemy)
-                    host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder(Squad(), enemy.Id) { Tick = host.Session.World.Tick });
-            }),
-            new("loot", 8, Retry(() => !host.Session.CurrentSnapshot.OpenLoot.IsNone,
-                () => { if (body is not null) Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 }); }), Begin: () =>
-            {
-                body = Nearest("downed body", host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && !Alive(c)).ToList(), c => c.Position);
-                if (body is not null)
-                    Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 });
-            }),
-            new("panels", 12, (t, dt) =>
-            {
-                string? panel = t < 3 ? "inventory" : t < 6 ? "stats" : t < 9 ? "overview" : null;
-                if (panel != _benchPanel)
-                {
-                    _benchPanel = panel;
-                    try
-                    {
-                        host.Player.ShowUiPanel(panel);
-                    }
-                    catch (InvalidOperationException e)
-                    {
-                        Console.WriteLine($"bench     panel {panel}: {e.Message}");
-                    }
-                }
-            }, Begin: () => _benchPanel = "-"),
-            // The same panels again (what the first opening built is warm), with the limbs and the build menu.
-            new("panels-warm", 15, (t, dt) =>
-            {
-                string? panel = t < 2.5 ? "inventory" : t < 5 ? "stats" : t < 7.5 ? "overview" : t < 10 ? "limbs" : t < 12.5 ? "build" : null;
-                if (panel != _benchPanel)
-                {
-                    _benchPanel = panel;
-                    try
-                    {
-                        host.Player.ShowUiPanel(panel);
-                    }
-                    catch (Exception e) when (e is InvalidOperationException or ArgumentException)
-                    {
-                        Console.WriteLine($"bench     panel {panel}: {e.Message}");
-                    }
-                }
-            }, Begin: () => _benchPanel = "-"),
-            // The far grazing view: the most terrain, foliage and objects in sight.
-            new("horizon", 12, (t, dt) => Look(_benchOrigin, yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900),
-                Begin: () => host.Player.ShowUiPanel(null)),
-            new("overview", 8, Begin: () =>
-            {
-                host.Player.ShowUiPanel(null);
-                Look(_benchOrigin, yaw0, 1.2f, Data.World.KenshiCamera.MaxDistance);
-            }),
-            // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights"
-            // on, else a cut).
-            new("flights", 6 * 2 * Math.Max(1, host.Session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), (t, dt) =>
-            {
-                var members = host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
-                int hop = (int)(t / 6);
-                if (members.Count == 0 || hop == _flightHop) return;
-                _flightHop = hop;
-                var id = members[hop % members.Count];
-                if (host.Player.FlyTo?.Invoke(id) != true) host.Player.Follow = id;
-                Console.WriteLine($"bench     flight {hop + 1} to {id}");
-            }, Begin: () => { host.Player.ShowUiPanel(null); _flightHop = -1; }),
-        ];
-    }
-
-    string? _benchPanel;
-    int _flightHop = -1;
 
     /// <summary>
     /// Writes frames.csv and summary.md into the bench directory (after the loop).
@@ -513,6 +421,9 @@ sealed class PlayBench(GameHost host)
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The summary (summary.md) for the window size <paramref name="sz"/>.
+    /// </summary>
     string BenchSummary(Silk.NET.Maths.Vector2D<int> sz)
     {
         var ci = CultureInfo.InvariantCulture;

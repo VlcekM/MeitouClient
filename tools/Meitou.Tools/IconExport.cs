@@ -45,6 +45,10 @@ static class IconExport
     /// </summary>
     sealed record Wanted(IconKey Key, string Manufacturer);
 
+    /// <summary>
+    /// <c>meitou-tools icons &lt;folder&gt; [--enhanced] [--mods]</c>: writes every item's icon and <c>icons.json</c> into the folder (the base
+    /// game's data, or the load order with <c>--mods</c>). Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         if (args is not [var output, ..] || output.StartsWith("--", StringComparison.Ordinal)) return Usage();
@@ -68,6 +72,9 @@ static class IconExport
         return 0;
     }
 
+    /// <summary>
+    /// Prints the command line and returns 2.
+    /// </summary>
     static int Usage()
     {
         Console.Error.WriteLine("meitou-tools icons <folder> [--enhanced] [--mods]");
@@ -204,6 +211,9 @@ static class IconExport
         return flipped;
     }
 
+    /// <summary>
+    /// Writes <c>icons.json</c>: every entry, indented, camel-case names.
+    /// </summary>
     static void WriteManifest(string output, List<Entry> entries)
     {
         var options = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

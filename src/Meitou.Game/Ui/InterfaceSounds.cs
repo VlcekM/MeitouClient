@@ -23,15 +23,54 @@ sealed class InterfaceSounds(PlayerInterface player)
         "OperateOrder", "PutInBedOrder", "RestOrder", "SplintOrder", "StealthKoOrder", "TalkOrder", "TreatOrder", "UseBedOrder",
     };
 
+    /// <summary>
+    /// The screens seen open at the last poll.
+    /// </summary>
     internal readonly HashSet<string> SoundScreens = [];
+
+    /// <summary>
+    /// The overview's tab at the last poll; -1 while it is closed.
+    /// </summary>
     int _soundOverviewTab = -1;
+
+    /// <summary>
+    /// The title button under the pointer at the last poll; null for none.
+    /// </summary>
     string? _soundHover;
+
+    /// <summary>
+    /// The world the research and building baselines belong to.
+    /// </summary>
     object? _soundWorld;
+
+    /// <summary>
+    /// The last running game speed.
+    /// </summary>
     double _soundSpeed = 1;
+
+    /// <summary>
+    /// A speed button sounded this frame (the speed keys' check skips it).
+    /// </summary>
     bool _speedSounded;
+
+    /// <summary>
+    /// The unlocked buildings and finished research counted at the last poll; -1 before the baseline.
+    /// </summary>
     int _soundUnlocked = -1;
+
+    /// <summary>
+    /// The buildings revision last looked at; -1 before the baseline.
+    /// </summary>
     long _soundBuildingsRevision = -1;
+
+    /// <summary>
+    /// Each player site's completion at the last look, by id.
+    /// </summary>
     readonly Dictionary<string, bool> _soundBuildings = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The slider that last sounded (it sounds once until another is moved); null for none.
+    /// </summary>
     string? _lastSliderSound;
 
     /// <summary>
@@ -39,6 +78,9 @@ sealed class InterfaceSounds(PlayerInterface player)
     /// </summary>
     public Action<UiSoundEvent>? UiSound { get; set; }
 
+    /// <summary>
+    /// Sends interface sound <paramref name="name"/> (with its switch group and value, a state, an item or a building) to the host.
+    /// </summary>
     internal void Sound(string name, string? group = null, string? value = null, bool state = false, string? item = null, string? building = null) =>
         UiSound?.Invoke(new UiSoundEvent(name, group, value, state, item, building));
 

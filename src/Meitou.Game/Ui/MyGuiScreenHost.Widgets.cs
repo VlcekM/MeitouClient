@@ -8,7 +8,43 @@ namespace Meitou.Game.Ui;
 /// <summary>
 /// A key a focused list (or combo box) handles: MyGUI ListBox / ComboBox <c>onKeyButtonPressed</c>.
 /// </summary>
-public enum UiListKey { Up, Down, PageUp, PageDown, Home, End, Accept }
+public enum UiListKey
+{
+    /// <summary>
+    /// One row up (from no selection, the first).
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// One row down (from no selection, the first); a closed combo box opens.
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// A client's worth of rows up.
+    /// </summary>
+    PageUp,
+
+    /// <summary>
+    /// A client's worth of rows down.
+    /// </summary>
+    PageDown,
+
+    /// <summary>
+    /// The first row.
+    /// </summary>
+    Home,
+
+    /// <summary>
+    /// The last row.
+    /// </summary>
+    End,
+
+    /// <summary>
+    /// Return: accepts the selected row.
+    /// </summary>
+    Accept,
+}
 
 /// <summary>
 /// Runtime of the scroll bars, sliders, lists, combo boxes and window geometry (docs/formats/mygui.md "Widget runtime"). The presentation lays the
@@ -19,19 +55,36 @@ public enum UiListKey { Up, Down, PageUp, PageDown, Home, End, Accept }
 /// </summary>
 public sealed partial class MyGuiScreenHost
 {
+    /// <summary>
+    /// The widget runtime's part of a screen's state: list sorts and the window geometry.
+    /// </summary>
     sealed partial class Screen
     {
+        /// <summary>
+        /// The lists' sort column and direction by widget.
+        /// </summary>
         public Dictionary<string, (int Column, bool Ascending)> Sorts { get; } = new(StringComparer.Ordinal);
+
         /// <summary>
         /// The viewport of the last arrangement and of the first (windows with Stretch alignment grow by the change from it).
         /// </summary>
         public Vector2 Viewport, FirstViewport;
+
         /// <summary>
         /// The first root's last placement (position, size), alignment, Snap and Movable.
         /// </summary>
         public Vector2 Placed, PlacedSize;
+
+        /// <summary>
+        /// The first root's alignment.
+        /// </summary>
         public string Align = "";
+
+        /// <summary>
+        /// The first root's Snap (edges snap to the viewport's) and Movable.
+        /// </summary>
         public bool Snap, Movable = true;
+
         /// <summary>
         /// The size a resize grip gave the window (null: the layout's).
         /// </summary>
@@ -44,40 +97,101 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     sealed record Grab(string Screen, string Bar, string Control, UiRect Place, float Thumb, bool Vertical, bool Thumbing, float Delta)
     {
+        /// <summary>
+        /// The thumb's grab point from its start (a thumb drag).
+        /// </summary>
         public float Offset;
+
+        /// <summary>
+        /// When the held part steps next (Stopwatch).
+        /// </summary>
         public long Next;
     }
+
     /// <summary>
     /// A legacy slider track (a decorating control with the property <c>Slider</c>): the drag raises its own action with the pointer's share of the
     /// track.
     /// </summary>
     sealed record LegacySlide(string Screen, string Widget, string Action, string Argument, UiRect Track);
+
+    /// <summary>
+    /// A resize grip held: the screen, where the press was, the window's rectangle then and the grip's four multipliers (left, top, width, height).
+    /// </summary>
     sealed record WindowGrab(string Screen, Vector2 At, UiRect Start, Vector4 Scale);
 
+    /// <summary>
+    /// The scroll bar part held; null for none.
+    /// </summary>
     Grab? _grab;
+
+    /// <summary>
+    /// The legacy slider being dragged; null for none.
+    /// </summary>
     LegacySlide? _legacy;
+
+    /// <summary>
+    /// The resize grip held; null for none.
+    /// </summary>
     WindowGrab? _windowGrab;
+
+    /// <summary>
+    /// The combo box whose list is open; null for none.
+    /// </summary>
     (string Screen, string Combo)? _openCombo;
+
     /// <summary>
     /// The list or combo box that has the keyboard (the last one clicked): its screen and selection key.
     /// </summary>
     (string Screen, string Key)? _keyFocus;
+
+    /// <summary>
+    /// Each open screen's bindings of the last arrangement (the lists' items).
+    /// </summary>
     readonly Dictionary<string, UiBindings> _lastBindings = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The repeat delay and step, seconds, and the snap distance, pixels.
+    /// </summary>
     const double RepeatDelay = 0.5, RepeatStep = 0.1, SnapDistance = 10;
+
+    /// <summary>
+    /// A scroll bar part, slider or resize grip is held.
+    /// </summary>
     bool CapturesWidget => _grab is not null || _legacy is not null || _windowGrab is not null;
 
+    /// <summary>
+    /// Scroll offset <paramref name="key"/> of screen <paramref name="id"/>.
+    /// </summary>
     public float GetScroll(string id, string key) => _screens[id].Scroll.GetValueOrDefault(key);
+
+    /// <summary>
+    /// Sets scroll offset <paramref name="key"/> of screen <paramref name="id"/>.
+    /// </summary>
     public void SetScroll(string id, string key, float value) => _screens[id].Scroll[key] = value;
+
     /// <summary>
     /// Back to the top (a new content for the screen's lists and scroll views).
     /// </summary>
     public void ResetScroll(string id) => _screens[id].Scroll.Clear();
 
+    /// <summary>
+    /// Screen <paramref name="id"/>'s controls of the last arrangement; null when it was not laid out.
+    /// </summary>
     IReadOnlyList<UiControl>? Controls(string id) => _frame.FirstOrDefault(f => f.Id == id)?.Controls;
+
+    /// <summary>
+    /// The last control named <paramref name="name"/> in screen <paramref name="id"/>.
+    /// </summary>
     UiControl? Find(string id, string name) => Controls(id)?.LastOrDefault(c => c.Name == name);
+
+    /// <summary>
+    /// Number property <paramref name="key"/> of <paramref name="c"/>.
+    /// </summary>
     static float Num(UiControl c, string key, float fallback = 0) => MyGuiPresentation.Num(c.Properties, key, fallback);
 
+    /// <summary>
+    /// Pushes the sorts, the open combo and the held part's pushed state into the bindings, and keeps the bindings.
+    /// </summary>
     void PushWidgetState(string id, Screen s, UiBindings b)
     {
         foreach (var t in s.Sorts) b.Sorts[t.Key] = t.Value;
@@ -87,6 +201,9 @@ public sealed partial class MyGuiScreenHost
         _lastBindings[id] = b;
     }
 
+    /// <summary>
+    /// Lets go the held parts, the open combo, the keyboard list and the bindings of screen <paramref name="id"/>.
+    /// </summary>
     void ForgetWidgets(string id)
     {
         if (_grab?.Screen == id) _grab = null;
@@ -162,6 +279,9 @@ public sealed partial class MyGuiScreenHost
         if (c is null) _keyFocus = null;
     }
 
+    /// <summary>
+    /// Raises the legacy slider's action with the pointer's share of its track.
+    /// </summary>
     void Slide(Vector2 p)
     {
         if (_legacy is not { } s) return;
@@ -213,6 +333,9 @@ public sealed partial class MyGuiScreenHost
         };
     }
 
+    /// <summary>
+    /// Moves the dragged thumb to the pointer: the bar's position by its share of the travel, whole steps.
+    /// </summary>
     void DragThumb(Grab g, Vector2 p)
     {
         if (Find(g.Screen, g.Bar) is not { } root) return;
@@ -224,6 +347,9 @@ public sealed partial class MyGuiScreenHost
         SetBar(g.Screen, root, MathF.Round(start * max / travel));
     }
 
+    /// <summary>
+    /// A scroll bar's position: the stored one, else its layout's, clamped to its maximum.
+    /// </summary>
     float BarPosition(string id, UiControl root)
     {
         float position = _screens[id].Scroll.TryGetValue(root.Properties.GetValueOrDefault("BarKey") ?? "", out float stored)
@@ -232,6 +358,9 @@ public sealed partial class MyGuiScreenHost
         return Math.Clamp(position, 0, Num(root, "BarMax"));
     }
 
+    /// <summary>
+    /// Steps a scroll bar by <paramref name="delta"/>.
+    /// </summary>
     void StepBar(string id, UiControl root, float delta) => SetBar(id, root, BarPosition(id, root) + delta);
 
     /// <summary>
@@ -258,6 +387,9 @@ public sealed partial class MyGuiScreenHost
         g.Next = Stopwatch.GetTimestamp() + (long)(RepeatStep * Stopwatch.Frequency);
     }
 
+    /// <summary>
+    /// A pointer move for a held part: the thumb drag, the legacy slider or the resize; false when none is held.
+    /// </summary>
     bool MoveWidget(Vector2 p)
     {
         if (_grab is { Thumbing: true } g)
@@ -283,6 +415,9 @@ public sealed partial class MyGuiScreenHost
         return false;
     }
 
+    /// <summary>
+    /// Lets go the held part, slider and grip.
+    /// </summary>
     void ReleaseWidget()
     {
         _grab = null;
@@ -352,6 +487,9 @@ public sealed partial class MyGuiScreenHost
         }
     }
 
+    /// <summary>
+    /// Scrolls offset <paramref name="key"/> by <paramref name="delta"/>, within 0 and <paramref name="max"/>.
+    /// </summary>
     static void Scroll(Screen s, string key, float max, float delta) => s.Scroll[key] = Math.Clamp(s.Scroll.GetValueOrDefault(key) + delta, 0, max);
 
     // ---- lists and combo boxes
@@ -368,6 +506,9 @@ public sealed partial class MyGuiScreenHost
         Activated?.Invoke(new(id, key, "select", items[source].Id, source));
     }
 
+    /// <summary>
+    /// A press on combo box <paramref name="combo"/>: its toggle opens or closes the list, an item selects it and closes the list.
+    /// </summary>
     void ComboPress(string id, string combo, string what)
     {
         _keyFocus = (id, combo);
@@ -527,6 +668,9 @@ public sealed partial class MyGuiScreenHost
         s.Viewport = viewport;
     }
 
+    /// <summary>
+    /// A window's <c>MinSize</c> and <c>MaxSize</c> (none: zero and unlimited).
+    /// </summary>
     static (Vector2 Min, Vector2 Max) SizeLimits(MyGuiWidget root)
     {
         static Vector2? Pair(string? v)
@@ -554,6 +698,9 @@ public sealed partial class MyGuiScreenHost
         foreach (var (follower, leader) in _leaders) if (leader == d.Screen) _screens[follower].Offset += moved;
     }
 
+    /// <summary>
+    /// Moves the window by the pointer's travel from the drag's start: edges snapped with Snap, then kept on screen.
+    /// </summary>
     void MoveWindow((string Screen, Vector2 At, Vector2 Offset) d, Vector2 p)
     {
         var s = _screens[d.Screen];

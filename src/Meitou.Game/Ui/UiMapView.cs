@@ -8,8 +8,14 @@ namespace Meitou.Game.Ui;
 /// </summary>
 public sealed class UiMapView
 {
+    /// <summary>
+    /// The view's centre on the image, 0..1 each way.
+    /// </summary>
     public Vector2 Centre { get; private set; } = new(0.5f);
 
+    /// <summary>
+    /// The zoom: 1 covers the viewport (or with <see cref="FitWhole"/> fits it).
+    /// </summary>
     public float Zoom { get; private set; } = 1;
 
     /// <summary>
@@ -17,8 +23,14 @@ public sealed class UiMapView
     /// </summary>
     public bool FitWhole { get; init; }
 
+    /// <summary>
+    /// The greatest zoom.
+    /// </summary>
     public float MaxZoom { get; set; } = 64;
 
+    /// <summary>
+    /// Centres the view on image point <paramref name="normalized"/>.
+    /// </summary>
     public void CentreOn(Vector2 normalized) => Centre = normalized;
 
     /// <summary>
@@ -26,6 +38,9 @@ public sealed class UiMapView
     /// </summary>
     public float Size(UiRect viewport) => (FitWhole ? Math.Min(viewport.Width, viewport.Height) : Math.Max(viewport.Width, viewport.Height)) * Zoom;
 
+    /// <summary>
+    /// <paramref name="value"/> as a centre that keeps the image over the viewport (an axis narrower than it centred, with <see cref="FitWhole"/>).
+    /// </summary>
     Vector2 Clamp(Vector2 value, UiRect viewport)
     {
         float size = Size(viewport);
@@ -39,6 +54,9 @@ public sealed class UiMapView
         return new(x, y);
     }
 
+    /// <summary>
+    /// The image's on-screen rectangle.
+    /// </summary>
     public UiRect ImageBounds(UiRect viewport)
     {
         var centre = Clamp(Centre, viewport);
@@ -46,12 +64,18 @@ public sealed class UiMapView
         return new(viewport.X + viewport.Width / 2 - centre.X * size, viewport.Y + viewport.Height / 2 - centre.Y * size, size, size);
     }
 
+    /// <summary>
+    /// The image point (0..1 each way) under <paramref name="pixel"/>.
+    /// </summary>
     public Vector2 At(UiRect viewport, Vector2 pixel)
     {
         var image = ImageBounds(viewport);
         return new((pixel.X - image.X) / image.Width, (pixel.Y - image.Y) / image.Height);
     }
 
+    /// <summary>
+    /// Zooms by <paramref name="factor"/> (within 1 and <see cref="MaxZoom"/>) keeping the image point under <paramref name="pixel"/> in place.
+    /// </summary>
     public void ZoomAt(UiRect viewport, Vector2 pixel, float factor)
     {
         if (viewport.Width <= 0 || viewport.Height <= 0 || !float.IsFinite(factor) || factor <= 0) return;
@@ -63,6 +87,9 @@ public sealed class UiMapView
         Centre = Clamp(before - delta / size, viewport);
     }
 
+    /// <summary>
+    /// Pans the view by <paramref name="delta"/> pixels.
+    /// </summary>
     public void Pan(UiRect viewport, Vector2 delta)
     {
         if (viewport.Width > 0 && viewport.Height > 0)

@@ -13,6 +13,8 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class FurnitureUse(PlayerInterface player)
 {
+    #region Beds
+
     // Beds (docs/game/ui-input.md "Building hover and click", docs/game/locks.md "Beds"): with characters selected the pointer over a bed is
     // <c>use</c>; a quick right click gives the original's order 258 "Sleep" (UseBedOrder: every selected character walks there, the first to arrive
     // lies in it until another order). Held, the menu offers the original's one bed verb: "Put in Bed" (PutInBedOrder) while a selected character
@@ -24,6 +26,14 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     const float BedPickPixels = 30;
 
+    /// <summary>
+    /// A right press on a bed waiting for its release or the hold time: the bed, where it was and when (Stopwatch).
+    /// </summary>
+    (BedSpot Bed, Vector2 At, long Since)? _bedPending;
+
+    /// <summary>
+    /// The bed under <paramref name="pixel"/> (<see cref="PickBedAt"/>).
+    /// </summary>
     internal BedSpot? PickBed(Vector2 pixel) => PickBedAt(pixel)?.Bed;
 
     /// <summary>
@@ -65,8 +75,6 @@ sealed class FurnitureUse(PlayerInterface player)
         return hit ?? near;
     }
 
-    (BedSpot Bed, Vector2 At, long Since)? _bedPending;
-
     /// <summary>
     /// A right press on a bed with characters selected: released before the hold time it gives the quick order, held longer it opens the menu (true:
     /// taken).
@@ -84,8 +92,14 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     CharacterId[] Carriers() => [.. player.Selected().Where(c => !c.Carrying.IsNone).Select(c => c.Id)];
 
+    /// <summary>
+    /// The selection sleeps in <paramref name="bed"/>.
+    /// </summary>
     void SleepIn(BedSpot bed) => player.Say(new UseBedOrder([], bed.Id) { Tick = player.Session.World.Tick });
 
+    /// <summary>
+    /// <paramref name="carriers"/> lay the ones they carry in <paramref name="bed"/>.
+    /// </summary>
     void PutIn(BedSpot bed, CharacterId[] carriers) => player.Say(new PutInBedOrder(carriers, bed.Id) { Tick = player.Session.World.Tick });
 
     /// <summary>
@@ -130,6 +144,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(bed.Record) ?? bed.Record, pending.At, verbs);
     }
+
+    #endregion
+
+    #region Cages
 
     // Cages under the pointer (docs/game/ui-input.md "Context menu verbs", the cage rows; the cages are published as WorldSnapshot.Cages): a quick
     // right click on an empty cage picks a locked one's lock, puts the carried captive in a free one (108) or gets the character in (107) (with Shift
@@ -270,6 +288,10 @@ sealed class FurnitureUse(PlayerInterface player)
         return player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, CageVerbs(cage)), quick);
     }
 
+    #endregion
+
+    #region Containers
+
     // Containers of a building's interior (docs/game/locks.md "Containers"): a right click on one sends the nearest selected character to open it
     // (pointer <c>search</c>); its inventory then shows in the storage window the research bench uses (<c>ProductionWindows</c>), beside the
     // character's.
@@ -278,6 +300,9 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     public Func<Vector3, bool>? AboveViewedFloor { get; set; }
 
+    /// <summary>
+    /// The container under <paramref name="pixel"/> (<see cref="PickContainerAt"/>).
+    /// </summary>
     internal ContainerSpot? PickContainer(Vector2 pixel) => PickContainerAt(pixel)?.Container;
 
     /// <summary>
@@ -333,6 +358,10 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     internal string ContainerPointer(ContainerSpot container) =>
         container.Owner < 0 || container.Owner == player.Session.World.Player.Faction ? "search" : container.Locked ? "lockpick" : "scavenge";
+
+    #endregion
+
+    #region Doors
 
     // Doors under the pointer (docs/game/ui-input.md "Building hover and click"): a quick right click sends the nearest selected character to open a
     // closed door or close an open one; another faction's locked door takes Alt to pick its lock (with Shift held, else its menu opens on the press).
@@ -432,9 +461,18 @@ sealed class FurnitureUse(PlayerInterface player)
         return true;
     }
 
+    #endregion
+
+    #region Training dummies
+
     // A town's training dummies (docs/game/ui-input.md "Context menu verbs": UseableStuff function 7 gives 97 USE_TRAINING_DUMMY whoever owns it):
     // with characters selected the pointer over one is <c>use</c>; a quick right click has them train there (OperateOrder), with Shift it becomes the
     // Training job; held, the menu offers "Training". A player's own dummy is a build site and goes through the site verbs instead.
+    /// <summary>
+    /// A right press on a dummy waiting for its release or the hold time: the dummy, where it was and when (Stopwatch).
+    /// </summary>
+    (TrainingSpot Dummy, Vector2 At, long Since)? _dummyPending;
+
     /// <summary>
     /// The dummy under the pixel with the ray distance, picked as a bed is (<see cref="PickBedAt"/>): on its record's collision, else its middle
     /// projected within <see cref="BedPickPixels"/>.
@@ -472,8 +510,6 @@ sealed class FurnitureUse(PlayerInterface player)
         return hit ?? near;
     }
 
-    (TrainingSpot Dummy, Vector2 At, long Since)? _dummyPending;
-
     /// <summary>
     /// A right press on a dummy with characters selected: released before the hold time it trains, held longer it opens the menu (true: taken).
     /// </summary>
@@ -485,6 +521,9 @@ sealed class FurnitureUse(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The selection trains on <paramref name="dummy"/> (with Shift as the training job).
+    /// </summary>
     void Train(TrainingSpot dummy) => player.Say(player.SlowModifier
         ? new AddJob(player.SelectedIds(), TaskType.UseTrainingDummy, dummy.Id) { Tick = player.Session.World.Tick }
         : new OperateOrder(player.SelectedIds(), dummy.Id) { Tick = player.Session.World.Tick });
@@ -518,11 +557,23 @@ sealed class FurnitureUse(PlayerInterface player)
             [("Training", () => Train(pending.Dummy))]);
     }
 
+    #endregion
+
+    #region Seats
+
     /// <summary>
     /// How near the pointer the projected middle of a seat without a footprint must be, in pixels (an engine choice).
     /// </summary>
     const float SeatPickPixels = 30;
 
+    /// <summary>
+    /// A right press on a seat waiting for its release or the hold time: the seat, where it was and when (Stopwatch).
+    /// </summary>
+    (SeatSpot Seat, Vector2 At, long Since)? _seatPending;
+
+    /// <summary>
+    /// The seat under <paramref name="pixel"/> (<see cref="PickSeatAt"/>).
+    /// </summary>
     internal SeatSpot? PickSeat(Vector2 pixel) => PickSeatAt(pixel)?.Seat;
 
     /// <summary>
@@ -567,8 +618,6 @@ sealed class FurnitureUse(PlayerInterface player)
         return hit ?? near;
     }
 
-    (SeatSpot Seat, Vector2 At, long Since)? _seatPending;
-
     /// <summary>
     /// A right press on a seat with characters selected: released before the hold time it gives the quick order, held longer it opens the menu (true:
     /// taken).
@@ -581,10 +630,16 @@ sealed class FurnitureUse(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The selection uses <paramref name="seat"/> (with Shift as the operating job).
+    /// </summary>
     void SitOn(SeatSpot seat) => player.Say(player.SlowModifier
         ? (SimCommand)new AddJob(player.SelectedIds(), TaskType.OperateMachinery, seat.Id) { Tick = player.Session.World.Tick }
         : new OperateOrder(player.SelectedIds(), seat.Id) { Tick = player.Session.World.Tick });
 
+    /// <summary>
+    /// The right button let go: a press on a seat released before the menu opened gives the quick order.
+    /// </summary>
     internal void SeatRelease()
     {
         if (_seatPending is not { } pending) return;
@@ -593,6 +648,9 @@ sealed class FurnitureUse(PlayerInterface player)
         SitOn(pending.Seat);
     }
 
+    /// <summary>
+    /// Once a frame: a press on a seat held past the hold time opens its menu (Use).
+    /// </summary>
     internal void UpdateSeat()
     {
         if (_seatPending is not { } pending
@@ -609,19 +667,28 @@ sealed class FurnitureUse(PlayerInterface player)
         player.ContextMenuWindow.OpenMenu = new(name, pending.At, [("Use", () => SitOn(seat))]);
     }
 
+    #endregion
+
+    #region Rocks
+
     // Mining rocks by hand (docs/simulation.md "Production", natural sites): a right click on a resource rock with characters selected has them
     // operate it, with Shift it becomes a job (Operating machine). A left click selects it; its machine window holds the mined ore, taken out by
     // hand. Rocks are the foliage system's (Rocks); a rock is hit by its mesh's triangles, as drawn (engine choice: the original picks the rock
     // building's collision; without the mesh, a sphere of its radius).
     /// <summary>
-    /// The world's resource rocks (null: none, e.g. headless or before the world is loaded).
+    /// A right press on a rock waiting for its release or the hold time: the rock, where it was and when (Stopwatch).
     /// </summary>
-    public Func<IResourceNodes?>? Rocks { get; set; }
+    (ResourceNode Rock, Vector2 At, long Since)? _rockPending;
 
     /// <summary>
     /// How far (X/Z) from the ground under the cursor a rock is looked for: a rock in front of the cursor's ground point is still hit.
     /// </summary>
     const float RockSearch = 200;
+
+    /// <summary>
+    /// The world's resource rocks (null: none, e.g. headless or before the world is loaded).
+    /// </summary>
+    public Func<IResourceNodes?>? Rocks { get; set; }
 
     /// <summary>
     /// The nearest rock the pixel's ray meets before the ground.
@@ -658,6 +725,9 @@ sealed class FurnitureUse(PlayerInterface player)
         new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position),
             ProductionSystem.NaturalId(rock.Record, rock.Position), rock.Position, null, Record: rock.Record);
 
+    /// <summary>
+    /// <paramref name="selection"/> mines <paramref name="rock"/>: an operate order, or with <paramref name="asJob"/> the operating job.
+    /// </summary>
     void MineRock(IReadOnlyList<CharacterId> selection, ResourceNode rock, bool asJob)
     {
         string site = ProductionSystem.NaturalId(rock.Record, rock.Position);
@@ -665,8 +735,6 @@ sealed class FurnitureUse(PlayerInterface player)
             player.Say(new AddJob(selection, TaskType.OperateMachinery, site) { Tick = player.Session.World.Tick });
         else player.Say(new OperateOrder(selection, site) { Tick = player.Session.World.Tick });
     }
-
-    (ResourceNode Rock, Vector2 At, long Since)? _rockPending;
 
     /// <summary>
     /// A right press on a rock with characters selected: released before the menu opens it mines (with Shift as a job), held longer it opens the menu
@@ -712,4 +780,6 @@ sealed class FurnitureUse(PlayerInterface player)
             ("Add to jobs", () => MineRock(selection, pending.Rock, true)),
         ]);
     }
+
+    #endregion
 }

@@ -16,7 +16,28 @@ namespace Meitou.Game.Ui;
 /// <summary>
 /// How a town's faction stands to the player, for its map colour.
 /// </summary>
-public enum MapStanding { Neutral, Ally, Enemy, Player }
+public enum MapStanding
+{
+    /// <summary>
+    /// Neither ally nor enemy (also an unexplored town).
+    /// </summary>
+    Neutral,
+
+    /// <summary>
+    /// An ally of the player's faction.
+    /// </summary>
+    Ally,
+
+    /// <summary>
+    /// Relations below -30.
+    /// </summary>
+    Enemy,
+
+    /// <summary>
+    /// The player's own faction.
+    /// </summary>
+    Player,
+}
 
 /// <summary>
 /// A town's faction as the map shows it: its name, the player's relation to it, the standing and whether it is <c>not real</c> (wildlife: a nest, not
@@ -29,55 +50,109 @@ public readonly record struct MapFaction(string Name, float Relation, MapStandin
 /// </summary>
 sealed class WorldMap(PlayerInterface player)
 {
+    #region View and input
+
+    /// <summary>
+    /// The map image's pan and zoom inside the viewport (fits the whole map at the least zoom).
+    /// </summary>
     readonly UiMapView _mapView = new() { FitWhole = true };
+
+    /// <summary>
+    /// The MapImage slot's visible rectangle on screen, from the last layout; empty while the overview has no map.
+    /// </summary>
     UiRect _mapViewport;
+
+    /// <summary>
+    /// Where the pointer was at the last pan step while a button drags the map; null when not panning.
+    /// </summary>
     internal Vector2? MapDrag;
+
+    /// <summary>
+    /// <see cref="MapRightPressed"/>: the right button went down over the map (a move order on release). <see cref="MapShown"/>: the Map tab was
+    /// open last frame.
+    /// </summary>
     internal bool MapRightPressed, MapShown;
+
+    /// <summary>
+    /// The world point of the last move order given on the map, where the movement marker stands.
+    /// </summary>
     Vector3 _movementMarker;
+
+    /// <summary>
+    /// The <see cref="Stopwatch"/> timestamp the movement marker shows until (0: hidden).
+    /// </summary>
     long _movementMarkerUntil;
-    readonly Dictionary<string, Vector2> _markerSizes = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The placed towns (the population's sites, in the order of <see cref="WorldSnapshot.Towns"/>); the host sets it.
+    /// Where the left button went down on the map, for <see cref="MapPickUp"/>'s click test; null when not pressed.
     /// </summary>
-    public Func<IReadOnlyList<TownSite>>? MapTowns { get; set; }
-    /// <summary>
-    /// A faction (by string id) as the map shows it, null when unknown; the host sets it.
-    /// </summary>
-    public Func<string?, MapFaction?>? MapFactionOf { get; set; }
-    /// <summary>
-    /// A faction's string id by its index (an outpost's owner), null when unknown; the host sets it.
-    /// </summary>
-    public Func<int, string?>? MapFactionId { get; set; }
-    /// <summary>
-    /// The names of the towns a map item (by record id) would reveal now, null for an item that is not a map; the host sets it.
-    /// </summary>
-    public Func<string, IReadOnlyList<string>?>? MapItemTowns { get; set; }
+    Vector2? _mapPickFrom;
 
+    /// <summary>
+    /// How far (pixels at UI scale 1) the pointer may move between press and release for a map pick to count as a click.
+    /// </summary>
+    const float MapPickSlop = 4;
+
+    /// <summary>
+    /// <see cref="MapExtent"/>: half the world's width in units. <see cref="MapCanvas"/>: the map canvas's size in pixels.
+    /// <see cref="MovementMarkerSeconds"/>: how long the movement marker shows. <see cref="NestShowRange"/>: how near a player character must be
+    /// for a nest to show (units).
+    /// </summary>
     const float MapExtent = 147456, MapCanvas = 4096, MovementMarkerSeconds = 3, NestShowRange = 3258;
-    // MarkerAlly, MarkerNeutral, MarkerEnemy, MarkerPlayer and MarkerMovement of data/gui/colours/kenshi_colours.xml; PlayerSelected is the game's
-    // built-in one (not in the file).
-    static readonly Vector4 AllyColour = Rgb(0x5cb473), NeutralColour = Rgb(0xdfdfdf), EnemyColour = Rgb(0xe65139), PlayerColour = Rgb(0x8dcdff),
-        MovementColour = Rgb(0x79b44b), SelectedColour = new(0.652f, 0.903f, 1, 1);
-    static Vector4 Rgb(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1);
 
-    // The map image spans the world's 294912 units with world (0, 0) at its centre, +X right and +Z down (Verified: GUI_Map.dds against the placed
-    // towns).
+    /// <summary>
+    /// Debug (the F10 tool "Teleport on map"): while set, a left click on the map (a press and release within <see cref="MapPickSlop"/> pixels,
+    /// scaled up with the UI, so panning still works) calls it with the world point (X, Z; Y 0). With <see cref="MapPickSticky"/> (the menu's toggle)
+    /// it stays set, whether the map is open or not; otherwise the click clears it, and closing the Map tab does too.
+    /// </summary>
+    public Action<Vector3>? MapPick { get; private set; }
+
+    /// <summary>
+    /// Whether <see cref="MapPick"/> stays armed after a click and while the map is closed (set by <see cref="ArmMapPick"/>).
+    /// </summary>
+    public bool MapPickSticky { get; private set; }
+
+    /// <summary>
+    /// The map image spans the world's 294912 units with world (0, 0) at its centre, +X right and +Z down (Verified: GUI_Map.dds against the placed
+    /// towns). A world position's point on the map, 0..1 each way.
+    /// </summary>
     static Vector2 MapPoint(Vector3 world) => new((world.X + MapExtent) / (2 * MapExtent), (world.Z + MapExtent) / (2 * MapExtent));
+
+    /// <summary>
+    /// A map point (0..1 each way) as a world position on the ground plane (y 0).
+    /// </summary>
     static Vector3 MapWorld(Vector2 normalized) => new(normalized.X * 2 * MapExtent - MapExtent, 0, normalized.Y * 2 * MapExtent - MapExtent);
 
+    /// <summary>
+    /// The UI's scale: 1 at 1080 pixels high.
+    /// </summary>
     float UiScale => player.Height / 1080f;
+
     /// <summary>
     /// Whether the overview shows its Map tab now (the F10 map-teleport hint reads it).
     /// </summary>
     public bool MapTabShown => MapTabOpen;
+
+    /// <summary>
+    /// The overview is open on its Map tab (tab 0) and the interface shows.
+    /// </summary>
     bool MapTabOpen => player.UiVisible && player.FaithfulScreens.IsOpen("overview") && player.FaithfulScreens.GetTab("overview", "TabsMain") == 0;
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is over the map viewport of the open Map tab, with no modal window up.
+    /// </summary>
     bool OverMap(Vector2 p) => MapTabOpen && _mapViewport.Contains(p.X, p.Y) && !player.FaithfulScreens.HasModal;
+
     /// <summary>
     /// The original's map scale: on-screen pixels per pixel of the 4096 canvas. The least fits the whole map, the most is 1.5 x the UI scale.
     /// </summary>
     float MapScale => _mapView.Size(_mapViewport) / MapCanvas;
+
+    /// <summary>
+    /// The map scale at which the whole map fits the viewport.
+    /// </summary>
     float MapMinScale => Math.Min(_mapViewport.Width, _mapViewport.Height) / MapCanvas;
+
     /// <summary>
     /// 0 below 0.4 x the UI scale (no characters or labels, small towns), 1 to 0.75 x, else 2.
     /// </summary>
@@ -96,17 +171,6 @@ sealed class WorldMap(PlayerInterface player)
     }
 
     /// <summary>
-    /// Debug (the F10 tool "Teleport on map"): while set, a left click on the map (a press and release within <see cref="MapPickSlop"/> pixels,
-    /// scaled up with the UI, so panning still works) calls it with the world point (X, Z; Y 0). With <see cref="MapPickSticky"/> (the menu's toggle)
-    /// it stays set, whether the map is open or not; otherwise the click clears it, and closing the Map tab does too.
-    /// </summary>
-    public Action<Vector3>? MapPick { get; private set; }
-    /// <summary>
-    /// Whether <see cref="MapPick"/> stays armed after a click and while the map is closed (set by <see cref="ArmMapPick"/>).
-    /// </summary>
-    public bool MapPickSticky { get; private set; }
-
-    /// <summary>
     /// Arms <see cref="MapPick"/> without opening the map, for every click until <see cref="DisarmMapPick"/> (the toggle "Teleport on map").
     /// </summary>
     public void ArmMapPick(Action<Vector3> pick)
@@ -115,14 +179,14 @@ sealed class WorldMap(PlayerInterface player)
         MapPickSticky = true;
     }
 
+    /// <summary>
+    /// Disarms <see cref="MapPick"/>.
+    /// </summary>
     public void DisarmMapPick()
     {
         MapPick = null;
         MapPickSticky = false;
     }
-
-    Vector2? _mapPickFrom;
-    const float MapPickSlop = 4;
 
     /// <summary>
     /// The left button up: a click on the map (not a pan) hands its world point to <see cref="MapPick"/>.
@@ -138,6 +202,9 @@ sealed class WorldMap(PlayerInterface player)
         pick(MapWorld(Vector2.Clamp(_mapView.At(_mapViewport, p), Vector2.Zero, Vector2.One)));
     }
 
+    /// <summary>
+    /// A pointer move while the map is dragged: pans it; false when no drag is under way.
+    /// </summary>
     internal bool MapPointerMove(Vector2 p)
     {
         if (MapDrag is not { } previous) return false;
@@ -192,6 +259,9 @@ sealed class WorldMap(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Zooms the map about <paramref name="p"/> to <paramref name="scale"/>, at least the whole-map scale.
+    /// </summary>
     void MapScaleAt(Vector2 p, float scale)
     {
         if (MapScale <= 0) return;
@@ -199,6 +269,9 @@ sealed class WorldMap(PlayerInterface player)
         _mapView.ZoomAt(_mapViewport, p, Math.Max(scale, MapMinScale) / MapScale);
     }
 
+    /// <summary>
+    /// A Map tab button: centre on the camera's target, or zoom in or out by the whole-map scale about the viewport's middle.
+    /// </summary>
     internal void MapAction(string widget)
     {
         if (widget == "MapCenterButton") _mapView.CentreOn(MapPoint(player.Session.Camera.Current.Target));
@@ -240,6 +313,43 @@ sealed class WorldMap(PlayerInterface player)
 
         MapShown = shown;
     }
+
+    #endregion
+
+    #region Drawing
+
+    /// <summary>
+    /// Marker group to its image size in Kenshi_MapMarkers (<see cref="GroupSize"/>'s cache).
+    /// </summary>
+    readonly Dictionary<string, Vector2> _markerSizes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The placed towns (the population's sites, in the order of <see cref="WorldSnapshot.Towns"/>); the host sets it.
+    /// </summary>
+    public Func<IReadOnlyList<TownSite>>? MapTowns { get; set; }
+
+    /// <summary>
+    /// A faction (by string id) as the map shows it, null when unknown; the host sets it.
+    /// </summary>
+    public Func<string?, MapFaction?>? MapFactionOf { get; set; }
+
+    /// <summary>
+    /// A faction's string id by its index (an outpost's owner), null when unknown; the host sets it.
+    /// </summary>
+    public Func<int, string?>? MapFactionId { get; set; }
+
+
+    /// <summary>
+    /// MarkerAlly, MarkerNeutral, MarkerEnemy, MarkerPlayer and MarkerMovement of data/gui/colours/kenshi_colours.xml; PlayerSelected is the game's
+    /// built-in one (not in the file).
+    /// </summary>
+    static readonly Vector4 AllyColour = Rgb(0x5cb473), NeutralColour = Rgb(0xdfdfdf), EnemyColour = Rgb(0xe65139), PlayerColour = Rgb(0x8dcdff),
+        MovementColour = Rgb(0x79b44b), SelectedColour = new(0.652f, 0.903f, 1, 1);
+
+    /// <summary>
+    /// A <c>0xrrggbb</c> colour as an opaque RGBA vector.
+    /// </summary>
+    static Vector4 Rgb(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1);
 
     /// <summary>
     /// One frame's map drawing: the control list, the index of the last control inserted after the map image, the image's bounds, the UI scale,
@@ -510,6 +620,18 @@ sealed class WorldMap(PlayerInterface player)
         AddMarker(ref frame, "map-camera", "Camera", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y), PlayerColour, angle);
     }
 
+    #endregion
+
+    #region Item right clicks
+
+    /// <summary>
+    /// The names of the towns a map item (by record id) would reveal now, null for an item that is not a map; the host sets it.
+    /// </summary>
+    public Func<string, IReadOnlyList<string>?>? MapItemTowns { get; set; }
+
+    /// <summary>
+    /// Two tooltip captions on separate lines, either alone when the other is null.
+    /// </summary>
     static string? JoinCaptions(string? a, string? b) => a is null ? b : b is null ? a : a + "\n" + b;
 
     /// <summary>
@@ -687,4 +809,6 @@ sealed class WorldMap(PlayerInterface player)
 
         static InventoryItemToken Token(InventoryItemView i) => new(i.Index, i.Record, i.Section, i.X, i.Y, i.Quantity, i.Quality);
     }
+
+    #endregion
 }

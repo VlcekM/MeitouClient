@@ -10,6 +10,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class ItemCells(PlayerInterface player)
 {
+    /// <summary>
+    /// The item icon source; null: names only.
+    /// </summary>
     internal ItemIcons? ItemIcons;
 
     /// <summary>

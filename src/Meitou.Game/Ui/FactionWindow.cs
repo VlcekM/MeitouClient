@@ -12,6 +12,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class FactionWindow(PlayerInterface player)
 {
+    /// <summary>
+    /// The Faction tab's index in the overview's tabs.
+    /// </summary>
     internal const int FactionTab = 1;
 
     #region Info panel lines
@@ -59,9 +62,19 @@ sealed class FactionWindow(PlayerInterface player)
     /// </summary>
     public Func<(IReadOnlyList<FactionInfoLine> Contracts, IReadOnlyList<FactionInfoLine> Events)>? FactionInfo { get; set; }
 
+    /// <summary>
+    /// The relations line layout; null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? RelationsLineLayout;
+
+    /// <summary>
+    /// How far the relations list is scrolled, pixels.
+    /// </summary>
     float _relationsScroll;
 
+    /// <summary>
+    /// The overview is open on its Faction tab.
+    /// </summary>
     bool FactionShown => player.FaithfulScreens.IsOpen("overview") && player.FaithfulScreens.GetTab("overview", "TabsMain") == FactionTab;
 
     /// <summary>
@@ -174,6 +187,9 @@ sealed class FactionWindow(PlayerInterface player)
 
     #region Faction name
 
+    /// <summary>
+    /// The faction name edit box.
+    /// </summary>
     internal const string FactionNameBox = "FactionNameText";
 
     /// <summary>

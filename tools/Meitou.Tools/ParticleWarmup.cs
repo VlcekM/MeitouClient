@@ -15,6 +15,10 @@ using Meitou.Data.Particles;
 /// </summary>
 static class ParticleWarmup
 {
+    /// <summary>
+    /// Measures the warm-up of every effect of each weather in <paramref name="names"/> (six heavy base-game weathers when empty); returns the exit
+    /// code.
+    /// </summary>
     public static int Run(GameInstall install, string[] names)
     {
         var db = GameDatabase.Load(LoadOrder.BaseGame(install));
@@ -35,6 +39,10 @@ static class ParticleWarmup
         return 0;
     }
 
+    /// <summary>
+    /// Measures one weather effect: makes a group, schedules and simulates its warm-up serially and in parallel, then times a warmed frame; prints
+    /// the second of two passes.
+    /// </summary>
     static void WarmEffect(WeatherEffectEntry entry, ParticleLibrary library, EffectCamera camera, WeatherEffectInput weather)
     {
         EffectGroup? Make() => EffectGroups.Create(entry, library, 1,

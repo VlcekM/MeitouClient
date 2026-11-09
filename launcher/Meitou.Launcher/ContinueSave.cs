@@ -4,14 +4,20 @@ using Meitou.Content;
 
 namespace Meitou.Launcher;
 
-// The Continue part of the Play button (docs/launcher.md "Continue"): starts the game in the newest save when it was made with the
-// enabled mods.
+/// <summary>
+/// The Continue part of the Play button (docs/launcher.md "Continue"): starts the game in the newest save when it was made with the enabled mods.
+/// </summary>
 public sealed partial class MainWindow
 {
-    // Options that pick the game's start themselves; the game refuses --load beside the others.
+    /// <summary>
+    /// Options that pick the game's start themselves; the game refuses --load beside the others.
+    /// </summary>
     static readonly string[] StartOptions = ["--load", "--continue", "--new-game", "--no-population", "--duel", "--sandbox", "--battle",
             "--terrain-sandbox"];
 
+    /// <summary>
+    /// Continue: starts the game in the newest save (<see cref="StartGame"/>).
+    /// </summary>
     async void Continue_Click(object? sender, RoutedEventArgs e) => await StartGame(continueSave: true);
 
     /// <summary>
@@ -32,6 +38,9 @@ public sealed partial class MainWindow
                 slot.ModifiedUtc.ToLocalTime().ToString("g")));
     }
 
+    /// <summary>
+    /// The newest save of the install's save folders, null when there is none or they cannot be read.
+    /// </summary>
     static SaveModSlot? NewestSave(GameInstall gameInstall)
     {
         try
@@ -70,7 +79,9 @@ public sealed partial class MainWindow
         }
     }
 
-    // The newest save, or null and why it can't be continued.
+    /// <summary>
+    /// The newest save, or null and why it can't be continued.
+    /// </summary>
     static (SaveModSlot? Slot, string? Problem) CheckNewestSave(GameInstall gameInstall, List<string> enabled)
     {
         if (SaveModList.Scan(SaveModList.Roots(gameInstall)).FirstOrDefault() is not { } slot)
@@ -83,7 +94,9 @@ public sealed partial class MainWindow
             : (slot, null);
     }
 
-    // Null when the save's mods are the enabled ones (in any order), else which are missing and which are extra.
+    /// <summary>
+    /// Null when the save's mods are the enabled ones (in any order), else which are missing and which are extra.
+    /// </summary>
     static string? ModDifferences(List<string> saved, List<string> enabled)
     {
         var missing = saved.Except(enabled, StringComparer.OrdinalIgnoreCase).ToList();

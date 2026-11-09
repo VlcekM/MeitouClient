@@ -4,6 +4,9 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.ModelViewer;
 
+/// <summary>
+/// The world viewer's terrain A/B switches.
+/// </summary>
 static partial class WorldApp
 {
     /// <summary>

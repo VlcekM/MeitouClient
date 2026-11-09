@@ -10,9 +10,19 @@ namespace Meitou.Launcher;
 /// </summary>
 sealed class GameSettings
 {
+    /// <summary>
+    /// The game's settings file name.
+    /// </summary>
     public const string FileName = "meitou.user.json";
+
+    /// <summary>
+    /// The game's settings file: in the launcher's data folder, the game's working directory.
+    /// </summary>
     public static string FilePath => Path.Combine(LauncherConfig.DataDirectory, FileName);
 
+    /// <summary>
+    /// The file's JSON, edited in place.
+    /// </summary>
     readonly JsonObject _root;
 
     /// <summary>
@@ -25,10 +35,20 @@ sealed class GameSettings
     /// </summary>
     public int? Version => _exists ? _root["version"] is JsonValue v && v.TryGetValue(out int n) ? n : 1 : null;
 
+    /// <summary>
+    /// The file existed when it was loaded.
+    /// </summary>
     readonly bool _exists;
 
+    /// <summary>
+    /// Wraps a loaded (or new) file.
+    /// </summary>
     GameSettings(JsonObject root, string? problem, bool exists = true) => (this._root, Problem, this._exists) = (root, problem, exists);
 
+    /// <summary>
+    /// Reads the settings file: an empty one when there is none, else the file, or an empty one with <see cref="Problem"/> set when it cannot be
+    /// read.
+    /// </summary>
     public static GameSettings Load()
     {
         try
@@ -42,17 +62,42 @@ sealed class GameSettings
         }
     }
 
+    /// <summary>
+    /// A top-level true or false; null when the key is missing or not a boolean.
+    /// </summary>
     public bool? GetBool(string key) => _root[key] is JsonValue v && v.TryGetValue(out bool b) ? b : null;
+
+    /// <summary>
+    /// A top-level number; null when the key is missing or not a number.
+    /// </summary>
     public float? GetNumber(string key) => Number(_root[key]);
+
+    /// <summary>
+    /// A top-level string; null when the key is missing or not a string.
+    /// </summary>
     public string? GetString(string key) => _root[key] is JsonValue v && v.TryGetValue(out string? text) ? text : null;
+
     /// <summary>
     /// A list of strings (non-string entries skipped); empty when the key is missing.
     /// </summary>
     public List<string> GetStrings(string key) =>
         _root[key] is JsonArray list ? [.. list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? s) ? s : null).OfType<string>()] : [];
+
+    /// <summary>
+    /// Sets a top-level key to a list of strings.
+    /// </summary>
     public void Set(string key, IEnumerable<string> values) => _root[key] = new JsonArray([.. values.Select(v => (JsonNode)JsonValue.Create(v))]);
+
+    /// <summary>
+    /// Sets a top-level key to a boolean.
+    /// </summary>
     public void Set(string key, bool value) => _root[key] = value;
+
+    /// <summary>
+    /// Sets a top-level key to a string.
+    /// </summary>
     public void Set(string key, string value) => _root[key] = value;
+
     /// <summary>
     /// A whole value is written as an integer: the game reads its integer settings (the frame limit) strictly.
     /// </summary>

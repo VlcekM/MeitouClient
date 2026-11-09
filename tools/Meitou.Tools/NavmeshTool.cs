@@ -1368,10 +1368,12 @@ static class NavmeshTool
         /// The grid cell size (units).
         /// </summary>
         const float Cell = 64;
+
         /// <summary>
         /// The original tile.
         /// </summary>
         readonly OriginalNavMesh _mesh;
+
         /// <summary>
         /// The polygons whose box touches each grid cell.
         /// </summary>

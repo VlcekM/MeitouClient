@@ -22,14 +22,17 @@ public sealed class NewsFeed(HttpClient http)
     /// The branch the posts are read from.
     /// </summary>
     public const string Branch = "master";
+
     /// <summary>
     /// The repository's news folder.
     /// </summary>
     const string Folder = "news";
+
     /// <summary>
     /// At most this many posts, the newest.
     /// </summary>
     const int MaxPosts = 20;
+
     /// <summary>
     /// An article folder's post.
     /// </summary>

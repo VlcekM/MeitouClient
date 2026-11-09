@@ -18,6 +18,9 @@ namespace Meitou.Game.DevTools;
 /// </summary>
 sealed class DevConsoleHost(GameHost host)
 {
+    /// <summary>
+    /// The console's text side: input, scrollback and commands.
+    /// </summary>
     internal readonly DevConsole DevConsole = new();
 
     /// <summary>
@@ -50,27 +53,42 @@ sealed class DevConsoleHost(GameHost host)
     /// The console that ran <c>explode</c> and waits for its result line (see <see cref="GameHost.WorldNews"/>).
     /// </summary>
     internal DevConsole? ExplodeAsker;
+
+    /// <summary>
+    /// The record names the completion offers, by whether characters (else items) are meant; listed once.
+    /// </summary>
     readonly Dictionary<bool, List<string>> _consoleNames = [];
+
+    /// <summary>
+    /// The console's commands are registered.
+    /// </summary>
     internal bool ConsoleRegistered;
+
     /// <summary>
     /// The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.
     /// </summary>
     internal Vector2 ConsolePointer;
+
     /// <summary>
     /// --headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read
     /// from the window instead.
     /// </summary>
     internal Vector2? HeadlessMouse;
+
     /// <summary>
     /// The control channel's <c>click</c>: steps the interactive loop plays one per frame ('m' move, 'i' idle, 'd' press, 'u' release; right button;
     /// pixel).
     /// </summary>
     internal readonly Queue<(char Kind, bool Right, Vector2 At)> PointerSteps = new();
+
     /// <summary>
     /// The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).
     /// </summary>
     internal bool ControlQuit;
 
+    /// <summary>
+    /// The console is open.
+    /// </summary>
     internal bool ConsoleOpen => DevConsole.Open;
 
     /// <summary>
@@ -78,6 +96,9 @@ sealed class DevConsoleHost(GameHost host)
     /// </summary>
     internal static bool IsConsoleToggle(SilkKey key, bool ctrl) => key == SilkKey.Insert || (ctrl && key == SilkKey.GraveAccent);
 
+    /// <summary>
+    /// Opens or closes the console (registering its commands on first use); opening it closes the debug menu.
+    /// </summary>
     internal void ToggleConsole()
     {
         if (!ConsoleRegistered) RegisterConsoleCommands();
@@ -137,6 +158,9 @@ sealed class DevConsoleHost(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Draws the console over the top of the screen: the scrollback, the input line with its caret.
+    /// </summary>
     internal void DrawConsole(DebugOverlay o, int width, int height)
     {
         float pad = 10, lineH = o.LineHeight;
@@ -200,6 +224,9 @@ sealed class DevConsoleHost(GameHost host)
         return _consoleNames[character] = names;
     }
 
+    /// <summary>
+    /// The names starting with <paramref name="typed"/>; when none does, those containing it (all for empty text).
+    /// </summary>
     static IEnumerable<string> ConsoleMatch(IEnumerable<string> names, string typed)
     {
         var all = names as IReadOnlyCollection<string> ?? [.. names];

@@ -131,6 +131,9 @@ sealed class OrdersPanel(PlayerInterface player)
             + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
     }
 
+    /// <summary>
+    /// The wheel over the jobs list scrolls it a line a step; false elsewhere.
+    /// </summary>
     internal bool JobsWheel(Vector2 p, float steps)
     {
         if (!player.ScrollBars.InventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
@@ -141,6 +144,9 @@ sealed class OrdersPanel(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Adds the jobs list's scroll bar when its lines do not fit.
+    /// </summary>
     internal void AddJobScrollBar(List<UiControl> controls)
     {
         int panelIndex = controls.FindIndex(c => c.Name == "JobsPanel");

@@ -22,6 +22,11 @@ namespace Meitou.ModelViewer;
 /// </summary>
 static class ImpostorApp
 {
+    #region Options and run
+
+    /// <summary>
+    /// The command lines and options this mode takes, printed for a bad command line.
+    /// </summary>
     public const string Usage = """
         meitou-viewer --impostor-preview <FOLIAGE_MESH name, string id or mesh file> [options]
         meitou-viewer --impostor-bake-all [--rebake]
@@ -35,16 +40,45 @@ static class ImpostorApp
         <name>-atlas-{albedo,normal}.png (level 0 as stored).
         """;
 
+    /// <summary>
+    /// The parsed command line.
+    /// </summary>
     sealed class Options
     {
+        /// <summary>
+        /// The FOLIAGE_MESH to preview (name, string id or mesh file); null with <c>--impostor-bake-all</c>.
+        /// </summary>
         public string? Mesh;
+
+        /// <summary>
+        /// <see cref="BakeAll"/>: bake every eligible mesh. <see cref="Rebake"/>: ignore the cache.
+        /// </summary>
         public bool BakeAll, Rebake;
+
+        /// <summary>
+        /// The unlit debug view of the impostor: 0 off, 1 albedo, 2 normal, 3 coverage.
+        /// </summary>
         public int Debug;
+
+        /// <summary>
+        /// Where the pictures go.
+        /// </summary>
         public string Out = @"C:\Temp\meitou-impostors";
+
+        /// <summary>
+        /// The field pictures' size in pixels.
+        /// </summary>
         public int Width = 1600, Height = 900;
+
+        /// <summary>
+        /// The size class forced with <c>--class</c> (medium or large); null for the mesh's own.
+        /// </summary>
         public string? Class;
     }
 
+    /// <summary>
+    /// Parses the command line, starts Vulkan offscreen, loads the foliage catalog and bakes all or previews one; returns the exit code.
+    /// </summary>
     public static int Run(string[] args)
     {
         var o = new Options();
@@ -109,9 +143,19 @@ static class ImpostorApp
     /// </summary>
     sealed class Frames(VulkanDisplay display)
     {
+        /// <summary>
+        /// The offscreen Vulkan context the frames run on.
+        /// </summary>
         public GpuContext Gpu { get; } = display.Context;
+
+        /// <summary>
+        /// A frame is open.
+        /// </summary>
         bool _open;
 
+        /// <summary>
+        /// Opens a frame unless one is.
+        /// </summary>
         public void Open()
         {
             if (_open) return;
@@ -119,6 +163,9 @@ static class ImpostorApp
             _open = true;
         }
 
+        /// <summary>
+        /// Submits the open frame and waits for every frame to finish; nothing when none is open.
+        /// </summary>
         public void Flush()
         {
             if (!_open) return;
@@ -127,6 +174,9 @@ static class ImpostorApp
             _open = false;
         }
 
+        /// <summary>
+        /// Submits the open frame and opens the next.
+        /// </summary>
         public void Next()
         {
             Flush();
@@ -134,6 +184,14 @@ static class ImpostorApp
         }
     }
 
+    #endregion
+
+    #region Baking
+
+    /// <summary>
+    /// The atlas of <paramref name="source"/> at the size class: from the cache when it matches (unless <c>--rebake</c>), else baked and stored; Hit
+    /// says which.
+    /// </summary>
     static (ImpostorAtlas Atlas, bool Hit) Obtain(Frames frames, ImpostorBaker baker, ImpostorCache cache, ImpostorSource source,
             ImpostorMeshes meshes, ImpostorClass size, Options o)
     {
@@ -176,6 +234,9 @@ static class ImpostorApp
         return (sources, ineligible, missing);
     }
 
+    /// <summary>
+    /// Bakes (or loads) every distinct eligible source of the catalog and prints the times and sizes; returns the exit code.
+    /// </summary>
     static int BakeAll(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
     {
         var (sources, ineligible, missing) = CollectSources(catalog, assets);
@@ -238,6 +299,9 @@ static class ImpostorApp
         return 0;
     }
 
+    /// <summary>
+    /// The catalog mesh <paramref name="name"/> names: a record's name or string id, or its mesh file; null when none.
+    /// </summary>
     static FoliageMesh? Find(FoliageCatalog catalog, string name)
     {
         var all = catalog.Meshes.Values.ToList();
@@ -247,6 +311,30 @@ static class ImpostorApp
             ?? all.FirstOrDefault(m => Path.GetFileName(m.MeshPath.Replace('\\', '/')).Equals(file, StringComparison.OrdinalIgnoreCase));
     }
 
+    #endregion
+
+    #region Preview
+
+    /// <summary>
+    /// The pictures' clear colour (RGB, 0 to 1).
+    /// </summary>
+    static readonly Vector3 Sky = new(0.55f, 0.65f, 0.78f);
+
+    /// <summary>
+    /// The sheet's rows: one per elevation (degrees), mesh and impostor side by side per azimuth, each seen from 1500 units with the view just
+    /// fitting the sphere.
+    /// </summary>
+    static readonly float[] Elevations = [-8, 0, 12, 25, 40, 60, 85];
+
+    /// <summary>
+    /// The sheet's columns: the azimuths (degrees) each elevation is seen from.
+    /// </summary>
+    static readonly float[] Azimuths = [20, 75, 160, 250];
+
+    /// <summary>
+    /// The preview of <c>--impostor-preview</c>: bakes or loads the mesh's atlas and writes the atlas, sheet and field pictures; returns the exit
+    /// code.
+    /// </summary>
     static int Preview(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
     {
         var mesh = Find(catalog, o.Mesh!);
@@ -317,6 +405,9 @@ static class ImpostorApp
         return 0;
     }
 
+    /// <summary>
+    /// Prints the distance at which the impostor takes over at <paramref name="h"/> pixels of height, for the smallest and the largest instance.
+    /// </summary>
     static void PrintDistances(ImpostorMeshes meshes, FoliageMesh mesh, ImpostorAtlas atlas, float worldRadius, int h)
     {
         var smallest = ImpostorLayout.TransitionDistance(meshes.Radius * mesh.MinScale, atlas.FramePixels, h, 50 * MathF.PI / 180, 0);
@@ -325,6 +416,9 @@ static class ImpostorApp
             $"distance  {h}p: transition at {smallest:0} (smallest instance) .. {largest:0} (largest)"));
     }
 
+    /// <summary>
+    /// Writes the atlas's albedo and normal maps (level 0) as PNGs.
+    /// </summary>
     static void WriteAtlasPngs(ImpostorAtlas atlas, string stem)
     {
         foreach (var map in new[] { ImpostorMap.Albedo, ImpostorMap.Normal })
@@ -346,6 +440,9 @@ static class ImpostorApp
         }
     }
 
+    /// <summary>
+    /// Writes the sheets: one per sun (high, low) and the two on baked frame directions.
+    /// </summary>
     static void WriteSheets(Frames frames, ImpostorPreview preview, ImpostorMeshes meshes, ImpostorAtlas atlas, string stem)
     {
         var suns = new (string Name, Vector3 Direction)[]
@@ -364,16 +461,20 @@ static class ImpostorApp
         Sheet(frames, preview, meshes, $"{stem}-frames2.png", suns[0].Direction, (row, col) => ImpostorLayout.FrameDirection(col, row, g));
     }
 
+    /// <summary>
+    /// <paramref name="name"/> with every character but ASCII letters, digits, '-' and '_' made '_' (a file name).
+    /// </summary>
     static string Safe(string name) => new(name.Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
 
+    /// <summary>
+    /// The image's rows in reverse order (top row first again).
+    /// </summary>
     static byte[] Flip(byte[] rgba, int w, int h)
     {
         var flipped = new byte[rgba.Length];
         for (int y = 0; y < h; y++) rgba.AsSpan((h - 1 - y) * w * 4, w * 4).CopyTo(flipped.AsSpan(y * w * 4));
         return flipped;
     }
-
-    static readonly Vector3 Sky = new(0.55f, 0.65f, 0.78f);
 
     /// <summary>
     /// A 4× multisampled target of the given size cleared to the sky colour, drawn by <paramref name="draw"/> (into the open rendering of the frame's
@@ -411,6 +512,9 @@ static class ImpostorApp
         PngWriter.Write(path, w, h, flipped);
     }
 
+    /// <summary>
+    /// An instance transform: scale, then yaw about +Y, then the position; its M14 carries <paramref name="fade"/>.
+    /// </summary>
     static Matrix4x4 Instance(float scale, float yaw, Vector3 position, float fade = 2)
     {
         var m = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateRotationY(yaw) * Matrix4x4.CreateTranslation(position);
@@ -419,16 +523,13 @@ static class ImpostorApp
     }
 
     /// <summary>
-    /// One row per elevation, mesh and impostor side by side per azimuth, each seen from 1500 units with the view just fitting the sphere.
+    /// The unit direction at <paramref name="elevation"/> above the horizon and <paramref name="azimuth"/> round from +Z towards +X (degrees).
     /// </summary>
     static Vector3 Direction(float elevation, float azimuth)
     {
         float e = elevation * MathF.PI / 180, a = azimuth * MathF.PI / 180;
         return new Vector3(MathF.Cos(e) * MathF.Sin(a), MathF.Sin(e), MathF.Cos(e) * MathF.Cos(a));
     }
-
-    static readonly float[] Elevations = [-8, 0, 12, 25, 40, 60, 85];
-    static readonly float[] Azimuths = [20, 75, 160, 250];
 
     /// <summary>
     /// Rows of view directions, pairs of mesh and impostor per direction.
@@ -498,4 +599,6 @@ static class ImpostorApp
         Offscreen(frames, o.Width, o.Height, stem + "-impostor.png",
                 (cmd, formats) => preview.DrawImpostors(cmd, formats, all, view * projection, eye, cameraUp, sun, ordered, coverage: false));
     }
+
+    #endregion
 }
