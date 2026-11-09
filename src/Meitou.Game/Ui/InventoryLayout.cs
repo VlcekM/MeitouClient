@@ -320,15 +320,16 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Data panel
 
     /// <summary>
-    /// The data panel's lines; an animal's window shows only the weight and burden rows (the original's animal inventory, observed).
+    /// The data panel's lines (<see cref="InventorySummaryLines"/>), an animal's as a person's: the player's own animals show the Disguise and slave rows
+    /// too (<b>Observed</b>, original: a Garru, a Pack Beast, an Iron Spider and a Bonedog of the player's squad).
     /// </summary>
-    internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead, bool animal = false)
+    internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead)
     {
         string weight = ((int)(lead.ItemGrid?.TotalWeight ?? 0)).ToString(CultureInfo.InvariantCulture);   // truncated, as the original prints it
         if (lead.ItemGrid?.CarryCapacity is { } capacity) weight += "/" + ((int)capacity).ToString(CultureInfo.InvariantCulture);
 
         var (burdenWord, burdenColour) = BurdenText(lead.Hud?.Encumbrance ?? lead.ItemGrid?.Burden ?? 1);
-        player.AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour, animal), 20 * player.InventoryScale);
+        player.AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour), 20 * player.InventoryScale);
     }
 
     /// <summary>
@@ -338,10 +339,10 @@ sealed class InventoryLayout(PlayerInterface player)
     /// slave or escaped slave: its owner faction's name in Bad, no line without an owner) and Looks like slave (free: "-" greyed; else the level in
     /// percent, Bad above 10 %). A character of another faction has only the weight rows (and, for a trader, its money lines, not built).
     /// </summary>
-    List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour, bool animal)
+    List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour)
     {
         var lines = new List<PlayerInterface.HudLine> { new(Loc.Tr("Total Weight:"), weight), new("", burdenWord, ValueColour: burdenColour) };
-        if (animal || !lead.IsPlayer) return lines;
+        if (!lead.IsPlayer) return lines;
 
         lines.AddRange(DisguiseLines(lead.Disguise));
         if (lead.Slave is not { } slave)

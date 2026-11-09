@@ -356,7 +356,7 @@ sealed class ScreenRouter(PlayerInterface player)
             if (id == "inventory" && TradeWindows.IsAnimal(lead)) InventoryLayout.TrimAnimalWindow(controls);
         }
 
-        if (id is "inventory" or "loot") player.InventoryLayout.AddInventorySummary(controls, lead, animal: TradeWindows.IsAnimal(lead));
+        if (id is "inventory" or "loot") player.InventoryLayout.AddInventorySummary(controls, lead);
         foreach (var item in grid.Items.Where(i => ShownInWindow(i, bagWindow, id)))
         {
             if (player.InventoryWindows.Lifted(Simulation.Items.ItemOwner.Of(lead.Id), item.Index)) continue;
