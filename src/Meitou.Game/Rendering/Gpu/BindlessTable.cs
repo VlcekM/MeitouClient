@@ -321,27 +321,13 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// What a shader reads from a colour texture of <paramref name="format"/>: UInt for UINT formats, Int for SINT, Float otherwise (UNORM, SNORM,
     /// SFLOAT, SRGB, and depth: a depth-stencil format's stencil part is not sampled).
     /// </summary>
-    public static ScalarKind ScalarOf(InternalFormat format) => Scalars.TryGetValue(format, out var s) ? s : ScalarByName(format);
-
-    /// <summary>
-    /// <see cref="ScalarByName"/> of every named format, worked out once: <see cref="ScalarOf"/> runs for every texture registered, and the enum's
-    /// name is a string allocation and three searches (~0.1 us).
-    /// </summary>
-    static readonly System.Collections.Frozen.FrozenDictionary<InternalFormat, ScalarKind> Scalars =
-        System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(Enum.GetValues<InternalFormat>().Distinct(), f => f, ScalarByName);
-
-    /// <summary>
-    /// The scalar kind a format's samplers read, from its GL name: "ui" unsigned, "i" signed, depth and everything else float.
-    /// </summary>
-    static ScalarKind ScalarByName(InternalFormat format)
+    public static ScalarKind ScalarOf(InternalFormat format) => format switch
     {
-        // GL's names: an integer format ends in "ui" (R16ui, Rgba8ui) or "i" (R16i, Rgba32i); depth(-stencil) formats are read as float.
-        var name = format.ToString();
-        if (GlConventions.IsDepthFormat(format)) return ScalarKind.Float;
-        return name.EndsWith("ui", StringComparison.Ordinal) ? ScalarKind.UInt
-            : name.EndsWith('i') ? ScalarKind.Int
-            : ScalarKind.Float;
-    }
+        InternalFormat.R8Ui or InternalFormat.R16Ui or InternalFormat.R32Ui
+            or InternalFormat.Rgba8Ui or InternalFormat.Rgba16Ui or InternalFormat.Rgba32Ui => ScalarKind.UInt,
+        InternalFormat.R16I or InternalFormat.R32I or InternalFormat.Rgba32I => ScalarKind.Int,
+        _ => ScalarKind.Float,
+    };
 
     /// <summary>
     /// Adds a texture. Its index is valid in the frame that is open (when one is) and in every frame that begins after the call.

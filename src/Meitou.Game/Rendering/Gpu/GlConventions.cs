@@ -826,7 +826,8 @@ public enum GlEnum : int
 
 /// <summary>
 /// GL's sized internal formats the renderers state their textures, attachments and vertex attributes in, with the OpenGL specification's token
-/// values; <see cref="GlConventions.VkFormat"/> maps them to Vulkan.
+/// values; <see cref="GlConventions.VkFormat"/> maps them to Vulkan. A new integer format also goes in <see cref="BindlessTable.ScalarOf"/>, which
+/// otherwise samples it as float.
 /// </summary>
 public enum InternalFormat : int
 {
