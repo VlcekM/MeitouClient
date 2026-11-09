@@ -32,7 +32,7 @@ Worker-built 576-unit pages (8x8 per zone) use placement density and terrain rul
 (**Observed**, allocation trace).
 Near pages draw blades; ranges and paging determine coverage. The blades live in one store (`FoliageGrassGpu`), 160 MB and 32768 slots at
 the default grass distance (x 8 the layer ranges), times the distance ratio squared and the kept places (`Areas`, render-objects.md "Kept points") rounded up, at most 8 and an eighth of the memory budget (x 2: 640 MB); raising the setting
-past it builds a larger store and makes every page again (`GrowGrassStore`; not when `VramGuard` refuses it), lowering it keeps the store until restart. A page that finds the
+past it builds a larger store and makes every page again (`FoliageGrassStore.Grow`; not when `VramGuard` refuses it), lowering it keeps the store until restart. A page that finds the
 store full keeps its blades and waits; while full, one waiting page a frame is tried. **Observed** (save siwa-test4, x 2 in the 160 MB
 store): retrying every waiting page each frame cost 15.8 ms of the render thread (trace: `BufferArena.Allocate` and the release of the
 partial allocation), and the pages past the store were never drawn. Pages round kept points ([render-objects.md](render-objects.md#kept-points))
