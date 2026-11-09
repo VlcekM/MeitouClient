@@ -22,34 +22,110 @@ static partial class WorldFrame
     /// </summary>
     struct FrameState
     {
+        /// <summary>
+        /// The world's renderers.
+        /// </summary>
         public WorldGpu Gpu;
+
+        /// <summary>
+        /// The loaded region.
+        /// </summary>
         public WorldScene Scene;
+
+        /// <summary>
+        /// The camera.
+        /// </summary>
         public WorldCamera Camera;
+
+        /// <summary>
+        /// What to draw (textures, objects, water, the debug views).
+        /// </summary>
         public WorldRenderOptions Render;
+
+        /// <summary>
+        /// The post-processing chain the scene is drawn into (set by <see cref="BeginFrame"/>).
+        /// </summary>
         public IWorldPostChain Post;
+
+        /// <summary>
+        /// The output's size in pixels.
+        /// </summary>
         public int Width, Height;
+
+        /// <summary>
+        /// The time of day (game hours), the animation clock (seconds) and the haze distance.
+        /// </summary>
         public float Hour, Time, FogDistance;
+
+        /// <summary>
+        /// The hour the weather schedule reads when it is not <see cref="Hour"/>; null: <see cref="Hour"/>.
+        /// </summary>
         public float? WeatherHour;
 
-        // BeginFrame: the render size (smaller than the display with an upscaler), the upscaler's jitter, the eye.
+        /// <summary>
+        /// BeginFrame: the render size (smaller than the display with an upscaler).
+        /// </summary>
         public int RenderWidth, RenderHeight;
+
+        /// <summary>
+        /// BeginFrame: the upscaler's jitter.
+        /// </summary>
         public Vector2 Jitter;
+
+        /// <summary>
+        /// BeginFrame: the eye.
+        /// </summary>
         public Vector3 Eye;
 
-        // UpdateTerrain and PrepareSky: the ground under the eye, the floor (ground or water) under it, the sun and the sky's light.
+        /// <summary>
+        /// UpdateTerrain and PrepareSky: the ground under the eye, and the floor (ground or water) under it.
+        /// </summary>
         public float GroundUnderEye, Floor;
+
+        /// <summary>
+        /// PrepareSky: the sun's direction.
+        /// </summary>
         public Vector3 Sun;
+
+        /// <summary>
+        /// PrepareSky: the sky's colours.
+        /// </summary>
         public SkyColours Colours;
+
+        /// <summary>
+        /// PrepareSky: the sky's light.
+        /// </summary>
         public WorldLighting Light;
 
-        // DrawReflection and DrawSky: whether the water reflects, the scene's pass host and camera.
+        /// <summary>
+        /// DrawReflection: whether the water reflects this frame.
+        /// </summary>
         public bool Reflecting;
+
+        /// <summary>
+        /// DrawSky: the scene's pass host.
+        /// </summary>
         public SceneHost Host;
+
+        /// <summary>
+        /// DrawSky: the output's aspect ratio.
+        /// </summary>
         public float Aspect;
+
+        /// <summary>
+        /// DrawSky: the camera's view, and the view without its translation (the world to view rotation).
+        /// </summary>
         public Matrix4x4 View, Rotation;
 
-        // DrawScene, for DrawParticles: the scene's views (Near is 0 when no scene was drawn).
+        /// <summary>
+        /// DrawScene, for DrawParticles: the scene's views for the weather particles: the scene's view-projection, the jittered close one, and the
+        /// unjittered pair for the low-resolution particles blended after the upscaler.
+        /// </summary>
         public Matrix4x4 ParticleView, ParticleClose, ParticleLow, ParticleLowClose;
+
+        /// <summary>
+        /// DrawScene, for DrawParticles: the near plane splitting the close particles off (0 when no scene was drawn).
+        /// </summary>
         public float ParticleNear;
     }
 

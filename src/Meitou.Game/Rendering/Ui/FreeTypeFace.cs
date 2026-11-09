@@ -17,12 +17,34 @@ internal sealed unsafe class FreeTypeFace
     /// </summary>
     public static readonly object Gate = new();
 
+    /// <summary>
+    /// The FreeType library, made on first use (<see cref="EnsureLibrary"/>).
+    /// </summary>
     static FT_LibraryRec_* s_library;
+
+    /// <summary>
+    /// The faces opened, by full path.
+    /// </summary>
     static readonly Dictionary<string, FreeTypeFace> Faces = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The font file's bytes, which FreeType reads from for the life of the process.
+    /// </summary>
     readonly byte* _memory;
+
+    /// <summary>
+    /// The file's length in bytes.
+    /// </summary>
     readonly int _length;
+
+    /// <summary>
+    /// The stb_truetype view of the file the kerning is read through; null when it cannot read the file.
+    /// </summary>
     readonly StbTrueType.stbtt_fontinfo? _kerningInfo;
+
+    /// <summary>
+    /// The kerning looked up, by left and right code point.
+    /// </summary>
     readonly Dictionary<long, int> _kerning = [];
 
     /// <summary>
@@ -48,6 +70,9 @@ internal sealed unsafe class FreeTypeFace
         }
     }
 
+    /// <summary>
+    /// Makes the FreeType library once, setting the TrueType interpreter to version 35 (<see cref="Interpreter35"/>).
+    /// </summary>
     static void EnsureLibrary()
     {
         if (s_library != null) return;
@@ -63,6 +88,9 @@ internal sealed unsafe class FreeTypeFace
         s_library = created;
     }
 
+    /// <summary>
+    /// Opens the face from <paramref name="data"/>, kept in native memory, with its OS/2 metrics and kerning reader.
+    /// </summary>
     FreeTypeFace(byte[] data, string filePath)
     {
         FilePath = filePath;
@@ -87,19 +115,34 @@ internal sealed unsafe class FreeTypeFace
         if (StbTrueType.stbtt_InitFont(info, _memory, 0) != 0) _kerningInfo = info;
     }
 
+    /// <summary>
+    /// The font file's full path.
+    /// </summary>
     public string FilePath { get; }
 
+    /// <summary>
+    /// The FreeType face.
+    /// </summary>
     public FT_FaceRec_* Face { get; }
 
+    /// <summary>
+    /// Whether the face has outlines (else only bitmap strikes).
+    /// </summary>
     public bool Scalable => ((int)Face->face_flags & (int)FT_FACE_FLAG.FT_FACE_FLAG_SCALABLE) != 0;
 
+    /// <summary>
+    /// The font units per em.
+    /// </summary>
     public int UnitsPerEm => Face->units_per_EM;
 
     /// <summary>
-    /// The hhea ascender (positive) and descender (negative) in font units.
+    /// The hhea ascender (positive) in font units.
     /// </summary>
     public int Ascender => Face->ascender;
 
+    /// <summary>
+    /// The hhea descender (negative) in font units.
+    /// </summary>
     public int Descender => Face->descender;
 
     /// <summary>

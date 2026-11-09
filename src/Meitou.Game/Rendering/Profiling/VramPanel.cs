@@ -58,7 +58,7 @@ sealed class VramPanel(GpuContext native)
 
     /// <summary>
     /// Writes what is in video memory now to <paramref name="path"/> (Ctrl+Shift+F12 in the game): the driver's usage and budget, the room in our
-    /// blocks, the owners, then every resource and block (<see cref="GpuAllocator.WriteReport"/>). What the driver counts beyond our blocks
+    /// blocks, the owners, then every resource and block (<see cref="Gpu.Core.GpuAllocator.WriteReport"/>). What the driver counts beyond our blocks
     /// (swapchain, DLSS, its own) is only a total here: a RenderDoc or Nsight capture lists it.
     /// </summary>
     public void Dump(string path, Action<TextWriter>? more = null)
@@ -119,8 +119,8 @@ sealed class VramPanel(GpuContext native)
     }
 
     /// <summary>
-    /// The VRAM by owner: the eight largest device-local owners of <see cref="GpuAllocator.Breakdown"/>, the rest of ours, the unused room in our
-    /// blocks, and what the driver counts beyond our blocks (its own allocations, swapchain, other APIs' resources such as DLSS's).
+    /// The VRAM by owner: the eight largest device-local owners of <see cref="Gpu.Core.GpuAllocator.Breakdown"/>, the rest of ours, the unused room
+    /// in our blocks, and what the driver counts beyond our blocks (its own allocations, swapchain, other APIs' resources such as DLSS's).
     /// </summary>
     List<(string Name, ulong Bytes)> VramSlices()
     {

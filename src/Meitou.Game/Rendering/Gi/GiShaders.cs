@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Gi;
 /// </summary>
 static class GiShaders
 {
+    /// <summary>
+    /// <paramref name="v"/> as a GLSL float literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>

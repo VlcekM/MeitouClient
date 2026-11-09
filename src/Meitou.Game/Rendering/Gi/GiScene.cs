@@ -18,7 +18,14 @@ namespace Meitou.Game.Rendering.Gi;
 [StructLayout(LayoutKind.Sequential)]
 public struct GeometryRecord
 {
+    /// <summary>
+    /// The device addresses of the vertices and of the indices.
+    /// </summary>
     public ulong Vertices, Indices;
+
+    /// <summary>
+    /// The bytes from one vertex to the next, and what the geometry is (<see cref="Terrain"/>, <see cref="Object"/> or <see cref="Foliage"/>).
+    /// </summary>
     public uint Stride, Kind;
 
     /// <summary>
@@ -31,12 +38,20 @@ public struct GeometryRecord
     /// through).
     /// </summary>
     public uint AlphaTexture;
+
+    /// <summary>
+    /// The alpha below which a hit on a cut-out geometry is passed through.
+    /// </summary>
     public float AlphaThreshold;
 
     /// <summary>
     /// The frame's interior lamp owner (0: no emitter), excluded from its own lamp's shadow query.
     /// </summary>
     public uint Emitter, Pad1, Pad2;
+
+    /// <summary>
+    /// The record's size in bytes.
+    /// </summary>
     public const int Size = 48;
 
     /// <summary>
@@ -76,6 +91,10 @@ internal sealed unsafe class GiScene : IDisposable
     /// cref="FoliageRange"/> of the eye is in the scene.
     /// </summary>
     public float FoliageRange { get; set; } = 4000;
+
+    /// <summary>
+    /// The smallest bounding radius of foliage in the scene (0: no foliage).
+    /// </summary>
     public float FoliageMinSize { get; set; } = 150;
 
     /// <summary>
@@ -129,12 +148,35 @@ internal sealed unsafe class GiScene : IDisposable
     /// The cell of the eye (a cube of this many units) that <see cref="LazyScene"/> commits on.
     /// </summary>
     const float EpochSize = 1024;
+
+    /// <summary>
+    /// The <see cref="EpochSize"/> cell of the eye at the last commit (<see cref="LazyScene"/>).
+    /// </summary>
     (int X, int Y, int Z) _epochCell;
+
+    /// <summary>
+    /// Whether a cell was committed yet.
+    /// </summary>
     bool _epochSet;
+
+    /// <summary>
+    /// Whether <see cref="Origin"/> was placed yet.
+    /// </summary>
     bool _originSet;
+
+    /// <summary>
+    /// This frame's native list of the scene (null until <see cref="Open"/>).
+    /// </summary>
     CommandList? _seg;
+
+    /// <summary>
+    /// Whether this frame's list is cut into timed parts (the pass meter is on).
+    /// </summary>
     bool _split;
-    public int FoliageInstances { get; private set; }
+
+    /// <summary>
+    /// The foliage the block is rebuilt from, nearest first (reused between rebuilds).
+    /// </summary>
     readonly List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> _rayFoliage = [];
 
     /// <summary>
@@ -142,14 +184,49 @@ internal sealed unsafe class GiScene : IDisposable
     /// </summary>
     const int KeepFrames = 600;
 
+    /// <summary>
+    /// The device context the builds are recorded on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The device the structures and buffers live on.
+    /// </summary>
     readonly VulkanDevice _device;
+
+    /// <summary>
+    /// The terrain grids: fine and coarse.
+    /// </summary>
     readonly TerrainGrid[] _terrain;
+
+    /// <summary>
+    /// The object meshes' bottom-level structures, by mesh.
+    /// </summary>
     readonly Dictionary<object, MeshEntry> _meshes = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Per frame slot: its instances and records buffers and its top level.
+    /// </summary>
     readonly FrameSlot[] _slots;
+
+    /// <summary>
+    /// This frame's top-level instances.
+    /// </summary>
     readonly List<InstanceRecord> _instances = [];
+
+    /// <summary>
+    /// This frame's geometry records, indexed by the instances' custom index.
+    /// </summary>
     readonly List<GeometryRecord> _records = [];
+
+    /// <summary>
+    /// The meshes found unused for too long by <see cref="Evict"/> (reused).
+    /// </summary>
     readonly List<object> _stale = [];
+
+    /// <summary>
+    /// The updates run so far, by which the meshes' use is told.
+    /// </summary>
     long _frame;
 
     /// <summary>
@@ -168,21 +245,48 @@ internal sealed unsafe class GiScene : IDisposable
     public GpuBufferBinding Records { get; private set; }
 
     /// <summary>
-    /// Statistics of the last update.
+    /// The instances in the last update's top level.
     /// </summary>
     public int InstanceCount { get; private set; }
+
+    /// <summary>
+    /// The object and foliage meshes with a bottom-level structure.
+    /// </summary>
     public int MeshCount => _meshes.Count;
+
+    /// <summary>
+    /// The bottom-level structures built in the last update.
+    /// </summary>
     public int BuiltThisFrame { get; private set; }
+
+    /// <summary>
+    /// The bytes of the object and foliage structures held.
+    /// </summary>
     public long MeshBytes { get; private set; }
+
+    /// <summary>
+    /// The foliage instances in the foliage block.
+    /// </summary>
+    public int FoliageInstances { get; private set; }
 
     /// <summary>
     /// Render-thread time of the last <see cref="Update"/>.
     /// </summary>
     public float UpdateMs { get; private set; }
 
+    /// <summary>
+    /// A mesh's bottom-level structure and the geometry records of its parts.
+    /// </summary>
     sealed class MeshEntry
     {
+        /// <summary>
+        /// The mesh's bottom-level structure.
+        /// </summary>
         public required AccelerationStructure Blas;
+
+        /// <summary>
+        /// The records of the mesh's geometries, copied per instance.
+        /// </summary>
         public required GeometryRecord[] Records;
 
         /// <summary>
@@ -190,22 +294,46 @@ internal sealed unsafe class GiScene : IDisposable
         /// </summary>
         public required int[] Parts;
 
-        // The buffers it was built from: a reshape (BuildingLodMesh) puts new parts into the same GpuObjectMesh and frees these, so the records
-        // would point at freed memory (a hit reads its triangle: device lost).
+        /// <summary>
+        /// The buffers it was built from: a reshape (BuildingLodMesh) puts new parts into the same GpuObjectMesh and frees these, so the records
+        /// would point at freed memory (a hit reads its triangle: device lost).
+        /// </summary>
         public required object[] Sources;
+
+        /// <summary>
+        /// The update (<see cref="_frame"/>) the structure was last in the scene.
+        /// </summary>
         public long LastUsed;
     }
 
+    /// <summary>
+    /// One frame slot's upload buffers and top level.
+    /// </summary>
     sealed class FrameSlot
     {
+        /// <summary>
+        /// The slot's top-level instances and geometry records (upload memory).
+        /// </summary>
         public required BufferAllocation Instances, Records;
+
+        /// <summary>
+        /// The slot's top-level structure.
+        /// </summary>
         public required AccelerationStructure Top;
 
         /// <summary>
         /// The instances (bytes) the slot's top level was last built over (ReuseTop).
         /// </summary>
         public byte[]? BuiltBytes;
+
+        /// <summary>
+        /// The bytes of <see cref="BuiltBytes"/> in use (-1: none).
+        /// </summary>
         public int BuiltLength;
+
+        /// <summary>
+        /// Whether the slot's top level was last built for tracing (<see cref="TopFastTrace"/>).
+        /// </summary>
         public bool BuiltTrace;
     }
 
@@ -213,6 +341,9 @@ internal sealed unsafe class GiScene : IDisposable
 
     #region Update
 
+    /// <summary>
+    /// Makes the terrain grids and, per frame slot, the instances and records buffers and a top level; needs ray queries.
+    /// </summary>
     public GiScene(GpuContext ctx)
     {
         if (!ctx.Device.HasRayQuery)
@@ -546,15 +677,46 @@ internal sealed unsafe class GiScene : IDisposable
 
     #region Foliage block
 
-    // The foliage block: rebuilt now and then (the foliage does not move), not every frame (FoliageRenderer.RayInstances walks every zone).
+    /// <summary>
+    /// The foliage block's instances: rebuilt now and then (the foliage does not move), not every frame (FoliageRenderer.RayInstances walks every
+    /// zone).
+    /// </summary>
     readonly List<InstanceRecord> _foliageBlock = [];
+
+    /// <summary>
+    /// The foliage block's geometry records.
+    /// </summary>
     readonly List<GeometryRecord> _foliageRecords = [];
+
+    /// <summary>
+    /// Per foliage record, the mesh and the part it is.
+    /// </summary>
     readonly List<(FoliageRayMesh Mesh, int Part)> _foliageSources = [];
+
+    /// <summary>
+    /// The origin the block's transforms are relative to, and the eye it was gathered at.
+    /// </summary>
     Vector3 _foliageOrigin, _foliageEye;
+
+    /// <summary>
+    /// The update the block was rebuilt in.
+    /// </summary>
     long _foliageFrame = long.MinValue / 2;
+
+    /// <summary>
+    /// The foliage's ray generation the block was gathered from.
+    /// </summary>
     int _foliageGeneration = -1;
+
+    /// <summary>
+    /// Whether every foliage mesh of the block had its structure (false: rebuilt again soon).
+    /// </summary>
     bool _foliageComplete;
 
+    /// <summary>
+    /// Whether the foliage block is due again: every 120 updates, on a commit (else when the eye moved 250 units), when the foliage changed, and soon
+    /// after a block that lacked meshes.
+    /// </summary>
     bool FoliageStale(Vector3 eye, FoliageRenderer foliage, bool lazy, bool commit) =>
         _frame - _foliageFrame >= 120
         || (lazy ? commit : Vector3.DistanceSquared(eye, _foliageEye) > 250f * 250f)
@@ -597,6 +759,10 @@ internal sealed unsafe class GiScene : IDisposable
         FoliageInstances = _foliageBlock.Count;
     }
 
+    /// <summary>
+    /// Builds the bottom-level structure of <paramref name="geometries"/> into the scene's list and keeps it under <paramref name="key"/> with its
+    /// records; null when there are none.
+    /// </summary>
     MeshEntry? Build(object key, object[] sources, List<TriangleGeometry> geometries, List<GeometryRecord> recs, List<int> partOf, string name)
     {
         if (geometries.Count == 0) return null;
@@ -614,6 +780,9 @@ internal sealed unsafe class GiScene : IDisposable
 
     #region Eviction and disposal
 
+    /// <summary>
+    /// Drops the meshes' structures not in the scene for <see cref="KeepFrames"/> updates.
+    /// </summary>
     void Evict()
     {
         _stale.Clear();
@@ -622,6 +791,9 @@ internal sealed unsafe class GiScene : IDisposable
         foreach (var key in _stale) Drop(key, _meshes[key]);
     }
 
+    /// <summary>
+    /// Whether <paramref name="entry"/> was built from <paramref name="source"/> and its current parts' vertex buffers.
+    /// </summary>
     static bool BuiltFrom(MeshEntry entry, GpuObjectMesh source)
     {
         var s = entry.Sources;
@@ -631,6 +803,9 @@ internal sealed unsafe class GiScene : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Frees <paramref name="entry"/>'s structure and forgets it.
+    /// </summary>
     void Drop(object key, MeshEntry entry)
     {
         MeshBytes -= (long)entry.Blas.Bytes;
@@ -638,11 +813,17 @@ internal sealed unsafe class GiScene : IDisposable
         _meshes.Remove(key);
     }
 
+    /// <summary>
+    /// A line describing the last update, the structures held and the terrain grids, for the log.
+    /// </summary>
     public string Describe() =>
         $"{UpdateMs:0.00} ms{(TopReused ? " (top level as it was)" : "")}, {InstanceCount} instances ({FoliageInstances} foliage), "
         + $"{_meshes.Count} object structures ({MeshBytes / (1024 * 1024)} MB), {BuiltThisFrame} built this frame, "
         + $"terrain {string.Join(" + ", _terrain.Select(t => t.Describe()))}";
 
+    /// <summary>
+    /// Frees the terrain grids, the mesh structures and the slots' buffers and top levels.
+    /// </summary>
     public void Dispose()
     {
         foreach (var t in _terrain) t.Dispose();
@@ -666,14 +847,40 @@ internal sealed unsafe class GiScene : IDisposable
     /// </summary>
     sealed class TerrainGrid(GpuContext ctx, string name, int cells, float spacing) : IDisposable
     {
+        /// <summary>
+        /// The grid's vertex and index buffers (null until the first build).
+        /// </summary>
         DeviceBuffer? _vertices, _indices;
+
+        /// <summary>
+        /// The sampling running on a worker (null: none).
+        /// </summary>
         Task<(Vector3 Centre, Vector3[] Positions)>? _job;
+
+        /// <summary>
+        /// The grid's bottom-level structure (null before the first build).
+        /// </summary>
         public AccelerationStructure? Blas { get; private set; }
+
+        /// <summary>
+        /// The centre the structure was built at.
+        /// </summary>
         public Vector3 Centre { get; private set; }
+
+        /// <summary>
+        /// The grid's geometry record.
+        /// </summary>
         public GeometryRecord Record { get; private set; }
-        // The centre of the newest grid asked for (the one being sampled, or built): Centre moves only when its structure is built, so the
-        // instance never places the old grid at the new centre.
+
+        /// <summary>
+        /// The centre of the newest grid asked for (the one being sampled, or built): Centre moves only when its structure is built, so the instance
+        /// never places the old grid at the new centre.
+        /// </summary>
         Vector3 _requested;
+
+        /// <summary>
+        /// Whether a grid was asked for yet.
+        /// </summary>
         bool _hasRequested;
 
         /// <summary>
@@ -686,19 +893,57 @@ internal sealed unsafe class GiScene : IDisposable
         /// grid with <see cref="GiScene.LazyScene"/>, whose refit is cheap and waits for the scene's commit).
         /// </summary>
         public int RequestDivisor { get; set; } = 8;
+
+        /// <summary>
+        /// Whether this is the fine grid (spacing under 100).
+        /// </summary>
         public bool Fine => spacing < 100;
 
         /// <summary>
         /// True when the last <see cref="Update"/> refitted the structure in place.
         /// </summary>
         public bool Refitted { get; private set; }
+
+        /// <summary>
+        /// A refitted grid is rebuilt every this many refits.
+        /// </summary>
         const int FullRebuildEvery = 16;
+
+        /// <summary>
+        /// The refits since the last build.
+        /// </summary>
         int _refitsSinceBuild;
+
+        /// <summary>
+        /// Whether the structure was built to be refitted.
+        /// </summary>
         bool _updatable;
+
+        /// <summary>
+        /// The grid's side in world units.
+        /// </summary>
         float Side => cells * spacing;
+
+        /// <summary>
+        /// The most frames a finished grid waits for the scene's commit.
+        /// </summary>
         const int MaxWait = 8;
+
+        /// <summary>
+        /// The frames the finished grid has waited.
+        /// </summary>
         int _waited;
 
+        /// <summary>
+        /// One array for every sampling (an LOH array a rebuild otherwise): one job at a time, and Build copies it into the upload staging before the
+        /// next starts.
+        /// </summary>
+        Vector3[]? _samples;
+
+        /// <summary>
+        /// Installs a finished grid (on <paramref name="install"/>, the first or one that waited <see cref="MaxWait"/> frames) and starts sampling a
+        /// new one when the eye left the middle of the last; the first grid is made at once.
+        /// </summary>
         public void Update(Func<IGpuCommandList> open, Vector3 eye, HeightSnapshot heights, bool install = true)
         {
             Refitted = false;
@@ -730,10 +975,9 @@ internal sealed unsafe class GiScene : IDisposable
             }
         }
 
-        // One array for every sampling (an LOH array a rebuild otherwise): one job at a time, and Build copies it into the upload staging before the
-        // next starts.
-        Vector3[]? _samples;
-
+        /// <summary>
+        /// The heights around <paramref name="centre"/>, a vertex per grid corner, relative to it.
+        /// </summary>
         Vector3[] Sample(Vector3 centre, HeightSnapshot heights)
         {
             int n = cells + 1;
@@ -751,6 +995,10 @@ internal sealed unsafe class GiScene : IDisposable
             return p;
         }
 
+        /// <summary>
+        /// Builds the grid at <paramref name="centre"/> from <paramref name="positions"/>: refitted in place when it can be, else into new buffers
+        /// and a new structure.
+        /// </summary>
         void Build(CommandList cmd, Vector3 centre, Vector3[] positions)
         {
             int n = cells + 1;
@@ -805,8 +1053,14 @@ internal sealed unsafe class GiScene : IDisposable
             };
         }
 
+        /// <summary>
+        /// The grid's size, for the log ("none" before it is built).
+        /// </summary>
         public string Describe() => Blas is null ? "none" : $"{cells}² × {spacing:0}";
 
+        /// <summary>
+        /// Waits for the sampling and frees the structure and buffers.
+        /// </summary>
         public void Dispose()
         {
             _job?.Wait();

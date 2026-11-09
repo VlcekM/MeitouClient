@@ -67,27 +67,76 @@ public sealed class ReflectionPass : IDisposable
     /// Set by the frame loop while the shadows switch is Faithful: the reflection then keeps the shadows as before (what the game does is Unknown).
     /// </summary>
     public bool FaithfulShadows { get; set; }
+
+    /// <summary>
+    /// The shadows-off receiver block swapped in while the pass records under <see cref="NoShadows"/>; made on first use.
+    /// </summary>
     FrameBlock? _unshadowed;
 
     /// <summary>
     /// The native GPU API (all native since phase 8 stage 3: the pass is the guests' host, docs/renderer-native.md 8.9).
     /// </summary>
     public IGpuContext Gpu { get; }
+
+    /// <summary>
+    /// The GPU timestamps of the pass.
+    /// </summary>
     readonly PassTimer _timer;
+
+    /// <summary>
+    /// The options the mirrored terrain and objects are drawn with (wireframe always off).
+    /// </summary>
     readonly WorldRenderOptions _options = new();
 
-    // The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the
-    // scene is drawn into, resolved into the colour.
+    /// <summary>
+    /// The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the scene is
+    /// drawn into, resolved into the colour.
+    /// </summary>
     GpuTexture? _colour, _depth, _msColour, _msDepth;
-    int _samples, _builtFor;   // builtFor: the Samples the targets were made for
+
+    /// <summary>
+    /// The sample count of the targets in use, and the <see cref="Samples"/> they were made for.
+    /// </summary>
+    int _samples, _builtFor;
+
+    /// <summary>
+    /// The targets' size, the frames reused since the start (for the statistics), and the frames since the image was drawn.
+    /// </summary>
     int _width, _height, _skipped, _age;
+
+    /// <summary>
+    /// Whether the last pass left an image the water may sample.
+    /// </summary>
     bool _hasImage;
+
+    /// <summary>
+    /// The eye the image was drawn from.
+    /// </summary>
     Vector3 _lastEye;
+
+    /// <summary>
+    /// The field of view the image was drawn with.
+    /// </summary>
     float _lastFov;
+
+    /// <summary>
+    /// The view the image was drawn with.
+    /// </summary>
     Matrix4x4 _lastView;
+
+    /// <summary>
+    /// The GPU time of each pass drawn, in milliseconds (for <see cref="DescribeStats"/>).
+    /// </summary>
     readonly List<double> _gpuSamples = [];
+
+    /// <summary>
+    /// The CPU time of each pass drawn, in milliseconds (for <see cref="DescribeStats"/>).
+    /// </summary>
     readonly List<double> _cpuSamples = [];
 
+    /// <summary>
+    /// Makes the pass on <paramref name="gpu"/>; the targets come with the first pass.
+    /// </summary>
     public ReflectionPass(IGpuContext gpu)
     {
         Gpu = gpu;
@@ -98,6 +147,10 @@ public sealed class ReflectionPass : IDisposable
     /// The game's <c>water reflection</c> when the key is missing, and <c>reflection range</c> (docs/formats/settings.md).
     /// </summary>
     public const int DefaultLevel = 2;
+
+    /// <summary>
+    /// The game's <c>reflection range</c> when the key is missing.
+    /// </summary>
     public const float DefaultRange = 0.6f;
 
     /// <summary>
@@ -108,7 +161,7 @@ public sealed class ReflectionPass : IDisposable
     public int Level { get; set; } = DefaultLevel;
 
     /// <summary>
-    /// The game's <c>reflection range</c>: the far clip is the haze distance (the game's view distance Ã— 10) times this; the frame loop sets <see
+    /// The game's <c>reflection range</c>: the far clip is the haze distance (the game's view distance × 10) times this; the frame loop sets <see
     /// cref="MaxDistance"/> from it.
     /// </summary>
     public float Range { get; set; } = DefaultRange;
@@ -209,14 +262,30 @@ public sealed class ReflectionPass : IDisposable
     /// The last run found no water in view, at this picture size: the verdict is reused as an image would be (<see cref="CanReuse"/>).
     /// </summary>
     bool _noWater;
+
+    /// <summary>
+    /// The picture size the no-water verdict was found at.
+    /// </summary>
     int _noWaterWidth, _noWaterHeight;
 
     /// <summary>
     /// Things whose bounding sphere is under this many texels of radius in the reflection are left out of it.
     /// </summary>
     public float MinTexels { get; set; } = 1.5f;
+
+    /// <summary>
+    /// The terrain's heights as the last pass drew them, for the water tests.
+    /// </summary>
     HeightSnapshot _heights;
+
+    /// <summary>
+    /// The real (not mirrored) eye of the last pass.
+    /// </summary>
     Vector3 _realEye;
+
+    /// <summary>
+    /// Texels of the reflection per unit of a thing's radius over its distance, for <see cref="MinTexels"/>.
+    /// </summary>
     float _texelScale;
 
     #endregion
@@ -287,7 +356,15 @@ public sealed class ReflectionPass : IDisposable
         : new(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
                 TextureWrapMode.ClampToEdge,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), _colour.View());
+
+    /// <summary>
+    /// The reflection's width in texels.
+    /// </summary>
     public int Width => _width;
+
+    /// <summary>
+    /// The reflection's height in texels.
+    /// </summary>
     public int Height => _height;
 
     /// <summary>
@@ -299,19 +376,35 @@ public sealed class ReflectionPass : IDisposable
     /// Time the CPU spent recording the last reflection pass, and what the GPU spent on it (a few frames late).
     /// </summary>
     public double CpuMs { get; private set; }
+
+    /// <summary>
+    /// What the GPU spent on the last reflection pass read back, in milliseconds (a few frames late).
+    /// </summary>
     public double GpuMs { get; private set; }
+
+    /// <summary>
+    /// The terrain chunks the last pass drew.
+    /// </summary>
     public int DrawnChunks { get; private set; }
 
     /// <summary>
     /// What the last scene callback drew (objects, foliage), for the log.
     /// </summary>
     public string SceneStats { get; set; } = "";
+
+    /// <summary>
+    /// The triangles the last pass drew.
+    /// </summary>
     public long DrawnTriangles { get; private set; }
 
     #endregion
 
     #region Render targets
 
+    /// <summary>
+    /// Makes the targets for <paramref name="w"/> x <paramref name="h"/> at the asked <see cref="Samples"/> (the next lower count the device
+    /// supports); nothing when they match.
+    /// </summary>
     void Resize(int w, int h)
     {
         if (w == _width && h == _height && _colour is not null && _builtFor == Samples) return;
@@ -341,6 +434,9 @@ public sealed class ReflectionPass : IDisposable
         _msDepth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, _samples, "reflection depth msaa", true);
     }
 
+    /// <summary>
+    /// Releases the targets (after the frames in flight).
+    /// </summary>
     void Free()
     {
         if (_colour is null) return;
@@ -588,7 +684,20 @@ public sealed class ReflectionPass : IDisposable
     /// CPU time of the parts of the pass (sky, terrain, objects, foliage), summed over the passes drawn; the scene callback adds its own.
     /// </summary>
     public readonly double[] PhaseMs = new double[5];
+
+    /// <summary>
+    /// When the current phase started, in <see cref="Stopwatch"/> ticks.
+    /// </summary>
     long _lapAt;
+
+    /// <summary>
+    /// The same for the last pass alone.
+    /// </summary>
+    public readonly double[] LastPhaseMs = new double[5];
+
+    /// <summary>
+    /// Adds the time since the last lap to <paramref name="phase"/>'s totals (0 sky, 1 terrain, 2 objects, 3 foliage, 4 setup).
+    /// </summary>
     public void Lap(int phase)
     {
         long now = Stopwatch.GetTimestamp();
@@ -599,9 +708,8 @@ public sealed class ReflectionPass : IDisposable
     }
 
     /// <summary>
-    /// The same for the last pass alone.
+    /// The last pass's phases as a line (milliseconds).
     /// </summary>
-    public readonly double[] LastPhaseMs = new double[5];
     public string DescribeLast() =>
         $"setup {LastPhaseMs[4]:0.0}, sky {LastPhaseMs[0]:0.0}, terrain {LastPhaseMs[1]:0.0}, "
         + $"objects {LastPhaseMs[2]:0.0}, foliage {LastPhaseMs[3]:0.0}";
@@ -740,8 +848,20 @@ public sealed class ReflectionPass : IDisposable
     /// texel shows; the volumes along that part are laid over the texel (the main fog pass already fogs the part from the eye to the water).
     /// </summary>
     public bool FogVolumes { get; set; }
+
+    /// <summary>
+    /// The program that lays the fog volumes over the reflection; remade when the sample count changes.
+    /// </summary>
     LegacyProgram? _fogProgram;
+
+    /// <summary>
+    /// The sample count <see cref="_fogProgram"/> was made for (-1: none).
+    /// </summary>
     int _fogProgramSamples = -1;
+
+    /// <summary>
+    /// The fog volumes pass's pipeline.
+    /// </summary>
     GpuPipeline? _fogPipeline;
 
     /// <summary>
@@ -782,6 +902,10 @@ public sealed class ReflectionPass : IDisposable
         }
         """;
 
+    /// <summary>
+    /// Lays the placed fog volumes along the reflected rays over the reflection (in place, blending the fog's light over the scene by its
+    /// transmittance).
+    /// </summary>
     void RunFog(IGpuCommandList cmd, Matrix4x4 nearViewProjection, Matrix4x4 nearRays, Vector3 mirroredEye)
     {
         var depthTexture = _msDepth ?? _depth;
@@ -794,7 +918,7 @@ public sealed class ReflectionPass : IDisposable
             _fogProgram = LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, FogFragment(_samples > 0), "reflection fog volumes");
             _fogProgramSamples = _samples;
 
-            // The fog volumes pass's blend: scene Ã— transmittance (alpha) + the fog's light, colour only.
+            // The fog volumes pass's blend: scene × transmittance (alpha) + the fog's light, colour only.
             var state = new DrawState(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0,
                 new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha), DrawState.Rgb, PolygonKind.Fill, false, false);
             _fogPipeline = Gpu.Pipelines.Get(state.Pipeline(_fogProgram.Program, _fogProgram.VertexLayout([]), PrimitiveType.Triangles,
@@ -825,6 +949,9 @@ public sealed class ReflectionPass : IDisposable
 
     #region Disposal
 
+    /// <summary>
+    /// Releases the targets and the fog program.
+    /// </summary>
     public void Dispose()
     {
         Free();

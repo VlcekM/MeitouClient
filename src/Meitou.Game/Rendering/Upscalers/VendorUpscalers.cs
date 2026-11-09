@@ -36,6 +36,10 @@ public static class VendorUpscalers
                 ? old
                 : null;
 
+    /// <summary>
+    /// Makes the upscaler of a kind: FSR, or DLSS through NGX (Linux, or with <paramref name="ngx"/>) else Streamline; null, with the reason logged,
+    /// when it cannot be made.
+    /// </summary>
     /// <param name="streamline">Streamline, when it was initialised before the device (DLSS on Windows); null otherwise.</param>
     /// <param name="ngx">NGX, when it was initialised before the device (DLSS on Linux, and on Windows with frame generation); null
     /// otherwise.</param>

@@ -10,95 +10,302 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// NVIDIA Streamline (MIT; the signed <c>sl.interposer.dll</c>, <c>sl.common.dll</c>, <c>sl.dlss.dll</c> and NVIDIA's <c>nvngx_dlss.dll</c>, with
 /// frame generation also <c>sl.dlss_g.dll</c>, <c>nvngx_dlssg.dll</c>, <c>sl.reflex.dll</c> and <c>sl.pcl.dll</c>; none of them in the repository),
 /// loaded at run time from <see cref="VendorUpscalers.DlssPath"/> or next to the executable, in Streamline's manual-hooking mode: <see
-/// cref="TryInit"/> runs
-/// <c>slInit</c> before the Vulkan instance exists and reports the extensions, features and queues the loaded features need (<see cref="Apply"/> adds
-/// them to the device), the device is handed over with <c>slSetVulkanInfo</c>, and presents go through the interposer's <c>vkQueuePresentKHR</c>
-/// (<see cref="PresentProxy"/>), which Streamline needs every frame. With DLSS frame generation the swapchain's whole life goes through the
-/// interposer too (<see cref="SwapchainHooks"/>). Shut down (<see cref="Dispose"/>) before the device is destroyed. docs/render-post.md.
+/// cref="TryInit"/> runs <c>slInit</c> before the Vulkan instance exists and reports the extensions, features and queues the loaded features need
+/// (<see cref="Apply"/> adds them to the device), the device is handed over with <c>slSetVulkanInfo</c>, and presents go through the interposer's
+/// <c>vkQueuePresentKHR</c> (<see cref="PresentProxy"/>), which Streamline needs every frame. With DLSS frame generation the swapchain's whole life
+/// goes through the interposer too (<see cref="SwapchainHooks"/>). Shut down (<see cref="Dispose"/>) before the device is destroyed.
+/// docs/render-post.md.
 /// </summary>
 public sealed unsafe class Streamline : IDisposable
 {
+    #region Interop structures
+
+    /// <summary>
+    /// The interposer's file name: the library loaded, which loads the feature plugins.
+    /// </summary>
     public const string InterposerName = "sl.interposer.dll";
     /// <summary>
     /// The DLLs DLSS frame generation adds to the upscaler's.
     /// </summary>
     public static readonly string[] FrameGenerationFiles = ["sl.dlss_g.dll", "nvngx_dlssg.dll", "sl.reflex.dll", "sl.pcl.dll"];
-    const ulong SdkVersion = (2UL << 48) | (14UL << 32) | (16UL << 16) | 0xfedc;  // Streamline 2.14.16 (sl_version.h)
+
+    /// <summary>
+    /// The SDK version <c>slInit</c> is told: Streamline 2.14.16 (sl_version.h), packed major, minor, build and the SDK's magic.
+    /// </summary>
+    const ulong SdkVersion = (2UL << 48) | (14UL << 32) | (16UL << 16) | 0xfedc;
     /// <summary>
     /// The viewports: DLSS upscales on 0 (constants for the post chain's bottom-up images), frame generation runs on 1 (top-down, as the swapchain).
     /// </summary>
     public const uint UpscaleViewport = 0, FrameGenerationViewport = 1;
+
+    /// <summary>
+    /// The GUIDs of <see cref="Preferences"/>, <see cref="FeatureRequirements"/>, <see cref="AdapterInfo"/> and <see cref="VulkanInfo"/>.
+    /// </summary>
     static readonly Guid PreferencesType = new("1ca10965-bf8e-432b-8da1-6716d879fb14"), RequirementsType = new("66714097-ac6d-4bc6-8915-1e0f55a6b61f"),
         AdapterInfoType = new("0677315f-a746-4492-9f42-cb6142c9c3d4"), VulkanInfoType = new("0eed6fd5-82cd-43a9-bdb5-47a5ba2f45d6");
 
+    /// <summary>
+    /// sl::Preferences (version 1): what <c>slInit</c> loads and how (the plugins' path, the log, the flags, the features, the project).
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Preferences
     {
+        /// <summary>
+        /// The next structure in the chain (0: none).
+        /// </summary>
         public nint Next;
+
+        /// <summary>
+        /// The structure's GUID, <see cref="PreferencesType"/>.
+        /// </summary>
         public Guid StructType;
+
+        /// <summary>
+        /// The structure's version.
+        /// </summary>
         public nuint StructVersion;
+
+        /// <summary>
+        /// Whether Streamline opens its console window (0: no).
+        /// </summary>
         public byte ShowConsole;
+
+        /// <summary>
+        /// The log level (1: default).
+        /// </summary>
         public uint LogLevel;
+
+        /// <summary>
+        /// The paths the plugins are loaded from (wide strings).
+        /// </summary>
         public nint PathsToPlugins;
+
+        /// <summary>
+        /// How many of <see cref="PathsToPlugins"/> there are.
+        /// </summary>
         public uint NumPathsToPlugins;
+
+        /// <summary>
+        /// Where Streamline writes its logs and data (0: nowhere).
+        /// </summary>
         public nint PathToLogsAndData;
+
+        /// <summary>
+        /// The allocation, release and log callbacks (0: Streamline's own, none).
+        /// </summary>
         public nint AllocateCallback, ReleaseCallback, LogMessageCallback;
+
+        /// <summary>
+        /// The preference flags (sl::PreferenceFlags).
+        /// </summary>
         public ulong Flags;
+
+        /// <summary>
+        /// The features to load (<see cref="SlTypes.FeatureDlss"/> and the others).
+        /// </summary>
         public nint FeaturesToLoad;
+
+        /// <summary>
+        /// How many of <see cref="FeaturesToLoad"/> there are.
+        /// </summary>
         public uint NumFeaturesToLoad;
+
+        /// <summary>
+        /// The NVIDIA application id (0: none; <see cref="ProjectId"/> is given instead).
+        /// </summary>
         public uint ApplicationId;
+
+        /// <summary>
+        /// The engine type (0: a custom engine).
+        /// </summary>
         public uint Engine;
+
+        /// <summary>
+        /// The engine's version and the project id (ANSI strings).
+        /// </summary>
         public nint EngineVersion, ProjectId;
+
+        /// <summary>
+        /// The render API (2: Vulkan).
+        /// </summary>
         public uint RenderApi;
     }
 
+    /// <summary>
+    /// sl::Version: a version number.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct SlVersion
     {
+        /// <summary>
+        /// The version's parts.
+        /// </summary>
         public uint Major, Minor, Build;
     }
 
+    /// <summary>
+    /// sl::FeatureRequirements (version 2): what a feature needs of the OS, the driver and the Vulkan instance and device.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct FeatureRequirements
     {
+        /// <summary>
+        /// The next structure in the chain (0: none).
+        /// </summary>
         public nint Next;
+
+        /// <summary>
+        /// The structure's GUID, <see cref="RequirementsType"/>.
+        /// </summary>
         public Guid StructType;
+
+        /// <summary>
+        /// The structure's version.
+        /// </summary>
         public nuint StructVersion;
+
+        /// <summary>
+        /// The requirement flags, the most CPU threads and viewports, and how many tags the feature requires.
+        /// </summary>
         public uint Flags, MaxNumCpuThreads, MaxNumViewports, NumRequiredTags;
+
+        /// <summary>
+        /// The tags the feature requires.
+        /// </summary>
         public nint RequiredTags;
+
+        /// <summary>
+        /// The OS and driver versions detected and required.
+        /// </summary>
         public SlVersion OsDetected, OsRequired, DriverDetected, DriverRequired;
+
+        /// <summary>
+        /// The compute and graphics queues the feature needs.
+        /// </summary>
         public uint VkNumComputeQueuesRequired, VkNumGraphicsQueuesRequired;
+
+        /// <summary>
+        /// How many of <see cref="VkDeviceExtensions"/> there are.
+        /// </summary>
         public uint VkNumDeviceExtensions;
+
+        /// <summary>
+        /// The device extensions the feature needs (ANSI strings).
+        /// </summary>
         public nint VkDeviceExtensions;
+
+        /// <summary>
+        /// How many of <see cref="VkInstanceExtensions"/> there are.
+        /// </summary>
         public uint VkNumInstanceExtensions;
+
+        /// <summary>
+        /// The instance extensions the feature needs (ANSI strings).
+        /// </summary>
         public nint VkInstanceExtensions;
+
+        /// <summary>
+        /// How many of <see cref="VkFeatures12"/> there are.
+        /// </summary>
         public uint VkNumFeatures12;
+
+        /// <summary>
+        /// The Vulkan 1.2 features the feature needs (ANSI names).
+        /// </summary>
         public nint VkFeatures12;
+
+        /// <summary>
+        /// How many of <see cref="VkFeatures13"/> there are.
+        /// </summary>
         public uint VkNumFeatures13;
+
+        /// <summary>
+        /// The Vulkan 1.3 features the feature needs (ANSI names).
+        /// </summary>
         public nint VkFeatures13;
+
+        /// <summary>
+        /// The optical flow queues the feature needs.
+        /// </summary>
         public uint VkNumOpticalFlowQueuesRequired;
     }
 
+    /// <summary>
+    /// sl::AdapterInfo (version 1): the GPU a feature's support is asked for.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct AdapterInfo
     {
+        /// <summary>
+        /// The next structure in the chain (0: none).
+        /// </summary>
         public nint Next;
+
+        /// <summary>
+        /// The structure's GUID, <see cref="AdapterInfoType"/>.
+        /// </summary>
         public Guid StructType;
+
+        /// <summary>
+        /// The structure's version.
+        /// </summary>
         public nuint StructVersion;
+
+        /// <summary>
+        /// The adapter's LUID (0: given by <see cref="VkPhysicalDevice"/> instead).
+        /// </summary>
         public nint Luid;
+
+        /// <summary>
+        /// The size of <see cref="Luid"/>.
+        /// </summary>
         public uint LuidSize;
+
+        /// <summary>
+        /// The Vulkan physical device.
+        /// </summary>
         public nint VkPhysicalDevice;
     }
 
+    /// <summary>
+    /// sl::VulkanInfo (version 3): the device Streamline works on and the queues it may use.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct VulkanInfo
     {
+        /// <summary>
+        /// The next structure in the chain (0: none).
+        /// </summary>
         public nint Next;
+
+        /// <summary>
+        /// The structure's GUID, <see cref="VulkanInfoType"/>.
+        /// </summary>
         public Guid StructType;
+
+        /// <summary>
+        /// The structure's version.
+        /// </summary>
         public nuint StructVersion;
+
+        /// <summary>
+        /// The Vulkan device, instance and physical device.
+        /// </summary>
         public nint Device, Instance, PhysicalDevice;
+
+        /// <summary>
+        /// The queues Streamline uses (index in the family, and the family): compute, graphics and optical flow.
+        /// </summary>
         public uint ComputeQueueIndex, ComputeQueueFamily, GraphicsQueueIndex, GraphicsQueueFamily, OpticalFlowQueueIndex, OpticalFlowQueueFamily;
+
+        /// <summary>
+        /// Whether the optical flow runs in its native mode.
+        /// </summary>
         public byte UseNativeOpticalFlowMode;
+
+        /// <summary>
+        /// The create flags of the compute, graphics and optical flow queues.
+        /// </summary>
         public uint ComputeQueueCreateFlags, GraphicsQueueCreateFlags, OpticalFlowQueueCreateFlags;
     }
 
@@ -108,46 +315,163 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public readonly struct SwapchainHooks
     {
+        /// <summary>
+        /// The interposer's <c>vkCreateSwapchainKHR</c>.
+        /// </summary>
         public delegate* unmanaged<Device, SwapchainCreateInfoKHR*, AllocationCallbacks*, SwapchainKHR*, Result> Create { get; init; }
+
+        /// <summary>
+        /// The interposer's <c>vkDestroySwapchainKHR</c>.
+        /// </summary>
         public delegate* unmanaged<Device, SwapchainKHR, AllocationCallbacks*, void> Destroy { get; init; }
+
+        /// <summary>
+        /// The interposer's <c>vkGetSwapchainImagesKHR</c>.
+        /// </summary>
         public delegate* unmanaged<Device, SwapchainKHR, uint*, Image*, Result> GetImages { get; init; }
+
+        /// <summary>
+        /// The interposer's <c>vkAcquireNextImageKHR</c>.
+        /// </summary>
         public delegate* unmanaged<Device, SwapchainKHR, ulong, VkSemaphore, Fence, uint*, Result> Acquire { get; init; }
     }
 
+    #endregion
+
+    #region Loading
+
+    /// <summary>
+    /// The loaded interposer library.
+    /// </summary>
     readonly nint _library;
+
+    /// <summary>
+    /// <c>slShutdown</c>.
+    /// </summary>
     readonly delegate* unmanaged<int> _shutdown;
+
+    /// <summary>
+    /// <c>slSetVulkanInfo</c>.
+    /// </summary>
     readonly delegate* unmanaged<VulkanInfo*, int> _setVulkanInfo;
+
+    /// <summary>
+    /// <c>slIsFeatureSupported</c>.
+    /// </summary>
     readonly delegate* unmanaged<uint, AdapterInfo*, int> _isFeatureSupported;
+
+    /// <summary>
+    /// <c>slSetFeatureLoaded</c>.
+    /// </summary>
     readonly delegate* unmanaged<uint, byte, int> _setFeatureLoaded;
+
+    /// <summary>
+    /// <c>slGetFeatureFunction</c>.
+    /// </summary>
     readonly delegate* unmanaged<uint, byte*, void**, int> _getFeatureFunction;
+
+    /// <summary>
+    /// <c>slGetNewFrameToken</c>.
+    /// </summary>
     readonly delegate* unmanaged<nint*, uint*, int> _getNewFrameToken;
+
+    /// <summary>
+    /// <c>slSetConstants</c>, for the upscaler and frame generation.
+    /// </summary>
     internal readonly delegate* unmanaged<void*, nint, void*, int> SetConstants;
+
+    /// <summary>
+    /// <c>slSetTagForFrame</c>, for the upscaler and frame generation.
+    /// </summary>
     internal readonly delegate* unmanaged<nint, void*, void*, uint, nint, int> SetTagForFrame;
+
+    /// <summary>
+    /// <c>slEvaluateFeature</c>, for the upscaler.
+    /// </summary>
     internal readonly delegate* unmanaged<uint, nint, void**, uint, nint, int> EvaluateFeature;
+
+    /// <summary>
+    /// <c>slFreeResources</c>, for the upscaler and frame generation.
+    /// </summary>
     internal readonly delegate* unmanaged<uint, void*, int> FreeResources;
+
+    /// <summary>
+    /// <c>slDLSSSetOptions</c>, after <see cref="Attach"/>.
+    /// </summary>
     internal delegate* unmanaged<void*, void*, int> DlssSetOptions;
+
+    /// <summary>
+    /// <c>slDLSSGSetOptions</c>, after <see cref="AttachFrameGeneration"/>.
+    /// </summary>
     internal delegate* unmanaged<void*, void*, int> DlssgSetOptions;
+
+    /// <summary>
+    /// <c>slDLSSGGetState</c>, after <see cref="AttachFrameGeneration"/>.
+    /// </summary>
     internal delegate* unmanaged<void*, void*, void*, int> DlssgGetState;
+
+    /// <summary>
+    /// <c>slReflexSetOptions</c>, after <see cref="AttachFrameGeneration"/>.
+    /// </summary>
     delegate* unmanaged<void*, int> _reflexSetOptions;
+
+    /// <summary>
+    /// <c>slReflexSleep</c>, after <see cref="AttachFrameGeneration"/>.
+    /// </summary>
     delegate* unmanaged<nint, int> _reflexSleep;
+
+    /// <summary>
+    /// <c>slPCLSetMarker</c>, after <see cref="AttachFrameGeneration"/>.
+    /// </summary>
     delegate* unmanaged<uint, nint, int> _pclSetMarker;
+
+    /// <summary>
+    /// The interposer's <c>vkGetDeviceProcAddr</c>, for its hooked device functions.
+    /// </summary>
     readonly delegate* unmanaged<nint, byte*, nint> _interposerGetDeviceProcAddr;
+
+    /// <summary>
+    /// The interposer's <c>vkGetInstanceProcAddr</c>, for its hooked instance functions.
+    /// </summary>
     readonly delegate* unmanaged<nint, byte*, nint> _interposerGetInstanceProcAddr;
+
+    /// <summary>
+    /// The unmanaged strings and the feature list <c>slInit</c> was given, freed by <see cref="FreeStrings"/>.
+    /// </summary>
     nint _pluginPath, _projectId, _engineVersion, _features;
-    uint _frameIndex;
-    nint _openToken;
-    (nint Hwnd, nint HInstance) _window;
-    VulkanDevice? _attached;
+
+    /// <summary>
+    /// Whether Streamline was shut down.
+    /// </summary>
     bool _disposed;
 
+    /// <summary>
+    /// The instance extensions the loaded features need (<see cref="Apply"/> adds them).
+    /// </summary>
     public string[] InstanceExtensions { get; private set; } = [];
+
+    /// <summary>
+    /// The device extensions the loaded features need.
+    /// </summary>
     public string[] DeviceExtensions { get; private set; } = [];
+
+    /// <summary>
+    /// The Vulkan 1.2 features the loaded features need.
+    /// </summary>
     public string[] Features12 { get; private set; } = [];
+
+    /// <summary>
+    /// The Vulkan 1.3 features the loaded features need.
+    /// </summary>
     public string[] Features13 { get; private set; } = [];
     /// <summary>
     /// Queues of the graphics family Streamline's features use (graphics and compute; DLSS frame generation presents on one), created after ours.
     /// </summary>
     public int GraphicsQueues { get; private set; }
+
+    /// <summary>
+    /// The compute queues among <see cref="GraphicsQueues"/> (created after the graphics ones).
+    /// </summary>
     int _computeQueues;
     /// <summary>
     /// After <see cref="Attach"/>: DLSS runs on this device (an NVIDIA GPU with a recent driver and <c>nvngx_dlss.dll</c> in place).
@@ -161,6 +485,10 @@ public sealed unsafe class Streamline : IDisposable
     /// After <see cref="Attach"/>: DLSS frame generation and Reflex run on this device (an RTX 40 or later with hardware GPU scheduling on).
     /// </summary>
     public bool FrameGenerationSupported { get; private set; }
+
+    /// <summary>
+    /// The folder the Streamline DLLs were loaded from.
+    /// </summary>
     public string Directory { get; }
     /// <summary>
     /// The interposer's <c>vkQueuePresentKHR</c> (after <see cref="Attach"/>): presents must go through it in manual-hooking mode.
@@ -171,6 +499,9 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public SwapchainHooks? Swapchain { get; private set; }
 
+    /// <summary>
+    /// Binds the interposer's exports; the device functions come with <see cref="Attach"/>.
+    /// </summary>
     Streamline(nint interposer, string directory, bool frameGeneration)
     {
         _library = interposer;
@@ -190,6 +521,9 @@ public sealed unsafe class Streamline : IDisposable
         _interposerGetInstanceProcAddr = (delegate* unmanaged<nint, byte*, nint>)NativeLibrary.GetExport(interposer, "vkGetInstanceProcAddr");
     }
 
+    /// <summary>
+    /// The <paramref name="count"/> ANSI strings of a native string array.
+    /// </summary>
     static string[] Strings(nint array, uint count)
     {
         var result = new string[count];
@@ -201,6 +535,9 @@ public sealed unsafe class Streamline : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Streamline's log callback: warnings and errors to the console, info only with <c>MEITOU_UPSCALER_LOG=1</c>.
+    /// </summary>
     [UnmanagedCallersOnly]
     static void OnLog(int type, byte* message)
     {
@@ -214,6 +551,9 @@ public sealed unsafe class Streamline : IDisposable
         Console.WriteLine($"streamline {level}: {Marshal.PtrToStringAnsi((nint)message)?.TrimEnd()}");
     }
 
+    /// <summary>
+    /// The folders the DLLs are looked for in: <see cref="VendorUpscalers.DlssPath"/>, then the executable's.
+    /// </summary>
     static IEnumerable<string> Candidates()
     {
         if (VendorUpscalers.DlssPath is { } env) yield return env;
@@ -253,6 +593,9 @@ public sealed unsafe class Streamline : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Runs <c>slInit</c> with the features wanted and gathers their requirements; null (with the reason, Streamline freed) on failure.
+    /// </summary>
     static Streamline? Init(nint lib, string dir, bool frameGeneration, out string? reason)
     {
         var init = (delegate* unmanaged<Preferences*, ulong, int>)NativeLibrary.GetExport(lib, "slInit");
@@ -348,6 +691,20 @@ public sealed unsafe class Streamline : IDisposable
         };
     }
 
+    #endregion
+
+    #region Device
+
+    /// <summary>
+    /// The window's Win32 handles (<see cref="UseWindow"/>); zero when none was given.
+    /// </summary>
+    (nint Hwnd, nint HInstance) _window;
+
+    /// <summary>
+    /// The device frame generation was attached to, whose wait-idle function the interposer's replaced; null when none.
+    /// </summary>
+    VulkanDevice? _attached;
+
     /// <summary>
     /// The window DLSS frame generation presents to (Win32 handles), set before the device is made.
     /// </summary>
@@ -368,6 +725,9 @@ public sealed unsafe class Streamline : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// A surface for the window made through the interposer's <c>vkCreateWin32SurfaceKHR</c>; a null handle when it cannot be made.
+    /// </summary>
     SurfaceKHR CreateWin32Surface(Instance instance, nint hwnd, nint hinstance)
     {
         nint fn;
@@ -386,6 +746,10 @@ public sealed unsafe class Streamline : IDisposable
         return r == Result.Success ? surface : default;
     }
 
+    /// <summary>
+    /// Hands the device to Streamline (<c>slSetVulkanInfo</c>, its queues after ours in the graphics family) and looks up DLSS and the present proxy;
+    /// without DLSS support Streamline is shut down.
+    /// </summary>
     void Attach(VulkanDevice device)
     {
         // Streamline's queues follow ours in the graphics family: graphics first, then compute (Apply asked for both there).
@@ -442,12 +806,18 @@ public sealed unsafe class Streamline : IDisposable
         if (FrameGenerationLoaded) AttachFrameGeneration(device);
     }
 
+    /// <summary>
+    /// <c>slIsFeatureSupported</c> for <paramref name="feature"/> on the device's GPU: 0 when supported.
+    /// </summary>
     int Supported(VulkanDevice device, uint feature)
     {
         var adapter = new AdapterInfo { StructType = AdapterInfoType, StructVersion = 1, VkPhysicalDevice = device.PhysicalDevice.Handle };
         return _isFeatureSupported(feature, &adapter);
     }
 
+    /// <summary>
+    /// A feature's function by name (<c>slGetFeatureFunction</c>); null when it has none.
+    /// </summary>
     void* Function(uint feature, string name)
     {
         void* fn = null;
@@ -455,6 +825,9 @@ public sealed unsafe class Streamline : IDisposable
         fixed (byte* p = bytes) return _getFeatureFunction(feature, p, &fn) == 0 ? fn : null;
     }
 
+    /// <summary>
+    /// The interposer's device function <paramref name="name"/>; 0 when it has none.
+    /// </summary>
     nint DeviceProc(VulkanDevice device, string name)
     {
         var bytes = System.Text.Encoding.ASCII.GetBytes(name + "\0");
@@ -514,6 +887,20 @@ public sealed unsafe class Streamline : IDisposable
         Console.WriteLine($"frame generation  DLSS supported on {device.DeviceName} (Reflex low latency on)");
     }
 
+    #endregion
+
+    #region Frames
+
+    /// <summary>
+    /// The number of the last frame token asked for.
+    /// </summary>
+    uint _frameIndex;
+
+    /// <summary>
+    /// The token of the frame <see cref="BeginFrame"/> opened; 0 when none is open.
+    /// </summary>
+    nint _openToken;
+
     /// <summary>
     /// Starts a rendered frame for DLSS frame generation (the game's loop, before the world advances): a new frame token, Reflex's sleep and the
     /// simulation marker. The token is the one every Streamline call of the frame uses until <see cref="EndFrame"/>. Does nothing without frame
@@ -546,6 +933,9 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public nint FrameToken() => _openToken != 0 ? _openToken : NewToken();
 
+    /// <summary>
+    /// A new frame token for the next frame index; 0 on failure.
+    /// </summary>
     nint NewToken()
     {
         nint token;
@@ -553,6 +943,13 @@ public sealed unsafe class Streamline : IDisposable
         return _getNewFrameToken(&token, &index) == 0 ? token : 0;
     }
 
+    #endregion
+
+    #region Disposal
+
+    /// <summary>
+    /// Frees the unmanaged strings and the feature list given to <c>slInit</c>.
+    /// </summary>
     void FreeStrings()
     {
         Marshal.FreeHGlobal(_pluginPath);
@@ -562,6 +959,9 @@ public sealed unsafe class Streamline : IDisposable
         _pluginPath = _projectId = _engineVersion = _features = 0;
     }
 
+    /// <summary>
+    /// Shuts Streamline down (once) and frees its strings; the device's wait-idle goes back to its own.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
@@ -570,4 +970,6 @@ public sealed unsafe class Streamline : IDisposable
         _shutdown();
         FreeStrings();
     }
+
+    #endregion
 }
