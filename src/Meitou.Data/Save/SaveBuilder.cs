@@ -50,12 +50,15 @@ public sealed class SaveBuilder
     public FcsRecord FactionCollectionOthers { get; }
     public FcsRecord FactionCollectionPlayer { get; }
 
-    // ------------------------------------------------------------------ ids
+    #region Ids
 
     /// <summary>
     /// The next number of a file: one more than the highest numeric id in it.
     /// </summary>
-    public static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
+    public static int NextNumber(SaveFile file) =>
+        file.Records.Count == 0
+            ? Math.Max(file.Data.NextId, 0) + 1
+            : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
 
     static string QuickId(int n) => $"{n}-{SaveFolder.QuickSaveName}-INGAME";
 
@@ -79,7 +82,9 @@ public sealed class SaveBuilder
         return (int)(x ^ (x >> 31));
     }
 
-    // ------------------------------------------------------------------ quick.save
+    #endregion
+
+    #region Quick save
 
     static FcsRecord NewCamera()
     {
@@ -207,7 +212,9 @@ public sealed class SaveBuilder
         Game.Reindex();
     }
 
-    // ------------------------------------------------------------------ platoons and characters
+    #endregion
+
+    #region Platoons and characters
 
     /// <summary>
     /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
@@ -283,24 +290,39 @@ public sealed class SaveBuilder
         var file = platoon.File ?? throw new InvalidOperationException("The platoon has no file.");
         var instance = new FcsInstance { Target = recordId, Position = position, Rotation = rotation };
         var c = new SaveCharacter(platoon, instance);
-        FcsRecord Make(FcsRecordType type, string recordName = "0")
-        {
-            var r = new FcsRecord { Type = (int)type, Name = recordName };
-            AssignId(file, r, "");
-            file.Records.Add(r);
-            instance.States.Add(r.StringId);
-            return r;
-        }
 
         // The file's records come in the order: the character's items are made first by callers, so the six states are appended here in a fixed order.
-        c.GameState = Make(FcsRecordType.GamestateCharacter);
-        c.Ai = Make(FcsRecordType.GamestateAi, "ai");
-        c.Inventory = Make(FcsRecordType.InventoryState);
-        c.Medical = Make(FcsRecordType.MedicalState);
-        c.Stats = Make(FcsRecordType.Stats, name);
-        c.Appearance = Make(FcsRecordType.CharacterAppearance);
+        c.GameState = AddState(file, instance, FcsRecordType.GamestateCharacter);
+        c.Ai = AddState(file, instance, FcsRecordType.GamestateAi, "ai");
+        c.Inventory = AddState(file, instance, FcsRecordType.InventoryState);
+        c.Medical = AddState(file, instance, FcsRecordType.MedicalState);
+        c.Stats = AddState(file, instance, FcsRecordType.Stats, name);
+        c.Appearance = AddState(file, instance, FcsRecordType.CharacterAppearance);
 
         var g = c.GameState;
+        FillGameState(g, name, ownerFactionId, isLeader, squadMemberType, age);
+        c.Ai!.Bools["jobs"] = true;
+        JoinPlatoon(platoon, file, c, g);
+        return c;
+    }
+
+    /// <summary>
+    /// A character's state record appended to the platoon file with the file's next number, named in the character's instance.
+    /// </summary>
+    static FcsRecord AddState(SaveFile file, FcsInstance instance, FcsRecordType type, string recordName = "0")
+    {
+        var r = new FcsRecord { Type = (int)type, Name = recordName };
+        AssignId(file, r, "");
+        file.Records.Add(r);
+        instance.States.Add(r.StringId);
+        return r;
+    }
+
+    /// <summary>
+    /// The GAMESTATE_CHARACTER defaults of a character that has done nothing (its portrait serial is the next <see cref="Serial"/>).
+    /// </summary>
+    void FillGameState(FcsRecord g, string name, string ownerFactionId, bool isLeader, int squadMemberType, float age)
+    {
         foreach (var k in new[] { "tn", "escap", "kidn", "carrying", "stealth" }) g.Bools[k] = false;
         g.Bools["is leader"] = isLeader;
         g.Floats["ssct"] = 0;
@@ -316,13 +338,20 @@ public sealed class SaveBuilder
         foreach (var prefix in new[] { "TI town", "isindoors", "carrying", "in what", "slaver" }) Hand.Null.Write(g, prefix);
         g.Strings["name"] = name;
         g.Strings["owner faction ID"] = ownerFactionId;
+    }
 
-        c.Ai!.Bools["jobs"] = true;
-
+    /// <summary>
+    /// Gives the character its handle (the platoon's container and serial, the next free slot from 1) and its instance a number, and adds it to the
+    /// platoon file's collection and the platoon.
+    /// </summary>
+    void JoinPlatoon(SavePlatoon platoon, SaveFile file, SaveCharacter c, FcsRecord g)
+    {
+        var instance = c.Instance;
         var collection = platoon.Collection ?? throw new InvalidOperationException("The platoon file has no collection.");
         int slot = platoon.Characters.Count == 0 ? 1 : platoon.Characters.Max(x => x.Handle.I) + 1;
         var ph = platoon.Handle;
         new Hand((int)FcsRecordType.Character, ph.C, ph.Cs, slot, Serial()).Write(g, "handle");
+
         int n = NextNumber(file);
         instance.Id = $"{n}--INGAME";
         file.Data.NextId = n;
@@ -330,8 +359,6 @@ public sealed class SaveBuilder
         collection.Ints["char count"] = collection.Instances.Count;
         platoon.CharCount = collection.Instances.Count;
         platoon.Characters.Add(c);
-
-        return c;
     }
 
     /// <summary>
@@ -383,21 +410,7 @@ public sealed class SaveBuilder
         SaveInventory.Replace(file, inventory, items, n => $"{n}--INGAME");
     }
 
-    // ------------------------------------------------------------------ STATS defaults
-
-    /// <summary>
-    /// The STATS floats a record always has that the stat system does not write (the legacy ones): zero.
-    /// </summary>
-    public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival", "arrow defence"];
-
-    /// <summary>
-    /// Fills the legacy STATS floats a real record always has (zero unless already set); a new character's <c>warrior spirit</c> is the STATS template's
-    /// (<paramref name="warriorSpirit"/>, <c>FUN_14064b6a0</c> reads it into CharStats, <c>FUN_14064a8f0</c> writes it back).
-    /// </summary>
-    public static void FillLegacyStats(FcsRecord stats, float warriorSpirit = 0)
-    {
-        foreach (var k in LegacyStatKeys) stats.Floats.TryAdd(k, k == "warrior spirit" ? warriorSpirit : 0);
-    }
+    #endregion
 }
 
 static class SaveFileExtensions

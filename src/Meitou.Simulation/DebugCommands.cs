@@ -215,7 +215,7 @@ public sealed record DebugSpawn(string Record, Vector2 At) : DebugCommand;
 
 /// <summary>
 /// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass
-/// makes a level building (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is
+/// makes a level building (<see cref="TownBuildingBuilder"/>), joins the building list of the town with placement id <see cref="Town"/> and is
 /// registered as a loaded one (<see cref="TownEdits.Place"/>).
 /// </summary>
 public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
