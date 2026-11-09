@@ -29,14 +29,26 @@ sealed class EditorOrbit
     /// </summary>
     public const float RadiansPerPixel = 0.008f, BodyStep = 1.5f, HeadStep = 0.5f;
 
+    /// <summary>
+    /// Whether the camera is set for the head (the face and hair tabs) rather than the whole body.
+    /// </summary>
     public bool Head { get; private set; }
     /// <summary>
     /// The camera's turn about the character (0: in front of it) and its lift, radians.
     /// </summary>
     public float Yaw { get; private set; } = StartYaw;
+    /// <summary>
+    /// The camera's lift, radians.
+    /// </summary>
     public float Elevation { get; private set; } = StartElevation;
+    /// <summary>
+    /// The camera's distance from its pivot.
+    /// </summary>
     public float Distance { get; private set; } = BodyStart;
 
+    /// <summary>
+    /// Starts the orbit over for the body or the head: in front, at the view's start lift and zoom.
+    /// </summary>
     public void Reset(bool head)
     {
         Head = head;

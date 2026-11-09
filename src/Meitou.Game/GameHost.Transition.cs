@@ -13,14 +13,27 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
+    /// <summary>
+    /// A load between scenes: its stages in order, the work the last one started and its clock.
+    /// </summary>
     internal sealed class SceneLoad
     {
+        /// <summary>
+        /// The stages still to run: a step name for the bar, the work (a task to wait for, or null), and whether it may run while the sky arrival
+        /// still climbs.
+        /// </summary>
         public readonly Queue<(string Step, Func<Task?> Run, bool DuringAscent)> Stages = new();
+        /// <summary>
+        /// The work the last stage started; the next stage waits for it.
+        /// </summary>
         public Task? Waiting;
         /// <summary>
         /// A covered frame was drawn since the last stage ran: the next one may run (it may hold the thread).
         /// </summary>
         public bool Shown;
+        /// <summary>
+        /// Times the load, for the log.
+        /// </summary>
         public readonly Stopwatch Clock = Stopwatch.StartNew();
     }
 
@@ -29,28 +42,58 @@ sealed partial class GameHost
     /// </summary>
     internal sealed class SceneLoadFailed(string message) : Exception(message);
 
+    /// <summary>
+    /// The load between scenes under way; null when none.
+    /// </summary>
     internal SceneLoad? ActiveSceneLoad;
+    /// <summary>
+    /// The sky arrival over the load (Meitou UI); null without one.
+    /// </summary>
     internal SkyArrival? SkyArrival;
+    /// <summary>
+    /// The hour the sky arrival shows instead of the clock's; null without one.
+    /// </summary>
     internal float? PresentationHour;
     /// <summary>
     /// The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.
     /// </summary>
     internal float ReadHour = float.NaN;
+    /// <summary>
+    /// The view warms up under the loading screen after a load (<see cref="BeginWarm"/>).
+    /// </summary>
     internal bool Warming;
+    /// <summary>
+    /// Seconds of smooth frames in a row while warming (frames under <see cref="SmoothFrame"/>).
+    /// </summary>
     internal double SmoothSeconds;
+    /// <summary>
+    /// Seconds the warm-up has run.
+    /// </summary>
     double _warmSeconds;
+    /// <summary>
+    /// Seconds the warm-up has run since the content was ready.
+    /// </summary>
     internal double ReadySeconds;
+    /// <summary>
+    /// The warm-up's seconds at which the next "still preparing" report is logged.
+    /// </summary>
     double _nextWarmReport;
     /// <summary>
     /// Seconds of the warm-up the VRAM guard has held its pressure without a break.
     /// </summary>
     double _guardSeconds;
+    /// <summary>
+    /// The title's last warm-up step (its uploads retired and compacted) was done.
+    /// </summary>
     bool _titleWarmFinalized;
     /// <summary>
     /// After content is ready, gameplay's smooth-frame target and run, and the pacing limit (title too); the title requires <see
     /// cref="TitleSmoothRun"/>.
     /// </summary>
     const double SmoothFrame = 0.04, SmoothRun = 0.5, WarmLimit = 5;
+    /// <summary>
+    /// The title's smooth-frame run (seconds).
+    /// </summary>
     const double TitleSmoothRun = 1;
     /// <summary>
     /// Seconds of the guard's pressure after which the content it holds back is not waited for: nothing new loads until the use falls (VramGuard), so
@@ -63,9 +106,16 @@ sealed partial class GameHost
     /// </summary>
     internal bool Covered => ActiveSceneLoad is not null || Warming || SkyArrival is not null || Loading is { Exiting: true };
 
+    /// <summary>
+    /// A load stage: its step, its work and whether it may run during the sky arrival's climb (the save's read always may).
+    /// </summary>
     internal static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run,
         duringAscent || step == "read");
 
+    /// <summary>
+    /// Starts a load between scenes under the loading screen (and, in the Meitou UI with transitions on, the sky arrival towards
+    /// <paramref name="destinationHour"/>): <paramref name="stages"/> run one a frame (<see cref="StepSceneLoad"/>).
+    /// </summary>
     internal void StartSceneLoad(bool mainMenuTransition, float? destinationHour, params (string Step, Func<Task?> Run, bool DuringAscent)[] stages)
     {
         if (ActiveSceneLoad is not null) return;
@@ -255,6 +305,9 @@ sealed partial class GameHost
     bool AwaitsLook(Simulation.CharacterSnapshot c, Rendering.Characters.CharacterRenderer characters) =>
         c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldLooks.HeldPrepared(look, c.HeldTool, characters);
 
+    /// <summary>
+    /// Advances the sky arrival by <paramref name="seconds"/>, aiming at the read save's hour once known; a finished one ends.
+    /// </summary>
     internal void AdvanceSkyArrival(double seconds)
     {
         if (SkyArrival is not { } arrival) return;
@@ -265,6 +318,9 @@ sealed partial class GameHost
         PresentationHour = null;
     }
 
+    /// <summary>
+    /// The sky arrival's camera and hour for this frame.
+    /// </summary>
     internal void ApplySkyArrival()
     {
         PresentationHour = SkyArrival?.Apply(Camera, TitleScreen.TitleVisible ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay, Warming);
@@ -286,5 +342,8 @@ sealed partial class GameHost
         OnWorldSettled();
     }
 
+    /// <summary>
+    /// The Metal host's hook after a new world settled (GameHost.Metal.cs); nothing elsewhere.
+    /// </summary>
     partial void OnWorldSettled();
 }

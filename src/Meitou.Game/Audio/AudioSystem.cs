@@ -13,6 +13,9 @@ namespace Meitou.Game.Audio;
 public sealed record AudioSettings(float Music = 0.5f, float Ambient = 0.5f, float Footstep = 0.5f, float Sfx = 0.5f, float Ui = 0.5f, float Vo = 0.5f,
     float MusicFrequency = 5, int Voices = AudioSettings.MeitouVoices, float Range = AudioSettings.MeitouRange)
 {
+    /// <summary>
+    /// The range of <see cref="MusicFrequency"/>, in minutes.
+    /// </summary>
     public const float MinFrequency = 1, MaxFrequency = 20;
 
     /// <summary>
@@ -56,6 +59,9 @@ public sealed record AudioSettings(float Music = 0.5f, float Ambient = 0.5f, flo
 /// </summary>
 public sealed class AudioSystem : IDisposable
 {
+    /// <summary>
+    /// The mixer's and the output device's sample rate, in Hz.
+    /// </summary>
     public const int SampleRate = 44100;
 
     /// <summary>
@@ -68,12 +74,30 @@ public sealed class AudioSystem : IDisposable
     /// </summary>
     public const ulong GuiObject = 110;
 
+    /// <summary>
+    /// The OpenAL output that pulls the player's mix.
+    /// </summary>
     readonly AudioOutput _output;
+    /// <summary>
+    /// Whether the game is paused (<see cref="SetPaused"/>), so the pause and resume events are posted only on a change.
+    /// </summary>
     bool _paused;
 
+    /// <summary>
+    /// The bank player: loads banks, posts events and mixes the voices.
+    /// </summary>
     public WwisePlayer Player { get; }
+    /// <summary>
+    /// The biome, day/night and weather ambience rules.
+    /// </summary>
     public AmbienceDirector Ambience { get; }
+    /// <summary>
+    /// The music timer and the music events.
+    /// </summary>
     public MusicDirector Music { get; }
+    /// <summary>
+    /// The output device's name, as OpenAL reports it ("default" when it reports none).
+    /// </summary>
     public string DeviceName => _output.DeviceName;
 
     /// <summary>
@@ -81,6 +105,9 @@ public sealed class AudioSystem : IDisposable
     /// </summary>
     public AudioSettings Settings { get; private set; }
 
+    /// <summary>
+    /// Wires the parts made by <see cref="TryCreate(GameInstall, AudioSettings, out string?)"/> and loads the ambience's start banks.
+    /// </summary>
     AudioSystem(WwisePlayer player, AudioOutput output, MusicDirector music, AudioSettings settings)
     {
         Player = player;
@@ -249,6 +276,9 @@ public sealed class AudioSystem : IDisposable
     static bool TryParseValue(string text, out float value) =>
         float.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
 
+    /// <summary>
+    /// Closes the output device, then the player.
+    /// </summary>
     public void Dispose()
     {
         _output.Dispose();

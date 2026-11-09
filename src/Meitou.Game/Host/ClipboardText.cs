@@ -8,6 +8,9 @@ namespace Meitou.Game.Host;
 /// </summary>
 static class ClipboardText
 {
+    /// <summary>
+    /// The keyboard's clipboard text; null when the clipboard holds no text.
+    /// </summary>
     public static string? Read(IKeyboard keyboard)
     {
         try

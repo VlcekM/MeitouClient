@@ -6,23 +6,49 @@ using Meitou.Simulation;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// The birds (docs/game/birds.md): they fly on the display's real time (the original's <c>BirdManager</c> thread is kicked with the real dt), and the flocks
-/// are those the camera's BIOME_GROUP lists.
+/// The birds (docs/game/birds.md): they fly on the display's real time (the original's <c>BirdManager</c> thread is kicked with the real dt), and the
+/// flocks are those the camera's BIOME_GROUP lists.
 /// </summary>
 sealed class Birds(GameHost host)
 {
     #region Flight
 
+    /// <summary>
+    /// The flocks, made on the first frame with game data (<see cref="CreateFlocks"/>).
+    /// </summary>
     BirdFlocks? _flocks;
+    /// <summary>
+    /// The weather areas' BIOME_GROUPs by cell; null when their file is missing or broken (no cell lists a kind, so no birds spawn).
+    /// </summary>
     Data.Gameplay.BiomeMap? _areas;
+    /// <summary>
+    /// The thread the step runs on.
+    /// </summary>
     BirdThread? _step;
+    /// <summary>
+    /// Whether a step has been started, so there are flocks to show.
+    /// </summary>
     bool _started;
+    /// <summary>
+    /// The real time (seconds) of the last step's inputs; NaN before the first, whose dt is 0.
+    /// </summary>
     double _clock = double.NaN;
+    /// <summary>
+    /// The terrain heights the birds fly over, refreshed from the terrain renderer each step.
+    /// </summary>
     readonly TerrainHeights _heights = new();
 
-    // The inputs of the step running beside the frame.
+    /// <summary>
+    /// The inputs of the step running beside the frame. Real seconds since the last step.
+    /// </summary>
     float _dt;
+    /// <summary>
+    /// The camera's eye and the camera controller's target (where new flocks look).
+    /// </summary>
     Vector3 _eye, _focus;
+    /// <summary>
+    /// The view's six planes, normals inwards and normalised.
+    /// </summary>
     Vector4[]? _planes;
 
     /// <summary>
@@ -87,6 +113,9 @@ sealed class Birds(GameHost host)
         flocks.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);
     }
 
+    /// <summary>
+    /// Sets the step's inputs: the real seconds since the last, the camera's eye and target, the view's planes and the terrain heights.
+    /// </summary>
     void SetStepInputs(float aspect)
     {
         double now = host.RealTime.Elapsed.TotalSeconds;
@@ -99,6 +128,9 @@ sealed class Birds(GameHost host)
         _heights.Refresh(host.Gpu.Terrain);
     }
 
+    /// <summary>
+    /// The BIOME_GROUP id of weather cell (<paramref name="cx"/>, <paramref name="cz"/>); null without areas or a group.
+    /// </summary>
     string? GroupIdOfCell(int cx, int cz) => _areas is { } areas && areas.GroupOf(cx, cz) is >= 0 and var g ? areas.Groups[g].Id : null;
 
     /// <summary>
@@ -118,16 +150,31 @@ sealed class Birds(GameHost host)
 
     #region Attractors
 
+    /// <summary>
+    /// The snapshot's buildings revision the building attractors were read at; -1 to read them again.
+    /// </summary>
     long _buildingsRevision = -1;
+    /// <summary>
+    /// The world the attractors were read for; a new one starts over.
+    /// </summary>
     object? _attractorsFor;
+    /// <summary>
+    /// The level's attractor sources being read off the main thread; null once taken or without world objects.
+    /// </summary>
     Task<List<(string Key, Data.GameRecord Record, Vector3 Position)>>? _levelSources;
+    /// <summary>
+    /// The attractors of the player's completed buildings, and those of the level's buildings and map features.
+    /// </summary>
     readonly List<BirdAttractor> _buildingAttractors = [], _levelAttractors = [];
+    /// <summary>
+    /// Whether the last frame had animal attractors, so their going away is handed on too.
+    /// </summary>
     bool _hadAnimals;
 
     /// <summary>
-    /// The <c>bird attractor</c> references of the objects the original registers them for (<c>FUN_140263700</c>, on a building's, map feature's or animal's
-    /// creation): the player's standing buildings, the level's buildings and map features (read once off the main thread) and every animal, which carries its
-    /// own as it moves.
+    /// The <c>bird attractor</c> references of the objects the original registers them for (<c>FUN_140263700</c>, on a building's, map feature's or
+    /// animal's creation): the player's standing buildings, the level's buildings and map features (read once off the main thread) and every animal,
+    /// which carries its own as it moves.
     /// </summary>
     void UpdateAttractors(Data.GameDatabase db)
     {
@@ -162,6 +209,9 @@ sealed class Birds(GameHost host)
         return true;
     }
 
+    /// <summary>
+    /// Takes the level's attractors once their read has finished; true when it did.
+    /// </summary>
     bool TakeLevelAttractors()
     {
         if (_levelSources is not { IsCompletedSuccessfully: true } read) return false;
@@ -173,6 +223,9 @@ sealed class Birds(GameHost host)
         return true;
     }
 
+    /// <summary>
+    /// Reads the player's completed buildings' attractors again when the buildings changed; true when it did.
+    /// </summary>
     bool UpdateBuildingAttractors(Data.GameDatabase db, WorldSnapshot snapshot)
     {
         if (snapshot.BuildingsRevision == _buildingsRevision) return false;
@@ -188,6 +241,9 @@ sealed class Birds(GameHost host)
         return true;
     }
 
+    /// <summary>
+    /// Adds the record's <c>bird attractor</c> references at <paramref name="at"/>, keyed by owner and kind.
+    /// </summary>
     static void AddAttractors(List<BirdAttractor> into, object owner, Data.GameRecord record, Vector3 at)
     {
         foreach (var link in record.GetReferences("bird attractor"))

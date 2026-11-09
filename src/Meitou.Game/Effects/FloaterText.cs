@@ -7,7 +7,21 @@ namespace Meitou.Game.Effects;
 /// <summary>
 /// The "Show damage floaters" option (the original's <c>floaters</c>: Off 0, Simple info 1, Full info 2).
 /// </summary>
-enum FloaterMode { Off, Simple, Full }
+enum FloaterMode
+{
+    /// <summary>
+    /// 0: no damage floaters (the other floaters still show their text).
+    /// </summary>
+    Off,
+    /// <summary>
+    /// 1: the whole-number total, with the armour's share.
+    /// </summary>
+    Simple,
+    /// <summary>
+    /// 2: per part: cut (with pierce), blunt with stun, each with its armour's share.
+    /// </summary>
+    Full
+}
 
 /// <summary>
 /// The words and colours of the floating numbers (docs/game/ui-screens.md "Damage floaters", <c>FUN_1406508d0</c>).
@@ -84,5 +98,8 @@ static class FloaterText
     /// </summary>
     public static readonly Vector4 LabelGrey = new(0.7f, 0.7f, 0.7f, 0.8f);
 
+    /// <summary>
+    /// The value cut to a whole number, in the invariant culture.
+    /// </summary>
     static string Whole(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
 }

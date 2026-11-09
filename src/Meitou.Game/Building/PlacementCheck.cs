@@ -148,6 +148,8 @@ public sealed record PlacementQuery(
 /// </summary>
 public static class PlacementCheck
 {
+    #region Checks
+
     /// <summary>
     /// A person's radius for the characters-in-the-way test (engine choice; the original's node box test is <b>Observed</b> only).
     /// </summary>
@@ -157,6 +159,10 @@ public static class PlacementCheck
     /// </summary>
     const float SteepestNormalY = 0.2f;
 
+    /// <summary>
+    /// The first reason the ghost cannot stand, in the original's order (town, ownership, resources, incomplete site, the centre, inside only,
+    /// overlap, ground, slope); None when it can.
+    /// </summary>
     public static PlacementFailure Evaluate(PlacementQuery q)
     {
         var b = q.Building;
@@ -295,7 +301,77 @@ public static class PlacementCheck
         return PlacementFailure.None;
     }
 
+    /// <summary>
+    /// The angle between a normal and straight up, in degrees.
+    /// </summary>
     static float AngleFromUp(Vector3 normal) => MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(normal), Vector3.UnitY), -1, 1)) * 180 / MathF.PI;
+
+    /// <summary>
+    /// The ground's slope under the footprint's box (engine reading of the original's four rays at the rotated bounding-box corners): the angle from
+    /// the vertical of the plane through the four corner heights, and its normal's Y.
+    /// </summary>
+    public static float SlopeDegrees(Func<float, float, float> ground, Vector2 centre, float yaw, (Vector2 Min, Vector2 Max) box, out float normalY)
+    {
+        var corners = new Vector3[4];
+        var local = new[]
+        {
+            new Vector2(box.Min.X, box.Min.Y),
+            new Vector2(box.Max.X, box.Min.Y),
+            new Vector2(box.Max.X, box.Max.Y),
+            new Vector2(box.Min.X, box.Max.Y),
+        };
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        for (int i = 0; i < 4; i++)
+        {
+            // Yaw about +Y as Quaternion.CreateFromAxisAngle turns a point (x, z): x' = x cos + z sin, z' = -x sin + z cos.
+            float x = local[i].X * cos + local[i].Y * sin + centre.X, z = -local[i].X * sin + local[i].Y * cos + centre.Y;
+            corners[i] = new Vector3(x, ground(x, z), z);
+        }
+        var normal = Vector3.Cross(corners[2] - corners[0], corners[3] - corners[1]);
+        if (normal.LengthSquared() < 1e-9f)
+        {
+            normalY = 1;
+            return 0;
+        }
+        normal = Vector3.Normalize(normal);
+        if (normal.Y < 0) normal = -normal;
+        normalY = normal.Y;
+        return MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * 180 / MathF.PI;
+    }
+
+    /// <summary>
+    /// The ground normal at <paramref name="centre"/> from the box's corners (up when flat), for tilting a ghost to the ground.
+    /// </summary>
+    public static Vector3 GroundNormal(Func<float, float, float> ground, Vector2 centre, float yaw, (Vector2 Min, Vector2 Max) box)
+    {
+        var corners = new Vector3[4];
+        var local = new[]
+        {
+            new Vector2(box.Min.X, box.Min.Y),
+            new Vector2(box.Max.X, box.Min.Y),
+            new Vector2(box.Max.X, box.Max.Y),
+            new Vector2(box.Min.X, box.Max.Y),
+        };
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        for (int i = 0; i < 4; i++)
+        {
+            float x = local[i].X * cos + local[i].Y * sin + centre.X, z = -local[i].X * sin + local[i].Y * cos + centre.Y;
+            corners[i] = new Vector3(x, ground(x, z), z);
+        }
+        var normal = Vector3.Cross(corners[2] - corners[0], corners[3] - corners[1]);
+        if (normal.LengthSquared() < 1e-9f) return Vector3.UnitY;
+        normal = Vector3.Normalize(normal);
+        return normal.Y < 0 ? -normal : normal;
+    }
+
+    /// <summary>
+    /// The text of a failure (<see cref="PlacementRules.Message"/>).
+    /// </summary>
+    public static string Message(PlacementFailure failure) => PlacementRules.Message(failure);
+
+    #endregion
+
+    #region Vertical margins
 
     /// <summary>
     /// The value of a margin with nothing limiting it (the original starts both at 1e8).
@@ -318,6 +394,9 @@ public static class PlacementCheck
     /// </summary>
     public readonly record struct VerticalMargins(float Down, float Up)
     {
+        /// <summary>
+        /// Both margins at <see cref="NoLimit"/>: nothing limits the ghost.
+        /// </summary>
         public static VerticalMargins Unlimited => new(NoLimit, NoLimit);
     }
 
@@ -395,71 +474,13 @@ public static class PlacementCheck
         return (step, new VerticalMargins(m.Down + step, m.Up - step));
     }
 
-    /// <summary>
-    /// The ground's slope under the footprint's box (engine reading of the original's four rays at the rotated bounding-box corners): the angle from
-    /// the vertical of the plane through the four corner heights, and its normal's Y.
-    /// </summary>
-    public static float SlopeDegrees(Func<float, float, float> ground, Vector2 centre, float yaw, (Vector2 Min, Vector2 Max) box, out float normalY)
-    {
-        var corners = new Vector3[4];
-        var local = new[]
-        {
-            new Vector2(box.Min.X, box.Min.Y),
-            new Vector2(box.Max.X, box.Min.Y),
-            new Vector2(box.Max.X, box.Max.Y),
-            new Vector2(box.Min.X, box.Max.Y),
-        };
-        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
-        for (int i = 0; i < 4; i++)
-        {
-            // Yaw about +Y as Quaternion.CreateFromAxisAngle turns a point (x, z): x' = x cos + z sin, z' = -x sin + z cos.
-            float x = local[i].X * cos + local[i].Y * sin + centre.X, z = -local[i].X * sin + local[i].Y * cos + centre.Y;
-            corners[i] = new Vector3(x, ground(x, z), z);
-        }
-        var normal = Vector3.Cross(corners[2] - corners[0], corners[3] - corners[1]);
-        if (normal.LengthSquared() < 1e-9f)
-        {
-            normalY = 1;
-            return 0;
-        }
-        normal = Vector3.Normalize(normal);
-        if (normal.Y < 0) normal = -normal;
-        normalY = normal.Y;
-        return MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * 180 / MathF.PI;
-    }
+    #endregion
+
+    #region Plane geometry on convex polygons
 
     /// <summary>
-    /// The ground normal at <paramref name="centre"/> from the box's corners (up when flat), for tilting a ghost to the ground.
+    /// The quaternion at unit length; the identity for a near-zero one.
     /// </summary>
-    public static Vector3 GroundNormal(Func<float, float, float> ground, Vector2 centre, float yaw, (Vector2 Min, Vector2 Max) box)
-    {
-        var corners = new Vector3[4];
-        var local = new[]
-        {
-            new Vector2(box.Min.X, box.Min.Y),
-            new Vector2(box.Max.X, box.Min.Y),
-            new Vector2(box.Max.X, box.Max.Y),
-            new Vector2(box.Min.X, box.Max.Y),
-        };
-        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
-        for (int i = 0; i < 4; i++)
-        {
-            float x = local[i].X * cos + local[i].Y * sin + centre.X, z = -local[i].X * sin + local[i].Y * cos + centre.Y;
-            corners[i] = new Vector3(x, ground(x, z), z);
-        }
-        var normal = Vector3.Cross(corners[2] - corners[0], corners[3] - corners[1]);
-        if (normal.LengthSquared() < 1e-9f) return Vector3.UnitY;
-        normal = Vector3.Normalize(normal);
-        return normal.Y < 0 ? -normal : normal;
-    }
-
-    /// <summary>
-    /// The text of a failure (<see cref="PlacementRules.Message"/>).
-    /// </summary>
-    public static string Message(PlacementFailure failure) => PlacementRules.Message(failure);
-
-    // ---- plane geometry on convex polygons ----
-
     static Quaternion Normalised(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);
 
     /// <summary>
@@ -472,6 +493,9 @@ public static class PlacementCheck
         return MathF.Atan2(-forward.Z, forward.X);
     }
 
+    /// <summary>
+    /// Whether the point is inside the convex polygon or on its edge.
+    /// </summary>
     static bool Contains(Vector2[] polygon, Vector2 point) => Distance(polygon, point) <= 0;
 
     /// <summary>
@@ -515,6 +539,9 @@ public static class PlacementCheck
         return true;
     }
 
+    /// <summary>
+    /// The interval the polygon's vertices project to on <paramref name="axis"/>.
+    /// </summary>
     static void Project(Vector2[] polygon, Vector2 axis, out float min, out float max)
     {
         min = float.MaxValue;
@@ -526,4 +553,6 @@ public static class PlacementCheck
             max = Math.Max(max, d);
         }
     }
+
+    #endregion
 }

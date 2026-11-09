@@ -14,20 +14,57 @@ namespace Meitou.Game.Host.WorldSync;
 /// </summary>
 sealed class FarmCrops(GameHost host)
 {
+    /// <summary>
+    /// A farm's crops as laid out once for its building: the site, its farm data, the plant layout and meshes, and what was last handed to
+    /// the renderer.
+    /// </summary>
     sealed class FarmLook(BuildingSnapshot site, FarmData data, FarmPlants plants, PlacedMesh[] meshes, float height)
     {
+        /// <summary>
+        /// The site as it was when laid out: a farm moved or with another record is laid out again.
+        /// </summary>
         public readonly BuildingSnapshot Site = site;
+        /// <summary>
+        /// The farm's FARM data (its parts and growth look).
+        /// </summary>
         public readonly FarmData Data = data;
+        /// <summary>
+        /// The plants' positions and which part and random value each mesh has (<see cref="FarmLayout.Plant"/>).
+        /// </summary>
         public readonly FarmPlants Plants = plants;
+        /// <summary>
+        /// One placed mesh per plant mesh, in <see cref="FarmPlants.Meshes"/>' order.
+        /// </summary>
         public readonly PlacedMesh[] Meshes = meshes;
+        /// <summary>
+        /// The top of the tallest part mesh, for <see cref="FarmLayout.Transform"/>.
+        /// </summary>
         public readonly float Height = height;
+        /// <summary>
+        /// Each mesh's transform last handed to the renderer (<see cref="FarmLayout.Transform"/>).
+        /// </summary>
         public readonly Matrix4x4?[] Transforms = new Matrix4x4?[meshes.Length];
+        /// <summary>
+        /// Each mesh's tint last handed to the renderer (<see cref="FarmLayout.Tint"/>).
+        /// </summary>
         public readonly Vector3[] Tints = new Vector3[meshes.Length];
+        /// <summary>
+        /// The growth, death and harvest count the transforms were made for; null until first shown.
+        /// </summary>
         public (float Growth, float Death, int Harvested)? Shown;
     }
 
+    /// <summary>
+    /// The farms laid out, by site id.
+    /// </summary>
     readonly Dictionary<string, FarmLook> _farms = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Each record's FARM data, null for one without (read once).
+    /// </summary>
     readonly Dictionary<string, FarmData?> _farmData = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The snapshot's machines version and buildings revision last laid out; (-1, -1) lays out the next snapshot.
+    /// </summary>
     (long Machines, long Buildings) _farmsVersion = (-1, -1);
 
     /// <summary>
@@ -69,6 +106,9 @@ sealed class FarmCrops(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Lays out a site's farm (its plants, meshes and height); null when its record has no farm parts or is missing.
+    /// </summary>
     FarmLook? MakeFarm(Data.GameDatabase db, Rendering.Objects.WorldObjectRenderer objects, BuildingSnapshot site)
     {
         if (!_farmData.TryGetValue(site.Record, out var data))
@@ -82,6 +122,9 @@ sealed class FarmCrops(GameHost host)
         return new FarmLook(site, data, plants, meshes, height);
     }
 
+    /// <summary>
+    /// Drops every farm's crops from the renderer (a new world).
+    /// </summary>
     internal void ForgetFarms()
     {
         foreach (string id in _farms.Keys) host.ActiveObjects?.Farms.Remove(id);

@@ -31,6 +31,9 @@ static class HardwareProbe
         return names[videoMemoryMb < 10 * 1024 ? 2 : 3];
     }
 
+    /// <summary>
+    /// Looks at the GPU the game would pick, the memory and the cores, and recommends a preset (<see cref="Recommend"/>).
+    /// </summary>
     public static Report Probe()
     {
         long memoryMb = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes >> 20;
@@ -61,6 +64,9 @@ static class HardwareProbe
         return new(preset, summary, gpu, integrated, videoMemoryMb, memoryMb, cores, problem);
     }
 
+    /// <summary>
+    /// Writes the probe's report as JSON to <paramref name="path"/> and logs its summary; returns the exit code, 0.
+    /// </summary>
     public static int Write(string path)
     {
         var report = Probe();

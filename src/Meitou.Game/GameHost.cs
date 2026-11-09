@@ -34,8 +34,8 @@ namespace Meitou.Game;
 
 /// <summary>
 /// The game loop: a real-time control tick (<see cref="FixedStepClock"/>, 30 Hz by default) runs the input actions, the camera rig and pause/speed; a
-/// game-time simulation tick (<see cref="SimulationClock"/>) advances the game clock; each displayed frame draws the camera interpolated between the last two
-/// ticks at the display rate.
+/// game-time simulation tick (<see cref="SimulationClock"/>) advances the game clock; each displayed frame draws the camera interpolated between the
+/// last two ticks at the display rate.
 /// </summary>
 sealed partial class GameHost(
     GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Data.Gameplay.NewGameStart? start)
@@ -43,12 +43,34 @@ sealed partial class GameHost(
     #region Inputs
 
     // Primary-constructor parameters the feature classes read.
+    /// <summary>
+    /// The game install.
+    /// </summary>
     internal readonly GameInstall Install = install;
+    /// <summary>
+    /// The world's data and level (replaced when the host reads it itself).
+    /// </summary>
     internal WorldScene Scene = scene;
+    /// <summary>
+    /// Finds the game's asset files.
+    /// </summary>
     internal readonly AssetLocator Assets = assets;
+    /// <summary>
+    /// The world and renderer options of the command line.
+    /// </summary>
     internal readonly WorldOptions WorldOptions = o;
+    /// <summary>
+    /// The game's own options of the command line.
+    /// </summary>
     internal readonly GameOptions GameOptions = g;
+    /// <summary>
+    /// The player's settings (<c>meitou.user.json</c>).
+    /// </summary>
     internal readonly UserConfig Config = config;
+    /// <summary>
+    /// The scene the host read itself (<see cref="LoadScene"/>), disposed with it; null when it was given.
+    /// </summary>
+    internal WorldScene? OwnedScene;
 
     /// <summary>
     /// The save the run starts in (<c>--load</c>), loaded at the end of <see cref="Boot"/> through the menu's load path; null for a new world.
@@ -60,8 +82,6 @@ sealed partial class GameHost(
     /// </summary>
     public Func<WorldScene?>? LoadScene { get; init; }
 
-    internal WorldScene? OwnedScene;
-
     /// <summary>
     /// The native splash shown since the program started; closed when the game window first shows.
     /// </summary>
@@ -72,42 +92,141 @@ sealed partial class GameHost(
     #region Features
 
     // The features, each a class of its own taking the host (made first in Run).
+    /// <summary>
+    /// The game loop: the window, the device, the input and the frames.
+    /// </summary>
     internal GameLoop GameLoop = null!;
+    /// <summary>
+    /// The game's sound.
+    /// </summary>
     internal GameSound Sound = null!;
+    /// <summary>
+    /// The title screen's world.
+    /// </summary>
     internal TitleScreen TitleScreen = null!;
+    /// <summary>
+    /// Leaving for the main menu and starting a new game.
+    /// </summary>
     internal NewGameLaunch NewGame = null!;
+    /// <summary>
+    /// Quicksave, quickload, import and the autosave.
+    /// </summary>
     internal GameSaves Saves = null!;
+    /// <summary>
+    /// The code mods.
+    /// </summary>
     internal GameMods Modding = null!;
+    /// <summary>
+    /// The battle scenario (<c>--battle</c>).
+    /// </summary>
     internal BattleScenario Battle = null!;
+    /// <summary>
+    /// The trailer duel (<c>--duel</c>).
+    /// </summary>
     internal DuelScenario Duel = null!;
+    /// <summary>
+    /// The animation sandbox (<c>--sandbox</c>).
+    /// </summary>
     internal SandboxScenario Sandbox = null!;
 
+    /// <summary>
+    /// The player's construction sites from the snapshot to the renderer, the navmesh and the lamps.
+    /// </summary>
     internal BuildingSync BuildingSync = null!;
+    /// <summary>
+    /// The crops of the player's farms.
+    /// </summary>
     internal FarmCrops FarmCrops = null!;
+    /// <summary>
+    /// The bought houses and the ruins under the renderer.
+    /// </summary>
     internal TownChanges TownChanges = null!;
+    /// <summary>
+    /// The loose items on the ground.
+    /// </summary>
     internal GroundItemSync GroundItemSync = null!;
+    /// <summary>
+    /// The interior view of the buildings holding a player character.
+    /// </summary>
     internal InteriorView Interiors = null!;
+    /// <summary>
+    /// The weather the simulation reads.
+    /// </summary>
     internal WeatherFeed WeatherFeed = null!;
+    /// <summary>
+    /// The item icons Meitou draws.
+    /// </summary>
     internal ItemIconFiles ItemIconFiles = null!;
 
+    /// <summary>
+    /// The blood on the ground.
+    /// </summary>
     internal BloodDecals BloodDecals = null!;
+    /// <summary>
+    /// The birds.
+    /// </summary>
     internal Birds Birds = null!;
+    /// <summary>
+    /// The flying and lying debris (bursts, limbs, bolts).
+    /// </summary>
     internal Debris Debris = null!;
+    /// <summary>
+    /// Meitou decapitation's falling heads and spurts.
+    /// </summary>
     internal Decapitation Decapitation = null!;
+    /// <summary>
+    /// The corpse flies.
+    /// </summary>
     internal CorpseFlies CorpseFlies = null!;
 
+    /// <summary>
+    /// The character editor's host side.
+    /// </summary>
     internal CharacterEditorHost CharacterEditor = null!;
+    /// <summary>
+    /// The level editor's host side.
+    /// </summary>
     internal LevelEditorHost LevelEditorHost = null!;
+    /// <summary>
+    /// The interior editor.
+    /// </summary>
     internal InteriorEditorHost InteriorEditorHost = null!;
 
+    /// <summary>
+    /// The debug menu (F10).
+    /// </summary>
     internal DebugMenu DebugMenu = null!;
+    /// <summary>
+    /// The debug views over the world.
+    /// </summary>
     internal DebugOverlays DebugOverlays = null!;
+    /// <summary>
+    /// The dev console.
+    /// </summary>
     internal DevConsoleHost DevConsoleHost = null!;
+    /// <summary>
+    /// The agent control channel (debug only).
+    /// </summary>
     internal AgentChannel AgentChannel = null!;
+    /// <summary>
+    /// The agent control channel's play commands.
+    /// </summary>
     internal AgentPlay AgentPlay = null!;
+    /// <summary>
+    /// The agent control channel's world commands.
+    /// </summary>
     internal AgentWorld AgentWorld = null!;
+    /// <summary>
+    /// The play benchmark (<c>--play-bench</c>).
+    /// </summary>
     internal PlayBench PlayBench = null!;
+    /// <summary>
+    /// The <c>--screenshot</c> runs.
+    /// </summary>
     internal ScreenshotScenes ScreenshotScenes = null!;
+    /// <summary>
+    /// The feedback button's host side.
+    /// </summary>
     internal FeedbackCapture FeedbackCapture = null!;
 
     /// <summary>
@@ -158,30 +277,80 @@ sealed partial class GameHost(
 
     #region World state
 
-    internal WorldSession Session = null!;   // disposed with the host (Run)
+    /// <summary>
+    /// The world, its clocks, camera rig and input; disposed with the host (Run).
+    /// </summary>
+    internal WorldSession Session = null!;
+    /// <summary>
+    /// The world's population system; null without population.
+    /// </summary>
     internal Simulation.Population.PopulationSystem? Population;
 
     // The game data the world was built from, kept to build the next world of a quickload (GameSaves).
+    /// <summary>
+    /// The population's data.
+    /// </summary>
     internal Simulation.Population.PopulationData? PopData;
+    /// <summary>
+    /// The towns' placements of the data, for the saves.
+    /// </summary>
     internal IReadOnlyList<Meitou.Data.World.TownPlacement> TownPlacements = [];
 
-    // The level data, for the zone files and town handles of a save (null in the sandbox and the duel).
+    /// <summary>
+    /// The level data, for the zone files and town handles of a save (null in the sandbox and the duel).
+    /// </summary>
     internal Meitou.Data.World.WorldLevelData? SaveLevels;
 
+    /// <summary>
+    /// The walkability the simulation's systems read (the navmesh, else the terrain).
+    /// </summary>
     internal IWalkability? SimWalkability;
+    /// <summary>
+    /// The characters' skeletons, for the ragdolls.
+    /// </summary>
     internal Data.Characters.CharacterRigs? CharacterRigs;
+    /// <summary>
+    /// The ragdolls' collision geometry; disposed with the host.
+    /// </summary>
     internal Simulation.Navigation.RagdollGeometry? RagdollGeometry;
+    /// <summary>
+    /// The navmesh system; null without one; disposed with the host.
+    /// </summary>
     internal Simulation.Navigation.NavSystem? Nav;
+    /// <summary>
+    /// The animations' lengths, for the simulation.
+    /// </summary>
     internal Data.Gameplay.AnimationLengths? AnimationLengths;
+    /// <summary>
+    /// The animation library, for the simulation.
+    /// </summary>
     internal Data.Gameplay.AnimationLibrary? AnimationLibrary;
 
+    /// <summary>
+    /// The player's interface.
+    /// </summary>
     internal PlayerInterface Player = null!;
+    /// <summary>
+    /// The player's squad in the world; null without one.
+    /// </summary>
     internal Simulation.Factions.Squad? PlayerSquad;
 
+    /// <summary>
+    /// The camera the world is drawn with.
+    /// </summary>
     internal WorldCamera Camera = null!;
+    /// <summary>
+    /// The render options.
+    /// </summary>
     internal WorldRenderOptions Render = null!;
+    /// <summary>
+    /// The real time since the host was made.
+    /// </summary>
     internal readonly Stopwatch RealTime = Stopwatch.StartNew();
 
+    /// <summary>
+    /// The next frame is saved as a screenshot (the Screenshot action).
+    /// </summary>
     internal bool ScreenshotRequested;
 
     /// <summary>
@@ -189,30 +358,70 @@ sealed partial class GameHost(
     /// </summary>
     internal int ShotNoFrame;
 
-    // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
+    // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the
+    // real time.
+    /// <summary>
+    /// The frame steps' seconds.
+    /// </summary>
     internal double AnimSeconds;
+    /// <summary>
+    /// The animation clock runs on <see cref="AnimSeconds"/> instead of the real time.
+    /// </summary>
     internal bool AnimClock;
 
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
+    /// <summary>
+    /// The previous snapshot indexed.
+    /// </summary>
     internal WorldSnapshot? IndexedFor;
+    /// <summary>
+    /// The previous snapshot's characters by id (<see cref="IndexPrevious"/>).
+    /// </summary>
     internal readonly Dictionary<CharacterId, CharacterSnapshot> PreviousById = [];
+    /// <summary>
+    /// The camera focus last sent to the world.
+    /// </summary>
     Vector3 _lastFocus;
+    /// <summary>
+    /// A camera focus was sent to the world.
+    /// </summary>
     bool _sentFocus;
 
     // Profile of the interactive run (printed by --quit-after).
+    /// <summary>
+    /// The world's advance and the draw list's fill, summed (ms).
+    /// </summary>
     internal double AdvanceTotal, FillTotal;
+    /// <summary>
+    /// The draw list's fills.
+    /// </summary>
     internal long FillCalls;
 
     // --quit-after keeps the exposed menu's frame pacing separate from covered loading work.
+    /// <summary>
+    /// The menu frames' summed and longest time (seconds).
+    /// </summary>
     internal double MenuFrameSeconds, MenuLongestFrame;
+    /// <summary>
+    /// The menu frames, and those that were slow.
+    /// </summary>
     internal long MenuFrames, MenuSlowFrames;
 
     #endregion
 
     #region Renderer services
 
+    /// <summary>
+    /// The world's renderers.
+    /// </summary>
     internal WorldGpu Gpu = null!;
+    /// <summary>
+    /// NVIDIA Streamline (DLSS frame generation); null when not loaded.
+    /// </summary>
     internal Rendering.Upscalers.Streamline? Streamline;
+    /// <summary>
+    /// NVIDIA NGX (DLSS); null when not loaded.
+    /// </summary>
     internal Rendering.Upscalers.Ngx? Ngx;
 
     /// <summary>
@@ -221,24 +430,64 @@ sealed partial class GameHost(
     internal bool MetalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
 
     // Fallback services for a host whose renderers are not in WorldGpu yet (the shared title, audio and save code asks through these).
+    /// <summary>
+    /// The weather.
+    /// </summary>
     WorldWeather? _fallbackWeather = null;
+    /// <summary>
+    /// The object renderer for a host without one in <see cref="Gpu"/>.
+    /// </summary>
     WorldObjectRenderer? _hostObjects = null;
+    /// <summary>
+    /// The foliage renderer for a host without one in <see cref="Gpu"/>.
+    /// </summary>
     FoliageRenderer? _hostFoliage = null;
+    /// <summary>
+    /// The character renderer for a host without one in <see cref="Gpu"/>.
+    /// </summary>
     CharacterRenderer? _hostCharacters = null;
+    /// <summary>
+    /// The lamps for a host without them in <see cref="Gpu"/>.
+    /// </summary>
     WorldLamps? _hostLamps = null;
+    /// <summary>
+    /// The ground height for a host without a terrain in <see cref="Gpu"/>.
+    /// </summary>
     Func<float, float, float>? _hostGround = null;
 
+    /// <summary>
+    /// The weather drawn: the renderer's, else the fallback.
+    /// </summary>
     internal WorldWeather? ActiveWeather => Gpu is null ? _fallbackWeather : Gpu.Weather ?? _fallbackWeather;
+    /// <summary>
+    /// The object renderer: the renderer's, else the fallback.
+    /// </summary>
     internal WorldObjectRenderer? ActiveObjects => Gpu is null ? _hostObjects : Gpu.Objects ?? _hostObjects;
+    /// <summary>
+    /// The foliage renderer: the renderer's, else the fallback.
+    /// </summary>
     internal FoliageRenderer? ActiveFoliage => Gpu is null ? _hostFoliage : Gpu.Foliage ?? _hostFoliage;
+    /// <summary>
+    /// The character renderer: the renderer's, else the fallback.
+    /// </summary>
     internal CharacterRenderer? ActiveCharacters => Gpu is null ? _hostCharacters : Gpu.Characters ?? _hostCharacters;
+    /// <summary>
+    /// The lamps: the renderer's, else the fallback.
+    /// </summary>
     internal WorldLamps? ActiveLamps => Gpu is null ? _hostLamps : Gpu.Lamps ?? _hostLamps;
+    /// <summary>
+    /// The ground height at a point: the fallback's, else the terrain's (0 without a renderer).
+    /// </summary>
     internal float ActiveGround(float x, float z) => _hostGround?.Invoke(x, z) ?? (Gpu is null ? 0 : Gpu.Terrain.HeightAt(x, z));
 
     #endregion
 
     #region Run
 
+    /// <summary>
+    /// Runs the game: the features, then the Metal loop, a screenshot run or the game loop; the world, the navmesh, the ragdolls and an owned scene
+    /// are disposed after. Returns the exit code.
+    /// </summary>
     public int Run()
     {
         CreateFeatures();
@@ -282,10 +531,14 @@ sealed partial class GameHost(
     #region Boot
 
     /// <summary>
-    /// The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.
+    /// The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this
+    /// many ticks.
     /// </summary>
     internal const int FarTickPeriod = 4;
 
+    /// <summary>
+    /// Boots the world: the simulation's data read on a worker while the renderers are made a step at a time, then the session and the player.
+    /// </summary>
     internal void Boot(VulkanDisplay display, bool interactive)
     {
         WorldOptions.Day ??= (int)GameClock.DefaultStartDay;   // the weather schedule starts on the clock's first day (--day moves both)
@@ -294,8 +547,8 @@ sealed partial class GameHost(
         Sandbox.Crowd = WorldOptions.Crowd;
         WorldOptions.Crowd = 0;
 
-        // The simulation's data (the navmesh system, the towns' homes, the population's data and systems) is read on a worker while the renderer is made
-        // here, a step at a time with a loading frame between the steps (docs/engine.md "Loading").
+        // The simulation's data (the navmesh system, the towns' homes, the population's data and systems) is read on a worker while the renderer is
+        // made here, a step at a time with a loading frame between the steps (docs/engine.md "Loading").
         var simulation = Task.Run(() =>
         {
             var grid = new Meitou.Data.World.GroundHeights(Scene.Window, Scene.Coarse, Scene.CoarseSize, WorldFrame.CoarseStep);
@@ -328,7 +581,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Makes the world session: its clock from the game constants (read from the data when the population did not), its simulation settings and systems.
+    /// Makes the world session: its clock from the game constants (read from the data when the population did not), its simulation settings
+    /// and systems.
     /// </summary>
     void CreateSession(IWalkability walkability, IReadOnlyList<ITickSystem> systems, Data.Gameplay.GameConstants? constants)
     {
@@ -357,8 +611,9 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the world's
-    /// content (<see cref="WorldBoot"/>), the code mods and the systems. Returns the walkability, the systems and the game constants for the session.
+    /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the
+    /// world's content (<see cref="WorldBoot"/>), the code mods and the systems. Returns the walkability, the systems and the game constants for
+    /// the session.
     /// </summary>
     internal (IWalkability Walkability, IReadOnlyList<ITickSystem> Systems, Data.Gameplay.GameConstants? Constants) BootSimulation(
         Meitou.Data.World.GroundHeights heights, bool interactive)
@@ -370,8 +625,8 @@ sealed partial class GameHost(
 
         if (!GameOptions.NoPopulation && Scene.Database is { } gameDb)
         {
-            // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a navmesh island
-            // the build prunes. None has towns: their own characters are the only ones.
+            // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a
+            // navmesh island the build prunes. None has towns: their own characters are the only ones.
             bool ownCharactersOnly = Sandbox.IsSandbox || Duel.IsDuel || Battle.IsBattle;
             var levels = ownCharactersOnly ? null : Scene.Objects?.Levels ?? WorldBoot.LoadLevels(Install, gameDb);
             var boot = WorldBoot.Load(BootOptions(gameDb, heights, levels));
@@ -443,8 +698,8 @@ sealed partial class GameHost(
     #region Boot: the player
 
     /// <summary>
-    /// The rest of <see cref="Boot"/> once the session exists: bindings, the player's interface, the start (a new game's squad, the sandbox, the duel), the
-    /// camera, a <c>--load</c> save.
+    /// The rest of <see cref="Boot"/> once the session exists: bindings, the player's interface, the start (a new game's squad, the sandbox, the
+    /// duel), the camera, a <c>--load</c> save.
     /// </summary>
     void BootPlayer(VulkanDisplay display, bool interactive)
     {
@@ -488,7 +743,8 @@ sealed partial class GameHost(
         if (bindings.Get(InputAction.Command).Contains(Binding.Of(EngineButton.Right)))
             bindings.Set(InputAction.Orbit, [.. bindings.Get(InputAction.Orbit).Where(b => !(b.IsMouse && b.Button == EngineButton.Right))]);
 
-        // Left Control orbits as the middle button does (mouse_rotate, FUN_1403636c0: only code 0x1d); older saved configs had the middle button alone.
+        // Left Control orbits as the middle button does (mouse_rotate, FUN_1403636c0: only code 0x1d); older saved configs had the middle
+        // button alone.
         if (BoundOnlyTo(InputAction.Orbit, Binding.Of(EngineButton.Middle)))
             bindings.Set(InputAction.Orbit, EngineButton.Middle, EngineKey.LeftControl);
 
@@ -511,6 +767,9 @@ sealed partial class GameHost(
             bindings.Set(InputAction.ToggleSettings);
     }
 
+    /// <summary>
+    /// Whether an action is bound to that one binding alone.
+    /// </summary>
     bool BoundOnlyTo(InputAction action, Binding binding) => Session.Bindings.Get(action).SequenceEqual([binding]);
 
     /// <summary>
@@ -593,8 +852,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Waits for the navmesh round the start when a new game's squad is placed on it or a still is taken: the squad stands on the mesh, and a still has its
-    /// town at once (a cold build is about 2 s, then cached).
+    /// Waits for the navmesh round the start when a new game's squad is placed on it or a still is taken: the squad stands on the mesh, and a still
+    /// has its town at once (a cold build is about 2 s, then cached).
     /// </summary>
     void LoadStartZones(bool interactive)
     {
@@ -611,7 +870,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Places the start's characters (a new game's squad, the sandbox, the duel, the battle, a <c>--crowd</c>) and returns where the camera looks first.
+    /// Places the start's characters (a new game's squad, the sandbox, the duel, the battle, a <c>--crowd</c>) and returns where the camera
+    /// looks first.
     /// </summary>
     Vector3 PlaceStart(Vector3 target, bool interactive)
     {
@@ -624,8 +884,8 @@ sealed partial class GameHost(
             target = lead;
             Console.WriteLine($"player    {PlayerSquad.Members.Count} characters, leader at {lead.X:0}, {lead.Z:0}");
 
-            // --new-game is a shortcut past the menus: the start's characters stay as rolled (the menu's New game opens the character editor); a still keeps
-            // the creation open for the showcase's editor pictures.
+            // --new-game is a shortcut past the menus: the start's characters stay as rolled (the menu's New game opens the character editor); a
+            // still keeps the creation open for the showcase's editor pictures.
             if (interactive)
                 Session.World.Commands.Enqueue(new Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
         }
@@ -638,6 +898,9 @@ sealed partial class GameHost(
         return target;
     }
 
+    /// <summary>
+    /// Makes the character renderer (with population data and none yet).
+    /// </summary>
     void CreateCharacterRenderer(Rendering.Gpu.GpuContext context)
     {
         if (Scene.Database is not { } characterDb || GameOptions.NoPopulation || Gpu.Characters is not null) return;
@@ -656,6 +919,10 @@ sealed partial class GameHost(
         };
     }
 
+    /// <summary>
+    /// Places the strategy camera on <paramref name="target"/> with the command line's yaw, pitch and distance (else the game's start view), and
+    /// sends the focus.
+    /// </summary>
     void PlaceCamera(Vector3 target)
     {
         var yaw = (WorldOptions.Yaw ?? 30) * MathF.PI / 180;
@@ -698,8 +965,8 @@ sealed partial class GameHost(
     #region Player interface services
 
     /// <summary>
-    /// The callbacks the interface asks the host for: the game data, the map, the build services, the tooltips and the character editor. Shared by the Vulkan
-    /// and Metal loops so the two expose the same interaction layer.
+    /// The callbacks the interface asks the host for: the game data, the map, the build services, the tooltips and the character editor. Shared by
+    /// the Vulkan and Metal loops so the two expose the same interaction layer.
     /// </summary>
     internal void ConfigurePlayerInterface(PlayerInterface ui)
     {
@@ -719,6 +986,9 @@ sealed partial class GameHost(
         CharacterEditor.ConfigureEditor(ui);
     }
 
+    /// <summary>
+    /// The save windows' services: the Load button fix, the save in use and deleting a save.
+    /// </summary>
     void ConnectSaves(PlayerInterface ui)
     {
         ui.Frontend.FixLoadButton = Config.FixLoadButton;
@@ -752,6 +1022,9 @@ sealed partial class GameHost(
         }
     }
 
+    /// <summary>
+    /// The faction services: names, the rename's test, the faction tab's list and its info panel.
+    /// </summary>
     void ConnectFactions(PlayerInterface ui)
     {
         ui.FactionName = FactionNameOf;
@@ -761,8 +1034,8 @@ sealed partial class GameHost(
         ui.FactionWindow.FactionNameTaken = name =>
             PopData is { } fd && fd.Factions.Where((f, i) => i != Session.World.Player.Faction).Any(f => f.Name == name);
 
-        // The faction tab's list (docs/game/ui-screens.md "Faction tab"): every faction the player has met but the player's, the `not real` ones and the
-        // generation template, with the player's relation towards it.
+        // The faction tab's list (docs/game/ui-screens.md "Faction tab"): every faction the player has met but the player's, the `not real` ones and
+        // the generation template, with the player's relation towards it.
         ui.FactionWindow.FactionRelations = () =>
         {
             if (PopData is not { } d || Session.World.Player.Faction is not (>= 0 and var own) || !d.Relations.Contains(own))
@@ -775,8 +1048,8 @@ sealed partial class GameHost(
                 .Select(p => (p.f.Name, d.Relations.Get(own, p.i)))];
         };
 
-        // Its info panel's contracts and events, read from the live world as the list above is (a collection changed mid-read shows the panel empty for that
-        // frame).
+        // Its info panel's contracts and events, read from the live world as the list above is (a collection changed mid-read shows the panel empty
+        // for that frame).
         ui.FactionWindow.FactionInfo = () =>
         {
             try
@@ -801,6 +1074,9 @@ sealed partial class GameHost(
         return PopData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Name : null;
     }
 
+    /// <summary>
+    /// The building panel's services: the build target, the upgrade chain, the build data and the power output.
+    /// </summary>
     void ConnectBuildings(PlayerInterface ui)
     {
         var selection = ui.BuildingSelection;
@@ -815,9 +1091,15 @@ sealed partial class GameHost(
         selection.PowerOutput = record => PopData?.Db.Find(record)?.GetInt("power output");
     }
 
+    /// <summary>
+    /// The build data of a BUILDING record; null for another record or without data.
+    /// </summary>
     Data.Gameplay.Construction.BuildingBuildData? BuildingDataOf(string record) =>
         PopData?.Db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r ? Data.Gameplay.Construction.BuildingBuildData.From(r) : null;
 
+    /// <summary>
+    /// The world map's services: the towns, their factions and the towns a map item reveals.
+    /// </summary>
     void ConnectWorldMap(PlayerInterface ui)
     {
         ui.WorldMap.MapTowns = () => PopData?.Sites ?? [];
@@ -852,6 +1134,9 @@ sealed partial class GameHost(
         return new MapFaction(faction.Name, relation, standing, faction.NotReal);
     }
 
+    /// <summary>
+    /// The item services: armour, names, prices and the rest the interface asks of the data.
+    /// </summary>
     void ConnectItems(PlayerInterface ui)
     {
         ui.ArmourOf = record => PopData?.Combat.Armour(record);
@@ -868,8 +1153,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// The tooltips' prices of an item: gear by its own price rules, anything else at a shelf with no trader. The price constants and the shelf are made on
-    /// first use.
+    /// The tooltips' prices of an item: gear by its own price rules, anything else at a shelf with no trader. The price constants and the shelf are
+    /// made on first use.
     /// </summary>
     Func<TooltipRuntime.ItemTip, (int Value, int Sell, int? Average)?> PriceLookup()
     {
@@ -914,6 +1199,9 @@ sealed partial class GameHost(
 
     #region Camera
 
+    /// <summary>
+    /// The drawn camera from a rig state.
+    /// </summary>
     internal void ApplyCamera(CameraState s)
     {
         Camera.Target = s.Target;
@@ -938,13 +1226,20 @@ sealed partial class GameHost(
     #region Nav streaming
 
     /// <summary>
-    /// Seconds between <see cref="Meitou.Simulation.RepathCommand"/>s at least: zones go live in runs along a long walk, and are sent together (engine choice).
+    /// Seconds between <see cref="Meitou.Simulation.RepathCommand"/>s at least: zones go live in runs along a long walk, and are sent together
+    /// (engine choice).
     /// </summary>
     const double RepathCoalesceSeconds = 1;
 
-    // Meitou's asset cache (engine choice): a left zone's mesh stays NavCacheSeconds, at most NavCacheZones zones, the oldest dropped first, so a return within
-    // two minutes rebuilds nothing.
+    // Meitou's asset cache (engine choice): a left zone's mesh stays NavCacheSeconds, at most NavCacheZones zones, the oldest dropped first, so a
+    // return within two minutes rebuilds nothing.
+    /// <summary>
+    /// The seconds a left zone's mesh stays.
+    /// </summary>
     const double NavCacheSeconds = 120;
+    /// <summary>
+    /// At most this many left zones' meshes stay cached.
+    /// </summary>
     const int NavCacheZones = 60;
 
     /// <summary>
@@ -956,10 +1251,19 @@ sealed partial class GameHost(
     /// Zones whose mesh went live since the last <see cref="Meitou.Simulation.RepathCommand"/> (filled on the nav thread, under its own lock).
     /// </summary>
     readonly HashSet<Meitou.Data.World.ZoneCoordinate> _navReady = [];
+    /// <summary>
+    /// When the last <see cref="Meitou.Simulation.RepathCommand"/> was sent (a <see cref="Stopwatch"/> timestamp).
+    /// </summary>
     long _lastRepath;
 
     // The batch of zones being dropped on the pool, and its task.
+    /// <summary>
+    /// The task.
+    /// </summary>
     Task _navUnload = Task.CompletedTask;
+    /// <summary>
+    /// The zones being dropped.
+    /// </summary>
     HashSet<Meitou.Data.World.ZoneCoordinate> _navUnloading = [];
 
     /// <summary>
@@ -975,9 +1279,9 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle too long, and has the characters whose
-    /// way leads through a zone whose mesh arrived ask for their paths again (their first path may have crossed a building), at most every
-    /// <see cref="RepathCoalesceSeconds"/>.
+    /// Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle too long, and has the
+    /// characters whose way leads through a zone whose mesh arrived ask for their paths again (their first path may have crossed a building), at most
+    /// every <see cref="RepathCoalesceSeconds"/>.
     /// </summary>
     internal void UpdateNav(bool wait = false)
     {
@@ -986,8 +1290,8 @@ sealed partial class GameHost(
         UpdateGateRegions(Nav);
         long now = Stopwatch.GetTimestamp();
 
-        // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again once that
-        // is done.
+        // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again
+        // once that is done.
         if (_navUnloading.Count > 0 && _navUnload.IsCompleted)
         {
             _navUnloading = [];
@@ -1021,7 +1325,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Drops the zones unwanted for <see cref="NavCacheSeconds"/>, and the oldest past <see cref="NavCacheZones"/>, once no other batch is being dropped.
+    /// Drops the zones unwanted for <see cref="NavCacheSeconds"/>, and the oldest past <see cref="NavCacheZones"/>, once no other batch is
+    /// being dropped.
     /// </summary>
     void DropStaleZones(Simulation.Navigation.NavSystem nav, long now)
     {
@@ -1073,13 +1378,23 @@ sealed partial class GameHost(
     /// The navmesh changed since the gate codes were made (a zone went live or was dropped).
     /// </summary>
     bool _relabelGates;
+    /// <summary>
+    /// The labelling running on the pool; null when none.
+    /// </summary>
     Task<Simulation.Navigation.NavGateRegions>? _gateLabelling;
+    /// <summary>
+    /// The last gate codes made; null before the first.
+    /// </summary>
     Simulation.Navigation.NavGateRegions? _gateRegions;
+    /// <summary>
+    /// The world <see cref="_gateRegions"/> was last handed to: a new world is handed them again.
+    /// </summary>
     object? _gateRegionsFor;
 
     /// <summary>
-    /// Keeps the simulation's gate codes (docs/game/pathfinding.md "Gate codes") up to date: labels the loaded meshes on the pool after they changed, one
-    /// labelling at a time, and hands each result to the world (again to a new world) as a <see cref="Meitou.Simulation.Locks.GateRegionsCommand"/>.
+    /// Keeps the simulation's gate codes (docs/game/pathfinding.md "Gate codes") up to date: labels the loaded meshes on the pool after they changed,
+    /// one labelling at a time, and hands each result to the world (again to a new world) as a
+    /// <see cref="Meitou.Simulation.Locks.GateRegionsCommand"/>.
     /// </summary>
     void UpdateGateRegions(Simulation.Navigation.NavSystem navSystem)
     {
@@ -1115,6 +1430,9 @@ sealed partial class GameHost(
 
     #region Frame
 
+    /// <summary>
+    /// Draws one frame of the world: the title's, the character editor's scene, or the world with its clocks and per-frame effects.
+    /// </summary>
     internal void DrawWorld(int width, int height)
     {
         SyncPreviewLook();
@@ -1165,8 +1483,8 @@ sealed partial class GameHost(
         // The sim's sight counts the interior lamps the renderer shows (the interiorlamps switch).
         Session.World.Sight.InteriorLampsAllDay = Gpu.Lamps?.InteriorAllDay ?? WorldOptions.InteriorLamps;
 
-        // The weather's three time bases: the game day and time of day (the hour DrawFrame passes), the game speed (the last non-zero one while paused) and the
-        // paused flag.
+        // The weather's three time bases: the game day and time of day (the hour DrawFrame passes), the game speed (the last non-zero one while
+        // paused) and the paused flag.
         if (Gpu.Weather is { } weather)
         {
             var sim = Session.Simulation;
@@ -1177,7 +1495,8 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// The per-frame effects before the draw, each lapped on the profiler: blood marks, the mods' hits, birds, then the weather source and the interior view.
+    /// The per-frame effects before the draw, each lapped on the profiler: blood marks, the mods' hits, birds, then the weather source and the
+    /// interior view.
     /// </summary>
     void UpdateFrameEffects(float aspect)
     {
@@ -1194,16 +1513,19 @@ sealed partial class GameHost(
         Interiors.UpdateInteriorView();
     }
 
+    /// <summary>
+    /// Draws the world at the shown game time, overlapping the next world tick when <see cref="TickAhead"/>.
+    /// </summary>
     void DrawFrame(int width, int height)
     {
-        // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in whole
-        // 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
+        // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in
+        // whole 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
         double shownSeconds = Session.Clock.GameSeconds + Session.SimulationAlpha * Session.Simulation.TickSeconds;
         float gameTime = (float)(shownSeconds / 600 % 1e4);
         float hour = (float)Session.Clock.HourOfDay;
 
-        // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here to the
-        // join nothing the renderer calls back may touch the world, only the session's snapshots.
+        // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here
+        // to the join nothing the renderer calls back may touch the world, only the session's snapshots.
         if (TickAhead) Session.BeginTickAhead();
         try
         {
@@ -1222,18 +1544,25 @@ sealed partial class GameHost(
     #region Tick ahead
 
     /// <summary>
-    /// This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).
+    /// This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the
+    /// play benchmark).
     /// </summary>
     internal bool TickAhead;
 
     /// <summary>
-    /// Meitou's dynamic tick ahead (engine choice): on once a world tick takes <see cref="AheadOnMs"/> (smoothed), off again under <see cref="AheadOffMs"/>,
-    /// so a quiet world keeps the game's input delay and a big fight or crowd overlaps; a tick run ahead is slower (it shares the cores with the draw), hence
-    /// the gap.
+    /// Meitou's dynamic tick ahead (engine choice): on once a world tick takes <see cref="AheadOnMs"/> (smoothed), off again under
+    /// <see cref="AheadOffMs"/>, so a quiet world keeps the game's input delay and a big fight or crowd overlaps; a tick run ahead is slower (it
+    /// shares the cores with the draw), hence the gap.
     /// </summary>
     const double AheadOnMs = 4, AheadOffMs = 2;
+    /// <summary>
+    /// A world tick took long enough for the dynamic tick ahead (<see cref="AheadOnMs"/>, off again under <see cref="AheadOffMs"/>).
+    /// </summary>
     bool _worldBusy;
 
+    /// <summary>
+    /// Whether the next frame's draw should overlap a world tick, by <see cref="UserConfig.TickAhead"/>.
+    /// </summary>
     internal bool TickAheadWanted() => Config.TickAhead switch
     {
         TickAheadMode.Always => true,

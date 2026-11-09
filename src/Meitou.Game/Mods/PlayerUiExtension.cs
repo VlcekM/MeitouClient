@@ -7,8 +7,14 @@ namespace Meitou.Modding;
 /// </summary>
 sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
 {
+    /// <summary>
+    /// The extension id of Meitou's own shared actions.
+    /// </summary>
     public string Id => "meitou";
 
+    /// <summary>
+    /// Registers the shared actions (the speed buttons, the panels and orders) that run the host's commands.
+    /// </summary>
     public void Register(UiRegistration r)
     {
         for (int i = 0; i < 4; i++)

@@ -20,6 +20,8 @@ namespace Meitou.Game.Effects;
 /// </summary>
 sealed class BloodDecals(GameHost host)
 {
+    #region Blood
+
     /// <summary>
     /// The <c>Blood</c> resource group's folders by decal type (<see cref="TerrainDecalType"/>), the game's names for them.
     /// </summary>
@@ -31,12 +33,35 @@ sealed class BloodDecals(GameHost host)
     /// </summary>
     internal const float BloodAboveGround = 20;
 
+    /// <summary>
+    /// The terrain blood decals; null with the <c>Blood</c> setting off (<see cref="SetUpBlood"/>).
+    /// </summary>
     internal TerrainDecalStore? DecalStore;
+    /// <summary>
+    /// The world the store was emptied and hooked for (<see cref="BloodForNewWorld"/>); another starts afresh.
+    /// </summary>
     World? _bloodFor;
+    /// <summary>
+    /// The world tick the decals were last aged to.
+    /// </summary>
     long _bloodTick;
+    /// <summary>
+    /// The shown game time (ticks plus the simulation's alpha) the debris last moved to.
+    /// </summary>
     double _debrisClock;
+    /// <summary>
+    /// The world's blood marks, queued by the simulation (<see cref="World.BloodMarks"/>) and taken each frame.
+    /// </summary>
     readonly ConcurrentQueue<BloodMark> _bloodQueue = new();
+    /// <summary>
+    /// The random of every blood decal, debris piece and spark (a look only, not the simulation's).
+    /// </summary>
     internal readonly Random BloodRandom = new();
+
+    /// <summary>
+    /// The default <c>blood colour</c> (RACE, 0x800000), the red the blood particles' textures already are.
+    /// </summary>
+    const uint DefaultBloodColour = 0x800000;
 
     /// <summary>
     /// Makes the store and the renderer when the install's <c>Blood</c> setting is on (missing: on).
@@ -97,16 +122,19 @@ sealed class BloodDecals(GameHost host)
             if (m.Position.Y > host.Gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodAboveGround) continue;
             switch (m.Kind)
             {
-                case BloodMarkKind.Pool: store.Bleed(who, m.Position, m.Amount, tick, opaque, BloodRandom);
-                break;
+                case BloodMarkKind.Pool:
+                    store.Bleed(who, m.Position, m.Amount, tick, opaque, BloodRandom);
+                    break;
                 case BloodMarkKind.Smear:
                     store.Add(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour),
                         TerrainDecalStore.NewLife, BloodRandom);
                     break;
-                case BloodMarkKind.Drip: store.Add(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife,
-                        BloodRandom); break;
-                case BloodMarkKind.Splash: store.Add(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife,
-                        BloodRandom); break;
+                case BloodMarkKind.Drip:
+                    store.Add(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, BloodRandom);
+                    break;
+                case BloodMarkKind.Splash:
+                    store.Add(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, BloodRandom);
+                    break;
             }
         }
         long ticks = world.Tick - _bloodTick;
@@ -130,45 +158,20 @@ sealed class BloodDecals(GameHost host)
     {
         switch (m.Kind)
         {
-            case BloodMarkKind.Pool: surfaces.BleedSurface(who, m.Position, m.Amount, tick, opaque, BloodRandom);
-            break;
+            case BloodMarkKind.Pool:
+                surfaces.BleedSurface(who, m.Position, m.Amount, tick, opaque, BloodRandom);
+                break;
             case BloodMarkKind.Smear:
                 surfaces.AddSurface(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f,
                     (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), BloodRandom);
                 break;
-            case BloodMarkKind.Drip: surfaces.AddSurface(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, BloodRandom);
-            break;
-            case BloodMarkKind.Splash: surfaces.AddSurface(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, BloodRandom);
-            break;
+            case BloodMarkKind.Drip:
+                surfaces.AddSurface(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, BloodRandom);
+                break;
+            case BloodMarkKind.Splash:
+                surfaces.AddSurface(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, BloodRandom);
+                break;
         }
-    }
-
-    /// <summary>
-    /// The EFFECT `small- sparks1` (5463-nodes_furniture1_otto.mod) the original throws on a parry: its particle system.
-    /// </summary>
-    const string SparksSystem = "kenshi_sparks";
-    readonly ConcurrentQueue<CharacterId> _sparkQueue = new();
-
-    /// <summary>
-    /// Once a frame: the parries of the ticks since the last frame throw <see cref="SparksSystem"/> at the parrying character's <c>Bip01 Prop2</c>
-    /// (its weapon), 0 or 1 unit higher at random, when that character is drawn (the original's <c>FUN_1404394f0</c>: only for a character on screen;
-    /// docs/game/combat.md "Block sparks").
-    /// </summary>
-    void UpdateBlockSparks(World world)
-    {
-        if (host.Gpu.Particles is not { } particles || host.Gpu.Characters is not { } characters)
-        {
-            world.BlockSparks = null;
-            return;
-        }
-        if (!ReferenceEquals(world.BlockSparks, _sparkQueue))
-        {
-            _sparkQueue.Clear();
-            world.BlockSparks = _sparkQueue;
-        }
-        while (_sparkQueue.TryDequeue(out var who))
-            if (characters.BonePosition(host.DrawKey(who), "Bip01 Prop2") is { } at)
-                particles.Burst(SparksSystem, at + new Vector3(0, BloodRandom.Next(2), 0), Quaternion.Identity, 0.1f);
     }
 
     /// <summary>
@@ -202,11 +205,6 @@ sealed class BloodDecals(GameHost host)
         SaveDecals.Write(record, store.All);
         if (host.Gpu?.Decals is { } decals) SaveSurfaceDecals.Write(record, decals.SavedSurfaces);
     }
-
-    /// <summary>
-    /// The default <c>blood colour</c> (RACE, 0x800000), the red the blood particles' textures already are.
-    /// </summary>
-    const uint DefaultBloodColour = 0x800000;
 
     /// <summary>
     /// The recolour a blood particle burst takes for a race's <c>blood colour</c> <paramref name="rgb"/> (<see cref="ParticleRenderer.Burst"/>): none
@@ -256,4 +254,41 @@ sealed class BloodDecals(GameHost host)
             return (0, 0);
         }
     }
+
+    #endregion
+
+    #region Block sparks
+
+    /// <summary>
+    /// The EFFECT `small- sparks1` (5463-nodes_furniture1_otto.mod) the original throws on a parry: its particle system.
+    /// </summary>
+    const string SparksSystem = "kenshi_sparks";
+    /// <summary>
+    /// The parrying characters, queued by the simulation (<see cref="World.BlockSparks"/>) and taken each frame.
+    /// </summary>
+    readonly ConcurrentQueue<CharacterId> _sparkQueue = new();
+
+    /// <summary>
+    /// Once a frame: the parries of the ticks since the last frame throw <see cref="SparksSystem"/> at the parrying character's <c>Bip01 Prop2</c>
+    /// (its weapon), 0 or 1 unit higher at random, when that character is drawn (the original's <c>FUN_1404394f0</c>: only for a character on screen;
+    /// docs/game/combat.md "Block sparks").
+    /// </summary>
+    void UpdateBlockSparks(World world)
+    {
+        if (host.Gpu.Particles is not { } particles || host.Gpu.Characters is not { } characters)
+        {
+            world.BlockSparks = null;
+            return;
+        }
+        if (!ReferenceEquals(world.BlockSparks, _sparkQueue))
+        {
+            _sparkQueue.Clear();
+            world.BlockSparks = _sparkQueue;
+        }
+        while (_sparkQueue.TryDequeue(out var who))
+            if (characters.BonePosition(host.DrawKey(who), "Bip01 Prop2") is { } at)
+                particles.Burst(SparksSystem, at + new Vector3(0, BloodRandom.Next(2), 0), Quaternion.Identity, 0.1f);
+    }
+
+    #endregion
 }

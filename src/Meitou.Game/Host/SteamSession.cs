@@ -8,12 +8,28 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed unsafe class SteamSession : IDisposable
 {
+    /// <summary>
+    /// Kenshi's Steam App ID.
+    /// </summary>
     const uint KenshiAppId = 233860;
+    /// <summary>
+    /// The install's <c>steam_api64.dll</c>, loaded; 0 once shut down.
+    /// </summary>
     nint _library;
+    /// <summary>
+    /// The library's <c>SteamAPI_Shutdown</c>.
+    /// </summary>
     delegate* unmanaged[Cdecl]<void> _shutdown;
 
+    /// <summary>
+    /// Only <see cref="TryStart"/> makes one.
+    /// </summary>
     SteamSession() { }
 
+    /// <summary>
+    /// Starts Steamworks from the install's <c>steam_api64.dll</c> (Windows only): null, with the reason logged, when the library is missing, another
+    /// App ID is configured or its init fails.
+    /// </summary>
     public static SteamSession? TryStart(GameInstall install)
     {
         if (!OperatingSystem.IsWindows())
@@ -86,6 +102,9 @@ sealed unsafe class SteamSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Shuts Steamworks down and frees the library; once only.
+    /// </summary>
     public void Dispose()
     {
         if (_library == 0) return;

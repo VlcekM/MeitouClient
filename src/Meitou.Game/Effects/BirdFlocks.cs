@@ -22,27 +22,96 @@ public sealed class BirdFlocks
     /// <summary>
     /// A bird's state (<b>Verified</b>, the <c>+0x38</c> field of <c>FUN_140262830</c>; 8 is never set).
     /// </summary>
-    public enum BirdState { Gone = 0, Return = 1, Wander = 2, Follow = 3, Circle = 4, Attracted = 5, Rest = 6 }
+    public enum BirdState
+    {
+        /// <summary>
+        /// 0: removed (beyond the kind's distance and outside the view); dropped at the end of the step.
+        /// </summary>
+        Gone = 0,
+        /// <summary>
+        /// 1: over a cell whose group does not list the kind; flies back toward where it left.
+        /// </summary>
+        Return = 1,
+        /// <summary>
+        /// 2: wanders, steering along the terrain's contour, and looks for a mate.
+        /// </summary>
+        Wander = 2,
+        /// <summary>
+        /// 3: follows a mate, 100 units beside it.
+        /// </summary>
+        Follow = 3,
+        /// <summary>
+        /// 4: circles a point that creeps along the terrain's slope (circling kinds).
+        /// </summary>
+        Circle = 4,
+        /// <summary>
+        /// 5: circles an attractor it took.
+        /// </summary>
+        Attracted = 5,
+        /// <summary>
+        /// 6: rests after an attractor (moves as <see cref="Wander"/>).
+        /// </summary>
+        Rest = 6
+    }
 
+    /// <summary>
+    /// One bird: where it is and heads, its state and timer, its circle, its scale, the mate it follows and the attractor it holds.
+    /// </summary>
     sealed class Bird
     {
+        /// <summary>
+        /// Where the bird is, its unit heading, and the point it returns to or circles.
+        /// </summary>
         public Vector3 Position, Forward, Target;
+        /// <summary>
+        /// Seconds left in the state; the circle's radius and altitude (the ground height where it began); the mesh scale.
+        /// </summary>
         public float Timer, Radius, Altitude, Scale;
+        /// <summary>
+        /// What the bird is doing.
+        /// </summary>
         public BirdState State;
+        /// <summary>
+        /// The bird it follows; null for none.
+        /// </summary>
         public Bird? Mate;
+        /// <summary>
+        /// The attractor it circles or rests from; null for none.
+        /// </summary>
         public Attractor? Attractor;
     }
 
+    /// <summary>
+    /// One object that draws birds (<see cref="BirdAttractor"/>): its place, its pull and how many birds it takes.
+    /// </summary>
     sealed class Attractor(object key)
     {
+        /// <summary>
+        /// The world object's key, matched across frames.
+        /// </summary>
         public readonly object Key = key;
+        /// <summary>
+        /// Where the object is.
+        /// </summary>
         public Vector3 Position;
+        /// <summary>
+        /// The pull: 100 x the range squared; a bird takes it while strength / distance squared is above 1.
+        /// </summary>
         public float Strength;
+        /// <summary>
+        /// The most birds it takes, and how many it holds.
+        /// </summary>
         public int Max, Count;
     }
 
+    /// <summary>
+    /// One WILDLIFE_BIRDS kind: its data, its amount per weather cell, the sums over them, its birds and attractors.
+    /// </summary>
     sealed class Group(BirdFlockData kind, Func<int, int, string?> groupOfCell)
     {
+        /// <summary>
+        /// The WILDLIFE_BIRDS record's data.
+        /// </summary>
         public readonly BirdFlockData Kind = kind;
         /// <summary>
         /// The kind's amount in each weather cell (-1: the cell's group does not list it), row z * 64 + x; the map does not change while the birds
@@ -56,6 +125,9 @@ public sealed class BirdFlocks
         public readonly int[] MatchSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)],
             TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
 
+        /// <summary>
+        /// The kind's amount per weather cell from the cell's BIOME_GROUP (-1 where the group does not list it).
+        /// </summary>
         static int[] BuildAmounts(BirdFlockData kind, Func<int, int, string?> groupOfCell)
         {
             var amounts = new int[WeatherAreas.Cells * WeatherAreas.Cells];
@@ -65,6 +137,9 @@ public sealed class BirdFlocks
             return amounts;
         }
 
+        /// <summary>
+        /// Fills <see cref="MatchSums"/> and <see cref="TotalSums"/> from <see cref="Amounts"/>.
+        /// </summary>
         public void BuildSums()
         {
             const int n = WeatherAreas.Cells, w = n + 1;
@@ -77,13 +152,23 @@ public sealed class BirdFlocks
                 }
         }
 
+        /// <summary>
+        /// The sum of a summed-area table over the cells <paramref name="minX"/>..<paramref name="maxX"/> by
+        /// <paramref name="minZ"/>..<paramref name="maxZ"/>.
+        /// </summary>
         public static int Sum(int[] sums, int minX, int minZ, int maxX, int maxZ)
         {
             const int w = WeatherAreas.Cells + 1;
             return sums[(maxZ + 1) * w + maxX + 1] - sums[minZ * w + maxX + 1] - sums[(maxZ + 1) * w + minX] + sums[minZ * w + minX];
         }
 
+        /// <summary>
+        /// The kind's birds alive.
+        /// </summary>
         public readonly List<Bird> Birds = [];
+        /// <summary>
+        /// The objects that draw the kind's birds this frame.
+        /// </summary>
         public readonly List<Attractor> Attractors = [];
         /// <summary>
         /// The mesh with its texture, as the debris renderer takes it.
@@ -91,11 +176,28 @@ public sealed class BirdFlocks
         public readonly string Mesh = kind.Texture.Length == 0 ? kind.Mesh : kind.Mesh + DebrisPiece.TextureMark + kind.Texture;
     }
 
+    /// <summary>
+    /// Spawns stay this far from the camera focus; the mate search radius while wandering and when a timer runs out; how far outside a frustum plane
+    /// a bird may be before it can be removed (units).
+    /// </summary>
     const float FarSpawn = 1000, NeighbourRadius = 100, WideNeighbourRadius = 1000, FrustumMargin = -10;
+    /// <summary>
+    /// Below this height over the ground a bird climbs at <c>ClimbRate</c>; the height error is divided by <c>HeightScale</c>; π for a turn of a
+    /// reversed heading; a follower aims this far beside its mate (units).
+    /// </summary>
     const float TooLow = 30, ClimbRate = 5, HeightScale = 2000, TurnPi = 3.14159f, FollowOffset = 100;
 
+    /// <summary>
+    /// The kinds that fly (a speed and a spawn count above 0).
+    /// </summary>
     readonly Group[] _groups;
+    /// <summary>
+    /// The terrain's height at a world x, z.
+    /// </summary>
     readonly Func<float, float, float> _ground;
+    /// <summary>
+    /// Every random draw of the step, seeded so a run repeats.
+    /// </summary>
     readonly Random _random;
 
     /// <param name="ground">The terrain's height at a world x, z.</param>
@@ -108,6 +210,9 @@ public sealed class BirdFlocks
         _random = new Random(seed);
     }
 
+    /// <summary>
+    /// The birds alive.
+    /// </summary>
     public int BirdCount => _groups.Sum(g => g.Birds.Count);
 
     /// <summary>
@@ -159,6 +264,9 @@ public sealed class BirdFlocks
 
     // ---- Spawning (FUN_140260620, FUN_140262500, FUN_1402622d0)
 
+    /// <summary>
+    /// The weather cells within the kind's distance (clamped to the map): their bounds, how many list the kind, and the sum of their amounts.
+    /// </summary>
     readonly record struct CellRange(int MinX, int MinZ, int MaxX, int MaxZ, int Matches, int Total);
 
     /// <summary>
@@ -172,8 +280,15 @@ public sealed class BirdFlocks
         return new CellRange(minX, minZ, maxX, maxZ, Group.Sum(g.MatchSums, minX, minZ, maxX, maxZ), Group.Sum(g.TotalSums, minX, minZ, maxX, maxZ));
     }
 
+    /// <summary>
+    /// The kind's amount in a cell; null when the cell's group does not list it.
+    /// </summary>
     static int? AmountOf(Group g, int x, int z) => g.Amounts[z * WeatherAreas.Cells + x] is >= 0 and var amount ? amount : null;
 
+    /// <summary>
+    /// Spawns a flock of the kind's <c>spawn count</c> at a random listing cell in range, unless the point is within <see cref="FarSpawn"/> of the
+    /// focus or outside the kind's spawn heights.
+    /// </summary>
     void SpawnFlock(Group g, CellRange range, Vector3 focus)
     {
         var kind = g.Kind;
@@ -208,6 +323,10 @@ public sealed class BirdFlocks
 
     // ---- The step (FUN_140262830)
 
+    /// <summary>
+    /// One bird's step: moves it, sends it back when it leaves the kind's cells, steers it by its state, takes an attractor, runs out its timer and
+    /// removes it beyond the kind's distance outside the view.
+    /// </summary>
     void Step(Group g, Bird b, int index, float dt, Vector3 eye, Vector4[]? frustum)
     {
         var kind = g.Kind;
@@ -234,12 +353,18 @@ public sealed class BirdFlocks
         }
     }
 
+    /// <summary>
+    /// Whether the point's weather cell lists the kind.
+    /// </summary>
     static bool InsideArea(Group g, Vector3 p)
     {
         var (cx, cz) = WeatherAreas.CameraCellOf(p.X, p.Z);
         return g.Amounts[cz * WeatherAreas.Cells + cx] >= 0;
     }
 
+    /// <summary>
+    /// Whether the point is more than 10 units outside any of the frustum's planes.
+    /// </summary>
     static bool Outside(Vector4[] frustum, Vector3 p)
     {
         foreach (var plane in frustum)
@@ -313,6 +438,10 @@ public sealed class BirdFlocks
         return desired;
     }
 
+    /// <summary>
+    /// The direction a circling bird wants: round its target (a point creeping along the slope, or the attractor's place) at its radius; lifts
+    /// <paramref name="groundY"/> to the altitude minus 500.
+    /// </summary>
     Vector3 Circle(Bird b, float dt, ref float groundY, BirdFlockData kind)
     {
         if (b.State == BirdState.Circle)
@@ -386,6 +515,9 @@ public sealed class BirdFlocks
         return mate;
     }
 
+    /// <summary>
+    /// Takes the attractor with the highest pull above 1 that is not full: state 5, timer 30 to 90, radius 400 to 600.
+    /// </summary>
     void TakeAttractor(Group g, Bird b)
     {
         Attractor? best = null;
@@ -408,6 +540,9 @@ public sealed class BirdFlocks
         b.Radius = Range(400, 600);
     }
 
+    /// <summary>
+    /// Lets go of the attractor (a bird circling it wanders again).
+    /// </summary>
     static void ReleaseAttractor(Bird b)
     {
         if (b.Attractor is null) return;
@@ -418,6 +553,9 @@ public sealed class BirdFlocks
 
     // ---- State timers
 
+    /// <summary>
+    /// A state's timer ran out: the next state, timer and mate (docs/game/birds.md timers).
+    /// </summary>
     void Expire(Group g, Bird b, float groundY)
     {
         switch (b.State)
@@ -446,15 +584,27 @@ public sealed class BirdFlocks
         }
     }
 
+    /// <summary>
+    /// Looks for a mate within <see cref="WideNeighbourRadius"/>: follows it, or wanders without one.
+    /// </summary>
     static void Wander(Group g, Bird b)
     {
         b.Mate = FindMate(g, b, WideNeighbourRadius);
         b.State = b.Mate is null ? BirdState.Wander : BirdState.Follow;
     }
 
+    /// <summary>
+    /// A random value 0..1.
+    /// </summary>
     float Next() => (float)_random.NextDouble();
+    /// <summary>
+    /// A random value <paramref name="min"/>..<paramref name="max"/>.
+    /// </summary>
     float Range(float min, float max) => min + Next() * (max - min);
 
+    /// <summary>
+    /// The vector at unit length; a near-zero one as it is.
+    /// </summary>
     static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
 
     /// <summary>
@@ -489,17 +639,35 @@ public sealed class BirdFlocks
 /// </summary>
 public sealed class BirdThread
 {
+    /// <summary>
+    /// The step the thread runs.
+    /// </summary>
     readonly Action _work;
+    /// <summary>
+    /// Released by <see cref="Start"/> to run one step.
+    /// </summary>
     readonly SemaphoreSlim _go = new(0);
+    /// <summary>
+    /// Set by <see cref="Start"/>, cleared when the step is done.
+    /// </summary>
     volatile bool _busy;
+    /// <summary>
+    /// The exception of the last failed step, thrown by the next <see cref="Start"/>.
+    /// </summary>
     Exception? _failure;
 
+    /// <summary>
+    /// Starts the background thread that runs <paramref name="work"/> on each <see cref="Start"/>.
+    /// </summary>
     public BirdThread(Action work)
     {
         this._work = work;
         new Thread(Run) { IsBackground = true, Name = "Birds" }.Start();
     }
 
+    /// <summary>
+    /// Whether a step is running.
+    /// </summary>
     public bool Busy => _busy;
 
     /// <summary>
@@ -517,6 +685,9 @@ public sealed class BirdThread
         _go.Release();
     }
 
+    /// <summary>
+    /// The thread's loop: waits for a start, runs the work, keeps a failure for the host.
+    /// </summary>
     void Run()
     {
         while (true)

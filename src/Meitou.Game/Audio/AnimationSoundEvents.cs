@@ -19,9 +19,18 @@ public sealed record AnimationSoundEvent(string Event, string OverrideState, str
 /// </summary>
 public sealed class AnimationSoundEvents
 {
+    /// <summary>
+    /// The list fields that carry the sound events: <c>events</c> (animations, techniques) and <c>animation events</c> (building functionality).
+    /// </summary>
     static readonly string[] Lists = ["events", "animation events"];
+    /// <summary>
+    /// The events per record string id, each array in time order.
+    /// </summary>
     readonly Dictionary<string, AnimationSoundEvent[]> _byRecord = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Made only by <see cref="FromDatabase"/>.
+    /// </summary>
     AnimationSoundEvents() { }
 
     /// <summary>
@@ -116,7 +125,13 @@ public sealed class AnimationSoundEvents
 /// </summary>
 public struct AnimationEventCursor
 {
+    /// <summary>
+    /// The clip fraction (0..1) at the last update.
+    /// </summary>
     public float Last;
+    /// <summary>
+    /// The index of the next event to fire; the event count once all of this pass have fired.
+    /// </summary>
     public int Next;
 
     /// <summary>
@@ -129,6 +144,10 @@ public struct AnimationEventCursor
         while (Next < events.Length && events[Next].Fraction < Last) Next++;
     }
 
+    /// <summary>
+    /// Fires, through <paramref name="fire"/>, the events passed between the last fraction and <paramref name="fraction"/> (those left from the pass
+    /// before first when the clip looped); keeps only the fraction while not <paramref name="enabled"/>.
+    /// </summary>
     public void Update(AnimationSoundEvent[] events, float fraction, bool enabled, Action<AnimationSoundEvent> fire)
     {
         if (events.Length == 0 || fraction == Last) return;

@@ -27,11 +27,17 @@ public sealed class CameraSettings
     /// <c>mouse speed horizontal</c> / <c>vertical</c> (default 1.5): scale of the mouse movement in pixels.
     /// </summary>
     public float MouseSpeedX { get; set; } = KenshiCamera.DefaultMouseSpeed;
+    /// <summary>
+    /// The vertical mouse scale; see <see cref="MouseSpeedX"/>.
+    /// </summary>
     public float MouseSpeedY { get; set; } = KenshiCamera.DefaultMouseSpeed;
     /// <summary>
     /// <c>invert X</c> (default off) and <c>invert Y</c> (default on): flip the turn and the tilt, keys and mouse alike.
     /// </summary>
     public bool InvertX { get; set; }
+    /// <summary>
+    /// The tilt's flip; see <see cref="InvertX"/>.
+    /// </summary>
     public bool InvertY { get; set; } = true;
     /// <summary>
     /// <c>Edge scrolling</c> (default on): the pointer at the edge of the screen pans the camera.
@@ -64,7 +70,13 @@ public sealed class CameraSettings
     /// Engine choice: free camera speed in units per second per unit of height above the ground.
     /// </summary>
     public float FreeSpeedPerHeight { get; set; } = 1.5f;
+    /// <summary>
+    /// Engine choice: the free camera's lowest speed, units per second.
+    /// </summary>
     public float FreeMinSpeed { get; set; } = 50;
+    /// <summary>
+    /// Engine choice: the free camera's highest speed, units per second.
+    /// </summary>
     public float FreeMaxSpeed { get; set; } = 30000;
     /// <summary>
     /// Engine choice: how far above the ground the free camera is kept (it is only kept a little above it in the game).

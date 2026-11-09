@@ -13,15 +13,23 @@ namespace Meitou.Game.Host.WorldSync;
 /// </summary>
 sealed class WeatherFeed(GameHost host)
 {
+    /// <summary>
+    /// The simulation's <see cref="IWeatherSource"/>: each place's region weather from the renderer's scheduler, and the local effect zones.
+    /// </summary>
     internal sealed class HostWeather(Func<WorldWeather?> weather) : IWeatherSource
     {
+        /// <summary>
+        /// The live effect zones collected this frame (<see cref="UpdateWeatherSource"/>).
+        /// </summary>
         public readonly List<WeatherAffectZone> ZoneList = [];
+        /// <inheritdoc/>
         public IReadOnlyList<WeatherAffectZone> Zones => ZoneList;
         /// <summary>
         /// A weather every point gets instead of the schedule's (the <c>--scene acid</c> harness).
         /// </summary>
         public WeatherHere? Forced;
 
+        /// <inheritdoc/>
         public WeatherHere? At(float x, float z)
         {
             if (Forced is { } forced) return forced;
@@ -32,6 +40,9 @@ sealed class WeatherFeed(GameHost host)
         }
     }
 
+    /// <summary>
+    /// The weather source handed to the world, made on the first frame.
+    /// </summary>
     internal HostWeather? WeatherSource;
 
     /// <summary>

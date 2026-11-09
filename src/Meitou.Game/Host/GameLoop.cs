@@ -39,10 +39,25 @@ sealed class GameLoop(GameHost host)
     // The display and its window (none headless: --headless draws into an offscreen picture), and the frame rate as this run started.
     #region State
 
+    /// <summary>
+    /// The Vulkan display (the device, the window's swapchain or the headless target), made by <see cref="OpenDisplay"/>.
+    /// </summary>
     VulkanDisplay _display = null!;
+    /// <summary>
+    /// The game window; null headless.
+    /// </summary>
     IWindow? _window;
+    /// <summary>
+    /// A run without a window (<c>--headless</c>), and vsync as the run started.
+    /// </summary>
     bool _headless, _vsync;
+    /// <summary>
+    /// The frame limit in use (0 = unlimited), and the one the run started with.
+    /// </summary>
     int _fpsLimit, _initialFpsLimit;
+    /// <summary>
+    /// Vsync and full screen as last written to the config: a change is saved at the end.
+    /// </summary>
     bool _savedVSync, _savedFullScreen;
 
     /// <summary>
@@ -51,9 +66,21 @@ sealed class GameLoop(GameHost host)
     FrameGenerationMethod _frameGenerationAtStart;
 
     // The debug overlay the interface draws through, the Faithful / Meitou switches and the settings panel (null without an overlay).
+    /// <summary>
+    /// The debug overlay.
+    /// </summary>
     DebugOverlay? _overlay;
+    /// <summary>
+    /// The Faithful / Meitou switches of the look (<see cref="WorldFrame.LiveSwitches"/>).
+    /// </summary>
     IReadOnlyList<Enhancement> _switches = [];
+    /// <summary>
+    /// F1's switch of every look switch between Faithful and Meitou.
+    /// </summary>
     MeitouToggle _meitou = null!;
+    /// <summary>
+    /// The settings panel; null without an overlay.
+    /// </summary>
     SettingsMenu? _panel;
 
     /// <summary>
@@ -68,18 +95,51 @@ sealed class GameLoop(GameHost host)
     HashSet<string> _runOnly = [];
 
     // The cinematic camera and the squad tour; while either holds the drawn camera the rig's state is not applied.
+    /// <summary>
+    /// The cinematic camera.
+    /// </summary>
     Cinema _cinema = null!;
+    /// <summary>
+    /// The cinema (or the tour) holds the drawn camera: the rig's state is not applied until a camera input takes it back.
+    /// </summary>
     bool _cinemaHolds;
+    /// <summary>
+    /// The squad tour (numpad /) and the character flights.
+    /// </summary>
     SquadTour _tour = null!;
+    /// <summary>
+    /// The tour's character is followed once it ends (a double-clicked member).
+    /// </summary>
     bool _tourFollows;
+    /// <summary>
+    /// The cinema's playing and recording state last frame, for the duel's start.
+    /// </summary>
     bool _cinemaWasPlaying, _cinemaWasRecording;
 
     // The keyboards and mice (none headless), and the pointer's state between their events.
+    /// <summary>
+    /// The input context.
+    /// </summary>
     Silk.NET.Input.IInputContext? _silkInput;
+    /// <summary>
+    /// The keyboards; none headless.
+    /// </summary>
     IReadOnlyList<Silk.NET.Input.IKeyboard> _keyboards = [];
+    /// <summary>
+    /// The mice; none headless.
+    /// </summary>
     IReadOnlyList<Silk.NET.Input.IMouse> _mice = [];
+    /// <summary>
+    /// The headless run's clipboard (no keyboard to hold one).
+    /// </summary>
     string? _headlessClipboard;
+    /// <summary>
+    /// The pointer's last position (window units); null before the first move or after the window lost it.
+    /// </summary>
     Vector2? _lastMouse;
+    /// <summary>
+    /// The headless pointer last applied from the dev console.
+    /// </summary>
     Vector2? _appliedHeadlessMouse;
 
     /// <summary>
@@ -89,11 +149,29 @@ sealed class GameLoop(GameHost host)
     /// 2026-10-25). While locked, the game treats the pointer as at <see cref="_orbitAnchor"/>.
     /// </summary>
     bool _lockOrbit;
+    /// <summary>
+    /// The pointer's position while the orbit locks it (Linux); null when not locked.
+    /// </summary>
     Vector2? _orbitAnchor;
+    /// <summary>
+    /// The window's cursor mode as last set.
+    /// </summary>
     Silk.NET.Input.CursorMode _windowCursor = Silk.NET.Input.CursorMode.Normal;
+    /// <summary>
+    /// The cursor mode before the orbit locked it, put back after.
+    /// </summary>
     Silk.NET.Input.CursorMode _cursorBeforeOrbit = Silk.NET.Input.CursorMode.Normal;
+    /// <summary>
+    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler (its release is not the game's).
+    /// </summary>
     bool _panelDrag, _shiftDown, _profilerClick;
+    /// <summary>
+    /// The highlight key (Alt) is held, as of the last control tick.
+    /// </summary>
     bool _highlightHeld;
+    /// <summary>
+    /// The window has the focus: the highlight shows only then.
+    /// </summary>
     bool _windowFocused = true;
 
     /// <summary>
@@ -103,28 +181,82 @@ sealed class GameLoop(GameHost host)
     (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldEditKey;
 
     // The loop's clock and end.
+    /// <summary>
+    /// A <see cref="Stopwatch"/> from the first frame.
+    /// </summary>
     Stopwatch _frame = null!;
+    /// <summary>
+    /// The time of the last frame (seconds of <see cref="_frame"/>).
+    /// </summary>
     double _last;
+    /// <summary>
+    /// The frames drawn so far.
+    /// </summary>
     int _totalFrames;
+    /// <summary>
+    /// The loop ends after this frame.
+    /// </summary>
     bool _quit;
 
     // What a frame draws into: the interface's layer, frame generation (made on the first frame), the headless backbuffer.
+    /// <summary>
+    /// The interface's layer.
+    /// </summary>
     UiLayer? _uiLayer;
+    /// <summary>
+    /// The frame generator; null when off or not made.
+    /// </summary>
     IFrameGenerator? _frameGen;
+    /// <summary>
+    /// The pointer the window system draws while frame generation is on.
+    /// </summary>
     readonly FrameGenerationSetup.SystemPointer _systemPointer = new();
+    /// <summary>
+    /// Frame generation was tried (on the first frame).
+    /// </summary>
     bool _frameGenTried;
+    /// <summary>
+    /// The headless run's backbuffer.
+    /// </summary>
     GpuTexture? _headlessTarget;
 
     // The fps counter (the mean over a tenth of a second) and F11's statistics (once a second); the triangle counts summed over the statistics'
     // second.
+    /// <summary>
+    /// F11's statistics lines.
+    /// </summary>
     readonly List<string> _stats = [];
+    /// <summary>
+    /// The fps counter's text.
+    /// </summary>
     string _fpsText = "";
+    /// <summary>
+    /// The fps counter's window (seconds), reset every tenth of a second.
+    /// </summary>
     double _fpsWindow;
+    /// <summary>
+    /// The frames in the fps counter's window.
+    /// </summary>
     int _fpsWindowFrames;
+    /// <summary>
+    /// The statistics second's summed draw time (ms) and GPU time (ms), and its length so far (seconds).
+    /// </summary>
     double _drawTotal, _gpuSum, _statsTimer;
+    /// <summary>
+    /// The statistics second's GPU samples and frames.
+    /// </summary>
     int _gpuSamples, _statsFrames;
+    /// <summary>
+    /// The world ticks run before the statistics second.
+    /// </summary>
     long _statsTicks;
+    /// <summary>
+    /// The statistics second's summed terrain and character triangles and grass blades.
+    /// </summary>
     double _terrainTris, _characterTris, _grassBlades;
+    /// <summary>
+    /// The object triangles counted before the statistics second.
+    /// </summary>
     long _objectTris0;
 
     #endregion
@@ -142,6 +274,10 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     Task<WorldScene?>? _sceneRead;
 
+    /// <summary>
+    /// Runs the game: opens the display, shows the window, loads the world, sets up the tools, settings and input, then draws frames until the window
+    /// closes; returns the exit code.
+    /// </summary>
     internal int Run()
     {
         using var owned = OpenDisplay();
@@ -314,7 +450,11 @@ sealed class GameLoop(GameHost host)
         if (_overlay is null) return;
         var values = WorldFrame.CreateSettingsPanel(_overlay, host.Gpu, host.Render,
             getHour: () => (float)host.Session.Clock.HourOfDay,
-            setHour: v => { host.Session.Clock.SetHourOfDay(v); if (host.Duel.IsDuel) host.Duel.HeldHour = v; },
+            setHour: v =>
+            {
+                host.Session.Clock.SetHourOfDay(v);
+                if (host.Duel.IsDuel) host.Duel.HeldHour = v;
+            },
             getVSync: () => _display.VSync, setVSync: v => _display.VSync = v, switches: _switches,
             getFullScreen: FullScreenOn, setFullScreen: _ => ToggleFullScreen(),
             extraChoices: [new PanelChoice(() => $"UI mode: {host.Player.UiMode}", () => ["Faithful", "Meitou"], () => (int)host.Player.UiMode,
@@ -354,6 +494,9 @@ sealed class GameLoop(GameHost host)
         };
     }
 
+    /// <summary>
+    /// Runs <paramref name="act"/> on each of the world's systems of type <typeparamref name="T"/>.
+    /// </summary>
     void EachSystem<T>(Action<T> act)
     {
         foreach (var system in host.Session.World.Systems.OfType<T>()) act(system);
@@ -376,6 +519,9 @@ sealed class GameLoop(GameHost host)
             production.UnloadedProduction = host.Config.UnloadedProduction;
     }
 
+    /// <summary>
+    /// The strategy camera's turn and tilt rate (degrees per second per unit of input), clamped to the Controls slider's range.
+    /// </summary>
     void ApplyCameraRotateSpeed(float speed) => host.Session.Camera.Settings.RotateSpeedX = host.Session.Camera.Settings.RotateSpeedY =
         Math.Clamp(speed, UserConfig.MinCameraRotateSpeed, UserConfig.MaxCameraRotateSpeed);
 
@@ -468,9 +614,15 @@ sealed class GameLoop(GameHost host)
         };
     }
 
+    /// <summary>
+    /// Where a character is drawn now; null when it is not in the snapshot.
+    /// </summary>
     Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c
         ? host.DrawnPosition(c) : null;
 
+    /// <summary>
+    /// Ends the tour or flight: the rig takes the drawn camera back (as the strategy camera), and a flown-to member is followed.
+    /// </summary>
     void EndTour()
     {
         _tour.Stop();
@@ -522,6 +674,9 @@ sealed class GameLoop(GameHost host)
         host.Session.Ticked += OnTicked;
     }
 
+    /// <summary>
+    /// An action of the game's screens: save, load, import and new game requests, the feedback form, the main menu, the options and exit buttons.
+    /// </summary>
     void OnScreenAction(MyGuiEvent e)
     {
         if (e.Action == "save") host.Saves.SaveRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, e.Text);
@@ -534,6 +689,10 @@ sealed class GameLoop(GameHost host)
         else if (e.Widget == "ExitGameButton") _quit = true;
     }
 
+    /// <summary>
+    /// After each control tick, its actions: the highlight key, Esc, the settings, screenshot, statistics, quicksave and quickload, floor and
+    /// profiler keys, and a camera input taking the camera back from the tour or the cinema.
+    /// </summary>
     void OnTicked(ActionState actions)
     {
         _highlightHeld = actions.Held(InputAction.Highlight);
@@ -575,16 +734,28 @@ sealed class GameLoop(GameHost host)
 
     // ---- the window and the pointer ----
 
+    /// <summary>
+    /// The framebuffer's size: the window's, or the headless run's size.
+    /// </summary>
     Vector2D<int> FramebufferSizeNow() => _window is null
         ? new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height) : _window.FramebufferSize;
 
+    /// <summary>
+    /// Whether the window is borderless full screen.
+    /// </summary>
     bool FullScreenOn() => _window is not null && BorderlessFullScreen.IsOn(_window);
 
+    /// <summary>
+    /// Switches the window between borderless full screen and windowed.
+    /// </summary>
     void ToggleFullScreen()
     {
         if (_window is not null) BorderlessFullScreen.Toggle(_window);
     }
 
+    /// <summary>
+    /// A position in window units as framebuffer pixels.
+    /// </summary>
     Vector2 Pixels(Vector2 p) => _window is null ? p
         : p * new Vector2(_window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1),
             _window.FramebufferSize.Y / (float)Math.Max(_window.Size.Y, 1));
@@ -594,8 +765,14 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     bool PanelLive() => !host.AgentChannel.InterfaceHidden && !_cinema.Clean;
 
+    /// <summary>
+    /// Whether either of two keys is held on any keyboard.
+    /// </summary>
     bool Held(SilkKey a, SilkKey b) => _keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
 
+    /// <summary>
+    /// Whether a Ctrl key is held on the keyboard.
+    /// </summary>
     static bool CtrlDown(Silk.NET.Input.IKeyboard keyboard) => keyboard.IsKeyPressed(SilkKey.ControlLeft)
         || keyboard.IsKeyPressed(SilkKey.ControlRight);
 
@@ -606,8 +783,15 @@ sealed class GameLoop(GameHost host)
 
     // ---- keyboard ----
 
+    /// <summary>
+    /// Whether a text field takes the keys (the settings panel, the debug menu, the dev console, an edited UI field).
+    /// </summary>
     bool TextFieldFocused() => _panel?.Visible == true || host.DebugMenu.DebugMenuOpen || host.DevConsoleHost.ConsoleOpen || host.Player.UiEditing;
 
+    /// <summary>
+    /// Repeats a held erase or caret key in a text field (<see cref="_heldEditKey"/>): when its time has come, again 30 times a second; a release or
+    /// the field closing stops it.
+    /// </summary>
     void RepeatEditKey()
     {
         if (_heldEditKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
@@ -620,6 +804,9 @@ sealed class GameLoop(GameHost host)
         OnKeyDown(held.Keyboard, held.Key);
     }
 
+    /// <summary>
+    /// Hooks a keyboard's key down (with the edit-key repeat), key up (Shift, the session's keys, the build mode's) and typed characters.
+    /// </summary>
     void ConnectKeyboard(Silk.NET.Input.IKeyboard kb)
     {
         kb.KeyDown += (keyboard, k, _) =>
@@ -646,6 +833,10 @@ sealed class GameLoop(GameHost host)
         kb.KeyChar += (_, value) => OnKeyChar(value);
     }
 
+    /// <summary>
+    /// A typed character to the first that takes text: the dev console, the settings panel, the sandbox picker, the debug menu, else the
+    /// game's interface.
+    /// </summary>
     void OnKeyChar(char value)
     {
         if (host.Covered) return;
@@ -891,6 +1082,9 @@ sealed class GameLoop(GameHost host)
 
     // ---- mouse ----
 
+    /// <summary>
+    /// Hooks a mouse's buttons (a press under the loading screen skips the splash), moves and wheel.
+    /// </summary>
     void ConnectMouse(Silk.NET.Input.IMouse mouse)
     {
         mouse.MouseDown += (m, b) =>
@@ -968,6 +1162,9 @@ sealed class GameLoop(GameHost host)
         if (physical is { } button) host.Session.Input.SetMouseButton(button, false);
     }
 
+    /// <summary>
+    /// A pointer move: the orbit's drag (locked or held), the settings panel's drag, the interface's hover and the camera's mouse input.
+    /// </summary>
     void OnMouseMove(Silk.NET.Input.IMouse m, Vector2 p)
     {
         if (_orbitAnchor is not null)
@@ -1194,6 +1391,9 @@ sealed class GameLoop(GameHost host)
         if (!_cinemaHolds) host.TitleScreen.ApplyTitleCamera();
     }
 
+    /// <summary>
+    /// The title's battle and the sky arrival advance by the frame; during the arrival the camera follows it.
+    /// </summary>
     void AdvanceTitleAndArrival(double frameDt)
     {
         if (host.TitleScreen.TitleVisible && !host.Warming) host.TitleScreen.TitleBattle?.Advance(frameDt);
@@ -1279,10 +1479,12 @@ sealed class GameLoop(GameHost host)
                 host.Session.Input.SetMousePosition(at.X, at.Y);
                 if (!host.Covered && !(PanelLive() && _panel?.MouseMove(at) == true) && !_cinema.MouseMove(at)) host.Player.MouseMove(at);
                 break;
-            case 'd': if (!host.Covered) PointerDown(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at);
-            break;
-            case 'u': if (!host.Covered) PointerUp(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at);
-            break;
+            case 'd':
+                if (!host.Covered) PointerDown(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at);
+                break;
+            case 'u':
+                if (!host.Covered) PointerUp(KeyMap.Map(right ? SilkButton.Right : SilkButton.Left), at);
+                break;
         }
     }
 
@@ -1522,6 +1724,10 @@ sealed class GameLoop(GameHost host)
         return y + h - 8;
     }
 
+    /// <summary>
+    /// The loading screen over the frame while covered (with the sky arrival: only once it is at the stars, or exiting), else it frees its pictures
+    /// once gone.
+    /// </summary>
     void DrawLoadingCover(Vector2D<int> size, bool covered, GpuTexture uiTarget)
     {
         if (covered && host.Loading is not null && host.LoadingOverlay is not null)
@@ -1711,6 +1917,9 @@ sealed class GameLoop(GameHost host)
         return (given, faithful);
     }
 
+    /// <summary>
+    /// Saves a picture as the next screenshot in the install's <c>_screens</c> folder.
+    /// </summary>
     void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
     {
         var file = GameScreenshots.Next(host.Install.Root);
@@ -1729,6 +1938,9 @@ sealed class GameLoop(GameHost host)
     void SaveSupersampled(GpuContext context, int n, int width, int height) => SaveTiles(context, n, width, height,
         GameScreenshots.Next(host.Install.Root));
 
+    /// <summary>
+    /// Draws and saves the tiled shot (<see cref="SaveSupersampled"/>) into <paramref name="file"/>.
+    /// </summary>
     void SaveTiles(GpuContext context, int n, int width, int height, string file)
     {
         var post = host.Gpu.Post!;
@@ -1820,8 +2032,15 @@ sealed class GameLoop(GameHost host)
             host.Gpu.Foliage?.Textures.WriteReport(w);
             host.Gpu.Characters?.Textures.WriteReport(w);
         }
-        try { profiler.DumpVram(path, Caches); Console.WriteLine($"vram      dumped to {path}"); }
-        catch (IOException e) { Console.WriteLine($"vram      dump failed: {e.Message}"); }
+        try
+        {
+            profiler.DumpVram(path, Caches);
+            Console.WriteLine($"vram      dumped to {path}");
+        }
+        catch (IOException e)
+        {
+            Console.WriteLine($"vram      dump failed: {e.Message}");
+        }
     }
 
     #endregion
@@ -1892,6 +2111,9 @@ sealed class GameLoop(GameHost host)
         host.Config.Save();
     }
 
+    /// <summary>
+    /// The config key of a look switch's label.
+    /// </summary>
     static string SwitchKey(string label) => SettingsMenu.SwitchKeyPrefix + label;
     #endregion
 

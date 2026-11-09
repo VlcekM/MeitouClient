@@ -25,11 +25,29 @@ public readonly record struct WallSnap(Vector3 Point, Vector3 Direction, int Cod
 /// </summary>
 public sealed class WallLink(Vector3 start, Vector3 end, Vector3 startDirection, Vector3 endDirection)
 {
+    /// <summary>
+    /// The wall's start link point.
+    /// </summary>
     public Vector3 Start { get; } = start;
+    /// <summary>
+    /// The wall's end link point.
+    /// </summary>
     public Vector3 End { get; } = end;
+    /// <summary>
+    /// The wall's horizontal direction at its start.
+    /// </summary>
     public Vector3 StartDirection { get; } = startDirection;
+    /// <summary>
+    /// The wall's horizontal direction at its end.
+    /// </summary>
     public Vector3 EndDirection { get; } = endDirection;
+    /// <summary>
+    /// How many other walls' link points join this one's start (within <see cref="WallLine.JoinDistanceSquared"/>).
+    /// </summary>
     public int JoinsAtStart { get; set; }
+    /// <summary>
+    /// How many other walls' link points join this one's end.
+    /// </summary>
     public int JoinsAtEnd { get; set; }
 }
 
@@ -40,6 +58,8 @@ public sealed class WallLink(Vector3 start, Vector3 end, Vector3 startDirection,
 /// </summary>
 public static class WallLine
 {
+    #region Link points
+
     /// <summary>
     /// Snap radius outdoors (<b>Verified</b>; 25 inside a building, not built).
     /// </summary>
@@ -49,42 +69,13 @@ public static class WallLine
     /// </summary>
     public const float JoinDistanceSquared = 10;
     /// <summary>
-    /// A line is at most this long (<b>Verified</b>).
-    /// </summary>
-    public const float MaxRun = 10000;
-    /// <summary>
-    /// A piece fits when its length is below what remains plus this (<b>Verified</b>), so the last may overshoot by up to it.
-    /// </summary>
-    public const float PieceTolerance = 10;
-    /// <summary>
-    /// The run stops when less than this remains (<b>Verified</b>).
-    /// </summary>
-    public const float StopDistance = 10;
-    /// <summary>
-    /// At most this many pieces in a run (<b>Verified</b>).
-    /// </summary>
-    public const int MaxPieces = 500;
-    /// <summary>
-    /// A joint bending more than this (degrees) gets a short piece over a crest or a wedge in a valley (<b>Verified</b>).
-    /// </summary>
-    public const float BendDegrees = 10;
-    /// <summary>
-    /// At a snapped joint one extra short piece per this many degrees of turn (<b>Verified</b>).
-    /// </summary>
-    public const float BendStepDegrees = 60;
-    /// <summary>
     /// A connector's end direction is turned this much about +Y (<b>Verified</b>).
     /// </summary>
     public const float ConnectorTurnDegrees = 48;
     /// <summary>
-    /// Near a snapped joint (pieces within <see cref="JointRun"/> of it) walls with a link point within <see cref="JointReach"/> of it do not block
-    /// (<b>Observed</b>).
+    /// A BUILDING's <c>link type</c> values (WallSectionLinkType): 1 connector, 2 lower wedge, 3 single (towers, gates; it takes no bend pieces).
     /// </summary>
-    public const float JointReach = 20, JointRun = 120;
-
     const int Connector = 1, Wedge = 2, Single = 3;
-
-    // ---- link points ----
 
     /// <summary>
     /// A wall's start (its position) and end (position + rotation x (0, 0, link length)).
@@ -147,7 +138,38 @@ public static class WallLine
         }
     }
 
-    // ---- laying a line ----
+    #endregion
+
+    #region Laying a line
+
+    /// <summary>
+    /// A line is at most this long (<b>Verified</b>).
+    /// </summary>
+    public const float MaxRun = 10000;
+    /// <summary>
+    /// A piece fits when its length is below what remains plus this (<b>Verified</b>), so the last may overshoot by up to it.
+    /// </summary>
+    public const float PieceTolerance = 10;
+    /// <summary>
+    /// The run stops when less than this remains (<b>Verified</b>).
+    /// </summary>
+    public const float StopDistance = 10;
+    /// <summary>
+    /// At most this many pieces in a run (<b>Verified</b>).
+    /// </summary>
+    public const int MaxPieces = 500;
+    /// <summary>
+    /// A joint bending more than this (degrees) gets a short piece over a crest or a wedge in a valley (<b>Verified</b>).
+    /// </summary>
+    public const float BendDegrees = 10;
+    /// <summary>
+    /// At a snapped joint one extra short piece per this many degrees of turn (<b>Verified</b>).
+    /// </summary>
+    public const float BendStepDegrees = 60;
+    /// <summary>
+    /// The constant a straight continuation compares the line's height over the ground with (<c>DAT_14167fad4</c>, <b>Verified</b> 10).
+    /// </summary>
+    const float Rise = 10;
 
     /// <summary>
     /// The pieces of a line from <paramref name="start"/> to <paramref name="end"/> (<b>Verified</b> unless the docs say otherwise,
@@ -180,18 +202,39 @@ public static class WallLine
     /// </summary>
     sealed class PieceSet
     {
+        /// <summary>
+        /// The wall and its subsections with a link length, longest first (at most 64).
+        /// </summary>
         public readonly List<BuildingBuildData> Pieces = [];
+        /// <summary>
+        /// Which of <see cref="Pieces"/> the current run has used, by index.
+        /// </summary>
         public readonly bool[] Used = new bool[64];
+        /// <summary>
+        /// The wall's connector and wedge pieces; null when it has none.
+        /// </summary>
         public BuildingBuildData? Connector, Wedge;
         /// <summary>
         /// The wall's <c>max slope</c> and <c>building height</c> (the wall object's +0x88 and +0x8c).
         /// </summary>
         public float MaxSlope, Height;
+        /// <summary>
+        /// The shortest piece.
+        /// </summary>
         public BuildingBuildData Shortest => Pieces[^1];
+        /// <summary>
+        /// The longest piece.
+        /// </summary>
         public BuildingBuildData Longest => Pieces[0];
 
+        /// <summary>
+        /// Clears the used marks for a new run.
+        /// </summary>
         public void Reset() => Array.Clear(Used);
 
+        /// <summary>
+        /// The pieces of <paramref name="master"/> and its subsections, sorted longest first (equal lengths in data order).
+        /// </summary>
         public static PieceSet Of(BuildingBuildData master, Func<string, BuildingBuildData?> data)
         {
             var set = new PieceSet { MaxSlope = master.MaxSlope, Height = master.BuildingHeight };
@@ -416,12 +459,15 @@ public static class WallLine
         return cur;
     }
 
-    /// <summary>
-    /// The constant a straight continuation compares the line's height over the ground with (<c>DAT_14167fad4</c>, <b>Verified</b> 10).
-    /// </summary>
-    const float Rise = 10;
+    #endregion
 
-    // ---- small geometry ----
+    #region Geometry
+
+    /// <summary>
+    /// Near a snapped joint (pieces within <see cref="JointRun"/> of it) walls with a link point within <see cref="JointReach"/> of it do not block
+    /// (<b>Observed</b>).
+    /// </summary>
+    public const float JointReach = 20, JointRun = 120;
 
     /// <summary>
     /// A piece at <paramref name="from"/> facing <paramref name="to"/> (<b>Verified</b>, <c>FUN_1404278b0</c>): +Z towards the target (pitching with
@@ -456,16 +502,27 @@ public static class WallLine
         return Vector2.Distance(ap, ab * t) <= JointRun;
     }
 
+    /// <summary>
+    /// The angle between two vectors in degrees; 0 when either is near zero.
+    /// </summary>
     static float Angle(Vector3 a, Vector3 b) =>
         a.LengthSquared() < 1e-9f || b.LengthSquared() < 1e-9f
             ? 0
             : MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1, 1)) * 180 / MathF.PI;
 
+    /// <summary>
+    /// The vector's horizontal part at unit length; zero for a vertical or near-zero vector.
+    /// </summary>
     static Vector3 Horizontal(Vector3 v)
     {
         var h = new Vector3(v.X, 0, v.Z);
         return h.LengthSquared() < 1e-9f ? Vector3.Zero : Vector3.Normalize(h);
     }
 
+    /// <summary>
+    /// The quaternion at unit length; the identity for a near-zero one.
+    /// </summary>
     static Quaternion Normalised(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);
+
+    #endregion
 }

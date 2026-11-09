@@ -22,6 +22,9 @@ sealed class BuildingSelection(PlayerInterface player)
     internal sealed record SelectedBuilding(string Name, string? Type, string? Owner, string? Town, string? SiteId, string Instance,
         Vector3 Position, Vector2[]? Hull, bool PublicDay = false, bool PublicNight = false, string? Record = null, bool Destroyed = false);
 
+    /// <summary>
+    /// The building selected by a click; null when none is.
+    /// </summary>
     internal SelectedBuilding? Selected;
 
     /// <summary>
@@ -187,6 +190,9 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     const string PausedColour = "777777";
 
+    /// <summary>
+    /// Each BUILDING record's build data by record id (<see cref="BuildingData"/>, asked once per record).
+    /// </summary>
     readonly Dictionary<string, Data.Gameplay.Construction.BuildingBuildData?> _buildingData = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -415,9 +421,18 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The upgrade chain of a BUILDING record and its build data (the panel's [UPGRADE] / [DOWNGRADE] and their tooltips); the host sets them.
     /// </summary>
     public Func<string, string?>? UpgradeOf { get; set; }
+    /// <summary>
+    /// The BUILDING record that upgrades to this one; null when none does (the host sets it).
+    /// </summary>
     public Func<string, string?>? DowngradeOf { get; set; }
+    /// <summary>
+    /// A BUILDING record's build data; null for one without (the host sets it).
+    /// </summary>
     public Func<string, Data.Gameplay.Construction.BuildingBuildData?>? BuildingData { get; set; }
 
+    /// <summary>
+    /// A record's build data, asked of <see cref="BuildingData"/> once and kept.
+    /// </summary>
     Data.Gameplay.Construction.BuildingBuildData? DataOf(string record) =>
         _buildingData.TryGetValue(record, out var data) ? data : _buildingData[record] = BuildingData?.Invoke(record);
 

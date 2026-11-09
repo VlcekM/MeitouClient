@@ -23,8 +23,17 @@ public sealed class UiSounds(WwisePlayer player, Func<GameDatabase?> database)
     /// </summary>
     public const ulong GuiObject = 110;
 
+    /// <summary>
+    /// The <c>Inventory_Items</c> values of a WEAPON or CROSSBOW by its <c>material</c>.
+    /// </summary>
     static readonly string[] Weapon = ["Weapon_Metal", "Weapon_Wood"];
+    /// <summary>
+    /// The <c>Inventory_Items</c> values of an ARMOUR by its <c>material type</c>.
+    /// </summary>
     static readonly string[] Armour = ["Fabric", "Leather", "Robotic_Component", "Steel_Bar"];
+    /// <summary>
+    /// The <c>Inventory_Items</c> values of an ITEM, CONTAINER, NEST_ITEM or MAP_ITEM by its <c>inventory sound</c>.
+    /// </summary>
     static readonly string[] Items =
     [
         "Backpack", "Building_Material", "Fabric", "Flour", "Food", "Kits", "Leather", "Luxury", "Narcotics", "Ore", "Potato",
@@ -50,6 +59,10 @@ public sealed class UiSounds(WwisePlayer player, Func<GameDatabase?> database)
     /// </summary>
     public int Posted { get; private set; }
 
+    /// <summary>
+    /// Sets the event's switch or state (an item's <c>Inventory_Items</c> or a building's <c>Buildings_Click</c> when it names one) and posts it on
+    /// the GUI object; a building without a click sound posts nothing.
+    /// </summary>
     public void Play(in UiSoundEvent e)
     {
         if (e.Group is { } group && e.Value is { } value)

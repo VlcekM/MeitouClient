@@ -11,8 +11,13 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer
 {
-    // Avoid-repeat history and sequence positions per playlist group, kept across plays.
+    /// <summary>
+    /// The avoid-repeat history per playlist group (by playlist and item id), kept across plays.
+    /// </summary>
     readonly Dictionary<(uint Playlist, uint Item), List<uint>> _musicHistory = [];
+    /// <summary>
+    /// The sequence step positions per playlist group (by playlist and item id), kept across plays.
+    /// </summary>
     readonly Dictionary<(uint Playlist, uint Item), int> _musicSteps = [];
 
     /// <summary>
@@ -30,6 +35,10 @@ public sealed partial class WwisePlayer
         /// </summary>
         public virtual bool Hold { get; set; }
 
+        /// <summary>
+        /// Plays the bank object <paramref name="id"/> as a child starting at player time <paramref name="at"/>; null when it is not loaded or
+        /// cannot play.
+        /// </summary>
         protected Instance? Spawn(uint id, double at)
         {
             if (!_player._objects.TryGetValue(id, out var o) || _player.Create(o, this) is not { } child) return null;
@@ -45,6 +54,7 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class MusicSegmentInstance(WwisePlayer player, WwiseMusicSegment node, Instance? parent) : MusicInstance(player, node, parent)
     {
+        /// <inheritdoc/>
         public override double CurrentExit => StartTime + Math.Max(1, node.ExitCue - node.EntryCue) / 1000;
 
         public override void Start()
@@ -73,10 +83,20 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class MusicPlaylistInstance(WwisePlayer player, WwiseMusicPlaylist node, Instance? parent) : MusicInstance(player, node, parent)
     {
+        /// <summary>
+        /// Walks the playlist tree: the ids of the segments to play, in order.
+        /// </summary>
         IEnumerator<uint>? _walker;
+        /// <summary>
+        /// Player time of the exit cue of the segment started last; minus infinity before the first.
+        /// </summary>
         double _exitTime = double.NegativeInfinity;
+        /// <summary>
+        /// The walk has run out: nothing follows the current segment.
+        /// </summary>
         bool _finished;
 
+        /// <inheritdoc/>
         public override double CurrentExit => _exitTime;
 
         public override void Start()
@@ -85,6 +105,10 @@ public sealed partial class WwisePlayer
             if (!StartNext(StartTime)) _finished = true;
         }
 
+        /// <summary>
+        /// Starts the next segment of the walk at <paramref name="at"/> (skipping those of banks not loaded, at most 64); false when the walk has
+        /// run out.
+        /// </summary>
         bool StartNext(double at)
         {
             for (int tries = 0; tries < 64 && _walker!.MoveNext(); tries++)
@@ -114,6 +138,9 @@ public sealed partial class WwisePlayer
         // Ends by its own rule above: not when a segment's clips end, which may be before the exit cue (a silence) or after it (a tail).
         protected override void ChildEnded(Instance child) { }
 
+        /// <summary>
+        /// The segment ids an item plays: a segment its loop count of times (0 forever), a group its passes (stopping after 100 empty ones).
+        /// </summary>
         IEnumerable<uint> Segments(WwisePlaylistItem item)
         {
             bool forever = item.LoopCount == 0;
@@ -172,6 +199,9 @@ public sealed partial class WwisePlayer
             }
         }
 
+        /// <summary>
+        /// A random index into <paramref name="candidates"/> by their weights (all 1 when the group does not use weights).
+        /// </summary>
         int WeightedIndex(WwisePlaylistItem group, IReadOnlyList<WwisePlaylistItem> candidates)
         {
             double Weight(WwisePlaylistItem c) => group.UsingWeight ? Math.Max(1, c.Weight) : 1;
@@ -184,6 +214,9 @@ public sealed partial class WwisePlayer
             return candidates.Count - 1;
         }
 
+        /// <summary>
+        /// A weighted pick among <paramref name="candidates"/> that skips the group's last <c>avoid repeat</c> picks (all of them when none is left).
+        /// </summary>
         WwisePlaylistItem Pick(WwisePlaylistItem group, IReadOnlyList<WwisePlaylistItem> candidates)
         {
             var key = (node.Id, group.ItemId);
@@ -204,14 +237,31 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class MusicSwitchInstance(WwisePlayer player, WwiseMusicSwitch node, Instance? parent) : MusicInstance(player, node, parent)
     {
+        /// <summary>
+        /// The pick playing now; null when nothing does.
+        /// </summary>
         MusicInstance? _active;
+        /// <summary>
+        /// The id of the pick playing now; 0 for none.
+        /// </summary>
         uint _activeId;
+        /// <summary>
+        /// Whether a new pick waits for the current segment's exit cue.
+        /// </summary>
         bool _pending;
+        /// <summary>
+        /// The id of the waiting pick; 0 for none.
+        /// </summary>
         uint _pendingId;
+        /// <summary>
+        /// The player time the waiting pick starts at (the current segment's exit cue).
+        /// </summary>
         double _switchAt;
 
+        /// <inheritdoc/>
         public override double CurrentExit => _active is { Done: false } ? _active.CurrentExit : double.NegativeInfinity;
 
+        /// <inheritdoc/>
         public override bool Hold
         {
             get => _active?.Hold ?? false;

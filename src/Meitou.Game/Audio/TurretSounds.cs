@@ -51,16 +51,40 @@ public sealed class TurretSounds(WwisePlayer player)
     /// </summary>
     public const float MovingDegrees = 0.1f;
 
+    /// <summary>
+    /// One turret's turning state: its mount, its parts' turns, its aim point, the movement counter and its game object.
+    /// </summary>
     sealed class Turret(TurretMount mount)
     {
+        /// <summary>
+        /// The mount last handed; a new mount (the building changed) resets the turns.
+        /// </summary>
         public TurretMount Mount = mount;
+        /// <summary>
+        /// Each turning part's turn so far, radians, in the mount's part order.
+        /// </summary>
         public float[] Angles = new float[mount.Parts.Count];
+        /// <summary>
+        /// The point the parts turn toward; null until a gunner's target assigns one, then kept when the gunner goes.
+        /// </summary>
         public Vector3? Target;
+        /// <summary>
+        /// Frames left before <c>Turret_Mvt_Stop</c>; 0 when no movement sound runs.
+        /// </summary>
         public int Counter;
+        /// <summary>
+        /// The turret's game object id; 0 until its first movement sound registers one.
+        /// </summary>
         public ulong Object;
     }
 
+    /// <summary>
+    /// The turrets by key, every one ever manned in this world.
+    /// </summary>
     readonly Dictionary<string, Turret> _turrets = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The next turret's game object id.
+    /// </summary>
     ulong _next = FirstObject;
 
     /// <summary>
@@ -105,6 +129,9 @@ public sealed class TurretSounds(WwisePlayer player)
     static float Turn(Turret t, Vector3 aim, float step) =>
         TurretRig.Turn(t.Mount.Parts, t.Angles, t.Mount.Position, t.Mount.Yaw, t.Mount.Scale, aim, step);
 
+    /// <summary>
+    /// Posts <c>Turret_Mvt_Start</c> (registering and placing the object first) unless the turret is farther than <see cref="Range"/> from the eye.
+    /// </summary>
     void Start(Turret t, Vector3 eye)
     {
         if (player.HeardDistanceSquared(t.Mount.Position, eye) > Range * Range) return;
@@ -118,6 +145,9 @@ public sealed class TurretSounds(WwisePlayer player)
         Posted++;
     }
 
+    /// <summary>
+    /// Posts <c>Turret_Mvt_Stop</c> on the turret's object; nothing when it never got one (its start was out of range).
+    /// </summary>
     void Stop(Turret t)
     {
         if (t.Object == 0) return;

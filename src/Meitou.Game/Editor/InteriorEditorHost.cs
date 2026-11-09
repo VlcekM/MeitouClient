@@ -16,16 +16,38 @@ namespace Meitou.Game.Editor;
 /// </summary>
 sealed class InteriorEditorHost(GameHost host)
 {
+    /// <summary>
+    /// Whether the interior editor is open (it then takes every key).
+    /// </summary>
     internal bool InteriorEditorOpen;
+    /// <summary>
+    /// Whether the exterior layouts (signs and NPCs) are listed rather than the interior ones (furniture); Tab switches.
+    /// </summary>
     bool _interiorEditorExterior;
+    /// <summary>
+    /// The picked row of the layout list.
+    /// </summary>
     int _interiorEditorRow;
-    // The layout whose parts are listed (null: the layout list is shown) and the part picked in it.
+    /// <summary>
+    /// The layout whose parts are listed (null: the layout list is shown) and the part picked in it.
+    /// </summary>
     GameRecord? _interiorEditorLayout;
+    /// <summary>
+    /// The picked part in the open layout's list.
+    /// </summary>
     int _interiorEditorPart;
+    /// <summary>
+    /// The placement key of the building shown; another selected building starts over at its layout list.
+    /// </summary>
     string? _interiorEditorKey;
-    // The level data's buildings by key, for the level data they were read from.
+    /// <summary>
+    /// The level data's buildings by key, for the level data they were read from.
+    /// </summary>
     (WorldLevelData Levels, int Revision, Dictionary<string, BuildingPlacement> ByKey)? _interiorEditorPlacements;
 
+    /// <summary>
+    /// The rows a list shows at once, round the picked one.
+    /// </summary>
     const int InteriorEditorRows = 18;
 
     /// <summary>
@@ -56,15 +78,25 @@ sealed class InteriorEditorHost(GameHost host)
         : [.. objects.Layouts.Names(building, exterior).Distinct(StringComparer.Ordinal).Select(n => objects.Layouts.Find(building, n, exterior))
             .OfType<GameRecord>().Distinct()];
 
+    /// <summary>
+    /// The open layout's parts; empty without one or without world objects.
+    /// </summary>
     List<LayoutItem> InteriorEditorParts() =>
         _interiorEditorLayout is { } layout && host.Scene.Objects is { } objects ? [.. objects.Layouts.Items(layout)] : [];
 
+    /// <summary>
+    /// Opens the interior editor from the F10 menu's Tools, closing the menu.
+    /// </summary>
     internal void OpenInteriorEditor()
     {
         host.DebugMenu.DebugMenuOpen = false;
         InteriorEditorOpen = true;
     }
 
+    /// <summary>
+    /// A key while the editor is open: Up/Down pick, Tab switches interior / exterior, Enter opens a layout's parts, C centres the camera on the
+    /// picked part, Esc goes back and closes.
+    /// </summary>
     internal void InteriorEditorKey(EngineKey key)
     {
         var shown = InteriorEditorBuilding();
@@ -74,18 +106,24 @@ sealed class InteriorEditorHost(GameHost host)
         ref int row = ref _interiorEditorLayout is not null ? ref _interiorEditorPart : ref _interiorEditorRow;
         switch (key)
         {
-            case EngineKey.Escape when _interiorEditorLayout is not null: _interiorEditorLayout = null;
-            break;
-            case EngineKey.Escape: InteriorEditorOpen = false;
-            break;
-            case EngineKey.Up when count > 0: row = (row + count - 1) % count;
-            break;
-            case EngineKey.Down when count > 0: row = (row + 1) % count;
-            break;
-            case EngineKey.PageUp: row = Math.Max(0, row - InteriorEditorRows);
-            break;
-            case EngineKey.PageDown when count > 0: row = Math.Min(count - 1, row + InteriorEditorRows);
-            break;
+            case EngineKey.Escape when _interiorEditorLayout is not null:
+                _interiorEditorLayout = null;
+                break;
+            case EngineKey.Escape:
+                InteriorEditorOpen = false;
+                break;
+            case EngineKey.Up when count > 0:
+                row = (row + count - 1) % count;
+                break;
+            case EngineKey.Down when count > 0:
+                row = (row + 1) % count;
+                break;
+            case EngineKey.PageUp:
+                row = Math.Max(0, row - InteriorEditorRows);
+                break;
+            case EngineKey.PageDown when count > 0:
+                row = Math.Min(count - 1, row + InteriorEditorRows);
+                break;
             case EngineKey.Tab or EngineKey.Left or EngineKey.Right when _interiorEditorLayout is null:
                 _interiorEditorExterior = !_interiorEditorExterior;
                 _interiorEditorRow = 0;
@@ -105,6 +143,9 @@ sealed class InteriorEditorHost(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Draws the editor's panel: the selected building's layout list, or the open layout's parts with their markers on the screen.
+    /// </summary>
     internal void DrawInteriorEditor(DebugOverlay o, int width, int height, float top)
     {
         var shown = InteriorEditorBuilding();

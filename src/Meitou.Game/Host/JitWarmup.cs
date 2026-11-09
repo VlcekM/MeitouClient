@@ -19,8 +19,10 @@ static class JitWarmup
     /// </summary>
     const int Threads = 3;
 
-    // The order the game first calls them in: the simulation (the world ticks during the loading), the game's rendering (the first frames), the host,
-    // then the rest.
+    /// <summary>
+    /// The order the game first calls them in: the simulation (the world ticks during the loading), the game's rendering (the first frames), the
+    /// host, then the rest. Assemblies not named come after them.
+    /// </summary>
     static readonly string[] Order = ["Meitou.Simulation", "MeitouClient"];
 
     /// <summary>
@@ -28,17 +30,35 @@ static class JitWarmup
     /// </summary>
     const string RenderingNamespace = "Meitou.Game.Rendering";
 
+    /// <summary>
+    /// The methods listed and not yet compiled, taken by the compiling threads.
+    /// </summary>
     static readonly ConcurrentQueue<MethodBase> Queue = new();
+    /// <summary>
+    /// Times the warm-up from the listing to the last thread's end.
+    /// </summary>
     static readonly Stopwatch Watch = new();
+    /// <summary>
+    /// Methods compiled, methods that could not be, and compiling threads still running.
+    /// </summary>
     static int s_compiled, s_failed, s_running;
 
+    /// <summary>
+    /// Starts the warm-up: one thread lists the methods, then it and two more compile them (unless <c>--no-precompile</c>, the caller's check).
+    /// </summary>
     public static void Start() => Spawn(List);
 
+    /// <summary>
+    /// Starts a background thread below normal priority.
+    /// </summary>
     static void Spawn(ThreadStart body) =>
         new Thread(body) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "jit warm-up" }.Start();
 
-    // Nothing may leave these threads: an exception unhandled on one would end the game. A method that cannot be compiled ahead (an assembly its
-    // signature needs is missing on this platform, say) is counted and left to compile on its first call, if it ever has one.
+    /// <summary>
+    /// Lists the methods, then compiles with the other threads. Nothing may leave these threads: an exception unhandled on one would end the game. A
+    /// method that cannot be compiled ahead (an assembly its signature needs is missing on this platform, say) is counted and left to compile on its
+    /// first call, if it ever has one.
+    /// </summary>
     static void List()
     {
         Watch.Start();
@@ -46,12 +66,19 @@ static class JitWarmup
         {
             Enqueue();
         }
-        catch (Exception e) { Console.Error.WriteLine($"warning   the jit warm-up stopped listing: {e.GetType().Name}: {e.Message}"); }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"warning   the jit warm-up stopped listing: {e.GetType().Name}: {e.Message}");
+        }
         s_running = Threads;
         for (int t = 1; t < Threads; t++) Spawn(Work);
         Work();
     }
 
+    /// <summary>
+    /// Queues every non-generic method and constructor of the Meitou assemblies, the simulation's first, then the game's (its renderers first), then
+    /// the rest.
+    /// </summary>
     static void Enqueue()
     {
         const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
@@ -97,6 +124,9 @@ static class JitWarmup
         }
     }
 
+    /// <summary>
+    /// Compiles queued methods until the queue is empty; the last thread to finish logs the count.
+    /// </summary>
     static void Work()
     {
         try
@@ -119,9 +149,15 @@ static class JitWarmup
                 Console.WriteLine($"jit       {s_compiled} methods compiled ahead in {Watch.Elapsed.TotalSeconds:0.0} s{failed}");
             }
         }
-        catch (Exception e) { Console.Error.WriteLine($"warning   a jit warm-up thread stopped: {e.GetType().Name}: {e.Message}"); }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"warning   a jit warm-up thread stopped: {e.GetType().Name}: {e.Message}");
+        }
     }
 
+    /// <summary>
+    /// Loads a referenced assembly; null when it cannot be.
+    /// </summary>
     static Assembly? TryLoad(AssemblyName name)
     {
         try
