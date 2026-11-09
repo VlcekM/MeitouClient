@@ -14,12 +14,17 @@ namespace Meitou.Simulation.Carrying;
 /// </summary>
 public sealed partial class CarrySystem
 {
+    #region Engaged defence
+
+    /// <summary>
+    /// The victims engaged now (<see cref="Engage"/>).
+    /// </summary>
+    readonly List<Engagement> _engagements = [];
+
     /// <summary>
     /// One victim engaged by an attacker until a tick (the forced sense's alert timer, <see cref="AggroSystem.AlarmSeconds"/>).
     /// </summary>
     readonly record struct Engagement(CharacterId Victim, CharacterId Attacker, long Until);
-
-    readonly List<Engagement> _engagements = [];
 
     /// <summary>
     /// Makes <paramref name="attacker"/> known to the player character <paramref name="victim"/> and asks the decision step to decide it again: the
@@ -86,4 +91,6 @@ public sealed partial class CarrySystem
             world.Defer(new AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
         }
     }
+
+    #endregion
 }

@@ -52,11 +52,18 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     readonly BuildingLayouts _layouts;
     readonly NavRuntimeBuildings? _runtime;
 
-    // The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one thread at a time.
+    /// <summary>
+    /// The placed foliage of the zones gathered so far.
+    /// </summary>
+    readonly FoliageObstacles _foliage;
+
+    // The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one thread
+    // at a time.
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> _byZone = [];
     int _indexedRevision = -1;
 
-    public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision, NavRuntimeBuildings? runtime = null)
+    public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision,
+        NavRuntimeBuildings? runtime = null)
     {
         this._install = install;
         this._db = db;
@@ -67,6 +74,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         _seedsByZone = NavSeeds.Load(install);
         _layouts = new BuildingLayouts(db, levels.Interiors);
         _layouts.UseSwaps(levels);
+        _foliage = new FoliageObstacles(install, db, levels);
     }
 
     /// <summary>
@@ -75,15 +83,15 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     public bool IncludeFoliage { get; set; } = true;
 
     /// <summary>
-    /// Every convex obstacle is a <see cref="NavSolid"/> too, so the ground inside a closed building volume is removed (the original's cutting materials).
+    /// Every convex obstacle is a <see cref="NavSolid"/> too, so the ground inside a closed building volume is removed (the original's cutting
+    /// materials).
     /// </summary>
     public bool CarveConvexObstacles { get; set; } = true;
 
     public void Dispose()
     {
         _map.Dispose();
-        foreach (var w in _foliagePool)
-            w.Dispose();
+        _foliage.Dispose();
     }
 
     public float TerrainHeight(double x, double z) => _map.HeightAt(x, z);
@@ -121,7 +129,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         var sw = Stopwatch.StartNew();
 
         // Foliage placement is the long pole: it runs on the pool while the terrain and buildings are gathered here.
-        var foliageTask = IncludeFoliage ? Task.Run(() => FoliageOf(FoliageRing(zone))) : null;
+        var foliageTask = IncludeFoliage ? Task.Run(() => _foliage.Of(FoliageRing(zone))) : null;
         AddTerrain(g);
         double terrain = sw.Elapsed.TotalMilliseconds;
         sw.Restart();

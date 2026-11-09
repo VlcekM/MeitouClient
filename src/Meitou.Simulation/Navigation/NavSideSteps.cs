@@ -3,17 +3,21 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
-internal static partial class ZoneNavMeshBuilder
+/// <summary>
+/// The side steps of a tile's compact heightfield (docs/game/pathfinding.md, "Own builder", side steps): found after the solids are cut, unlinked
+/// before the regions are built and linked again where both ends ended in one region.
+/// </summary>
+internal static class NavSideSteps
 {
     /// <summary>
-    /// How far (units) the height between two neighbouring cells may jump beyond what both surfaces' own slopes explain before it counts as a step; also the
-    /// largest rise between two cells of one surface.
+    /// How far (units) the height between two neighbouring cells may jump beyond what both surfaces' own slopes explain before it counts as a step;
+    /// also the largest rise between two cells of one surface.
     /// </summary>
     const float StepJump = 3;
 
     /// <summary>
-    /// Cosine of the largest angle between the two edges of a step that still joins (engine choice: about 37°, clear of the slopes' sampling error; a spiral
-    /// stair's top meets its floor at about 28°, the side of a 45° ramp a flat ledge at 45°).
+    /// Cosine of the largest angle between the two edges of a step that still joins (engine choice: about 37°, clear of the slopes' sampling error; a
+    /// spiral stair's top meets its floor at about 28°, the side of a 45° ramp a flat ledge at 45°).
     /// </summary>
     const float StepEdgeAlignment = 0.8f;
 
@@ -23,8 +27,8 @@ internal static partial class ZoneNavMeshBuilder
     const float TerrainSlack = 4;
 
     /// <summary>
-    /// Cells along the edge over which each side's slope is measured, at least (engine choice: a slope from one or two cells is noise at a surface's rim:
-    /// a spiral stair's top was cut from its floor).
+    /// Cells along the edge over which each side's slope is measured, at least (engine choice: a slope from one or two cells is noise at a surface's
+    /// rim: a spiral stair's top was cut from its floor).
     /// </summary>
     const int SlopeBaseCells = 3;
 
@@ -37,15 +41,15 @@ internal static partial class ZoneNavMeshBuilder
     /// A link between span <see cref="Span"/> and its neighbour <see cref="Neighbour"/> in direction <see cref="Direction"/>, with the connection
     /// indices Recast gave both ends.
     /// </summary>
-    readonly record struct StepLink(int Span, int Direction, int Neighbour, int Con, int NeighbourCon);
+    internal readonly record struct StepLink(int Span, int Direction, int Neighbour, int Con, int NeighbourCon);
 
     /// <summary>
-    /// The links between neighbouring spans that meet on a step whose two edges rise differently along it. Recast joins any two cells within the climb, so a
-    /// raised flat ledge joined the side of a stair ramp where the ramp came within the climb of it, and the ledge was kept with the stair; the original joins
-    /// two surfaces only along edges that run alike (docs/game/pathfinding.md, "Own builder", side steps). Cells on one smooth surface, whose height and slope
-    /// along the edge change as their own slopes say, and steps from the terrain keep their links.
+    /// The links between neighbouring spans that meet on a step whose two edges rise differently along it. Recast joins any two cells within the
+    /// climb, so a raised flat ledge joined the side of a stair ramp where the ramp came within the climb of it, and the ledge was kept with the
+    /// stair; the original joins two surfaces only along edges that run alike (docs/game/pathfinding.md, "Own builder", side steps). Cells on one
+    /// smooth surface, whose height and slope along the edge change as their own slopes say, and steps from the terrain keep their links.
     /// </summary>
-    static List<StepLink> SideSteps(RcCompactHeightfield chf, HeightWindow? terrain)
+    internal static List<StepLink> Find(RcCompactHeightfield chf, HeightWindow? terrain)
     {
         var steps = new List<StepLink>();
         for (int z = 0; z < chf.height; z++)
@@ -78,7 +82,7 @@ internal static partial class ZoneNavMeshBuilder
     /// <summary>
     /// Unlinks the side steps before the regions are built, so a surface reached only over one becomes a region of its own.
     /// </summary>
-    static void CutSteps(RcCompactHeightfield chf, List<StepLink> steps)
+    internal static void Cut(RcCompactHeightfield chf, List<StepLink> steps)
     {
         foreach (var s in steps)
         {
@@ -88,10 +92,10 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Links again the side steps whose two spans ended in one region: the surfaces join elsewhere anyway, and a link missing inside a region leaves a slit in
-    /// its outline, which Recast's triangulation can drop the whole region over.
+    /// Links again the side steps whose two spans ended in one region: the surfaces join elsewhere anyway, and a link missing inside a region leaves
+    /// a slit in its outline, which Recast's triangulation can drop the whole region over.
     /// </summary>
-    static void RelinkWithinRegions(RcCompactHeightfield chf, List<StepLink> steps)
+    internal static void Relink(RcCompactHeightfield chf, List<StepLink> steps)
     {
         foreach (var s in steps)
         {
@@ -109,9 +113,9 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Whether the link from span <paramref name="i"/> in direction <paramref name="d"/> to span <paramref name="j"/> joins edges that do not run alike: a
-    /// step the surfaces' own slopes do not explain, or two surfaces crossing at one height, such as a stair ramp rising past the side of a ledge (Stephouse,
-    /// whose outer steps passed its wall top).
+    /// Whether the link from span <paramref name="i"/> in direction <paramref name="d"/> to span <paramref name="j"/> joins edges that do not run
+    /// alike: a step the surfaces' own slopes do not explain, or two surfaces crossing at one height, such as a stair ramp rising past the side of a
+    /// ledge (Stephouse, whose outer steps passed its wall top).
     /// </summary>
     static bool IsSideStep(RcCompactHeightfield chf, int x, int z, int i, int d, int j)
     {
@@ -166,8 +170,8 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// The rise (units) from span <paramref name="i"/> to its walkable neighbour in direction <paramref name="d"/> on the same surface; null when it has none,
-    /// or only one a step away.
+    /// The rise (units) from span <paramref name="i"/> to its walkable neighbour in direction <paramref name="d"/> on the same surface; null when it
+    /// has none, or only one a step away.
     /// </summary>
     static float? Rise(RcCompactHeightfield chf, int x, int z, int i, int d)
     {
@@ -208,7 +212,8 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// The span linked to span <paramref name="i"/> of cell (<paramref name="x"/>, <paramref name="z"/>) in direction <paramref name="d"/>; null when none is.
+    /// The span linked to span <paramref name="i"/> of cell (<paramref name="x"/>, <paramref name="z"/>) in direction <paramref name="d"/>; null when
+    /// none is.
     /// </summary>
     static int? Neighbour(RcCompactHeightfield chf, int x, int z, int i, int d)
     {

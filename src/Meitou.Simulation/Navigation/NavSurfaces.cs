@@ -99,8 +99,9 @@ public sealed class NavSurfaces
     int Row(float z) => Math.Clamp((int)((z - _min.Y) / Cell), 0, _rows - 1);
 
     /// <summary>
-    /// The height of the surface at (x, z) nearest to <paramref name="y"/>, when one is within <paramref name="range"/>. A surface beside the point within
-    /// <see cref="EdgeReach"/> counts with its edge height, its distance added to the difference (a steep side under the point loses to the top beside it).
+    /// The height of the surface at (x, z) nearest to <paramref name="y"/>, when one is within <paramref name="range"/>. A surface beside the point
+    /// within <see cref="EdgeReach"/> counts with its edge height, its distance added to the difference (a steep side under the point loses to the
+    /// top beside it).
     /// </summary>
     public bool TryNear(float x, float z, float y, float range, out float height) => TryNear(x, z, y, range, out height, out _);
 
@@ -249,7 +250,7 @@ public sealed class NavSurfaces
 
     /// <summary>
     /// Adds the parts of a convex polygon outside the solid to <paramref name="output"/> (convex pieces). Inside means as in the builder: below every
-    /// face, by more than <see cref="ZoneNavMeshBuilder.SolidTopInset"/> under the upward ones, so the solid's own top stays.
+    /// face, by more than <see cref="NavSolidCarving.SolidTopInset"/> under the upward ones, so the solid's own top stays.
     /// </summary>
     static void Outside(List<Vector3> polygon, NavSolid solid, List<List<Vector3>> output)
     {
@@ -257,7 +258,7 @@ public sealed class NavSurfaces
         foreach (var plane in solid.Planes)
         {
             var n = new Vector3(plane.X, plane.Y, plane.Z);
-            float d = plane.W + (plane.Y > 0 ? ZoneNavMeshBuilder.SolidTopInset : 0);
+            float d = plane.W + (plane.Y > 0 ? NavSolidCarving.SolidTopInset : 0);
             bool all = true;
             foreach (var p in polygon)
             {
@@ -279,7 +280,7 @@ public sealed class NavSurfaces
         foreach (var plane in solid.Planes)
         {
             var n = new Vector3(plane.X, plane.Y, plane.Z);
-            float d = plane.W + (plane.Y > 0 ? ZoneNavMeshBuilder.SolidTopInset : 0);
+            float d = plane.W + (plane.Y > 0 ? NavSolidCarving.SolidTopInset : 0);
             List<Vector3> outside = [];
             List<Vector3> inside = [];
             for (int i = 0; i < rest.Count; i++)

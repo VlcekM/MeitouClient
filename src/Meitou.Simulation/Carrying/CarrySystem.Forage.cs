@@ -13,6 +13,14 @@ namespace Meitou.Simulation.Carrying;
 // The foraging job and the Rescue Allies option (docs/game/ai-tasks.md "Perma-jobs" and "Squad AI options").
 public sealed partial class CarrySystem
 {
+    #region Foraging
+
+    /// <summary>
+    /// Seconds the forager works at the body before it takes (<b>Verified</b>, <c>Task_Loot_ResourcesWeHaveStorageFor</c> update
+    /// <c>FUN_14034e2a0</c>: the timer must pass <c>DAT_14168a254</c> = 3).
+    /// </summary>
+    public const float ForageSeconds = 3;
+
     /// <summary>
     /// The foraging job's finder (238 "Foraging animals", <c>FUN_1408ce3a0</c>; a pure read; the decision step's <see cref="CarryJobs"/>): with no
     /// fight in the forager's squad, the nearest downed animal within its sight that is not carried, not looted by another (<paramref name="taken"/>)
@@ -46,12 +54,6 @@ public sealed partial class CarrySystem
         }
         return best;
     }
-
-    /// <summary>
-    /// Seconds the forager works at the body before it takes (<b>Verified</b>, <c>Task_Loot_ResourcesWeHaveStorageFor</c> update
-    /// <c>FUN_14034e2a0</c>: the timer must pass <c>DAT_14168a254</c> = 3).
-    /// </summary>
-    public const float ForageSeconds = 3;
 
     /// <summary>
     /// The forager at its body (<c>Task_Loot_ResourcesWeHaveStorageFor</c> update, <c>FUN_14034e2a0</c>, docs/game/carry-loot.md "Foraging take"): it
@@ -139,4 +141,6 @@ public sealed partial class CarrySystem
     /// </summary>
     bool Rescues(World world, CharacterCold rescuer, CharacterCold body) =>
         body.Faction == rescuer.Faction || (!rescuer.IsPlayer || (world.Player.SquadAi & SquadAi.Rescue) != 0) && Friendly(rescuer, body);
+
+    #endregion
 }

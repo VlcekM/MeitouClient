@@ -100,7 +100,7 @@ the idle candidate with the highest weight (speed weight × leg weight), the fir
 standing speed; [boost-unordered](formats/boost-unordered.md)), chosen again every frame. A character counts as moving at any filtered
 speed other than 0. Meitou: `AnimationLibrary.CombatGuard`.
 A block (an upper-body clip with no lower-body tracks) played standing outside the stance (the running flag set, the fighter held at a distance) would leave the legs
-unposed, as no idle plays under a technique: Meitou gives the legs the combat footwork's lower clip then (engine choice, `AnimationSystem.Update` `blockStanding`).
+unposed, as no idle plays under a technique: Meitou gives the legs the combat footwork's lower clip then (engine choice, `AnimationSystem.PickGait` `blockStanding`).
 
 ### Animation files
 
