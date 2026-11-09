@@ -26,6 +26,8 @@ sealed class TutorialPanel(PlayerInterface player)
     /// </summary>
     const float TutorialWait = 5;
 
+    // The tutorials (docs/game/ui-screens.md "Tutorials"): what their triggers see.
+
     /// <summary>
     /// The management tabs of the crafting and research triggers (overview tabs 3 and 2).
     /// </summary>

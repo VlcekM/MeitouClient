@@ -127,6 +127,7 @@ sealed class NewGameLaunch(GameHost host)
                 host.SettleNewWorld();
                 host.Player.Notice(Loc.Tr("Started {1}", chosen.Name));
                 ShowStartHints();
+                // The start's characters are made in the editor first (docs/characters.md "Character editor").
                 host.CharacterEditor.PendingCreation = [.. spawned.Members];
                 return null;
             }));

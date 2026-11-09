@@ -136,10 +136,8 @@ public sealed record WeatherDef
     /// The window test of the weather choice for the controller's whole hour: <c>[start, end]</c> inclusive; for <c>start &gt; end</c> the game's
     /// test accepts <c>hour ≤ start or hour ≥ end</c>, which is always true.
     /// </summary>
-    public bool IsInWindow(int hour) => !HasTimeWindow || (
-        StartTime <= EndTime ? hour >= StartTime
-        && hour <= EndTime : hour <= StartTime || hour >= EndTime
-    );
+    public bool IsInWindow(int hour) =>
+        !HasTimeWindow || (StartTime <= EndTime ? hour >= StartTime && hour <= EndTime : hour <= StartTime || hour >= EndTime);
 
     /// <summary>
     /// The fog distance at a wind speed: <c>lerp(min, max, saturate((wind − fogWindMin) / (fogWindMax − fogWindMin)))</c>, or the minimum when the
@@ -234,8 +232,15 @@ public sealed record SeasonDef
         var list = weathers.ToList();
         if (list.Any(w => w.Weather.HasTimeWindow))
             list.Add(new SeasonWeather(defaultWeather, 0, FallbackMinMinutes, FallbackMaxMinutes));
-        return new SeasonDef { StringId = stringId, Name = name, Weathers = list, StrengthLimitMin = limitMin, StrengthLimitMax = limitMax,
-        SunlightColour = sunlight };
+        return new SeasonDef
+        {
+            StringId = stringId,
+            Name = name,
+            Weathers = list,
+            StrengthLimitMin = limitMin,
+            StrengthLimitMax = limitMax,
+            SunlightColour = sunlight
+        };
     }
 
     public override string ToString() => Name;
@@ -395,10 +400,8 @@ public sealed class WeatherData
     /// The region whose name matches (exactly, else by substring).
     /// </summary>
     public RegionDef? FindRegion(string name) =>
-        Regions.FirstOrDefault(r => r.Name.Equals(
-            name,
-            StringComparison.OrdinalIgnoreCase
-        )) ?? Regions.FirstOrDefault(r => r.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+        Regions.FirstOrDefault(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? Regions.FirstOrDefault(r => r.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
 
     #endregion
 
@@ -527,14 +530,12 @@ public sealed class WeatherData
             HasNoSeasons = listed.Count == 0,
             StrengthMultiplierMin = g.GetFloat("weather strength multiplier min", 1),
             StrengthMultiplierMax = g.GetFloat("weather strength multiplier max", 1),
-            Ambience = Enum.IsDefined((Ambience)g.GetInt(
-                "ambience",
-                (int)Ambience.Desert
-            )) ? (Ambience)g.GetInt("ambience", (int)Ambience.Desert) : Ambience.Desert,
-            Music = Enum.IsDefined((BiomeMusic)g.GetInt(
-                "music",
-                (int)BiomeMusic.None
-            )) ? (BiomeMusic)g.GetInt("music", (int)BiomeMusic.None) : BiomeMusic.None,
+            Ambience = Enum.IsDefined((Ambience)g.GetInt("ambience", (int)Ambience.Desert))
+                ? (Ambience)g.GetInt("ambience", (int)Ambience.Desert)
+                : Ambience.Desert,
+            Music = Enum.IsDefined((BiomeMusic)g.GetInt("music", (int)BiomeMusic.None))
+                ? (BiomeMusic)g.GetInt("music", (int)BiomeMusic.None)
+                : BiomeMusic.None,
             AcidicGround = g.GetFloat("acidic ground"),
             AcidicWater = g.GetFloat("acidic water"),
         };
@@ -542,10 +543,9 @@ public sealed class WeatherData
 
     static RegionDef NoneRegionOf(List<RegionDef> regions, WeatherDef defaultWeather, int daysPerYear)
     {
-        return regions.FirstOrDefault(r => r.StringId == NoneRegionId) ?? regions.FirstOrDefault(
-            r => r.Name == "NONE"
-            && r.Index == 0
-        ) ?? MakeNone(defaultWeather, daysPerYear);
+        return regions.FirstOrDefault(r => r.StringId == NoneRegionId)
+            ?? regions.FirstOrDefault(r => r.Name == "NONE" && r.Index == 0)
+            ?? MakeNone(defaultWeather, daysPerYear);
     }
 
     #endregion

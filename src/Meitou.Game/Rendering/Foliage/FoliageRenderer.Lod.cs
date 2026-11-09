@@ -286,10 +286,16 @@ public sealed unsafe partial class FoliageRenderer
                 var bindings = MeshBindings.Of(VertexAttributes(main.Parts[p].Vertices), indices);
                 parts[p] = new PartLod { Indices = indices, Bindings = bindings, First = first, Count = count };
             }
-            a.Lod = new RockLod { AllLevels = set.Levels,
-                    LegacyLevels = 1 + set.NormalAngles.Skip(1).TakeWhile(x => x <= FoliageLodBuilder.LegacyMaxNormalAngle).Count(),
-                    Relative = RelativeErrors(set, a.Radius), TriangleExtent = [.. set.Triangles.Select(t => FoliageScreenLod.LevelExtent(a.TriExtent,
-                    a.Triangles, t) / a.Radius)], Parts = parts, Set = set, Bytes = bytes };
+            a.Lod = new RockLod
+            {
+                AllLevels = set.Levels,
+                LegacyLevels = 1 + set.NormalAngles.Skip(1).TakeWhile(x => x <= FoliageLodBuilder.LegacyMaxNormalAngle).Count(),
+                Relative = RelativeErrors(set, a.Radius),
+                TriangleExtent = [.. set.Triangles.Select(t => FoliageScreenLod.LevelExtent(a.TriExtent, a.Triangles, t) / a.Radius)],
+                Parts = parts,
+                Set = set,
+                Bytes = bytes
+            };
             a.Bytes += bytes;
             _residentMeshBytes += bytes;
         });

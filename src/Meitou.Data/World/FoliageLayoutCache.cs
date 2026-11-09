@@ -19,26 +19,13 @@ public static class LoadCaches
 /// <summary>
 /// What the foliage layout cache did so far (a snapshot of <see cref="FoliageLayoutCache.Stats"/>).
 /// </summary>
-public readonly record struct FoliageLayoutCacheStats(
-    int Hits,
-    int Misses,
-    int Rejected,
-    int Written,
-    double LoadMs,
-    double ComputeMs,
-    double SavedMs,
-    long BytesRead,
-    long BytesWritten
-)
+public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int Rejected, int Written, double LoadMs, double ComputeMs, double SavedMs, long BytesRead, long BytesWritten)
 {
     public string Describe()
     {
         var inv = CultureInfo.InvariantCulture;
         var odd = Rejected > 0 ? string.Create(inv, $" ({Rejected} unusable entries recomputed)") : "";
-        return string.Create(
-            inv,
-            $"layout cache {Hits} hits, {Misses} misses{odd}; hits loaded in {LoadMs:0} ms ({BytesRead / 1048576.0:0.0} MB), misses computed in {ComputeMs:0} ms, {Written} written ({BytesWritten / 1048576.0:0.0} MB); saved about {SavedMs / 1000:0.0} s of worker time"
-        );
+        return string.Create(inv, $"layout cache {Hits} hits, {Misses} misses{odd}; hits loaded in {LoadMs:0} ms ({BytesRead / 1048576.0:0.0} MB), misses computed in {ComputeMs:0} ms, {Written} written ({BytesWritten / 1048576.0:0.0} MB); saved about {SavedMs / 1000:0.0} s of worker time");
     }
 }
 
@@ -46,21 +33,20 @@ public readonly record struct FoliageLayoutCacheStats(
 /// The disk cache of laid-out foliage zones (<see cref="FoliageLayout.Place"/>'s result and the ground it was placed on): the layout is deterministic
 /// (docs/formats/foliage.md, "Random numbers"), so a start with the same game data and code reads it back instead of placing a million meshes.
 /// <para>
-/// <c>%LOCALAPPDATA%\Meitou\foliage\&lt;key&gt;\z&lt;X&gt;.&lt;Y&gt;.&lt;w|f&gt;.mfl</c> (or the constructor's root; never in the repository), one
-/// file per zone and layout kind (whole or far only). The key is a hash of everything the layout reads: the foliage records (every field of the
+/// <c>%LOCALAPPDATA%\Meitou\foliage\&lt;key&gt;\z&lt;X&gt;.&lt;Y&gt;.&lt;w|f&gt;.mfl</c> (or the constructor's root; never in the repository),
+/// one file per zone and layout kind (whole or far only). The key is a hash of everything the layout reads: the foliage records (every field of the
 /// layers, meshes and grass types reached from the biomes), the towns, the size and write time of the heightmap, blend file, biome map and overlay
-/// tiles, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change alters what the layout places, so an edit
-/// elsewhere keeps the cache. Settings (foliage and grass range, grass density) are not inputs of the layout and are not in it.
+/// tiles, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change alters what the layout places, so an edit elsewhere
+/// keeps the cache. Settings (foliage and grass range, grass density) are not inputs of the layout and are not in it.
 /// </para>
 /// <para>
 /// A file is written to a temporary name and moved into place, carries its key, zone, sizes and a checksum, and is read whole: anything that does not
-/// verify (truncated, other key, wrong zone, bad checksum, a mesh or layer id the catalog does not have) is a miss and is placed again. Thread-safe.
+/// verify (truncated, other key, wrong zone, bad checksum, a mesh or layer id the catalog does not have) is a miss and is placed again.
+/// Thread-safe.
 /// </para>
 /// </summary>
 public sealed class FoliageLayoutCache
 {
-    #region State
-
     /// <summary>
     /// The file format's version: bump it when the layout of the bytes changes.
     /// </summary>
@@ -79,8 +65,7 @@ public sealed class FoliageLayoutCache
     readonly string _directory;
     readonly byte[] _key;
     int _hits, _misses, _rejected, _written, _maintained;
-    // The player-owned towns the key was made with; the cache is bypassed when the world's snapshot has a different number (a load after the cache
-    // was opened).
+    // The player-owned towns the key was made with; the cache is bypassed when the world's snapshot has a different number (a load after the cache was opened).
     readonly int _keyedOwned;
     bool Stale => FoliageWorld.PlayerTowns.Count != _keyedOwned;
     long _loadTicks, _computeTicks, _savedMicros, _bytesRead, _bytesWritten;
@@ -105,15 +90,12 @@ public sealed class FoliageLayoutCache
     public long MaxBytes { get; set; }
     public string Directory => _directory;
 
-    public FoliageLayoutCacheStats Stats => new(_hits, _misses, _rejected, _written, _loadTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
-    _computeTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
+    public FoliageLayoutCacheStats Stats => new(_hits, _misses, _rejected, _written, _loadTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency, _computeTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
         Interlocked.Read(ref _savedMicros) / 1000.0, Interlocked.Read(ref _bytesRead), Interlocked.Read(ref _bytesWritten));
 
     public string PathFor(ZoneCoordinate zone, bool farOnly) => Path.Combine(_directory, $"z{zone.X}.{zone.Y}.{(farOnly ? 'f' : 'w')}.mfl");
 
-    #endregion
-
-    #region Key
+    // ------------------------------------------------------------------ key
 
     /// <summary>
     /// The 32-byte key (see the class summary).
@@ -148,37 +130,26 @@ public sealed class FoliageLayoutCache
             }
             Flush();
         }
-        foreach (var (at, range) in towns) text.Append("town|").Append(at.X.ToString(
-            "R",
-            inv
-        )).Append('|').Append(at.Y.ToString("R", inv)).Append('|').Append(range.ToString("R", inv)).Append('\n');
+        foreach (var (at, range) in towns) text.Append("town|").Append(at.X.ToString("R", inv)).Append('|').Append(at.Y.ToString("R", inv)).Append('|').Append(range.ToString("R", inv)).Append('\n');
         // The files the layout reads, by size and write time.
         void File(string path, string name)
         {
             var info = new FileInfo(path);
-            text.Append("file|").Append(name).Append('|').Append(info.Exists ? info.Length : -1).Append('|').Append(info.Exists
-                    ? info.LastWriteTimeUtc.Ticks : 0).Append('\n');
+            text.Append("file|").Append(name).Append('|').Append(info.Exists ? info.Length : -1).Append('|').Append(info.Exists ? info.LastWriteTimeUtc.Ticks : 0).Append('\n');
         }
         File(Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath), "heightmap");
         File(Path.Combine(install.DataDirectory, BlendInfoFile.RelativePath), "blend");
         File(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap), "biomemap");
         var overlays = Path.Combine(install.DataDirectory, TerrainMaps.LandDirectory, "overlaymaps");
         if (System.IO.Directory.Exists(overlays))
-            foreach (var f in System.IO.Directory.EnumerateFiles(
-                overlays,
-                "new_overlay.*.png"
-            ).OrderBy(f => f, StringComparer.Ordinal)) File(f, Path.GetFileName(f));
+            foreach (var f in System.IO.Directory.EnumerateFiles(overlays, "new_overlay.*.png").OrderBy(f => f, StringComparer.Ordinal)) File(f, Path.GetFileName(f));
         Flush();
         return hash.GetHashAndReset();
     }
 
     static void AppendMesh(StringBuilder text, FoliageMesh mesh, HashSet<GameRecord> done)
     {
-        if (!done.Add(mesh.Record))
-        {
-            text.Append("again|").Append(mesh.StringId).Append('\n');
-            return;
-        }
+        if (!done.Add(mesh.Record)) { text.Append("again|").Append(mesh.StringId).Append('\n'); return; }
         AppendRecord(text, mesh.Record);
         foreach (var child in mesh.Children) AppendMesh(text, child, done);
         if (mesh.BuildingType is { } b) text.Append("building|").Append(b.StringId).Append('\n');
@@ -188,40 +159,21 @@ public sealed class FoliageLayoutCache
     {
         var inv = CultureInfo.InvariantCulture;
         text.Append("rec|").Append(r.StringId).Append('|').Append((int)r.Type).Append('|').Append(r.Name).Append('\n');
-        foreach (var (
-            k,
-            v
-        ) in r.Bools.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('b').Append(k).Append('=').Append(v ? 1 : 0).Append('\n');
-        foreach (var (k, v) in r.Floats.OrderBy(
-            p => p.Key,
-            StringComparer.Ordinal
-        )) text.Append('f').Append(k).Append('=').Append(BitConverter.SingleToInt32Bits(v).ToString(inv)).Append('\n');
+        foreach (var (k, v) in r.Bools.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('b').Append(k).Append('=').Append(v ? 1 : 0).Append('\n');
+        foreach (var (k, v) in r.Floats.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('f').Append(k).Append('=').Append(BitConverter.SingleToInt32Bits(v).ToString(inv)).Append('\n');
         foreach (var (k, v) in r.Ints.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('i').Append(k).Append('=').Append(v).Append('\n');
-        foreach (var (k, v) in r.Vector3S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('v').Append(k).Append('=').Append(v.X.ToString(
-            "R",
-            inv
-        )).Append(',').Append(v.Y.ToString("R", inv)).Append(',').Append(v.Z.ToString("R", inv)).Append('\n');
-        foreach (var (k, v) in r.Vector4S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('w').Append(k).Append('=').Append(v.X.ToString(
-            "R",
-            inv
-        )).Append(',').Append(v.Y.ToString(
-            "R",
-            inv
-        )).Append(',').Append(v.Z.ToString("R", inv)).Append(',').Append(v.W.ToString("R", inv)).Append('\n');
+        foreach (var (k, v) in r.Vector3S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('v').Append(k).Append('=').Append(v.X.ToString("R", inv)).Append(',').Append(v.Y.ToString("R", inv)).Append(',').Append(v.Z.ToString("R", inv)).Append('\n');
+        foreach (var (k, v) in r.Vector4S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('w').Append(k).Append('=').Append(v.X.ToString("R", inv)).Append(',').Append(v.Y.ToString("R", inv)).Append(',').Append(v.Z.ToString("R", inv)).Append(',').Append(v.W.ToString("R", inv)).Append('\n');
         foreach (var (k, v) in r.Strings.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('s').Append(k).Append('=').Append(v).Append('\n');
         foreach (var (k, v) in r.Filenames.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('p').Append(k).Append('=').Append(v).Append('\n');
         foreach (var list in r.ReferenceLists.OrderBy(l => l, StringComparer.Ordinal))
         {
             text.Append('r').Append(list).Append('\n');
-            foreach (var x in r.GetReferences(list))
-                text.Append(' ').Append(x.TargetStringId).Append(':').Append(x.Values.Value0).Append(',').Append(x.Values.Value1)
-                    .Append(',').Append(x.Values.Value2).Append('\n');
+            foreach (var x in r.GetReferences(list)) text.Append(' ').Append(x.TargetStringId).Append(':').Append(x.Values.Value0).Append(',').Append(x.Values.Value1).Append(',').Append(x.Values.Value2).Append('\n');
         }
     }
 
-    #endregion
-
-    #region Read
+    // ------------------------------------------------------------------ read
 
     /// <summary>
     /// The cached zone, or null (a miss: absent, or unusable, which is also counted in <see cref="FoliageLayoutCacheStats.Rejected"/>).
@@ -230,9 +182,8 @@ public sealed class FoliageLayoutCache
         Fetch(zone, farOnly, grouped: false) is { } f ? (f.Zone, f.Ground) : null;
 
     /// <summary>
-    /// Like <see cref="TryLoad"/>, with the instances already grouped for the renderer (<see cref="GroupedFoliageZone"/>; its zone's instance list is
-    /// empty): the records are built straight from the file's, so the zone's 56-byte-per-instance list and the copies grouping it made are never
-    /// allocated.
+    /// Like <see cref="TryLoad"/>, with the instances already grouped for the renderer (<see cref="GroupedFoliageZone"/>; its zone's instance list is empty): the
+    /// records are built straight from the file's, so the zone's 56-byte-per-instance list and the copies grouping it made are never allocated.
     /// </summary>
     public GroupedFoliageZone? TryLoadGrouped(ZoneCoordinate zone, bool farOnly) => Fetch(zone, farOnly, grouped: true)?.Grouped;
 
@@ -254,8 +205,7 @@ public sealed class FoliageLayoutCache
         catch (UnauthorizedAccessException) { return Miss(true); }
         Decoded? result;
         try { result = Decode(bytes, length, zone, farOnly, grouped); }
-        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException
-                or OverflowException or EndOfStreamException) { result = null; }
+        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException or OverflowException or EndOfStreamException) { result = null; }
         if (result is null) return Miss(true);
         Interlocked.Increment(ref _hits);
         TouchOnce();
@@ -275,9 +225,9 @@ public sealed class FoliageLayoutCache
     }
 
     /// <summary>
-    /// The whole file in a fresh buffer. A file is 300 KB on average; the shared ArrayPool keeps such arrays for the life of the worker threads,
-    /// which adds up to gigabytes over a tour of the world's zones. The decode copies everything it keeps, so the file bytes can go back to the GC
-    /// immediately.
+    /// The whole file in a fresh buffer. A file is 300 KB on average; the shared ArrayPool keeps such arrays for the
+    /// life of the worker threads, which adds up to gigabytes over a tour of the world's zones. The decode copies
+    /// everything it keeps, so the file bytes can go back to the GC immediately.
     /// </summary>
     static (byte[] Buffer, int Length) ReadFile(string path)
     {
@@ -363,14 +313,7 @@ public sealed class FoliageLayoutCache
         var list = result.Instances;
         list.Capacity = count;
         foreach (ref readonly var d in disk)
-            list.Add(new FoliageInstance(
-                meshes[d.Mesh],
-                layers[d.Layer],
-                new Vector3(d.X, d.Y, d.Z),
-                d.Scale,
-                d.Yaw,
-                new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw)
-            ));
+            list.Add(new FoliageInstance(meshes[d.Mesh], layers[d.Layer], new Vector3(d.X, d.Y, d.Z), d.Scale, d.Yaw, new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw)));
         return new Decoded(result, ground, computeMs, null);
 
         void Need(int n) { if (n < 0 || at + n > end) throw new InvalidDataException("truncated"); }
@@ -396,16 +339,10 @@ public sealed class FoliageLayoutCache
     }
 
     /// <summary>
-    /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order,
-    /// bit-identical records), in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
+    /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order, bit-identical records),
+    /// in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
     /// </summary>
-    static GroupedFoliageZone GroupDisk(
-        FoliageZone zone,
-        FoliageGround ground,
-        ReadOnlySpan<InstanceOnDisk> disk,
-        FoliageMesh[] meshes,
-        FoliageLayer[] layers
-    )
+    static GroupedFoliageZone GroupDisk(FoliageZone zone, FoliageGround ground, ReadOnlySpan<InstanceOnDisk> disk, FoliageMesh[] meshes, FoliageLayer[] layers)
     {
         var slotOf = new Dictionary<int, int>();
         var keys = new List<int>();
@@ -414,11 +351,7 @@ public sealed class FoliageLayoutCache
         foreach (ref readonly var d in disk)
         {
             int key = d.Mesh << 16 | d.Layer;
-            if (key == lastKey)
-            {
-                counts[lastSlot]++;
-                continue;
-            }
+            if (key == lastKey) { counts[lastSlot]++; continue; }
             if (!slotOf.TryGetValue(key, out lastSlot))
             {
                 _ = (meshes[d.Mesh], layers[d.Layer]);   // an index the file's own list lacks throws, as decoding the instances does
@@ -439,11 +372,7 @@ public sealed class FoliageLayoutCache
         foreach (ref readonly var d in disk)
         {
             int key = d.Mesh << 16 | d.Layer;
-            if (key != lastKey)
-            {
-                lastSlot = slotOf[key];
-                lastKey = key;
-            }
+            if (key != lastKey) { lastSlot = slotOf[key]; lastKey = key; }
             int at = filled[lastSlot]++;
             records[lastSlot][at] = new FoliageInstanceRecord
             {
@@ -455,8 +384,7 @@ public sealed class FoliageLayoutCache
             maxY = Math.Max(maxY, d.Y);
         }
         var groups = new List<FoliageInstanceGroup>(keys.Count);
-        for (int g = 0; g < keys.Count; g++) groups.Add(new FoliageInstanceGroup(meshes[(int)((uint)keys[g] >> 16)], layers[keys[g] & 0xFFFF],
-        records[g], maxScale[g]));
+        for (int g = 0; g < keys.Count; g++) groups.Add(new FoliageInstanceGroup(meshes[(int)((uint)keys[g] >> 16)], layers[keys[g] & 0xFFFF], records[g], maxScale[g]));
         return new GroupedFoliageZone
         {
             Zone = zone,
@@ -468,9 +396,7 @@ public sealed class FoliageLayoutCache
         };
     }
 
-    #endregion
-
-    #region Write
+    // ------------------------------------------------------------------ write
 
     /// <summary>
     /// Records the time a miss took to place (for the summary) and writes the zone; failures are ignored, the cache is only a cache.
@@ -485,8 +411,7 @@ public sealed class FoliageLayoutCache
             if (bytes is null) return;
             System.IO.Directory.CreateDirectory(_directory);
             var path = PathFor(zone, farOnly);
-            var temporary = path + "." + Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "."
-                + Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture) + ".tmp";
+            var temporary = path + "." + Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "." + Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture) + ".tmp";
             File.WriteAllBytes(temporary, bytes);
             File.Move(temporary, path, overwrite: true);
             Interlocked.Increment(ref _written);
@@ -504,170 +429,93 @@ public sealed class FoliageLayoutCache
     {
         var meshIndex = new Dictionary<FoliageMesh, int>();
         var layerIndex = new Dictionary<FoliageLayer, int>();
-        if (!IndexAssets(laid, meshIndex, layerIndex)) return null;
+        foreach (var i in laid.Instances)
+        {
+            if (!meshIndex.ContainsKey(i.Mesh)) meshIndex[i.Mesh] = meshIndex.Count;
+            if (!layerIndex.ContainsKey(i.Layer)) layerIndex[i.Layer] = layerIndex.Count;
+        }
+        foreach (var p in laid.Grass) if (!layerIndex.ContainsKey(p.Layer)) layerIndex[p.Layer] = layerIndex.Count;
+        // What is read back is looked up by id in the catalog: it must be the same object.
+        foreach (var m in meshIndex.Keys) if (!_catalog.Meshes.TryGetValue(m.StringId, out var c) || !ReferenceEquals(c, m)) return null;
+        foreach (var l in layerIndex.Keys) if (!_catalog.Layers.TryGetValue(l.StringId, out var c) || !ReferenceEquals(c, l)) return null;
+        if (meshIndex.Count > ushort.MaxValue || layerIndex.Count > ushort.MaxValue) return null;
 
         var densities = new List<byte[]>();
         var patchDensity = new int[laid.Grass.Count];
-        IndexDensities(laid, densities, patchDensity);
-
+        for (int i = 0; i < patchDensity.Length; i++)
+        {
+            var d = laid.Grass[i].Density;
+            int found = densities.FindIndex(x => x.AsSpan().SequenceEqual(d));
+            if (found < 0) { found = densities.Count; densities.Add(d); }
+            patchDensity[i] = found;
+        }
         var heights = ground.Heights;
         int size = Unsafe_SizeOf();
-        using var ms = new MemoryStream(
-            1024 + heights.Length * 4 + densities.Sum(d => d.Length) + laid.Instances.Count * size + laid.Grass.Count * 40);
+        using var ms = new MemoryStream(1024 + heights.Length * 4 + densities.Sum(d => d.Length) + laid.Instances.Count * size + laid.Grass.Count * 40);
         using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
         {
-            WriteHeader(w, laid, farOnly, computeMs);
-            WriteIds(w, meshIndex.OrderBy(p => p.Value).Select(p => p.Key.StringId));
-            WriteIds(w, layerIndex.OrderBy(p => p.Value).Select(p => p.Key.StringId));
+            w.Write(Magic);
+            w.Write(FormatVersion);
+            w.Write(_key);
+            w.Write(laid.Zone.X);
+            w.Write(laid.Zone.Y);
+            w.Write((byte)(farOnly ? 1 : 0));
+            w.Write((byte)(laid.Complete ? 1 : 0));
+            w.Write(laid.Resources);
+            w.Write(BitConverter.SingleToInt32Bits(computeMs));
+            void Strings(IEnumerable<string> ids)
+            {
+                var list = ids.ToList();
+                w.Write((ushort)list.Count);
+                foreach (var s in list) { var b = Encoding.UTF8.GetBytes(s); w.Write((ushort)b.Length); w.Write(b); }
+            }
+            Strings(meshIndex.OrderBy(p => p.Value).Select(p => p.Key.StringId));
+            Strings(layerIndex.OrderBy(p => p.Value).Select(p => p.Key.StringId));
             w.Write(ground.X0);
             w.Write(ground.Z0);
             w.Write(MemoryMarshal.AsBytes(heights));
-            if (!WriteGrass(w, laid, layerIndex, densities, patchDensity)) return null;
-
-            WriteInstances(w, laid, meshIndex, layerIndex);
+            w.Write(densities.Count);
+            w.Write(laid.Grass.Count);
+            foreach (var d in densities) { w.Write(d.Length); w.Write(d); }
+            for (int i = 0; i < laid.Grass.Count; i++)
+            {
+                var p = laid.Grass[i];
+                int g = -1;
+                for (int k = 0; k < p.Layer.Grass.Count; k++) if (ReferenceEquals(p.Layer.Grass[k].Grass, p.Grass)) { g = k; break; }
+                if (g < 0) return null;
+                w.Write((ushort)layerIndex[p.Layer]);
+                w.Write((ushort)g);
+                w.Write(p.Channel);
+                w.Write(patchDensity[i]);
+                w.Write(p.X0); w.Write(p.Z0); w.Write(p.X1); w.Write(p.Z1);
+            }
+            w.Write(laid.Instances.Count);
+            var records = new InstanceOnDisk[laid.Instances.Count];
+            for (int i = 0; i < records.Length; i++)
+            {
+                var n = laid.Instances[i];
+                records[i] = new InstanceOnDisk
+                {
+                    Mesh = (ushort)meshIndex[n.Mesh],
+                    Layer = (ushort)layerIndex[n.Layer],
+                    X = n.Position.X,
+                    Y = n.Position.Y,
+                    Z = n.Position.Z,
+                    Scale = n.Scale,
+                    Yaw = n.YawDegrees,
+                    Qx = n.Orientation.X,
+                    Qy = n.Orientation.Y,
+                    Qz = n.Orientation.Z,
+                    Qw = n.Orientation.W,
+                };
+            }
+            w.Write(MemoryMarshal.AsBytes(records.AsSpan()));
         }
         ms.TryGetBuffer(out var buffer);
         var total = new byte[buffer.Count + 8];
         buffer.AsSpan().CopyTo(total);
         BinaryPrimitives.WriteUInt64LittleEndian(total.AsSpan(buffer.Count), Checksum(total.AsSpan(0, buffer.Count)));
         return total;
-    }
-
-    /// <summary>
-    /// Gives every mesh and layer of the zone its index in first-use order; false when one of them is not the catalog's object.
-    /// </summary>
-    bool IndexAssets(FoliageZone laid, Dictionary<FoliageMesh, int> meshIndex, Dictionary<FoliageLayer, int> layerIndex)
-    {
-        foreach (var i in laid.Instances)
-        {
-            if (!meshIndex.ContainsKey(i.Mesh)) meshIndex[i.Mesh] = meshIndex.Count;
-            if (!layerIndex.ContainsKey(i.Layer)) layerIndex[i.Layer] = layerIndex.Count;
-        }
-        foreach (var p in laid.Grass)
-        {
-            if (!layerIndex.ContainsKey(p.Layer)) layerIndex[p.Layer] = layerIndex.Count;
-        }
-        return IsCatalogued(meshIndex, layerIndex);
-    }
-
-    bool IsCatalogued(Dictionary<FoliageMesh, int> meshIndex, Dictionary<FoliageLayer, int> layerIndex)
-    {
-        // What is read back is looked up by id in the catalog: it must be the same object.
-        foreach (var m in meshIndex.Keys)
-        {
-            if (!_catalog.Meshes.TryGetValue(m.StringId, out var c) || !ReferenceEquals(c, m)) return false;
-        }
-        foreach (var l in layerIndex.Keys)
-        {
-            if (!_catalog.Layers.TryGetValue(l.StringId, out var c) || !ReferenceEquals(c, l)) return false;
-        }
-        return meshIndex.Count <= ushort.MaxValue && layerIndex.Count <= ushort.MaxValue;
-    }
-
-    /// <summary>
-    /// Makes the table of distinct grass densities; each patch gets the index of its own.
-    /// </summary>
-    static void IndexDensities(FoliageZone laid, List<byte[]> densities, int[] patchDensity)
-    {
-        for (int i = 0; i < patchDensity.Length; i++)
-        {
-            var d = laid.Grass[i].Density;
-            int found = densities.FindIndex(x => x.AsSpan().SequenceEqual(d));
-            if (found < 0)
-            {
-                found = densities.Count;
-                densities.Add(d);
-            }
-            patchDensity[i] = found;
-        }
-    }
-
-    void WriteHeader(BinaryWriter w, FoliageZone laid, bool farOnly, float computeMs)
-    {
-        w.Write(Magic);
-        w.Write(FormatVersion);
-        w.Write(_key);
-        w.Write(laid.Zone.X);
-        w.Write(laid.Zone.Y);
-        w.Write((byte)(farOnly ? 1 : 0));
-        w.Write((byte)(laid.Complete ? 1 : 0));
-        w.Write(laid.Resources);
-        w.Write(BitConverter.SingleToInt32Bits(computeMs));
-    }
-
-    static void WriteIds(BinaryWriter w, IEnumerable<string> ids)
-    {
-        var list = ids.ToList();
-        w.Write((ushort)list.Count);
-        foreach (var s in list)
-        {
-            var b = Encoding.UTF8.GetBytes(s);
-            w.Write((ushort)b.Length);
-            w.Write(b);
-        }
-    }
-
-    /// <summary>
-    /// The grass patches and their densities; false when a patch's type is not in its layer's list.
-    /// </summary>
-    static bool WriteGrass(BinaryWriter w, FoliageZone laid, Dictionary<FoliageLayer, int> layerIndex, List<byte[]> densities, int[] patchDensity)
-    {
-        w.Write(densities.Count);
-        w.Write(laid.Grass.Count);
-        foreach (var d in densities)
-        {
-            w.Write(d.Length);
-            w.Write(d);
-        }
-        for (int i = 0; i < laid.Grass.Count; i++)
-        {
-            var p = laid.Grass[i];
-            int g = -1;
-            for (int k = 0; k < p.Layer.Grass.Count; k++)
-            {
-                if (ReferenceEquals(p.Layer.Grass[k].Grass, p.Grass))
-                {
-                    g = k;
-                    break;
-                }
-            }
-            if (g < 0) return false;
-
-            w.Write((ushort)layerIndex[p.Layer]);
-            w.Write((ushort)g);
-            w.Write(p.Channel);
-            w.Write(patchDensity[i]);
-            w.Write(p.X0);
-            w.Write(p.Z0);
-            w.Write(p.X1);
-            w.Write(p.Z1);
-        }
-        return true;
-    }
-
-    static void WriteInstances(BinaryWriter w, FoliageZone laid, Dictionary<FoliageMesh, int> meshIndex, Dictionary<FoliageLayer, int> layerIndex)
-    {
-        w.Write(laid.Instances.Count);
-        var records = new InstanceOnDisk[laid.Instances.Count];
-        for (int i = 0; i < records.Length; i++)
-        {
-            var n = laid.Instances[i];
-            records[i] = new InstanceOnDisk
-            {
-                Mesh = (ushort)meshIndex[n.Mesh],
-                Layer = (ushort)layerIndex[n.Layer],
-                X = n.Position.X,
-                Y = n.Position.Y,
-                Z = n.Position.Z,
-                Scale = n.Scale,
-                Yaw = n.YawDegrees,
-                Qx = n.Orientation.X,
-                Qy = n.Orientation.Y,
-                Qz = n.Orientation.Z,
-                Qw = n.Orientation.W,
-            };
-        }
-        w.Write(MemoryMarshal.AsBytes(records.AsSpan()));
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -695,9 +543,7 @@ public sealed class FoliageLayoutCache
         return h;
     }
 
-    #endregion
-
-    #region Upkeep
+    // ------------------------------------------------------------------ upkeep
 
     void TouchOnce() { if (Interlocked.Increment(ref _maintained) == 1) MaintainInBackground(); }
 
@@ -712,9 +558,9 @@ public sealed class FoliageLayoutCache
     });
 
     /// <summary>
-    /// Keeps the cache in bounds: abandoned temporary files go, keys unused for 30 days go (the folder of a key is touched when a start opens it for
-    /// writing and on each pass), and when the files total more than <see cref="MaxBytes"/> the other keys go whole, least recently used first, then
-    /// this key's oldest files, down to 90% of the cap. Returns (files, bytes before, files deleted).
+    /// Keeps the cache in bounds: abandoned temporary files go, keys unused for 30 days go (the folder of a key is touched when a start opens it for writing and
+    /// on each pass), and when the files total more than <see cref="MaxBytes"/> the other keys go whole, least recently used first, then this key's oldest files,
+    /// down to 90% of the cap. Returns (files, bytes before, files deleted).
     /// </summary>
     public (int Files, long Bytes, int Deleted) Maintain(DateTime? now = null)
     {
@@ -729,20 +575,12 @@ public sealed class FoliageLayoutCache
             long bytes = 0;
             foreach (var f in dir.EnumerateFiles())
             {
-                if (f.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (time - f.LastWriteTimeUtc > AbandonedTemporary && TryDelete(f)) deleted++;
-                    continue;
-                }
+                if (f.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase)) { if (time - f.LastWriteTimeUtc > AbandonedTemporary && TryDelete(f)) deleted++; continue; }
                 if (!f.Extension.Equals(".mfl", StringComparison.OrdinalIgnoreCase)) continue;
                 bytes += f.Length;
                 files++;
             }
-            if (dir.Name != KeyName && time - dir.LastWriteTimeUtc > StaleKey)
-            {
-                deleted += DeleteDirectory(dir);
-                continue;
-            }
+            if (dir.Name != KeyName && time - dir.LastWriteTimeUtc > StaleKey) { deleted += DeleteDirectory(dir); continue; }
             total += bytes;
             keys.Add((dir, bytes));
         }
@@ -761,11 +599,7 @@ public sealed class FoliageLayoutCache
                 {
                     if (total <= target) break;
                     long length = f.Length;
-                    if (TryDelete(f))
-                    {
-                        total -= length;
-                        deleted++;
-                    }
+                    if (TryDelete(f)) { total -= length; deleted++; }
                 }
         }
         return (files, before, deleted);
@@ -785,6 +619,4 @@ public sealed class FoliageLayoutCache
         try { dir.Delete(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         return n;
     }
-
-    #endregion
 }

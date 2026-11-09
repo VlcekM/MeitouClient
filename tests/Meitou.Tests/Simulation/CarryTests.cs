@@ -289,12 +289,15 @@ public class CarryTests
         var leader = rig.Add(1600, 2000, player: false, squad: 4, faction: 0, leader: true);
         var rescuer = rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
 
-        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages); a squad whose package does not list it leaves its leader
-        // lying.
-        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!,
-                Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader",
+        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages);
+        // a squad whose package does not list it leaves its leader lying.
+        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind
+        {
+            Squad = rig.World.Squads.Find(4)!,
+            Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader",
                 Data.Gameplay.Ai.TaskType.FindAndRescueLeader, Data.Gameplay.Ai.TaskPriority.NonUrgent, Data.Gameplay.Ai.TaskTargetType.Specific,
-                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
+                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1)
+        };
         rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // the witness, facing the looting
         foreach (var r in new[] { "a", "b", "c", "d" }) rig.Cold(down1).Inventory!.Add(Item(r, 2, 2));
         rig.Body(down1).KnockOut(10000);
