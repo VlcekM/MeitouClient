@@ -104,10 +104,12 @@ from the start.
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).
 - No inventory-window filter on the flag was found: the items show while the owner lives (**Observed**, absence in the decompile).
-- Unknown: `FUN_1405a59a0` (reads record 3979's `death items`); whether the flag changes weight.
+- They count nothing in Total Weight while the owner lives (**Observed**, original, the player's Garru pup carrying its Garru Backpack (6 kg), 4 Animal
+  Skin and 10 Raw Meat flagged (1 kg each): Total Weight 6); so they do not load a living owner either, as the window shows the carried-weight sum
+  ([ui-screens](ui-screens.md), **Inferred**); a dead owner's are **Unknown**. Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
 Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
-moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
+moving an item out of its inventory clears it, a living owner's weigh nothing, worn bag included (`Inventory.ContentWeight` with `skipDeath`, Total Weight and the encumbrance load), and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
 
 ## Ageing
 

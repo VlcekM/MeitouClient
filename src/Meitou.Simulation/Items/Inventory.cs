@@ -27,12 +27,14 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// The weight of everything in this inventory (not including a carried person or fitted prosthetics, which vanilla keeps outside the inventory).
+    /// With <paramref name="skipDeath"/> the death items (<see cref="ItemInstance.Death"/>) weigh nothing: a living owner's do not count in the
+    /// original's Total Weight (<b>Observed</b>, docs/game/animals.md "Death items").
     /// </summary>
-    public float ContentWeight()
+    public float ContentWeight(bool skipDeath = false)
     {
         float w = 0;
         foreach (var i in Items)
-            if (!InventoryCommands.IsLimbSection(i.Section)) w += i.Weight;
+            if (!InventoryCommands.IsLimbSection(i.Section) && !(skipDeath && i.Death)) w += i.WeightOf(skipDeath);
         return w;
     }
 
@@ -40,12 +42,14 @@ public sealed class Inventory(int width, int height)
     /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
     /// the section it came from (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
     /// </summary>
-    public float ContentWeight(HeldItem? held)
+    public float ContentWeight(HeldItem? held, bool skipDeath = false)
     {
-        float w = ContentWeight();
-        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section)) return w;
+        float w = ContentWeight(skipDeath);
+        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section) || skipDeath && held.Item.Death)
+            return w;
+
         float factor = held.Section == "backpack_content" ? Backpack?.ContentsFactor ?? 1 : 1;
-        return w + held.Item.Weight * factor;
+        return w + held.Item.WeightOf(skipDeath) * factor;
     }
 
     /// <summary>

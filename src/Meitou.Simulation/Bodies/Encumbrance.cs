@@ -30,9 +30,9 @@ public static class Encumbrance
         c.CarryWeightMult * strength * strengthInjuryMultiplier + c.EncumbranceBase;
 
     /// <summary>
-    /// The maximum the inventory window prints (<b>Observed</b>, docs/game/ui-screens.md "Total Weight"): the strength (with its injury multiplier)
-    /// plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>: that only enters the capacity of the encumbrance factor
-    /// (<see cref="Capacity"/>).
+    /// The maximum the inventory window prints (<b>Observed</b>, docs/game/ui-screens.md "Total Weight"): the strength (times the stats
+    /// multiplier, which is an animal's age, and its injury multiplier) plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>:
+    /// that only enters the capacity of the encumbrance factor (<see cref="Capacity"/>).
     /// </summary>
     public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
         MathF.Floor(strength * strengthInjuryMultiplier + c.EncumbranceBase);
