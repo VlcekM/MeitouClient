@@ -10,24 +10,38 @@ namespace Meitou.Settings;
 public sealed class SettingsSchema
 {
     public const string FileName = "settings-schema.json";
-    /// <summary>The layout of this file. Adding properties keeps it; anything a reader would misread raises it, and the launcher then shows nothing.</summary>
+    /// <summary>
+    /// The layout of this file. Adding properties keeps it; anything a reader would misread raises it, and the launcher then shows nothing.
+    /// </summary>
     public const int CurrentFormat = 1;
 
     public int Format { get; set; } = CurrentFormat;
-    /// <summary>The <c>meitou.user.json</c> layout this release reads and writes (its <c>version</c> key).</summary>
+    /// <summary>
+    /// The <c>meitou.user.json</c> layout this release reads and writes (its <c>version</c> key).
+    /// </summary>
     public int SettingsVersion { get; set; }
-    /// <summary>The frame renderers this release contains; an older schema without the key is Vulkan-only.</summary>
+    /// <summary>
+    /// The frame renderers this release contains; an older schema without the key is Vulkan-only.
+    /// </summary>
     public List<string> Renderers { get; set; } = ["vulkan"];
-    /// <summary>The sections, one launcher tab each, in the game's page order.</summary>
+    /// <summary>
+    /// The sections, one launcher tab each, in the game's page order.
+    /// </summary>
     public List<SettingsSection> Sections { get; set; } = [];
-    /// <summary>The graphics quality presets; null in an older schema (no preset row).</summary>
+    /// <summary>
+    /// The graphics quality presets; null in an older schema (no preset row).
+    /// </summary>
     public SettingsPresets? Presets { get; set; }
-    /// <summary>The graphics look; null in an older schema (no look row).</summary>
+    /// <summary>
+    /// The graphics look; null in an older schema (no look row).
+    /// </summary>
     public SettingsLooks? Looks { get; set; }
 
     public string ToJson() => JsonSerializer.Serialize(this, SettingsSchemaJson.Default.SettingsSchema);
 
-    /// <summary>The file's schema, or null when it is missing, unreadable or of a newer format.</summary>
+    /// <summary>
+    /// The file's schema, or null when it is missing, unreadable or of a newer format.
+    /// </summary>
     public static SettingsSchema? Read(string path)
     {
         try
@@ -44,7 +58,9 @@ public sealed class SettingsSection
 {
     public string Name { get; set; } = "";
     public List<SettingDescription> Settings { get; set; } = [];
-    /// <summary>The section's features, as the game's menu folds them; null in an older schema (every setting a row of its own).</summary>
+    /// <summary>
+    /// The section's features, as the game's menu folds them; null in an older schema (every setting a row of its own).
+    /// </summary>
     public List<SettingsGroup>? Groups { get; set; }
 }
 
@@ -72,11 +88,14 @@ public sealed class SettingsPresets
     public string Description { get; set; } = "";
     public List<string> Names { get; set; } = [];
     public string Custom { get; set; } = "";
-    /// <summary>The preset shown while nothing is saved (the game's start settings).</summary>
+    /// <summary>
+    /// The preset shown while nothing is saved (the game's start settings).
+    /// </summary>
     public string Default { get; set; } = "";
     public List<string> Keys { get; set; } = [];
     /// <summary>
-    /// The game's option that picks a preset for the hardware: <c>&lt;exe&gt; &lt;Detect&gt; &lt;file&gt;</c> writes a JSON object whose <c>preset</c> is one of
+    /// The game's option that picks a preset for the hardware: <c>&lt;exe&gt; &lt;Detect&gt; &lt;file&gt;</c> writes a JSON object whose
+    /// <c>preset</c> is one of
     /// <see cref="Names"/> and whose <c>summary</c> is a line to show. Null in an older schema (no detection).
     /// </summary>
     public string? Detect { get; set; }
@@ -85,7 +104,8 @@ public sealed class SettingsPresets
 /// <summary>
 /// The graphics look: Faithful (<see cref="FaithfulKey"/>, a top-level <c>meitou.user.json</c> key, true) or a Meitou look preset (false), named by
 /// <see cref="PresetKey"/>: one of <see cref="Presets"/> (the first, Meitou's own, is saved as no key) or one of the player's, a JSON file in
-/// <see cref="Folder"/> beside <c>meitou.user.json</c> with its <c>name</c> and <c>values</c>. A look is a set of <c>graphics</c> values: Faithful's are
+/// <see cref="Folder"/> beside <c>meitou.user.json</c> with its <c>name</c> and <c>values</c>. A look is a set of <c>graphics</c> values: Faithful's
+/// are
 /// <see cref="Faithful"/>; a preset's are <see cref="Meitou"/> with its own values over them. Choosing a look writes them.
 /// </summary>
 public sealed class SettingsLooks
@@ -98,13 +118,19 @@ public sealed class SettingsLooks
     public Dictionary<string, float> Meitou { get; set; } = [];
     public List<SettingsLook> Presets { get; set; } = [];
     public string Folder { get; set; } = "";
-    /// <summary>The look's own settings (the look tabs): what a preset saves, and what differs from the look counts as a change.</summary>
+    /// <summary>
+    /// The look's own settings (the look tabs): what a preset saves, and what differs from the look counts as a change.
+    /// </summary>
     public List<string> Keys { get; set; } = [];
-    /// <summary>The Meitou version a preset saved now is marked with (<c>meitou</c> in its file).</summary>
+    /// <summary>
+    /// The Meitou version a preset saved now is marked with (<c>meitou</c> in its file).
+    /// </summary>
     public string Made { get; set; } = "";
 }
 
-/// <summary>A look preset: its name and the <c>graphics</c> values it sets over <see cref="SettingsLooks.Meitou"/>.</summary>
+/// <summary>
+/// A look preset: its name and the <c>graphics</c> values it sets over <see cref="SettingsLooks.Meitou"/>.
+/// </summary>
 public sealed class SettingsLook
 {
     public string Name { get; set; } = "";
@@ -122,13 +148,18 @@ public sealed record SettingDescription
     public SettingKind Kind { get; set; }
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
-    /// <summary>How much the setting costs (No / Low / Medium / High impact, Faster with Meitou), shown beside its name; null when not ranked.</summary>
+    /// <summary>
+    /// How much the setting costs (No / Low / Medium / High impact, Faster with Meitou), shown beside its name; null when not ranked.
+    /// </summary>
     public string? Impact { get; set; }
-    /// <summary>The value when the key is missing (a toggle: 1 on, 0 off); null when it depends on the mode or the computer, and the slider then sits at
+    /// <summary>The value when the key is missing (a toggle: 1 on, 0 off); null when it depends on the mode or the computer, and the slider then sits
+    /// at
     /// <see cref="Shown"/> (a graphics toggle offers the game's default as a choice of its own).</summary>
     public float? Default { get; set; }
     public float Shown { get; set; }
-    /// <summary>A toggle's two states.</summary>
+    /// <summary>
+    /// A toggle's two states.
+    /// </summary>
     public string On { get; set; } = "On";
     public string Off { get; set; } = "Off";
     public float Min { get; set; }
@@ -156,22 +187,29 @@ public sealed record SettingDescription
     public string Text(float value)
     {
         if (OffBelow is { } off && value < off) return OffText;
-        if (Labels is { Length: > 0 } labels) return labels[Math.Clamp((int)MathF.Round(value - Min), 0, labels.Length - 1)];
+        if (Labels is { Length: > 0 } labels)
+            return labels[Math.Clamp((int)MathF.Round(value - Min), 0, labels.Length - 1)];
         return (value * Scale).ToString(Format, System.Globalization.CultureInfo.InvariantCulture) + Suffix;
     }
 }
 
-/// <summary>One of a slider's <see cref="SettingDescription.Modes"/>: its name and the value it writes.</summary>
+/// <summary>
+/// One of a slider's <see cref="SettingDescription.Modes"/>: its name and the value it writes.
+/// </summary>
 public sealed record SettingMode
 {
     public string Name { get; set; } = "";
     public float Value { get; set; }
 
-    /// <summary>Whether <paramref name="value"/> is this mode's, within half a slider <paramref name="step"/>.</summary>
+    /// <summary>
+    /// Whether <paramref name="value"/> is this mode's, within half a slider <paramref name="step"/>.
+    /// </summary>
     public bool Matches(float value, float step) => MathF.Abs(value - Value) <= step / 2;
 }
 
-/// <summary>A setting (<see cref="Key"/>) at one of its whole values: a choice's index from its slider's left end, a switch's 1 or 0.</summary>
+/// <summary>
+/// A setting (<see cref="Key"/>) at one of its whole values: a choice's index from its slider's left end, a switch's 1 or 0.
+/// </summary>
 public sealed record SettingCondition
 {
     public string Key { get; set; } = "";

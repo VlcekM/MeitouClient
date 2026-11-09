@@ -18,7 +18,9 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
 
     public bool Configured => config.GithubAppId is not null && config.GithubAppKey is not null || config.GithubToken is not null;
 
-    /// <summary>A token that may open issues on the repo, or null when none is set up or GitHub refused.</summary>
+    /// <summary>
+    /// A token that may open issues on the repo, or null when none is set up or GitHub refused.
+    /// </summary>
     public async Task<string?> Token()
     {
         if (config.GithubAppId is not { } appId || config.GithubAppKey is not { } key) return config.GithubToken;
@@ -27,7 +29,10 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
         {
             if (_token is not null && DateTimeOffset.UtcNow < _expires.AddMinutes(-5)) return _token;
             string jwt;
-            try { jwt = Jwt(appId, key); }
+            try
+            {
+                jwt = Jwt(appId, key);
+            }
             catch (Exception e) when (e is CryptographicException or ArgumentException)
             {
                 log.LogWarning("GITHUB_APP_PRIVATE_KEY is not a usable PEM key: {Error}", e.Message);
@@ -41,7 +46,10 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
             _expires = DateTimeOffset.Parse((string)at!, System.Globalization.CultureInfo.InvariantCulture);
             return _token;
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     async Task<JsonNode?> Send(HttpMethod method, string url, string jwt)
@@ -57,12 +65,15 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
         return null;
     }
 
-    /// <summary>The app's RS256 JWT: issued a minute ago (clock drift), valid 9 minutes (GitHub allows at most 10).</summary>
+    /// <summary>
+    /// The app's RS256 JWT: issued a minute ago (clock drift), valid 9 minutes (GitHub allows at most 10).
+    /// </summary>
     static string Jwt(string appId, string pem)
     {
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var payload = new JsonObject { ["iat"] = now - 60, ["exp"] = now + 540, ["iss"] = appId };
-        string signing = Base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}"u8.ToArray()) + "." + Base64Url(Encoding.UTF8.GetBytes(payload.ToJsonString()));
+        string signing = Base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}"u8.ToArray()) + "."
+                + Base64Url(Encoding.UTF8.GetBytes(payload.ToJsonString()));
         using var rsa = RSA.Create();
         rsa.ImportFromPem(pem);
         byte[] signature = rsa.SignData(Encoding.ASCII.GetBytes(signing), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);

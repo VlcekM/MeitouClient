@@ -17,8 +17,9 @@ public sealed class NamePool
     }
 
     /// <summary>
-    /// The pools of <paramref name="installRoot"/>: each file as the game opens it from resource group <c>General</c> (<b>Verified</b> <c>FUN_140641d80</c>:
-    /// an enabled mod's copy, else the active language's in <c>locale/&lt;code&gt;</c>, docs/formats/localisation.md, else <c>data/</c>'s).
+    /// The pools of <paramref name="installRoot"/>: each file as the game opens it from resource group <c>General</c> (<b>Verified</b>
+    /// <c>FUN_140641d80</c>: an enabled mod's copy, else the active language's in <c>locale/&lt;code&gt;</c>, docs/formats/localisation.md, else
+    /// <c>data/</c>'s).
     /// </summary>
     public static NamePool Load(string installRoot)
     {
@@ -37,7 +38,9 @@ public sealed class NamePool
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
     }
 
-    /// <summary>A name from the sex's list picked by <paramref name="roll"/> (uniform over the list), or null when the list is empty.</summary>
+    /// <summary>
+    /// A name from the sex's list picked by <paramref name="roll"/> (uniform over the list), or null when the list is empty.
+    /// </summary>
     public string? Pick(bool female, ulong roll)
     {
         var list = female ? Female : Male;

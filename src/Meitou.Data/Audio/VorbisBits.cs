@@ -1,6 +1,8 @@
 namespace Meitou.Data.Audio;
 
-/// <summary>Reads Vorbis-style bit fields: least significant bit first within each byte, fields least significant bit first.</summary>
+/// <summary>
+/// Reads Vorbis-style bit fields: least significant bit first within each byte, fields least significant bit first.
+/// </summary>
 ref struct VorbisBitReader(ReadOnlySpan<byte> data)
 {
     readonly ReadOnlySpan<byte> _data = data;
@@ -9,10 +11,13 @@ ref struct VorbisBitReader(ReadOnlySpan<byte> data)
     public readonly int Length => _data.Length * 8;
     public readonly int Remaining => Length - Position;
 
-    /// <summary>Reads up to 32 bits.</summary>
+    /// <summary>
+    /// Reads up to 32 bits.
+    /// </summary>
     public uint Read(int bits)
     {
-        if (bits > Remaining) throw new InvalidDataException($"Read of {bits} bits at bit {Position} runs past the packet ({Length} bits)");
+        if (bits > Remaining)
+            throw new InvalidDataException($"Read of {bits} bits at bit {Position} runs past the packet ({Length} bits)");
         ulong value = 0;
         int got = 0;
         while (got < bits)
@@ -29,13 +34,17 @@ ref struct VorbisBitReader(ReadOnlySpan<byte> data)
     public bool Flag() => Read(1) != 0;
 }
 
-/// <summary>Writes Vorbis-style bit fields (the order of <see cref="VorbisBitReader"/>).</summary>
+/// <summary>
+/// Writes Vorbis-style bit fields (the order of <see cref="VorbisBitReader"/>).
+/// </summary>
 sealed class VorbisBitWriter
 {
     byte[] _bytes = new byte[256];
     int _bit;
 
-    /// <summary>Writes the low <paramref name="bits"/> (up to 32) of <paramref name="value"/>.</summary>
+    /// <summary>
+    /// Writes the low <paramref name="bits"/> (up to 32) of <paramref name="value"/>.
+    /// </summary>
     public void Write(uint value, int bits)
     {
         if (bits == 0) return;
@@ -50,7 +59,9 @@ sealed class VorbisBitWriter
 
     public void Write(bool flag) => Write(flag ? 1u : 0u, 1);
 
-    /// <summary>Copies <paramref name="bits"/> bits from the reader.</summary>
+    /// <summary>
+    /// Copies <paramref name="bits"/> bits from the reader.
+    /// </summary>
     public void Copy(ref VorbisBitReader reader, int bits)
     {
         while (bits > 0)
@@ -68,7 +79,9 @@ sealed class VorbisBitWriter
 
     public byte[] ToArray() => _bytes[..((_bit + 7) >> 3)];
 
-    /// <summary>The number of bits needed for <paramref name="v"/> (Vorbis <c>ilog</c>).</summary>
+    /// <summary>
+    /// The number of bits needed for <paramref name="v"/> (Vorbis <c>ilog</c>).
+    /// </summary>
     public static int Log(uint v)
     {
         int r = 0;

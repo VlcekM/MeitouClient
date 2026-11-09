@@ -9,13 +9,20 @@ namespace Meitou.Launcher;
 /// </summary>
 static class MacSupport
 {
+    /// <summary>
+    /// The command a user with Homebrew needs for Vulkan; shown, never run by the launcher.
+    /// </summary>
+    public const string HomebrewVulkanCommand = "brew install molten-vk vulkan-loader";
+
     public static bool MetalAvailable =>
         OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
 
     [DllImport("libc", SetLastError = true)]
     static extern int sysctlbyname(string name, out ulong oldp, ref ulong oldlenp, IntPtr newp, ulong newlen);
 
-    /// <summary>The Mac's physical memory in bytes, or 0 when it cannot be read.</summary>
+    /// <summary>
+    /// The Mac's physical memory in bytes, or 0 when it cannot be read.
+    /// </summary>
     public static ulong PhysicalMemoryBytes
     {
         get
@@ -29,10 +36,14 @@ static class MacSupport
         }
     }
 
-    /// <summary>The 8 GB Metal budget preset is offered on 16 GB machines and larger; an unknown size stays conservative.</summary>
+    /// <summary>
+    /// The 8 GB Metal budget preset is offered on 16 GB machines and larger; an unknown size stays conservative.
+    /// </summary>
     public static bool CanUseHighBudget => PhysicalMemoryBytes is 0 or >= 16UL << 30;
 
-    /// <summary>The folder holding <c>libvulkan.1.dylib</c>, or null when Vulkan is not installed.</summary>
+    /// <summary>
+    /// The folder holding <c>libvulkan.1.dylib</c>, or null when Vulkan is not installed.
+    /// </summary>
     public static string? VulkanLoaderDirectory()
     {
         if (!OperatingSystem.IsMacOS()) return null;
@@ -42,7 +53,9 @@ static class MacSupport
 
     public static bool VulkanAvailable => VulkanLoaderDirectory() is not null;
 
-    /// <summary>The renderer to pass to the game. Auto prefers Vulkan when its loader exists and falls back to Metal.</summary>
+    /// <summary>
+    /// The renderer to pass to the game. Auto prefers Vulkan when its loader exists and falls back to Metal.
+    /// </summary>
     public static string Resolve(string requested) => requested switch
     {
         "metal" when MetalAvailable => "metal",
@@ -52,7 +65,9 @@ static class MacSupport
         _ => "vulkan",
     };
 
-    /// <summary>Points the game at a narrow folder holding the loader and MoltenVK, and sets the argument-buffer switch.</summary>
+    /// <summary>
+    /// Points the game at a narrow folder holding the loader and MoltenVK, and sets the argument-buffer switch.
+    /// </summary>
     public static bool AddVulkanEnvironment(IDictionary<string, string?> environment)
     {
         if (VulkanLoaderDirectory() is not { } source) return false;
@@ -63,9 +78,6 @@ static class MacSupport
             environment["MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS"] = "1";
         return true;
     }
-
-    /// <summary>The command a user with Homebrew needs for Vulkan; shown, never run by the launcher.</summary>
-    public const string HomebrewVulkanCommand = "brew install molten-vk vulkan-loader";
 
     static string[] Candidates(string? existing) =>
         (existing ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)
@@ -82,7 +94,8 @@ static class MacSupport
             if (Path.GetFullPath(source) == directory) return directory;
             Directory.CreateDirectory(directory);
             Link(Path.Combine(directory, "libvulkan.1.dylib"), Path.Combine(source, "libvulkan.1.dylib"));
-            if (molten is not null) Link(Path.Combine(directory, "libMoltenVK.dylib"), Path.Combine(molten, "libMoltenVK.dylib"));
+            if (molten is not null)
+                Link(Path.Combine(directory, "libMoltenVK.dylib"), Path.Combine(molten, "libMoltenVK.dylib"));
             return directory;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
@@ -91,7 +104,10 @@ static class MacSupport
     static void Link(string path, string target)
     {
         if (Path.GetFullPath(path) == Path.GetFullPath(target)) return;
-        try { File.Delete(path); }
+        try
+        {
+            File.Delete(path);
+        }
         catch (FileNotFoundException) { }
         File.CreateSymbolicLink(path, target);
     }

@@ -14,18 +14,28 @@ public sealed class AppearanceFile
 
     public bool Female => Record.Bools.TryGetValue("sex female", out var f) && f;
 
-    /// <summary>String id of the RACE (reference list <c>race</c>), or null.</summary>
+    /// <summary>
+    /// String id of the RACE (reference list <c>race</c>), or null.
+    /// </summary>
     public string? RaceId => Record.References.TryGetValue("race", out var refs) && refs.Count > 0 ? refs[0].TargetStringId : null;
 
-    /// <summary>String id of the HEAD record, or null when empty.</summary>
+    /// <summary>
+    /// String id of the HEAD record, or null when empty.
+    /// </summary>
     public string? HeadId => NonEmpty("head");
-    /// <summary>String id of the hair ATTACHMENT, or null when empty.</summary>
+    /// <summary>
+    /// String id of the hair ATTACHMENT, or null when empty.
+    /// </summary>
     public string? HairId => NonEmpty("hair style");
-    /// <summary>String id of the beard ATTACHMENT, or null when empty.</summary>
+    /// <summary>
+    /// String id of the beard ATTACHMENT, or null when empty.
+    /// </summary>
     public string? BeardId => NonEmpty("beard");
     public string? IdleStance => NonEmpty("idle stance");
 
-    /// <summary>The <c>Skin Tone</c> colour (RGB 0–1), or null if the file has none.</summary>
+    /// <summary>
+    /// The <c>Skin Tone</c> colour (RGB 0–1), or null if the file has none.
+    /// </summary>
     public Vector3? SkinTone => Record.Vector3S.TryGetValue("Skin Tone", out var v) ? v : null;
 
     public IReadOnlyDictionary<string, float> Floats => Record.Floats;

@@ -11,10 +11,14 @@ public sealed class FcsFile
     public string Author { get; set; } = "";
     public string Description { get; set; } = "";
 
-    /// <summary>Files that must load before this one, e.g. <c>gamedata.base</c>.</summary>
+    /// <summary>
+    /// Files that must load before this one, e.g. <c>gamedata.base</c>.
+    /// </summary>
     public List<string> Dependencies { get; } = [];
 
-    /// <summary>Files this one refers to without depending on them.</summary>
+    /// <summary>
+    /// Files this one refers to without depending on them.
+    /// </summary>
     public List<string> References { get; } = [];
 
     /// <summary>
@@ -28,7 +32,9 @@ public sealed class FcsFile
     /// </summary>
     public List<FcsDeleteRequest>? DeleteRequests { get; set; }
 
-    /// <summary>Header bytes after the known fields; empty in every known file. Kept for byte-exact round-trips.</summary>
+    /// <summary>
+    /// Header bytes after the known fields; empty in every known file. Kept for byte-exact round-trips.
+    /// </summary>
     public byte[] HeaderTail { get; set; } = [];
 
     /// <summary>
@@ -41,13 +47,19 @@ public sealed class FcsFile
 
 public enum FcsFileType
 {
-    /// <summary>No header at all: the next id and the records follow the type. Used by world state files (<c>.zone</c>, <c>.level</c>).</summary>
+    /// <summary>
+    /// No header at all: the next id and the records follow the type. Used by world state files (<c>.zone</c>, <c>.level</c>).
+    /// </summary>
     V15 = 15,
 
-    /// <summary>Header without a length prefix or editor bookkeeping (<c>gamedata.base</c>, <c>Newwworld.mod</c>).</summary>
+    /// <summary>
+    /// Header without a length prefix or editor bookkeeping (<c>gamedata.base</c>, <c>Newwworld.mod</c>).
+    /// </summary>
     V16 = 16,
 
-    /// <summary>Current format; the header is prefixed with its length and carries editor bookkeeping.</summary>
+    /// <summary>
+    /// Current format; the header is prefixed with its length and carries editor bookkeeping.
+    /// </summary>
     V17 = 17,
 }
 

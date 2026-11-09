@@ -13,33 +13,42 @@ public sealed class WwiseVorbis
     public int Channels { get; private init; }
     public int SampleRate { get; private init; }
     public int AverageBytesPerSecond { get; private init; }
-    /// <summary>The number of sample frames the sound plays.</summary>
+    /// <summary>
+    /// The number of sample frames the sound plays.
+    /// </summary>
     public int SampleCount { get; private init; }
     public int SetupOffset { get; private init; }
     public int FirstAudioOffset { get; private init; }
     public int Blocksize0Exponent { get; private init; }
     public int Blocksize1Exponent { get; private init; }
     public uint Uid { get; private init; }
-    /// <summary>The <c>data</c> chunk: the setup packet, then the audio packets, each after a u16 size.</summary>
+    /// <summary>
+    /// The <c>data</c> chunk: the setup packet, then the audio packets, each after a u16 size.
+    /// </summary>
     public ReadOnlyMemory<byte> Data { get; private init; }
 
-    /// <summary>Reads the RIFF header of a WEM with the 66-byte <c>fmt </c> chunk (Wwise 2016 layout, the only one in Kenshi).</summary>
+    /// <summary>
+    /// Reads the RIFF header of a WEM with the 66-byte <c>fmt </c> chunk (Wwise 2016 layout, the only one in Kenshi).
+    /// </summary>
     public static WwiseVorbis Read(ReadOnlyMemory<byte> wem)
     {
         var s = wem.Span;
-        if (s.Length < 12 || !s.StartsWith("RIFF"u8) || !s[8..12].SequenceEqual("WAVE"u8)) throw new InvalidDataException("Not a RIFF/WAVE file");
+        if (s.Length < 12 || !s.StartsWith("RIFF"u8) || !s[8..12].SequenceEqual("WAVE"u8))
+            throw new InvalidDataException("Not a RIFF/WAVE file");
         int fmt = -1, fmtLength = 0, data = -1, dataLength = 0;
         for (int p = 12; p + 8 <= s.Length;)
         {
             int len = BinaryPrimitives.ReadInt32LittleEndian(s[(p + 4)..]);
-            if (len < 0 || p + 8 + (long)len > s.Length) throw new InvalidDataException("RIFF chunk runs past the file");
+            if (len < 0 || p + 8 + (long)len > s.Length)
+                throw new InvalidDataException("RIFF chunk runs past the file");
             var tag = s.Slice(p, 4);
             if (tag.SequenceEqual("fmt "u8)) (fmt, fmtLength) = (p + 8, len);
             else if (tag.SequenceEqual("data"u8)) (data, dataLength) = (p + 8, len);
             p += 8 + len + (len & 1);
         }
         if (fmt < 0 || data < 0) throw new InvalidDataException("WEM without fmt or data");
-        if (BinaryPrimitives.ReadUInt16LittleEndian(s[fmt..]) != 0xFFFF) throw new InvalidDataException("Not Wwise Vorbis");
+        if (BinaryPrimitives.ReadUInt16LittleEndian(s[fmt..]) != 0xFFFF)
+            throw new InvalidDataException("Not Wwise Vorbis");
         if (fmtLength != 66) throw new InvalidDataException($"fmt chunk of {fmtLength} bytes not decoded");
         int vorb = fmt + 0x18;
         var w = new WwiseVorbis
@@ -55,12 +64,15 @@ public sealed class WwiseVorbis
             Blocksize1Exponent = s[vorb + 0x29],
             Data = wem.Slice(data, dataLength),
         };
-        if (w.Channels is < 1 or > 8 || w.Blocksize0Exponent is < 6 or > 13 || w.Blocksize1Exponent < w.Blocksize0Exponent || w.Blocksize1Exponent > 13)
+        if (w.Channels is < 1 or > 8 || w.Blocksize0Exponent is < 6 or > 13 || w.Blocksize1Exponent < w.Blocksize0Exponent
+                || w.Blocksize1Exponent > 13)
             throw new InvalidDataException("Implausible Wwise Vorbis header");
         return w;
     }
 
-    /// <summary>The whole sound as an Ogg Vorbis stream.</summary>
+    /// <summary>
+    /// The whole sound as an Ogg Vorbis stream.
+    /// </summary>
     public byte[] ToOgg(WwiseCodebookLibrary library)
     {
         var ogg = new OggWriter((int)Uid);
@@ -91,13 +103,16 @@ public sealed class WwiseVorbis
             bool last = i == packets.Count - 1;
             bool previousLong = i > 0 && modeLong[modes[i - 1]];
             bool nextLong = !last && modeLong[modes[i + 1]];
-            ogg.Packet(AudioPacket(packets[i].Span, modeBits, isLong, previousLong, nextLong), last ? SampleCount : Math.Min(granule, SampleCount), last);
+            ogg.Packet(AudioPacket(packets[i].Span, modeBits, isLong, previousLong, nextLong), last ? SampleCount : Math.Min(granule, SampleCount),
+                    last);
         }
         ogg.Flush();
         return ogg.ToArray();
     }
 
-    /// <summary>The sound decoded to interleaved float samples (<see cref="SampleCount"/> × <see cref="Channels"/>).</summary>
+    /// <summary>
+    /// The sound decoded to interleaved float samples (<see cref="SampleCount"/> × <see cref="Channels"/>).
+    /// </summary>
     public float[] Decode(WwiseCodebookLibrary library)
     {
         using var stream = new MemoryStream(ToOgg(library));
@@ -153,7 +168,9 @@ public sealed class WwiseVorbis
         return w.ToArray();
     }
 
-    /// <summary>Rebuilds the setup header; <paramref name="modeLong"/> gets each mode's block flag.</summary>
+    /// <summary>
+    /// Rebuilds the setup header; <paramref name="modeLong"/> gets each mode's block flag.
+    /// </summary>
     byte[] SetupHeader(ReadOnlySpan<byte> packet, WwiseCodebookLibrary library, out bool[] modeLong, out int modeBits)
     {
         var r = new VorbisBitReader(packet);
@@ -284,7 +301,9 @@ public sealed class WwiseVorbis
         return w.ToArray();
     }
 
-    /// <summary>Expands a packed codebook into the standard Vorbis codebook layout.</summary>
+    /// <summary>
+    /// Expands a packed codebook into the standard Vorbis codebook layout.
+    /// </summary>
     static void Codebook(ref VorbisBitReader r, VorbisBitWriter w)
     {
         w.Write(0x564342, 24);
@@ -337,7 +356,9 @@ public sealed class WwiseVorbis
         }
     }
 
-    /// <summary>The bits a packed codebook uses (used to find and check the library).</summary>
+    /// <summary>
+    /// The bits a packed codebook uses (used to find and check the library).
+    /// </summary>
     internal static int PackedCodebookBits(ReadOnlySpan<byte> packed)
     {
         var r = new VorbisBitReader(packed);
@@ -345,7 +366,9 @@ public sealed class WwiseVorbis
         return r.Position;
     }
 
-    /// <summary>The largest integer v with v^dimensions &lt;= entries (Vorbis <c>lookup1_values</c>).</summary>
+    /// <summary>
+    /// The largest integer v with v^dimensions &lt;= entries (Vorbis <c>lookup1_values</c>).
+    /// </summary>
     static uint Lookup1Values(uint entries, uint dimensions)
     {
         if (dimensions == 0) throw new InvalidDataException("Codebook with zero dimensions");
@@ -366,7 +389,9 @@ public sealed class WwiseVorbis
         }
     }
 
-    /// <summary>Puts back the packet type bit (0) and, for a long block, the previous and next window flags.</summary>
+    /// <summary>
+    /// Puts back the packet type bit (0) and, for a long block, the previous and next window flags.
+    /// </summary>
     static byte[] AudioPacket(ReadOnlySpan<byte> packet, int modeBits, bool isLong, bool previousLong, bool nextLong)
     {
         var r = new VorbisBitReader(packet);
@@ -382,7 +407,9 @@ public sealed class WwiseVorbis
         return w.ToArray();
     }
 
-    /// <summary>Builds Ogg pages: packets are laced into pages of up to 255 segments; <see cref="Flush"/> ends a page.</summary>
+    /// <summary>
+    /// Builds Ogg pages: packets are laced into pages of up to 255 segments; <see cref="Flush"/> ends a page.
+    /// </summary>
     sealed class OggWriter(int serial)
     {
         readonly MemoryStream _output = new();

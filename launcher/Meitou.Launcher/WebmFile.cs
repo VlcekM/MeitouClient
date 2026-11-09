@@ -2,7 +2,9 @@ using System.Buffers.Binary;
 
 namespace Meitou.Launcher;
 
-/// <summary>One frame of a track: its time from the start of the file and its bytes.</summary>
+/// <summary>
+/// One frame of a track: its time from the start of the file and its bytes.
+/// </summary>
 public readonly record struct WebmFrame(TimeSpan Time, bool Key, ReadOnlyMemory<byte> Data);
 
 /// <summary>
@@ -17,15 +19,21 @@ public sealed class WebmFile
         ClusterTimecode = 0xE7, SimpleBlock = 0xA3, BlockGroup = 0xA0, Block = 0xA1;
     const long UnknownSize = -1;
 
-    /// <summary><c>V_VP8</c> or <c>V_VP9</c>; null without a video track.</summary>
+    /// <summary>
+    /// <c>V_VP8</c> or <c>V_VP9</c>; null without a video track.
+    /// </summary>
     public string? VideoCodec { get; private set; }
     public int Width { get; private set; }
     public int Height { get; private set; }
-    /// <summary><c>A_VORBIS</c>, <c>A_OPUS</c>, ...; null without an audio track.</summary>
+    /// <summary>
+    /// <c>A_VORBIS</c>, <c>A_OPUS</c>, ...; null without an audio track.
+    /// </summary>
     public string? AudioCodec { get; private set; }
     public int SampleRate { get; private set; }
     public int AudioChannels { get; private set; }
-    /// <summary>The Vorbis identification, comment and setup headers (the track's CodecPrivate, Xiph-laced).</summary>
+    /// <summary>
+    /// The Vorbis identification, comment and setup headers (the track's CodecPrivate, Xiph-laced).
+    /// </summary>
     public List<ReadOnlyMemory<byte>> AudioHeaders { get; } = [];
     public List<WebmFrame> VideoFrames { get; } = [];
     public List<WebmFrame> AudioFrames { get; } = [];
@@ -67,8 +75,13 @@ public sealed class WebmFile
         while (pos < end)
         {
             var (id, size, start) = Header(ref pos);
+
             // A live-written Cluster has no size: its children follow until the next top-level element.
-            if (id == Cluster && size == UnknownSize) { pos = start; continue; }
+            if (id == Cluster && size == UnknownSize)
+            {
+                pos = start;
+                continue;
+            }
             int childEnd = End(start, size, end);
             switch (id)
             {
@@ -152,11 +165,14 @@ public sealed class WebmFile
         else if (type == 2 && AudioCodec is null)
         {
             (_audioTrack, AudioCodec, SampleRate, AudioChannels) = (number, codec, (int)rate, channels);
-            if (codec == "A_VORBIS" && codecPrivate.Length > 0) AudioHeaders.AddRange(Laced(codecPrivate, 1, codecPrivate.Span[0] + 1, xiph: true));
+            if (codec == "A_VORBIS" && codecPrivate.Length > 0)
+                AudioHeaders.AddRange(Laced(codecPrivate, 1, codecPrivate.Span[0] + 1, xiph: true));
         }
     }
 
-    /// <summary>A (Simple)Block: track number, timecode relative to the cluster, flags, then one frame or a lace of them.</summary>
+    /// <summary>
+    /// A (Simple)Block: track number, timecode relative to the cluster, flags, then one frame or a lace of them.
+    /// </summary>
     void ReadBlock(int pos, int end, long clusterTime, bool key = true)
     {
         var span = _data.Span;
@@ -175,13 +191,17 @@ public sealed class WebmFile
             return;
         }
         int count = span[pos] + 1;
+
         // Laced frames share the block's time (audio only; the player plays them back to back).
         foreach (var frame in Laced(_data[(pos + 1)..end], 0, count, xiph: lacing == 1, fixedSize: lacing == 2, ebml: lacing == 3))
             target.Add(new WebmFrame(time, key, frame));
     }
 
-    /// <summary>Splits <paramref name="count"/> frames laced from <paramref name="offset"/>: Xiph sizes, EBML sizes or equal parts.</summary>
-    IEnumerable<ReadOnlyMemory<byte>> Laced(ReadOnlyMemory<byte> lace, int offset, int count, bool xiph = false, bool fixedSize = false, bool ebml = false)
+    /// <summary>
+    /// Splits <paramref name="count"/> frames laced from <paramref name="offset"/>: Xiph sizes, EBML sizes or equal parts.
+    /// </summary>
+    IEnumerable<ReadOnlyMemory<byte>> Laced(ReadOnlyMemory<byte> lace, int offset, int count, bool xiph = false, bool fixedSize = false,
+            bool ebml = false)
     {
         var span = lace.Span;
         var sizes = new long[count];
@@ -199,7 +219,12 @@ public sealed class WebmFile
                 {
                     long size = 0;
                     byte b;
-                    do { b = span[pos++]; size += b; } while (b == 255);
+                    do
+                    {
+                        b = span[pos++];
+                        size += b;
+                    }
+                    while (b == 255);
                     sizes[i] = size;
                 }
                 else if (ebml)
@@ -239,7 +264,9 @@ public sealed class WebmFile
 
     ulong VarInt(ref int pos, bool stripMarker) => VarInt(ref pos, stripMarker, out _);
 
-    /// <summary>An EBML variable-length number: the leading zero bits of its first byte give its length.</summary>
+    /// <summary>
+    /// An EBML variable-length number: the leading zero bits of its first byte give its length.
+    /// </summary>
     ulong VarInt(ref int pos, bool stripMarker, out int length)
     {
         var span = _data.Span;

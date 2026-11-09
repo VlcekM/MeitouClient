@@ -15,7 +15,9 @@ public sealed partial class SetupOverlay : UserControl
     readonly LauncherConfig _config = new();
     GameInstall? _install;
 
-    /// <summary>Raised once Continue saved the folders, with the Kenshi install chosen (null when none was).</summary>
+    /// <summary>
+    /// Raised once Continue saved the folders, with the Kenshi install chosen (null when none was).
+    /// </summary>
     public event Action<GameInstall?>? Confirmed;
 
     public SetupOverlay() => InitializeComponent();
@@ -81,6 +83,7 @@ public sealed partial class SetupOverlay : UserControl
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
             _ => vulkan ? "Vulkan (MoltenVK loader found)." : "Vulkan loader not found; choose Auto/Metal, or install it later in Settings.",
         };
+
         // Inlines, not Text: a translation pass would put back the first hint it saw.
         RendererHint.Inlines = [new Run(LauncherText.Translate(hint, effective))];
     }

@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace Meitou.Reports;
 
-/// <summary>A roadmap row as the site's <c>/roadmap.json</c> lists it.</summary>
+/// <summary>
+/// A roadmap row as the site's <c>/roadmap.json</c> lists it.
+/// </summary>
 sealed record RoadmapRow(string Id, string System, string Category, string Status);
 
 sealed record RoadmapFile(List<RoadmapRow> Rows);
@@ -22,7 +24,9 @@ sealed record GithubRelease(
 /// </summary>
 sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] Builds, DateTimeOffset[] Published, Latest Latest);
 
-/// <summary>The version (no <c>v</c>) of the newest full game release and of the newest game release of any kind, nightlies included; null for none.</summary>
+/// <summary>
+/// The version (no <c>v</c>) of the newest full game release and of the newest game release of any kind, nightlies included; null for none.
+/// </summary>
 sealed record Latest(string? Release, string? Any);
 
 /// <summary>
@@ -56,7 +60,10 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
             log.LogWarning("Roadmap rows from {Url} not read: {Error}", config.RoadmapUrl, e.Message);
             _rowsAt = DateTimeOffset.UtcNow - RowsFor + TimeSpan.FromMinutes(1);   // retry in a minute, keep the old list
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
         return _rows;
     }
 
@@ -111,7 +118,10 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
             log.LogWarning("Releases not read: {Error}", e.Message);
             _releasesAt = DateTimeOffset.UtcNow - ReleasesFor + TimeSpan.FromMinutes(5);
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
         return _window;
     }
 
@@ -126,9 +136,16 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
         {
             if (!rows.TryGetValue(s.Row, out var row)) continue;
             if (row.Status == "untested" && (s.Works >= 3 || s.TrustedWorks))
-                list.Add(new(row.Id, row.System, row.Status, "works", s.TrustedWorks ? "a trusted tester saw it work" : $"{s.Works} people saw it work"));
+            {
+                string worksText = s.TrustedWorks ? "a trusted tester saw it work" : $"{s.Works} people saw it work";
+                list.Add(new(row.Id, row.System, row.Status, "works", worksText));
+            }
+
             if (s.Broken > 0)
-                list.Add(new(row.Id, row.System, row.Status, "look", $"{s.Broken} broken report{(s.Broken == 1 ? "" : "s")}, newest on {s.LastBuild}"));
+            {
+                string lookText = $"{s.Broken} broken report{(s.Broken == 1 ? "" : "s")}, newest on {s.LastBuild}";
+                list.Add(new(row.Id, row.System, row.Status, "look", lookText));
+            }
         }
         return list;
     }

@@ -12,6 +12,7 @@ namespace Meitou.Content;
 public static class GameFiles
 {
     static readonly bool Fold = !OperatingSystem.IsWindows();
+
     // Folder -> its entries by name ignoring case, and the folder's write time when it was listed: a name that is not in the listing makes it
     // read again if the folder has changed since (the install is normally read-only while the game runs, so this is rare).
     sealed record Listing(DateTime Stamp, Dictionary<string, string> Entries);
@@ -24,15 +25,20 @@ public static class GameFiles
     public static string Resolve(string path)
     {
         if (!Fold || path.Length == 0) return path;
+
         // Walk even when the path exists: on macOS and Windows the file system ignores case, and the caller wants the spelling on disk
         // (the upstream test pins it; a record may name a file in another case than the install).
         return Walk(path) ?? path;
     }
 
-    /// <summary>Whether a file exists at the path, ignoring the case of its parts.</summary>
+    /// <summary>
+    /// Whether a file exists at the path, ignoring the case of its parts.
+    /// </summary>
     public static bool Exists(string path) => File.Exists(Resolve(path));
 
-    /// <summary>The folder at the path (ignoring the case of its parts), or null when there is none.</summary>
+    /// <summary>
+    /// The folder at the path (ignoring the case of its parts), or null when there is none.
+    /// </summary>
     public static string? ExistingDirectory(string path)
     {
         var resolved = Resolve(path);

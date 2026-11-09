@@ -15,10 +15,14 @@ sealed class GameSettings
 
     readonly JsonObject _root;
 
-    /// <summary>Why the file could not be read; while set, <see cref="Save"/> writes nothing, so the game's file is never replaced by a guess.</summary>
+    /// <summary>
+    /// Why the file could not be read; while set, <see cref="Save"/> writes nothing, so the game's file is never replaced by a guess.
+    /// </summary>
     public string? Problem { get; }
 
-    /// <summary>The file's layout (the game's <c>UserConfig.CurrentVersion</c>; no key: 1); null when there is no file yet.</summary>
+    /// <summary>
+    /// The file's layout (the game's <c>UserConfig.CurrentVersion</c>; no key: 1); null when there is no file yet.
+    /// </summary>
     public int? Version => _exists ? _root["version"] is JsonValue v && v.TryGetValue(out int n) ? n : 1 : null;
 
     readonly bool _exists;
@@ -41,29 +45,40 @@ sealed class GameSettings
     public bool? GetBool(string key) => _root[key] is JsonValue v && v.TryGetValue(out bool b) ? b : null;
     public float? GetNumber(string key) => Number(_root[key]);
     public string? GetString(string key) => _root[key] is JsonValue v && v.TryGetValue(out string? text) ? text : null;
-    /// <summary>A list of strings (non-string entries skipped); empty when the key is missing.</summary>
+    /// <summary>
+    /// A list of strings (non-string entries skipped); empty when the key is missing.
+    /// </summary>
     public List<string> GetStrings(string key) =>
         _root[key] is JsonArray list ? [.. list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? s) ? s : null).OfType<string>()] : [];
     public void Set(string key, IEnumerable<string> values) => _root[key] = new JsonArray([.. values.Select(v => (JsonNode)JsonValue.Create(v))]);
     public void Set(string key, bool value) => _root[key] = value;
     public void Set(string key, string value) => _root[key] = value;
-    /// <summary>A whole value is written as an integer: the game reads its integer settings (the frame limit) strictly.</summary>
-    public void Set(string key, float value) => _root[key] = value == MathF.Round(value) && Math.Abs(value) < int.MaxValue ? JsonValue.Create((int)value) : JsonValue.Create(value);
+    /// <summary>
+    /// A whole value is written as an integer: the game reads its integer settings (the frame limit) strictly.
+    /// </summary>
+    public void Set(string key, float value) => _root[key] = value == MathF.Round(value)
+            && Math.Abs(value) < int.MaxValue ? JsonValue.Create((int)value) : JsonValue.Create(value);
 
-    /// <summary>Whether any Tab panel slider or switch is saved.</summary>
+    /// <summary>
+    /// Whether any Tab panel slider or switch is saved.
+    /// </summary>
     public bool HasGraphics => _root["graphics"] is JsonObject { Count: > 0 };
 
-    /// <summary>A Tab panel slider's saved value (a switch's: 1 on, 0 off); null when it was never saved (the game then uses the mode's default).</summary>
+    /// <summary>
+    /// A Tab panel slider's saved value (a switch's: 1 on, 0 off); null when it was never saved (the game then uses the mode's default).
+    /// </summary>
     public float? GetGraphics(string label) => _root["graphics"] is JsonObject g ? Number(g[label]) : null;
 
     /// <summary>
-    /// A number however it is held: read from the file (any number), or written this session as a float or, whole, an int (<see cref="Set(string, float)"/>);
-    /// a value made from one type does not read back as another.
+    /// A number however it is held: read from the file (any number), or written this session as a float or, whole, an int
+    /// (<see cref="Set(string, float)"/>); a value made from one type does not read back as another.
     /// </summary>
     static float? Number(JsonNode? node) => node is not JsonValue v ? null
         : v.TryGetValue(out double d) ? (float)d : v.TryGetValue(out float f) ? f : v.TryGetValue(out int i) ? i : null;
 
-    /// <summary>Saves a slider's value, or removes it (null) so the game falls back to its default.</summary>
+    /// <summary>
+    /// Saves a slider's value, or removes it (null) so the game falls back to its default.
+    /// </summary>
     public void SetGraphics(string label, float? value)
     {
         if (_root["graphics"] is not JsonObject g)
@@ -75,10 +90,14 @@ sealed class GameSettings
         else g.Remove(label);
     }
 
-    /// <summary>Removes a top-level key, so the game takes its default.</summary>
+    /// <summary>
+    /// Removes a top-level key, so the game takes its default.
+    /// </summary>
     public void Remove(string key) => _root.Remove(key);
 
-    /// <summary>Removes every saved slider and switch, and the saved preset and look (<paramref name="keys"/>).</summary>
+    /// <summary>
+    /// Removes every saved slider and switch, and the saved preset and look (<paramref name="keys"/>).
+    /// </summary>
     public void ResetGraphics(params string?[] keys)
     {
         _root.Remove("graphics");
@@ -86,12 +105,15 @@ sealed class GameSettings
             if (key is not null) _root.Remove(key);
     }
 
-    /// <summary>Writes the file; a new one gets <paramref name="version"/>, the layout the keys were written in.</summary>
+    /// <summary>
+    /// Writes the file; a new one gets <paramref name="version"/>, the layout the keys were written in.
+    /// </summary>
     public bool Save(int version)
     {
         if (Problem is not null) return false;
         _root["version"] ??= version;
         Directory.CreateDirectory(LauncherConfig.DataDirectory);
+
         // The tree writes itself (no type resolver), so this works trimmed.
         using var file = File.Create(FilePath);
         using var writer = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });

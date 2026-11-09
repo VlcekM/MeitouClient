@@ -7,10 +7,14 @@ namespace Meitou.Content;
 /// </summary>
 public sealed record CodeModEntry(string Name, CodeModManifest? Manifest, bool Enabled, IReadOnlyList<string>? HeaderDependencies = null)
 {
-    /// <summary>Why the mod's <c>meitou.json</c> could not be read; null when it was, or when the mod has none.</summary>
+    /// <summary>
+    /// Why the mod's <c>meitou.json</c> could not be read; null when it was, or when the mod has none.
+    /// </summary>
     public string? ManifestError { get; init; }
 
-    /// <summary>The manifest id; for an unreadable manifest, the <c>id</c> it still names (so dependents can name it), else null.</summary>
+    /// <summary>
+    /// The manifest id; for an unreadable manifest, the <c>id</c> it still names (so dependents can name it), else null.
+    /// </summary>
     public string? Id
     {
         get => field ?? Manifest?.Id;
@@ -56,7 +60,9 @@ public static class CodeModDependencies
         return new ArrangeResult([.. list.Select(m => m.Name)], [.. cycle]);
     }
 
-    /// <summary>Every constraint between two enabled mods, by position, with its reason.</summary>
+    /// <summary>
+    /// Every constraint between two enabled mods, by position, with its reason.
+    /// </summary>
     static List<(int Before, int After, string Why)> Constraints(IReadOnlyList<CodeModEntry> list)
     {
         var constraints = new List<(int, int, string)>();
@@ -123,7 +129,9 @@ public static class CodeModDependencies
         }
     }
 
-    /// <summary>The position of the mod with manifest id <paramref name="id"/>: the first enabled one, else the first; -1 when none has it.</summary>
+    /// <summary>
+    /// The position of the mod with manifest id <paramref name="id"/>: the first enabled one, else the first; -1 when none has it.
+    /// </summary>
     public static int IndexOf(string id, IReadOnlyList<CodeModEntry> list)
     {
         int first = -1;
@@ -143,7 +151,10 @@ public static class CodeModDependencies
     public static CodeModEntry ReadEntry(ModInfo mod, bool enabled)
     {
         if (!mod.HasCode) return new CodeModEntry(mod.Name, null, enabled);
-        try { return new CodeModEntry(mod.Name, CodeModManifest.Read(mod.CodeManifestPath), enabled); }
+        try
+        {
+            return new CodeModEntry(mod.Name, CodeModManifest.Read(mod.CodeManifestPath), enabled);
+        }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             return new CodeModEntry(mod.Name, null, enabled) { ManifestError = e.Message, Id = CodeModManifest.TryReadId(mod.CodeManifestPath) };

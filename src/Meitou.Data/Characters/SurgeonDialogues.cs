@@ -4,24 +4,28 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.Characters;
 
 /// <summary>
-/// Plastic surgeons (docs/characters.md "Plastic surgeons"): the NPCs whose dialogue has a line with the effect <c>DA_CHARACTER_EDITOR</c> (11), and what that line
-/// costs (its <c>DA_TAKE_MONEY</c> (8) effect's val0). The surgeon itself is talked to (DA 11 through the dialogue, paid by its line); this check stands behind an unpaid <c>EditCharacter</c> (tests, scripts): only lines whose path from their
-/// DIALOGUE is gated by nothing but <c>DC_PLAYERMONEY</c> (2) or <c>DC_IS_RECRUITABLE</c> (77) count (the Thieves Guild's rank-gated and Grey's escaped-slave
-/// lines are left out).
+/// Plastic surgeons (docs/characters.md "Plastic surgeons"): the NPCs whose dialogue has a line with the effect <c>DA_CHARACTER_EDITOR</c> (11), and
+/// what that line costs (its <c>DA_TAKE_MONEY</c> (8) effect's val0). The surgeon itself is talked to (DA 11 through the dialogue, paid by its line);
+/// this check stands behind an unpaid <c>EditCharacter</c> (tests, scripts): only lines whose path from their DIALOGUE is gated by nothing but
+/// <c>DC_PLAYERMONEY</c> (2) or <c>DC_IS_RECRUITABLE</c> (77) count (the Thieves Guild's rank-gated and Grey's escaped-slave lines are left out).
 /// </summary>
 public sealed class SurgeonDialogues(GameDatabase db)
 {
-    /// <summary><c>DialogActionEnum</c> numbers (FCS editor): take money, character editor.</summary>
+    /// <summary>
+    /// <c>DialogActionEnum</c> numbers (FCS editor): take money, character editor.
+    /// </summary>
     public const int TakeMoney = 8, CharacterEditor = 11;
-    /// <summary><c>DialogConditionEnum</c> numbers the offer accepts: the player's money, the speaker recruitable.</summary>
+    /// <summary>
+    /// <c>DialogConditionEnum</c> numbers the offer accepts: the player's money, the speaker recruitable.
+    /// </summary>
     public const int PlayerMoney = 2, IsRecruitable = 77;
 
     readonly ConcurrentDictionary<string, int?> _byDialogue = new(StringComparer.Ordinal);
     readonly ConcurrentDictionary<(string, string), int?> _byCharacter = new();
 
     /// <summary>
-    /// The cheapest surgery a CHARACTER offers through its own <c>dialogue</c>, its <c>dialogue package</c>s' <c>dialogs</c>, or (as its squad's leader) the squad
-    /// template's <c>dialog leader</c> package; null when it offers none.
+    /// The cheapest surgery a CHARACTER offers through its own <c>dialogue</c>, its <c>dialogue package</c>s' <c>dialogs</c>, or (as its squad's
+    /// leader) the squad template's <c>dialog leader</c> package; null when it offers none.
     /// </summary>
     public int? CostOf(string characterId, string? squadTemplateId, bool leader) =>
         _byCharacter.GetOrAdd((characterId, leader ? squadTemplateId ?? "" : ""), key => Find(key.Item1, key.Item2));
@@ -35,14 +39,17 @@ public sealed class SurgeonDialogues(GameDatabase db)
             if (package is not null) dialogues.AddRange(package.GetReferences("dialogs").Select(r => r.TargetStringId));
         if (templateId.Length > 0 && db.Find(templateId) is { } template)
             foreach (var package in template.GetReferences("dialog leader").Select(r => db.Find(r.TargetStringId)))
-                if (package is not null) dialogues.AddRange(package.GetReferences("dialogs").Select(r => r.TargetStringId));
+                if (package is not null)
+                    dialogues.AddRange(package.GetReferences("dialogs").Select(r => r.TargetStringId));
         int? best = null;
         foreach (string d in dialogues.Distinct())
             if (_byDialogue.GetOrAdd(d, Cost) is { } cost && (best is null || cost < best)) best = cost;
         return best;
     }
 
-    /// <summary>The cheapest open editor line of a DIALOGUE (its own conditions included), or null.</summary>
+    /// <summary>
+    /// The cheapest open editor line of a DIALOGUE (its own conditions included), or null.
+    /// </summary>
     int? Cost(string dialogueId)
     {
         if (db.Find(dialogueId) is not { Type: FcsRecordType.Dialogue } dialogue || !Open(dialogue)) return null;
@@ -52,7 +59,8 @@ public sealed class SurgeonDialogues(GameDatabase db)
         {
             if (depth > 30 || !seen.Add(node.StringId)) return;
             if (node.Type == FcsRecordType.DialogueLine && !Open(node)) return;
-            var effects = node.GetReferences("effects").Select(r => (Action: db.Find(r.TargetStringId)?.GetInt("action name") ?? -1, r.Values.Value0)).ToList();
+            var effects = node.GetReferences("effects").Select(r => (Action: db.Find(r.TargetStringId)?.GetInt("action name") ?? -1,
+                    r.Values.Value0)).ToList();
             if (effects.Any(e => e.Action == CharacterEditor))
             {
                 int cost = effects.Where(e => e.Action == TakeMoney).Sum(e => e.Value0);
@@ -66,7 +74,9 @@ public sealed class SurgeonDialogues(GameDatabase db)
         return best;
     }
 
-    /// <summary>A line or dialogue the offer can pass: every condition is the player's money or the speaker being recruitable.</summary>
+    /// <summary>
+    /// A line or dialogue the offer can pass: every condition is the player's money or the speaker being recruitable.
+    /// </summary>
     bool Open(GameRecord node) =>
         node.GetReferences("conditions").All(r => db.Find(r.TargetStringId)?.GetInt("condition name") is PlayerMoney or IsRecruitable);
 }
