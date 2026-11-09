@@ -131,5 +131,5 @@ public sealed class PresetMod
 /// </summary>
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(LauncherConfig))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(Releases.Cache))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ReleaseCache.Cache))]
 sealed partial class LauncherJson : System.Text.Json.Serialization.JsonSerializerContext;

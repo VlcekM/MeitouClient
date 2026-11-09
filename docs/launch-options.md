@@ -214,7 +214,7 @@ Ids (`Enhancements.cs`): `ao`, `dither`, `haze`, `aa`, `shadows`, `range`, `impo
 
 ## Meitou.Tools (`meitou-tools`)
 
-Authority: `tools/Meitou.Tools/Program.cs` (dispatch and usage), with the option parsing in `NavmeshTool.cs`, `WeatherTool.cs`, `AudioTool.cs`. Every subcommand except `image-diff` and `world-map` reads the install (see the install order above).
+Authority: `tools/Meitou.Tools/Program.cs` (dispatch and usage), with the option parsing in `NavmeshOptions.cs`, `WeatherTool.cs`, `AudioTool.cs`. Every subcommand except `image-diff` and `world-map` reads the install (see the install order above).
 
 | Subcommand | Arguments | Effect |
 |---|---|---|

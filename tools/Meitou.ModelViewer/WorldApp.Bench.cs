@@ -7,6 +7,7 @@ using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
@@ -33,182 +34,12 @@ static partial class WorldApp
         int drop = ab && period > 1 ? Math.Min(Math.Min(period / 4, 16), period - 1) : 0;
 
         // The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
-        AbToggles.Clear();
-        AbToggles.RegisterEnhancements(LiveSwitches(o, () => gpu, () => camera, () => render));
-        if (gpu.Water is { } water) AbToggles.Register("water-lean", () => water.Lean, v => water.Lean = v,
-            "skip zero-contribution surf, ocean and distant detail work and refraction copies of an opaque view; B: always evaluate/copy");
-        AbToggles.Register("shadow-zone-box", () => ShadowZoneBox.Enabled, v => ShadowZoneBox.Enabled = v,
-            "each shadow cascade's foliage work list box-tested by zone against the cascade's planes (A) against every zone within 1.2 x the shadow range (B)");
-        AbToggles.Register("char-casters", () => ShadowPass.CharacterCasterCull, v => ShadowPass.CharacterCasterCull = v,
-            "character parts under a texel across cast nothing into the coarse shadow cascades (A) against every part in every cascade (B)");
-        AbToggles.Register("occlusion", () => post.OcclusionCull, v => post.OcclusionCull = v,
-                "foliage occlusion cull against the previous frame's depth pyramid");
-        if (gpu.FogVolumes is { } fog)
-        {
-            AbToggles.Register("fog-cull", () => fog.CullEnabled, v => fog.CullEnabled = v, "culling of what the fog hides");
-            AbToggles.Register("fog-volumes", () => fog.Enabled, v => fog.Enabled = v, "the placed fog volumes");
-            AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v,
-                    "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
-        }
-        if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v,
-                "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment; B: every pixel shaded");
-        AbToggles.Register("layer-merge", () => post.MergeLayers, v => post.MergeLayers = v,
-                "the light shafts' apply, the fog volumes and the SSAO onto the scene in one pass (A) against three passes (B)");
-        AbToggles.Register("sun-motion", () => post.SunMotion, v => post.SunMotion = v,
-                "the sky round the sun moves with the sun in the motion vectors (A) against the camera's motion alone (B)");
-        AbToggles.Register("fog-half", () => post.FogHalf, v => post.FogHalf = v,
-                "with the merged layers, the fog volumes at half the render size, upsampled by depth (A) against full size (B)");
-        AbToggles.Register("shafts-half", () => post.ShaftsHalf, v => post.ShaftsHalf = v,
-                "with the merged layers, the light shafts' apply at half the render size too, in the fog volumes' texture, upsampled by depth (A) against full size (B)");
-        AbToggles.Register("layers-lean", () => post.LeanLayers, v => post.LeanLayers = v,
-                "with the layers at half size, the merged pass only upsamples and the few pixels no half-size texel fits are drawn by a second pass tested by a mask depth (A) against one pass doing both (B)");
-        AbToggles.Register("layers-all", () => post.ShaftsHalf && post.LeanLayers, v => { post.ShaftsHalf = v; post.LeanLayers = v; },
-                "shafts-half and layers-lean together (A) against both off (B): the merged layers as they were before the shafts went to half size");
-        AbToggles.Register("ssao-mask-skip", () => post.MaskSkip, v => post.MaskSkip = v,
-                "the SSAO blur's read of the character mask (the scene colour's alpha) left out when no character was drawn this frame (A) against always read (B)");
-        AbToggles.Register("ssao-layers", () => post.ShaftsHalf && post.LeanLayers && post.MaskSkip,
-                v => { post.ShaftsHalf = v; post.LeanLayers = v; post.MaskSkip = v; },
-                        "all three of the SSAO and layers change (shafts-half, layers-lean, ssao-mask-skip) on (A) against all off (B): the merged layers and the blur as they were before");
-        if (post.ShaftScanSupported) AbToggles.Register("shafts-scan", () => post.ShaftScan, v => post.ShaftScan = v,
-                "the light shafts' integrate and air-layer scatter as one compute kernel walking each cell column's slices once, A, against the two fragment passes looping over every nearer slice, B");
-        float startScale = post.Options.Upscale.EffectiveScale;
-        AbToggles.Register("render-scale", () => post.Options.Upscale.EffectiveScale >= startScale, v => post.Options.Upscale.Scale = v ? startScale
-                : MathF.Round(startScale * 0.67f * 100) / 100,
-            "the render scale as set (A) against two thirds of it (B), switched at run time like the Tab slider (targets and upscaler made again)");
-        if (post.MergeSupported) AbToggles.Register("post-merge",() => post.MergePasses, v => post.MergePasses = v,
-                "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation; B: the separate full-screen passes");
-        if (post.MergeSupported)
-        {
-            AbToggles.Register("post-merge-velocity", () => post.MergeVelocity, v => post.MergeVelocity = v,
-                    "the velocity kernel alone (see post-merge)");
-            AbToggles.Register("post-merge-exposure", () => post.MergeExposure, v => post.MergeExposure = v,
-                    "the exposure kernel alone (see post-merge)");
-        }
-        if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v,
-                "the whole shadow pass");
-        if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v
-                ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
-        if (gpu.Shadow is { } fogCapPass) AbToggles.Register("shadow-fogcap", () => fogCapPass.FogCapEnabled, v => fogCapPass.FogCapEnabled = v,
-                "the sun shadows' range capped at the placed fog block's hide distance when the block hides the whole view; B: the full range");
-        AbToggles.Register("shadow-coarse", () => ShadowLod.Enabled, v => ShadowLod.Enabled = v,
-                "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
-        if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v,
-                "trees, bushes, rocks and grass (--no-foliage)");
-        if (gpu.Foliage is { } grassPass)
-        {
-            AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades");
-            AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v,
-                    "generated rock levels: the pixel tolerance growing with the distance (needs lod on)");
-            AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v,
-                    "foliage meshes and impostors, not the TERRAIN-mode rocks");
-            AbToggles.Register("foliage-prepass", () => FoliagePrepass.Enabled, v => FoliagePrepass.Enabled = v,
-                    "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
-            AbToggles.Register("impostor-prepass", () => Game.Rendering.Impostors.ImpostorPrepass.Enabled,
-                    v => Game.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
-            AbToggles.Register("impostor-quad", () => Game.Rendering.Impostors.ImpostorQuad.Enabled,
-                    v => Game.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
-            AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v,
-                    "alpha-tested foliage cards drawn cut to the opaque outline of their texture; B: the whole cards");
-            AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v,
-                    "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2; B: levels by deviation, billboards at the impostor distance");
-            AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v,
-                    "the grass's own motion vectors only for blades that move 0.5 px a frame or more, the camera reprojection for the rest; B: every blade redrawn in the motion pass");
-        }
-        AbToggles.Register("cloud-fog-skip", () => gpu.Sky.CloudFogSkip, v => gpu.Sky.CloudFogSkip = v,
-                "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
-        AbToggles.Register("sky-fog-skip", () => gpu.Sky.SkyFogSkip, v => gpu.Sky.SkyFogSkip = v,
-                "the main view's sky pass and cloud march left out where the placed fog block hides the sky in every direction of the view; B: drawn");
-        if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v,
-                "the lamps: the game's point and spot lights on the world");
-        AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1,
-                "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
-        AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v,
-                "the weather's particles, simulated and drawn (the Tab slider at 0)");
-        { int threaded = Recording.Mode > 0 ? Recording.Mode
-            : 2;
-            AbToggles.Register("record-threads", () => Recording.Mode == threaded, v => Recording.Mode = v ? threaded : 0, "the native hosts' secondary command buffers recorded on the job threads (A: mode 2); B: mode 0, every segment inline on the render thread");
-            }
-        AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
-        if (gpu.Gi is not null)
-        {
-            int giMode = gpu.GiDebug;
-            AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v,
-                    "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
-            if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v,
-                    "the world's shading reading the probes (side B: probes updated, not read)");
-            if (gpu.Gi is { } traceScene) AbToggles.Register("gi-top-trace", () => traceScene.TopFastTrace, v => traceScene.TopFastTrace = v,
-                    "the traced scene's top level built to trace fast (A) against built fast (B)");
-            if (gpu.Gi is { } lazyScene) AbToggles.Register("gi-lazy-scene", () => lazyScene.LazyScene, v => lazyScene.LazyScene = v,
-                    "the traced scene changing only when the eye crosses into another 1024-unit cell: object selection, foliage block, origin and finished terrain grids together; B: each at its own step");
-            if (gpu.Gi is { } sharedScene) AbToggles.Register("gi-top-shared", () => sharedScene.SharedTop, v => sharedScene.SharedTop = v,
-                    "one top-level structure for all frame slots, built once per change of the scene; B: one per slot");
-            if (gpu.Gi is { } refitScene) AbToggles.Register("gi-terrain-refit", () => refitScene.RefitTerrain, v => refitScene.RefitTerrain = v,
-                    "the traced terrain grids refitted in place when they follow the eye; B: rebuilt into a new structure");
-            if (gpu.Gi is { } topScene) AbToggles.Register("gi-top-reuse", () => topScene.ReuseTop, v => topScene.ReuseTop = v,
-                    "the traced scene's top level left as it was when its instances are those of its last build, the origin and the object set moving in coarse steps; B: built every frame");
-            if (gpu.Probes is { } rayProbes)
-            {
-                int rayCount = rayProbes.Rays;
-                AbToggles.Register("gi-rays", () => rayProbes.Rays == rayCount, v => rayProbes.Rays = v ? rayCount : rayCount == 64 ? 32 : 64,
-                        "rays per probe as set (A, default 32) against the other of 32 and 64 (B), the hysteresis scaled so that the noise stays the same");
-            }
-            if (gpu.Probes is { } farProbes)
-            {
-                int farPeriod = farProbes.FarPeriod > 1 ? farProbes.FarPeriod : 2;
-                AbToggles.Register("gi-far", () => farProbes.FarPeriod > 1, v => farProbes.FarPeriod = v ? farPeriod : 1,
-                        "the far cascade's probes traced and blended on every other round only; B: every round");
-            }
-            if (gpu.Probes is { } sleepProbes) AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8
-                    : 0, "probes with no surface near sleep (side B: every probe traced)");
-            if (gpu.Probes is { } fogProbes)
-            {
-                int hiddenPeriod = fogProbes.HiddenPeriod > 0 ? fogProbes.HiddenPeriod : 16;
-                AbToggles.Register("gi-fog", () => fogProbes.HiddenPeriod > 0, v => fogProbes.HiddenPeriod = v ? hiddenPeriod : 0,
-                        "probes no visible surface can read, because the fog hides everything near them, updated every 16th round (side B: at the normal rate)");
-            }
-            if (gpu.Probes is { } reflectProbes) AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected,
-                    v => reflectProbes.Reflected = !v, "the water reflection without the probes (side B: it reads them)");
-            { int resolve = gpu.GiResolve > 0 ? gpu.GiResolve
-                : 2;
-                AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0, "the probes read once per pixel after the scene (side B: in every lit fragment)");
-                }
-            AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0,
-                    "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
-        }
-        {
-            // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
-            float err = render.TerrainPixelError, materialDistance = render.MaterialDistance;
-            AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => render.TerrainPixelError = v ? err : err * 2,
-                    "terrain screen-space error doubled on side B (probe)");
-            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v
-                    ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
-        }
-        if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst,
-                v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
-        AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v,
-                "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
-        AbToggles.Register("object-lod-gen", () => ObjectLodGen.Enabled, v => ObjectLodGen.Enabled = v,
-                "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen; B: the file's levels only");
-        AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v,
-                "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
-        RegisterTerrainAb();
-        AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
-        AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
-        AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--water-reflection 0)");
-        if (gpu.Reflection is { } rp)
-        {
-            AbToggles.Register("refl-cull", () => rp.CullToWater, v => rp.CullToWater = rp.CropToWater = v,
-                    "the cheaper reflection: only what the water shows (crop, footprint, size), objects to 2000 and foliage to 2200 units (B: 3000)");
-            AbToggles.Register("refl-shadows", () => rp.NoShadows, v => rp.NoShadows = v,
-                    "the reflection without sun shadows (A, Meitou; B: the shadows on the mirrored scene; Faithful shadows keep them regardless)");
-            int msaaA = rp.Samples;
-            AbToggles.Register("refl-msaa", () => rp.Samples == msaaA, v => rp.Samples = v ? msaaA : 1,
-                    "the reflection's multisampling: the default samples (A, 4) against one sample (B)");
-            AbToggles.Register("refl-foliage", () => rp.Level >= 4, v => rp.Level = v ? 4 : 3,
-                    "foliage in the water reflection (--water-reflection 4 against 3)");
-            AbToggles.Register("refl-objects", () => rp.Level >= 3, v => rp.Level = v ? 4 : 2,
-                    "objects and foliage in the water reflection (--water-reflection 4 against 2)");
-        }
+        RegisterCullToggles(gpu, post, o, camera, render);
+        RegisterPostToggles(post);
+        RegisterShadowAndFoliageToggles(gpu);
+        RegisterSkyAndSceneToggles(gpu, render);
+        RegisterGiToggles(gpu);
+        RegisterTerrainObjectAndWaterToggles(gpu, render);
         AbToggles.Toggle? toggle = null;
         if (ab && !AbToggles.TryGet(o.Ab!, out toggle))
         {
@@ -415,6 +246,225 @@ static partial class WorldApp
         SaveFrames(csvFile, series, sideOf, keep);
         Console.WriteLine($"saved     {csvFile} (every metric per measured frame)");
         return 0;
+    }
+
+    /// <summary>
+    /// The runtime switches of <see cref="Bench"/>, first part: the Faithful / Meitou ones, the water, shadow and foliage culls and the fog volumes.
+    /// </summary>
+    static void RegisterCullToggles(Gpu gpu, PostProcess post, WorldOptions o, WorldCamera camera, WorldRenderOptions render)
+    {
+        // The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
+        AbToggles.Clear();
+        AbToggles.RegisterEnhancements(LiveSwitches(o, () => gpu, () => camera, () => render));
+        if (gpu.Water is { } water) AbToggles.Register("water-lean", () => water.Lean, v => water.Lean = v,
+            "skip zero-contribution surf, ocean and distant detail work and refraction copies of an opaque view; B: always evaluate/copy");
+        AbToggles.Register("shadow-zone-box", () => ShadowZoneBox.Enabled, v => ShadowZoneBox.Enabled = v,
+            "each shadow cascade's foliage work list box-tested by zone against the cascade's planes (A) against every zone within 1.2 x the shadow range (B)");
+        AbToggles.Register("char-casters", () => ShadowPass.CharacterCasterCull, v => ShadowPass.CharacterCasterCull = v,
+            "character parts under a texel across cast nothing into the coarse shadow cascades (A) against every part in every cascade (B)");
+        AbToggles.Register("occlusion", () => post.OcclusionCull, v => post.OcclusionCull = v,
+                "foliage occlusion cull against the previous frame's depth pyramid");
+        if (gpu.FogVolumes is { } fog)
+        {
+            AbToggles.Register("fog-cull", () => fog.CullEnabled, v => fog.CullEnabled = v, "culling of what the fog hides");
+            AbToggles.Register("fog-volumes", () => fog.Enabled, v => fog.Enabled = v, "the placed fog volumes");
+            AbToggles.Register("fog-direction", () => fog.DirectionBound, v => fog.DirectionBound = v,
+                    "the fog cull's bound by ray direction (off: only the plain bound, which finds no distance at a 50000 far clip)");
+        }
+    }
+
+    /// <summary>
+    /// The post-processing chain's switches: fog shading rate, merged layers, half-size passes, render scale, merged compute passes.
+    /// </summary>
+    static void RegisterPostToggles(PostProcess post)
+    {
+        if (post.FogVrsSupported) AbToggles.Register("fog-vrs", () => post.FogVrs, v => post.FogVrs = v,
+                "variable-rate shading where the fog hides the surface: the opaque scene passes shade 2x2 or 4x4 pixels with one fragment; B: every pixel shaded");
+        AbToggles.Register("layer-merge", () => post.MergeLayers, v => post.MergeLayers = v,
+                "the light shafts' apply, the fog volumes and the SSAO onto the scene in one pass (A) against three passes (B)");
+        AbToggles.Register("sun-motion", () => post.SunMotion, v => post.SunMotion = v,
+                "the sky round the sun moves with the sun in the motion vectors (A) against the camera's motion alone (B)");
+        AbToggles.Register("fog-half", () => post.FogHalf, v => post.FogHalf = v,
+                "with the merged layers, the fog volumes at half the render size, upsampled by depth (A) against full size (B)");
+        AbToggles.Register("shafts-half", () => post.ShaftsHalf, v => post.ShaftsHalf = v,
+                "with the merged layers, the light shafts' apply at half the render size too, in the fog volumes' texture, upsampled by depth (A) against full size (B)");
+        AbToggles.Register("layers-lean", () => post.LeanLayers, v => post.LeanLayers = v,
+                "with the layers at half size, the merged pass only upsamples and the few pixels no half-size texel fits are drawn by a second pass tested by a mask depth (A) against one pass doing both (B)");
+        AbToggles.Register("layers-all", () => post.ShaftsHalf && post.LeanLayers, v => { post.ShaftsHalf = v; post.LeanLayers = v; },
+                "shafts-half and layers-lean together (A) against both off (B): the merged layers as they were before the shafts went to half size");
+        AbToggles.Register("ssao-mask-skip", () => post.MaskSkip, v => post.MaskSkip = v,
+                "the SSAO blur's read of the character mask (the scene colour's alpha) left out when no character was drawn this frame (A) against always read (B)");
+        AbToggles.Register("ssao-layers", () => post.ShaftsHalf && post.LeanLayers && post.MaskSkip,
+                v => { post.ShaftsHalf = v; post.LeanLayers = v; post.MaskSkip = v; },
+                        "all three of the SSAO and layers change (shafts-half, layers-lean, ssao-mask-skip) on (A) against all off (B): the merged layers and the blur as they were before");
+        if (post.ShaftScanSupported) AbToggles.Register("shafts-scan", () => post.ShaftScan, v => post.ShaftScan = v,
+                "the light shafts' integrate and air-layer scatter as one compute kernel walking each cell column's slices once, A, against the two fragment passes looping over every nearer slice, B");
+        float startScale = post.Options.Upscale.EffectiveScale;
+        AbToggles.Register("render-scale", () => post.Options.Upscale.EffectiveScale >= startScale, v => post.Options.Upscale.Scale = v ? startScale
+                : MathF.Round(startScale * 0.67f * 100) / 100,
+            "the render scale as set (A) against two thirds of it (B), switched at run time like the Tab slider (targets and upscaler made again)");
+        if (post.MergeSupported) AbToggles.Register("post-merge",() => post.MergePasses, v => post.MergePasses = v,
+                "merged post passes: one compute dispatch for the motion, upscaler depth and reactivity, one for the exposure measure and adaptation; B: the separate full-screen passes");
+        if (post.MergeSupported)
+        {
+            AbToggles.Register("post-merge-velocity", () => post.MergeVelocity, v => post.MergeVelocity = v,
+                    "the velocity kernel alone (see post-merge)");
+            AbToggles.Register("post-merge-exposure", () => post.MergeExposure, v => post.MergeExposure = v,
+                    "the exposure kernel alone (see post-merge)");
+        }
+    }
+
+    /// <summary>
+    /// The shadow pass's and the foliage's switches.
+    /// </summary>
+    static void RegisterShadowAndFoliageToggles(Gpu gpu)
+    {
+        if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v,
+                "the whole shadow pass");
+        if (gpu.Shadow is { } spreadPass) AbToggles.Register("shadow-spread", () => spreadPass.FarBudget > 0, v => spreadPass.FarBudget = v
+                ? ShadowSchedule.DefaultBudget : 0, "at most one far shadow cascade redrawn per frame (B: all that are due at once)");
+        if (gpu.Shadow is { } fogCapPass) AbToggles.Register("shadow-fogcap", () => fogCapPass.FogCapEnabled, v => fogCapPass.FogCapEnabled = v,
+                "the sun shadows' range capped at the placed fog block's hide distance when the block hides the whole view; B: the full range");
+        AbToggles.Register("shadow-coarse", () => ShadowLod.Enabled, v => ShadowLod.Enabled = v,
+                "coarser casters in the far shadow cascades (1 to 3): objects, terrain nodes and generated foliage levels by the cascade's texel (B: as the main view's rule, cascade by cascade as before)");
+        if (gpu.Foliage is { } foliagePass) AbToggles.Register("foliage-draw", () => foliagePass.Enabled, v => foliagePass.Enabled = v,
+                "trees, bushes, rocks and grass (--no-foliage)");
+        if (gpu.Foliage is { } grassPass)
+        {
+            AbToggles.Register("grass", () => grassPass.DrawGrass, v => grassPass.DrawGrass = v, "the grass blades");
+            AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v,
+                    "generated rock levels: the pixel tolerance growing with the distance (needs lod on)");
+            AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v,
+                    "foliage meshes and impostors, not the TERRAIN-mode rocks");
+            AbToggles.Register("foliage-prepass", () => FoliagePrepass.Enabled, v => FoliagePrepass.Enabled = v,
+                    "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
+            AbToggles.Register("impostor-prepass", () => Game.Rendering.Impostors.ImpostorPrepass.Enabled,
+                    v => Game.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
+            AbToggles.Register("impostor-quad", () => Game.Rendering.Impostors.ImpostorQuad.Enabled,
+                    v => Game.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
+            AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v,
+                    "alpha-tested foliage cards drawn cut to the opaque outline of their texture; B: the whole cards");
+            AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v,
+                    "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2; B: levels by deviation, billboards at the impostor distance");
+            AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v,
+                    "the grass's own motion vectors only for blades that move 0.5 px a frame or more, the camera reprojection for the rest; B: every blade redrawn in the motion pass");
+        }
+    }
+
+    /// <summary>
+    /// The sky's fog skips, the lamps, anisotropy, weather particles, threaded recording and the objects.
+    /// </summary>
+    static void RegisterSkyAndSceneToggles(Gpu gpu, WorldRenderOptions render)
+    {
+        AbToggles.Register("cloud-fog-skip", () => gpu.Sky.CloudFogSkip, v => gpu.Sky.CloudFogSkip = v,
+                "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
+        AbToggles.Register("sky-fog-skip", () => gpu.Sky.SkyFogSkip, v => gpu.Sky.SkyFogSkip = v,
+                "the main view's sky pass and cloud march left out where the placed fog block hides the sky in every direction of the view; B: drawn");
+        if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v,
+                "the lamps: the game's point and spot lights on the world");
+        AbToggles.Register("anisotropy", () => gpu.Sky.Gpu.Samplers.MaxAnisotropy > 1, v => gpu.Sky.Gpu.Samplers.MaxAnisotropy = v ? 16 : 1,
+                "anisotropic filtering as the textures ask (A) against none, 1x (B); the Tab slider's ends");
+        AbToggles.Register("weather-particles", () => gpu.WeatherParticles, v => gpu.WeatherParticles = v,
+                "the weather's particles, simulated and drawn (the Tab slider at 0)");
+        {
+            int threaded = Recording.Mode > 0 ? Recording.Mode : 2;
+            AbToggles.Register("record-threads", () => Recording.Mode == threaded, v => Recording.Mode = v ? threaded : 0, "the native hosts' secondary command buffers recorded on the job threads (A: mode 2); B: mode 0, every segment inline on the render thread");
+            }
+        AbToggles.Register("objects-draw", () => render.Objects, v => render.Objects = v, "buildings and map features (--no-objects)");
+    }
+
+    /// <summary>
+    /// The global illumination's switches (with <c>--gi</c>).
+    /// </summary>
+    static void RegisterGiToggles(Gpu gpu)
+    {
+        if (gpu.Gi is not null)
+        {
+            int giMode = gpu.GiDebug;
+            AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v,
+                    "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
+            if (gpu.Probes is { } shadeProbes) AbToggles.Register("gi-shade", () => shadeProbes.Shade, v => shadeProbes.Shade = v,
+                    "the world's shading reading the probes (side B: probes updated, not read)");
+            if (gpu.Gi is { } traceScene) AbToggles.Register("gi-top-trace", () => traceScene.TopFastTrace, v => traceScene.TopFastTrace = v,
+                    "the traced scene's top level built to trace fast (A) against built fast (B)");
+            if (gpu.Gi is { } lazyScene) AbToggles.Register("gi-lazy-scene", () => lazyScene.LazyScene, v => lazyScene.LazyScene = v,
+                    "the traced scene changing only when the eye crosses into another 1024-unit cell: object selection, foliage block, origin and finished terrain grids together; B: each at its own step");
+            if (gpu.Gi is { } sharedScene) AbToggles.Register("gi-top-shared", () => sharedScene.SharedTop, v => sharedScene.SharedTop = v,
+                    "one top-level structure for all frame slots, built once per change of the scene; B: one per slot");
+            if (gpu.Gi is { } refitScene) AbToggles.Register("gi-terrain-refit", () => refitScene.RefitTerrain, v => refitScene.RefitTerrain = v,
+                    "the traced terrain grids refitted in place when they follow the eye; B: rebuilt into a new structure");
+            if (gpu.Gi is { } topScene) AbToggles.Register("gi-top-reuse", () => topScene.ReuseTop, v => topScene.ReuseTop = v,
+                    "the traced scene's top level left as it was when its instances are those of its last build, the origin and the object set moving in coarse steps; B: built every frame");
+            if (gpu.Probes is { } rayProbes)
+            {
+                int rayCount = rayProbes.Rays;
+                AbToggles.Register("gi-rays", () => rayProbes.Rays == rayCount, v => rayProbes.Rays = v ? rayCount : rayCount == 64 ? 32 : 64,
+                        "rays per probe as set (A, default 32) against the other of 32 and 64 (B), the hysteresis scaled so that the noise stays the same");
+            }
+            if (gpu.Probes is { } farProbes)
+            {
+                int farPeriod = farProbes.FarPeriod > 1 ? farProbes.FarPeriod : 2;
+                AbToggles.Register("gi-far", () => farProbes.FarPeriod > 1, v => farProbes.FarPeriod = v ? farPeriod : 1,
+                        "the far cascade's probes traced and blended on every other round only; B: every round");
+            }
+            if (gpu.Probes is { } sleepProbes) AbToggles.Register("gi-sleep", () => sleepProbes.SleepPeriod > 0, v => sleepProbes.SleepPeriod = v ? 8
+                    : 0, "probes with no surface near sleep (side B: every probe traced)");
+            if (gpu.Probes is { } fogProbes)
+            {
+                int hiddenPeriod = fogProbes.HiddenPeriod > 0 ? fogProbes.HiddenPeriod : 16;
+                AbToggles.Register("gi-fog", () => fogProbes.HiddenPeriod > 0, v => fogProbes.HiddenPeriod = v ? hiddenPeriod : 0,
+                        "probes no visible surface can read, because the fog hides everything near them, updated every 16th round (side B: at the normal rate)");
+            }
+            if (gpu.Probes is { } reflectProbes) AbToggles.Register("gi-reflection", () => !reflectProbes.Reflected,
+                    v => reflectProbes.Reflected = !v, "the water reflection without the probes (side B: it reads them)");
+            {
+                int resolve = gpu.GiResolve > 0 ? gpu.GiResolve : 2;
+                AbToggles.Register("gi-resolve", () => gpu.GiResolve > 0, v => gpu.GiResolve = v ? resolve : 0, "the probes read once per pixel after the scene (side B: in every lit fragment)");
+                }
+            AbToggles.Register("gi-debug", () => gpu.GiDebug > 0, v => gpu.GiDebug = v ? giMode : 0,
+                    "the global illumination's debug view, the scene built on both sides (needs --gi-debug)");
+        }
+    }
+
+    /// <summary>
+    /// The terrain cost probes, the objects' draw order and programs, the terrain switches, normal maps, the water and its reflection.
+    /// </summary>
+    static void RegisterTerrainObjectAndWaterToggles(Gpu gpu, WorldRenderOptions render)
+    {
+        {
+            // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
+            float err = render.TerrainPixelError, materialDistance = render.MaterialDistance;
+            AbToggles.Register("terrain-error", () => render.TerrainPixelError <= err * 1.01f, v => render.TerrainPixelError = v ? err : err * 2,
+                    "terrain screen-space error doubled on side B (probe)");
+            AbToggles.Register("terrain-material", () => render.MaterialDistance >= materialDistance, v => render.MaterialDistance = v
+                    ? materialDistance : 1, "terrain textured material (side B: ground colour only; probe)");
+        }
+        if (gpu.Objects is { } sortObjects) AbToggles.Register("object-sort", () => sortObjects.SortNearestFirst,
+                v => sortObjects.SortNearestFirst = v, "objects' colour batches drawn nearest first (Meitou reach)");
+        AbToggles.Register("early-depth", () => EarlyDepth.Enabled, v => EarlyDepth.Enabled = v,
+                "objects, rocks and foliage meshes use programs without a discard where fully visible and uncut (early depth test); B: the single program with the discard");
+        AbToggles.Register("object-lod-gen", () => ObjectLodGen.Enabled, v => ObjectLodGen.Enabled = v,
+                "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen; B: the file's levels only");
+        AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v,
+                "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
+        RegisterTerrainAb();
+        AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
+        AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
+        AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--water-reflection 0)");
+        if (gpu.Reflection is { } rp)
+        {
+            AbToggles.Register("refl-cull", () => rp.CullToWater, v => rp.CullToWater = rp.CropToWater = v,
+                    "the cheaper reflection: only what the water shows (crop, footprint, size), objects to 2000 and foliage to 2200 units (B: 3000)");
+            AbToggles.Register("refl-shadows", () => rp.NoShadows, v => rp.NoShadows = v,
+                    "the reflection without sun shadows (A, Meitou; B: the shadows on the mirrored scene; Faithful shadows keep them regardless)");
+            int msaaA = rp.Samples;
+            AbToggles.Register("refl-msaa", () => rp.Samples == msaaA, v => rp.Samples = v ? msaaA : 1,
+                    "the reflection's multisampling: the default samples (A, 4) against one sample (B)");
+            AbToggles.Register("refl-foliage", () => rp.Level >= 4, v => rp.Level = v ? 4 : 3,
+                    "foliage in the water reflection (--water-reflection 4 against 3)");
+            AbToggles.Register("refl-objects", () => rp.Level >= 3, v => rp.Level = v ? 4 : 2,
+                    "objects and foliage in the water reflection (--water-reflection 4 against 2)");
+        }
     }
 
     /// <summary>

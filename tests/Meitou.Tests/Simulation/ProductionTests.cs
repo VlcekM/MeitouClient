@@ -25,8 +25,8 @@ namespace Meitou.Tests.Simulation;
 public class ProductionTests
 {
     const string Water = "50-t", Crop = "51-t", Book = "52-t", Gadget = "53-t", Well = "60-t", Farm = "61-t", Bench = "62-t", Workshop = "63-t",
-            Study = "70-t",
-        Fuel = "54-t", Generator = "64-t", Battery = "65-t", Lamp = "66-t", BigLamp = "67-t", PoweredWorkshop = "68-t", Tank = "69-t";
+        Study = "70-t", Fuel = "54-t", Generator = "64-t", Battery = "65-t", Lamp = "66-t", BigLamp = "67-t", PoweredWorkshop = "68-t",
+        Tank = "69-t";
     /// <summary>
     /// The stat that gives skill factor 1: lerp(0.5, 1.4, x/100) = 1.
     /// </summary>
@@ -52,31 +52,100 @@ public class ProductionTests
     /// </summary>
     static GameDatabase Database()
     {
-        FcsRecord Item(string id,
-                string name) { var r = Rec(id, FcsRecordType.Item, name); r.Floats["weight kg"] = 1; r.Ints["stackable"] = 100; return r; }
-        FcsRecord Function(string id, int function, int stat)
-        {
-            var r = Rec(id, FcsRecordType.BuildingFunctionality, id);
-            r.Ints["function"] = function;
-            r.Ints["stat used"] = stat;
-            return r;
-        }
-        FcsRecord Building(string id, string name, string function)
-        {
-            var r = Rec(id, FcsRecordType.Building, name);
-            r.References["functionality"] = [new FcsReference(function, 0, 0, 0)];
-            return r;
-        }
+        var file = new FcsFile();
+        file.Records.AddRange([Item(Water, "Water"), Item(Crop, "Crop"), Item(Book, "Book"), WellFunction(), FarmFunction(), BenchFunction(),
+            FarmData(), Building(Well, "Test Well", "80-t"), FarmBuilding(), BenchBuilding(), StudyResearch(), GadgetItem(), WorkshopFunction(),
+            Building(Workshop, "Test Workshop", "84-t"), Item(Fuel, "Fuel"), GeneratorFunction(), Function("86-t", MachineData.BatteryFunction, 0),
+            Function("87-t", 15, 0), Powered(Building(Generator, "Test Generator", "85-t"), 20),
+            Powered(Building(Battery, "Test Battery", "86-t"), 10, 30), Powered(Building(Lamp, "Lamp", "87-t"), -4),
+            Powered(Building(BigLamp, "Big Lamp", "87-t"), -8), Powered(Building(PoweredWorkshop, "Powered Workshop", "84-t"), -5),
+            Function("88-t", MachineData.ResourceStorageFunction, 0), TankBuilding()]);
+        var db = new GameDatabase();
+        db.Apply(file, "test.mod");
+        return db;
+    }
+
+    /// <summary>
+    /// A stackable item of 1 kg.
+    /// </summary>
+    static FcsRecord Item(string id, string name)
+    {
+        var r = Rec(id, FcsRecordType.Item, name);
+        r.Floats["weight kg"] = 1;
+        r.Ints["stackable"] = 100;
+        return r;
+    }
+
+    /// <summary>
+    /// A building functionality record of the given function, run with <paramref name="stat"/>.
+    /// </summary>
+    static FcsRecord Function(string id, int function, int stat)
+    {
+        var r = Rec(id, FcsRecordType.BuildingFunctionality, id);
+        r.Ints["function"] = function;
+        r.Ints["stat used"] = stat;
+        return r;
+    }
+
+    /// <summary>
+    /// A building with the functionality <paramref name="function"/>.
+    /// </summary>
+    static FcsRecord Building(string id, string name, string function)
+    {
+        var r = Rec(id, FcsRecordType.Building, name);
+        r.References["functionality"] = [new FcsReference(function, 0, 0, 0)];
+        return r;
+    }
+
+    /// <summary>
+    /// <paramref name="building"/> with a power output (negative: a draw) and a battery capacity.
+    /// </summary>
+    static FcsRecord Powered(FcsRecord building, int output, int capacity = 0)
+    {
+        building.Ints["power output"] = output;
+        building.Ints["power capacity"] = capacity;
+        return building;
+    }
+
+    /// <summary>
+    /// The well's functionality: 0.1 water per second at skill 1, from labouring.
+    /// </summary>
+    static FcsRecord WellFunction()
+    {
         var wellFn = Function("80-t", MachineData.MineFunction, (int)StatsEnumerated.Labouring);
         wellFn.Floats["production mult"] = 0.05f;
         wellFn.References["produces"] = [new FcsReference(Water, 10, 0, 0)];
+        return wellFn;
+    }
+
+    /// <summary>
+    /// The farm's functionality: two farmers on the ground resource, water in, crops out.
+    /// </summary>
+    static FcsRecord FarmFunction()
+    {
         var farmFn = Function("81-t", MachineData.MineFunction, (int)StatsEnumerated.Farming);
         farmFn.Ints["world resource mining"] = MachineData.GroundResource;
         farmFn.Ints["max operators"] = 2;
         farmFn.References["consumes"] = [new FcsReference(Water, 10, 0, 0)];
         farmFn.References["produces"] = [new FcsReference(Crop, 20, 0, 0)];
+        return farmFn;
+    }
+
+    /// <summary>
+    /// The research bench's functionality: tech level 1, from science.
+    /// </summary>
+    static FcsRecord BenchFunction()
+    {
         var benchFn = Function("82-t", MachineData.ResearchFunction, (int)StatsEnumerated.Science);
         benchFn.Ints["tech level"] = 1;
+        return benchFn;
+    }
+
+    /// <summary>
+    /// The farm's crop: 4 plants, 1 h to grow, 2 crops each.
+    /// </summary>
+    static FcsRecord FarmData()
+    {
         var farmData = Rec("83-t", FcsRecordType.FarmData, "Test Crop");
         farmData.Ints["amount"] = 4;
 
@@ -85,47 +154,88 @@ public class ProductionTests
         foreach (var (key, value) in new[] { ("growth time", 1f), ("harvest time", 48f), ("death time", 8f), ("consumption rate", 24f),
                 ("harvest rate", 256f), ("clear rate", 500f), ("output per plant", 2f), ("green", 1f) })
             farmData.Floats[key] = value;
+        return farmData;
+    }
+
+    /// <summary>
+    /// The indoor farm, growing <see cref="FarmData"/>.
+    /// </summary>
+    static FcsRecord FarmBuilding()
+    {
         var farm = Building(Farm, "Test Farm", "81-t");
         farm.References["farm data"] = [new FcsReference("83-t", 0, 0, 0)];
+        return farm;
+    }
+
+    /// <summary>
+    /// The research bench, with a 4 x 4 inventory grid.
+    /// </summary>
+    static FcsRecord BenchBuilding()
+    {
         var bench = Building(Bench, "Test Bench", "82-t");
         bench.Bools["has inventory"] = true;
         bench.Ints["storage size width"] = 4;
         bench.Ints["storage size height"] = 4;
+        return bench;
+    }
+
+    /// <summary>
+    /// The level 1 research of 0.3 h, costing 2 books.
+    /// </summary>
+    static FcsRecord StudyResearch()
+    {
         var study = Rec(Study, FcsRecordType.Research, "Test Study");
         study.Ints["level"] = 1;
         study.Ints["time"] = 1;
         study.References["cost"] = [new FcsReference(Book, 2, 0, 0)];
+        return study;
+    }
+
+    /// <summary>
+    /// The gadget: 1 crop, crafted in 1 h.
+    /// </summary>
+    static FcsRecord GadgetItem()
+    {
         var gadget = Item(Gadget, "Gadget");
         gadget.Ints["production time"] = 1;
         gadget.References["ingredients"] = [new FcsReference(Crop, 100, 0, 0)];
+        return gadget;
+    }
+
+    /// <summary>
+    /// The workshop's functionality: crafts the gadget (the output holds 3), its section consuming water until a craft rebinds it.
+    /// </summary>
+    static FcsRecord WorkshopFunction()
+    {
         var workshopFn = Function("84-t", CraftBench.CraftingFunction, (int)StatsEnumerated.Engineering);
         workshopFn.References["item crafts"] = [new FcsReference(Gadget, 3, 0, 0)];
         workshopFn.References["consumes"] = [new FcsReference(Water, 5, 100, 0)];
-        FcsRecord Powered(FcsRecord building, int output,
-                int capacity = 0) { building.Ints["power output"] = output; building.Ints["power capacity"] = capacity; return building; }
+        return workshopFn;
+    }
+
+    /// <summary>
+    /// The generator's functionality: 0.01 x P fuel a second at full load.
+    /// </summary>
+    static FcsRecord GeneratorFunction()
+    {
         var generatorFn = Function("85-t", MachineData.GeneratorFunction, 0);
         generatorFn.Floats["production mult"] = 0.01f;
         generatorFn.References["consumes"] = [new FcsReference(Fuel, 10, 100, 0)];
-        var batteryFn = Function("86-t", MachineData.BatteryFunction, 0);
-        var lampFn = Function("87-t", 15, 0);
-        var tankFn = Function("88-t", MachineData.ResourceStorageFunction, 0);
+        return generatorFn;
+    }
+
+    /// <summary>
+    /// The 2 x 2 tank storing only water, its stacks x 10.
+    /// </summary>
+    static FcsRecord TankBuilding()
+    {
         var tank = Building(Tank, "Test Tank", "88-t");
         tank.Bools["has inventory"] = true;
         tank.Ints["storage size width"] = 2;
         tank.Ints["storage size height"] = 2;
         tank.Floats["stackable bonus mult"] = 10;
         tank.References["limit inventory"] = [new FcsReference(Water, 0, 0, 0)];
-        var file = new FcsFile();
-        file.Records.AddRange([Item(Water, "Water"), Item(Crop, "Crop"), Item(Book, "Book"), wellFn, farmFn, benchFn, farmData,
-                Building(Well, "Test Well", "80-t"), farm, bench, study, gadget, workshopFn,
-            Building(Workshop, "Test Workshop", "84-t"), Item(Fuel, "Fuel"), generatorFn, batteryFn, lampFn,
-                    Powered(Building(Generator, "Test Generator", "85-t"), 20),
-            Powered(Building(Battery, "Test Battery", "86-t"), 10, 30), Powered(Building(Lamp, "Lamp", "87-t"), -4),
-                    Powered(Building(BigLamp, "Big Lamp", "87-t"), -8),
-            Powered(Building(PoweredWorkshop, "Powered Workshop", "84-t"), -5), tankFn, tank]);
-        var db = new GameDatabase();
-        db.Apply(file, "test.mod");
-        return db;
+        return tank;
     }
 
     sealed class Rig : IDisposable

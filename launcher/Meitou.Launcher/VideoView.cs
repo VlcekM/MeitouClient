@@ -35,7 +35,7 @@ sealed class VideoView : Border
     enum State { Poster, Loading, Playing, Paused }
 
     readonly string _url;
-    readonly NewsFeed _feed;
+    readonly NewsMediaCache _media;
     WebmFile? _file; // the whole video, downloaded on the first Play
     readonly Image _image = new() { Stretch = Stretch.Uniform };
     readonly Control _button;
@@ -54,9 +54,10 @@ sealed class VideoView : Border
     /// <summary>
     /// Fills the post's width, its height following the picture's shape.
     /// </summary>
-    VideoView(string url, NewsFeed feed, WebmFile? file, byte[] firstPicture, int width, int height, (string Url, Action<string> Open)? fullVideo)
+    VideoView(string url, NewsMediaCache media, WebmFile? file, byte[] firstPicture, int width, int height,
+        (string Url, Action<string> Open)? fullVideo)
     {
-        (this._url, this._feed, this._file) = (url, feed, file);
+        (this._url, this._media, this._file) = (url, media, file);
         CornerRadius = new CornerRadius(6);
         ClipToBounds = true;
         Focusable = true;
@@ -217,26 +218,26 @@ sealed class VideoView : Border
     }
 
     /// <summary>
-    /// A video whose first picture loads in the background from the file's start (<see cref="NewsFeed.HeadAsync"/>); the rest downloads
+    /// A video whose first picture loads in the background from the file's start (<see cref="NewsMediaCache.HeadAsync"/>); the rest downloads
     /// only when it is played. Until then (or when it cannot be played) it takes no room, like an image.
     /// </summary>
-    public static Control Create(string url, NewsFeed feed, (string Url, Action<string> Open)? fullVideo = null)
+    public static Control Create(string url, NewsMediaCache media, (string Url, Action<string> Open)? fullVideo = null)
     {
         var host = new Panel();
         _ = Task.Run(async () =>
         {
             if (!VpxDecoder.Available) return;
-            var bytes = await feed.HeadAsync(url, PosterBytes);
+            var bytes = await media.HeadAsync(url, PosterBytes);
             bool whole = bytes is not null && bytes.Length < PosterBytes; // a short file comes whole
             if (bytes is null) return;
             if (Poster(bytes, head: !whole) is not var (head, pixels, width, height))
             {
                 // A first frame larger than the head: take the whole file after all.
-                if (whole || await feed.ImageAsync(url) is not { } all || Poster(all, head: false) is not var (full, p, w, h))
+                if (whole || await media.ImageAsync(url) is not { } all || Poster(all, head: false) is not var (full, p, w, h))
                     return;
                 (head, pixels, width, height, whole) = (full, p, w, h, true);
             }
-            Dispatcher.UIThread.Post(() => host.Children.Add(new VideoView(url, feed, whole ? head : null, pixels, width, height, fullVideo)));
+            Dispatcher.UIThread.Post(() => host.Children.Add(new VideoView(url, media, whole ? head : null, pixels, width, height, fullVideo)));
         });
         return host;
     }
@@ -278,7 +279,7 @@ sealed class VideoView : Border
         _button.Opacity = 0.5;
         _ = Task.Run(async () =>
         {
-            var bytes = await _feed.ImageAsync(_url);
+            var bytes = await _media.ImageAsync(_url);
             WebmFile? loaded = null;
             try
             {

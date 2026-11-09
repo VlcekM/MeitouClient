@@ -69,6 +69,10 @@ static partial class WorldApp
     /// Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.
     /// </summary>
     static Streamline? s_streamline;
+
+    /// <summary>
+    /// NGX for DLSS, with <see cref="s_streamline"/>.
+    /// </summary>
     static Ngx? s_ngx;
 
     static string RendererName(WorldOptions o) =>
@@ -82,7 +86,9 @@ static partial class WorldApp
             WindowState = WindowState.Maximized,
         }, o.Monitor);
 
-    // Vulkan headless (no window at all).
+    /// <summary>
+    /// Vulkan headless (no window at all).
+    /// </summary>
     static unsafe int Screenshot(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         VulkanDisplay.TriangleMeasurements = o.BenchTris;
@@ -107,9 +113,81 @@ static partial class WorldApp
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
         var (camera, render) = Setup(scene, o);
         Console.WriteLine($"camera    {CameraCode.Encode(camera)} ({CameraCode.Describe(camera)}; --camera-code puts a viewer here)");
-        { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal
-                ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f)
-                    : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
+        SettleForPicture(gpu, camera, o);
+        FinishLoading(context);
+
+        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
+        int w = o.Width, h = o.Height;
+        using var target = context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "offscreen picture"));
+        gpu.Post!.Target = target;
+        gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
+        Console.WriteLine($"post      {o.Post.Describe()}");
+        if (o.BenchFrames > 0 || o.Ab is not null) return Bench(display, gpu, scene, camera, render, o, w, h);
+        if (o.FlyBenchmark > 0)
+        {
+            int flown = FlyBenchmark(display, gpu, scene, camera, render, o, w, h);
+            if (o.Screenshot is null) return flown;   // with --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right)
+        }
+        if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ) FlyTo(gpu, scene, camera, render, o, w, h, context, flyX, flyZ);
+
+        FieldTour(gpu, scene, camera, render, o, w, h, context, target);
+        // With --orbit-step and weather particles the frame clock runs at 1/60 s a frame (the draw's time unit is 600 s), so they move as in play.
+        int orbitFrames = 0;
+        float Clock() => o.OrbitStep != 0 && gpu.Particles is { Groups.Count: > 0 } ? (float)(orbitFrames / 60.0 / 600) : 0;
+        void Step()
+        {
+            orbitFrames++;
+            camera.Yaw += o.OrbitStep;
+            if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
+        }
+        DetailedStats = true;   // per-cascade and per-step times in the statistics below
+        // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
+        for (int i = 0; i < gpu.Post!.WarmupFrames; i++)
+        {
+            Step();
+            Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance);
+            EndFrame(context);
+        }
+        var drawWatch = Stopwatch.StartNew();
+        {
+            Step();
+            Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance);
+            EndFrame(context);
+        }
+        context.Finish();
+        Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
+            (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
+        // Steady-state frame time (the first frame includes shader and texture warm-up).
+        drawWatch.Restart();
+        const int timedFrames = 10;
+        gpu.Post?.Flush();
+        gpu.Post?.TakeCosts(); // drop the warm-up frames
+        for (int i = 0; i < timedFrames; i++)
+        {
+            Step();
+            Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+            EndFrame(context);
+        }
+        context.Finish();
+        Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
+        PrintFrameCosts(gpu, camera);
+        if (o.ShowKeys) DrawKeysOverlay(context, assets, gpu, render, o, target, w, h);
+        FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
+        Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Settles the streamers at the camera before the picture: the terrain, the objects (told the view first) and the foliage, each with
+    /// its time.
+    /// </summary>
+    static void SettleForPicture(Gpu gpu, WorldCamera camera, WorldOptions o)
+    {
+        // Before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same
+        // level).
+        var up = o.Post.Upscale;
+        gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f) : 0f);
         if (gpu.Streamer is { } streamer)
         {
             var streamWatch = Stopwatch.StartNew();
@@ -131,81 +209,53 @@ static partial class WorldApp
                     ? $"foliage   {layoutCache.Stats.Describe()} (key {layoutCache.KeyName})" : "foliage   layout cache off (--no-load-cache)");
             Console.WriteLine($"foliage   {foliageRenderer.SettleTimeline}");
         }
-        FinishLoading(context);
+    }
 
-        // Offscreen: the post-processing chain (HDR scene, resolve, effects) ends in a plain RGBA8 texture that is read back.
-        int w = o.Width, h = o.Height;
-        using var target = context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h,
-            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "offscreen picture"));
-        gpu.Post!.Target = target;
-        gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
-        Console.WriteLine($"post      {o.Post.Describe()}");
-        if (o.BenchFrames > 0 || o.Ab is not null) return Bench(display, gpu, scene, camera, render, o, w, h);
-        if (o.FlyBenchmark > 0)
+    /// <summary>
+    /// Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of wall time, and report the render
+    /// thread's cost per frame (draw + uploads) while data streams in.
+    /// </summary>
+    static void FlyTo(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
+        double flyX, double flyZ)
+    {
+        var start = camera.Target;
+        var end = new Vector3((float)flyX, 0, (float)flyZ);
+        float length = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
+        float perFrame = 3f * 0.8f * Math.Max(camera.Distance, 50) / 60f;
+        int frames = Math.Max((int)(length / perFrame), 1);
+        var times = new List<double>();
+        var frameWatch = new Stopwatch();
+        for (int i = 1; i <= frames; i++)
         {
-            int flown = FlyBenchmark(display, gpu, scene, camera, render, o, w, h);
-            if (o.Screenshot is null) return flown;   // with --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right)
-        }
-        if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ)
-        {
-            // Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of
-            // wall time, and report the render thread's cost per frame (draw + uploads) while data streams in.
-            var start = camera.Target;
-            var end = new Vector3((float)flyX, 0, (float)flyZ);
-            float length = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
-            float perFrame = 3f * 0.8f * Math.Max(camera.Distance, 50) / 60f;
-            int frames = Math.Max((int)(length / perFrame), 1);
-            var times = new List<double>();
-            var frameWatch = new Stopwatch();
-            for (int i = 1; i <= frames; i++)
+            float t = i / (float)frames;
+            var p = Vector3.Lerp(start, end, t);
+            camera.Target = new Vector3(p.X, gpu.Terrain.HeightAt(p.X, p.Z), p.Z);
+            frameWatch.Restart();
             {
-                float t = i / (float)frames;
-                var p = Vector3.Lerp(start, end, t);
-                camera.Target = new Vector3(p.X, gpu.Terrain.HeightAt(p.X, p.Z), p.Z);
-                frameWatch.Restart();
-                { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
-                context.Finish();
-                times.Add(frameWatch.Elapsed.TotalMilliseconds);
-                if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
-                    Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, gen0 {GC.CollectionCount(0)}");
-                int sleep = 16 - (int)frameWatch.ElapsedMilliseconds;
-                if (sleep > 0) Thread.Sleep(sleep);
+                Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+                EndFrame(context);
             }
-            double first = times[0], worstAfterFirst = times.Count > 1 ? times.Skip(1).Max() : 0;
-            times.Sort();
-            Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, 99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, worst after it {worstAfterFirst:0.0} ms), " +
-                $"{times.Count(x => x > 10)} frames over 10 ms; streaming {(gpu.Streamer?.Idle == true ? "idle" : $"{gpu.Streamer?.Pending} pending")}");
-            gpu.Objects?.Settle(camera.Eye);
-            gpu.Foliage?.Settle(camera.Eye);
+            context.Finish();
+            times.Add(frameWatch.Elapsed.TotalMilliseconds);
+            if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
+                Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, gen0 {GC.CollectionCount(0)}");
+            int sleep = 16 - (int)frameWatch.ElapsedMilliseconds;
+            if (sleep > 0) Thread.Sleep(sleep);
         }
+        double first = times[0], worstAfterFirst = times.Count > 1 ? times.Skip(1).Max() : 0;
+        times.Sort();
+        Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, 99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, worst after it {worstAfterFirst:0.0} ms), " +
+            $"{times.Count(x => x > 10)} frames over 10 ms; streaming {(gpu.Streamer?.Idle == true ? "idle" : $"{gpu.Streamer?.Pending} pending")}");
+        gpu.Objects?.Settle(camera.Eye);
+        gpu.Foliage?.Settle(camera.Eye);
+    }
 
-        FieldTour(gpu, scene, camera, render, o, w, h, context, target);
-        // With --orbit-step and weather particles the frame clock runs at 1/60 s a frame (the draw's time unit is 600 s), so they move as in play.
-        int orbitFrames = 0;
-        float Clock() => o.OrbitStep != 0 && gpu.Particles is { Groups.Count: > 0 } ? (float)(orbitFrames / 60.0 / 600) : 0;
-        void Step()
-        {
-            orbitFrames++;
-            camera.Yaw += o.OrbitStep;
-            if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
-        }
-        DetailedStats = true;   // per-cascade and per-step times in the statistics below
-        // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
-        for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(),
-                o.FogDistance); EndFrame(context); }
-        var drawWatch = Stopwatch.StartNew();
-        { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
-        context.Finish();
-        Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
-            (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
-        // Steady-state frame time (the first frame includes shader and texture warm-up).
-        drawWatch.Restart();
-        const int timedFrames = 10;
-        gpu.Post?.Flush();
-        gpu.Post?.TakeCosts(); // drop the warm-up frames
-        for (int i = 0; i < timedFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(context); }
-        context.Finish();
-        Console.WriteLine($"frame     {drawWatch.Elapsed.TotalMilliseconds / timedFrames:0.0} ms on average over {timedFrames} more frames");
+    /// <summary>
+    /// The last timed frames' costs and counts per renderer: objects, foliage, reflection, shadows, sky, post, exposure, particles, haze, fog,
+    /// global illumination, occlusion and shafts.
+    /// </summary>
+    static void PrintFrameCosts(Gpu gpu, WorldCamera camera)
+    {
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
         if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}"); }
         if (gpu.Reflection is { Valid: true } reflection)
@@ -236,19 +286,22 @@ static partial class WorldApp
         if (gpu.Post is { } occlusionPost
             && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off")}");
         if (gpu.Post is { } shaftsPost) Console.WriteLine($"shafts     {shaftsPost.ShaftsDescribe}");
-        if (o.ShowKeys && DebugOverlay.TryCreate(context, assets.Find) is { } keysOverlay)
-        {
-            keysOverlay.Target = target;
-            keysOverlay.Visible = true;
-            keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
-            var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v, switches: WorldOptions.Switches(o));
-            settings.Visible = true;
-            settings.Draw(w, h);
-            keysOverlay.Dispose();
-        }
-        FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
-        Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
-        return 0;
+    }
+
+    /// <summary>
+    /// <c>--show-keys</c>: the key list and the settings panel drawn over the picture.
+    /// </summary>
+    static void DrawKeysOverlay(GpuContext context, AssetLocator assets, Gpu gpu, WorldRenderOptions render, WorldOptions o, GpuTexture target,
+        int w, int h)
+    {
+        if (DebugOverlay.TryCreate(context, assets.Find) is not { } keysOverlay) return;
+        keysOverlay.Target = target;
+        keysOverlay.Visible = true;
+        keysOverlay.Draw(w, h, "Keys   (F10 hides this)", DebugOverlay.KeyItems(WorldOptions.Usage));
+        var settings = CreateSettingsPanel(keysOverlay, gpu, render, () => o.Hour, v => o.Hour = v, switches: WorldOptions.Switches(o));
+        settings.Visible = true;
+        settings.Draw(w, h);
+        keysOverlay.Dispose();
     }
 
     /// <summary>

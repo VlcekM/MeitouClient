@@ -38,94 +38,26 @@ static class SyntheticTown
     {
         var race = Rec("1-t", FcsRecordType.Race, "Testers");
         var parts = new List<FcsRecord>();
-        if (anatomy)
-        {
-            race.Floats["water avoidance"] = 3;
-            // A chest (vital) and two legs: enough to be hurt, to limp and to be knocked out.
-            FcsRecord Part(string id, string name, int type, int collapse, bool vital)
-            {
-                var p = Rec(id, FcsRecordType.LocationalDamage, name);
-                p.Ints["body part type"] = type;
-                p.Ints["collapse part"] = collapse;
-                p.Bools["death"] = vital;
-                p.Bools["collapses"] = true;
-                p.Bools["severance"] = !vital;
-                return p;
-            }
-            parts.AddRange([Part("60-t", "Chest", 0, 1, true), Part("61-t", "Left Leg", 1, 0x20, false), Part("62-t", "Right Leg", 1, 0x10, false)]);
-            race.References["combat anatomy"] = [Ref("60-t", 140, 100), Ref("61-t", 80, 100), Ref("62-t", 80, 100)];
-        }
+        if (anatomy) AddAnatomy(race, parts);
         race.Ints["speed min skill"] = 70;
         race.Ints["speed max skill"] = 120;
         race.Floats["walk speed"] = 15;
         var guard = Rec("2-t", FcsRecordType.Character, "Guard");
         guard.References["race"] = [Ref("1-t", 100)];
         var itemRecords = new List<FcsRecord>();
-        if (items)
-        {
-            var ration = Rec("70-t", FcsRecordType.Item, "Ration");
-            ration.Ints["item function"] = 3;
-            ration.Floats["charges"] = 100;
-            ration.Floats["weight kg"] = 1;
-            ration.Ints["value"] = 10;
-            var snack = Rec("71-t", FcsRecordType.Item, "Snack");
-            snack.Ints["item function"] = 3;
-            snack.Floats["charges"] = 30;
-            snack.Floats["weight kg"] = 0.5f;
-            snack.Ints["value"] = 5;
-            itemRecords.AddRange([ration, snack]);
-            guard.References["inventory"] = [Ref("70-t", 2)];
-        }
+        if (items) AddRations(guard, itemRecords);
         var boss = Rec("3-t", FcsRecordType.Character, "Boss");
         boss.References["race"] = [Ref("1-t", 100)];
         var dog = Rec("4-t", FcsRecordType.AnimalCharacter, "Dog");
         dog.Floats["animal age random"] = 0.5f;
 
-        var patrol = Rec("10-t", FcsRecordType.SquadTemplate, "Patrol");
-        patrol.References["leader"] = [Ref("3-t", 1)];
-        patrol.References["squad"] = [Ref("2-t", 2, 4)];
-        patrol.References["squad2"] = [Ref("2-t", 1, 100)];
-        patrol.References["animals"] = [Ref("4-t", 1, 0, 50)];
-        var gated = Rec("11-t", FcsRecordType.SquadTemplate, "Gated");
-        gated.References["squad"] = [Ref("2-t", 5)];
-        gated.References["world state"] = [Ref("90-t", 1)];   // needs a state that does not hold: the boss dead
-        var bossDead = Rec("90-t", FcsRecordType.WorldEventState, "Boss dead");
-        bossDead.References["NPC is"] = [Ref("3-t", 0)];
-        var factionTemplate = Rec("12-t", FcsRecordType.SquadTemplate, "Faction folk");
-        factionTemplate.References["squad"] = [Ref("2-t", 3)];
-
+        var (patrol, gated, bossDead, factionTemplate) = SquadTemplates();
         var faction = Rec("20-t", FcsRecordType.Faction, "Testfolk");
         faction.Ints["default relation"] = 0;
         faction.References["residents"] = [Ref("12-t", 1, 0)];
-        var town = Rec("30-t", FcsRecordType.Town, "Testville");
-        town.Ints["type"] = 2;
-        town.Floats["size radius"] = 300;
-        town.Floats["town radius mult"] = 1;
-        town.Bools["residents override"] = overrideFlag;
-        town.References["faction"] = [Ref("20-t")];
-        town.References["residents"] = [Ref("10-t", residentSquads, 0), Ref("11-t", 1, 0), Ref("13-t", 0, 0)];
-
-        FcsRecord? far = null;
-        if (roaming)
-        {
-            faction.Ints["roaming population"] = 10;
-            town.References["roaming squads"] = [Ref("12-t", 2)];
-            town.References["bar squads"] = [Ref("12-t", 2, 100), Ref("10-t", 1, 100)];
-            far = Rec("31-t", FcsRecordType.Town, "Faraway");
-            far.Ints["type"] = 2;
-            far.Floats["size radius"] = 300;
-            far.Floats["town radius mult"] = 1;
-            far.References["faction"] = [Ref("20-t")];
-        }
-
-        var nameless = Rec("204-gamedata.base", FcsRecordType.Faction, "Nameless");
-        nameless.Ints["default relation"] = 0;
-        var startoff = Rec("40-t", FcsRecordType.NewGameStartoff, "Test start");
-        startoff.Ints["money"] = 500;
-        startoff.Ints["start pos X"] = 4000;
-        startoff.Ints["start pos Z"] = 4000;
-        startoff.References["squad"] = [Ref("3-t"), Ref("12-t")];
-        startoff.References["town"] = [Ref("30-t")];
+        var town = Town(residentSquads, overrideFlag);
+        FcsRecord? far = roaming ? AddRoaming(faction, town) : null;
+        var (nameless, startoff) = StartRecords();
 
         var file = new FcsFile();
         file.Records.AddRange(parts);
@@ -139,6 +71,114 @@ static class SyntheticTown
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
         return db;
+    }
+
+    /// <summary>
+    /// <c>anatomy</c>: the race avoids water and gets its combat anatomy parts.
+    /// </summary>
+    static void AddAnatomy(FcsRecord race, List<FcsRecord> parts)
+    {
+        race.Floats["water avoidance"] = 3;
+        // A chest (vital) and two legs: enough to be hurt, to limp and to be knocked out.
+        FcsRecord Part(string id, string name, int type, int collapse, bool vital)
+        {
+            var p = Rec(id, FcsRecordType.LocationalDamage, name);
+            p.Ints["body part type"] = type;
+            p.Ints["collapse part"] = collapse;
+            p.Bools["death"] = vital;
+            p.Bools["collapses"] = true;
+            p.Bools["severance"] = !vital;
+            return p;
+        }
+        parts.AddRange([Part("60-t", "Chest", 0, 1, true), Part("61-t", "Left Leg", 1, 0x20, false), Part("62-t", "Right Leg", 1, 0x10, false)]);
+        race.References["combat anatomy"] = [Ref("60-t", 140, 100), Ref("61-t", 80, 100), Ref("62-t", 80, 100)];
+    }
+
+    /// <summary>
+    /// <c>items</c>: a ration (100 charges) and a snack (30), food both; the guard carries two rations.
+    /// </summary>
+    static void AddRations(FcsRecord guard, List<FcsRecord> itemRecords)
+    {
+        var ration = Rec("70-t", FcsRecordType.Item, "Ration");
+        ration.Ints["item function"] = 3;
+        ration.Floats["charges"] = 100;
+        ration.Floats["weight kg"] = 1;
+        ration.Ints["value"] = 10;
+        var snack = Rec("71-t", FcsRecordType.Item, "Snack");
+        snack.Ints["item function"] = 3;
+        snack.Floats["charges"] = 30;
+        snack.Floats["weight kg"] = 0.5f;
+        snack.Ints["value"] = 5;
+        itemRecords.AddRange([ration, snack]);
+        guard.References["inventory"] = [Ref("70-t", 2)];
+    }
+
+    /// <summary>
+    /// The squad templates: <c>Patrol</c> (the boss leading guards and a dog), <c>Gated</c> (behind the boss's death, which does not hold), that
+    /// world state, and <c>Faction folk</c>.
+    /// </summary>
+    static (FcsRecord Patrol, FcsRecord Gated, FcsRecord BossDead, FcsRecord FactionTemplate) SquadTemplates()
+    {
+        var patrol = Rec("10-t", FcsRecordType.SquadTemplate, "Patrol");
+        patrol.References["leader"] = [Ref("3-t", 1)];
+        patrol.References["squad"] = [Ref("2-t", 2, 4)];
+        patrol.References["squad2"] = [Ref("2-t", 1, 100)];
+        patrol.References["animals"] = [Ref("4-t", 1, 0, 50)];
+        var gated = Rec("11-t", FcsRecordType.SquadTemplate, "Gated");
+        gated.References["squad"] = [Ref("2-t", 5)];
+        gated.References["world state"] = [Ref("90-t", 1)];   // needs a state that does not hold: the boss dead
+        var bossDead = Rec("90-t", FcsRecordType.WorldEventState, "Boss dead");
+        bossDead.References["NPC is"] = [Ref("3-t", 0)];
+        var factionTemplate = Rec("12-t", FcsRecordType.SquadTemplate, "Faction folk");
+        factionTemplate.References["squad"] = [Ref("2-t", 3)];
+        return (patrol, gated, bossDead, factionTemplate);
+    }
+
+    /// <summary>
+    /// Testville, the faction's town: <paramref name="residentSquads"/> patrols, a gated squad and a missing template as residents.
+    /// </summary>
+    static FcsRecord Town(int residentSquads, bool overrideFlag)
+    {
+        var town = Rec("30-t", FcsRecordType.Town, "Testville");
+        town.Ints["type"] = 2;
+        town.Floats["size radius"] = 300;
+        town.Floats["town radius mult"] = 1;
+        town.Bools["residents override"] = overrideFlag;
+        town.References["faction"] = [Ref("20-t")];
+        town.References["residents"] = [Ref("10-t", residentSquads, 0), Ref("11-t", 1, 0), Ref("13-t", 0, 0)];
+        return town;
+    }
+
+    /// <summary>
+    /// <c>roaming</c>: the faction's roaming budget, the town's roaming and bar squads, and the second town far away (answered).
+    /// </summary>
+    static FcsRecord AddRoaming(FcsRecord faction, FcsRecord town)
+    {
+        faction.Ints["roaming population"] = 10;
+        town.References["roaming squads"] = [Ref("12-t", 2)];
+        town.References["bar squads"] = [Ref("12-t", 2, 100), Ref("10-t", 1, 100)];
+        var far = Rec("31-t", FcsRecordType.Town, "Faraway");
+        far.Ints["type"] = 2;
+        far.Floats["size radius"] = 300;
+        far.Floats["town radius mult"] = 1;
+        far.References["faction"] = [Ref("20-t")];
+        return far;
+    }
+
+    /// <summary>
+    /// The Nameless faction and the new game start (500 money, the boss and the faction folk, in Testville).
+    /// </summary>
+    static (FcsRecord Nameless, FcsRecord Startoff) StartRecords()
+    {
+        var nameless = Rec("204-gamedata.base", FcsRecordType.Faction, "Nameless");
+        nameless.Ints["default relation"] = 0;
+        var startoff = Rec("40-t", FcsRecordType.NewGameStartoff, "Test start");
+        startoff.Ints["money"] = 500;
+        startoff.Ints["start pos X"] = 4000;
+        startoff.Ints["start pos Z"] = 4000;
+        startoff.References["squad"] = [Ref("3-t"), Ref("12-t")];
+        startoff.References["town"] = [Ref("30-t")];
+        return (nameless, startoff);
     }
 
     public static PopulationData Data(GameDatabase db, Meitou.Simulation.Bodies.BodyOptions? options = null, GameDatabase? level = null) =>
