@@ -19,6 +19,9 @@ public sealed partial class PopulationSystem
     /// </summary>
     List<ArtifactStack>[]? _townArtifacts;
 
+    /// <summary>
+    /// The price constants the artifacts' values are reckoned with, read on first use.
+    /// </summary>
     PriceConstants? _prices;
 
     /// <summary>
@@ -59,12 +62,19 @@ public sealed partial class PopulationSystem
     internal static Dictionary<int, List<ArtifactStack>> PlanArtifacts(PopulationData data) =>
         Artifacts.Plan(data.Db, data.Sites.Select(s => new ArtifactTown(s.Index, s.Record, s.Position)));
 
+    /// <summary>
+    /// The GAMESTATE_TOWN keys of a town's artifact list: the entry count and each entry's key prefix.
+    /// </summary>
     const string ArtifactCountKey = "artifacts count", ArtifactPrefix = "artifact_";
 
+    /// <summary>
+    /// The key of field <paramref name="field"/> of artifact entry <paramref name="k"/>.
+    /// </summary>
     static string Key(int k, string field) => ArtifactPrefix + k.ToString(CultureInfo.InvariantCulture) + "_" + field;
 
     /// <summary>
-    /// A town state's list (<c>artifacts count</c>, <c>artifact_&lt;k&gt;_itm/mat/man/lvl/qty</c>): the entries whose item the data has; a part it lacks is none.
+    /// A town state's list (<c>artifacts count</c>, <c>artifact_&lt;k&gt;_itm/mat/man/lvl/qty</c>): the entries whose item the data has; a part it
+    /// lacks is none.
     /// </summary>
     internal static List<ArtifactStack> ReadArtifacts(FcsRecord state, GameDatabase db)
     {
@@ -280,7 +290,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One unit of an entry as an item flagged unique: armour at its level as quality, a weapon of its maker and model, a crossbow or limb at its level.
+    /// One unit of an entry as an item flagged unique: armour at its level as quality, a weapon of its maker and model, a crossbow or limb at
+    /// its level.
     /// </summary>
     ItemInstance? MakeArtifact(ArtifactStack s)
     {

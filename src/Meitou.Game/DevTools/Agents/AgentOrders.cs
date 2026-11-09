@@ -38,7 +38,9 @@ sealed class AgentOrders(PlayerInterface player)
     /// </summary>
     readonly Dictionary<string, ControlBuilding> _controlBuildings = [];
 
-
+    /// <summary>
+    /// A character's entity id, <c>c:slot.generation</c>.
+    /// </summary>
     static string CharacterKey(CharacterId id) => $"c:{id.Slot}.{id.Generation}";
 
     /// <summary>
@@ -56,6 +58,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The published snapshot of character <paramref name="id"/>; null when it is not in it.
+    /// </summary>
     CharacterSnapshot? ControlCharacter(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
 
     /// <summary>
@@ -78,8 +83,14 @@ sealed class AgentOrders(PlayerInterface player)
     /// </summary>
     public Vector3? ControlLeadPosition() => player.Selected().FirstOrDefault() is { } lead ? player.Where(lead) : null;
 
+    /// <summary>
+    /// Whether screen point <paramref name="s"/> is inside the window.
+    /// </summary>
     bool OnScreen(Vector2 s) => s.X >= 0 && s.X <= player.Width && s.Y >= 0 && s.Y <= player.Height;
 
+    /// <summary>
+    /// Writes <paramref name="p"/> as an array named <paramref name="name"/>, one decimal.
+    /// </summary>
     void WritePosition(Utf8JsonWriter w, string name, Vector3 p)
     {
         w.WriteStartArray(name);
@@ -87,6 +98,9 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndArray();
     }
 
+    /// <summary>
+    /// Writes whether <paramref name="world"/> projects into the window and, when it does, its screen point.
+    /// </summary>
     void WriteScreen(Utf8JsonWriter w, Vector3 world)
     {
         var s = player.Project(world);
@@ -100,6 +114,9 @@ sealed class AgentOrders(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// A character's state word: dead, ko, playing-dead, carried or alive.
+    /// </summary>
     static string StateWord(CharacterSnapshot c) =>
         c.Body is { Dead: true } ? "dead"
         : c.Body is { Unconscious: true } ? "ko"
@@ -107,6 +124,10 @@ sealed class AgentOrders(PlayerInterface player)
         : !c.CarriedBy.IsNone ? "carried"
         : "alive";
 
+    /// <summary>
+    /// Writes a character's entry: id, name, faction, position and distance from <paramref name="from"/>, state, flags, health, task, order,
+    /// selection and screen point.
+    /// </summary>
     void WriteCharacter(Utf8JsonWriter w, CharacterSnapshot c, Vector3 from)
     {
         var at = player.Where(c);
@@ -146,6 +167,9 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndObject();
     }
 
+    /// <summary>
+    /// Writes a building's entry: id, name, record, position, distance from <paramref name="from"/> and screen point.
+    /// </summary>
     void WriteBuilding(Utf8JsonWriter w, ControlBuilding b, Vector3 from)
     {
         w.WriteStartObject();
@@ -374,6 +398,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The active squad's members.
+    /// </summary>
     public IReadOnlyList<CharacterId> ControlSquad() => player.ActiveSquadMembers();
 
     /// <summary>
@@ -565,6 +592,10 @@ sealed class AgentOrders(PlayerInterface player)
 
     #region Play orders
 
+    // The agent control channel's play API (docs/procedures/agent-play-api.md): <c>observe</c> (one JSON for a decision) and the thin wrappers that
+    // give the selection the game's own order commands (stop, follow, stance, pick up, loot, first aid, build, operate, research, craft). Every
+    // action goes out through PlayerInterface.Say as the same SimCommand the player's input gives; each returns false with the reason when the game
+    // would refuse it. Characters are selected with <c>select</c> first; the orders go to the selection.
     /// <summary>
     /// The stance flags by the names the play API uses.
     /// </summary>
@@ -572,13 +603,14 @@ sealed class AgentOrders(PlayerInterface player)
         [("block", CharacterOrders.Block), ("hold", CharacterOrders.Hold), ("passive", CharacterOrders.Passive), ("ranged", CharacterOrders.Ranged),
             ("taunt", CharacterOrders.Taunt), ("sneak", CharacterOrders.Sneak), ("jobs", CharacterOrders.Jobs)];
 
-    // The agent control channel's play API (docs/procedures/agent-play-api.md): <c>observe</c> (one JSON for a decision) and the thin wrappers that
-    // give the selection the game's own order commands
-    // (stop, follow, stance, pick up, loot, first aid, build, operate, research, craft). Every action goes out through PlayerInterface.Say as the
-    // same SimCommand the player's input gives;
-    // each returns false with the reason when the game would refuse it. Characters are selected with <c>select</c> first; the orders go to the
-    // selection.
+    /// <summary>
+    /// <paramref name="v"/> rounded to one decimal.
+    /// </summary>
     static double R1(double v) => Math.Round(v, 1);
+
+    /// <summary>
+    /// <paramref name="v"/> rounded to two decimals.
+    /// </summary>
     static double R2(double v) => Math.Round(v, 2);
 
     /// <summary>
@@ -598,8 +630,14 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Stops the selection.
+    /// </summary>
     public bool ControlStop(out string message) => ControlOrder(w => new StopCommand(w) { Tick = player.Session.World.Tick }, "stop", out message);
 
+    /// <summary>
+    /// The selection follows (or with <paramref name="guard"/> guards) <paramref name="target"/>; refused for an unknown, dead or selected target.
+    /// </summary>
     public bool ControlFollow(CharacterId target, bool guard, out string message)
     {
         if (ControlCharacter(target) is not { } t)
@@ -624,6 +662,9 @@ sealed class AgentOrders(PlayerInterface player)
             $"{(guard ? "bodyguard" : "follow")} {t.Name} {CharacterKey(target)}", out message);
     }
 
+    /// <summary>
+    /// The stance names the play API takes.
+    /// </summary>
     public static IReadOnlyList<string> StanceWords => [.. StanceNames.Select(s => s.Name)];
 
     /// <summary>
@@ -720,6 +761,9 @@ sealed class AgentOrders(PlayerInterface player)
             $"loot {t.Name} {CharacterKey(target)}", out message);
     }
 
+    /// <summary>
+    /// The selection gives <paramref name="patient"/> first aid (a kit in the medic's inventory needed); refused for an unknown or dead patient.
+    /// </summary>
     public bool ControlFirstAid(CharacterId patient, out string message)
     {
         if (ControlCharacter(patient) is not { } t)
@@ -746,6 +790,10 @@ sealed class AgentOrders(PlayerInterface player)
 
     #region Construction
 
+    /// <summary>
+    /// The building type <paramref name="query"/> names: a record id, else one name (exact, else contained; else the one unlocked); null with the
+    /// error otherwise.
+    /// </summary>
     BuildingBuildData? ControlBuildingData(string query, out string error)
     {
         error = "";
@@ -970,6 +1018,9 @@ sealed class AgentOrders(PlayerInterface player)
 
     #region Production
 
+    /// <summary>
+    /// The selection operates the machine at <paramref name="site"/> (one of the player's, operable by hand or automatic).
+    /// </summary>
     public bool ControlOperate(string site, out string message)
     {
         string id = site.StartsWith("b:", StringComparison.OrdinalIgnoreCase) ? site[2..] : site;
@@ -990,6 +1041,9 @@ sealed class AgentOrders(PlayerInterface player)
         return ControlOrder(w => new OperateOrder(w, id) { Tick = player.Session.World.Tick }, $"operate {machine.Record} {site}", out message);
     }
 
+    /// <summary>
+    /// The research state as JSON (<see cref="WriteResearch"/>, at most 40 options).
+    /// </summary>
     public string ControlResearchJson()
     {
         var r = player.Session.CurrentSnapshot.Research;
@@ -1001,6 +1055,9 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// Writes the research state: levels, rate, finished and known counts, the queue, and up to <paramref name="limit"/> options not known or begun.
+    /// </summary>
     void WriteResearch(Utf8JsonWriter w, ResearchSnapshot r, int limit)
     {
         w.WriteStartObject();
@@ -1037,6 +1094,10 @@ sealed class AgentOrders(PlayerInterface player)
         w.WriteEndObject();
     }
 
+    /// <summary>
+    /// Queues the research <paramref name="query"/> names (an id or name, exact, else contained); refused when it names none or several, the bench is
+    /// too low or it is queued.
+    /// </summary>
     public bool ControlQueueResearch(string query, out string message)
     {
         var r = player.Session.CurrentSnapshot.Research;
@@ -1070,6 +1131,10 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// At crafting bench <paramref name="site"/>: lists its recipes as JSON without <paramref name="recipe"/>, else queues <paramref name="count"/>
+    /// of the unlocked recipe it names.
+    /// </summary>
     public bool ControlCraft(string site, string? recipe, int count, out string message, out string json)
     {
         json = "";
@@ -1120,8 +1185,14 @@ sealed class AgentOrders(PlayerInterface player)
     /// </summary>
     internal readonly AgentKillCounter Kills = new(player);
 
+    /// <summary>
+    /// The stance names set in <paramref name="o"/>, comma-separated.
+    /// </summary>
     static string StanceText(CharacterOrders o) => string.Join(',', StanceNames.Where(s => (o & s.Order) != 0).Select(s => s.Name));
 
+    /// <summary>
+    /// Writes <paramref name="p"/>'s x and z as an array named <paramref name="name"/>, one decimal.
+    /// </summary>
     void WriteXz(Utf8JsonWriter w, string name, Vector3 p)
     {
         w.WriteStartArray(name);
@@ -1265,6 +1336,10 @@ sealed class AgentOrders(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Writes a nearby character's entry: id, name, faction, distance, position, state and worst limb; a threat's combat state, else whether a downed
+    /// one is lootable.
+    /// </summary>
     void WriteNearby(Utf8JsonWriter w, CharacterSnapshot c, Vector3 from, bool threat)
     {
         var at = player.Where(c);
@@ -1851,6 +1926,9 @@ sealed class AgentOrders(PlayerInterface player)
             $"carry {t.Name} {CharacterKey(target)}", out message);
     }
 
+    /// <summary>
+    /// Puts down what the selection carries.
+    /// </summary>
     public bool ControlPutDown(out string message) => ControlOrder(w => new Simulation.Carrying.PutDownOrder(w) { Tick = player.Session.World.Tick },
         "putdown", out message);
 
@@ -1885,6 +1963,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Closes the open trade; refused when none is open.
+    /// </summary>
     public bool ControlTradeClose(out string message)
     {
         if (player.Session.CurrentSnapshot.Trade is null)

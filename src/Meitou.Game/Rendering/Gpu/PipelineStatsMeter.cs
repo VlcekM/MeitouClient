@@ -24,26 +24,71 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     /// </summary>
     internal static PipelineStatsMeter? Current;
 
+    /// <summary>
+    /// Queries one frame may take.
+    /// </summary>
     public const uint Capacity = 2048;
 
-    // In the order of the set bits: input assembly primitives, vertex invocations, clipping invocations, clipping primitives, fragment invocations.
+    /// <summary>
+    /// The values a query gives, in the order of the set bits: input assembly primitives, vertex invocations, clipping invocations, clipping
+    /// primitives, fragment invocations.
+    /// </summary>
     const int Values = 5;
 
+    /// <summary>
+    /// The statistics the queries count.
+    /// </summary>
     const QueryPipelineStatisticFlags Wanted = QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit
         | QueryPipelineStatisticFlags.VertexShaderInvocationsBit | QueryPipelineStatisticFlags.ClippingInvocationsBit
         | QueryPipelineStatisticFlags.ClippingPrimitivesBit | QueryPipelineStatisticFlags.FragmentShaderInvocationsBit;
 
+    /// <summary>
+    /// The context whose frame the queries are interleaved into.
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     readonly Vk _vk;
+    /// <summary>
+    /// The logical device.
+    /// </summary>
     readonly Device _device;
+    /// <summary>
+    /// The pipeline statistics query pool.
+    /// </summary>
     readonly QueryPool _pool;
+    /// <summary>
+    /// The queries of the part open now (a part split by renderings has several).
+    /// </summary>
     readonly List<int> _loose = [];
+    /// <summary>
+    /// The parts of the stage open now, with their queries, filed under the stage when it closes.
+    /// </summary>
     readonly List<(string Label, int[] Queries)> _subs = [];
+    /// <summary>
+    /// The frame's rows: each stage (and its parts as stage/part) with its queries, in order.
+    /// </summary>
     readonly List<(string Key, int[] Queries)> _rows = [];
+    /// <summary>
+    /// How many times each stage label has closed this frame (a repeat is filed as <c>label #n</c>).
+    /// </summary>
     readonly Dictionary<string, int> _occurrences = [];
+    /// <summary>
+    /// The next free query.
+    /// </summary>
     int _next;
+    /// <summary>
+    /// The open query; -1 when none is.
+    /// </summary>
     int _open = -1;
+    /// <summary>
+    /// The command buffer the open query began in (it must end there).
+    /// </summary>
     nint _openBuffer;
+    /// <summary>
+    /// Between <see cref="BeginFrame"/> and the post stage's close (or <see cref="Read"/>).
+    /// </summary>
     bool _active;
 
     /// <summary>
@@ -51,8 +96,14 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     /// </summary>
     public int Lost { get; private set; }
 
+    /// <summary>
+    /// Whether the device can count pipeline statistics.
+    /// </summary>
     public static bool Supported(GpuContext ctx) => ctx.Device.HasPipelineStatistics;
 
+    /// <summary>
+    /// A meter with a pool of <see cref="Capacity"/> queries; throws when the device has no pipeline statistics.
+    /// </summary>
     public PipelineStatsMeter(GpuContext ctx)
     {
         if (!ctx.Device.HasPipelineStatistics) throw new NotSupportedException("the device has no pipeline statistics queries");
@@ -115,6 +166,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         _ctx.Interleave(Open);
     }
 
+    /// <summary>
+    /// Files the closed stage's queries (and its parts' under <c>stage/part</c>) as a row.
+    /// </summary>
     void FileStage(string label)
     {
         int n = _occurrences.GetValueOrDefault(label) + 1;
@@ -126,6 +180,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         _subs.Clear();
     }
 
+    /// <summary>
+    /// The open part's queries, handed over and cleared.
+    /// </summary>
     int[] Take()
     {
         var q = _loose.ToArray();
@@ -133,6 +190,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         return q;
     }
 
+    /// <summary>
+    /// Begins the next query in the list's command buffer (counted as lost when the pool is full).
+    /// </summary>
     void Open(IGpuCommandList cmd)
     {
         if (!_active || _open >= 0) return;
@@ -149,6 +209,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         _loose.Add(_open);
     }
 
+    /// <summary>
+    /// Ends the open query; one opened in another command buffer is dropped and counted as lost.
+    /// </summary>
     void End(IGpuCommandList cmd)
     {
         if (_open < 0) return;
@@ -210,6 +273,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Reads every query's values, waiting for them.
+    /// </summary>
     void ReadResults(ulong[] data)
     {
         fixed (ulong* p = data)
@@ -220,6 +286,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
         }
     }
 
+    /// <summary>
+    /// Destroys the pool and stops being the current meter.
+    /// </summary>
     public void Dispose()
     {
         if (Current == this) Current = null;

@@ -35,6 +35,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// How long a corpse lies before it decays, in game hours (<c>FUN_1405ccd90</c>, <b>Verified</b> literal: "corpse decayed" past 12).
     /// </summary>
     public const float CorpseHours = 12;
+    /// <summary>
+    /// <see cref="CorpseHours"/> in ticks of the default tick length; <see cref="CorpseTicksOf"/> takes the world's.
+    /// </summary>
     public const long CorpseTicks = (long)(CorpseHours / HoursPerTick);
 
     /// <summary>
@@ -48,10 +51,22 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// </summary>
     public static long CorpseTicksOf(World world) => (long)(CorpseHours * World.SecondsPerGameHour / world.TickSeconds);
 
+    /// <summary>
+    /// The CONSTANTS the medical tick and the XP rates read.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
+    /// <summary>
+    /// The body options every character's medical tick gets.
+    /// </summary>
     public BodyOptions Options { get; } = options ?? BodyOptions.Default;
+    /// <summary>
+    /// The last camera view the client sent (also put in <see cref="World.View"/>).
+    /// </summary>
     CameraViewCommand? _view;
 
+    /// <summary>
+    /// Takes the camera view commands: the last one is kept and set as the world's view.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var c in commands)
@@ -62,6 +77,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// The <see cref="MedicalContext.BodyTimeScale"/> every character gets (default 1: the documented rates).
     /// </summary>
     public float BodyTimeScale { get; } = bodyTimeScale;
+    /// <summary>
+    /// The XP rates and level-ups of training.
+    /// </summary>
     readonly XpService _xp = new(constants, options ?? BodyOptions.Default);
 
     /// <summary>
@@ -75,18 +93,18 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     const float BedReach = 3;
 
     /// <summary>
-    /// The bed a character lies in (character state 1; <c>FUN_140652000</c>, character-stats.md "Beds"): the one it is held in (the player's beds,
-    /// <see cref="Locks.BedSystem"/>), else for an AI asleep at its home's bed spot the bed fixture there. Its kind is the functionality's
-    /// <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED) and its factor the Building's <c>+0x3c0</c>: <c>output rate</c> x <c>production mult</c> x the
-    /// research production multiplier. None outside a bed.
-    /// </summary>
-    /// <summary>
     /// The health word tooltip's "Recovery rate: {1}x" (<c>FUN_14088a8f0</c>): in a bed (state 1) of class 6 whose rate is above 1, that rate; null
     /// otherwise. A repair bed has none.
     /// </summary>
     public float? BedRecoveryRate(World world, CharacterCold cold, in CharacterHot n) =>
         cold.InSomething == Locks.HeldState.Bed && BedOf(world, cold, in n) is (BedKind.Bed, var factor) && factor > 1 ? factor : null;
 
+    /// <summary>
+    /// The bed a character lies in (character state 1; <c>FUN_140652000</c>, character-stats.md "Beds"): the one it is held in (the player's beds,
+    /// <see cref="Locks.BedSystem"/>), else for an AI asleep at its home's bed spot the bed fixture there. Its kind is the functionality's
+    /// <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED) and its factor the Building's <c>+0x3c0</c>: <c>output rate</c> x <c>production mult</c> x the
+    /// research production multiplier. None outside a bed.
+    /// </summary>
     (BedKind Kind, float Factor) BedOf(World world, CharacterCold cold, in CharacterHot n)
     {
         if (db is null) return (BedKind.None, 1);
@@ -430,13 +448,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// The numbers behind the information panel's extended lines (<c>FUN_140895350</c>, docs/game/ui-screens.md section 4). Toughness XP
-    /// (<c>FUN_1408c5f40</c>, <b>Verified</b> in game, #82): 1, or 2 with the left arm crippled, plus 2 for the right arm, 2 while the blood-loss
-    /// trauma flag is set, and 2 for the "Critical wounds" term, which tests the worst part's fraction (at most 1) against 15 and so is always on: a
-    /// whole character reads 3x. Strength XP is the carrying rate here; the published HUD replaces it in combat mode (<see cref="WithCombatMode"/>),
-    /// which needs the fight and turret state of other characters.
-    /// </summary>
-    /// <summary>
     /// The functionality <c>hunger rate</c> of the machine a character works or the chair it sits on, while it stands still out of combat
     /// (<see cref="MedicalContext.UseHungerRate"/>); null otherwise.
     /// </summary>
@@ -468,6 +479,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return cold.AmIdle;
     }
 
+    /// <summary>
+    /// The numbers behind the information panel's extended lines (<c>FUN_140895350</c>, docs/game/ui-screens.md section 4). Toughness XP
+    /// (<c>FUN_1408c5f40</c>, <b>Verified</b> in game, #82): 1, or 2 with the left arm crippled, plus 2 for the right arm, 2 while the blood-loss
+    /// trauma flag is set, and 2 for the "Critical wounds" term, which tests the worst part's fraction (at most 1) against 15 and so is always on: a
+    /// whole character reads 3x. Strength XP is the carrying rate here; the published HUD replaces it in combat mode (<see cref="WithCombatMode"/>),
+    /// which needs the fight and turret state of other characters.
+    /// </summary>
     ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance,
         in MedicalContext ctx, bool carrying)
     {
@@ -494,13 +512,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return x with { StrengthXp = rate, Fighting = true, Fists = fists };
     }
 
-    /// <summary>
-    /// XP outside combat (character-stats.md "Levelling"; the movement tick <c>FUN_1408c6660</c>): athletics while running, strength while carrying a
-    /// load. A character counts as running when it moves faster than its race walk speed (+1); whether walking trains too is <b>Unknown</b> (the doc
-    /// names running). In deep water (<paramref name="deepWater"/>) swimming trains instead of athletics (<b>Verified</b>, <c>FUN_1408c6660</c>).
-    /// Strength rises only when the load encumbers it, and only while it moves. The speed the stat sees is the velocity the movement system left this
-    /// tick.
-    /// </summary>
     /// <summary>
     /// A sneaker's exposure for its stealth XP: an exposure older than a second (a looker's scan interval with room to spare) has lapsed.
     /// </summary>
@@ -554,10 +565,22 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return false;
     }
 
+    /// <summary>
+    /// The state of <see cref="SomeoneAbout"/>'s grid query.
+    /// </summary>
     struct AboutScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The sneaker's slot and the player's faction.
+        /// </summary>
         public int Self, PlayerFaction;
+        /// <summary>
+        /// Whether someone the sneaker senses was found.
+        /// </summary>
         public bool Found;
     }
 
@@ -578,6 +601,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return scan.Found;
     }
 
+    /// <summary>
+    /// XP outside combat (character-stats.md "Levelling"; the movement tick <c>FUN_1408c6660</c>): athletics while running, strength while carrying a
+    /// load. A character counts as running when it moves faster than its race walk speed (+1); whether walking trains too is <b>Unknown</b> (the doc
+    /// names running). In deep water (<paramref name="deepWater"/>) swimming trains instead of athletics (<b>Verified</b>, <c>FUN_1408c6660</c>).
+    /// Strength rises only when the load encumbers it, and only while it moves. The speed the stat sees is the velocity the movement system left this
+    /// tick.
+    /// </summary>
     void TrainOnTheMove(CharacterStats stats, RaceData race, MedicalState medical, in CharacterHot n, bool deepWater, bool carrying,
         float encumbrance, float dt)
     {
@@ -635,6 +665,10 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             (Db: db, Template: squad.TemplateId, world.Seed));
     }
 
+    /// <summary>
+    /// The serial corpse and collapse step: a leg's first collapse stops the character, a burst blows, and a corpse past <see cref="CorpseTicksOf"/>
+    /// (or in a zone that is not loaded) is removed; one carried or held in a bed or cage is kept at most <see cref="HeldCorpseHours"/> old.
+    /// </summary>
     public void SlowWorld(World world)
     {
         var table = world.Characters;

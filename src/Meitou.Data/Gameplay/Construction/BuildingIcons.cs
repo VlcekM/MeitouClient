@@ -8,6 +8,9 @@ namespace Meitou.Data.Gameplay.Construction;
 /// </summary>
 public sealed class BuildingIcons
 {
+    /// <summary>
+    /// The saved pictures by BUILDING string id (the file name without <c>.png</c>), to the file's path.
+    /// </summary>
     readonly Dictionary<string, string> _files = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -35,6 +38,9 @@ public sealed class BuildingIcons
 /// </summary>
 public static class BuildingIconStyle
 {
+    /// <summary>
+    /// The picture's width and height in pixels.
+    /// </summary>
     public const int Size = 128;
 
     /// <summary>
@@ -48,8 +54,8 @@ public static class BuildingIconStyle
     public const float Pitch = 30, Yaw = -90;
 
     /// <summary>
-    /// A building whose bounds are less than this many times as wide (X) as deep (Z) after the turns is yawed again, so its long side faces the
-    /// camera.
+    /// A building whose bounds are less than this many times as wide (X) as deep (Z) after the turns is yawed again, so its long side faces
+    /// the camera.
     /// </summary>
     public const float WideRatio = 1.2f;
 

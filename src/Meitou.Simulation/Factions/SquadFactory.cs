@@ -12,6 +12,9 @@ namespace Meitou.Simulation.Factions;
 /// </summary>
 public interface IWorldStates
 {
+    /// <summary>
+    /// Whether the WORLD_EVENT_STATE <paramref name="worldStateId"/> holds.
+    /// </summary>
     bool IsTrue(string worldStateId);
 
     /// <summary>
@@ -26,8 +29,14 @@ public interface IWorldStates
     public static bool Passes(IWorldStates states, GameDatabase db, string worldStateId, int v0) =>
         db.Find(worldStateId) is not { Type: FcsRecordType.WorldEventState } || states.IsTrue(worldStateId) == (v0 == 1);
 
+    /// <summary>
+    /// The answer of <see cref="None"/>: no state holds.
+    /// </summary>
     sealed class NoStates : IWorldStates
     {
+        /// <summary>
+        /// No state holds.
+        /// </summary>
         public bool IsTrue(string worldStateId) => false;
     }
 }

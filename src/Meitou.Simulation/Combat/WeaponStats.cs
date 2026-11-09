@@ -12,12 +12,16 @@ namespace Meitou.Simulation.Combat;
 /// <param name="CutMultiplier">lerp(q, 0.3, 2) x the record's cut damage multiplier x the manufacturer's cut damage mod.</param>
 /// <param name="BluntMultiplier">lerp(q, 0, 2) x the record's blunt damage multiplier x the manufacturer's blunt damage mod.</param>
 /// <param name="MinCut">The record's min cut damage mult x the manufacturer's min cut damage.</param>
-/// <param name="Weight">The larger of weight kg x the manufacturer's weight mod and 40 x blunt multiplier x weight mult x the weapon inventory weight multiplier.</param>
+/// <param name="Weight">The larger of weight kg x the manufacturer's weight mod and 40 x blunt multiplier x weight mult x the weapon inventory
+/// weight multiplier.</param>
 /// <param name="AttackMod">The record's attack mod plus the model's.</param>
 /// <param name="DefenceMod">The record's defence mod plus the model's.</param>
 public readonly record struct WeaponStats(float Quality, float CutMultiplier, float BluntMultiplier, float MinCut, float Weight, int AttackMod,
     int DefenceMod, int IndoorsMod)
 {
+    /// <summary>
+    /// The numbers of a weapon of <paramref name="quality"/> (clamped to 0..1) from its record, manufacturer and material.
+    /// </summary>
     public static WeaponStats Compute(float quality, WeaponData weapon, WeaponManufacturer manufacturer, WeaponMaterial material,
         CombatConstants constants)
     {
@@ -42,8 +46,14 @@ public readonly record struct WeaponStats(float Quality, float CutMultiplier, fl
 /// </summary>
 public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
 {
+    /// <summary>
+    /// The WEAPON record's data.
+    /// </summary>
     public WeaponData Data { get; } = data;
 
+    /// <summary>
+    /// The weapon's numbers at its quality.
+    /// </summary>
     public WeaponStats Stats { get; } = stats;
 
     /// <summary>
@@ -57,12 +67,21 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
     /// </summary>
     public WeaponKinds Kind { get; } = KindOf(data.AnimationCategory);
 
+    /// <summary>
+    /// Whether the weapon can block (its record's).
+    /// </summary>
     public bool CanBlock => Data.CanBlock;
 
+    /// <summary>
+    /// A weapon of <paramref name="quality"/> from its record; a missing manufacturer or material is the neutral one.
+    /// </summary>
     public static WeaponInstance Create(float quality, WeaponData data, WeaponManufacturer? manufacturer, WeaponMaterial? material,
         CombatConstants constants) =>
         new(data, WeaponStats.Compute(quality, data, manufacturer ?? WeaponManufacturer.Neutral, material ?? WeaponMaterial.None, constants));
 
+    /// <summary>
+    /// The skill of weapon category <paramref name="category"/> (martial arts for any other).
+    /// </summary>
     public static StatsEnumerated SkillOf(int category) => category switch
     {
         (int)WeaponCategory.Katanas => StatsEnumerated.Katanas,

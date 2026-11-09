@@ -9,10 +9,22 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class FoliageRandom
 {
+    /// <summary>
+    /// MT19937's state size (n) and shift offset (m), in words.
+    /// </summary>
     const int N = 624, M = 397;
+    /// <summary>
+    /// The generator's state words.
+    /// </summary>
     readonly uint[] _state = new uint[N];
+    /// <summary>
+    /// The next state word to temper; the block is twisted first when it reaches <see cref="N"/>.
+    /// </summary>
     int _index;
 
+    /// <summary>
+    /// A generator seeded with <paramref name="seed"/>.
+    /// </summary>
     public FoliageRandom(uint seed) => Seed(seed);
 
     /// <summary>
@@ -30,6 +42,9 @@ public sealed class FoliageRandom
     /// </summary>
     public int Count { get; private set; }
 
+    /// <summary>
+    /// Seeds the generator with MT19937's standard initialisation and resets <see cref="Count"/>.
+    /// </summary>
     public void Seed(uint seed)
     {
         _state[0] = seed;
@@ -40,7 +55,9 @@ public sealed class FoliageRandom
         Count = 0;
     }
 
-    // The block in three runs, so no index wraps (a modulo per word was 40% of a grass page's time; grass reseeds per page and patch).
+    /// <summary>
+    /// Twists the block in three runs, so no index wraps (a modulo per word was 40% of a grass page's time; grass reseeds per page and patch).
+    /// </summary>
     void Twist()
     {
         var s = _state.AsSpan();
@@ -51,6 +68,10 @@ public sealed class FoliageRandom
         _index = 0;
     }
 
+    /// <summary>
+    /// MT19937's step for one word: the top bit of <paramref name="current"/> and the low bits of <paramref name="next"/>, mixed into
+    /// <paramref name="far"/>.
+    /// </summary>
     static uint Mix(uint current, uint next, uint far)
     {
         uint y = (current & 0x80000000u) | (next & 0x7FFFFFFFu);

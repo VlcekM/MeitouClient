@@ -10,8 +10,19 @@ namespace Meitou.Data.Gameplay.Economy;
 /// </summary>
 public sealed class TradeCulture
 {
+    /// <summary>
+    /// Price factors by item id (v0 / 100, 0 meaning 100); the later culture wins.
+    /// </summary>
     readonly Dictionary<string, float> _prices = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The <c>illegal goods</c> of every listed culture.
+    /// </summary>
     readonly HashSet<string> _illegal = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The <c>forbidden items</c> of every listed culture.
+    /// </summary>
     readonly HashSet<string> _forbidden = new(StringComparer.Ordinal);
 
     /// <summary>

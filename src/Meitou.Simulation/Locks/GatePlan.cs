@@ -27,23 +27,71 @@ sealed class GatePlan : IPlanWorld
     /// A gateway's reach (<c>getReachRange</c>, docs/game/locks.md "Door and place"; x2 standing), and the most bashers one gate takes (crowdLimit8).
     /// </summary>
     public const float GateReach = 45;
+    /// <summary>
+    /// The most bashers one gate takes (crowdLimit8; see <see cref="GateReach"/>).
+    /// </summary>
     public const int CrowdLimit = 8;
 
+    /// <summary>
+    /// The world of the plan being made.
+    /// </summary>
     World _world = null!;
+    /// <summary>
+    /// The combat system the aggression test reads (null: none).
+    /// </summary>
     CombatSystem? _combat;
+    /// <summary>
+    /// The lock system the fortification state reads.
+    /// </summary>
     LockSystem _locks = null!;
+    /// <summary>
+    /// The planning character's slot.
+    /// </summary>
     int _me;
+    /// <summary>
+    /// Where the planning character wants to go.
+    /// </summary>
     Vector3 _to;
+    /// <summary>
+    /// The goal row planned.
+    /// </summary>
     TaskType _goal;
+    /// <summary>
+    /// The planning character.
+    /// </summary>
     CharacterCold _cold = null!;
+    /// <summary>
+    /// The gate building's instance id ("" for a wall smash).
+    /// </summary>
     string _building = "";
+    /// <summary>
+    /// The gate's main door.
+    /// </summary>
     Fixture _door = null!;
+    /// <summary>
+    /// Where the main door's leaf is.
+    /// </summary>
     DoorSpot _spot;
+    /// <summary>
+    /// The wall 270 falls back to (null: a gate is planned).
+    /// </summary>
     BuildSite? _wall;
+    /// <summary>
+    /// The character's desire to bash the gate (1 for a wall smash).
+    /// </summary>
     float _aggressive;
+    /// <summary>
+    /// The plan the last <see cref="Run"/> made.
+    /// </summary>
     readonly List<PlanStep> _plan = [];
 
+    /// <summary>
+    /// The human repertoire (1).
+    /// </summary>
     public int Category => 0x1;
+    /// <summary>
+    /// Restricted rows are open: the attacker is planned as an NPC.
+    /// </summary>
     public bool Squadless => true;
 
     /// <summary>
@@ -60,6 +108,10 @@ sealed class GatePlan : IPlanWorld
     public bool PlansSmash(World w, CombatSystem? fights, LockSystem lockSystem, int s, int t, BuildSite smash) =>
         PlansBash(w, fights, lockSystem, s, t, "", null!, default, smash);
 
+    /// <summary>
+    /// Plans row 4 for attacker <paramref name="s"/> at <paramref name="t"/> through gate <paramref name="gate"/> or wall <paramref name="smash"/>;
+    /// true when the plan bashes or smashes it.
+    /// </summary>
     bool PlansBash(World w, CombatSystem? fights, LockSystem lockSystem, int s, int t, string gate, Fixture mainDoor, DoorSpot mainSpot,
             BuildSite? smash) =>
         Run(w, fights, lockSystem, s, w.Characters.Next[t].Position, TaskType.MeleeAttack, gate, mainDoor, mainSpot, smash) == DoorPlan.Entry.Bash;
@@ -73,6 +125,10 @@ sealed class GatePlan : IPlanWorld
             DoorSpot mainSpot) =>
         Run(w, fights, lockSystem, s, dest, TaskType.RunAroundTownLookingForPeople, gate, mainDoor, mainSpot, null);
 
+    /// <summary>
+    /// Plans <paramref name="goalRow"/> for the character at <paramref name="s"/> towards <paramref name="dest"/> through the gate or wall and says
+    /// how the way in goes: blocked, a walk or a bash.
+    /// </summary>
     DoorPlan.Entry Run(World w, CombatSystem? fights, LockSystem lockSystem, int s, Vector3 dest, TaskType goalRow, string gate, Fixture mainDoor,
             DoorSpot mainSpot, BuildSite? smash)
     {
@@ -92,6 +148,10 @@ sealed class GatePlan : IPlanWorld
         return DoorPlan.Entry.Walk;
     }
 
+    /// <summary>
+    /// The desire of a row on the way: the bash and smash rows the character's aggression, else the row's task profile desire (1 for a random or
+    /// own one).
+    /// </summary>
     public float Desire(TaskDataRow row, in PlanTarget target)
     {
         if (row.Type is TaskType.BashDoor or TaskType.BashDoorHere or TaskType.BashGate or TaskType.Unnamed290 or TaskType.SmashBuilding)
@@ -101,6 +161,10 @@ sealed class GatePlan : IPlanWorld
         return d >= 0 ? d : 1;
     }
 
+    /// <summary>
+    /// A gate state's value for a target (the gate's open state, the character at the gate or the foe, the way not blocked by fortifications, the
+    /// wall); the rest is held.
+    /// </summary>
     public bool Holds(TaskCondition condition, in PlanTarget target)
     {
         ref var n = ref _world.Characters.Next[_me];

@@ -11,12 +11,24 @@ namespace Meitou.Data.Audio;
 /// </summary>
 public sealed class WwiseCodebookLibrary
 {
+    /// <summary>
+    /// The layout of <c>codebooks.bin</c>; a cache of another version is read again from the exe.
+    /// </summary>
     const int CacheVersion = 1;
 
+    /// <summary>
+    /// The packed codebooks by index.
+    /// </summary>
     readonly byte[][] _codebooks;
 
+    /// <summary>
+    /// A library of <paramref name="codebooks"/>, kept as given.
+    /// </summary>
     WwiseCodebookLibrary(byte[][] codebooks) => this._codebooks = codebooks;
 
+    /// <summary>
+    /// How many codebooks the library holds (598 in Kenshi's exe).
+    /// </summary>
     public int Count => _codebooks.Length;
 
     /// <summary>
@@ -26,6 +38,9 @@ public sealed class WwiseCodebookLibrary
         (uint)index < (uint)_codebooks.Length ? _codebooks[index]
                 : throw new InvalidDataException($"Codebook {index} is not in the library ({_codebooks.Length})");
 
+    /// <summary>
+    /// A library of the given packed codebooks in order (tests and tools).
+    /// </summary>
     public static WwiseCodebookLibrary FromCodebooks(IEnumerable<byte[]> codebooks) => new([.. codebooks]);
 
     /// <summary>
@@ -39,6 +54,9 @@ public sealed class WwiseCodebookLibrary
     public static string DefaultCacheDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "audio");
 
+    /// <summary>
+    /// The first four bytes of <c>codebooks.bin</c>.
+    /// </summary>
     static ReadOnlySpan<byte> CacheMagic => "MWCB"u8;
 
     /// <summary>
@@ -77,6 +95,10 @@ public sealed class WwiseCodebookLibrary
         return library;
     }
 
+    /// <summary>
+    /// The library cached in <paramref name="file"/> when it was made from an exe of <paramref name="exeLength"/> bytes and write time
+    /// <paramref name="stamp"/>; null when missing, stale or unreadable.
+    /// </summary>
     static WwiseCodebookLibrary? TryReadCache(string file, long exeLength, long stamp)
     {
         try
@@ -101,6 +123,9 @@ public sealed class WwiseCodebookLibrary
         }
     }
 
+    /// <summary>
+    /// Finds the library in the bytes of a Wwise-linked 64-bit Windows executable; null when none is found.
+    /// </summary>
     public static WwiseCodebookLibrary? FromExecutable(byte[] exe) => FromExecutable(exe, out _);
 
     /// <summary>
@@ -115,6 +140,10 @@ public sealed class WwiseCodebookLibrary
         return $"{exe.Length:N0} bytes, {why}";
     }
 
+    /// <summary>
+    /// Scans every section that is not code for a run of at least 200 increasing pointers into the image no more than 8000 bytes apart, and takes the
+    /// first whose codebooks all parse; <paramref name="why"/> says why none did.
+    /// </summary>
     static WwiseCodebookLibrary? FromExecutable(byte[] exe, out string why)
     {
         var sections = Sections(exe, out ulong imageBase);
@@ -171,6 +200,10 @@ public sealed class WwiseCodebookLibrary
         return null;
     }
 
+    /// <summary>
+    /// The codebooks between the <paramref name="pointers"/> pointers at file offset <paramref name="table"/>, each of which must parse and fill its
+    /// span exactly; null otherwise, with the failing index in <paramref name="failedAt"/>.
+    /// </summary>
     static WwiseCodebookLibrary? TryRead(byte[] exe, long table, int pointers, Func<ulong, long> toFile, out int failedAt)
     {
         var books = new byte[pointers - 1][];
@@ -196,8 +229,14 @@ public sealed class WwiseCodebookLibrary
         return new WwiseCodebookLibrary(books);
     }
 
+    /// <summary>
+    /// A PE section header: name, virtual address (relative to the image base), file offset and size of its raw data, characteristics flags.
+    /// </summary>
     sealed record Section(string Name, ulong Va, long Raw, long RawSize, uint Flags);
 
+    /// <summary>
+    /// The section headers of a PE32+ executable and its image base; null when <paramref name="exe"/> is not one.
+    /// </summary>
     static List<Section>? Sections(byte[] exe, out ulong imageBase)
     {
         imageBase = 0;

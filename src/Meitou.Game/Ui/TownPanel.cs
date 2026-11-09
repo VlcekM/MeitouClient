@@ -12,6 +12,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class TownPanel(PlayerInterface player)
 {
+    /// <summary>
+    /// The panel's screen id, its name edit box and its Open to public tick.
+    /// </summary>
     internal const string TownScreen = "town", TownNameBox = "OutpostNameEditBox", TownPublicTick = "OpenToPublicCheckBox";
 
     /// <summary>

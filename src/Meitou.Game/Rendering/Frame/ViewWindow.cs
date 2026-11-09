@@ -13,6 +13,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public readonly record struct ViewWindow(float Scale, float OffsetX, float OffsetY)
 {
+    /// <summary>
+    /// The whole view: scale 1, no offset (no tiled screenshot).
+    /// </summary>
     public static readonly ViewWindow Whole = new(1, 0, 0);
 
     /// <summary>
@@ -31,6 +34,9 @@ public readonly record struct ViewWindow(float Scale, float OffsetX, float Offse
         return new(sy, sx * ((2f * column + 1) / n - 1), sy * (1 - (2f * row + 1) / n));
     }
 
+    /// <summary>
+    /// Whether this is <see cref="Whole"/>, so projections pass through unchanged.
+    /// </summary>
     public bool IsWhole => Scale == 1 && OffsetX == 0 && OffsetY == 0;
 
     /// <summary>

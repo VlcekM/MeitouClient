@@ -62,9 +62,9 @@ public sealed class FoliageLayoutCacheUpkeep
     public void MaintainInBackground() => Task.Run(MaintainQuietly);
 
     /// <summary>
-    /// Keeps the cache in bounds: abandoned temporary files go, keys unused for 30 days go (the folder of a key is touched when a start opens it for writing and
-    /// on each pass), and when the files total more than <see cref="MaxBytes"/> the other keys go whole, least recently used first, then this key's oldest files,
-    /// down to 90% of the cap. Returns (files, bytes before, files deleted).
+    /// Keeps the cache in bounds: abandoned temporary files go, keys unused for 30 days go (the folder of a key is touched when a start opens it for
+    /// writing and on each pass), and when the files total more than <see cref="MaxBytes"/> the other keys go whole, least recently used first, then
+    /// this key's oldest files, down to 90% of the cap. Returns (files, bytes before, files deleted).
     /// </summary>
     public (int Files, long Bytes, int Deleted) Maintain(DateTime? now = null)
     {
@@ -138,7 +138,8 @@ public sealed class FoliageLayoutCacheUpkeep
     }
 
     /// <summary>
-    /// Over the cap: the other keys go whole, least recently used first, then this key's oldest files, down to 90% of the cap. Returns the files deleted.
+    /// Over the cap: the other keys go whole, least recently used first, then this key's oldest files, down to 90% of the cap. Returns the
+    /// files deleted.
     /// </summary>
     int Evict(List<(DirectoryInfo Dir, long Bytes)> keys, long total)
     {

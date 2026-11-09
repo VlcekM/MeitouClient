@@ -16,7 +16,14 @@ namespace Meitou.Game.Rendering.Overlays;
 /// </summary>
 public sealed unsafe class MarkerRenderer : IDisposable
 {
+    /// <summary>
+    /// The movement marker's scale (<c>position.mesh</c> scaled 8) and the lighting's contrast (as <c>Basic_Lit_VP</c> lights it, 0.5).
+    /// </summary>
     const float MarkerScale = 8, Contrast = 0.5f;
+
+    /// <summary>
+    /// The colours of the material's two passes: the visible part (lit, alpha blended) and the part behind the scene.
+    /// </summary>
     static readonly Vector4 Visible = new(0.612f, 0.694f, 0.529f, 1), Hidden = new(0.306f, 0.347f, 0.2645f, 0.6f);
     /// <summary>
     /// The alpha of an arrow's part behind the scene (the stealth call's second pass, <c>FUN_1409b7830</c>).
@@ -28,6 +35,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// </summary>
     public readonly record struct Arrow(Vector3 At, Vector3 Direction, Vector3 Colour);
 
+    /// <summary>
+    /// The vertex shader: the mesh turned and placed relative to the eye, lit by the sun at <see cref="Contrast"/>.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec3 aPos;
@@ -46,7 +56,10 @@ public sealed unsafe class MarkerRenderer : IDisposable
         }
         """;
 
-    // The scene's depth decides which pass a fragment belongs to (the game's depth tests, against the scene only).
+    /// <summary>
+    /// The fragment shader: the scene's depth decides which pass a fragment belongs to (the game's depth tests, against the scene only);
+    /// premultiplied, over a clear target.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec4 vColour;
@@ -64,12 +77,17 @@ public sealed unsafe class MarkerRenderer : IDisposable
         }
         """;
 
-    // The resolved markers over the picture (a full-screen triangle).
+    /// <summary>
+    /// The composite's vertex shader: the resolved markers over the picture (a full-screen triangle).
+    /// </summary>
     const string CompositeVertex = """
         #version 330 core
         void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
         """;
 
+    /// <summary>
+    /// The composite's fragment shader: the resolved markers' texel at the pixel.
+    /// </summary>
     const string CompositeFragment = """
         #version 330 core
         out vec4 fragColour;
@@ -83,29 +101,95 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// </summary>
     const int WantedSamples = 4;
 
+    /// <summary>
+    /// The device the markers are drawn on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The markers' program (<see cref="Vertex"/>, <see cref="Fragment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The markers' pipelines.
+    /// </summary>
     readonly NativeSegment _segment;
+
+    /// <summary>
+    /// The meshes' vertices: position and normal.
+    /// </summary>
     readonly DeviceBuffer _vertices;
+
+    /// <summary>
+    /// The vertex layout: position and normal, three floats each, 24 bytes a vertex.
+    /// </summary>
     readonly VertexArrayBindings _vertexSource;
+
+    /// <summary>
+    /// The vertex buffer at the position's and the normal's offset, bound for the draws.
+    /// </summary>
     readonly GpuBufferBinding[] _bindings = new GpuBufferBinding[2];
+
+    /// <summary>
+    /// The markers program's uniforms: the view-projection, the mesh's turn and offset, the sun, the colour, the scene depth's scale and the pass.
+    /// </summary>
     readonly UniformHandle _viewProjection, _rotation, _offset, _sun, _colour, _depthScale, _hiddenPass;
+
+    /// <summary>
+    /// The markers program's scene depth slot.
+    /// </summary>
     readonly SamplerSlot _sceneDepth;
+
+    /// <summary>
+    /// The composite program (<see cref="CompositeVertex"/>, <see cref="CompositeFragment"/>).
+    /// </summary>
     readonly LegacyProgram _composite;
+
+    /// <summary>
+    /// The composite's pipelines.
+    /// </summary>
     readonly NativeSegment _compositeSegment;
+
+    /// <summary>
+    /// The composite program's marker picture slot.
+    /// </summary>
     readonly SamplerSlot _markerImage;
 
-    // The markers drawn multisampled with a depth of their own, at the picture's size, and resolved.
+    /// <summary>
+    /// The markers drawn multisampled with a depth of their own, at the picture's size, and resolved (the colour itself without multisampling).
+    /// </summary>
     GpuTexture? _msColour, _msDepth, _resolved;
+
+    /// <summary>
+    /// The samples per pixel the markers are drawn with: <see cref="WantedSamples"/>, at most what the device allows.
+    /// </summary>
     readonly int _samples;
     /// <summary>
     /// Milliseconds without a marker before the targets are freed (about 70 MB multisampled at 1080p; markers show only for a while after an order).
     /// </summary>
     const long IdleReleaseMs = 10_000;
+
+    /// <summary>
+    /// When the frames without a marker began (<see cref="Environment.TickCount64"/>; 0: a marker was drawn last).
+    /// </summary>
     long _idleSince;
 
-    // The vertex ranges of the two meshes in the buffer (count 0: the mesh is missing).
+    /// <summary>
+    /// The vertex ranges of the marker, arrow and rotation ring meshes in the buffer (count 0: the mesh is missing).
+    /// </summary>
     readonly (int First, int Count) _marker, _arrow, _ring;
+
+    /// <summary>
+    /// Premultiplied alpha blending: the colour over the picture by one minus its alpha.
+    /// </summary>
+    static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
+
+    /// <summary>
+    /// The sneak arrow's node scale in its own frame, before the turn: half as long (its X) and 0.35 as thick, about 5 units long with a head of
+    /// ±0.42 (<c>FUN_1405dc7d0</c> <c>setScale(0.5, 0.35, 0.35)</c>; docs/game/perception.md).
+    /// </summary>
+    static readonly Matrix4x4 ArrowScale = Matrix4x4.CreateScale(0.5f, 0.35f, 0.35f);
 
     /// <summary>
     /// Where the movement marker stands (the ground point of the move order).
@@ -126,6 +210,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// </summary>
     public bool Rotation { get; set; }
 
+    /// <summary>
+    /// Makes the programs and pipelines, uploads the meshes' vertices and picks the sample count.
+    /// </summary>
     MarkerRenderer(IGpuContext gpu, float[] data, (int, int) marker, (int, int) arrow, (int, int) ring)
     {
         this._gpu = gpu;
@@ -261,8 +348,6 @@ public sealed unsafe class MarkerRenderer : IDisposable
         _gpu.EndNative(cmd);
     }
 
-    static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
-
     /// <summary>
     /// The multisampled targets and the resolved picture at <paramref name="width"/> × <paramref name="height"/>, made again when the size changes.
     /// </summary>
@@ -328,6 +413,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         cmd.EndRendering();
     }
 
+    /// <summary>
+    /// Draws <paramref name="mesh"/> turned by <paramref name="turn"/> at <paramref name="relative"/> to the eye, in colour <paramref name="c"/>.
+    /// </summary>
     void Draw(IGpuCommandList cmd, (int First, int Count) mesh, Vector3 relative, Matrix4x4 turn, Vector4 c)
     {
         _program.Set(_offset, relative);
@@ -336,12 +424,6 @@ public sealed unsafe class MarkerRenderer : IDisposable
         _program.Flush(cmd);
         cmd.Draw((uint)mesh.Count, 1, (uint)mesh.First, 0);
     }
-
-    /// <summary>
-    /// The sneak arrow's node scale in its own frame, before the turn: half as long (its X) and 0.35 as thick, about 5 units long with a head of
-    /// ±0.42 (<c>FUN_1405dc7d0</c> <c>setScale(0.5, 0.35, 0.35)</c>; docs/game/perception.md).
-    /// </summary>
-    static readonly Matrix4x4 ArrowScale = Matrix4x4.CreateScale(0.5f, 0.35f, 0.35f);
 
     /// <summary>
     /// The turn taking the arrow mesh's −X (its tip) onto <paramref name="direction"/> (Ogre's <c>getRotationTo</c>; opposite: half a turn about Y).
@@ -355,6 +437,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         return Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(new Quaternion(Vector3.Cross(from, direction), 1 + dot)));
     }
 
+    /// <summary>
+    /// The nearest-filtered, edge-clamped sampler the composite reads the markers with.
+    /// </summary>
     GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
 
     /// <summary>
@@ -368,6 +453,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         else if (now - _idleSince >= IdleReleaseMs) ReleaseTargets();
     }
 
+    /// <summary>
+    /// Frees the multisampled targets and the resolved picture.
+    /// </summary>
     void ReleaseTargets()
     {
         if (_resolved != _msColour) _resolved?.Dispose();
@@ -377,6 +465,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
         _idleSince = 0;
     }
 
+    /// <summary>
+    /// Releases the vertices and the targets.
+    /// </summary>
     public void Dispose()
     {
         _vertices.Dispose();

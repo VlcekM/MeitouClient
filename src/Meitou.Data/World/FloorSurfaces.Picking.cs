@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
+/// <summary>
+/// The part with ray picks and the floor below a point.
+/// </summary>
 public sealed partial class FloorSurfaces
 {
     /// <summary>
@@ -74,6 +77,10 @@ public sealed partial class FloorSurfaces
         return normal;
     }
 
+    /// <summary>
+    /// The highest point at most 0.5 over <paramref name="point"/> on a walkable triangle of a floor up to <paramref name="floor"/>: straight below
+    /// it, else on a triangle edge within 4 units (a floor that starts inside a thick wall); null when there is none.
+    /// </summary>
     Vector3? FloorBelow(Vector3 point, int floor)
     {
         Vector3? best = null;
@@ -131,13 +138,19 @@ public sealed partial class FloorSurfaces
         return best;
     }
 
-    // Match the navigation slope limit; collision meshes can have either winding.
+    /// <summary>
+    /// Whether the triangle slopes at most 40°, the navigation slope limit; collision meshes can have either winding.
+    /// </summary>
     static bool Walkable(Vector3 a, Vector3 b, Vector3 c)
     {
         var normal = Vector3.Cross(b - a, c - a);
         return normal.LengthSquared() > 1e-12f && MathF.Abs(normal.Y) >= normal.Length() * MathF.Cos(40 * MathF.PI / 180);
     }
 
+    /// <summary>
+    /// The distance along <paramref name="direction"/> from <paramref name="origin"/> to triangle <paramref name="a"/>, <paramref name="b"/>,
+    /// <paramref name="c"/> (either winding); null when the ray misses it or it lies behind.
+    /// </summary>
     internal static float? RayTriangle(Vector3 origin, Vector3 direction, Vector3 a, Vector3 b, Vector3 c)
     {
         var edge = b - a;
@@ -155,6 +168,9 @@ public sealed partial class FloorSurfaces
         return t >= 0 ? t : null;
     }
 
+    /// <summary>
+    /// Whether the ray from <paramref name="origin"/> along <paramref name="direction"/> meets the box within <paramref name="distance"/>.
+    /// </summary>
     internal static bool RayBox(Vector3 origin, Vector3 direction, Vector3 min, Vector3 max, float distance)
     {
         float near = 0, far = distance;

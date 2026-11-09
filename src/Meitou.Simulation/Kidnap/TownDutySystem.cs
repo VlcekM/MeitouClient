@@ -32,6 +32,9 @@ public sealed record TownDutySettings
     /// <see cref="FixtureRegistry.AtCage"/>).
     /// </summary>
     public float Arrive { get; init; } = 40;
+    /// <summary>
+    /// A walk that ended within this of its goal counts as arrived (see <see cref="Arrive"/>).
+    /// </summary>
     public float CageSlack { get; init; } = 200;
     /// <summary>
     /// Walks that end short before the member gives up (an intruder is then put down where it is).
@@ -48,38 +51,116 @@ public sealed record TownDutySettings
     public double RefuseHours { get; init; } = 2;
 }
 
-public enum TownDutyKind : byte { Lift, Out, Cage, Food, Confiscate, LootFood, Shoo, Ransack, Stash, Ditch, HomeLift, HomeOut }
+/// <summary>
+/// What a town errand is: its rows, by <see cref="TownDutySystem.RowOf"/>.
+/// </summary>
+public enum TownDutyKind : byte
+{
+    /// <summary>
+    /// 273 Remove Intruder: lifting an intruder.
+    /// </summary>
+    Lift,
+    /// <summary>
+    /// 274 Throwing out: carrying it outside the town.
+    /// </summary>
+    Out,
+    /// <summary>
+    /// 112 / 281: carrying it to a cage.
+    /// </summary>
+    Cage,
+    /// <summary>
+    /// 243 Getting food: fetching food from a store.
+    /// </summary>
+    Food,
+    /// <summary>
+    /// Looting the stolen goods off a caged prisoner.
+    /// </summary>
+    Confiscate,
+    /// <summary>
+    /// Looting food and stuff from a store.
+    /// </summary>
+    LootFood,
+    /// <summary>
+    /// Shooing strangers out of the member's building.
+    /// </summary>
+    Shoo,
+    /// <summary>
+    /// Running round the town looking for people.
+    /// </summary>
+    Ransack,
+    /// <summary>
+    /// Putting loot in storage.
+    /// </summary>
+    Stash,
+    /// <summary>
+    /// Getting rid of the resources it carries.
+    /// </summary>
+    Ditch,
+    /// <summary>
+    /// 223 Remove Home Intruder: lifting a home intruder.
+    /// </summary>
+    HomeLift,
+    /// <summary>
+    /// 224: carrying it past the home's first door.
+    /// </summary>
+    HomeOut
+}
 
 /// <summary>
 /// One member's errand of the <see cref="TownDutySystem"/>: an intruder it lifts and carries out or to a cage, or a store it fetches food from.
 /// </summary>
 public sealed class TownDuty
 {
+    /// <summary>
+    /// The member running the errand.
+    /// </summary>
     public required CharacterId Member { get; init; }
     /// <summary>
     /// The intruder (none for a food run).
     /// </summary>
     public CharacterId Body { get; init; } = CharacterId.None;
+    /// <summary>
+    /// The member's faction.
+    /// </summary>
     public required int Faction { get; init; }
+    /// <summary>
+    /// The town of the errand.
+    /// </summary>
     public required CampaignTown Town { get; init; }
+    /// <summary>
+    /// What the errand is.
+    /// </summary>
     public TownDutyKind Kind { get; set; }
+    /// <summary>
+    /// Where the member walks.
+    /// </summary>
     public Vector2 Goal { get; set; }
     /// <summary>
     /// The cage's fixture id, or the store's (a machine's site id, else a container's fixture id).
     /// </summary>
     public string? Target { get; set; }
+    /// <summary>
+    /// Walks that ended short so far (<see cref="TownDutySettings.Walks"/> give up).
+    /// </summary>
     public int Tries { get; set; }
     /// <summary>
     /// A shoo's start (game hours) and its next event (game seconds of the errand); a confiscation's seconds at the cage; a lift's seconds walking to
     /// the body.
     /// </summary>
     public double Since { get; set; }
+    /// <summary>
+    /// A shoo's next event (game seconds of the errand), a confiscation's seconds at the cage or a lift's seconds walking to the body
+    /// (see <see cref="Since"/>).
+    /// </summary>
     public float Next { get; set; }
     /// <summary>
     /// A food run of a character of the player's side (243 from <c>Character::setupAI</c>): a player order ends it without being undone.
     /// </summary>
     public bool PlayerSide { get; init; }
 
+    /// <summary>
+    /// Adds the errand to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Member);
@@ -188,7 +269,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     public IReadOnlyList<TownDuty> Duties => _duties;
 
     /// <summary>
-    /// The serial step: every errand steps on (an ended one is dropped), then the look on each member's turn, the player's food runs and the ditches asked for.
+    /// The serial step: every errand steps on (an ended one is dropped), then the look on each member's turn, the player's food runs and the ditches
+    /// asked for.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -243,8 +325,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     #region The player's food runs
 
+    /// <summary>
+    /// Whether a squad runs an occupation, as found on <see cref="_occupationsTick"/>.
+    /// </summary>
     bool _occupations;
 
+    /// <summary>
+    /// The tick <see cref="_occupations"/> was found on (-1: never).
+    /// </summary>
     long _occupationsTick = -1;
 
     /// <summary>
@@ -284,6 +372,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
     }
 
+    /// <summary>
+    /// Starts a ditch errand: the member walks to the store spot to empty its inventory there.
+    /// </summary>
     void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
     {
         cold.Engaged = true;
@@ -416,6 +507,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return _occupations;
     }
 
+    /// <summary>
+    /// Starts a food run of a player-side character to a store.
+    /// </summary>
     void StartFood(World world, int s, CharacterCold c, (CampaignTown Town, string Id, Vector2 Spot) store)
     {
         c.Engaged = true;
@@ -881,6 +975,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     static bool HoldsHigherGoal(CharacterCold c) => c.Ai?.Goal?.Task.Priority is TaskPriority.Urgent or TaskPriority.Obedience;
 
+    /// <summary>
+    /// Whether <paramref name="id"/> runs an errand.
+    /// </summary>
     bool Busy(CharacterId id)
     {
         foreach (var d in _duties)
@@ -1035,6 +1132,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     Vector2 Centre(World world, CampaignTown town) =>
         town.Site >= 0 ? Flat(data.Sites[town.Site].Position) : world.Buildings.FindTown(town.PlayerTown) is { } t ? Flat(t.Position) : default;
 
+    /// <summary>
+    /// The reach of a town: a placed town's radius, a player town's farthest building from its centre.
+    /// </summary>
     float Reach(World world, CampaignTown town)
     {
         if (town.Site >= 0) return data.Sites[town.Site].Town.Radius;
@@ -1058,7 +1158,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The player town's complete buildings as exit candidates: each one's point and whether it is a way through (an unlocked gate, or a linking building with an interior).
+    /// The player town's complete buildings as exit candidates: each one's point and whether it is a way through (an unlocked gate, or a linking
+    /// building with an interior).
     /// </summary>
     IEnumerable<(Vector2, bool)> ExitCandidates(World world, CampaignTown town)
     {
@@ -1179,6 +1280,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     public static bool CarriesLoot(World world, CharacterCold c) => LootOf(world, c).Any();
 
+    /// <summary>
+    /// Whether a fixture is a store, with the item type and the items it is limited to (cached by record).
+    /// </summary>
     (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit) StorageOf(Fixture f)
     {
         if (_storageRecords.TryGetValue(f.RecordId, out var known)) return known;
@@ -1514,6 +1618,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return true;
     }
 
+    /// <summary>
+    /// The member puts the body down short of its goal; the body is left alone for <see cref="TownDutySettings.RefuseHours"/>.
+    /// </summary>
     bool PutDown(World world, TownDuty d, int g)
     {
         TaskStart.Stand(world.Characters, g);
@@ -1651,6 +1758,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         return item is null ? 1 : InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _);   // nothing listed is no failure of room
     }
 
+    /// <summary>
+    /// One tick of a food run: walking to the store, then taking one food item; false when it is over.
+    /// </summary>
     bool StepFood(World world, TownDuty d, int g, CharacterCold gc)
     {
         var table = world.Characters;

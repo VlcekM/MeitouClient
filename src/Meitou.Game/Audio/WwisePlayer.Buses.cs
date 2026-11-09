@@ -9,8 +9,14 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer
 {
-    // Offsets set by actions, keyed by (target node or bus, game object; 0 for the global scope), fading to their target value.
+    /// <summary>
+    /// Offsets set by actions, keyed by (target node or bus, game object; 0 for the global scope), fading to their target value. Volume and bus
+    /// volume offsets are in dB, pitch in cents, low-pass in its own units.
+    /// </summary>
     readonly OffsetTable _volumeOffsets = new(decibels: true), _pitchOffsets = new(), _lowPassOffsets = new(), _busVolumes = new(decibels: true);
+    /// <summary>
+    /// The auxiliary buses' states by bus id, made on first use (<see cref="AuxBus"/>).
+    /// </summary>
     readonly Dictionary<uint, AuxBusState> _auxBuses = [];
 
     /// <summary>
@@ -21,32 +27,56 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class OffsetTable(bool decibels = false)
     {
+        /// <summary>
+        /// One offset: its value now, where its fade started and goes, the fade's length and the time faded so far (seconds).
+        /// </summary>
         sealed class Entry
         {
+            /// <summary>
+            /// The offset now, the value its fade started from, its target, the fade's length and the time faded so far (seconds).
+            /// </summary>
             public float Value, Start, Target, Seconds, Elapsed;
         }
 
+        /// <summary>
+        /// The offsets by (target node or bus, game object; 0 for the global scope).
+        /// </summary>
         readonly Dictionary<(uint Id, ulong Object), Entry> _entries = [];
 
+        /// <summary>
+        /// Whether no offset is set.
+        /// </summary>
         public bool IsEmpty => _entries.Count == 0;
 
+        /// <summary>
+        /// Fades the offset of (<paramref name="id"/>, <paramref name="gameObject"/>) to <paramref name="target"/> over <paramref name="seconds"/>.
+        /// </summary>
         public void Set(uint id, ulong gameObject, float target, float seconds)
         {
             if (!_entries.TryGetValue((id, gameObject), out var e)) _entries[(id, gameObject)] = e = new Entry();
             Start(e, target, seconds);
         }
 
+        /// <summary>
+        /// Fades a set offset back to 0 over <paramref name="seconds"/>; nothing for one never set.
+        /// </summary>
         public void Reset(uint id, ulong gameObject, float seconds)
         {
             if (_entries.TryGetValue((id, gameObject), out var e)) Start(e, 0, seconds);
         }
 
+        /// <summary>
+        /// Starts a fade from the entry's value now (at once when <paramref name="seconds"/> is 0 or less).
+        /// </summary>
         static void Start(Entry e, float target, float seconds)
         {
             (e.Start, e.Target, e.Seconds, e.Elapsed) = (e.Value, target, Math.Max(seconds, 0), 0);
             if (seconds <= 0) e.Value = target;
         }
 
+        /// <summary>
+        /// Moves every fading offset on by <paramref name="dt"/> seconds (a dB one straight in linear gain) and drops those back at 0.
+        /// </summary>
         public void Advance(double dt)
         {
             if (_entries.Count == 0) return;
@@ -77,6 +107,9 @@ public sealed partial class WwisePlayer
             return sum;
         }
 
+        /// <summary>
+        /// Drops the object's offsets (it was unregistered).
+        /// </summary>
         public void ForgetObject(ulong gameObject)
         {
             foreach (var key in _entries.Keys.Where(k => k.Object == gameObject).ToList()) _entries.Remove(key);
@@ -93,18 +126,30 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class AuxBusState(WwiseBus bus)
     {
+        /// <summary>
+        /// The bus record: its effect slots, volume, parent and RTPCs.
+        /// </summary>
         public readonly WwiseBus Bus = bus;
         /// <summary>
         /// Bit n set: the effect in slot n is bypassed (starts as the bank's, changed by bypass actions).
         /// </summary>
         public byte Bypass = bus.FxBypass;
+        /// <summary>
+        /// The reverb of each RoomVerb effect slot, by slot index, made on first use.
+        /// </summary>
         public readonly Dictionary<byte, RoomReverb> Units = [];
+        /// <summary>
+        /// The stereo input of the block being mixed (interleaved), grown as needed; cleared after each block that received.
+        /// </summary>
         public float[] Input = [];
         /// <summary>
         /// Senders added to <see cref="Input"/> in the block being mixed.
         /// </summary>
         public bool Received;
 
+        /// <summary>
+        /// The input buffer for a sender this block (at least <paramref name="frames"/> stereo frames), marked as received.
+        /// </summary>
         public float[] Prepare(int frames)
         {
             if (Input.Length < frames * 2) Input = new float[frames * 2];

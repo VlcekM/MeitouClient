@@ -11,11 +11,29 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class ResourceLoadBar
 {
+    /// <summary>
+    /// Frames in a row with work pending before the bar shows: six.
+    /// </summary>
     const int Delay = 6;
+    /// <summary>
+    /// Last frame's pending requests, the requests counted since none were left, those finished, and the frames still to wait.
+    /// </summary>
     int _previous, _total, _done, _wait = Delay;
+    /// <summary>
+    /// Whether the bar shows this frame.
+    /// </summary>
     bool _visible;
+    /// <summary>
+    /// The bar's layout, made on first draw.
+    /// </summary>
     MyGuiLayout? _layout;
+    /// <summary>
+    /// The track's skin, from the layout.
+    /// </summary>
     string? _trackSkin;
+    /// <summary>
+    /// The resources <see cref="_layout"/> was made from: other resources lay it out again.
+    /// </summary>
     MyGuiResources? _laidOutFor;
 
     /// <summary>
@@ -34,6 +52,9 @@ sealed class ResourceLoadBar
         else if (_wait > 0) _wait--;
     }
 
+    /// <summary>
+    /// Whether the bar shows this frame (<see cref="Update"/>).
+    /// </summary>
     public bool Visible => _visible;
 
     /// <summary>

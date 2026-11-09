@@ -7,6 +7,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's guard and stranger rules: the buildings strangers visit and the town guards' posts.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>

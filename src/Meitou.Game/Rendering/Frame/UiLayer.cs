@@ -15,6 +15,10 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public sealed class UiLayer : IDisposable
 {
+    /// <summary>
+    /// The composite's fragment shader: the interface over the world picture (<c>ui + back * (1 - ui.a)</c>), both read bottom-up and written
+    /// top-down.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -30,12 +34,34 @@ public sealed class UiLayer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The device the textures and the composite run on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The composite program (<see cref="Fragment"/> on the full-screen post vertex shader).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The composite's samplers: the interface (<c>uUi</c>) and the world picture (<c>uBack</c>).
+    /// </summary>
     readonly SamplerSlot _samplerUi, _samplerBack;
+
+    /// <summary>
+    /// The nearest-filtered, edge-clamped sampler both textures are read with.
+    /// </summary>
     readonly SampledTexture _pointSampler;
+
+    /// <summary>
+    /// The interface picture (<see cref="Texture"/>) and the composite's output (<see cref="Final"/>); null until first made, remade at a new size.
+    /// </summary>
     GpuTexture? _texture, _final;
 
+    /// <summary>
+    /// Builds the composite program and its point sampler on <paramref name="gpu"/>.
+    /// </summary>
     public UiLayer(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -104,6 +130,9 @@ public sealed class UiLayer : IDisposable
         return _final;
     }
 
+    /// <summary>
+    /// Releases the two textures (after the frames in flight).
+    /// </summary>
     public void Dispose()
     {
         _texture?.Dispose();

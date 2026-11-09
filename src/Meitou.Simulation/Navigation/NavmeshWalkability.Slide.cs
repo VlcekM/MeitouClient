@@ -3,15 +3,24 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The walls of the walkable surface: sliding a free move along them (<see cref="Slide"/>).
+/// </summary>
 public sealed partial class NavmeshWalkability
 {
     /// <summary>
-    /// How far (units) above or below the walker a wall's edge may lie and still stop it (engine choice: the mesh's own error on stairs, <see cref="SnapRange"/>;
-    /// the original's agent takes edges within 1 Havok unit, 10, of its own height, docs/game/pathfinding.md "Walls").
+    /// How far (units) above or below the walker a wall's edge may lie and still stop it (engine choice: the mesh's own error on stairs,
+    /// <see cref="SnapRange"/>; the original's agent takes edges within 1 Havok unit, 10, of its own height, docs/game/pathfinding.md "Walls").
     /// </summary>
     const float WallHeightWindow = SnapRange;
 
+    /// <summary>
+    /// This thread's list of the walls gathered round a move.
+    /// </summary>
     [ThreadStatic] static List<Wall>? s_wallScratch;
+    /// <summary>
+    /// This thread's set of the polygons already visited while gathering walls.
+    /// </summary>
     [ThreadStatic] static HashSet<int>? s_seenScratch;
 
     /// <summary>
@@ -47,8 +56,8 @@ public sealed partial class NavmeshWalkability
     }
 
     /// <summary>
-    /// The fraction of <paramref name="step"/> a circle at <paramref name="from"/> moves before it touches a wall it is closing on (1: none), and the contact normal
-    /// (from the wall to the circle).
+    /// The fraction of <paramref name="step"/> a circle at <paramref name="from"/> moves before it touches a wall it is closing on (1: none), and the
+    /// contact normal (from the wall to the circle).
     /// </summary>
     static float Sweep(List<Wall> walls, Vector2 from, Vector2 step, float radius, out Vector2 normal)
     {
@@ -99,6 +108,11 @@ public sealed partial class NavmeshWalkability
         return best;
     }
 
+    /// <summary>
+    /// Moves <paramref name="best"/> (the fraction of <paramref name="step"/>) back to where the circle of squared radius <paramref name="r2"/>
+    /// moving from <paramref name="from"/> first touches <paramref name="corner"/>, with the contact <paramref name="normal"/>; nothing when it moves
+    /// away from the corner.
+    /// </summary>
     static void Corner(Vector2 corner, Vector2 from, Vector2 step, float r2, ref float best, ref Vector2 normal)
     {
         var f = from - corner;
@@ -155,6 +169,10 @@ public sealed partial class NavmeshWalkability
         }
     }
 
+    /// <summary>
+    /// Adds to <paramref name="walls"/> the edges of polygon <paramref name="p"/> a walker cannot cross (<see cref="Open"/>) that pass within
+    /// <paramref name="reach"/> of <paramref name="from"/> in plan and within <see cref="WallHeightWindow"/> of its height there.
+    /// </summary>
     static void AddWalls(ZoneNavMesh m, int p, Vector3 from, float reach, NavDoors doors, List<Wall> walls)
     {
         var poly = m.Polygons[p];
@@ -196,6 +214,9 @@ public sealed partial class NavmeshWalkability
             || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMin.Y) || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMax.Y);
     }
 
+    /// <summary>
+    /// Whether polygon <paramref name="p"/> belongs to a door that is closed in <paramref name="doors"/>.
+    /// </summary>
     static bool ClosedDoor(ZoneNavMesh m, int p, NavDoors doors) =>
         m.DoorOf is { } of && of[p] is var d and >= 0 && doors.IsClosed(m.DoorIds![d]);
 }

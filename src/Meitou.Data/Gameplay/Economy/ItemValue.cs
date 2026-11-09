@@ -28,8 +28,8 @@ public static class ItemValue
 
     /// <summary>
     /// The value of <paramref name="record"/> at <paramref name="quality"/> (0 to 100). <paramref name="manufacturer"/> is a WEAPON_MANUFACTURER
-    /// (weapons only, its <c>price mod</c>); <paramref name="find"/> resolves the <c>ingredients</c> of a crafted item (null: such an item is worth
-    /// 0).
+    /// (weapons only, its <c>price mod</c>); <paramref name="find"/> resolves the <c>ingredients</c> of a crafted item (null: such an item is
+    /// worth 0).
     /// </summary>
     public static int Of(
         GameRecord record, float quality, bool applyCategoryMult, PriceConstants k, GameRecord? manufacturer = null,
@@ -43,6 +43,10 @@ public static class ItemValue
         GameRecord? manufacturer = null) =>
         Of(record, quality, applyCategoryMult, k, manufacturer, db.Find, 0);
 
+    /// <summary>
+    /// The value of <paramref name="r"/> at <paramref name="quality"/>, <paramref name="find"/> resolving its ingredients; <paramref name="depth"/>
+    /// counts the ingredient levels walked so far.
+    /// </summary>
     static int Of(GameRecord r, float quality, bool apply, PriceConstants k, GameRecord? manufacturer, Func<string, GameRecord?>? find, int depth)
     {
         float s = quality * 0.01f;
@@ -124,8 +128,8 @@ public static class ItemValue
     static float Lerp(float t, float a, float b) => a + (b - a) * t;
 
     /// <summary>
-    /// The ARMOUR <c>slot</c> price factor: hat x0.3, legs x0.5, shirt x1.5, boots x0.2, any other slot x1 (immediates <b>Verified</b> in the
-    /// disassembly).
+    /// The ARMOUR <c>slot</c> price factor: hat x0.3, legs x0.5, shirt x1.5, boots x0.2, any other slot x1 (immediates <b>Verified</b> in
+    /// the disassembly).
     /// </summary>
     public static float SlotFactor(int slot) => slot switch { 3 => 0.3f, 6 => 0.5f, 8 => 1.5f, 9 => 0.2f, _ => 1f };
 }

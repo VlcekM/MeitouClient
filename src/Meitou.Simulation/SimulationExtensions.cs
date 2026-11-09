@@ -11,6 +11,9 @@ namespace Meitou.Simulation;
 /// </summary>
 public readonly record struct SystemAnchor
 {
+    /// <summary>
+    /// An anchor at <paramref name="part"/> (one standard part, or none for the end).
+    /// </summary>
     SystemAnchor(StandardParts part, bool after)
     {
         if (part != StandardParts.None && !BitOperations.IsPow2((uint)part))
@@ -20,7 +23,13 @@ public readonly record struct SystemAnchor
         After = after;
     }
 
+    /// <summary>
+    /// The standard part the system goes next to (<see cref="StandardParts.None"/>: the end).
+    /// </summary>
     public StandardParts Part { get; }
+    /// <summary>
+    /// Whether it goes after the part's last system (else before its first).
+    /// </summary>
     public bool After { get; }
 
     /// <summary>
@@ -28,8 +37,14 @@ public readonly record struct SystemAnchor
     /// </summary>
     public static SystemAnchor End => new(StandardParts.None, true);
 
+    /// <summary>
+    /// Before the first system of <paramref name="part"/>.
+    /// </summary>
     public static SystemAnchor Before(StandardParts part) => new(part, false);
 
+    /// <summary>
+    /// After the last system of <paramref name="part"/>.
+    /// </summary>
     public static SystemAnchor AfterPart(StandardParts part) => new(part, true);
 
     public override string ToString() => Part == StandardParts.None ? "end" : $"{(After ? "after" : "before")} {Part}";
@@ -40,7 +55,13 @@ public readonly record struct SystemAnchor
 /// </summary>
 public sealed class SystemBuildContext(PopulationData data, IReadOnlyList<ITickSystem> standard)
 {
+    /// <summary>
+    /// The population data.
+    /// </summary>
     public PopulationData Data { get; } = data;
+    /// <summary>
+    /// The standard systems already made, in tick order.
+    /// </summary>
     public IReadOnlyList<ITickSystem> Standard { get; } = standard;
 
     /// <summary>
@@ -83,8 +104,14 @@ public readonly record struct DialogueCheck(World World, CharacterId Speaker, Ch
 /// </summary>
 public readonly record struct DialogueAct(World World, CharacterId Speaker, CharacterId Target, DialogueEffect Effect);
 
+/// <summary>
+/// A mod's dialogue condition code: whether the condition holds for the check.
+/// </summary>
 public delegate bool DialogueConditionHandler(DialogueCheck check);
 
+/// <summary>
+/// A mod's dialogue effect code, run as the line is said.
+/// </summary>
 public delegate void DialogueEffectHandler(DialogueAct act);
 
 /// <summary>
@@ -98,13 +125,27 @@ public sealed class SimulationExtensions
     /// </summary>
     public const int FirstModCode = 1000;
 
+    /// <summary>
+    /// The extra systems' factories.
+    /// </summary>
     public List<SystemFactory> Systems { get; } = [];
+    /// <summary>
+    /// The mods' dialogue conditions by code.
+    /// </summary>
     public Dictionary<int, DialogueConditionHandler> DialogueConditions { get; } = [];
+    /// <summary>
+    /// The mods' dialogue effects by code.
+    /// </summary>
     public Dictionary<int, DialogueEffectHandler> DialogueEffects { get; } = [];
 
+    /// <summary>
+    /// Whether the mods add nothing.
+    /// </summary>
     public bool IsEmpty => Systems.Count == 0 && DialogueConditions.Count == 0 && DialogueEffects.Count == 0;
 
-    // Each extra system's factory, for log lines that name the mod and the system; weak, so a dropped world's systems go with it.
+    /// <summary>
+    /// Each extra system's factory, for log lines that name the mod and the system; weak, so a dropped world's systems go with it.
+    /// </summary>
     static readonly ConditionalWeakTable<ITickSystem, SystemFactory> MadeBy = new();
 
     /// <summary>
@@ -112,5 +153,8 @@ public sealed class SimulationExtensions
     /// </summary>
     public static SystemFactory? FactoryOf(ITickSystem system) => MadeBy.TryGetValue(system, out var factory) ? factory : null;
 
+    /// <summary>
+    /// Notes the factory an extra system was made by.
+    /// </summary>
     internal static void Made(ITickSystem system, SystemFactory factory) => MadeBy.AddOrUpdate(system, factory);
 }

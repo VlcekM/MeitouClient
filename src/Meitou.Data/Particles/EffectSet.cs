@@ -20,21 +20,51 @@ public sealed class EffectSet
     /// </summary>
     public const float MaxAutoPrewarm = 40;
 
+    /// <summary>
+    /// The groups made for <see cref="Source"/>; filled before the warm-up starts and never changed after.
+    /// </summary>
     readonly List<EffectGroup> _groups = [];
+    /// <summary>
+    /// The entries no group was made for.
+    /// </summary>
     readonly List<WeatherEffectEntry> _skipped = [];
+    /// <summary>
+    /// Stops the background warm-up between two steps.
+    /// </summary>
     readonly CancellationTokenSource _cancel = new();
+    /// <summary>
+    /// The world the groups are rebound to once a background warm-up is done; null for a set made on the calling thread.
+    /// </summary>
     EffectWorld? _live;
+    /// <summary>
+    /// The warm-up asked for; null is each system's longest particle life up to <see cref="MaxAutoPrewarm"/>.
+    /// </summary>
     float? _prewarmSeconds;
+    /// <summary>
+    /// Where a background warm-up places the units.
+    /// </summary>
     EffectCamera _camera;
+    /// <summary>
+    /// Set once the simulation finished (or was cancelled or failed); read across threads.
+    /// </summary>
     volatile bool _ready;
+    /// <summary>
+    /// What the background warm-up threw, if anything.
+    /// </summary>
     volatile Exception? _failure;
 
+    /// <summary>
+    /// A set with no groups yet for <paramref name="source"/>.
+    /// </summary>
     EffectSet(WeatherEffectInput source) => Source = source;
 
     /// <summary>
     /// The weather this set was made for.
     /// </summary>
     public WeatherEffectInput Source { get; }
+    /// <summary>
+    /// The groups made: the list is made before the worker starts and never changes, so the render thread may read it before <see cref="Ready"/>.
+    /// </summary>
     public IReadOnlyList<EffectGroup> Groups => _groups;
     /// <summary>
     /// The entries that have no group (a type that is not a weather effect, or an unknown particle system).
@@ -44,12 +74,19 @@ public sealed class EffectSet
     /// The simulation finished (or was cancelled): the set may be used (<see cref="Failure"/> null and not cancelled) or dropped.
     /// </summary>
     public bool Ready => _ready;
+    /// <summary>
+    /// Whether <see cref="Cancel"/> was called.
+    /// </summary>
     public bool Cancelled => _cancel.IsCancellationRequested;
     /// <summary>
     /// What went wrong on the background thread, if anything; the set is then not to be used.
     /// </summary>
     public Exception? Failure => _failure;
 
+    /// <summary>
+    /// Makes a group for each of the weather's effects that has one, in order, the n-th taking <paramref name="seed"/> plus n; the others go to
+    /// <see cref="Skipped"/>.
+    /// </summary>
     EffectSet Make(ParticleLibrary library, int seed, EffectWorld world)
     {
         int i = 0;
@@ -61,6 +98,9 @@ public sealed class EffectSet
         return this;
     }
 
+    /// <summary>
+    /// The warm-up of <paramref name="group"/>: the one asked for, else its system's longest particle life up to <see cref="MaxAutoPrewarm"/>.
+    /// </summary>
     float WarmSeconds(EffectGroup group) => _prewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(group.System), MaxAutoPrewarm);
 
     /// <summary>
@@ -103,6 +143,10 @@ public sealed class EffectSet
     /// </summary>
     public (long Freeze, long Make, long Queue) StartTicks { get; private set; }
 
+    /// <summary>
+    /// The background half on the warmer's thread: each group's schedule and simulation in turn, stopping when cancelled, then the groups rebound to
+    /// the live world; marks the set ready even when it threw.
+    /// </summary>
     internal void Warm()
     {
         try
@@ -146,8 +190,14 @@ public sealed class EffectSet
 /// </summary>
 public sealed class EffectWarmer : IDisposable
 {
+    /// <summary>
+    /// The sets waiting to be warmed.
+    /// </summary>
     readonly BlockingCollection<EffectSet> _queue = [];
 
+    /// <summary>
+    /// Starts the warming thread (background, below-normal priority).
+    /// </summary>
     public EffectWarmer()
     {
         new Thread(() =>
@@ -157,7 +207,13 @@ public sealed class EffectWarmer : IDisposable
         { IsBackground = true, Name = "meitou-particle-warmup", Priority = ThreadPriority.BelowNormal }.Start();
     }
 
+    /// <summary>
+    /// Hands <paramref name="set"/> to the warming thread.
+    /// </summary>
     internal void Queue(EffectSet set) => _queue.Add(set);
 
+    /// <summary>
+    /// Takes no more sets; the thread ends once the queue is empty.
+    /// </summary>
     public void Dispose() => _queue.CompleteAdding();
 }

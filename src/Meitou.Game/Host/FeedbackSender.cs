@@ -34,6 +34,9 @@ static class FeedbackSender
     /// The service's limit for the zipped save.
     /// </summary>
     const long SaveMax = 95_000_000;
+    /// <summary>
+    /// The client for the feedback service, with a 30 min timeout (uploads are large).
+    /// </summary>
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
 
     /// <summary>
@@ -232,6 +235,9 @@ static class FeedbackSender
         return packed.ToArray();
     }
 
+    /// <summary>
+    /// Uploads one part of a report (<paramref name="kind"/>) under its token; a refusal throws <see cref="Refused"/>.
+    /// </summary>
     static async Task Put(string token, string kind, HttpContent content, string type)
     {
         content.Headers.ContentType = new MediaTypeHeaderValue(type);
@@ -264,8 +270,14 @@ static class FeedbackSender
         }
     }
 
+    /// <summary>
+    /// Bytes as megabytes to one decimal ("12.3 MB").
+    /// </summary>
     static string Mb(long bytes) => (bytes / 1_000_000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB";
 
+    /// <summary>
+    /// A refusal of the feedback service, with its reason for the player.
+    /// </summary>
     sealed class Refused(string message) : Exception(message);
 
     /// <summary>

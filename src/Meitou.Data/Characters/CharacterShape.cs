@@ -8,13 +8,49 @@ namespace Meitou.Data.Characters;
 /// <summary>
 /// Kenshi's limb order for missing limbs and robotic limbs (fcs.def "severed limbs": 0 left arm ... 3 right leg).
 /// </summary>
-public enum Limb { LeftArm, RightArm, LeftLeg, RightLeg }
+public enum Limb
+{
+    /// <summary>
+    /// 0: the left arm.
+    /// </summary>
+    LeftArm,
+    /// <summary>
+    /// 1: the right arm.
+    /// </summary>
+    RightArm,
+    /// <summary>
+    /// 2: the left leg.
+    /// </summary>
+    LeftLeg,
+    /// <summary>
+    /// 3: the right leg.
+    /// </summary>
+    RightLeg
+}
 
 /// <summary>
 /// ARMOUR <c>hide stump</c> (fcs_enums.def HideStump): which upper arms go to zero when that arm is missing.
 /// </summary>
 [Flags]
-public enum HideStump { None = 0, LeftArm = 1, RightArm = 2, BothArms = 3 }
+public enum HideStump
+{
+    /// <summary>
+    /// Neither upper arm.
+    /// </summary>
+    None = 0,
+    /// <summary>
+    /// The left upper arm.
+    /// </summary>
+    LeftArm = 1,
+    /// <summary>
+    /// The right upper arm.
+    /// </summary>
+    RightArm = 2,
+    /// <summary>
+    /// Both upper arms.
+    /// </summary>
+    BothArms = 3
+}
 
 /// <summary>
 /// Everything the body-shape sliders depend on (docs/animation.md, "Body shape sliders").
@@ -25,38 +61,51 @@ public sealed record CharacterShapeInput
     /// Appearance values in Kenshi units (100 = neutral), keyed by slider name (<c>Height</c>, <c>Arm bulk</c>...).
     /// </summary>
     public IReadOnlyDictionary<string, float> Sliders { get; init; } = new Dictionary<string, float>();
+
+    /// <summary>
+    /// Whether the body is female.
+    /// </summary>
     public bool Female { get; init; }
+
     /// <summary>
     /// The character's muscle value (stat driven, see <see cref="CharacterShape.MuscleFromStats"/>); 0 = no change.
     /// </summary>
     public float Muscle { get; init; }
+
     /// <summary>
     /// The character's starvation value, 0 (fed) to 1; see <see cref="CharacterShape.StarvationFromNutrition"/>.
     /// </summary>
     public float Starvation { get; init; }
+
     /// <summary>
     /// Limbs the character has lost (forearm, hand / calf, foot and toe scale to zero).
     /// </summary>
     public IReadOnlySet<Limb> Missing { get; init; } = new HashSet<Limb>();
+
     /// <summary>
     /// <c>hide stump</c> of the worn body armour.
     /// </summary>
     public HideStump HideStump { get; init; }
+
     /// <summary>
     /// Calf length ratio from boot heights and robotic-leg offsets (positive: left calf Y, negative: right calf Y); 0 = none.
     /// </summary>
     public float LegRatio { get; init; }
+
     /// <summary>
-    /// Per-leg state of the character that narrows the thigh to 0.8 (source not identified).
+    /// A state of the character's left leg that narrows the thigh to 0.8 (source not identified).
     /// </summary>
     public bool NarrowLeftThigh { get; init; }
+
+    /// <summary>
+    /// The same state of the right leg (see <see cref="NarrowLeftThigh"/>).
+    /// </summary>
     public bool NarrowRightThigh { get; init; }
 }
 
 /// <summary>
 /// A character's stat-driven body (the original's <c>AppearanceHuman</c> values at +0x1a0..+0x1a8, <c>FUN_14052bc70</c>; docs/animation.md
-/// "Stat-driven body"):
-/// <see cref="Muscle"/> the bulk of the bone shape, <see cref="Definition"/> the body normal map's blend towards the strong one,
+/// "Stat-driven body"): <see cref="Muscle"/> the bulk of the bone shape, <see cref="Definition"/> the body normal map's blend towards the strong one,
 /// <see cref="Starvation"/> 0 (fed) to 1.
 /// </summary>
 public readonly record struct BodyBuild(float Muscle, float Definition, float Starvation, float ShapeMuscle, float ShapeStarvation)
@@ -84,10 +133,12 @@ public sealed class CharacterShapeResult
     /// Bone size: multiplies the bone's own derived scale.
     /// </summary>
     public Dictionary<string, Vector3> BoneSize { get; } = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Positional size: multiplies the bone's local position before the parent transform.
     /// </summary>
     public Dictionary<string, Vector3> PositionalSize { get; } = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The skeleton's movement scale (track translations are multiplied by it).
     /// </summary>
@@ -524,8 +575,8 @@ public static class CharacterShape
     }
 
     /// <summary>
-    /// Applies a slider value: the slider matched by name ignoring case, then ignoring spaces, hyphens and underscores; values of 3 or less are
-    /// fractions.
+    /// Applies a slider value: the slider matched by name ignoring case, then ignoring spaces, hyphens and underscores; values of 3 or less
+    /// are fractions.
     /// </summary>
     static void OverrideSlider(string key, string text, Dictionary<string, float> sliders, List<string> applied)
     {

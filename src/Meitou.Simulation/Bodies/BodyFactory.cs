@@ -13,10 +13,22 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 public sealed class BodyFactory(GameDatabase db)
 {
+    /// <summary>
+    /// The race data read so far, by RACE string id.
+    /// </summary>
     readonly ConcurrentDictionary<string, RaceData> _races = new();
 
+    /// <summary>
+    /// The game data the CHARACTER, STATS and RACE records come from.
+    /// </summary>
     public GameDatabase Db { get; } = db;
+    /// <summary>
+    /// The CONSTANTS of the game data, read once.
+    /// </summary>
     public GameConstants Constants { get; } = GameConstants.FromDatabase(db);
+    /// <summary>
+    /// The body options (the medical rules' engine choices and settings) the new medical states get.
+    /// </summary>
     public BodyOptions Options { get; init; } = BodyOptions.Default;
 
     /// <summary>

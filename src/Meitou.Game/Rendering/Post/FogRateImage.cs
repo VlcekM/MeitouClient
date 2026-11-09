@@ -33,6 +33,9 @@ sealed unsafe class FogRateImage(PostProcess post)
         /// </summary>
         public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, Eye, Size, WaterY;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FogRateDistancePass(GpuContext gpu) : base(gpu, PostProcessShaders.FogRateDistance, "post fog rate distance")
         {
             NearDepth = P.Sampler("uNearDepth");
@@ -57,6 +60,9 @@ sealed unsafe class FogRateImage(PostProcess post)
         /// </summary>
         public readonly UniformHandle Tan, Right, Up, Back, Size, Rate, Threshold;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FogRatePass(GpuContext gpu) : base(gpu, PostProcessShaders.FogRate, "post fog rate")
         {
             Distance = P.Sampler("uDistance");

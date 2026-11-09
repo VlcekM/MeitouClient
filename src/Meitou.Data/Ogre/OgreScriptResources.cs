@@ -29,16 +29,24 @@ public sealed class OgreScriptResources
     /// </summary>
     static readonly string[] SkippedModFolders = ["leveldata", "newland/leveldata", "locale", "LC_MESSAGES"];
 
-    // Group -> bare name -> path. Groups in ordinal order, as Ogre's std::map keeps them.
+    /// <summary>
+    /// Group -> bare name -> path. Groups in ordinal order, as Ogre's std::map keeps them.
+    /// </summary>
     readonly SortedDictionary<string, Dictionary<string, string>> _groups = new(StringComparer.Ordinal);
 
-    // The same files by exact-case name (Ogre's case-sensitive index, which a lookup tries before the lower-case one: OgreMain
-    // ResourceGroupManager::openResource);
-    // a name registered later overwrites an earlier one, as in the other index.
+    /// <summary>
+    /// The same files by exact-case name (Ogre's case-sensitive index, which a lookup tries before the lower-case one: OgreMain
+    /// ResourceGroupManager::openResource); a name registered later overwrites an earlier one, as in the other index.
+    /// </summary>
     readonly Dictionary<string, Dictionary<string, string>> _exact = new(StringComparer.Ordinal);
 
-    // resources.cfg folder relative to data/ -> group (later sections overwrite earlier ones); used to place mod folders.
+    /// <summary>
+    /// resources.cfg folder relative to data/ -> group (later sections overwrite earlier ones); used to place mod folders.
+    /// </summary>
     readonly Dictionary<string, string> _folderGroups = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether locations are listed with their subfolders (an indexed folder, not the game's configuration, which is not recursive).
+    /// </summary>
     bool _recursive;
 
     /// <summary>
@@ -182,6 +190,9 @@ public sealed class OgreScriptResources
         _exact.TryGetValue(group, out var sensitive) && sensitive.TryGetValue(name, out var hit) ? hit
         : insensitive.TryGetValue(name, out hit) ? hit : null;
 
+    /// <summary>
+    /// Whether any group has a resource named <paramref name="name"/>.
+    /// </summary>
     public bool Contains(string name) => Find(name) is not null;
 
     /// <summary>
@@ -223,6 +234,10 @@ public sealed class OgreScriptResources
     /// </summary>
     public string? ReadScript(string name) => Find(name) is { } path ? OgreScriptLexer.ReadText(path) : null;
 
+    /// <summary>
+    /// Registers a location: a <c>FileSystem</c> folder that exists has its files indexed by name in both indexes of its group, later files replacing
+    /// earlier ones; any other is kept in <see cref="Skipped"/>.
+    /// </summary>
     void Add(OgreResourceLocation location)
     {
         if (!_groups.TryGetValue(location.Group, out var index))
@@ -243,6 +258,9 @@ public sealed class OgreScriptResources
         }
     }
 
+    /// <summary>
+    /// The group of a mod folder: that of the nearest enclosing <c>resources.cfg</c> folder, else <c>General</c>.
+    /// </summary>
     string GroupOf(string relativeFolder)
     {
         for (var folder = relativeFolder; folder.Length > 0; folder = folder.Contains('/') ? folder[..folder.LastIndexOf('/')] : "")
@@ -260,12 +278,18 @@ public sealed class OgreScriptResources
         return at < 0 ? path : path.Insert(at + 1, "newland/");
     }
 
+    /// <summary>
+    /// A relative folder with forward slashes and no trailing slash; <c>.</c> becomes empty.
+    /// </summary>
     static string Normalize(string relative)
     {
         var r = relative.Replace('\\', '/').TrimEnd('/');
         return r == "." ? "" : r;
     }
 
+    /// <summary>
+    /// The files of <paramref name="directory"/> matching <paramref name="pattern"/>'s extension exactly, sorted by name ignoring case.
+    /// </summary>
     static IEnumerable<string> Files(string directory, string pattern, SearchOption option) =>
         Directory.EnumerateFiles(directory, pattern, option)
             // EnumerateFiles' "*.material" also matches longer extensions on Windows (8.3 rule); keep exact ones.

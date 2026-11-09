@@ -35,7 +35,19 @@ public readonly record struct ResourceNode(
 /// </summary>
 public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
 {
+    /// <summary>
+    /// The footprint hull, made on the first ask of <see cref="Outline"/>.
+    /// </summary>
+    Vector2[]? _outline;
+
+    /// <summary>
+    /// The low corner of the triangles' bounds box (mesh space).
+    /// </summary>
     public Vector3 Min => min;
+
+    /// <summary>
+    /// The high corner of the triangles' bounds box (mesh space).
+    /// </summary>
     public Vector3 Max => max;
 
     /// <summary>
@@ -50,8 +62,6 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
                 best = t;
         return best;
     }
-
-    Vector2[]? _outline;
 
     /// <summary>
     /// The mesh's footprint: the convex hull of its corners' X/Z, counter-clockwise (made on first use).
@@ -90,6 +100,9 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
         return best;
     }
 
+    /// <summary>
+    /// The cross product of (a - o) and (b - o): positive when b lies left of the line o to a.
+    /// </summary>
     static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
 
     /// <summary>
@@ -161,7 +174,25 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
     /// </summary>
     public const float NodeRadius = 25;
 
+    /// <summary>
+    /// Each rock mesh's bounds sphere and shape by path (ignoring case); null for a mesh that could not be read.
+    /// </summary>
     readonly Dictionary<string, (Vector3 Centre, float Radius, RockShape Shape)?> _meshBounds = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The rocks of each placed zone, kept.
+    /// </summary>
+    readonly Dictionary<ZoneCoordinate, List<ResourceNode>> _zones = [];
+
+    /// <summary>
+    /// The <c>world resource mining</c> of each rock BUILDING by string id (0: none), cached.
+    /// </summary>
+    readonly Dictionary<string, int> _resourceOf = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The lock <see cref="Near"/> takes; the caches are read and filled under it.
+    /// </summary>
+    readonly Lock _gate = new();
 
     /// <summary>
     /// A rock mesh's shape and its bounds sphere (the triangles' box middle, and its longest half-extent as the radius, before scaling); null without
@@ -173,11 +204,15 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
         if (_meshBounds.TryGetValue(meshPath, out var known)) return known;
         RockShape? shape = null;
         if ((findMesh(meshPath) ?? findMesh(Path.GetFileName(meshPath.Replace('\\', '/')))) is { } path)
+        {
             try
             {
                 shape = RockShape.Of(OgreMeshReader.ReadFile(path));
             }
-            catch (Exception e) when (e is IOException or OgreFormatException or NotSupportedException) { }
+            catch (Exception e) when (e is IOException or OgreFormatException or NotSupportedException)
+            {
+            }
+        }
         if (shape is null) return _meshBounds[meshPath] = null;
         // The longest half-extent of the bounds box, not its half-diagonal (a rock of 71 x 72 x 66 is 36 across, not 60: the diagonal made the radius
         // nearly twice the rock).
@@ -185,10 +220,7 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
         return _meshBounds[meshPath] = ((shape.Min + shape.Max) / 2, Math.Max(size.X, Math.Max(size.Y, size.Z)) / 2, shape);
     }
 
-    readonly Dictionary<ZoneCoordinate, List<ResourceNode>> _zones = [];
-    readonly Dictionary<string, int> _resourceOf = new(StringComparer.Ordinal);
-    readonly Lock _gate = new();
-
+    /// <inheritdoc/>
     public IReadOnlyList<ResourceNode> Near(int resource, float x, float z, float range)
     {
         var found = new List<ResourceNode>();
@@ -206,6 +238,10 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
         return found;
     }
 
+    /// <summary>
+    /// The rocks of <paramref name="zone"/>, placing them on the first ask: each foliage instance whose mesh names a rock BUILDING, sized by its
+    /// mesh's bounds (at least <see cref="NodeRadius"/>).
+    /// </summary>
     List<ResourceNode> Zone(ZoneCoordinate zone)
     {
         if (_zones.TryGetValue(zone, out var list)) return list;
@@ -227,6 +263,9 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
         return list;
     }
 
+    /// <summary>
+    /// The <c>world resource mining</c> of <paramref name="building"/>'s first functionality (0 for none), cached.
+    /// </summary>
     int ResourceOf(GameRecord building)
     {
         if (_resourceOf.TryGetValue(building.StringId, out int r)) return r;
@@ -236,5 +275,8 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
         return _resourceOf[building.StringId] = r;
     }
 
+    /// <summary>
+    /// Disposes the foliage world the rocks are placed from.
+    /// </summary>
     public void Dispose() => world.Dispose();
 }

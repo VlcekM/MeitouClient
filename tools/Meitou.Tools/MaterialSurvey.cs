@@ -6,6 +6,10 @@ using Meitou.Data.Ogre;
 /// </summary>
 static class MaterialSurvey
 {
+    /// <summary>
+    /// <c>meitou-tools materials</c>: compiles every material script of the install and prints the counts, the property use, the program references,
+    /// the diagnostics by code and the audits. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install)
     {
         var all = OgreMaterialLibrary.LoadAll(install, out var dataIndex);
@@ -29,6 +33,9 @@ static class MaterialSurvey
         return all.Diagnostics.Any(d => d.Code == OgreScriptError.Fatal) ? 1 : 0;
     }
 
+    /// <summary>
+    /// Prints how many script files under data/ compiled and failed, and what the data index's and resources.cfg's libraries hold.
+    /// </summary>
     static void PrintScripts(
         OgreMaterialLibrary all, OgreMaterialLibrary configured, OgreScriptResources dataIndex, OgreScriptResources resources)
     {
@@ -44,6 +51,9 @@ static class MaterialSurvey
         Console.WriteLine($"  script files outside the configured folders: {string.Join(", ", outside)}");
     }
 
+    /// <summary>
+    /// Prints how many techniques, passes and texture units set each property.
+    /// </summary>
     static void PrintPropertyUsage(List<OgreTechnique> techniques, List<OgrePass> passes, List<OgreTextureUnit> units, OgreMaterialLibrary all)
     {
         Console.WriteLine("  property usage (material / technique / pass / texture_unit / program ref):");
@@ -67,6 +77,9 @@ static class MaterialSurvey
             Console.WriteLine($"    {k,-48} {v,5}");
     }
 
+    /// <summary>
+    /// Prints the vertex and fragment programs the passes reference, with how often.
+    /// </summary>
     static void PrintProgramRefs(OgreMaterialLibrary all, List<OgrePass> passes)
     {
         var refs = passes.SelectMany(p => new[] { p.VertexProgram, p.FragmentProgram }).OfType<OgreProgramRef>().ToList();
@@ -75,6 +88,9 @@ static class MaterialSurvey
         Console.WriteLine($"  program refs: {refs.Count}, to undefined programs: {missingPrograms.Count} {missing}");
     }
 
+    /// <summary>
+    /// Prints the compile diagnostics grouped by code, with an example each.
+    /// </summary>
     static void PrintDiagnosticsByCode(OgreMaterialLibrary all)
     {
         Console.WriteLine("  diagnostics by code:");
@@ -85,6 +101,10 @@ static class MaterialSurvey
         }
     }
 
+    /// <summary>
+    /// Prints the material audit (<c>OgreMaterialAudit</c>): the meshes read, their submeshes and how many of their materials resolve, and its other
+    /// checks.
+    /// </summary>
     static void PrintAudits(
         GameInstall install, OgreMaterialLibrary all, OgreMaterialLibrary configured, OgreScriptResources dataIndex, OgreScriptResources resources)
     {
@@ -111,6 +131,9 @@ static class MaterialSurvey
         Console.WriteLine($"  in resources.cfg folders: {configuredFound}");
     }
 
+    /// <summary>
+    /// <paramref name="part"/> of <paramref name="whole"/> as a percentage with one decimal, "-" when the whole is 0.
+    /// </summary>
     static string Percent(int part, int whole) =>
         whole == 0 ? "-" : (100.0 * part / whole).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
 }

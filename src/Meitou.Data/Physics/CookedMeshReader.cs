@@ -9,12 +9,28 @@ namespace Meitou.Data.Physics;
 /// </summary>
 public static class CookedMeshReader
 {
+    /// <summary>
+    /// The first eight bytes of a cooked triangle mesh.
+    /// </summary>
     static ReadOnlySpan<byte> TriangleMagic => "NXS\u0001MESH"u8;
+    /// <summary>
+    /// The first eight bytes of a cooked convex mesh.
+    /// </summary>
     static ReadOnlySpan<byte> ConvexMagic => "NXS\u0001CVXM"u8;
+    /// <summary>
+    /// The tag that starts a convex mesh's hull (<c>CVHL</c>) block.
+    /// </summary>
     static ReadOnlySpan<byte> HullTag => "ICE\u0001CVHL"u8;
 
+    /// <summary>
+    /// Triangle mesh flag bits: the indices are stored as bytes, or as 16-bit values; neither means 32-bit.
+    /// </summary>
     const int IndicesAre8Bit = 0x08, IndicesAre16Bit = 0x10;
 
+    /// <summary>
+    /// The triangle mesh's vertices and indices (version 1 only); <see cref="InvalidDataException"/> when it is not one, is truncated or has an index
+    /// past its vertices.
+    /// </summary>
     public static CookedMesh ReadTriangleMesh(ReadOnlySpan<byte> data)
     {
         if (!data.StartsWith(TriangleMagic)) throw new InvalidDataException("Not a cooked triangle mesh (NXS MESH)");
@@ -62,6 +78,9 @@ public static class CookedMeshReader
         return new CookedMesh(Vertices(data, ref p, count), []);
     }
 
+    /// <summary>
+    /// Reads <paramref name="count"/> float triples at <paramref name="p"/> and moves past them; every vertex must be finite.
+    /// </summary>
     static Vector3[] Vertices(ReadOnlySpan<byte> data, ref int p, int count)
     {
         if (p + (long)count * 12 > data.Length) throw new InvalidDataException("Cooked mesh is truncated");
@@ -75,6 +94,9 @@ public static class CookedMeshReader
         return v;
     }
 
+    /// <summary>
+    /// Reads the little-endian int32 at <paramref name="p"/> and moves past it; <see cref="InvalidDataException"/> past the end.
+    /// </summary>
     static int I32(ReadOnlySpan<byte> d, ref int p)
     {
         if (p + 4 > d.Length) throw new InvalidDataException("Cooked mesh is truncated");
@@ -83,5 +105,8 @@ public static class CookedMeshReader
         return v;
     }
 
+    /// <summary>
+    /// The little-endian float at <paramref name="p"/>.
+    /// </summary>
     static float F32(ReadOnlySpan<byte> d, int p) => BinaryPrimitives.ReadSingleLittleEndian(d[p..]);
 }

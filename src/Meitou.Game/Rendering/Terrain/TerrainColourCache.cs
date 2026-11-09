@@ -25,8 +25,19 @@ static class TerrainColourCache
     /// </summary>
     public const int Granule = 4 << (Levels - 1);
 
+    /// <summary>
+    /// Part of every cache file's key: a change of the encoding gives every tile a new file.
+    /// </summary>
     const string Version = "terrain colour bc3 v1";
-    const int Magic = 0x3343544D;   // "MTC3"
+
+    /// <summary>
+    /// The cache file's magic (<c>MTC3</c> as little-endian bytes).
+    /// </summary>
+    const int Magic = 0x3343544D;
+
+    /// <summary>
+    /// One lock per tile path, so a tile is encoded and written once however many threads ask for it.
+    /// </summary>
     static readonly ConcurrentDictionary<string, object> Gates = new();
 
     /// <summary>
@@ -34,10 +45,16 @@ static class TerrainColourCache
     /// </summary>
     public sealed record Tile(int Size, byte[][] Levels);
 
+    /// <summary>
+    /// Every colour tile's path in the install (the overlay grid row by row).
+    /// </summary>
     static IEnumerable<string> TilePaths(GameInstall install) =>
         Enumerable.Range(0, TerrainMaps.OverlayTiles * TerrainMaps.OverlayTiles)
             .Select(t => TerrainMaps.OverlayTile(install, "colour", t % TerrainMaps.OverlayTiles, t / TerrainMaps.OverlayTiles));
 
+    /// <summary>
+    /// The tiles that exist but have no cache file (none with the caches off).
+    /// </summary>
     static string[] Uncached(GameInstall install) =>
         LoadCaches.Disabled ? [] : [.. TilePaths(install).Where(p => File.Exists(p) && !File.Exists(CachePath(p)))];
 
@@ -114,7 +131,9 @@ static class TerrainColourCache
         }
     }
 
-    // The side of a valid cache file (magic, a side fit for blocks, the length of its levels), else null.
+    /// <summary>
+    /// The side of a valid cache file (magic, a side fit for blocks, the length of its levels), else null.
+    /// </summary>
     static int? Header(string path)
     {
         try
@@ -129,6 +148,10 @@ static class TerrainColourCache
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
+    /// <summary>
+    /// Decodes a tile and encodes its <see cref="Levels"/> mip levels as BC3; a tile not square with a side a multiple of <see cref="Granule"/>
+    /// throws <see cref="InvalidDataException"/>.
+    /// </summary>
     static Tile Encode(string path)
     {
         var img = TextureLoader.LoadImage(File.ReadAllBytes(path));
@@ -141,6 +164,10 @@ static class TerrainColourCache
         return new Tile(img.Width, levels);
     }
 
+    /// <summary>
+    /// The cache file of <paramref name="tile"/>: a hash of the version, its path, length and write time,
+    /// under <c>%LOCALAPPDATA%\Meitou\terrain\colour</c>.
+    /// </summary>
     static string CachePath(string tile)
     {
         var file = new FileInfo(tile);
@@ -149,7 +176,9 @@ static class TerrainColourCache
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "terrain", "colour", hash + ".bc3");
     }
 
-    // The file: magic, side (i32 each), then every level's blocks; one of any other length is encoded again.
+    /// <summary>
+    /// Reads a cache file: magic, side (i32 each), then every level's blocks; one of any other length gives null and is encoded again.
+    /// </summary>
     static Tile? Read(string path)
     {
         try
@@ -167,6 +196,9 @@ static class TerrainColourCache
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
+    /// <summary>
+    /// Writes a cache file through a temporary file and a move (an I/O failure leaves no file).
+    /// </summary>
     static void Write(string path, Tile tile)
     {
         try

@@ -15,16 +15,7 @@ namespace Meitou.Game.Rendering.Display;
 /// </summary>
 public sealed unsafe class VulkanDisplay : IDisposable
 {
-    /// <summary>
-    /// The window; null when headless.
-    /// </summary>
-    public IWindow? Window { get; }
-    public VulkanDevice Device { get; }
-
-    /// <summary>
-    /// The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.
-    /// </summary>
-    public GpuContext Context { get; }
+    #region Device and window
 
     /// <summary>
     /// The window's presenter; null when headless.
@@ -37,36 +28,18 @@ public sealed unsafe class VulkanDisplay : IDisposable
     readonly bool _validationRequested;
 
     /// <summary>
-    /// With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.
+    /// The window; null when headless.
     /// </summary>
-    public GpuTexture? Backbuffer => _presenter?.Backbuffer;
+    public IWindow? Window { get; }
+    /// <summary>
+    /// The Vulkan device.
+    /// </summary>
+    public VulkanDevice Device { get; }
 
     /// <summary>
-    /// Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).
+    /// The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.
     /// </summary>
-    public long AcquireTicks => _presenter?.AcquireTicks ?? 0;
-    public long PresentTicks => _presenter?.PresentTicks ?? 0;
-
-    /// <summary>
-    /// The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.
-    /// </summary>
-    public bool VSync { get => _presenter?.VSync ?? false; set { if (_presenter is not null) _presenter.VSync = value; } }
-
-    /// <summary>
-    /// True while the swapchain goes through AMD's frame-interpolation layer (the Frame generation setting, when it could be honoured; false after a
-    /// fallback).
-    /// </summary>
-    public bool FrameGeneration => _presenter?.FrameGeneration is not null;
-
-    /// <summary>
-    /// The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.
-    /// </summary>
-    public FfxSwapchain? FrameGenerationLayer => _presenter?.FrameGeneration;
-
-    /// <summary>
-    /// True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).
-    /// </summary>
-    public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
+    public GpuContext Context { get; }
 
     /// <summary>
     /// Streamline (DLSS), when <c>dlss</c> asked for it and it loaded; shut down before the device.
@@ -263,40 +236,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
     }
 
     /// <summary>
-    /// Opens a rendered frame for Reflex (DLSS frame generation): its frame token, Reflex's sleep, the simulation start marker. Call before the world
-    /// advances; does nothing without DLSS frame generation.
+    /// Disposes the presenter and the context, waits for the frames in flight, then releases Streamline, NGX, the device and the window; reports the
+    /// validation errors when there were any or the layer was asked for.
     /// </summary>
-    public void BeginLatencyFrame() => Streamline?.BeginFrame();
-
-    /// <summary>
-    /// Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.
-    /// </summary>
-    public bool BeginFrame(int width, int height)
-    {
-        Streamline?.Marker(PclMarker.SimulationEnd);
-        Streamline?.Marker(PclMarker.RenderSubmitStart);
-        return _presenter?.BeginFrame(width, height) ?? width > 0 && height > 0;
-    }
-
-    /// <summary>
-    /// Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this. With
-    /// <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.
-    /// </summary>
-    public void Present(GpuTexture? topDown = null)
-    {
-        Streamline?.Marker(PclMarker.RenderSubmitEnd);
-        Streamline?.Marker(PclMarker.PresentStart);
-        if (_presenter is not null) _presenter.Present(topDown);
-        else Context.EndFrame();
-        Streamline?.Marker(PclMarker.PresentEnd);
-        Streamline?.EndFrame();
-    }
-
-    /// <summary>
-    /// Headless: ends the frame (submits it).
-    /// </summary>
-    public void EndFrame() => Context.EndFrame();
-
     public void Dispose()
     {
         _presenter?.Dispose();
@@ -335,4 +277,80 @@ public sealed unsafe class VulkanDisplay : IDisposable
             return null;
         }
     }
+
+    #endregion
+
+    #region Frames
+
+    /// <summary>
+    /// With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.
+    /// </summary>
+    public GpuTexture? Backbuffer => _presenter?.Backbuffer;
+
+    /// <summary>
+    /// Stopwatch ticks spent acquiring swapchain images (0 when headless).
+    /// </summary>
+    public long AcquireTicks => _presenter?.AcquireTicks ?? 0;
+    /// <summary>
+    /// Stopwatch ticks spent presenting (0 when headless).
+    /// </summary>
+    public long PresentTicks => _presenter?.PresentTicks ?? 0;
+
+    /// <summary>
+    /// The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.
+    /// </summary>
+    public bool VSync { get => _presenter?.VSync ?? false; set { if (_presenter is not null) _presenter.VSync = value; } }
+
+    /// <summary>
+    /// True while the swapchain goes through AMD's frame-interpolation layer (the Frame generation setting, when it could be honoured; false after a
+    /// fallback).
+    /// </summary>
+    public bool FrameGeneration => _presenter?.FrameGeneration is not null;
+
+    /// <summary>
+    /// The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.
+    /// </summary>
+    public FfxSwapchain? FrameGenerationLayer => _presenter?.FrameGeneration;
+
+    /// <summary>
+    /// True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).
+    /// </summary>
+    public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
+
+    /// <summary>
+    /// Opens a rendered frame for Reflex (DLSS frame generation): its frame token, Reflex's sleep, the simulation start marker. Call before the world
+    /// advances; does nothing without DLSS frame generation.
+    /// </summary>
+    public void BeginLatencyFrame() => Streamline?.BeginFrame();
+
+    /// <summary>
+    /// Starts a frame of the given size; false when nothing can be shown (a minimised window): skip drawing.
+    /// </summary>
+    public bool BeginFrame(int width, int height)
+    {
+        Streamline?.Marker(PclMarker.SimulationEnd);
+        Streamline?.Marker(PclMarker.RenderSubmitStart);
+        return _presenter?.BeginFrame(width, height) ?? width > 0 && height > 0;
+    }
+
+    /// <summary>
+    /// Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this. With
+    /// <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.
+    /// </summary>
+    public void Present(GpuTexture? topDown = null)
+    {
+        Streamline?.Marker(PclMarker.RenderSubmitEnd);
+        Streamline?.Marker(PclMarker.PresentStart);
+        if (_presenter is not null) _presenter.Present(topDown);
+        else Context.EndFrame();
+        Streamline?.Marker(PclMarker.PresentEnd);
+        Streamline?.EndFrame();
+    }
+
+    /// <summary>
+    /// Headless: ends the frame (submits it).
+    /// </summary>
+    public void EndFrame() => Context.EndFrame();
+
+    #endregion
 }

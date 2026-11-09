@@ -18,6 +18,9 @@ public static class SpikeLog
     /// </summary>
     public const double Factor = 1.5;
 
+    /// <summary>
+    /// A GPU spike must also exceed this many ms.
+    /// </summary>
     public const double MinMs = 2;
 
     /// <summary>
@@ -25,11 +28,34 @@ public static class SpikeLog
     /// </summary>
     public const double CpuMinMs = 20;
 
+    /// <summary>
+    /// Guards the frame's notes: places on other threads note too.
+    /// </summary>
     static readonly object Gate = new();
+
+    /// <summary>
+    /// An empty note list (used nowhere at present).
+    /// </summary>
     static readonly string[] NoNotes = [];
+
+    /// <summary>
+    /// The run's totals per kind of note, for the summary.
+    /// </summary>
     static readonly Dictionary<string, Total> Totals = [];
+
+    /// <summary>
+    /// The notes of the frame being made, per kind.
+    /// </summary>
     static Dictionary<string, Tally> s_current = [];
+
+    /// <summary>
+    /// The garbage collections of generation 2 and of generation 0 at the last frame, and the frames taken so far.
+    /// </summary>
     static long s_gc2, s_gcCount, s_takenFrames;
+
+    /// <summary>
+    /// The garbage collector's total pause at the last frame.
+    /// </summary>
     static TimeSpan s_gcPause;
 
     /// <summary>
@@ -37,6 +63,9 @@ public static class SpikeLog
     /// </summary>
     internal static Action? OnSummary;
 
+    /// <summary>
+    /// Whether <c>--log-spikes</c> is on: off, a note does nothing.
+    /// </summary>
     public static bool Enabled { get; set; }
 
     /// <summary>
@@ -164,16 +193,40 @@ public static class SpikeLog
         all.MaxFrameBytes = Math.Max(all.MaxFrameBytes, t.Bytes);
     }
 
+    /// <summary>
+    /// One frame's notes of one kind: how many, their bytes and their ms.
+    /// </summary>
     sealed class Tally
     {
+        /// <summary>
+        /// How many notes.
+        /// </summary>
         public int Count;
+
+        /// <summary>
+        /// Their bytes.
+        /// </summary>
         public long Bytes;
+
+        /// <summary>
+        /// Their milliseconds.
+        /// </summary>
         public double Ms;
     }
 
+    /// <summary>
+    /// The run's notes of one kind: the frames with any, how many, their bytes, the most bytes in one frame, and their ms.
+    /// </summary>
     sealed class Total
     {
+        /// <summary>
+        /// The frames with notes of the kind, how many notes, their bytes, and the most bytes in one frame.
+        /// </summary>
         public long Frames, Count, Bytes, MaxFrameBytes;
+
+        /// <summary>
+        /// Their milliseconds.
+        /// </summary>
         public double Ms;
     }
 }

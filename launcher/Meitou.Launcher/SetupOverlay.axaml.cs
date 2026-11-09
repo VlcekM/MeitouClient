@@ -12,7 +12,14 @@ namespace Meitou.Launcher;
 /// </summary>
 public sealed partial class SetupOverlay : UserControl
 {
+    /// <summary>
+    /// The launcher's settings the dialog writes.
+    /// </summary>
     readonly LauncherConfig _config = new();
+
+    /// <summary>
+    /// The Kenshi install shown, null when the folder is not one.
+    /// </summary>
     GameInstall? _install;
 
     /// <summary>
@@ -20,8 +27,14 @@ public sealed partial class SetupOverlay : UserControl
     /// </summary>
     public event Action<GameInstall?>? Confirmed;
 
+    /// <summary>
+    /// For the designer.
+    /// </summary>
     public SetupOverlay() => InitializeComponent();
 
+    /// <summary>
+    /// The dialog prefilled from <paramref name="config"/> and the detected install; the Steam row on Windows, the renderer row on macOS.
+    /// </summary>
     public SetupOverlay(LauncherConfig config, GameInstall? found)
     {
         this._config = config;
@@ -38,6 +51,9 @@ public sealed partial class SetupOverlay : UserControl
         ShowRendererHint();
     }
 
+    /// <summary>
+    /// Shows the Kenshi folder <paramref name="text"/> and whether it is one (<paramref name="found"/>).
+    /// </summary>
     void ShowKenshi(GameInstall? found, string? text)
     {
         _install = found;
@@ -47,24 +63,36 @@ public sealed partial class SetupOverlay : UserControl
             : "Not a Kenshi folder: data/gamedata.base not found.";
     }
 
+    /// <summary>
+    /// Uses the typed or picked folder (quotes trimmed).
+    /// </summary>
     void SetKenshi(string path)
     {
         path = path.Trim().Trim('"');
         ShowKenshi(GameInstall.IsValid(path) ? GameInstall.Open(path) : null, path);
     }
 
+    /// <summary>
+    /// Find: searches for the Kenshi install again.
+    /// </summary>
     void FindKenshi_Click(object? sender, RoutedEventArgs e)
     {
         var found = GameInstall.Locate();
         ShowKenshi(found, found?.Root ?? KenshiBox.Text);
     }
 
+    /// <summary>
+    /// Opens the guide to running Kenshi's data on macOS.
+    /// </summary>
     async void KenshiHelp_Click(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this)?.Launcher is { } launcher)
             await launcher.LaunchUriAsync(new Uri("https://github.com/VlcekM/MeitouClient/blob/master/docs/kenshi-on-macos.md"));
     }
 
+    /// <summary>
+    /// macOS renderer picked.
+    /// </summary>
     void Renderer_Changed(object? sender, SelectionChangedEventArgs e)
     {
         if (RendererBox.SelectedItem is ComboBoxItem { Tag: string renderer } && renderer is "auto" or "metal" or "vulkan")
@@ -72,6 +100,9 @@ public sealed partial class SetupOverlay : UserControl
         ShowRendererHint();
     }
 
+    /// <summary>
+    /// The macOS renderer hint: which renderer the choice comes to here, and why.
+    /// </summary>
     void ShowRendererHint()
     {
         if (RendererHint is null) return;
@@ -88,21 +119,33 @@ public sealed partial class SetupOverlay : UserControl
         RendererHint.Inlines = [new Run(LauncherText.Translate(hint, effective))];
     }
 
+    /// <summary>
+    /// Browse for the Kenshi folder.
+    /// </summary>
     async void BrowseKenshi_Click(object? sender, RoutedEventArgs e)
     {
         if (await PickFolder("Kenshi folder") is { } path) SetKenshi(path);
     }
 
+    /// <summary>
+    /// The typed Kenshi folder, when it changed, is used.
+    /// </summary>
     void KenshiBox_LostFocus(object? sender, RoutedEventArgs e)
     {
         if (KenshiBox.Text is { } path && path != _install?.Root) SetKenshi(path);
     }
 
+    /// <summary>
+    /// Browse for the install folder.
+    /// </summary>
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
         if (await PickFolder("Install folder") is { } path) InstallBox.Text = path;
     }
 
+    /// <summary>
+    /// A folder the user picks, null when cancelled.
+    /// </summary>
     async Task<string?> PickFolder(string title)
     {
         if (TopLevel.GetTopLevel(this) is not { } top) return null;
@@ -110,6 +153,9 @@ public sealed partial class SetupOverlay : UserControl
         return folders is [var folder] ? folder.TryGetLocalPath() : null;
     }
 
+    /// <summary>
+    /// Continue: checks the install folder, saves both folders and the choices and raises <see cref="Confirmed"/>.
+    /// </summary>
     async void Continue_Click(object? sender, RoutedEventArgs e)
     {
         if (KenshiBox.Text is { } typed && typed != _install?.Root) SetKenshi(typed);

@@ -8,16 +8,91 @@ namespace Meitou.Game.Ui;
 /// The colour a tooltip text takes: the palette the original's inline colour tags name (<c>data/gui/colours/kenshi_colours.xml</c>); the host maps
 /// each to its UI mode's colour.
 /// </summary>
-public enum TooltipTone { Default, Main, Ink, Title, Bad, BadBright, Good, Grey, GreyBright, Cyan, Grade0, Grade1, Grade2, Grade3, Grade4 }
+public enum TooltipTone
+{
+    /// <summary>
+    /// No tag: the text's own colour.
+    /// </summary>
+    Default,
+
+    /// <summary>
+    /// #afa68b.
+    /// </summary>
+    Main,
+
+    /// <summary>
+    /// #140806.
+    /// </summary>
+    Ink,
+
+    /// <summary>
+    /// #492620.
+    /// </summary>
+    Title,
+
+    /// <summary>
+    /// #59231a.
+    /// </summary>
+    Bad,
+
+    /// <summary>
+    /// #bf4834.
+    /// </summary>
+    BadBright,
+
+    /// <summary>
+    /// #a8b774.
+    /// </summary>
+    Good,
+
+    /// <summary>
+    /// #444444.
+    /// </summary>
+    Grey,
+
+    /// <summary>
+    /// #777777.
+    /// </summary>
+    GreyBright,
+
+    /// <summary>
+    /// #14ffdc.
+    /// </summary>
+    Cyan,
+
+    /// <summary>
+    /// Armour grade 0 (ItemGrade0 of kenshi_colours.xml).
+    /// </summary>
+    Grade0,
+
+    /// <summary>
+    /// Armour grade 1 (ItemGrade1).
+    /// </summary>
+    Grade1,
+
+    /// <summary>
+    /// Armour grade 2 (ItemGrade2).
+    /// </summary>
+    Grade2,
+
+    /// <summary>
+    /// Armour grade 3 (ItemGrade3).
+    /// </summary>
+    Grade3,
+
+    /// <summary>
+    /// Armour grade 4 (ItemGrade4).
+    /// </summary>
+    Grade4,
+}
 
 /// <summary>
-/// One tooltip row: a key (left) and an optional value (right), each with the tone of its leading <c>#rrggbb</c> tag.
+/// One tooltip row: a key (left) and an optional value (right), each with the tone of its leading <c>#rrggbb</c> tag. A paragraph (Paragraph true)
+/// is wrapped at the width the other rows give the tooltip: it does not widen it.
 /// </summary>
 public readonly record struct TooltipLine(string Key, string Value = "", TooltipTone KeyTone = TooltipTone.Default,
     TooltipTone ValueTone = TooltipTone.Default, string Suffix = "", TooltipTone SuffixTone = TooltipTone.Default, bool Paragraph = false)
 {
-    // A paragraph (Paragraph true) is wrapped at the width the other rows give the tooltip: it does not widen it.
-
     /// <summary>
     /// The value and the suffix (the price mark-up after a price) as one text.
     /// </summary>
@@ -28,25 +103,51 @@ public readonly record struct TooltipLine(string Key, string Value = "", Tooltip
 /// Where a tooltip sits (docs/game/ui-screens.md "Tooltips"): <c>ToolTip</c>/<c>ToolTipDynamic</c> at the pointer, <c>ToolTipFixed</c> on an anchor
 /// panel, <c>ToolTipInventory</c> beside the window holding the item.
 /// </summary>
-public enum TooltipKind { Floating, Fixed, Inventory, Static }
+public enum TooltipKind
+{
+    /// <summary>
+    /// At the pointer (<c>ToolTip</c>, <c>ToolTipDynamic</c>).
+    /// </summary>
+    Floating,
+
+    /// <summary>
+    /// On an anchor panel (<c>ToolTipFixed</c>).
+    /// </summary>
+    Fixed,
+
+    /// <summary>
+    /// Beside the window holding the item (<c>ToolTipInventory</c>).
+    /// </summary>
+    Inventory,
+
+    /// <summary>
+    /// In a widget of its own, the class naming it (<c>static:AIToolTip</c>).
+    /// </summary>
+    Static,
+}
 
 /// <summary>
 /// The rectangles of a laid out row, inside <see cref="TooltipLayout.Panel"/>: the key (left aligned) and the value (right aligned) share one area.
 /// </summary>
 public readonly record struct TooltipRow(UiRect Area);
 
+/// <summary>
+/// A laid out tooltip: its panel, its rows' areas and the rows' inset from the panel's sides.
+/// </summary>
 public sealed record TooltipLayout(UiRect Panel, IReadOnlyList<TooltipRow> Rows, float Offset);
 
 /// <summary>
 /// The tooltip runtime's data and layout (docs/game/ui-screens.md "Tooltips"). A widget carries the original's MyGUI user strings as control
 /// properties (<c>tooltip_type</c> 0 text, 1 rows, 2 data record, 4 map place; <c>tooltip_text</c>, <c>tooltip_size</c>, <c>tooltip_key_N</c>,
-/// <c>tooltip_val_N</c>,
-/// <c>tooltip_data</c>) plus Meitou's <c>tooltip_class</c> (<c>fixed</c> / <c>inventory</c>).
+/// <c>tooltip_val_N</c>, <c>tooltip_data</c>) plus Meitou's <c>tooltip_class</c> (<c>fixed</c> / <c>inventory</c>).
 /// </summary>
 public static class UiTooltips
 {
     #region Properties
 
+    /// <summary>
+    /// The user string names: the type, the text, the row count, the row keys' and values' prefixes, the data record and Meitou's class.
+    /// </summary>
     public const string Type = "tooltip_type", Text = "tooltip_text", Size = "tooltip_size", KeyPrefix = "tooltip_key_", ValuePrefix = "tooltip_val_",
         Data = "tooltip_data", Class = "tooltip_class";
 

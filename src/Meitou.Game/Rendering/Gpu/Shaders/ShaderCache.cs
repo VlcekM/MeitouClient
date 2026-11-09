@@ -9,11 +9,20 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 /// </summary>
 static class ShaderCache
 {
-    const uint Magic = 0x4D535056; // "MSPV"
+    /// <summary>
+    /// The cache file's magic number ("MSPV").
+    /// </summary>
+    const uint Magic = 0x4D535056;
 
+    /// <summary>
+    /// The default cache directory: <c>Meitou/shader-cache</c> in the local application data.
+    /// </summary>
     public static string DefaultDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "shader-cache");
 
+    /// <summary>
+    /// A program's cache key: the SHA-256 (hex) of the version, the options that change the output, and both sources.
+    /// </summary>
     public static string Key(string vertex, string fragment, ShaderCompileOptions o, int version)
     {
         using var sha = SHA256.Create();
@@ -32,6 +41,9 @@ static class ShaderCache
         return Convert.ToHexString(sha.Hash!);
     }
 
+    /// <summary>
+    /// Both stages' SPIR-V from the cache file of <paramref name="key"/>, when it exists with the right magic, version, hash and SPIR-V headers.
+    /// </summary>
     public static bool TryRead(string directory, string key, int version, out byte[] vertex, out byte[] fragment)
     {
         vertex = fragment = [];
@@ -72,6 +84,9 @@ static class ShaderCache
         }
     }
 
+    /// <summary>
+    /// Writes the cache file of <paramref name="key"/> (through a temporary file, then moved in place); a cache that cannot be written is skipped.
+    /// </summary>
     public static void Write(string directory, string key, int version, byte[] vertex, byte[] fragment)
     {
         try

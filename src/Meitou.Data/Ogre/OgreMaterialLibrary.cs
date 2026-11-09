@@ -14,7 +14,13 @@ public sealed class OgreMaterialLibrary
     public static readonly string[] ProgramClasses =
         ["vertex_program", "fragment_program", "geometry_program", "tessellation_hull_program", "tessellation_domain_program", "compute_program"];
 
+    /// <summary>
+    /// The materials by name; the first parsed definition of a name wins.
+    /// </summary>
     public Dictionary<string, OgreMaterial> Materials { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The GPU programs by name; the first definition of a name wins (a later one is reported).
+    /// </summary>
     public Dictionary<string, OgreGpuProgram> Programs { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -23,6 +29,9 @@ public sealed class OgreMaterialLibrary
     /// </summary>
     public List<OgreMaterial> DuplicateMaterials { get; } = [];
 
+    /// <summary>
+    /// The compiled script files in the order added.
+    /// </summary>
     public List<OgreScriptFile> Files { get; } = [];
 
     /// <summary>
@@ -35,6 +44,9 @@ public sealed class OgreMaterialLibrary
     /// </summary>
     public Dictionary<string, int> TopLevelClasses { get; } = [];
 
+    /// <summary>
+    /// The material named <paramref name="name"/>; null when no script defines it.
+    /// </summary>
     public OgreMaterial? Find(string name) => Materials.GetValueOrDefault(name);
 
     /// <summary>

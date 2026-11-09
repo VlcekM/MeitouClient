@@ -10,7 +10,25 @@ namespace Meitou.Simulation.Locks;
 /// <summary>
 /// How a character gets shackles off: the original's context-menu verbs Unlock Shackles (task 201), Use Tools (185) and Use Strength (186).
 /// </summary>
-public enum ShackleWork : byte { Pick, Cut, Break, PutOn }
+public enum ShackleWork : byte
+{
+    /// <summary>
+    /// Unlock Shackles (201): picked.
+    /// </summary>
+    Pick,
+    /// <summary>
+    /// Use Tools (185): cut.
+    /// </summary>
+    Cut,
+    /// <summary>
+    /// Use Strength (186): broken.
+    /// </summary>
+    Break,
+    /// <summary>
+    /// Putting shackles on (an engine stand-in for the original's inventory drag; no row).
+    /// </summary>
+    PutOn
+}
 
 /// <summary>
 /// A character working on <see cref="Wearer"/>'s shackles (its own or another's).
@@ -51,6 +69,9 @@ public sealed partial class LockSystem
     /// </summary>
     public static Items.ItemInstance? WornShackles(CharacterCold? c) => c?.Inventory?.Items.FirstOrDefault(i => i.LockedOn);
 
+    /// <summary>
+    /// The shackle order: the first named player character able to works on the wearer's shackles (from a cage only its own; cutting needs a tool).
+    /// </summary>
     void ShackleInput(World world, ShackleOrder order)
     {
         var table = world.Characters;
@@ -75,6 +96,9 @@ public sealed partial class LockSystem
         }
     }
 
+    /// <summary>
+    /// A point on the ground plane (X, Z).
+    /// </summary>
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
     /// <summary>
@@ -97,6 +121,9 @@ public sealed partial class LockSystem
                 && (c.IsImprisoned || c.Medical is { Incapacitated: true })
                         && !c.Inventory.Items.Any(i => i.IsLocked && Items.InventoryCommands.IsEquipmentSection(i.Section));
 
+    /// <summary>
+    /// The put-shackles order: a player character puts shackles on a caged or downed wearer.
+    /// </summary>
     void PutShacklesInput(World world, PutShacklesOrder order)
     {
         var table = world.Characters;
@@ -293,6 +320,9 @@ public sealed partial class LockSystem
         Thank(world, world.Characters.IdOf(s), freed);
     }
 
+    /// <summary>
+    /// Shackles came off: the unlocked sound, the player's line, and the thanks of an NPC wearer.
+    /// </summary>
     static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string? message)
     {
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
@@ -302,6 +332,9 @@ public sealed partial class LockSystem
         if (c.IsPlayer) Thank(world, world.Characters.IdOf(s), wearer);
     }
 
+    /// <summary>
+    /// An NPC freed by another character thanks it (event UNLOCK_MY_CAGE_OR_SHACKLES).
+    /// </summary>
     static void Thank(World world, CharacterId worker, CharacterId freed)
     {
         if (freed != worker && world.Characters.TryResolveNext(freed, out int w) && world.Characters.Cold(w) is { IsPlayer: false })

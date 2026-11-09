@@ -9,8 +9,8 @@ namespace Meitou.Data.Ui;
 public readonly record struct TextColourRun(int Start, Vector3 Colour);
 
 /// <summary>
-/// MyGUI's inline colour tags (its TextView, docs/game/ui-screens.md "Inline colour tags"): <c>#rrggbb</c> colours the text after it, <c>##</c> is one <c>#</c>.
-/// A <c>#</c> before anything else is kept as written (engine choice: MyGUI reads any six characters).
+/// MyGUI's inline colour tags (its TextView, docs/game/ui-screens.md "Inline colour tags"): <c>#rrggbb</c> colours the text after it, <c>##</c> is
+/// one <c>#</c>. A <c>#</c> before anything else is kept as written (engine choice: MyGUI reads any six characters).
 /// </summary>
 public static class MyGuiTextTags
 {

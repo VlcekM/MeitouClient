@@ -18,9 +18,18 @@ public sealed unsafe class GpuDefaults : IDisposable
     /// </summary>
     public const ulong DummyIntOffset = 16;
 
+    /// <summary>
+    /// The device the buffer and images are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The made stand-in textures, by sampler target slot, sampled kind and depth.
+    /// </summary>
     readonly Dictionary<(int Slot, ScalarKind Kind, bool Depth), DummyTexture> _textures = [];
 
+    /// <summary>
+    /// Makes the dummy vertex buffer with (0, 0, 0, 1) as floats at offset 0 and as integers at <see cref="DummyIntOffset"/>.
+    /// </summary>
     public GpuDefaults(VulkanDevice device)
     {
         this._device = device;
@@ -65,6 +74,9 @@ public sealed unsafe class GpuDefaults : IDisposable
         return d;
     }
 
+    /// <summary>
+    /// Frees the dummy vertex buffer, and the stand-in images after the frames in flight.
+    /// </summary>
     public void Dispose()
     {
         _device.Allocator.Free(DummyVertex);
@@ -73,6 +85,9 @@ public sealed unsafe class GpuDefaults : IDisposable
         _textures.Clear();
     }
 
+    /// <summary>
+    /// The stand-in's format: 24-bit depth for a shadow sampler, R32UI or R32I for the integer kinds, else RGBA8.
+    /// </summary>
     static InternalFormat FormatOf(ScalarKind kind, bool depth)
     {
         if (depth) return InternalFormat.DepthComponent24;
@@ -85,6 +100,9 @@ public sealed unsafe class GpuDefaults : IDisposable
         };
     }
 
+    /// <summary>
+    /// A 1x1 sampled image of <paramref name="layers"/> layers (cube-compatible for slot 2) in device-local memory.
+    /// </summary>
     ImageAllocation CreateImage(int slot, InternalFormat format, int layers)
     {
         var info = new ImageCreateInfo
@@ -143,6 +161,9 @@ public sealed unsafe class GpuDefaults : IDisposable
         _device.EndImmediate(cb);
     }
 
+    /// <summary>
+    /// (0, 0, 0, 1) as integers for the integer kinds, else as floats.
+    /// </summary>
     static ClearColorValue ClearColorOf(ScalarKind kind)
     {
         if (kind is ScalarKind.UInt or ScalarKind.Int)

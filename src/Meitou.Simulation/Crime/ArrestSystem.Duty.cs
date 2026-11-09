@@ -6,6 +6,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 
+/// <summary>
+/// The arrest system's goal 204: guards on duty look for a bounty to arrest.
+/// </summary>
 public sealed partial class ArrestSystem
 {
     /// <summary>
@@ -72,16 +75,40 @@ public sealed partial class ArrestSystem
         return scan.Best;
     }
 
+    /// <summary>
+    /// The state of the goal 204 target finder's grid query: the nearest wanted character so far.
+    /// </summary>
     struct TargetScan
     {
+        /// <summary>
+        /// The arrest system the tests go through.
+        /// </summary>
         public ArrestSystem System;
+        /// <summary>
+        /// The world queried.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The guard's slot.
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The guard.
+        /// </summary>
         public CharacterCold Guard;
+        /// <summary>
+        /// The nearest target's slot so far, -1: none.
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// Its squared distance.
+        /// </summary>
         public float BestD2;
     }
 
+    /// <summary>
+    /// Whether the guard goes after the target: a bounty it perceives (<see cref="PerceivedBounty"/>), or the target's faction is its enemy.
+    /// </summary>
     bool WantedBy(CharacterCold guard, CharacterCold target) =>
         PerceivedBounty(guard, target)
             || Crimes.Relations.Contains(guard.Faction) && Crimes.Relations.Contains(target.Faction)

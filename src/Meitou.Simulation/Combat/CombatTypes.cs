@@ -27,8 +27,8 @@ public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, Character
     public bool Picked { get; init; }
 
     /// <summary>
-    /// The player's Attack Unprovoked (row 61): the only attack that books an Assault and marks the attacker ordered (<c>Task_FocusedMeleeAttack</c> flag,
-    /// <b>Verified</b>); Attack Target (5) and the AI's fights do neither. Needs <see cref="Picked"/>.
+    /// The player's Attack Unprovoked (row 61): the only attack that books an Assault and marks the attacker ordered (<c>Task_FocusedMeleeAttack</c>
+    /// flag, <b>Verified</b>); Attack Target (5) and the AI's fights do neither. Needs <see cref="Picked"/>.
     /// </summary>
     public bool Unprovoked { get; init; }
 
@@ -73,6 +73,9 @@ public readonly record struct CombatLogEntry(
     /// </summary>
     public bool Ranged { get; init; }
 
+    /// <summary>
+    /// Whether the bolt hit the character it was shot at (false: a friend or another enemy in the way).
+    /// </summary>
     public bool Intended { get; init; }
 }
 
@@ -107,7 +110,8 @@ public sealed record CombatOptions
     public int? AttackSlots { get; init; }
 
     /// <summary>
-    /// A dodge or block that passed its roll but starts too late joins its clip partway so it still counts (Meitou balance choice); false: the game's rule, it fails.
+    /// A dodge or block that passed its roll but starts too late joins its clip partway so it still counts (Meitou balance choice); false: the game's
+    /// rule, it fails.
     /// </summary>
     public bool LateDefences { get; init; }
 

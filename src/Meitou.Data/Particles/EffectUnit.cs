@@ -5,7 +5,23 @@ namespace Meitou.Data.Particles;
 /// <summary>
 /// How an effect's particles are kept near its node.
 /// </summary>
-public enum UnitWrap { None, Cube, Sphere }
+public enum UnitWrap
+{
+    /// <summary>
+    /// The particles go where they move.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// They wrap round a cube (the camera groups).
+    /// </summary>
+    Cube,
+
+    /// <summary>
+    /// They are brought back into a sphere (the global groups).
+    /// </summary>
+    Sphere
+}
 
 /// <summary>
 /// One live effect (the game's "effect handler"): a particle system at a place. It exists as a record (position, life) all the time and holds a
@@ -15,6 +31,10 @@ public enum UnitWrap { None, Cube, Sphere }
 /// </summary>
 public sealed class EffectUnit
 {
+    /// <summary>
+    /// A unit of <paramref name="effect"/> running <paramref name="system"/>, its simulation seeded with <paramref name="seed"/> once it
+    /// is activated.
+    /// </summary>
     public EffectUnit(EffectRecord effect, PuSystemDef system, int seed)
     {
         Effect = effect;
@@ -23,10 +43,25 @@ public sealed class EffectUnit
         LongestLife = ParticleSimulation.LongestLife(system);
     }
 
+    /// <summary>
+    /// The EFFECT record the unit runs.
+    /// </summary>
     public EffectRecord Effect { get; }
+    /// <summary>
+    /// The particle system the unit simulates.
+    /// </summary>
     public PuSystemDef System { get; }
+    /// <summary>
+    /// The seed of the unit's simulation; the same unit makes the same particles each time it is activated.
+    /// </summary>
     public int Seed { get; }
+    /// <summary>
+    /// The longest particle life of the system's emitters, in seconds: how much history an activated unit catches up on.
+    /// </summary>
     public float LongestLife { get; }
+    /// <summary>
+    /// The unit's simulation while it is active (near the camera); null otherwise.
+    /// </summary>
     public ParticleSimulation? Simulation { get; set; }
     /// <summary>
     /// The node's place in the world.
@@ -36,7 +71,13 @@ public sealed class EffectUnit
     /// Where the simulation's coordinates start in the world (kept near the node so a far-off place does not cost the particles precision).
     /// </summary>
     public Vector3 Anchor { get; set; }
+    /// <summary>
+    /// The rgb multiplier of the particles: the effect's colour multiplier, times the ground colour when the effect asks.
+    /// </summary>
     public Vector3 Tint { get; set; } = Vector3.One;
+    /// <summary>
+    /// The multiplier of the particles' alpha when drawn.
+    /// </summary>
     public float Alpha { get; set; } = 1;
     /// <summary>
     /// The node's turn (<see cref="ParticleSimulation.Orientation"/>).
@@ -46,6 +87,9 @@ public sealed class EffectUnit
     /// The particles' size and life factors (<see cref="ParticleSimulation.Size"/>, <see cref="ParticleSimulation.LifeScale"/>).
     /// </summary>
     public float Size { get; set; } = 1;
+    /// <summary>
+    /// See <see cref="Size"/>.
+    /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
     /// The node's bounding sphere for culling (<see cref="float.PositiveInfinity"/>: always drawn).
@@ -63,17 +107,47 @@ public sealed class EffectUnit
     /// The life is over: the emitters make nothing more, the particles live out (Verified (decompiled), the handlers' stop).
     /// </summary>
     public bool Stopped { get; set; }
+    /// <summary>
+    /// Seconds since the unit stopped, for the fog fade out.
+    /// </summary>
     public float StoppedFor { get; set; }
+    /// <summary>
+    /// The wind and emission scale its simulation reads this frame; set by the group.
+    /// </summary>
     public ParticleEnvironment Environment { get; set; } = ParticleEnvironment.None;
+    /// <summary>
+    /// The node's distance to the camera at the last update.
+    /// </summary>
     public float DistanceToCamera { get; set; }
     // wandering
+    /// <summary>
+    /// Wandering: the unit's direction of travel in x and z, unit length.
+    /// </summary>
     public Vector2 Heading { get; set; }
+    /// <summary>
+    /// Wandering: seconds until the heading turns again.
+    /// </summary>
     public float TurnTimer { get; set; }
+    /// <summary>
+    /// Wandering: seconds until the height is put on the ground again.
+    /// </summary>
     public float GroundTimer { get; set; }
     // wrapping
+    /// <summary>
+    /// How the particles are kept near the node.
+    /// </summary>
     public UnitWrap Wrap { get; set; }
+    /// <summary>
+    /// The wrap's centre in the world: the cube's centre ahead of the camera, or the global node.
+    /// </summary>
     public Vector3 WrapCentre { get; set; }
+    /// <summary>
+    /// The cube's edge, or the sphere's radius.
+    /// </summary>
     public float WrapSize { get; set; }
+    /// <summary>
+    /// Sphere wrap: the highest a particle may be (infinity: no limit).
+    /// </summary>
     public float WrapMaxHeight { get; set; } = float.PositiveInfinity;
     /// <summary>
     /// Sphere wrap: the camera's direction of movement this frame (unit length, zero when it stands still); a particle that leaves the sphere is
@@ -84,9 +158,23 @@ public sealed class EffectUnit
     /// Seconds of simulation to run on the next <see cref="Advance"/>.
     /// </summary>
     public float Pending { get; set; }
+    /// <summary>
+    /// Simulation steps one <see cref="Advance"/> call runs at most.
+    /// </summary>
+    public const int MaxStepsPerFrame = 40;
+
+    /// <summary>
+    /// Counts the sphere wraps, so each one's random places differ.
+    /// </summary>
     int _wrapSalt;
 
+    /// <summary>
+    /// Whether the unit has a simulation.
+    /// </summary>
     public bool Active => Simulation is not null;
+    /// <summary>
+    /// Whether the unit has stopped and has no particles left to show.
+    /// </summary>
     public bool Done => Stopped && (Simulation is null || Simulation.ParticleCount == 0);
 
     /// <summary>
@@ -111,6 +199,9 @@ public sealed class EffectUnit
     /// </summary>
     public float RangeFade { get; set; } = 1;
 
+    /// <summary>
+    /// Makes the unit's simulation, with no particles, at its current state and anchors its coordinates at the node.
+    /// </summary>
     public void Activate()
     {
         Simulation = new ParticleSimulation(System, Seed)
@@ -123,6 +214,9 @@ public sealed class EffectUnit
         Anchor = Position;
     }
 
+    /// <summary>
+    /// Drops the simulation and the queued time.
+    /// </summary>
     public void Deactivate()
     {
         Simulation = null;
@@ -171,15 +265,13 @@ public sealed class EffectUnit
     }
 
     /// <summary>
-    /// Simulation steps one <see cref="Advance"/> call runs at most.
-    /// </summary>
-    public const int MaxStepsPerFrame = 40;
-
-    /// <summary>
     /// True while the unit is still catching up on a backlog of more than a second (it is not drawn until it has).
     /// </summary>
     public bool CatchingUp => Pending > 1f;
 
+    /// <summary>
+    /// Wraps the simulation's particles by <see cref="Wrap"/>, in the simulation's own coordinates.
+    /// </summary>
     void ApplyWrap(ParticleSimulation sim)
     {
         switch (Wrap)

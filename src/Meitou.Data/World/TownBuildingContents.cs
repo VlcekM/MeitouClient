@@ -35,9 +35,10 @@ sealed class TownBuildingContents
     public List<HomeSpot> Furniture = [];
 
     /// <summary>
-    /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the exterior's shop and
-    /// bar flags, the interior's beds, nodes, seats, furniture, tables, fixtures and item slots. Its interior holds objects only from a named layout the data has (none
-    /// named, or one the data lacks, loads nothing); a ruin holds none, as destroying it clears them (docs/game/buildings-production.md "Ruined by residents").
+    /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the
+    /// exterior's shop and bar flags, the interior's beds, nodes, seats, furniture, tables, fixtures and item slots. Its interior holds objects only
+    /// from a named layout the data has (none named, or one the data lacks, loads nothing); a ruin holds none, as destroying it clears them
+    /// (docs/game/buildings-production.md "Ruined by residents").
     /// </summary>
     public static TownBuildingContents Lay(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord state,
         Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
@@ -78,8 +79,8 @@ sealed class TownBuildingContents
     }
 
     /// <summary>
-    /// The interior layout's objects in layout order: beds and nodes, chairs, other furniture, tables and fixtures; returns the chairs' spot indices and
-    /// functionality flags (null: none).
+    /// The interior layout's objects in layout order: beds and nodes, chairs, other furniture, tables and fixtures; returns the chairs' spot indices
+    /// and functionality flags (null: none).
     /// </summary>
     List<(int Spot, int Flags)>? LayItems(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior,
         Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
@@ -173,8 +174,9 @@ sealed class TownBuildingContents
     }
 
     /// <summary>
-    /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its <c>animation</c> and <c>hunger rate</c>), BF_TRAINING
-    /// is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
+    /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its
+    /// <c>animation</c> and <c>hunger rate</c>), BF_TRAINING is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of
+    /// function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
     /// </summary>
     static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {

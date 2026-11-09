@@ -9,8 +9,15 @@ static class AudioTool
 {
     #region Run
 
+    /// <summary>
+    /// The install's Wwise bank folder, <c>data/audio</c>.
+    /// </summary>
     static string AudioDirectory(GameInstall install) => Path.Combine(install.DataDirectory, "audio");
 
+    /// <summary>
+    /// <c>meitou-tools audio</c>: no argument surveys every bank, <c>render</c> mixes events into a WAV, otherwise dumps one bank (a file or a name
+    /// in the audio folder) or, with <c>--wav</c> or <c>--decode</c>, exports or decodes its sounds. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         if (args.Length == 0) return Survey(install);
@@ -121,6 +128,10 @@ static class AudioTool
         return events;
     }
 
+    /// <summary>
+    /// Mixes <paramref name="events"/> (each posted at its time in seconds) through <paramref name="player"/> into <paramref name="all"/>, one output
+    /// block at a time, <paramref name="total"/> frames at <paramref name="rate"/>.
+    /// </summary>
     static void MixRender(
         Meitou.Game.Audio.WwisePlayer player, List<(double At, string Event, ulong Object)> events, float[] all, int rate, int total)
     {
@@ -173,6 +184,9 @@ static class AudioTool
 
     #region Decode
 
+    /// <summary>
+    /// The Vorbis codebook library read from the game's <c>kenshi_x64.exe</c>, null (said on the console) when it is not found.
+    /// </summary>
     static WwiseCodebookLibrary? Library(GameInstall install)
     {
         var exe = Path.Combine(install.Root, "kenshi_x64.exe");
@@ -233,6 +247,9 @@ static class AudioTool
         return 0;
     }
 
+    /// <summary>
+    /// Writes interleaved float samples as a 16-bit PCM WAV file.
+    /// </summary>
     static void WriteWav(string file, float[] pcm, int channels, int rate)
     {
         using var s = new BinaryWriter(File.Create(file));
@@ -330,6 +347,9 @@ static class AudioTool
 
     #region Objects
 
+    /// <summary>
+    /// The node part (properties, positioning, parent) of a hierarchy object, null for an object without one.
+    /// </summary>
     public static WwiseNodeBase? Node(WwiseObject o) => o switch
     {
         WwiseSound s => s.Node,
@@ -341,6 +361,9 @@ static class AudioTool
         _ => Music(o)?.Node,
     };
 
+    /// <summary>
+    /// The music node part of a music segment, switch or playlist, null for any other object.
+    /// </summary>
     public static WwiseMusicNode? Music(WwiseObject o) => o switch
     {
         WwiseMusicSegment s => s.Music,
@@ -375,6 +398,9 @@ static class AudioTool
     }.Concat(new[] { "Dunes", "Savannah", "Swamplands", "Tarsands" }.SelectMany(b => new[] { $"Music_{b}_Play", $"Music_{b}_Stop" }))
         .ToDictionary(WwiseHash.Id);
 
+    /// <summary>
+    /// An id in hexadecimal, with its name when it is one of the known names (<see cref="KnownNames"/>).
+    /// </summary>
     static string Name(uint id) => KnownNames.TryGetValue(id, out var n) ? $"{id:X8} ({n})" : id.ToString("X8");
 
     /// <summary>
@@ -383,6 +409,10 @@ static class AudioTool
     static bool IsRoot(WwiseBank bank, WwiseObject o, HashSet<uint> printed) =>
         Node(o) is not null && !printed.Contains(o.Id) && (Node(o)!.ParentId == 0 || bank.Find(Node(o)!.ParentId) is null);
 
+    /// <summary>
+    /// Prints a bank: its header and sections, every object with its details, the hierarchy as trees from its roots and, with <paramref
+    /// name="media"/>, the embedded media.
+    /// </summary>
     static void Dump(WwiseBank bank, bool media)
     {
         Console.WriteLine($"bank {bank.Id:X8} v{bank.Version} language {bank.LanguageId} names "
@@ -415,6 +445,10 @@ static class AudioTool
             Console.WriteLine($"{raw.Type} {raw.Id:X8} {raw.Body.Length} bytes{(raw.Error is null ? "" : " FAIL " + raw.Error)}");
     }
 
+    /// <summary>
+    /// The kind-specific part of an action's line: the bank of a Play, the group and state of a SetState, the value of a volume, pitch or low-pass
+    /// change.
+    /// </summary>
     static string ActionDetail(WwiseAction a) => a.Kind switch
     {
         WwiseActionKind.Play => $" bank {a.BankId:X8}",
@@ -424,6 +458,9 @@ static class AudioTool
         _ => "",
     };
 
+    /// <summary>
+    /// Prints the object <paramref name="id"/> and its children <paramref name="depth"/> levels in, each once (<paramref name="printed"/>).
+    /// </summary>
     static void Tree(WwiseBank bank, uint id, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -461,6 +498,9 @@ static class AudioTool
         PrintChildren(bank, o, depth, pad, printed);
     }
 
+    /// <summary>
+    /// Prints an object's children: a switch container's per switch, a music switch's decision tree, a playlist's items, else its child list.
+    /// </summary>
     static void PrintChildren(WwiseBank bank, WwiseObject o, int depth, string pad, HashSet<uint> printed)
     {
         if (o is WwiseSwitchContainer sw)
@@ -476,6 +516,9 @@ static class AudioTool
             if (o is not WwiseSwitchContainer || !printed.Contains(c)) Tree(bank, c, depth + 1, printed);
     }
 
+    /// <summary>
+    /// Appends a node's properties, its positioning (when it overrides the parent's), RTPCs and state groups.
+    /// </summary>
     static void AppendNodeDetails(StringBuilder sb, WwiseNodeBase node)
     {
         sb.Append(Props(node.Properties));
@@ -491,6 +534,10 @@ static class AudioTool
         foreach (var s in node.StateGroups) sb.Append($" states {s.GroupId:X8}[{s.States.Length}]");
     }
 
+    /// <summary>
+    /// Appends what an object's kind holds: a sound's source, and the settings of a random or sequence, switch or layer container, music segment,
+    /// track or switch.
+    /// </summary>
     static void AppendKindDetails(StringBuilder sb, WwiseObject o)
     {
         switch (o)
@@ -523,8 +570,14 @@ static class AudioTool
         }
     }
 
+    /// <summary>
+    /// A transition fade: "cut" when it has no time and no offset, else its time, curve and offset.
+    /// </summary>
     static string Fade(WwiseFade f) => f.Time == 0 && f.Offset == 0 ? "cut" : $"{f.Time} ms curve {f.Curve} offset {f.Offset}";
 
+    /// <summary>
+    /// A music transition rule's line: sources to destinations, the exit's sync and fade-out, the entry's fade-in, jump and cues.
+    /// </summary>
     static string Transition(WwiseMusicTransition t)
     {
         static string Ids(uint[] ids) => string.Join("|", ids.Select(i => i == WwiseMusicTransition.Any ? "any" : i.ToString("X8")));
@@ -536,6 +589,9 @@ static class AudioTool
             + $"{(s.CueFilter != 0 || d.CueFilter != 0 ? $" cues {s.CueFilter:X8}/{d.CueFilter:X8}" : "")}";
     }
 
+    /// <summary>
+    /// Prints a music switch's decision tree node: each key's children or the audio node it plays.
+    /// </summary>
     static void Decision(WwiseBank bank, WwiseDecisionNode d, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -557,6 +613,9 @@ static class AudioTool
         }
     }
 
+    /// <summary>
+    /// Prints a playlist item (group or segment) with its loop count, weight and children.
+    /// </summary>
     static void PlaylistItem(WwiseBank bank, WwisePlaylistItem item, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -582,6 +641,9 @@ static class AudioTool
         Tree(bank, item.SegmentId, depth + 1, printed);
     }
 
+    /// <summary>
+    /// A properties block as " {name=value ... name~[min,max]}", empty when it has none.
+    /// </summary>
     static string Props(WwiseProperties p)
     {
         if (p.Values.Count == 0 && p.Ranges.Count == 0) return "";
@@ -590,6 +652,9 @@ static class AudioTool
         return $" {{{string.Join(' ', parts)}}}";
     }
 
+    /// <summary>
+    /// A short name for a property id (vol, pitch, lpf, fade, loop), else its number.
+    /// </summary>
     static string PropName(byte id) => id switch
     {
         WwisePropertyId.Volume => "vol",
@@ -600,6 +665,9 @@ static class AudioTool
         _ => $"p{id:X2}",
     };
 
+    /// <summary>
+    /// A property's raw 32 bits as text: as an integer when it reads as a denormal float (small integers stored as ints), else as the float.
+    /// </summary>
     static string PropValue(byte id, uint raw)
     {
         float f = BitConverter.UInt32BitsToSingle(raw);

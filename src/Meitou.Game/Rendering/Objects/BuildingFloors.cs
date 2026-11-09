@@ -14,18 +14,35 @@ sealed class BuildingFloor
     /// The placement's key (the interior view's id for it).
     /// </summary>
     public required string Key { get; init; }
+
     /// <summary>
     /// The placement it was made from: a new listing with the same one keeps this floor and its collision.
     /// </summary>
     public required BuildingPlacement Placement { get; init; }
+
+    /// <summary>
+    /// The building's position in the world.
+    /// </summary>
     public required Vector3 Position { get; init; }
+
     /// <summary>
     /// The building's <c>interior material</c> and <c>exterior material</c> (GroundType).
     /// </summary>
     public required int Interior { get; init; }
+
+    /// <summary>
+    /// The building's <c>exterior material</c> (GroundType), taken when the character is outside.
+    /// </summary>
     public required int Exterior { get; init; }
+
+    /// <summary>
+    /// Makes the floor collision (run on a worker on the first <see cref="Request"/>).
+    /// </summary>
     public required Func<FloorSurfaces> Make { get; init; }
 
+    /// <summary>
+    /// The job making the collision (null: not asked for yet).
+    /// </summary>
     Task<FloorSurfaces>? _job;
 
     /// <summary>
@@ -33,6 +50,9 @@ sealed class BuildingFloor
     /// </summary>
     public FloorSurfaces? Surfaces => _job is { IsCompletedSuccessfully: true } j ? j.Result : null;
 
+    /// <summary>
+    /// Starts making the floor collision on a worker, once.
+    /// </summary>
     public void Request() => _job ??= BackgroundWork.Run(Make);
 }
 
@@ -51,13 +71,21 @@ sealed class BuildingFloors(WorldObjects objects)
     /// How far (units, X/Z) from a building's position its floors are looked for (engine choice: the largest buildings reach about this far).
     /// </summary>
     public const float Reach = 400;
+
     /// <summary>
     /// How far above the feet the ray starts (<c>FUN_14065f160</c>: 20), and how far below the feet a floor still counts as the one stood on (engine
     /// choice: the heights characters stand at come from the navigation mesh).
     /// </summary>
     public const float RayStart = 20, Tolerance = 4;
 
+    /// <summary>
+    /// The floor listings of the zones asked about, by zone.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, ZoneListing> _zones = [];
+
+    /// <summary>
+    /// The scratch list of the floors near the point asked about, with their collision (cleared at each call).
+    /// </summary>
     readonly List<(BuildingFloor Floor, FloorSurfaces Surfaces)> _near = [];
 
     /// <summary>
@@ -154,9 +182,24 @@ sealed class BuildingFloors(WorldObjects objects)
     /// </summary>
     sealed class ZoneListing
     {
+        /// <summary>
+        /// The floors in use (an unchanged building keeps its floor and collision across listings).
+        /// </summary>
         public BuildingFloor[] Floors = [];
+
+        /// <summary>
+        /// The job listing the zone's floors again (null: none started).
+        /// </summary>
         public Task<BuildingFloor[]>? Job;
+
+        /// <summary>
+        /// The listing job whose result <see cref="Floors"/> holds.
+        /// </summary>
         public Task<BuildingFloor[]>? Adopted;
+
+        /// <summary>
+        /// The placement version <see cref="Job"/> was started at.
+        /// </summary>
         public int Version;
     }
 }

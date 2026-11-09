@@ -10,10 +10,20 @@ public sealed class GameDatabase
 {
     #region Records
 
+    /// <summary>
+    /// Every loaded record by string id; a record whose merged <c>REMOVED</c> bool is true is taken out.
+    /// </summary>
     readonly Dictionary<string, GameRecord> _records = new(StringComparer.Ordinal);
-    // Ids of records a translation file created because no data file defined them (its entries for mods that are not loaded).
+
+    /// <summary>
+    /// Ids of records a translation file created because no data file defined them (its entries for mods that are not loaded);
+    /// <see cref="DropTranslationOnlyRecords"/> removes them after loading.
+    /// </summary>
     readonly HashSet<string> _translationOnly = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Every loaded record by string id.
+    /// </summary>
     public IReadOnlyDictionary<string, GameRecord> Records => _records;
 
     /// <summary>
@@ -36,8 +46,14 @@ public sealed class GameDatabase
     /// </summary>
     public List<GameDataIssue> Issues { get; } = [];
 
+    /// <summary>
+    /// The record of <paramref name="stringId"/>, or null when none is loaded.
+    /// </summary>
     public GameRecord? Find(string stringId) => _records.GetValueOrDefault(stringId);
 
+    /// <summary>
+    /// Every record of <paramref name="type"/>, in no defined order (a scan of all records each call).
+    /// </summary>
     public IEnumerable<GameRecord> OfType(FcsRecordType type) => _records.Values.Where(r => r.Type == type);
 
     /// <summary>
@@ -114,9 +130,11 @@ public sealed class GameDatabase
         }
     }
 
-    // A translation file lists records of mods that may not be loaded; the game creates them from the translation's changes. Meitou drops those
-    // placeholders when no data file touched them, so a record with only a name and a description never reaches a list (Meitou choice,
-    // docs/formats/localisation.md).
+    /// <summary>
+    /// Drops the placeholders a translation file created when no data file touched them. A translation file lists records of mods that may not be
+    /// loaded; the game creates them from the translation's changes, Meitou drops them so a record with only a name and a description never reaches a
+    /// list (Meitou choice, docs/formats/localisation.md).
+    /// </summary>
     void DropTranslationOnlyRecords()
     {
         Version++;
@@ -179,6 +197,9 @@ public sealed class GameDatabase
 
     #region Merging
 
+    /// <summary>
+    /// Copies every value and reference of <paramref name="from"/> onto <paramref name="to"/>, replacing values of the same key and kind.
+    /// </summary>
     static void CopyFields(GameRecord from, GameRecord to)
     {
         foreach (var (k, v) in from.BoolTable) to.BoolTable[k] = v;
@@ -204,6 +225,10 @@ public sealed class GameDatabase
             Apply(record, fileName);
     }
 
+    /// <summary>
+    /// Merges one record of a file: finds or creates the record, merges each value table, the references and the instances, then removes the record
+    /// when its merged <c>REMOVED</c> bool is true.
+    /// </summary>
     void Apply(FcsRecord source, string fileName, bool translation = false)
     {
         var record = EnsureRecord(source, fileName, translation);
@@ -257,6 +282,10 @@ public sealed class GameDatabase
         return record;
     }
 
+    /// <summary>
+    /// Merges the reference lists of <paramref name="source"/>: an entry with the removed values deletes the target from the list, any other sets
+    /// its values.
+    /// </summary>
     static void MergeReferences(GameRecord record, FcsRecord source)
     {
         foreach (var (list, refs) in source.References)
@@ -270,6 +299,10 @@ public sealed class GameDatabase
         }
     }
 
+    /// <summary>
+    /// Merges the instances of <paramref name="source"/> by id: a removed one clears the entry it names (target and states) but keeps it; any other
+    /// sets target, position and rotation and appends its states.
+    /// </summary>
     static void MergeInstances(GameRecord record, FcsRecord source)
     {
         foreach (var si in source.Instances)
@@ -294,6 +327,9 @@ public sealed class GameDatabase
         }
     }
 
+    /// <summary>
+    /// Sets every key of <paramref name="from"/> in <paramref name="into"/>, replacing a value of the same key.
+    /// </summary>
     static void Merge<T>(Dictionary<string, T> into, OrderedDictionary<string, T> from)
     {
         foreach (var (k, v) in from) into[k] = v;
@@ -303,12 +339,18 @@ public sealed class GameDatabase
 
     #region Issues
 
+    /// <summary>
+    /// Records a problem found while applying <paramref name="file"/>.
+    /// </summary>
     void Issue(GameDataIssueKind kind, string file, string stringId, string message) =>
         Issues.Add(new GameDataIssue(kind, file, stringId, message));
 
     #endregion
 }
 
+/// <summary>
+/// What kind of problem a <see cref="GameDataIssue"/> reports.
+/// </summary>
 public enum GameDataIssueKind
 {
     /// <summary>
@@ -342,6 +384,10 @@ public enum GameDataIssueKind
 /// </summary>
 public sealed record FileHeader(int Version, string Author, string Description);
 
+/// <summary>
+/// A problem found while building the load order or applying a file: its kind, the file, the record's string id (null when it concerns the whole
+/// file) and a message.
+/// </summary>
 public sealed record GameDataIssue(GameDataIssueKind Kind, string File, string? StringId, string Message)
 {
     public override string ToString() => StringId is null ? $"{File}: {Message}" : $"{File}: {StringId} {Message}";

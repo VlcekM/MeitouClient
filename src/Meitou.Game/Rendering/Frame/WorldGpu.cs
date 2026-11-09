@@ -76,7 +76,7 @@ internal sealed class WorldGpu : IDisposable
     public DebrisRenderer? Debris;
 
     /// <summary>
-    /// This frame's bolts stuck in characters (<see cref="CharacterRenderer.CollectBolts"/>), drawn with the debris.
+    /// This frame's bolts stuck in characters (<see cref="Characters.CharacterRenderer.CollectBolts"/>), drawn with the debris.
     /// </summary>
     public readonly List<DebrisPiece> BoltPieces = [];
 
@@ -102,7 +102,7 @@ internal sealed class WorldGpu : IDisposable
     public NavmeshOverlayRenderer? NavmeshOverlay;
 
     /// <summary>
-    /// The pick & collision inspector's drawing (Meitou only): pick hulls and shapes, same kind of renderer as the navmesh view.
+    /// The pick &amp; collision inspector's drawing (Meitou only): pick hulls and shapes, same kind of renderer as the navmesh view.
     /// </summary>
     public NavmeshOverlayRenderer? InspectorOverlay;
 

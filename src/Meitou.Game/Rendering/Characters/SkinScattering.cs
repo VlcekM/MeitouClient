@@ -10,13 +10,18 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 sealed class SkinScattering : IDisposable
 {
+    /// <summary>
+    /// The table's size in texels: 64 steps of N·L by 64 of curvature.
+    /// </summary>
     public const int Width = 64, Height = 64;
     /// <summary>
     /// The table's last row: a radius of 1 mm; anything curved more tightly reads that row.
     /// </summary>
     public const float MaxInverseRadiusMm = 1f;
 
-    // The profile: variance (mm²) and the weights of red, green and blue (GPU Gems 3, ch. 14, table 14-1).
+    /// <summary>
+    /// The profile: variance (mm²) and the weights of red, green and blue (GPU Gems 3, ch. 14, table 14-1).
+    /// </summary>
     static readonly (float Variance, float R, float G, float B)[] Profile =
     [
         (0.0064f, 0.233f, 0.455f, 0.649f),
@@ -27,7 +32,13 @@ sealed class SkinScattering : IDisposable
         (7.41f, 0.078f, 0.0f, 0.0f),
     ];
 
+    /// <summary>
+    /// The device the table was uploaded to (for freeing its bindless slot).
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The baked table (RGBA16F, <see cref="Width"/> × <see cref="Height"/>).
+    /// </summary>
     readonly GpuTexture _texture;
 
     /// <summary>
@@ -35,6 +46,9 @@ sealed class SkinScattering : IDisposable
     /// </summary>
     public uint Index { get; }
 
+    /// <summary>
+    /// Bakes the table on the CPU, uploads it as half floats and registers it with a clamped bilinear sampler (<c>Index</c>).
+    /// </summary>
     public SkinScattering(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -112,6 +126,9 @@ sealed class SkinScattering : IDisposable
         return texels;
     }
 
+    /// <summary>
+    /// Frees the bindless slot and the texture.
+    /// </summary>
     public void Dispose()
     {
         _gpu.Bindless.Free(BindlessKind.Texture2D, Index);

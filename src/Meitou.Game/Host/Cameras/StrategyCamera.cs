@@ -16,8 +16,9 @@ namespace Meitou.Game.Host.Cameras;
 /// a pitch step is refused when the real view direction's y is already at or below -0.92 (down) or at or above 0.2 (up), checked before
 /// the step (here a step is cut into pieces of at most <see cref="CameraSettings.MaxPitchSubStep"/>, each checked, so a big mouse jump
 /// overshoots no more than a key step);</item>
-/// <item>height: the pivot never goes below the ground at it (the pivot ground: buildings' floors too) or the lowest ground under the camera, is raised until the eye clears the ground
-/// under it by <c>min(0.2 · boom, 20) + 10</c> (the view is not tilted for it) and closes on that height at ten times the gap per second.</item>
+/// <item>height: the pivot never goes below the ground at it (the pivot ground: buildings' floors too) or the lowest ground under the camera, is
+/// raised until the eye clears the ground under it by <c>min(0.2 · boom, 20) + 10</c> (the view is not tilted for it) and closes on that height at
+/// ten times the gap per second.</item>
 /// </list>
 /// </summary>
 public sealed class StrategyCamera
@@ -31,18 +32,47 @@ public sealed class StrategyCamera
     /// </summary>
     public static readonly float MaxPitch = MathF.Asin(-KenshiCamera.MinViewY);
 
+    /// <summary>
+    /// Degrees to radians, for the rotate speeds (degrees per second).
+    /// </summary>
     const float DegreesToRadians = MathF.PI / 180;
 
+    /// <summary>
+    /// The ground under the eye, and the ground under the pivot (with buildings' floors).
+    /// </summary>
     readonly Func<float, float, float> _ground, _pivotGround;
+    /// <summary>
+    /// The settings the camera reads.
+    /// </summary>
     readonly CameraSettings _settings;
+    /// <summary>
+    /// The turn input averaged over the last frames (<see cref="KenshiCamera.YawSmoothing"/>).
+    /// </summary>
     readonly SmoothedInput _yawInput = new(KenshiCamera.YawSmoothing, KenshiCamera.SmoothingFrames);
+    /// <summary>
+    /// The tilt input averaged over the last frames (<see cref="KenshiCamera.PitchSmoothing"/>).
+    /// </summary>
     readonly SmoothedInput _pitchInput = new(KenshiCamera.PitchSmoothing, KenshiCamera.SmoothingFrames);
+    /// <summary>
+    /// The pivot's height, which closes on its goal (<see cref="FollowHeight"/>).
+    /// </summary>
     float _pivotY;
+    /// <summary>
+    /// The pivot height being closed on; a new goal sets <see cref="_heightSpeed"/> again.
+    /// </summary>
     float _heightGoal;
+    /// <summary>
+    /// The pivot's climb or descent per second towards <see cref="_heightGoal"/>; 0 once there.
+    /// </summary>
     float _heightSpeed;
 
+    /// <summary>
+    /// A camera at the start view (<see cref="KenshiCamera.InitialDistance"/>, <see cref="KenshiCamera.InitialPitchDegrees"/>), its pivot
+    /// settled on the ground.
+    /// </summary>
     /// <param name="ground">The ground under the eye.</param>
-    /// <param name="pivotGround">The ground under the pivot (the game's pivot ray also hits buildings' floors, its eye ray does not raise the eye for them); the eye's by default.</param>
+    /// <param name="pivotGround">The ground under the pivot (the game's pivot ray also hits buildings' floors, its eye ray does not raise the eye for
+    /// them); the eye's by default.</param>
     public StrategyCamera(Func<float, float, float> ground, CameraSettings? settings = null, Func<float, float, float>? pivotGround = null)
     {
         this._ground = ground;
@@ -75,6 +105,9 @@ public sealed class StrategyCamera
     /// </summary>
     public CameraState State { get; private set; }
 
+    /// <summary>
+    /// The pivot, at its height.
+    /// </summary>
     public Vector3 Pivot => new(PivotXz.X, _pivotY, PivotXz.Y);
 
     /// <summary>
@@ -289,6 +322,9 @@ public sealed class StrategyCamera
         _pivotY = shortfall > 0 ? y + shortfall : y;
     }
 
+    /// <summary>
+    /// The camera state from the pivot, yaw, pitch and boom.
+    /// </summary>
     CameraState Compute()
     {
         var pivot = Pivot;
@@ -302,9 +338,18 @@ public sealed class StrategyCamera
     /// </summary>
     sealed class SmoothedInput(float decay, int frames)
     {
+        /// <summary>
+        /// The last frames' input, a ring.
+        /// </summary>
         readonly float[] _samples = new float[frames];
+        /// <summary>
+        /// The ring's newest sample.
+        /// </summary>
         int _newest;
 
+        /// <summary>
+        /// Adds a frame's input and returns the weighted average.
+        /// </summary>
         public float Push(float value)
         {
             _newest = (_newest + 1) % _samples.Length;

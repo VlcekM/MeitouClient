@@ -20,14 +20,37 @@ namespace Meitou.Game.Host.WorldSync;
 /// </summary>
 sealed class BuildingSync(GameHost host)
 {
+    #region Site overlays
+
+    /// <summary>
+    /// The world the shown sites belong to: a new one (a loaded save, a new game) drops them all first (<see cref="ForgetBuildings"/>).
+    /// </summary>
     World? _buildingsWorld;
+    /// <summary>
+    /// The snapshot's <see cref="WorldSnapshot.BuildingsRevision"/> and <see cref="WorldSnapshot.NestBuildingsRevision"/> last diffed; -1 diffs the
+    /// next snapshot.
+    /// </summary>
     long _buildingsRevision = -1, _nestBuildingsRevision = -1;
-    // What the overlays were last told, by instance id.
+    /// <summary>
+    /// What the overlays were last told, by instance id: the sites and nest buildings shown, as of their last snapshot.
+    /// </summary>
     internal readonly Dictionary<string, BuildingSnapshot> ShownBuildings = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The ids of the nest debris meshes put into the runtime item placements (<see cref="NestMeshId"/>).
+    /// </summary>
     readonly HashSet<string> _shownNestMeshes = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The sites in the navmesh overlay, with lamps lit, and with their effects running, by instance id.
+    /// </summary>
     readonly HashSet<string> _navBuildings = new(StringComparer.Ordinal), _litBuildings = new(StringComparer.Ordinal),
         _effectBuildings = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Each unfinished site's construction look (<see cref="ConstructionLook"/>) handed to the object renderer, by id; filled again every frame.
+    /// </summary>
     readonly Dictionary<string, float> _constructionLook = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The build fields of every BUILDING by id, read on first use (<see cref="BuildData"/>).
+    /// </summary>
     Dictionary<string, BuildingBuildData>? _buildData;
 
     /// <summary>
@@ -93,6 +116,10 @@ sealed class BuildingSync(GameHost host)
         return Math.Clamp((done - threshold) / (1 - threshold), 0, 1);
     }
 
+    /// <summary>
+    /// Diffs the snapshot's sites and the loaded nests' buildings against <see cref="ShownBuildings"/>: the gone ones leave the overlays, a moved or
+    /// changed one goes out and in again, a new one goes in; lamps and effects follow each one's completion.
+    /// </summary>
     void DiffBuildings(WorldSnapshot snapshot)
     {
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
@@ -157,6 +184,9 @@ sealed class BuildingSync(GameHost host)
         }
     }
 
+    /// <summary>
+    /// A nest debris mesh's runtime placement id: its mesh and position to a tenth.
+    /// </summary>
     static string NestMeshId(NestMesh m) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture, $"nestmesh:{m.Mesh}@{m.Position.X:F1},{m.Position.Z:F1}");
 
@@ -230,6 +260,10 @@ sealed class BuildingSync(GameHost host)
         host.Nav.AddRuntimeBuilding(placement);   // the zones loaded are built again; UpdateNav sends the RepathCommand when one is ready
     }
 
+    /// <summary>
+    /// Drops the overlays of the old world: the runtime placements, lamps, effects, navmesh buildings, ruins, emptied houses, farms and ground items,
+    /// and resets the diff.
+    /// </summary>
     internal void ForgetBuildings()
     {
         host.ActiveObjects?.ClearRuntime();
@@ -251,6 +285,20 @@ sealed class BuildingSync(GameHost host)
         _shownNestMeshes.Clear();
         if (host.ActiveObjects is { } objects) objects.Construction = null;
     }
+
+    #endregion
+
+    #region Build services
+
+    /// <summary>
+    /// A level building's instance id, owning faction id (its state's owner, else its town's faction) and town building, by placement key; made on
+    /// first use.
+    /// </summary>
+    Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? _levelOwners;
+    /// <summary>
+    /// The <see cref="Meitou.Simulation.Population.PopulationData.BuildingsRevision"/> <see cref="_levelOwners"/> was made for.
+    /// </summary>
+    int _levelOwnersRevision = -1;
 
     /// <summary>
     /// What the player's build mode needs (docs/simulation.md "Buildings", BuildMode): the catalog of BUILDINGs, their texts and parts, the placement
@@ -420,11 +468,6 @@ sealed class BuildingSync(GameHost host)
         return (name, name != recordName ? recordName : null);
     }
 
-    // A level building's instance id, owning faction id (its state's owner, else its town's faction) and town building, by placement key; made on
-    // first use.
-    Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? _levelOwners;
-    int _levelOwnersRevision = -1;
-
     /// <summary>
     /// The floor a ghost stands on in <paramref name="room"/>: a player site's, else a level building's with what <c>PlacementRules.MayBuildIn</c>
     /// reads (whether the player's faction owns it, whether it is a ruin, whether its owner is <c>not real</c>). A repaired town house is shown as a
@@ -448,6 +491,10 @@ sealed class BuildingSync(GameHost host)
         };
     }
 
+    /// <summary>
+    /// The level buildings' instances, owners and town buildings (<see cref="_levelOwners"/>), made again when the population's buildings revision
+    /// changes; null without population data.
+    /// </summary>
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? LevelOwners()
     {
         if (host.PopData is not { } d || _levelOwners is not null && _levelOwnersRevision == d.BuildingsRevision) return _levelOwners;
@@ -463,8 +510,14 @@ sealed class BuildingSync(GameHost host)
         return _levelOwners;
     }
 
-    // <summary>The doors' open amounts from the snapshot to the object renderer (docs/simulation.md "Cages, beds and locks"), made again only when
-    // the snapshot's door table is a new one.</summary>
+    #endregion
+
+    #region Doors
+
+    /// <summary>
+    /// The doors' open amounts from the snapshot to the object renderer (docs/simulation.md "Cages, beds and locks"), made again only when the
+    /// snapshot's door table is a new one: the table last handed over.
+    /// </summary>
     IReadOnlyDictionary<(string Building, int Door), DoorView>? _shownDoors;
 
     /// <summary>
@@ -482,12 +535,28 @@ sealed class BuildingSync(GameHost host)
         objects.Doors.Open = open.Count == 0 ? null : open;
     }
 
+    #endregion
+
+    #region Rotors
+
     // The parts that turn by themselves (RotatingParts.Advance, docs/game/buildings-production.md "Rotating parts"): each frame the
     // object renderer is told the scheduled wind and what each building's ROTATION_OUTPUT parts turn by, then moves them by the frame's game time
     // (real time x speed, 0 while paused). Display only.
+    /// <summary>
+    /// Each player machine's ROTATION_OUTPUT share, by site id; filled again every frame.
+    /// </summary>
     readonly Dictionary<string, float> _rotorOutputs = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The level buildings' ROTATION_OUTPUT share read from their data, by record id; kept once read.
+    /// </summary>
     readonly Dictionary<string, float> _levelRotorOutputs = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The ids of the sites not complete this frame, whose parts do not turn.
+    /// </summary>
     readonly HashSet<string> _unbuiltSites = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Real time since the last frame's rotor advance (capped at 0.25 s).
+    /// </summary>
     readonly Stopwatch _rotorClock = new();
 
     /// <summary>
@@ -531,14 +600,29 @@ sealed class BuildingSync(GameHost host)
         return share;
     }
 
+    #endregion
+
+    #region Turrets
+
     // The turrets' turning parts from the snapshot to the object renderer (JointPoses.Turrets, docs/simulation.md "Combat", turrets): a
     // manned, simulated turret (MannedTurret.Angles) is drawn with its parts turned by the angles of the last two snapshots, interpolated by the
     // simulation's alpha. Display only. A turret keeps its last turn when its gunner leaves (the building keeps the turn, as the simulation's turret
     // does); a world change drops them all.
+    /// <summary>
+    /// The turrets' poses handed to the object renderer, by turret key.
+    /// </summary>
     readonly Dictionary<string, TurretPose> _turretPoses = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The previous snapshot's manned-turret angles, by turret key; filled again every frame.
+    /// </summary>
     readonly Dictionary<string, float[]> _previousTurretAngles = new(StringComparer.Ordinal);
-    // The turrets whose records are missing (not retried).
+    /// <summary>
+    /// The turrets whose records are missing (not retried).
+    /// </summary>
     readonly HashSet<string> _turretPoseMissing = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The world the turret poses belong to: a new one drops them.
+    /// </summary>
     World? _turretPosesWorld;
 
     /// <summary>
@@ -585,4 +669,6 @@ sealed class BuildingSync(GameHost host)
         }
         if (added) objects.Joints.Turrets = new Dictionary<string, TurretPose>(_turretPoses, StringComparer.Ordinal);
     }
+
+    #endregion
 }

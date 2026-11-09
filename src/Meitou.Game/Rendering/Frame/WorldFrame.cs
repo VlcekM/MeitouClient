@@ -180,6 +180,10 @@ static partial class WorldFrame
             0), X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db, Clock = SkyClock.FromDatabase(db) };
     }
 
+    /// <summary>
+    /// The starting camera round the scene's focus (<c>--yaw</c>, <c>--pitch</c>, <c>--distance</c>, or a camera code) and the render options the
+    /// command line asks for.
+    /// </summary>
     public static (WorldCamera, WorldRenderOptions) Setup(WorldScene scene, WorldOptions o)
     {
         float radius = o.Radius * WorldLayout.ZoneSize;
@@ -283,10 +287,9 @@ static partial class WorldFrame
     #region Settings labels
 
     /// <summary>
-    /// The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).
+    /// The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones). The anti-aliasing slider's label changes
+    /// with its numbering ("0 off" 2026-10-09, SMAA 2026-10-19), so a value saved under an old one is not misread.
     /// </summary>
-    // The anti-aliasing slider's label changes with its numbering ("0 off" 2026-10-09, SMAA 2026-10-19), so a value saved under an old one is not
-    // misread.
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS", "Render scale (upscaler)",
         "Upscaler sharpness"];
 
@@ -296,17 +299,31 @@ static partial class WorldFrame
     public const string DlssPresetSlider = "DLSS preset";
 
     /// <summary>
-    /// The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2 SMAA, 3.. the upscaler kinds (TAA, FSR, DLSS).
+    /// The anisotropic filtering slider's label.
     /// </summary>
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
+
+    /// <summary>
+    /// The texture quality slider's label (the game's <c>texture resolution gimping</c>, 0-4).
+    /// </summary>
     public const string TextureQualitySlider = "Texture quality 0-4 (game)";
+
+    /// <summary>
+    /// The weather particle sliders' labels: the particles' resolution and their density.
+    /// </summary>
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
 
-    // The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
+    /// <summary>
+    /// The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
+    /// </summary>
     public const string ObjectDistanceSlider = "Object draw distance", GrassDensitySlider = "Grass density x",
         WaterReflectionSlider = "Water reflection 0-4 (game)", ShadowDistanceSlider = "Shadow distance (game 1k-9k, 0 off)",
         ShadowMapSlider = "Shadow map size (game quality 0-2)", GroundReliefQualitySlider = "Ground relief quality",
         ShaftQualitySlider = "Light shafts quality";
+
+    /// <summary>
+    /// More of the Tab panel sliders' labels, kept as saved and as the launcher names them.
+    /// </summary>
     public const string
         LandmarkDistanceSlider = "Landmark distance (Meitou)",
         DistantTownsSlider = "Distant towns (zones)",
@@ -361,6 +378,10 @@ static partial class WorldFrame
     /// </summary>
     public static int WeatherParticlesSlider(bool weatherOn, PostOptions o) =>
         !weatherOn ? 0 : !o.LowResParticles || o.ParticleDivisor == 1 ? 4 : o.ParticleDivisor switch { 4 => 1, 2 => 2, _ => 3 };
+
+    /// <summary>
+    /// The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2 SMAA, 3.. the upscaler kinds (TAA, FSR, DLSS).
+    /// </summary>
     public static int AntiAliasingSlider(PostOptions o) => o.Upscale.Kind != UpscalerKind.Off ? (int)o.Upscale.Kind + 2 : o.Smaa ? 2 : o.Fxaa ? 1 : 0;
 
     /// <summary>
@@ -811,8 +832,19 @@ static partial class WorldFrame
 
     #region Sky and shadows
 
+    /// <summary>
+    /// Whether the frame keeps the detailed statistics (the shadow cascades' and the foliage's per-step times); the viewer turns it on.
+    /// </summary>
     public static bool DetailedStats;
+
+    /// <summary>
+    /// The profiler's phase label of each shadow cascade.
+    /// </summary>
     static readonly string[] CascadeLabels = [.. Enumerable.Range(0, ShadowSettings.MaxCascades).Select(i => $"shadow c{i}")];
+
+    /// <summary>
+    /// Each cascade's character casting spec for <see cref="ShadowCasters.Prepare"/> (reused, cleared after each frame).
+    /// </summary>
     static readonly (int, Vector4[], float, float)[] CasterSpecs = new (int, Vector4[], float, float)[ShadowSettings.MaxCascades];
 
     /// <summary>
@@ -927,13 +959,15 @@ static partial class WorldFrame
     /// </summary>
     internal static float Overcast(float cloudDensity, float rain) => MathF.Max(Math.Clamp(cloudDensity, 0, 1), WeatherSurfaces.RainAmount(rain));
 
+    /// <summary>
+    /// <see cref="Overcast(float, float)"/> of the sky's cloud density and the weather surfaces' rain.
+    /// </summary>
     static float Overcast(WorldGpu gpu) => Overcast(gpu.Sky.CloudDensity, gpu.Surfaces?.Rain ?? 0);
 
     /// <summary>
-    /// What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any
-    /// weather, but crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud
-    /// density c goes from
-    /// <c>ShaftCloudFrom</c> to 1 (smoothstep).
+    /// What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any weather, but
+    /// crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud density c goes
+    /// from <c>ShaftCloudFrom</c> to 1 (smoothstep).
     /// </summary>
     internal static float ShaftCloudFade(float cloudDensity)
     {
@@ -1011,7 +1045,14 @@ static partial class WorldFrame
     /// </summary>
     sealed class ShadowCasters(WorldGpu gpu, ShadowPass shadow, WorldRenderOptions render)
     {
+        /// <summary>
+        /// The object instances and foliage meshes drawn over the cascades.
+        /// </summary>
         int _objects, _foliage;
+
+        /// <summary>
+        /// The cascades' detail line (null unless <see cref="DetailedStats"/>).
+        /// </summary>
         readonly System.Text.StringBuilder? _cascades = DetailedStats ? new() : null;
 
         /// <summary>

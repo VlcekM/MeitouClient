@@ -74,6 +74,10 @@ public sealed partial class CaptiveSystem
         return best;
     }
 
+    /// <summary>
+    /// Starts a slave logistics job of goal <paramref name="type"/> (gathering slaves from cages, caging oneself or a delivery) for the worker at
+    /// <paramref name="slot"/>; null when it finds nothing to do.
+    /// </summary>
     CaptiveJob? TryStartLogistics(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type)
     {
         var table = world.Characters;
@@ -223,6 +227,9 @@ public sealed partial class CaptiveSystem
         }
     }
 
+    /// <summary>
+    /// One tick of a logistics job; false when it is over.
+    /// </summary>
     bool StepLogistics(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;

@@ -14,11 +14,20 @@ namespace Meitou.Game.Rendering.Gi;
 /// </summary>
 static partial class GiResolveShaders
 {
+    /// <summary>
+    /// <paramref name="v"/> as a GLSL float literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// A shader's <c>void main()</c>.
+    /// </summary>
     [GeneratedRegex(@"void\s+main\s*\(\s*\)")]
     private static partial Regex MainRegex();
 
+    /// <summary>
+    /// A shader's <c>out vec4 fragColour;</c> declaration without a layout qualifier.
+    /// </summary>
     [GeneratedRegex(@"(?<!\)\s*)\bout\s+vec4\s+fragColour\s*;")]
     private static partial Regex ColourOutRegex();
 

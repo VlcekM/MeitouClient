@@ -26,8 +26,17 @@ public sealed record CloseTrade : SimCommand;
 /// </summary>
 public sealed record BuyItem(InventoryItemToken Item, int Quantity) : SimCommand
 {
+    /// <summary>
+    /// The section of the cell the item was dropped on (<c>main</c>, <c>backpack_content</c> or <c>backpack_attach</c>); null: wherever it fits.
+    /// </summary>
     public string? Section { get; init; }
+    /// <summary>
+    /// The column of the cell dropped on.
+    /// </summary>
     public int X { get; init; }
+    /// <summary>
+    /// The row of the cell dropped on.
+    /// </summary>
     public int Y { get; init; }
     /// <summary>
     /// The window's right click (no cell chosen): one unit goes into the equipment slot that takes it when that is free, before the grids
@@ -47,7 +56,13 @@ public sealed record BuyItem(InventoryItemToken Item, int Quantity) : SimCommand
 /// </summary>
 public sealed record SellItem(InventoryItemToken Item, int Quantity) : SimCommand
 {
+    /// <summary>
+    /// The column of the stock cell dropped on; null: wherever it fits.
+    /// </summary>
     public int? X { get; init; }
+    /// <summary>
+    /// The row of the stock cell dropped on.
+    /// </summary>
     public int Y { get; init; }
     /// <summary>
     /// The character whose window it comes from: the trade passes to them (<see cref="TradeSystem.TradeWith"/>). None: the customer, or the
@@ -87,9 +102,21 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// (<c>FUN_14079e6d0</c>, 1: none).
     /// </summary>
     public string Company { get; init; } = "";
+    /// <summary>
+    /// The item's model level.
+    /// </summary>
     public int Level { get; init; }
+    /// <summary>
+    /// The item's charges.
+    /// </summary>
     public float Charges { get; init; }
+    /// <summary>
+    /// The charges of a full unit.
+    /// </summary>
     public float MaxCharges { get; init; }
+    /// <summary>
+    /// The trader factor of its price (1: none).
+    /// </summary>
     public float PriceFactor { get; init; } = 1;
     /// <summary>
     /// The trader's town market factor of the item (<see cref="Market.MarketFactor"/>, 1: none); with <see cref="PriceFactor"/> it makes a trade
@@ -113,6 +140,9 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// (Sell value).
     /// </summary>
     public long Value { get; init; }
+    /// <summary>
+    /// What the shop pays for one unit.
+    /// </summary>
     public long SellValue { get; init; }
     /// <summary>
     /// The stack's weight in kg.
@@ -133,6 +163,9 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// A good of the customer's that the culture of the trader's faction lists as illegal (the smuggling prompt, <c>FUN_140712920</c>).
     /// </summary>
     public bool Illegal { get; init; }
+    /// <summary>
+    /// The token addressing the item in its inventory.
+    /// </summary>
     public InventoryItemToken Token => new(Index, Record, Section, X, Y, Quantity, Quality);
 }
 
@@ -170,9 +203,15 @@ public sealed record TradeView(CharacterId Customer, CharacterId Trader, string 
 /// </summary>
 public interface ITradeSource
 {
+    /// <summary>
+    /// The open trade as the window shows it; null: none.
+    /// </summary>
     TradeView? PublishTrade();
 }
 
+/// <summary>
+/// Settings of the <see cref="TradeSystem"/>.
+/// </summary>
 public sealed class TradeSettings
 {
     /// <summary>
@@ -217,13 +256,37 @@ public sealed class TradeSettings
 /// </summary>
 public sealed class TradeSystem : ITickSystem, ITradeSource
 {
+    /// <summary>
+    /// The world's data: shops, templates, factions and the game database.
+    /// </summary>
     readonly PopulationData _data;
+    /// <summary>
+    /// Re-dresses a character whose worn gear changed in a trade.
+    /// </summary>
     readonly CharacterAssembly _assembly;
+    /// <summary>
+    /// The prices, made on first use.
+    /// </summary>
     Market? _market;
+    /// <summary>
+    /// The open trade's customer and trader (none: no trade).
+    /// </summary>
     CharacterId _customer = CharacterId.None, _trader = CharacterId.None;
+    /// <summary>
+    /// Whether the trade window is open (the customer reached the trader), and whether the trader was wandering when held.
+    /// </summary>
     bool _open, _traderWandered;
+    /// <summary>
+    /// The open trade's session (its buy-back receipts); closed and replaced when the trade closes.
+    /// </summary>
     TradeSession _session = new();
+    /// <summary>
+    /// The customer's walk up to the trader.
+    /// </summary>
     readonly Dialogue.WalkUp _approach;
+    /// <summary>
+    /// The view of the open trade published with the snapshot.
+    /// </summary>
     TradeView? _view;
 
     /// <summary>
@@ -231,6 +294,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     readonly SquadWages _wages;
 
+    /// <summary>
+    /// The trade system over <paramref name="data"/> (default settings when none are given).
+    /// </summary>
     public TradeSystem(PopulationData data, TradeSettings? settings = null)
     {
         this._data = data;
@@ -240,6 +306,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         _wages = new(data);
     }
 
+    /// <summary>
+    /// The settings.
+    /// </summary>
     public TradeSettings Settings { get; }
     /// <summary>
     /// The crime system a caught fence is reported to (null: no crimes).
@@ -252,6 +321,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
     #region Commands and the open trade
 
+    /// <summary>
+    /// Takes the open, close, buy, sell and arrange commands; a trade that cannot open closes again (an enemy trader is attacked instead).
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
@@ -296,6 +368,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
     }
 
+    /// <summary>
+    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the shops and the wages; then the open trade follows the selection, and the customer's walk
+    /// opens the trade in talk range, keeps it within <see cref="TradeSettings.PassRange"/> or closes it.
+    /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Tick % Settings.CheckEveryTicks == 0)
@@ -385,11 +461,18 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return false;
     }
 
+    /// <summary>
+    /// Whether the character can trade: a player character with an inventory, not incapacitated.
+    /// </summary>
     static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } };
 
+    /// <summary>
+    /// Rebuilds the published view of the open trade.
+    /// </summary>
     internal void RefreshView(World world) =>
         _view = _open && Resolve(world, out int ci, out int ti, out var shop) ? Publish(world, ci, ti, shop!) : null;
 
+    /// <inheritdoc/>
     public TradeView? PublishTrade() => _view;
 
     /// <summary>
@@ -407,6 +490,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             TaskStart.Stand(world.Characters, t);
     }
 
+    /// <summary>
+    /// Closes the open trade: its session ends, the trader is released (and wanders again when it was), and the view goes.
+    /// </summary>
     void Close(World world)
     {
         _session.Active = false;
@@ -429,6 +515,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     readonly Dictionary<string, SquadTemplate?> _templates = new(StringComparer.Ordinal), _homeTemplates = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The template of <paramref name="id"/> when it is a squad template with a shop, cached; null otherwise.
+    /// </summary>
     SquadTemplate? TemplateOf(string id)
     {
         if (!_templates.TryGetValue(id, out var t))
@@ -440,6 +529,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return t;
     }
 
+    /// <summary>
+    /// The shops of every squad not of the player's faction: made, refilled when due, given back to their containers, or a home's contents filled.
+    /// </summary>
     void Stock(World world)
     {
         foreach (var squad in world.Squads.All)
@@ -481,6 +573,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
     }
 
+    /// <summary>
+    /// Whether the squad is of the player's faction (the world's or the data's).
+    /// </summary>
     bool PlayersSquad(World world, Squad squad) =>
         squad.Faction >= 0 && (squad.Faction == world.Player.Faction || squad.Faction == _data.PlayerFaction);
 
@@ -500,6 +595,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         Refill(world, squad, squad.Shop, template);
     }
 
+    /// <summary>
+    /// The trade terms of <paramref name="squad"/>: its town and faction, and the template's buy mult and stolen and illegal goods flags.
+    /// </summary>
     internal static Trader TermsOf(Squad squad, SquadTemplate? template) =>
         new(squad.Town, squad.Faction, template?.BuyMult ?? 1, template?.BuysStolen ?? false, template?.BuysIllegal ?? false);
 
@@ -530,6 +628,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     internal static Shop? UnfilledShop(Squad squad, SquadTemplate? template) =>
         squad.HomeBuilding is { } home ? Shop.ForBuilding(home, TermsOf(squad, template)) : new Shop { Terms = TermsOf(squad, template) };
 
+    /// <summary>
+    /// Whether the open trade's trader is of <paramref name="squad"/>.
+    /// </summary>
     bool TradesWith(World world, Squad squad) => world.Characters.TryResolveNext(_trader, out int t) && world.Characters.Cold(t)!.SquadId == squad.Id;
 
     /// <summary>
@@ -597,8 +698,14 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
     }
 
+    /// <summary>
+    /// The FACTION record of faction <paramref name="faction"/>; null for none.
+    /// </summary>
     Data.GameRecord? FactionRecord(int faction) => (uint)faction < (uint)_data.Factions.Count ? _data.Db.Find(_data.Factions[faction].Id) : null;
 
+    /// <summary>
+    /// The home-filling template of <paramref name="id"/> (<see cref="HomeFill"/>), cached.
+    /// </summary>
     SquadTemplate? HomeTemplateOf(string id)
     {
         if (!_homeTemplates.TryGetValue(id, out var t)) _homeTemplates[id] = t = HomeFill(_data.Db.Find(id));
@@ -646,6 +753,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             Rng.StableHash(home.Key), true);
     }
 
+    /// <summary>
+    /// Whether the template stocks anything: vendor lists for it and its faction, or special items or map items.
+    /// </summary>
     bool HoldsStock(SquadTemplate template, Data.GameRecord? faction) =>
         ShopFiller.VendorLinks(template, faction).Count > 0
         || _data.Db.Find(template.Id) is { } r && (r.GetReferences("special items").Count > 0 || r.GetReferences("special map items").Count > 0);
@@ -678,6 +788,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             if (box.Lock is { } l) l.Locked = box.Contents!.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
     }
 
+    /// <summary>
+    /// Fills the shop again (the specials on its first fill), sets the squad's purse, relocks a building shop's containers that hold stock and sets
+    /// the next restock tick.
+    /// </summary>
     void Refill(World world, Squad squad, Shop shop, SquadTemplate template)
     {
         squad.Money = ShopFiller.Fill(shop, template, Market(world), _data, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
@@ -704,6 +818,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
     #region Trading parties
 
+    /// <summary>
+    /// The open trade's parties and the trader's shop; false when they cannot trade or the trader keeps no shop.
+    /// </summary>
     bool Resolve(World world, out int c, out int t, out Shop? shop)
     {
         shop = null;
@@ -737,6 +854,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     static bool InReach(World world, int c, int t) => Dialogue.DialogueSystem.InTalkRange(world.Characters, c, t);
 
+    /// <summary>
+    /// Whether <paramref name="c"/> and <paramref name="t"/> are within <paramref name="range"/> of each other in X/Z.
+    /// </summary>
     static bool InReach(World world, int c, int t, float range)
     {
         var a = world.Characters.Next[c].Position;
@@ -745,6 +865,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return dx * dx + dz * dz <= range * range;
     }
 
+    /// <summary>
+    /// The item <paramref name="token"/> addresses in <paramref name="inventory"/>, when it still matches; a bag only as a single unit.
+    /// </summary>
     static ItemInstance? Find(Inventory inventory, InventoryItemToken token)
     {
         var item = inventory.All().ElementAtOrDefault(token.Index);
@@ -872,6 +995,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     internal const string BagNotEmpty = "That bag isn't empty.";
 
+    /// <summary>
+    /// Buys the units of the stock item into the customer's (or the receiving character's) inventory, as many as are affordable and fit.
+    /// </summary>
     void Buy(World world, BuyItem buy)
     {
         if (!Resolve(world, out int c, out int t, out var shop)) return;
@@ -939,6 +1065,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
     }
 
+    /// <summary>
+    /// Sells the units of the customer's (or the giving character's) item to the shop, as many as the shop can afford, after the fence and
+    /// smuggling tests.
+    /// </summary>
     void Sell(World world, SellItem sell)
     {
         if (!Resolve(world, out int c, out int t, out var shop)) return;
@@ -1081,6 +1211,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return FenceChance(thievery, from == shopFaction, item.OwnerSquad >= 0 && item.OwnerSquad == shopSquad.Id);
     }
 
+    /// <summary>
+    /// Rolls the fence test of selling a stolen <paramref name="item"/> (<see cref="FenceOdds"/>) and trains the seller's thievery; true when the
+    /// seller is caught.
+    /// </summary>
     bool Caught(World world, int seller, int trader, ItemInstance item, Squad shopSquad, Trader terms)
     {
         var cold = world.Characters.Cold(seller)!;
@@ -1111,7 +1245,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return 0;
     }
 
-    // Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory.
+    /// <summary>
+    /// Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory.
+    /// </summary>
     static int TransferContainer(Inventory from, InventoryItemToken token, Inventory into, string? section, int x, int y, bool equip,
         CharacterCold? wearer)
     {
@@ -1126,11 +1262,20 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             && InventoryCommands.Transfer(from, token, into, "main", cx, cy) ? 1 : 0;
     }
 
+    /// <summary>
+    /// Whether the item's receipt is of the open trade and the opposite direction (<paramref name="sell"/>): it trades back at its own coins.
+    /// </summary>
     bool IsBuyback(ItemInstance item, bool sell) => item.Buyback is { } r && ReferenceEquals(r.Session, _session) && r.Sell == sell;
 
+    /// <summary>
+    /// The price of <paramref name="units"/> units: a buy-back's coins, else the market's stack price.
+    /// </summary>
     long Price(Market market, ItemInstance item, int units, bool sell, Trader terms, int holder) => IsBuyback(item, sell)
         ? item.Buyback!.Price(units) : market.StackPrice(item.WithQuantity(units), sell, terms, holder);
 
+    /// <summary>
+    /// The receipt of the units' coins, each unit's share of the stack price; null for a buy-back.
+    /// </summary>
     TradeReceipt? Receipt(Market market, ItemInstance item, int units, bool sell, Trader terms, int holder)
     {
         if (IsBuyback(item, sell)) return null;
@@ -1170,6 +1315,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return Place(root, copy, units);
     }
 
+    /// <summary>
+    /// Puts the units wherever they fit in <paramref name="into"/>'s main grid; the units placed.
+    /// </summary>
     internal static int Place(Inventory into, ItemInstance copy, int units)
     {
         copy.Section = "main";
@@ -1185,6 +1333,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         else item.Quantity -= units;
     }
 
+    /// <summary>
+    /// "N x name", or the name alone for one.
+    /// </summary>
     static string Units(int n, string name) => n == 1 ? name : $"{n} x {name}";
 
     #endregion
@@ -1277,6 +1428,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         return stock;
     }
 
+    /// <summary>
+    /// The views of the seller's items in movable sections, with their inventory index.
+    /// </summary>
     static TradeItemView[] Goods(CharacterCold seller, Func<(ItemInstance Item, int Index), TradeItemView> view) =>
         seller.Inventory!
             .All()

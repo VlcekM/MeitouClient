@@ -5,8 +5,14 @@ using Meitou.Simulation.Items;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's weapon handling: <c>Task_EquipBestWeapon</c>'s search of a character's inventory.
+/// </summary>
 public sealed partial class AiSystem
 {
+    /// <summary>
+    /// The character assembly used for the weapon steps.
+    /// </summary>
     readonly CharacterAssembly _assembly = new(data);
 
     /// <summary>
@@ -34,6 +40,10 @@ public sealed partial class AiSystem
         return true;
     }
 
+    /// <summary>
+    /// The first item of <paramref name="kind"/> that is not on the back or hip and is a single one, in <paramref name="scan"/> or else in a bag
+    /// inside it (depth first), with the inventory holding it; null when there is none.
+    /// </summary>
     static (Inventory Owner, ItemInstance Item)? FirstOfKind(Inventory root, Inventory scan, FcsRecordType kind)
     {
         foreach (var item in scan.Items)

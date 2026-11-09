@@ -10,12 +10,25 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe class Uploader : IGpuUploads
 {
+    /// <summary>
+    /// The context whose frame, staging and device the uploads go through.
+    /// </summary>
     readonly GpuContext _ctx;
 
+    /// <summary>
+    /// The uploads of the context.
+    /// </summary>
     internal Uploader(GpuContext ctx) => this._ctx = ctx;
 
+    /// <summary>
+    /// The frame's upload command buffer; throws when no frame is open.
+    /// </summary>
     CommandBuffer Cmd => _ctx.Frame.Open ? _ctx.Frame.UploadCommands : throw new InvalidOperationException("uploads need an open frame");
 
+    /// <summary>
+    /// Copies <paramref name="data"/> into the buffer at <paramref name="offset"/> through the frame's staging; throws when the frame already drew
+    /// from the buffer or the write passes its end.
+    /// </summary>
     public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
@@ -123,6 +136,9 @@ public sealed unsafe class Uploader : IGpuUploads
         vk.CmdPipelineBarrier2(cmd, &info);
     }
 
+    /// <summary>
+    /// <see cref="TransferBarrier(Vk, CommandBuffer)"/> on the context's device.
+    /// </summary>
     void TransferBarrier(CommandBuffer cmd) => TransferBarrier(_ctx.Device.Vk, cmd);
 }
 
@@ -133,10 +149,22 @@ public sealed unsafe class Uploader : IGpuUploads
 /// </summary>
 public sealed unsafe class UploadBatch : IGpuUploadBatch
 {
+    /// <summary>
+    /// The context the batch's uploads, textures and staging come from.
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// Whether the batch has its own one-shot command buffer (no frame was open when it began).
+    /// </summary>
     readonly bool _immediate;
+    /// <summary>
+    /// The staging buffers of a one-shot batch, freed after its submission.
+    /// </summary>
     readonly List<Core.BufferAllocation> _staging = [];
 
+    /// <summary>
+    /// A batch into the open frame's upload buffer, or, without an open frame, into a new one-shot command buffer.
+    /// </summary>
     internal UploadBatch(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -149,6 +177,7 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
     /// </summary>
     public CommandList Commands { get; }
 
+    /// <inheritdoc/>
     IGpuCommandList IGpuUploadBatch.Commands => Commands;
 
     /// <summary>
@@ -202,6 +231,9 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
         Uploader.TransferBarrier(_ctx.Device.Vk, Commands.Handle);
     }
 
+    /// <summary>
+    /// A new staging buffer with <paramref name="data"/> in it (kept until the batch is disposed), and the data's offset in it.
+    /// </summary>
     (Silk.NET.Vulkan.Buffer Buffer, ulong Offset) Stage(ReadOnlySpan<byte> data)
     {
         var b = _ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Core.MemoryKind.Upload, "upload staging");

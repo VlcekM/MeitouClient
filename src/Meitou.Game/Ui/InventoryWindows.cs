@@ -20,41 +20,57 @@ sealed class InventoryWindows(PlayerInterface player)
     /// The held item as drawn: the world's, or what the interface expects while its last held command is on its way (<see cref="HeldSerial"/>).
     /// </summary>
     internal HeldItemView? Held;
+
     /// <summary>
     /// Where the pointer holds the item: its offset from the item's top-left corner, in cells (at least half a cell inside the footprint,
     /// <c>FUN_140713560</c>).
     /// </summary>
     Vector2 _heldGrab;
+
     /// <summary>
     /// The serial of the held command the world has not applied yet (0: none), when it was sent, and the last serial used.
     /// </summary>
     internal long HeldSerial, HeldSentAt, HeldCounter;
+
     /// <summary>
     /// Where the press that lifted the held item was, while the button is down (null otherwise).
     /// </summary>
     internal Vector2? LiftPress;
+
     /// <summary>
     /// The item cell a whole-stack lift emptied, hidden until the world's answer (its window and the cell's index or machine code).
     /// </summary>
     internal (ItemOwner Window, int Code)? Lifting;
+
     /// <summary>
     /// Shift and Ctrl at the last press (a lift takes the whole stack with either).
     /// </summary>
     internal bool PressShift, PressCtrl;
+
     /// <summary>
     /// The pinned inventory windows (<see cref="PinnedPrefix"/> and a number) and the character each stays on (docs/game/ui-screens.md section 6).
     /// </summary>
     internal readonly Dictionary<string, CharacterId> PinnedInventories = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The pinned characters last told to the simulation (<see cref="ShowInventoryCommand"/>), which publishes their grids while they are not
     /// selected.
     /// </summary>
     CharacterId[] _pinnedSent = [];
+
     /// <summary>
     /// The character whose window was pinned last: selecting someone else opens the inventory again for them, beside it.
     /// </summary>
     CharacterId _pinnedFrom = CharacterId.None;
+
+    /// <summary>
+    /// The screen id prefix of the pinned inventory windows.
+    /// </summary>
     const string PinnedPrefix = "inventory-pin-";
+
+    /// <summary>
+    /// Whether <paramref name="screen"/> is a pinned inventory window.
+    /// </summary>
     internal static bool IsPinnedInventory(string screen) => screen.StartsWith(PinnedPrefix, StringComparison.Ordinal);
 
     /// <summary>
@@ -216,6 +232,10 @@ sealed class InventoryWindows(PlayerInterface player)
         Held = null;
     }
 
+    /// <summary>
+    /// A press over the windows: places the held item, presses a scroll bar's thumb, or lifts the item under it; false when the windows do not take
+    /// it.
+    /// </summary>
     internal bool InventoryPointerDown(Vector2 p)
     {
         if (!player.UiVisible || player.FaithfulScreens.HasModal) return false;
@@ -233,6 +253,9 @@ sealed class InventoryWindows(PlayerInterface player)
         return LiftAt(picked.Screen, picked.Control, p);
     }
 
+    /// <summary>
+    /// The button let go: a drag that lifted an item places it; a click leaves it on the mouse.
+    /// </summary>
     internal void InventoryPointerUp(Vector2 p)
     {
         player.ScrollBars.ScrollDrag = null;
@@ -367,7 +390,26 @@ sealed class InventoryWindows(PlayerInterface player)
     static Vector2 ClampGrab(Vector2 grab, HeldItemView item) =>
         new(Math.Clamp(grab.X, 0.5f, MathF.Max(0.5f, item.Width - 0.5f)), Math.Clamp(grab.Y, 0.5f, MathF.Max(0.5f, item.Height - 0.5f)));
 
-    enum DropKind { World, Window, Section }
+    /// <summary>
+    /// Where a held item would go.
+    /// </summary>
+    enum DropKind
+    {
+        /// <summary>
+        /// Nowhere: the world under the pointer.
+        /// </summary>
+        World,
+
+        /// <summary>
+        /// A window, with no section under the pointer.
+        /// </summary>
+        Window,
+
+        /// <summary>
+        /// A window's section, with the snapped cell.
+        /// </summary>
+        Section,
+    }
 
     /// <summary>
     /// Where the held item would go at a point: nowhere (the world), a window without a section under it, or a window's section with the snapped cell
@@ -434,6 +476,10 @@ sealed class InventoryWindows(PlayerInterface player)
         return none with { Kind = DropKind.Window, Window = window };
     }
 
+    /// <summary>
+    /// The drop in <paramref name="section"/> of <paramref name="window"/> at <paramref name="topLeft"/>: the snapped cell and its area, and whether
+    /// the slot takes the item and it fits.
+    /// </summary>
     DropSpot Spot(ItemOwner window, string section, UiControl slot, Vector2 topLeft, HeldItemView h)
     {
         var b = slot.Bounds;

@@ -7,6 +7,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public static class MeshWeld
 {
+    /// <summary>
+    /// On: meshes decoded from now on are welded; off: they keep the game's vertices.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
     /// <summary>

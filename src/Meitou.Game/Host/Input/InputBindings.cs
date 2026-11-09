@@ -5,52 +5,137 @@ namespace Meitou.Game.Host.Input;
 /// </summary>
 public enum InputAction
 {
-    MoveForward, MoveBack, MoveLeft, MoveRight,
     /// <summary>
-    /// Free camera only: straight up and down.
+    /// Moves the camera forward (default W and Up, the game's camera keys).
     /// </summary>
-    MoveUp, MoveDown,
-    RotateLeft, RotateRight,
-    PitchUp, PitchDown,
-    ZoomIn, ZoomOut,
+    MoveForward,
     /// <summary>
-    /// Held, the mouse movement turns the camera.
+    /// Moves the camera back (default S and Down).
+    /// </summary>
+    MoveBack,
+    /// <summary>
+    /// Moves the camera left (default A and Left).
+    /// </summary>
+    MoveLeft,
+    /// <summary>
+    /// Moves the camera right (default D and Right).
+    /// </summary>
+    MoveRight,
+    /// <summary>
+    /// Free camera only: straight up (default R).
+    /// </summary>
+    MoveUp,
+    /// <summary>
+    /// Free camera only: straight down (default F).
+    /// </summary>
+    MoveDown,
+    /// <summary>
+    /// Turns the camera left (default Q, the game's).
+    /// </summary>
+    RotateLeft,
+    /// <summary>
+    /// Turns the camera right (default E, the game's).
+    /// </summary>
+    RotateRight,
+    /// <summary>
+    /// Tilts the camera steeper (default Period, the game's <c>camera_tilt+</c>).
+    /// </summary>
+    PitchUp,
+    /// <summary>
+    /// Tilts the camera shallower (default Comma, the game's <c>camera_tilt-</c>).
+    /// </summary>
+    PitchDown,
+    /// <summary>
+    /// Zooms the camera in (default Home, the game's <c>camera_zoom_in</c>).
+    /// </summary>
+    ZoomIn,
+    /// <summary>
+    /// Zooms the camera out (default End, the game's <c>camera_zoom_out</c>).
+    /// </summary>
+    ZoomOut,
+    /// <summary>
+    /// Held, the mouse movement turns the camera (default the middle button and the left Ctrl).
     /// </summary>
     Orbit,
     /// <summary>
-    /// The game view's mouse buttons: Select (the game's left button) picks characters and presses the interface; Command (the right button) gives
-    /// orders and opens menus.
+    /// The game view's left button: picks characters and presses the interface.
     /// </summary>
-    Select, Command,
+    Select,
     /// <summary>
-    /// The game's <c>toggle_fps_camera</c> (docs/formats/camera.md).
+    /// The game view's right button: gives orders and opens menus.
+    /// </summary>
+    Command,
+    /// <summary>
+    /// The game's <c>toggle_fps_camera</c> (docs/formats/camera.md; default ;).
     /// </summary>
     ToggleFreeCamera,
-    Pause, TimeFaster, TimeSlower,
     /// <summary>
-    /// The game speed_1, speed_2, speed_3 actions: 1x, 2x, 5x.
+    /// Pauses and resumes the game (default Space, the game's).
     /// </summary>
-    Speed1, Speed2, Speed3,
-    Screenshot, ToggleSettings,
+    Pause,
     /// <summary>
-    /// The debug menu (the game's cheats), the frame statistics, the profiler chart (gpu, cpu, off).
+    /// Steps the game speed up; unbound by default (the game has no such key).
     /// </summary>
-    ToggleDebugMenu, ToggleStats, CycleProfiler,
+    TimeFaster,
     /// <summary>
-    /// The small frame-rate counter at the top left.
+    /// Steps the game speed down; unbound by default (the game has no such key).
+    /// </summary>
+    TimeSlower,
+    /// <summary>
+    /// The game's <c>speed_1</c> action: 1x (default F2).
+    /// </summary>
+    Speed1,
+    /// <summary>
+    /// The game's <c>speed_2</c> action: 2x (default F3).
+    /// </summary>
+    Speed2,
+    /// <summary>
+    /// The game's <c>speed_3</c> action: 5x (default F4).
+    /// </summary>
+    Speed3,
+    /// <summary>
+    /// Saves a screenshot (default F8 and Print Screen, the game's own keys).
+    /// </summary>
+    Screenshot,
+    /// <summary>
+    /// Opens or closes the settings; unbound by default (Tab is the game's change_squad; the settings open from the Esc menu's Options).
+    /// </summary>
+    ToggleSettings,
+    /// <summary>
+    /// The debug menu (the game's cheats; default F10).
+    /// </summary>
+    ToggleDebugMenu,
+    /// <summary>
+    /// The frame statistics (default F11).
+    /// </summary>
+    ToggleStats,
+    /// <summary>
+    /// Cycles the profiler chart: gpu, cpu, off (default F12).
+    /// </summary>
+    CycleProfiler,
+    /// <summary>
+    /// The small frame-rate counter at the top left; unbound by default (Ctrl+F9 in the game, whose plain F9 is the quickload).
     /// </summary>
     ToggleFps,
     /// <summary>
-    /// The game's quicksave and quickload (F5 and F9, docs/game/ui-input.md): the host saves to and loads from its own "quicksave" slot.
+    /// The game's quicksave (F5, docs/game/ui-input.md): the host saves to its own "quicksave" slot.
     /// </summary>
-    QuickSave, QuickLoad,
+    QuickSave,
     /// <summary>
-    /// The game's <c>floor_up</c> / <c>floor_down</c>: the viewed floor of the buildings with a player character inside (docs/formats/zones.md
+    /// The game's quickload (F9, docs/game/ui-input.md): the host loads from its own "quicksave" slot.
+    /// </summary>
+    QuickLoad,
+    /// <summary>
+    /// The game's <c>floor_up</c> (default Page Up): the viewed floor of the buildings with a player character inside goes up (docs/formats/zones.md
     /// "Interior view").
     /// </summary>
-    FloorUp, FloorDown,
+    FloorUp,
     /// <summary>
-    /// Held: highlight building signs in yellow.
+    /// The game's <c>floor_down</c> (default Page Down): the viewed floor of the buildings with a player character inside goes down.
+    /// </summary>
+    FloorDown,
+    /// <summary>
+    /// Held: highlight building signs in yellow (default either Alt).
     /// </summary>
     Highlight,
     /// <summary>
@@ -58,34 +143,156 @@ public enum InputAction
     /// </summary>
     ToggleInterface,
     /// <summary>
-    /// The game's <c>toggle_inventory</c>, <c>toggle_stats</c>, <c>toggle_map</c>, <c>toggle_faction</c>, <c>toggle_research</c> and
-    /// <c>toggle_crafting</c> (events 1..6): the windows.
+    /// The game's <c>toggle_inventory</c> (event 1, default I): the inventory window.
     /// </summary>
-    ToggleInventory, ToggleCharacterStats, ToggleMap, ToggleFaction, ToggleResearch, ToggleCrafting, ToggleHelp,
+    ToggleInventory,
     /// <summary>
-    /// The game's <c>change_squad</c> (0x23), <c>select_all</c> (0x22), <c>character_next</c> / <c>character_prev</c> (0x26 / 0x27) and
-    /// <c>focus_char</c> (0x11).
+    /// The game's <c>toggle_stats</c> (event 2, default C): the character stats window.
     /// </summary>
-    ChangeSquad, SelectAll, NextCharacter, PreviousCharacter, FocusCharacter,
+    ToggleCharacterStats,
     /// <summary>
-    /// The game's <c>select_0</c> .. <c>select_9</c> (events 100..109, keys 1..9 and 0): the active squad's members by position.
+    /// The game's <c>toggle_map</c> (event 3, default M): the map window.
     /// </summary>
-    SelectMember1, SelectMember2, SelectMember3, SelectMember4, SelectMember5, SelectMember6, SelectMember7, SelectMember8,
-    SelectMember9, SelectMember10,
+    ToggleMap,
     /// <summary>
-    /// The game's <c>stop_movement</c> (0x16) and <c>toggle_build</c> (10).
+    /// The game's <c>toggle_faction</c> (event 4): the faction window; unbound by default, as in the game.
     /// </summary>
-    StopMovement, ToggleBuild,
+    ToggleFaction,
     /// <summary>
-    /// The orders panel's hotkeys (events 0x17..0x21, each the panel button's own handler): <c>toggle_block</c>, <c>toggle_hold</c>,
-    /// <c>toggle_passive</c>, <c>toggle_jobs</c>, <c>toggle_ranged</c>, <c>toggle_sneak</c>, <c>toggle_taunt</c>, <c>cycle_run_speed</c>,
-    /// <c>medic</c>, <c>rescue</c>, <c>prospect</c>.
+    /// The game's <c>toggle_research</c> (event 5, default T): the research window.
     /// </summary>
-    ToggleBlock, ToggleHold, TogglePassive, ToggleJobs, ToggleRanged, ToggleSneak, ToggleTaunt, CycleRunSpeed, Medic, Rescue, Prospect,
+    ToggleResearch,
     /// <summary>
-    /// Meitou's own: the selection sits down to rest, and the carriers put their bodies down (no binding in the game).
+    /// The game's <c>toggle_crafting</c> (event 6, default Y): the crafting window.
     /// </summary>
-    Rest, PutDown,
+    ToggleCrafting,
+    /// <summary>
+    /// The game's <c>toggle_help</c> (default F1): the Tutorials window.
+    /// </summary>
+    ToggleHelp,
+    /// <summary>
+    /// The game's <c>change_squad</c> (0x23, default Tab).
+    /// </summary>
+    ChangeSquad,
+    /// <summary>
+    /// The game's <c>select_all</c> (0x22, default `).
+    /// </summary>
+    SelectAll,
+    /// <summary>
+    /// The game's <c>character_next</c> (0x26, default ]).
+    /// </summary>
+    NextCharacter,
+    /// <summary>
+    /// The game's <c>character_prev</c> (0x27, default [).
+    /// </summary>
+    PreviousCharacter,
+    /// <summary>
+    /// The game's <c>focus_char</c> (0x11, default F).
+    /// </summary>
+    FocusCharacter,
+    /// <summary>
+    /// The game's <c>select_0</c> (event 100, key 1): the active squad's first member.
+    /// </summary>
+    SelectMember1,
+    /// <summary>
+    /// The game's <c>select_1</c> (event 101, key 2): the active squad's second member.
+    /// </summary>
+    SelectMember2,
+    /// <summary>
+    /// The game's <c>select_2</c> (event 102, key 3): the active squad's third member.
+    /// </summary>
+    SelectMember3,
+    /// <summary>
+    /// The game's <c>select_3</c> (event 103, key 4): the active squad's fourth member.
+    /// </summary>
+    SelectMember4,
+    /// <summary>
+    /// The game's <c>select_4</c> (event 104, key 5): the active squad's fifth member.
+    /// </summary>
+    SelectMember5,
+    /// <summary>
+    /// The game's <c>select_5</c> (event 105, key 6): the active squad's sixth member.
+    /// </summary>
+    SelectMember6,
+    /// <summary>
+    /// The game's <c>select_6</c> (event 106, key 7): the active squad's seventh member.
+    /// </summary>
+    SelectMember7,
+    /// <summary>
+    /// The game's <c>select_7</c> (event 107, key 8): the active squad's eighth member.
+    /// </summary>
+    SelectMember8,
+    /// <summary>
+    /// The game's <c>select_8</c> (event 108, key 9): the active squad's ninth member.
+    /// </summary>
+    SelectMember9,
+    /// <summary>
+    /// The game's <c>select_9</c> (event 109, key 0): the active squad's tenth member.
+    /// </summary>
+    SelectMember10,
+    /// <summary>
+    /// The game's <c>stop_movement</c> (0x16, default R).
+    /// </summary>
+    StopMovement,
+    /// <summary>
+    /// The game's <c>toggle_build</c> (10, default B).
+    /// </summary>
+    ToggleBuild,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_block</c> (events 0x17..0x21 run the panel button's own handler; default numpad 0).
+    /// </summary>
+    ToggleBlock,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_hold</c> (default numpad 1).
+    /// </summary>
+    ToggleHold,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_passive</c> (default numpad 2).
+    /// </summary>
+    TogglePassive,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_jobs</c>; unbound by default, as in the game.
+    /// </summary>
+    ToggleJobs,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_ranged</c> (default numpad 3).
+    /// </summary>
+    ToggleRanged,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_sneak</c> (default numpad 4).
+    /// </summary>
+    ToggleSneak,
+    /// <summary>
+    /// Orders panel hotkey <c>toggle_taunt</c> (default numpad 5).
+    /// </summary>
+    ToggleTaunt,
+    /// <summary>
+    /// Orders panel hotkey <c>cycle_run_speed</c> (default numpad 6).
+    /// </summary>
+    CycleRunSpeed,
+    /// <summary>
+    /// Orders panel hotkey <c>medic</c> (default numpad 7 and Meitou's H).
+    /// </summary>
+    Medic,
+    /// <summary>
+    /// Orders panel hotkey <c>rescue</c> (default numpad 8 and Meitou's J).
+    /// </summary>
+    Rescue,
+    /// <summary>
+    /// Orders panel hotkey <c>prospect</c>; unbound by default, as in the game.
+    /// </summary>
+    Prospect,
+    /// <summary>
+    /// Meitou's own: the selection sits down to rest (default L; no binding in the game).
+    /// </summary>
+    Rest,
+    /// <summary>
+    /// Meitou's own: the carriers put their bodies down (default K; no binding in the game).
+    /// </summary>
+    PutDown,
+    /// <summary>
+    /// Escape's action (default Escape).
+    /// </summary>
     Quit,
 }
 
@@ -94,17 +301,44 @@ public enum InputAction
 /// </summary>
 public sealed class ActionState
 {
+    /// <summary>
+    /// How many actions there are.
+    /// </summary>
     static readonly int Count = Enum.GetValues<InputAction>().Length;
+    /// <summary>
+    /// Each action is held at this tick.
+    /// </summary>
     readonly bool[] _held = new bool[Count];
+    /// <summary>
+    /// Each action went down this tick.
+    /// </summary>
     readonly bool[] _pressed = new bool[Count];
+    /// <summary>
+    /// Each action went up this tick.
+    /// </summary>
     readonly bool[] _released = new bool[Count];
 
+    /// <summary>
+    /// An empty state for <paramref name="input"/>'s tick (<see cref="InputBindings.Resolve"/> fills it).
+    /// </summary>
     internal ActionState(TickInput input) => Input = input;
 
+    /// <summary>
+    /// The raw input of the tick.
+    /// </summary>
     public TickInput Input { get; }
+    /// <summary>
+    /// Mouse movement in pixels since the previous tick (x right, y down).
+    /// </summary>
     public System.Numerics.Vector2 MouseDelta => Input.MouseDelta;
+    /// <summary>
+    /// Wheel notches since the previous tick, positive away from the user.
+    /// </summary>
     public float Wheel => Input.Wheel;
 
+    /// <summary>
+    /// Whether any binding of the action is down.
+    /// </summary>
     public bool Held(InputAction a) => _held[(int)a];
     /// <summary>
     /// Went down this tick: true in exactly one tick per press.
@@ -115,6 +349,9 @@ public sealed class ActionState
     /// </summary>
     public bool Released(InputAction a) => _released[(int)a];
 
+    /// <summary>
+    /// Sets an action's three states.
+    /// </summary>
     internal void Set(InputAction a, bool isHeld, bool isPressed, bool isReleased)
     {
         _held[(int)a] = isHeld;
@@ -137,14 +374,29 @@ public sealed class ActionState
 /// </summary>
 public sealed class InputBindings
 {
+    /// <summary>
+    /// Each action's bindings.
+    /// </summary>
     readonly Dictionary<InputAction, Binding[]> _map = [];
 
+    /// <summary>
+    /// Starts with the default bindings.
+    /// </summary>
     public InputBindings() => ResetToDefaults();
 
+    /// <summary>
+    /// An action's bindings; none when it has none.
+    /// </summary>
     public IReadOnlyList<Binding> Get(InputAction action) => _map.TryGetValue(action, out var b) ? b : [];
 
+    /// <summary>
+    /// Replaces an action's bindings (none unbinds it).
+    /// </summary>
     public void Set(InputAction action, params Binding[] bindings) => _map[action] = bindings;
 
+    /// <summary>
+    /// The default bindings (the game's keys where it has them, docs/game/ui-input.md, Meitou's otherwise).
+    /// </summary>
     public void ResetToDefaults()
     {
         _map.Clear();

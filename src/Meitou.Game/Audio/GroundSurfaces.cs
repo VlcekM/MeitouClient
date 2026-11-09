@@ -25,21 +25,54 @@ public sealed class GroundSurfaces
     /// The overlay channel value above which a channel counts as present (<c>0xA0</c>, strictly).
     /// </summary>
     public const int Threshold = 0xA0;
+    /// <summary>
+    /// The most overlay tiles kept; the least recently used goes when a new one is needed.
+    /// </summary>
     const int MaxTiles = 6;
 
+    /// <summary>
+    /// The install the overlay tiles and the biome map are read from.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// Each BIOMES record's five GroundTypes (ground, slope, grass, dirt, road) by its 24-bit <c>index</c>.
+    /// </summary>
     readonly Dictionary<uint, byte[]> _biomes = [];
+    /// <summary>
+    /// Guards <see cref="_tiles"/> and <see cref="_clock"/> (<see cref="At"/> may run on more than one thread).
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// The overlay tiles loaded or loading, by tile column and row.
+    /// </summary>
     readonly Dictionary<(int X, int Z), Tile> _tiles = [];
+    /// <summary>
+    /// The biome map, loading on a worker from the first lookup; its result is null when it cannot be read.
+    /// </summary>
     Task<FoliageBiomeMap?>? _biomeMap;
+    /// <summary>
+    /// The use counter that stamps each tile's last use.
+    /// </summary>
     long _clock;
 
+    /// <summary>
+    /// One overlay tile: its pixels (loading on a worker) and its last use.
+    /// </summary>
     sealed class Tile
     {
+        /// <summary>
+        /// The tile's RGBA pixels; the result is null when it cannot be read or has the wrong size.
+        /// </summary>
         public Task<byte[]?> Pixels = null!;
+        /// <summary>
+        /// The <see cref="_clock"/> value of the tile's last lookup.
+        /// </summary>
         public long Used;
     }
 
+    /// <summary>
+    /// Reads every BIOMES record's ground types from the database; a missing field falls back to sand (ground), concrete (road) or dirt (the rest).
+    /// </summary>
     public GroundSurfaces(GameInstall install, GameDatabase db)
     {
         this._install = install;
@@ -91,12 +124,18 @@ public sealed class GroundSurfaces
         return _biomes.TryGetValue(map.At(x, z), out var types) ? types[channel] : Sand;
     }
 
+    /// <summary>
+    /// Reads overlay tile (<paramref name="tx"/>, <paramref name="tz"/>) of <c>new_overlay</c>; null when it is not 1024 pixels square.
+    /// </summary>
     byte[]? ReadTile(int tx, int tz)
     {
         var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.OverlayTile(_install, "new_overlay", tx, tz)));
         return image.Width == FoliageOverlay.TilePixels && image.Height == FoliageOverlay.TilePixels ? image.Pixels : null;
     }
 
+    /// <summary>
+    /// Runs <paramref name="load"/>; null when it fails to read the file.
+    /// </summary>
     static T? TryLoad<T>(Func<T?> load) where T : class
     {
         try

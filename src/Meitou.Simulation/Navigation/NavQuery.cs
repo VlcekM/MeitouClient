@@ -25,9 +25,12 @@ public sealed record NavAgent
     /// </summary>
     public float RoadPreference { get; init; }
     /// <summary>
-    /// Doors are blocked (closed, face data 5) when this is true; open doors cost <see cref="OpenDoorCost"/> extra.
+    /// Doors are blocked (closed, face data 5) when this is true; open doors cost <see cref="NavQuery.OpenDoorCost"/> extra.
     /// </summary>
     public bool DoorsClosed { get; init; }
+    /// <summary>
+    /// The default agent: a human's radius 4, water cost 7, no road preference, doors open.
+    /// </summary>
     public static NavAgent Human { get; } = new();
 }
 
@@ -46,6 +49,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     public const int MaxIterations = 100000;
 
+    /// <summary>
+    /// The counters behind <see cref="Stats"/>, updated with <see cref="Interlocked"/>.
+    /// </summary>
     static long s_searches, s_expanded, s_exhausted;
 
     /// <summary>
@@ -64,7 +70,13 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     const float PartialStandStill = 1;
 
+    /// <summary>
+    /// The navmesh the queries search.
+    /// </summary>
     public NavWorld World { get; } = world;
+    /// <summary>
+    /// The run-time door table the queries consult; null: every door is open.
+    /// </summary>
     public NavDoors? Doors { get; } = doors;
 
     /// <summary>
@@ -78,12 +90,30 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     public sealed record Corridor(List<NavRef> Polygons, Vector3 Start, Vector3 Goal, int Iterations);
 
+    /// <summary>
+    /// One polygon reached by a search: its cost so far and estimate, and the key of the node it was reached from (-1 for the start).
+    /// </summary>
     sealed class Node
     {
+        /// <summary>
+        /// The polygon this node stands for.
+        /// </summary>
         public NavRef Ref;
+        /// <summary>
+        /// The point the search entered the polygon at.
+        /// </summary>
         public Vector3 Position;
+        /// <summary>
+        /// The cost from the start (G) and that plus the estimate to the goal (F, the open list's priority).
+        /// </summary>
         public float G, F;
+        /// <summary>
+        /// The <see cref="NavRef.Key"/> of the node it was reached from; -1 for the start.
+        /// </summary>
         public long Parent = -1;
+        /// <summary>
+        /// Whether the node has been expanded.
+        /// </summary>
         public bool Closed;
     }
 
@@ -92,15 +122,30 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     sealed class SearchScratch
     {
+        /// <summary>
+        /// The nodes of the current search by <see cref="NavRef.Key"/>.
+        /// </summary>
         public readonly Dictionary<long, Node> Nodes = [];
+        /// <summary>
+        /// The open list, by <see cref="Node.F"/>.
+        /// </summary>
         public readonly PriorityQueue<Node, float> Open = new();
         /// <summary>
         /// Whether the last search explored all it could reach without finding its goal (not cut short by <see cref="MaxIterations"/>).
         /// </summary>
         public bool Exhaustive;
+        /// <summary>
+        /// Every node made on this thread, handed out again from the start by each search (<see cref="Take"/>).
+        /// </summary>
         readonly List<Node> _made = [];
+        /// <summary>
+        /// How many of <see cref="_made"/> the current search has taken.
+        /// </summary>
         int _used;
 
+        /// <summary>
+        /// Empties the node table and the open list for a new search, keeping their capacity and the nodes made.
+        /// </summary>
         public void Reset()
         {
             // Kept whatever a search grew it to (MaxIterations bounds it: tens of MB a path thread). Dropping it after a long search made every
@@ -111,6 +156,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             _used = 0;
         }
 
+        /// <summary>
+        /// A node for polygon <paramref name="at"/> entered at <paramref name="position"/>, reused from an earlier search where one is free.
+        /// </summary>
         public Node Take(NavRef at, Vector3 position, float g, float f)
         {
             if (_used == _made.Count) _made.Add(new Node());
@@ -120,6 +168,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         }
     }
 
+    /// <summary>
+    /// This thread's search state, made by its first search.
+    /// </summary>
     [ThreadStatic] static SearchScratch? s_searchScratch;
 
     /// <summary>
@@ -159,6 +210,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         public bool SqueezeOut;
     }
 
+    /// <summary>
+    /// A path from <paramref name="from"/> to <paramref name="to"/> for <paramref name="agent"/> (null: <see cref="NavAgent.Human"/>).
+    /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to, NavAgent? agent = null) => FindPath(from, to, agent ?? NavAgent.Human, null, out _);
 
     /// <summary>
@@ -373,8 +427,15 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         return Vector3.Lerp(left, right, (lo + hi) / 2);
     }
 
+    /// <summary>
+    /// The length of the way from <paramref name="a"/> through <paramref name="p"/> to <paramref name="b"/>.
+    /// </summary>
     static float Detour(Vector3 a, Vector3 p, Vector3 b) => Vector3.Distance(a, p) + Vector3.Distance(p, b);
 
+    /// <summary>
+    /// The cost factor of a polygon of <paramref name="area"/> for <paramref name="agent"/>: its water cost for the polygon's wet state, 1 on
+    /// dry ground.
+    /// </summary>
     static float Factor(byte area, NavAgent agent) => NavArea.WetState(area) is var state and > 0 ? agent.Water[state] : 1;
 
     /// <summary>
@@ -384,6 +445,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     bool Portal(NavRef from, int edge, NavRef to, out Vector3 left, out Vector3 right) => Portal(from, edge, to, out left, out right, out _, out _);
 
+    /// <summary>
+    /// As the other overload, also telling whether each end of the portal is a wall vertex (where the radius must be left clear).
+    /// </summary>
     bool Portal(NavRef from, int edge, NavRef to, out Vector3 left, out Vector3 right, out bool leftWall, out bool rightWall)
     {
         var ma = World.Mesh(from.Zone);
@@ -457,6 +521,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         return true;
     }
 
+    /// <summary>
+    /// The distance on the X/Z plane from <paramref name="p"/> to the line through <paramref name="a"/> along <paramref name="d"/>.
+    /// </summary>
     static float DistanceToLine(Vector3 a, Vector3 d, Vector3 p)
     {
         float len = MathF.Sqrt(d.X * d.X + d.Z * d.Z);
@@ -594,9 +661,11 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             var m = World.Mesh(r.Zone);
             var onPoly = NavWorld.ClosestPoint(m, r.Polygon, p);
             float d = (onPoly.X - p.X) * (onPoly.X - p.X) + (onPoly.Z - p.Z) * (onPoly.Z - p.Z), rise = MathF.Abs(onPoly.Y - p.Y);
-            if (d < 1e-6f
-                    && best < 1e-6f ? rise < bestRise - StackedGap : d < best - 1e-6f) { (best, bestRise) = (d, rise); result = new Vector3(p.X,
-                            onPoly.Y, p.Z); }
+            if (d < 1e-6f && best < 1e-6f ? rise < bestRise - StackedGap : d < best - 1e-6f)
+            {
+                (best, bestRise) = (d, rise);
+                result = new Vector3(p.X, onPoly.Y, p.Z);
+            }
         }
         return result;
     }
@@ -607,6 +676,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     const float StackedGap = 12;
 
+    /// <summary>
+    /// Whether two points coincide on the X/Z plane (within 1e-3).
+    /// </summary>
     static bool Same(Vector3 a, Vector3 b) => (a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z) < 1e-6f;
 
     /// <summary>
@@ -614,6 +686,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     static float Cross(Vector3 a, Vector3 b, Vector3 c) => (b.X - a.X) * (c.Z - a.Z) - (b.Z - a.Z) * (c.X - a.X);
 
+    /// <summary>
+    /// The portal between two adjacent polygons: across a shared edge or a link in the same zone, else across a border link; false (both ends walls)
+    /// when they do not touch.
+    /// </summary>
     bool FindPortal(NavRef from, NavRef to, out Vector3 left, out Vector3 right, out bool leftWall, out bool rightWall)
     {
         var m = World.Mesh(from.Zone);

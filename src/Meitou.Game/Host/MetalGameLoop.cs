@@ -681,7 +681,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 if (host.WorldOptions.Screenshot is null)
                     host.Session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = host.Session.World.Tick });
             }
-            catch (InvalidOperationException e) { Console.WriteLine($"metal     player squad skipped: {e.Message}"); }
+            catch (InvalidOperationException e)
+            {
+                Console.WriteLine($"metal     player squad skipped: {e.Message}");
+            }
         }
     }
 
@@ -994,7 +997,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 host.Loading = LoadingScreen.Create(_overlay, host.Assets.Find, host.Install.DataDirectory,
                     (host.GameOptions.UiMode ?? host.Config.UiMode) == Meitou.Data.Ui.UiMode.Faithful);
             }
-            catch (Exception e) { Console.Error.WriteLine($"loading   the loading screen did not load: {e.Message}"); }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"loading   the loading screen did not load: {e.Message}");
+            }
         }
     }
 

@@ -163,6 +163,9 @@ sealed class WorldPicking(PlayerInterface player)
     /// </summary>
     public CharacterId? PickHurtAlly(Vector2 pixel) => PickWhere(pixel, c => c.IsPlayer && c.Body is { Dead: false, NeedsAid: true });
 
+    /// <summary>
+    /// The id of the nearest character under <paramref name="pixel"/> that <paramref name="accept"/> takes (<see cref="PickWhereAt"/>).
+    /// </summary>
     internal CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
 
     /// <summary>
@@ -225,7 +228,63 @@ sealed class WorldPicking(PlayerInterface player)
     /// <summary>
     /// What a right click acts on, as <see cref="PickAt"/> chose it.
     /// </summary>
-    internal enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage, Dummy, Seat }
+    internal enum Picked
+    {
+        /// <summary>
+        /// Nothing.
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// A character with a quick order.
+        /// </summary>
+        Character,
+
+        /// <summary>
+        /// An item on the ground.
+        /// </summary>
+        GroundItem,
+
+        /// <summary>
+        /// A container.
+        /// </summary>
+        Container,
+
+        /// <summary>
+        /// A door.
+        /// </summary>
+        Door,
+
+        /// <summary>
+        /// A rock to mine.
+        /// </summary>
+        Rock,
+
+        /// <summary>
+        /// A site that is an object.
+        /// </summary>
+        Site,
+
+        /// <summary>
+        /// A bed.
+        /// </summary>
+        Bed,
+
+        /// <summary>
+        /// A cage.
+        /// </summary>
+        Cage,
+
+        /// <summary>
+        /// A training dummy.
+        /// </summary>
+        Dummy,
+
+        /// <summary>
+        /// A seat.
+        /// </summary>
+        Seat,
+    }
 
     /// <summary>
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest
@@ -303,6 +362,10 @@ sealed class WorldPicking(PlayerInterface player)
         player.Build.Services?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
         && f.Gap(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector2(point.X, point.Z)) == 0;
 
+    /// <summary>
+    /// The player's characters whose middle projects into the screen box from <paramref name="a"/> to <paramref name="b"/>, within the box-select
+    /// range.
+    /// </summary>
     internal IReadOnlyList<CharacterId> InBox(Vector2 a, Vector2 b)
     {
         float x0 = MathF.Min(a.X, b.X), x1 = MathF.Max(a.X, b.X), y0 = MathF.Min(a.Y, b.Y), y1 = MathF.Max(a.Y, b.Y);
@@ -323,11 +386,16 @@ sealed class WorldPicking(PlayerInterface player)
 
     #region Buildings
 
-    // Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast
-    // against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
-    // files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
+    /// <summary>
+    /// Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast
+    /// against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
+    /// files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
+    /// </summary>
     readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
+    /// <summary>
+    /// The collision triangles of building record <paramref name="record"/>, read once (empty without collision files).
+    /// </summary>
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
     {
         if (_collisionMeshes.TryGetValue(record, out var known)) return known;

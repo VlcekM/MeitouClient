@@ -30,6 +30,9 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     internal sealed record LookPreset(string Name, string Source, string Made, Dictionary<string, float> Values, string? File = null);
 
+    /// <summary>
+    /// The built-in Meitou look: it sets nothing.
+    /// </summary>
     internal static readonly LookPreset MeitouLook = new("Meitou", "built in", MeitouVersion, []);
 
     /// <summary>
@@ -56,6 +59,9 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     internal const string LookFolder = "presets";
 
+    /// <summary>
+    /// The look choice's hint.
+    /// </summary>
     internal const string LookHint = "The game as it ships, or Meitou with a look preset.";
 
     /// <summary>
@@ -63,8 +69,19 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     internal readonly HashSet<string> StuckSwitches = [];
 
+    /// <summary>
+    /// The looks: Meitou, the examples and the player's presets; null until listed.
+    /// </summary>
     List<LookPreset>? _looks;
+
+    /// <summary>
+    /// The look chosen this session; null for the saved one.
+    /// </summary>
     internal LookPreset? ChosenLook;
+
+    /// <summary>
+    /// The look and quality choices, made on first use.
+    /// </summary>
     SettingsMenu.Choice? _lookChoice, _qualityChoice;
 
     #endregion
@@ -76,6 +93,9 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     internal static string MeitouVersion => BuildVersion.Tag.TrimStart('v');
 
+    /// <summary>
+    /// The look choice: the looks by name (with their source but the built-in ones); choosing one applies it.
+    /// </summary>
     internal SettingsMenu.Choice LookChoice => _lookChoice ??= new(
         () => Looks().Select(l => l.Source == "built in" ? l.Name : $"{l.Name}  ·  {l.Source}").ToList(),
         () => Looks().IndexOf(ActiveLook),
@@ -86,8 +106,14 @@ sealed class LookPresets(SettingsMenu menu)
             menu.Notice = $"{look.Name} loaded.";
         });
 
+    /// <summary>
+    /// The quality choice (<see cref="QualityTiers.PresetEntry"/>'s).
+    /// </summary>
     internal SettingsMenu.Choice QualityChoice => _qualityChoice ??= menu.Tiers.PresetEntry.Choice!;
 
+    /// <summary>
+    /// The presets folder beside the user config.
+    /// </summary>
     string PresetFolder => Path.Combine(Path.GetDirectoryName(menu.Config.Path) is { Length: > 0 } dir ? dir : ".", LookFolder);
 
     /// <summary>
@@ -143,6 +169,9 @@ sealed class LookPresets(SettingsMenu menu)
 
     #region Preset files
 
+    /// <summary>
+    /// The looks, listed once: Meitou, the examples and the player's presets (an unreadable folder adds none).
+    /// </summary>
     List<LookPreset> Looks()
     {
         if (_looks is not null) return _looks;
@@ -172,16 +201,31 @@ sealed class LookPresets(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The active look: the chosen one, else the saved one by name, else Meitou.
+    /// </summary>
     internal LookPreset ActiveLook => ChosenLook ??= Looks().FirstOrDefault(l => l.Name == menu.Config.LookPreset) ?? MeitouLook;
 
-    // The preset files and share codes are LookPresetFile's (Meitou.Core), the launcher's too.
+    /// <summary>
+    /// The preset files and share codes are LookPresetFile's (Meitou.Core), the launcher's too. A look read from preset JSON, marked as from
+    /// <paramref name="source"/>; null when it is not one.
+    /// </summary>
     static LookPreset? ReadLook(string json, string source) =>
         global::Meitou.Settings.LookPresetFile.Read(json) is { } read ? new(read.Name, source, read.Made, read.Values) : null;
 
+    /// <summary>
+    /// The preset file data of <paramref name="look"/>.
+    /// </summary>
     static global::Meitou.Settings.LookPresetData Data(LookPreset look) => new(look.Name, look.Made, look.Values);
 
+    /// <summary>
+    /// <paramref name="look"/> as preset file JSON.
+    /// </summary>
     static string WriteLook(LookPreset look) => global::Meitou.Settings.LookPresetFile.Write(Data(look));
 
+    /// <summary>
+    /// <paramref name="look"/>'s share code.
+    /// </summary>
     internal static string ShareCode(LookPreset look) => global::Meitou.Settings.LookPresetFile.ShareCode(Data(look));
 
     #endregion
@@ -283,17 +327,29 @@ sealed class LookPresets(SettingsMenu menu)
 
     #region Look toggles and sliders
 
+    /// <summary>
+    /// The look switches (Meitou features with a look key) with their keys and Meitou defaults.
+    /// </summary>
     IEnumerable<(string Key, Toggle Toggle, bool Default)> LookToggles() =>
         menu.Values.Toggles.Select((t, i) => (SettingsMenu.SwitchKey(t.Label), t, menu.ToggleDefaults[i]))
             .Where(x => x.t.Remaster && IsLook(x.t.Label, true));
 
+    /// <summary>
+    /// The look sliders (outside Display and Advanced) with their keys and Meitou defaults.
+    /// </summary>
     IEnumerable<(string Key, Slider Slider, float Default)> LookSliders() =>
         menu.Values.Sliders
             .Select((s, i) => (s.Label, s, menu.Defaults[i]))
             .Where(x => SettingsMenu.Section(x.s.Label) is not ("Display" or "Advanced") && IsLook(x.s.Label, false));
 
+    /// <summary>
+    /// <paramref name="key"/>'s value in <paramref name="look"/>, else <paramref name="meitou"/>.
+    /// </summary>
     static float LookValue(LookPreset look, string key, float meitou) => look.Values.TryGetValue(key, out float v) ? v : meitou;
 
+    /// <summary>
+    /// Whether the active look has switch <paramref name="label"/> on.
+    /// </summary>
     bool PresetHas(string label)
     {
         var found = LookToggles().FirstOrDefault(x => x.Toggle.Label == label);
@@ -307,6 +363,9 @@ sealed class LookPresets(SettingsMenu menu)
         QualityTiers.LowOffSwitches.Contains(label) && !menu.Config.KeepAtLow.Contains(label) && !FaithfulLook && PresetHas(label)
         && menu.Tiers.Tier == QualityTiers.LowPreset;
 
+    /// <summary>
+    /// The switches Low holds off now.
+    /// </summary>
     internal IEnumerable<string> LowCut() => QualityTiers.LowOffSwitches.Where(CutAtLow);
 
     /// <summary>
@@ -374,6 +433,10 @@ sealed class LookPresets(SettingsMenu menu)
             && !StuckSwitches.Contains(t.Label))
         .All(t => !t.Get());
 
+    /// <summary>
+    /// Applies <paramref name="look"/> with the Meitou look on and saves it as the choice (none for Meitou): its switches (one Low holds off stays
+    /// off) and sliders.
+    /// </summary>
     internal void ApplyLook(LookPreset look)
     {
         menu.Config.FaithfulLook = false;
@@ -413,6 +476,9 @@ sealed class LookPresets(SettingsMenu menu)
         menu.Notice = FaithfulLook ? "Back to the game's value." : $"Back to {ActiveLook.Name}'s value.";
     }
 
+    /// <summary>
+    /// Switches the look to Faithful or Meitou (the active preset), keeping the quality tier: its sliders are set again for the new look.
+    /// </summary>
     internal void SetFaithful(bool faithful)
     {
         // The tier stays: its sliders are measured from the switches' sides (Draw distances, Shadows), so they are set again for the new look.
@@ -525,6 +591,9 @@ sealed class LookPresets(SettingsMenu menu)
         return saved;
     }
 
+    /// <summary>
+    /// Deletes the player's preset <paramref name="look"/> (its file too) and applies Meitou.
+    /// </summary>
     internal void DeleteLook(LookPreset look)
     {
         if (look.File is { } file && !menu.NoDiskWrites)
@@ -542,10 +611,19 @@ sealed class LookPresets(SettingsMenu menu)
         ApplyLook(MeitouLook);
     }
 
+    /// <summary>
+    /// The file name of a preset named <paramref name="name"/>.
+    /// </summary>
     static string MakeFileName(string name) => global::Meitou.Settings.LookPresetFile.FileName(name);
 
+    /// <summary>
+    /// <paramref name="stem"/>, or it with a number, so no look has the name.
+    /// </summary>
     internal string FreeName(string stem) => global::Meitou.Settings.LookPresetFile.FreeName(stem, Looks().Select(l => l.Name));
 
+    /// <summary>
+    /// Adds the preset of the clipboard's share code under a free name and applies it; the notice says when the clipboard holds none.
+    /// </summary>
     internal void PasteLook()
     {
         if (global::Meitou.Settings.LookPresetFile.FromShareCode(menu.Player.ClipboardRead?.Invoke()) is not { } read
@@ -595,16 +673,24 @@ sealed class LookPresets(SettingsMenu menu)
 
     #region Showcase and rows
 
-    // ---- the settings showcase (--settings-showcase with --screenshot): the Graphics page offscreen ----
-
+    /// <summary>
+    /// Switches the look to Faithful or Meitou (the settings showcase: <c>--settings-showcase</c> with <c>--screenshot</c>, the Graphics page
+    /// offscreen).
+    /// </summary>
     internal void ShowcaseFaithful(bool faithful) => SetFaithful(faithful);
 
+    /// <summary>
+    /// Applies look <paramref name="index"/> and returns its name (the settings showcase).
+    /// </summary>
     internal string ShowcaseLook(int index)
     {
         ApplyLook(Looks()[index]);
         return Looks()[index].Name;
     }
 
+    /// <summary>
+    /// How many looks there are (the settings showcase).
+    /// </summary>
     internal int ShowcaseLookCount => Looks().Count;
 
     /// <summary>

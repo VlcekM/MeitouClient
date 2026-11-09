@@ -12,10 +12,24 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed class AnimationLengths
 {
+    /// <summary>
+    /// Clip lengths in seconds by name (ignoring case); the first skeleton to name a clip wins.
+    /// </summary>
     readonly Dictionary<string, float> _lengths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Each clip's <c>Bip01</c> track as key times and (X, Z) offsets, by clip name (ignoring case).
+    /// </summary>
     readonly Dictionary<string, (float[] Times, System.Numerics.Vector2[] Offsets)> _roots = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The tables of the animal races' own skeletons, by RACE string id.
+    /// </summary>
     readonly Dictionary<string, AnimationLengths> _species = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// A table with no clips.
+    /// </summary>
     public static readonly AnimationLengths Empty = new();
 
     /// <summary>
@@ -48,6 +62,9 @@ public sealed class AnimationLengths
         foreach (var skeleton in read) if (skeleton is not null) AddSkeleton(skeleton);
     }
 
+    /// <summary>
+    /// The skeleton in <paramref name="file"/>; null when it cannot be read.
+    /// </summary>
     static OgreSkeleton? TryRead(string file)
     {
         try
@@ -68,6 +85,9 @@ public sealed class AnimationLengths
         if (TryRead(file) is { } skeleton) AddSkeleton(skeleton);
     }
 
+    /// <summary>
+    /// Adds the clips of <paramref name="skeleton"/> (a clip already known keeps its first length) and, for a new clip, its <c>Bip01</c> track.
+    /// </summary>
     void AddSkeleton(OgreSkeleton skeleton)
     {
         var root = skeleton.Bones.FirstOrDefault(b => b.Name == "Bip01");
@@ -115,8 +135,8 @@ public sealed class AnimationLengths
     }
 
     /// <summary>
-    /// The skeleton file a mesh (an FCS path) links: beside the mesh, else the first file of that name under <c>data</c>; null when either is
-    /// missing.
+    /// The skeleton file a mesh (an FCS path) links: beside the mesh, else the first file of that name under <c>data</c>; null when either
+    /// is missing.
     /// </summary>
     static string? SkeletonFile(string installRoot, string fcsMesh, Func<string, string?>? find)
     {
@@ -143,8 +163,8 @@ public sealed class AnimationLengths
     }
 
     /// <summary>
-    /// The clips of an animal race's own skeleton (<paramref name="raceId"/> a RACE string id); this table for anything else (people, a race not
-    /// loaded).
+    /// The clips of an animal race's own skeleton (<paramref name="raceId"/> a RACE string id); this table for anything else (people, a race
+    /// not loaded).
     /// </summary>
     public AnimationLengths For(string? raceId) => raceId is not null && _species.TryGetValue(raceId, out var table) ? table : this;
 
@@ -167,6 +187,9 @@ public sealed class AnimationLengths
         return this;
     }
 
+    /// <summary>
+    /// Sets a clip's length in seconds (tests).
+    /// </summary>
     public AnimationLengths Add(string clip, float seconds)
     {
         _lengths[clip] = seconds;

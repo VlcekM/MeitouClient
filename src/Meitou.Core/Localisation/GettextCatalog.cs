@@ -45,6 +45,9 @@ public sealed class GettextCatalog
         _version++;
     }
 
+    /// <summary>
+    /// The plural rule of the catalog's <c>Plural-Forms</c> header; <see cref="PluralRule.Germanic"/> until a header names one.
+    /// </summary>
     public PluralRule Plurals { get; private set; } = PluralRule.Germanic;
 
     /// <summary>

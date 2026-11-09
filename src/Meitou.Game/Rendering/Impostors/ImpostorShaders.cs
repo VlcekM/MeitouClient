@@ -22,20 +22,41 @@ public struct ImpostorPush
     /// The camera's up axis (world): the billboards' roll.
     /// </summary>
     [FieldOffset(16)] public Vector3 CameraUp;
+    /// <summary>
+    /// Frames per atlas side, as a float.
+    /// </summary>
     [FieldOffset(28)] public float Grid;
     /// <summary>
     /// The atlas maps' bindless indices (2D float array).
     /// </summary>
     [FieldOffset(32)] public uint Albedo;
+    /// <summary>
+    /// The normal map's bindless index (see <see cref="Albedo"/>).
+    /// </summary>
     [FieldOffset(36)] public uint Normal;
     /// <summary>
     /// The atlas's gloss x specular (<see cref="ImpostorAtlas.Gloss"/>), what the mesh passes to the lighting.
     /// </summary>
     [FieldOffset(40)] public float Gloss;
+    /// <summary>
+    /// Unused.
+    /// </summary>
     [FieldOffset(44)] public uint Spare2;
+    /// <summary>
+    /// 1: the three nearest frames are blended instead of one picked per pixel (the preview's switch).
+    /// </summary>
     [FieldOffset(48)] public uint Blend;
+    /// <summary>
+    /// Unlit debug output: 1 albedo, 2 normal, 3 coverage; 0 lit.
+    /// </summary>
     [FieldOffset(52)] public int Debug;
+    /// <summary>
+    /// 1: alpha to coverage on a multisampled target, as the foliage meshes.
+    /// </summary>
     [FieldOffset(56)] public uint Coverage;
+    /// <summary>
+    /// The tight quad's box (<see cref="ImpostorQuad.Pack"/>); 0: the sphere's silhouette.
+    /// </summary>
     [FieldOffset(60)] public uint Spare;
     /// <summary>
     /// A directional view (w 1, a shadow cascade): the direction towards its viewer; w 0 uses the view's eye.
@@ -50,27 +71,81 @@ public struct ImpostorPush
 [StructLayout(LayoutKind.Explicit, Size = 128)]
 public struct ImpostorRockPush
 {
+    /// <summary>
+    /// As <see cref="ImpostorPush.Sphere"/>.
+    /// </summary>
     [FieldOffset(0)] public Vector4 Sphere;
+    /// <summary>
+    /// As <see cref="ImpostorPush.CameraUp"/>.
+    /// </summary>
     [FieldOffset(16)] public Vector3 CameraUp;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Grid"/>.
+    /// </summary>
     [FieldOffset(28)] public float Grid;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Albedo"/>.
+    /// </summary>
     [FieldOffset(32)] public uint Albedo;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Normal"/>.
+    /// </summary>
     [FieldOffset(36)] public uint Normal;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Gloss"/>.
+    /// </summary>
     [FieldOffset(40)] public float Gloss;
+    /// <summary>
+    /// Unused.
+    /// </summary>
     [FieldOffset(44)] public uint Spare2;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Blend"/>.
+    /// </summary>
     [FieldOffset(48)] public uint Blend;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Debug"/>.
+    /// </summary>
     [FieldOffset(52)] public int Debug;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Coverage"/>.
+    /// </summary>
     [FieldOffset(56)] public uint Coverage;
+    /// <summary>
+    /// As <see cref="ImpostorPush.Spare"/>.
+    /// </summary>
     [FieldOffset(60)] public uint Spare;
+    /// <summary>
+    /// As <see cref="ImpostorPush.View"/>.
+    /// </summary>
     [FieldOffset(64)] public Vector4 View;
     /// <summary>
     /// The colour-map window (x0, z0, 1/width, 1/depth), the bindless indices of the ground, whole-world colour and colour maps.
     /// </summary>
     [FieldOffset(80)] public Vector4 Region;
+    /// <summary>
+    /// The ground map's bindless index (see <see cref="Region"/>).
+    /// </summary>
     [FieldOffset(96)] public uint Ground;
+    /// <summary>
+    /// The whole-world colour map's bindless index.
+    /// </summary>
     [FieldOffset(100)] public uint WorldColour;
+    /// <summary>
+    /// The colour map's bindless index.
+    /// </summary>
     [FieldOffset(104)] public uint Colour;
+    /// <summary>
+    /// Half the world's size, in world units.
+    /// </summary>
     [FieldOffset(108)] public float HalfWorld;
+    /// <summary>
+    /// Where the material starts to fade to the biomes' ground colour, in world units.
+    /// </summary>
     [FieldOffset(112)] public float FarStart;
+    /// <summary>
+    /// Where the material has faded to the ground colour, in world units.
+    /// </summary>
     [FieldOffset(116)] public float FarEnd;
     /// <summary>
     /// Bit 0 ground map, 1 whole-world colour map, 2 colour map, 3 apply the colour map's tint.
@@ -366,9 +441,10 @@ public static class ImpostorShaders
         }
         """;
 
-
-    /// <summary>The fragment stages' inputs and uniforms that the visibility test of <see cref="Fragment"/> and <see cref="PrepassFragment"/> reads
-    /// (and the lighting's).</summary>
+    /// <summary>
+    /// The fragment stages' inputs and uniforms that the visibility test of <see cref="Fragment"/> and <see cref="PrepassFragment"/> reads (and the
+    /// lighting's).
+    /// </summary>
     const string FragmentInputs = """
         in vec3 vObjectPoint;
         flat in vec3 vObjectEye;
@@ -434,9 +510,7 @@ public static class ImpostorShaders
     """);
 
     /// <summary>
-
     /// The colour program's main, from the sampled surface on: the wetness, the mesh shader's lighting and the haze.
-
     /// </summary>
     const string FragmentLighting = """
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
@@ -472,6 +546,10 @@ public static class ImpostorShaders
 
         """;
 
+    /// <summary>
+    /// The colour program's fragment stage; <paramref name="discards"/>: it decides visibility itself (with <c>discard</c>), else it runs after the
+    /// depth prepass with the depth test EQUAL and never discards.
+    /// </summary>
     static string ColourFragment(bool discards) =>
         "#version 330 core\n#define MS_NO_BLOCKER_SEARCH\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + FragmentInputs + "\n" + """
         uniform vec3 uLightDir;
@@ -560,9 +638,7 @@ public static class ImpostorShaders
         """;
 
     /// <summary>
-
     /// <see cref="DepthFragment"/> in the native model.
-
     /// </summary>
     public static string DepthFragmentNative() => NativeShaders.Port(DepthFragment, NativeShaders.Map(NativeMap), PushMembers);
 
@@ -599,19 +675,25 @@ public static class ImpostorShaders
         return NativeShaders.Port(f);
     }
 
-    /// <summary>The bake's vertex shader: <see cref="Shaders.MeshVertex"/> in the native model with the identity model matrix (object space is
-    /// world space while baking).</summary>
+    /// <summary>
+    /// The bake's vertex shader: <see cref="Shaders.MeshVertex"/> in the native model with the identity model matrix (object space is world space
+    /// while baking).
+    /// </summary>
     public static string BakeVertexNative() => NativeShaders.MeshVertex(new Dictionary<string, string> { ["uModel"] = "mat4(1.0)" });
 
     /// <summary>
-
     /// The C# side of the bake's storage block (<see cref="BakeFragmentNative"/>, std430, 80 bytes).
-
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct BakeBlock
     {
+        /// <summary>
+        /// The bounding sphere (centre, radius) and the frame's direction, right and up axes.
+        /// </summary>
         public Vector4 Sphere, Dir, Right, Up;
+        /// <summary>
+        /// What the pass writes: 0 albedo, 1 the normal in the frame's basis, 2 depth and gloss; the rest pad to 16 bytes.
+        /// </summary>
         public int Pass, Pad1, Pad2, Pad3;
     }
 
@@ -620,9 +702,7 @@ public static class ImpostorShaders
     // The impostor program in the native model (docs/renderer-native.md 3.3): Vertex and Fragment through NativeShaders.Port.
 
     /// <summary>
-
     /// The impostor program's push constants (<see cref="ImpostorPush"/> is the C# side; std430, 80 bytes).
-
     /// </summary>
     public const string PushMembers = """
             vec4 sphere;
@@ -640,9 +720,7 @@ public static class ImpostorShaders
         """;
 
     /// <summary>
-
     /// The impostor program's own uniforms: <see cref="ImpostorPush"/> members, the atlas maps by their bindless index.
-
     /// </summary>
     static readonly Dictionary<string, string> NativeMap = new()
     {
@@ -660,32 +738,24 @@ public static class ImpostorShaders
     };
 
     /// <summary>
-
     /// <see cref="Vertex"/> in the native model.
-
     /// </summary>
     public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary>
-
     /// <see cref="Fragment"/> in the native model.
-
     /// </summary>
     public static string FragmentNative() =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
     /// <summary>
-
     /// <see cref="FragmentAfterPrepass"/> in the native model.
-
     /// </summary>
     public static string FragmentAfterPrepassNative() =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(FragmentAfterPrepass, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
     /// <summary>
-
     /// <see cref="PrepassFragment"/> in the native model.
-
     /// </summary>
     public static string PrepassFragmentNative() => NativeShaders.Port(PrepassFragment, NativeShaders.Map(NativeMap), PushMembers);
 
@@ -693,9 +763,11 @@ public static class ImpostorShaders
 
     #region TERRAIN-mode rocks (docs/impostors.md section 13)
 
-    /// <summary><see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80
-    /// to 123): the colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances
-    /// the material fades to the ground colour between, and which maps exist (bit 0 ground, 1 whole-world colour, 2 colour map).</summary>
+    /// <summary>
+    /// <see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80 to 123):
+    /// the colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances the
+    /// material fades to the ground colour between, and which maps exist (bit 0 ground, 1 whole-world colour, 2 colour map).
+    /// </summary>
     public const string RockPushMembers = PushMembers + """
 
             vec4 rockRegion;
@@ -708,6 +780,9 @@ public static class ImpostorShaders
             uint rockFlags;
         """;
 
+    /// <summary>
+    /// <see cref="NativeMap"/> with the rock's terrain inputs (<see cref="RockPushMembers"/>).
+    /// </summary>
     static readonly Dictionary<string, string> RockNativeMap = new(NativeMap)
     {
         ["uRockGround"] = "textures2D[pc.rockGround]",
@@ -766,10 +841,14 @@ public static class ImpostorShaders
         return Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers), inShader: true);
     }
 
-    /// <summary>The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger
-    /// one).</summary>
+    /// <summary>
+    /// The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger one).
+    /// </summary>
     public static string RockVertexNative() => VertexNative();
 
+    /// <summary>
+    /// <paramref name="source"/> with the first match of <paramref name="pattern"/> replaced; throws when the shared mesh shader no longer has it.
+    /// </summary>
     static string Replace(string source, string pattern, string replacement)
     {
         var regex = new Regex(pattern);

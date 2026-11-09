@@ -111,6 +111,10 @@ public sealed partial class UiPainter
         return Measure(_standardFont ?? _overlay, text, wrapWidth, resourceScale);
     }
 
+    /// <summary>
+    /// The size of <paramref name="text"/> (its tags taken out) in <paramref name="font"/> at <paramref name="scale"/>: wrapped to <paramref
+    /// name="wrapWidth"/> when it is above 0, else one line per break.
+    /// </summary>
     static TextSize Measure(DebugOverlay font, string text, float wrapWidth, float scale)
     {
         text = MyGuiTextTags.Strip(text.Replace("\\n", "\n", StringComparison.Ordinal)).ReplaceLineEndings("\n");

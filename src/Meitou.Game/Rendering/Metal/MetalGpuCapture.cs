@@ -10,9 +10,18 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalGpuCapture
 {
+    /// <summary>
+    /// The trace file the capture is writing.
+    /// </summary>
     readonly string _path;
+    /// <summary>
+    /// Whether the capture is still running (until <see cref="Stop"/>).
+    /// </summary>
     bool _active;
 
+    /// <summary>
+    /// A running capture into <paramref name="path"/>.
+    /// </summary>
     MetalGpuCapture(string path)
     {
         this._path = path;

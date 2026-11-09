@@ -6,6 +6,9 @@ namespace Meitou.Data.Audio;
 /// </summary>
 public static class WwiseHash
 {
+    /// <summary>
+    /// The Wwise id of <paramref name="name"/>: FNV-1 (32-bit) over each character lowercased and cut to a byte.
+    /// </summary>
     public static uint Id(string name)
     {
         uint hash = 2166136261;

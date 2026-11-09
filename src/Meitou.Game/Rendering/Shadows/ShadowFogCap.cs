@@ -45,7 +45,14 @@ internal sealed class ShadowFogCap
     /// </summary>
     public const int PendingFrames = 300;
 
+    /// <summary>
+    /// The cap in effect (null: none).
+    /// </summary>
     float? _applied;
+
+    /// <summary>
+    /// The frames without a radius, and the frames a pending radius has been waited for.
+    /// </summary>
     int _missing, _pending;
 
     /// <summary>
@@ -80,6 +87,9 @@ internal sealed class ShadowFogCap
         return _applied;
     }
 
+    /// <summary>
+    /// Drops the cap and its counts (the cap switch is off).
+    /// </summary>
     public void Reset()
     {
         _applied = null;

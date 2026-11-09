@@ -21,6 +21,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
 {
     #region Editor session
 
+    /// <summary>
+    /// One opening of the editor: what it edits (a new game's characters or a surgeon's patient), the characters with their drafts, and the camera.
+    /// </summary>
     internal sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals,
         CharacterId surgeon, bool paid = false)
     {
@@ -28,13 +31,37 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         /// A surgeon's dialogue took the money already (<see cref="EditCharacter.Paid"/>).
         /// </summary>
         public bool Paid { get; } = paid;
+        /// <summary>
+        /// Whether the editor makes the start's characters or a plastic surgeon edits one.
+        /// </summary>
         public EditKind Kind { get; } = kind;
+        /// <summary>
+        /// The characters listed, in the order the arrows step through.
+        /// </summary>
         public IReadOnlyList<CharacterId> Characters { get; } = characters;
+        /// <summary>
+        /// The plastic surgeon (none at creation).
+        /// </summary>
         public CharacterId Surgeon { get; } = surgeon;
+        /// <summary>
+        /// The index of the character shown in <see cref="Characters"/>.
+        /// </summary>
         public int Index;
+        /// <summary>
+        /// The tab shown (body, face, hair).
+        /// </summary>
         public EditorTab Tab = EditorTab.Body;
+        /// <summary>
+        /// Whether the characters are shown with their clothes on.
+        /// </summary>
         public bool Clothes = true;
+        /// <summary>
+        /// The drafts made so far, by character.
+        /// </summary>
         public Dictionary<CharacterId, CharacterDraft> Drafts { get; } = [];
+        /// <summary>
+        /// Each drafted character's name when its draft was made, to tell a renamed one.
+        /// </summary>
         public Dictionary<CharacterId, string> StartNames { get; } = [];
         /// <summary>
         /// The animals among <see cref="Characters"/>: listed and shown, but only their name can be changed (<c>FUN_1405efd60</c>); no draft is made
@@ -49,16 +76,31 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         /// The characters shown so far: CONFIRM asks first when some never were.
         /// </summary>
         public HashSet<CharacterId> Shown { get; } = [];
+        /// <summary>
+        /// The next seed of a random roll (randomise, a race change); counts up from the tick count at opening.
+        /// </summary>
         public int Seed = Environment.TickCount;
+        /// <summary>
+        /// The character shown.
+        /// </summary>
         public CharacterId Current => Characters[Index];
         /// <summary>
-        /// The camera's orbit, the character it was last set for, and the button dragging it (with where the pointer was last).
+        /// The camera's orbit round the shown character.
         /// </summary>
         public EditorOrbit Orbit { get; } = new();
+        /// <summary>
+        /// The character the camera's orbit was last set for.
+        /// </summary>
         public CharacterId OrbitCharacter;
+        /// <summary>
+        /// The mouse button dragging the orbit and where the pointer was last; null while none drags.
+        /// </summary>
         public (Host.Input.MouseButton Button, Vector2 Last)? Drag;
     }
 
+    /// <summary>
+    /// The editor's session; null while it is closed.
+    /// </summary>
     internal EditorSession? Editor;
     /// <summary>
     /// The game data and the install root the editor reads races and editor limits from (the host sets them).
@@ -84,6 +126,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
 
     #region Editor control
 
+    /// <summary>
+    /// Whether the editor's window is open with a session.
+    /// </summary>
     public bool EditorOpen => Editor is not null && player.FaithfulScreens.IsOpen("editor");
     /// <summary>
     /// The character the editor shows and its tab, for the host's camera; null while the editor is closed.
@@ -128,6 +173,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The CHARACTER (or animal) record of a look: its loadout's appearance record, else its body's.
+    /// </summary>
     static Data.Fcs.FcsRecord? RecordOf(CharacterAppearance look) => look.Loadout?.Appearance.Record ?? look.Body?.Record;
 
     /// <summary>
@@ -146,6 +194,10 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         return draft;
     }
 
+    /// <summary>
+    /// Shows the current character: its name in NameText, selected in the world; at creation a race the editor does not offer becomes the first
+    /// offered one.
+    /// </summary>
     void ShowEditorCharacter()
     {
         if (Editor is null) return;
@@ -165,6 +217,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         player.Select([Editor.Current], false);
     }
 
+    /// <summary>
+    /// Closes the editor (and its file dialog) and drops the session and its previews.
+    /// </summary>
     void CloseEditor()
     {
         player.FaithfulScreens.Close("file");
@@ -182,7 +237,13 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// The ImageBox texture name of the renderer's stage picture (<see cref="Meitou.Game.Rendering.Characters.CharacterRenderer.StageTexture"/>).
     /// </summary>
     public const string StageTexture = "meitou:stage";
+    /// <summary>
+    /// Finds a game asset's path by file name (the host sets it); null for one not found.
+    /// </summary>
     internal Func<string, string?>? FindAsset;
+    /// <summary>
+    /// The path of <c>SandyGround.dds</c>, the scene's ground, found once; empty when it is missing.
+    /// </summary>
     string? _groundFile;
 
     /// <summary>
@@ -256,6 +317,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Moves the camera's orbit while a button drags it; false when none does.
+    /// </summary>
     internal bool EditorPointerMove(Vector2 p)
     {
         if (Editor?.Drag is not { } drag) return false;
@@ -264,6 +328,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// A button went up: the drag it held ends.
+    /// </summary>
     internal void EditorPointerUp(Host.Input.MouseButton button)
     {
         if (Editor?.Drag is { } drag && drag.Button == button) Editor.Drag = null;
@@ -279,6 +346,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// A widget's event in the editor's window: the tab and draft buttons, the arrows, CONFIRM, IMPORT and EXPORT; an animal's own handling for one.
+    /// </summary>
     internal void EditorAction(MyGuiEvent e)
     {
         if (Editor is { } open && open.Animals.Contains(open.Current))
@@ -290,22 +360,30 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         bool creation = s.Kind == EditKind.Creation;
         switch (e.Widget)
         {
-            case "BodyTabButton": s.Tab = EditorTab.Body;
-            return;
-            case "FaceTabButton": s.Tab = EditorTab.Face;
-            return;
-            case "HairTabButton": s.Tab = EditorTab.Hair;
-            return;
-            case "NameText" when e.Action == "text": draft.Name = e.Text;
-            return;
-            case "RandomiseButton": draft.Randomise(s.Tab, s.Seed++);
-            return;
-            case "RandomiseAllButton": draft.Randomise(null, s.Seed++);
-            return;
-            case "ResetButton": draft.Reset();
-            return;
-            case "ClothesButton": s.Clothes = !s.Clothes;
-            return;
+            case "BodyTabButton":
+                s.Tab = EditorTab.Body;
+                return;
+            case "FaceTabButton":
+                s.Tab = EditorTab.Face;
+                return;
+            case "HairTabButton":
+                s.Tab = EditorTab.Hair;
+                return;
+            case "NameText" when e.Action == "text":
+                draft.Name = e.Text;
+                return;
+            case "RandomiseButton":
+                draft.Randomise(s.Tab, s.Seed++);
+                return;
+            case "RandomiseAllButton":
+                draft.Randomise(null, s.Seed++);
+                return;
+            case "ResetButton":
+                draft.Reset();
+                return;
+            case "ClothesButton":
+                s.Clothes = !s.Clothes;
+                return;
             case "CharLeftArrow" or "CharRightArrow":
                 ChangeEditorCharacter(s, e.Widget);
                 return;
@@ -349,6 +427,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     }
 
 
+    /// <summary>
+    /// Steps to the previous or next listed character, wrapping round.
+    /// </summary>
     void ChangeEditorCharacter(EditorSession s, string arrow)
     {
         s.Index = (s.Index + (arrow == "CharLeftArrow" ? s.Characters.Count - 1 : 1)) % s.Characters.Count;
@@ -470,6 +551,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         ("lbRaceStats", "Race Stats"),
     ];
 
+    /// <summary>
+    /// Fills the editor window's bindings for the current character and tab (an animal's own for one).
+    /// </summary>
     internal void BindEditor(UiBindings b)
     {
         if (Editor is { } open && open.Animals.Contains(open.Current))
@@ -599,6 +683,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// The row widgets in the scroll view, top to bottom, with their template's height (layout pixels).
     /// </summary>
     readonly List<(string Name, float Height)> _editorRowWidgets = [];
+    /// <summary>
+    /// The scroll view widget the tab's rows are made in.
+    /// </summary>
     const string EditorRowsView = "EditorRows";
 
     /// <summary>

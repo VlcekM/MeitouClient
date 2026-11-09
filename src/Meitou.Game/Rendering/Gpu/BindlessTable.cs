@@ -10,7 +10,37 @@ namespace Meitou.Game.Rendering.Gpu;
 /// The arrays of the bindless set (set 0 of the native model, docs/renderer-native.md 2.6), by binding number. The integer arrays
 /// (<see cref="UintTexture2D"/>, <see cref="IntTexture2D"/>) take textures of UINT and SINT formats, which a float sampler may not read.
 /// </summary>
-public enum BindlessKind { Texture2D = 0, Texture2DArray = 1, Cube = 2, Shadow2D = 3, UintTexture2D = 4, IntTexture2D = 5, ShadowArray = 6 }
+public enum BindlessKind
+{
+    /// <summary>
+    /// Binding 0, <c>sampler2D textures2D[]</c>: 2D colour textures.
+    /// </summary>
+    Texture2D = 0,
+    /// <summary>
+    /// Binding 1, <c>sampler2DArray textures2DArray[]</c>: 2D array textures.
+    /// </summary>
+    Texture2DArray = 1,
+    /// <summary>
+    /// Binding 2, <c>samplerCube texturesCube[]</c>: cube maps.
+    /// </summary>
+    Cube = 2,
+    /// <summary>
+    /// Binding 3, <c>sampler2DShadow shadowTextures[]</c>: depth textures read with a compare.
+    /// </summary>
+    Shadow2D = 3,
+    /// <summary>
+    /// Binding 4, <c>usampler2D utextures2D[]</c>: 2D textures of UINT formats.
+    /// </summary>
+    UintTexture2D = 4,
+    /// <summary>
+    /// Binding 5, <c>isampler2D itextures2D[]</c>: 2D textures of SINT formats.
+    /// </summary>
+    IntTexture2D = 5,
+    /// <summary>
+    /// Binding 6, <c>sampler2DArrayShadow shadowArrays[]</c>: depth array textures read with a compare.
+    /// </summary>
+    ShadowArray = 6
+}
 
 /// <summary>
 /// An entry of the <see cref="BindlessTable"/>: the array and the index in it (what a shader reads through a push constant or a material table).
@@ -103,17 +133,51 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
 
     #region Table state
 
+    /// <summary>
+    /// The device the set, pool and layout are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The update-after-bind pool the slots' sets come from.
+    /// </summary>
     readonly DescriptorPool _pool;
+    /// <summary>
+    /// One set per frame slot.
+    /// </summary>
     readonly DescriptorSet[] _sets;
+    /// <summary>
+    /// Each slot's set's index in the device's set table.
+    /// </summary>
     readonly int[] _setIndices;
-    readonly long[] _applied;   // per slot: journal entries replayed so far
+    /// <summary>
+    /// Per slot: the journal entries replayed so far.
+    /// </summary>
+    readonly long[] _applied;
+    /// <summary>
+    /// The registrations and rewrites in order, replayed into each slot's set (entries every slot has seen are dropped).
+    /// </summary>
     readonly List<(BindlessKind Kind, uint Index, SampledTexture GpuTexture)> _journal = [];
-    long _journalBase;          // number of entries dropped from the front of the journal
+    /// <summary>
+    /// The number of entries dropped from the front of the journal.
+    /// </summary>
+    long _journalBase;
+    /// <summary>
+    /// Per array: the indices freed and past the frames in flight, handed out again first.
+    /// </summary>
     readonly Stack<uint>[] _free = new Stack<uint>[ArrayCount];
+    /// <summary>
+    /// Per array: the next index never handed out.
+    /// </summary>
     readonly uint[] _next = new uint[ArrayCount];
-    bool _open;                 // between BeginFrame and EndFrame of the frame in currentSlot
+    /// <summary>
+    /// Between BeginFrame and EndFrame of the frame in <see cref="_currentSlot"/>.
+    /// </summary>
+    bool _open;
 
+    /// <summary>
+    /// The table for the device: the arrays sized from its update-after-bind limits (raised to 8192 on macOS), the layout, the pool and one set per
+    /// frame slot.
+    /// </summary>
     public BindlessTable(VulkanDevice device)
     {
         this._device = device;
@@ -191,11 +255,18 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     #region Registration
 
     /// <summary>
+    /// The slot of the frame begun last.
+    /// </summary>
+    int _currentSlot;
+
+    /// <summary>
     /// Entries per array (<see cref="BindlessKind"/> order).
     /// </summary>
     public uint[] Capacity { get; }
+    /// <summary>
+    /// The table's descriptor set layout (set 0 of the native model).
+    /// </summary>
     public DescriptorSetLayout Layout { get; }
-    int _currentSlot;
 
     /// <summary>
     /// The set of the frame being recorded (bind once per command buffer).
@@ -206,6 +277,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// The set of the frame being recorded, as the renderers' handle (the index into the backend's sets).
     /// </summary>
     public int SetIndex => _setIndices[_currentSlot];
+    /// <inheritdoc/>
     public int Registered
     {
         get
@@ -258,6 +330,9 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     static readonly System.Collections.Frozen.FrozenDictionary<InternalFormat, ScalarKind> Scalars =
         System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(Enum.GetValues<InternalFormat>().Distinct(), f => f, ScalarByName);
 
+    /// <summary>
+    /// The scalar kind a format's samplers read, from its GL name: "ui" unsigned, "i" signed, depth and everything else float.
+    /// </summary>
     static ScalarKind ScalarByName(InternalFormat format)
     {
         // GL's names: an integer format ends in "ui" (R16ui, Rgba8ui) or "i" (R16i, Rgba32i); depth(-stencil) formats are read as float.
@@ -328,6 +403,11 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     #region Frame updates
 
     /// <summary>
+    /// The (array, index) pairs already written in the current <see cref="Apply"/> (each is written once, the newest entry).
+    /// </summary>
+    readonly HashSet<(BindlessKind, uint)> _written = [];
+
+    /// <summary>
     /// At the start of a frame in <paramref name="slot"/> (the slot's previous frame has finished): the journal's new entries are written into the
     /// slot's set.
     /// </summary>
@@ -348,8 +428,6 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         _open = false;
         Apply(_currentSlot, endOfFrame: true);
     }
-
-    readonly HashSet<(BindlessKind, uint)> _written = [];
 
     /// <summary>
     /// Writes the journal's entries the slot has not seen, newest first, each (array, index) once: an entry overwritten later is skipped (its
@@ -411,6 +489,9 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
 
     #region Disposal
 
+    /// <summary>
+    /// Destroys the pool (its sets go with it) and the layout.
+    /// </summary>
     public void Dispose()
     {
         _device.Vk.DestroyDescriptorPool(_device.Device, _pool, null);

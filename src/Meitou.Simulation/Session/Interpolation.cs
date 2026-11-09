@@ -5,6 +5,9 @@ namespace Meitou.Simulation.Session;
 /// </summary>
 public static class Interp
 {
+    /// <summary>
+    /// The value <paramref name="t"/> of the way from <paramref name="a"/> to <paramref name="b"/>.
+    /// </summary>
     public static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
     /// <summary>
@@ -28,7 +31,13 @@ public static class Interp
 /// </summary>
 public sealed class Interpolated<T>(T initial, Func<T, T, float, T> lerp)
 {
+    /// <summary>
+    /// The previous tick's state.
+    /// </summary>
     public T Previous { get; private set; } = initial;
+    /// <summary>
+    /// The current tick's state.
+    /// </summary>
     public T Current { get; private set; } = initial;
 
     /// <summary>
@@ -45,5 +54,8 @@ public sealed class Interpolated<T>(T initial, Func<T, T, float, T> lerp)
     /// </summary>
     public void Snap(T state) => Previous = Current = state;
 
+    /// <summary>
+    /// The state <paramref name="alpha"/> of the way from the previous to the current one.
+    /// </summary>
     public T At(float alpha) => lerp(Previous, Current, alpha);
 }

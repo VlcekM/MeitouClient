@@ -16,10 +16,20 @@ static class ShadowShaders
     /// Uniform buffer binding points of the receiver block and the caster block.
     /// </summary>
     public const uint ReceiverBinding = 6, CasterBinding = 7;
+
+    /// <summary>
+    /// The GLSL names of the receiver block and the caster block.
+    /// </summary>
     public const string ReceiverBlock = "KenshiShadowReceiver", CasterBlock = "KenshiShadowCaster";
 
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 
+    /// <summary>
+    /// The game's PCF tap offsets (<see cref="KenshiShadows.PcfOffsets"/>) as a GLSL list of vec2.
+    /// </summary>
     static string Taps() => string.Join(", ", KenshiShadows.PcfOffsets.Select(o => $"vec2({F(o.X)}, {F(o.Y)})"));
 
     /// <summary>
@@ -195,6 +205,9 @@ static class ShadowShaders
         }
         """;
 
+    /// <summary>
+    /// The debug views' vertex stage: one triangle covering the screen, with its uv.
+    /// </summary>
     public const string FullscreenVertex = """
         #version 330 core
         out vec2 vUv;

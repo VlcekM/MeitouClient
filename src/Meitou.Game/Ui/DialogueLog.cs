@@ -5,7 +5,23 @@ namespace Meitou.Game.Ui;
 /// <summary>
 /// The colour of a DIALOGUE log line (the original's <c>MessageLogColor</c>: ML_NORMAL, ML_PLAYER, ML_SYSTEM).
 /// </summary>
-enum MessageTone { Normal, Player, System }
+enum MessageTone
+{
+    /// <summary>
+    /// ML_NORMAL: a line said (black, the kit's text colour in the Meitou mode).
+    /// </summary>
+    Normal,
+
+    /// <summary>
+    /// ML_PLAYER: the player's own line (DialogueTextOption).
+    /// </summary>
+    Player,
+
+    /// <summary>
+    /// ML_SYSTEM: a message (#c6ac6a).
+    /// </summary>
+    System,
+}
 
 /// <summary>
 /// The Overview's DIALOGUE log (docs/game/ui-screens.md "Dialogue log"): the lines said and the message panel's messages.

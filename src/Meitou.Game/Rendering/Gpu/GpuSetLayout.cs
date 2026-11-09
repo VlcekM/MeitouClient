@@ -8,17 +8,38 @@ namespace Meitou.Game.Rendering.Gpu;
 [Flags]
 public enum GpuStage
 {
+    /// <summary>
+    /// No stage.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// The vertex stage.
+    /// </summary>
     Vertex = 1,
+    /// <summary>
+    /// The fragment stage.
+    /// </summary>
     Fragment = 2,
+    /// <summary>
+    /// The compute stage.
+    /// </summary>
     Compute = 4,
+    /// <summary>
+    /// The tessellation control stage.
+    /// </summary>
     TessControl = 8,
+    /// <summary>
+    /// The tessellation evaluation stage.
+    /// </summary>
     TessEvaluation = 16,
 
     /// <summary>
     /// The stages of a graphics program, including tessellation where the program uses it.
     /// </summary>
     Graphics = Vertex | Fragment | TessControl | TessEvaluation,
+    /// <summary>
+    /// Every stage.
+    /// </summary>
     All = Vertex | Fragment | Compute | TessControl | TessEvaluation,
 }
 
@@ -76,6 +97,9 @@ public sealed class GpuSetLayout : IEquatable<GpuSetLayout>
     /// </summary>
     public bool IsBindless { get; }
 
+    /// <summary>
+    /// A set of <paramref name="slots"/>, written per draw or not, and the bindless table or not.
+    /// </summary>
     GpuSetLayout(GpuSlot[] slots, bool perDraw, bool bindless)
     {
         Slots = slots;
@@ -98,6 +122,9 @@ public sealed class GpuSetLayout : IEquatable<GpuSetLayout>
     /// </summary>
     public static GpuSetLayout Bindless { get; } = new([], false, true);
 
+    /// <summary>
+    /// Equal when both are written per draw or not, both are the bindless table or not, and their slots are the same in order.
+    /// </summary>
     public bool Equals(GpuSetLayout? other) =>
         other is not null && PerDraw == other.PerDraw && IsBindless == other.IsBindless && Slots.AsSpan().SequenceEqual(other.Slots);
 

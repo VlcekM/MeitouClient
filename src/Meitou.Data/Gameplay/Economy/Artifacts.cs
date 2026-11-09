@@ -35,22 +35,70 @@ public static class Artifacts
         return ItemValue.Of(db, record, stack.Level, false, prices, maker);
     }
 
+    /// <summary>
+    /// An artifact being handed out: its stack, its value, the units still to give and the indexes of the towns whose range holds its value.
+    /// </summary>
     sealed class Entry(ArtifactStack stack, int value)
     {
+        /// <summary>
+        /// The item, its parts, level and units as listed.
+        /// </summary>
         public ArtifactStack Stack { get; } = stack;
+
+        /// <summary>
+        /// The <see cref="ValueOf"/> of one unit.
+        /// </summary>
         public int Value { get; } = value;
+
+        /// <summary>
+        /// The units not given to a town yet.
+        /// </summary>
         public int Left { get; set; } = stack.Units;
+
+        /// <summary>
+        /// The indexes (into the taker list) of the towns that accept its value, in the takers' order.
+        /// </summary>
         public List<int> Towns { get; } = [];
     }
 
+    /// <summary>
+    /// A town taking items or gear, with the value range it accepts and what it has been given.
+    /// </summary>
     sealed class Taker(int key, TownData town, Vector3 position, uint min, uint max)
     {
+        /// <summary>
+        /// The caller's key of the town (<see cref="ArtifactTown.Key"/>).
+        /// </summary>
         public int Key { get; } = key;
+
+        /// <summary>
+        /// The TOWN record.
+        /// </summary>
         public TownData Town { get; } = town;
+
+        /// <summary>
+        /// The town's position; the last tie-breaks of the town order.
+        /// </summary>
         public Vector3 Position { get; } = position;
+
+        /// <summary>
+        /// The lowest value it takes (the town's artifacts min value).
+        /// </summary>
         public uint Min { get; } = min;
+
+        /// <summary>
+        /// The highest value it takes (the town's artifacts max value).
+        /// </summary>
         public uint Max { get; } = max;
+
+        /// <summary>
+        /// The stacks given so far with their unit value, one per value, item and parts.
+        /// </summary>
         public List<(ArtifactStack Stack, int Value)> Given { get; } = [];
+
+        /// <summary>
+        /// Whether <paramref name="value"/> lies in [<see cref="Min"/>, <see cref="Max"/>] (compared unsigned).
+        /// </summary>
         public bool Accepts(int value) => Min <= (uint)value && (uint)value <= Max;
 
         /// <summary>
@@ -267,6 +315,9 @@ public static class Artifacts
         }
     }
 
+    /// <summary>
+    /// The takers' order: by max value, min value, TOWN id, then position X and Z.
+    /// </summary>
     static int CompareTowns(Taker a, Taker b)
     {
         if (a.Max != b.Max) return a.Max.CompareTo(b.Max);
@@ -277,6 +328,9 @@ public static class Artifacts
         return a.Position.Z.CompareTo(b.Position.Z);
     }
 
+    /// <summary>
+    /// The artifacts' order: by value (unsigned), then item, part 1 and part 2 ordinally (one with the record before one without), then level.
+    /// </summary>
     static int CompareEntries(Entry a, Entry b)
     {
         if (a.Value != b.Value) return ((uint)a.Value).CompareTo((uint)b.Value);

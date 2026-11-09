@@ -18,6 +18,9 @@ static class WorldStats
     /// </summary>
     public readonly record struct Triangles(double Terrain, double Objects, double? Foliage, double Characters, double GrassBlades)
     {
+        /// <summary>
+        /// All the frame's triangles (grass blades not counted); the foliage's count as 0 while unknown.
+        /// </summary>
         public double Total => Terrain + Objects + (Foliage ?? 0) + Characters;
     }
 
@@ -26,8 +29,16 @@ static class WorldStats
     /// click.
     /// </summary>
     public const string CharacterBoxesOff = "[ ] boxes", CharacterBoxesOn = "[x] boxes";
+
+    /// <summary>
+    /// The scene line's paths checkbox, ticked as the host's path switch stands.
+    /// </summary>
     public const string PathsOff = "[ ] paths", PathsOn = "[x] paths";
 
+    /// <summary>
+    /// Adds the Scene, Memory and World sections (what is drawn and loading, video memory and RAM, the camera and the weather) to <paramref
+    /// name="stats"/>; <paramref name="characterBoxes"/> puts the boxes and paths checkboxes on the characters line.
+    /// </summary>
     public static void Add(List<string> stats, GpuContext context, WorldGpu gpu, Vector3 camera, in Triangles tris, bool characterBoxes = false)
     {
         stats.Add("");
@@ -60,5 +71,8 @@ static class WorldStats
         if (gpu.Weather is { } w) stats.Add($"  weather       {w.Describe()}");
     }
 
+    /// <summary>
+    /// <paramref name="triangles"/> in millions with two decimals.
+    /// </summary>
     static string Millions(double triangles) => $"{triangles / 1e6:0.00} M";
 }

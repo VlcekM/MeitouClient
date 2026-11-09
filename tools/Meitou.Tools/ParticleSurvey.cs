@@ -9,6 +9,10 @@ using Meitou.Data.Particles;
 /// </summary>
 static class ParticleSurvey
 {
+    /// <summary>
+    /// Counts what the install's particle scripts and materials use; <paramref name="weathers"/> lists the weathers' effects instead, <paramref
+    /// name="effects"/> the EFFECT records. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, bool effects, bool weathers = false)
     {
         var library = ParticleLibrary.Load(install);
@@ -45,12 +49,18 @@ static class ParticleSurvey
         return library.Errors.Count == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// Prints <paramref name="title"/> and each distinct value with its count, the most used first.
+    /// </summary>
     static void Count(string title, IEnumerable<string> values)
     {
         Console.WriteLine($"{title}: " + string.Join(", ",
             values.GroupBy(v => v).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}")));
     }
 
+    /// <summary>
+    /// Lists the base game's EFFECT records with their particle systems and whether the library has them; returns the exit code.
+    /// </summary>
     static int Effects(GameInstall install, ParticleLibrary library)
     {
         var db = GameDatabase.Load(LoadOrder.BaseGame(install));

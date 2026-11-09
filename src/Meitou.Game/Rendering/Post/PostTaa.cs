@@ -15,25 +15,76 @@ namespace Meitou.Game.Rendering.Post;
 /// </summary>
 sealed class PostTaa : IDisposable
 {
+    /// <summary>
+    /// The TAA's blend of the current frame into the history.
+    /// </summary>
     const float Blend = 0.1f;
 
+    /// <summary>
+    /// The device the passes run on.
+    /// </summary>
     readonly IGpuContext _ctx;
+    /// <summary>
+    /// The velocity and TAA programs.
+    /// </summary>
     readonly LegacyProgram _velocity, _taa;
+    /// <summary>
+    /// The velocity program's uniforms.
+    /// </summary>
     readonly UniformHandle _nearToPrevious, _nearPlanes, _fullPlanes, _jitterNdc, _mode,
         _flipDepthY, _tan, _right, _up, _back, _eyeY, _waterY, _waterReactive, _sun, _sunMotion;
+    /// <summary>
+    /// The velocity program's scene depth sampler.
+    /// </summary>
     readonly SamplerSlot _nearDepth;
+    /// <summary>
+    /// The TAA program's uniforms.
+    /// </summary>
     readonly UniformHandle _renderSize, _displaySize, _jitter, _blend, _reset;
+    /// <summary>
+    /// The TAA program's samplers: the scene colour, the motion and the history.
+    /// </summary>
     readonly SamplerSlot _colour, _motionSlot, _history;
+    /// <summary>
+    /// The pass pipelines made so far, by program and target format.
+    /// </summary>
     readonly Dictionary<(GpuProgram Program, InternalFormat Format), GraphicsPipelineDesc> _pipelines = [];
+    /// <summary>
+    /// The nearest and linear clamped samplers the passes read with.
+    /// </summary>
     readonly SampledTexture _pointSampler, _linearSampler;
+    /// <summary>
+    /// Works out the sun's motion from frame to frame for the velocity pass.
+    /// </summary>
     readonly SunMotionTracker _sunTracker = new();
 
+    /// <summary>
+    /// The render-size motion and reactive targets, the display-size history pair and the external upscaler's output.
+    /// </summary>
     GpuTexture? _motion, _reactive, _historyA, _historyB, _externalOutput;
+    /// <summary>
+    /// The render size and the display size the targets were made for.
+    /// </summary>
     int _width, _height, _displayWidth, _displayHeight;
+    /// <summary>
+    /// Whether the history holds a frame, last frame's camera is set, and the external upscaler has a history.
+    /// </summary>
     bool _historyValid, _previousValid, _externalValid;
+    /// <summary>
+    /// Backing field of <see cref="External"/>.
+    /// </summary>
     IUpscaler? _external;
+    /// <summary>
+    /// Last frame's eye.
+    /// </summary>
     Vector3 _previousEye;
+    /// <summary>
+    /// Last frame's view rotation.
+    /// </summary>
     Matrix4x4 _previousRotation;
+    /// <summary>
+    /// Last frame's field of view and aspect.
+    /// </summary>
     float _previousFov, _previousAspect;
 
     /// <summary>
@@ -73,6 +124,9 @@ sealed class PostTaa : IDisposable
 
     #region Setup
 
+    /// <summary>
+    /// Compiles the velocity and TAA programs, resolves their handles and makes the samplers.
+    /// </summary>
     public PostTaa(IGpuContext ctx)
     {
         this._ctx = ctx;
@@ -117,10 +171,16 @@ sealed class PostTaa : IDisposable
     public static Vector2 Offset(long frame, int renderWidth, int displayWidth) =>
         Jitter.Offset(frame, Jitter.PhaseCount(renderWidth, displayWidth));
 
+    /// <summary>
+    /// A clamped sampler with the GL filters <paramref name="min"/> and <paramref name="mag"/>, no LOD bias.
+    /// </summary>
     GpuSampler Sampled(TextureMinFilter min, TextureMagFilter mag) =>
         _ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat,
             false, DepthFunction.Lequal, false, 1, false, 0));
 
+    /// <summary>
+    /// Frees the external upscaler, the targets and the two programs.
+    /// </summary>
     public void Dispose()
     {
         _external?.Dispose();
@@ -344,6 +404,10 @@ sealed class PostTaa : IDisposable
 
     #region Targets
 
+    /// <summary>
+    /// Makes the targets for the render size <paramref name="w"/> × <paramref name="h"/> and the display size <paramref name="dw"/> ×
+    /// <paramref name="dh"/> when they changed (the histories only without an external upscaler), forgetting the histories and the last camera.
+    /// </summary>
     void Ensure(int w, int h, int dw, int dh)
     {
         // MetalFX owns the temporal history. TAA's two display-size RGBA16F histories are only needed when it falls back.
@@ -374,6 +438,9 @@ sealed class PostTaa : IDisposable
         _sunTracker.Reset();
     }
 
+    /// <summary>
+    /// Makes the external upscaler's display-size output when it has none of that size.
+    /// </summary>
     void EnsureExternalOutput()
     {
         if (External is null) return;
@@ -412,6 +479,9 @@ sealed class PostTaa : IDisposable
         cmd.Order();
     }
 
+    /// <summary>
+    /// Frees the targets.
+    /// </summary>
     void DisposeTargets()
     {
         _motion?.Dispose();

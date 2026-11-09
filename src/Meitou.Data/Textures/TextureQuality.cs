@@ -12,6 +12,9 @@ public static class TextureQuality
     /// The value when the key is missing (High).
     /// </summary>
     public const int Default = 1;
+    /// <summary>
+    /// The highest level, Fugly.
+    /// </summary>
     public const int Maximum = 4;
 
     /// <summary>

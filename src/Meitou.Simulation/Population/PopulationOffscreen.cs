@@ -21,14 +21,24 @@ public sealed partial class PopulationSystem
     /// </summary>
     public const float FightRadius = 300;
 
+    /// <summary>
+    /// The stand-ins that may fight in this check.
+    /// </summary>
     readonly List<Platoon> _fighters = [];
+    /// <summary>
+    /// The fighting stand-ins by grid cell of <see cref="FightRadius"/>.
+    /// </summary>
     readonly Dictionary<(int X, int Z), List<Platoon>> _fightCells = [];
+    /// <summary>
+    /// The race data cache of the off-screen healing.
+    /// </summary>
     readonly Dictionary<string, RaceData?> _recoverRaces = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Settles the meetings of hostile stand-ins (serial phase): every unloaded platoon that is not a town's own nor the player's, met by an enemy within
-    /// <see cref="FightRadius"/>, fights the first one met in id order. The winner is drawn by the square of the strengths (A wins with S_A² / (S_A² + S_B²)),
-    /// the loser is wiped out (despawned; a save leaves it out), and the winner loses its weakest members in the share (S_loser / S_winner)² / 2.
+    /// Settles the meetings of hostile stand-ins (serial phase): every unloaded platoon that is not a town's own nor the player's, met by an enemy
+    /// within <see cref="FightRadius"/>, fights the first one met in id order. The winner is drawn by the square of the strengths (A wins with S_A² /
+    /// (S_A² + S_B²)), the loser is wiped out (despawned; a save leaves it out), and the winner loses its weakest members in the share (S_loser /
+    /// S_winner)² / 2.
     /// </summary>
     void Fights(World world)
     {
@@ -94,6 +104,9 @@ public sealed partial class PopulationSystem
         }
     }
 
+    /// <summary>
+    /// A platoon's name for the town log: its stored or saved name, else its template's name, else the template id.
+    /// </summary>
     string NameOf(Platoon p) => p.Stored?.Name ?? p.Saved?.Name ?? _data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId;
 
     /// <summary>

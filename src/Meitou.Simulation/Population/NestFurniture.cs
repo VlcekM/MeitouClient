@@ -16,6 +16,9 @@ public sealed record NestPiece(string Id, string Record, Vector3 Position, Quate
 /// </summary>
 public sealed record NestLayout(List<NestPiece> Pieces, List<NestMesh> Meshes, List<NestDrop> Drops)
 {
+    /// <summary>
+    /// Whether the nest scatters nothing.
+    /// </summary>
     public bool IsEmpty => Pieces.Count == 0 && Meshes.Count == 0 && Drops.Count == 0;
 }
 
@@ -29,13 +32,38 @@ public sealed record NestLayout(List<NestPiece> Pieces, List<NestMesh> Meshes, L
 /// </summary>
 public static partial class NestFurniture
 {
+    /// <summary>
+    /// A centre within this of an earlier one is pushed away from it.
+    /// </summary>
     const float CentreSpacing = 140;
+    /// <summary>
+    /// How far a centre is pushed from an earlier one it came near.
+    /// </summary>
     const float CentrePush = 190;
+    /// <summary>
+    /// A piece within this of a piece of the same entry is pushed away from it.
+    /// </summary>
     const float PieceSpacing = 17;
+    /// <summary>
+    /// How far a piece is pushed from one of the same entry it came near.
+    /// </summary>
     const float PiecePush = 25;
+    /// <summary>
+    /// A piece still within this of a piece of the same entry after the push is dropped.
+    /// </summary>
     const float PieceGap = 12;
+    /// <summary>
+    /// A piece (or a loot item) with no navmesh within this of its centre's height is dropped (the original's nearest-point query, a box of
+    /// half-size 60).
+    /// </summary>
     const float NavReach = 60;
+    /// <summary>
+    /// The spread of an entry's count: v0 ± v0 x 0.5.
+    /// </summary>
     const float CountSpread = 0.5f;
+    /// <summary>
+    /// The step of the ground-normal samples, in units.
+    /// </summary>
     const float NormalStep = 5;
 
     /// <summary>
@@ -53,6 +81,9 @@ public static partial class NestFurniture
         return layout;
     }
 
+    /// <summary>
+    /// Lays out the <c>debris building</c> pieces: <c>num centrepoints</c> centres, and each entry's buildings round each centre.
+    /// </summary>
     static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix,
         List<NestPiece> pieces)
     {
@@ -118,7 +149,8 @@ public static partial class NestFurniture
     }
 
     /// <summary>
-    /// A point within <paramref name="spacing"/> of an earlier one is moved to <paramref name="push"/> from it, along the line between them, each in turn.
+    /// A point within <paramref name="spacing"/> of an earlier one is moved to <paramref name="push"/> from it, along the line between them, each
+    /// in turn.
     /// </summary>
     static Vector2 Spaced(Vector2 p, List<Vector2> earlier, float spacing, float push)
     {
@@ -142,6 +174,9 @@ public static partial class NestFurniture
         return d.LengthSquared() > 1e-6f ? Vector2.Normalize(d) : Vector2.UnitX;
     }
 
+    /// <summary>
+    /// A uniform roll in [<paramref name="min"/>, <paramref name="max"/>).
+    /// </summary>
     static float Between(ref RandomStream rolls, float min, float max) => min + rolls.NextFloat() * (max - min);
 
     /// <summary>
@@ -160,6 +195,9 @@ public static partial class NestFurniture
         return tilt > maxSlope ? Quaternion.Slerp(turn, tilted, maxSlope / tilt) : tilted;
     }
 
+    /// <summary>
+    /// The ground's normal at <paramref name="p"/>, from samples <see cref="NormalStep"/> either side on X and Z.
+    /// </summary>
     static Vector3 GroundNormal(IWalkability walk, Vector3 p)
     {
         float dx = walk.GroundHeight(p.X + NormalStep, p.Z, p.Y) - walk.GroundHeight(p.X - NormalStep, p.Z, p.Y);
@@ -176,11 +214,26 @@ public static partial class NestFurniture
 /// </summary>
 public sealed class NestBuildings
 {
+    /// <summary>
+    /// A camp standing: its layout, owner faction, centre and the TOWN record it was stood up from.
+    /// </summary>
     sealed record Camp(NestLayout Layout, int Owner, Vector2 Centre, string Record);
 
+    /// <summary>
+    /// The camps standing, by camp key.
+    /// </summary>
     readonly SortedDictionary<int, Camp> _camps = [];
+    /// <summary>
+    /// The camps that laid their items (see <see cref="Stock"/>).
+    /// </summary>
     readonly HashSet<int> _stocked = [];
+    /// <summary>
+    /// The cache of <see cref="Published"/> (null: made again on the next call).
+    /// </summary>
     IReadOnlyList<BuildingSnapshot>? _published;
+    /// <summary>
+    /// The cache of <see cref="Meshes"/> (null: made again on the next call).
+    /// </summary>
     IReadOnlyList<NestMesh>? _meshes;
 
     /// <summary>
@@ -193,6 +246,9 @@ public sealed class NestBuildings
     /// </summary>
     public static int TownCamp(int site) => -1 - site;
 
+    /// <summary>
+    /// The buildings camp <paramref name="camp"/> stood up (none when it stands nothing).
+    /// </summary>
     public IReadOnlyList<NestPiece> Of(int camp) => _camps.TryGetValue(camp, out var c) ? c.Layout.Pieces : [];
 
     /// <summary>
@@ -205,12 +261,18 @@ public sealed class NestBuildings
     /// </summary>
     public IEnumerable<(int Site, Vector2 Centre)> Standing => _camps.Where(kv => kv.Key >= 0).Select(kv => (kv.Key, kv.Value.Centre));
 
+    /// <summary>
+    /// Stands up a camp's layout for its owner at its centre, replacing what it stood before.
+    /// </summary>
     public void Set(int camp, NestLayout layout, int owner, Vector2 centre, string record)
     {
         _camps[camp] = new Camp(layout, owner, centre, record);
         Changed();
     }
 
+    /// <summary>
+    /// Takes a camp down; false when it stood nothing.
+    /// </summary>
     public bool Remove(int camp)
     {
         if (!_camps.Remove(camp)) return false;
@@ -224,6 +286,9 @@ public sealed class NestBuildings
     /// </summary>
     public bool Stock(int camp) => _stocked.Add(camp);
 
+    /// <summary>
+    /// Drops the caches and bumps <see cref="Revision"/>.
+    /// </summary>
     void Changed()
     {
         _published = null;
@@ -245,5 +310,8 @@ public sealed class NestBuildings
     /// </summary>
     public IReadOnlyList<NestMesh> Meshes() => _meshes ??= [.. _camps.Values.SelectMany(c => c.Layout.Meshes)];
 
+    /// <summary>
+    /// A camp piece as a complete building snapshot of its owner.
+    /// </summary>
     static BuildingSnapshot Snapshot(NestPiece p, int owner) => new(p.Id, p.Record, p.Position, p.Rotation, 0, null, owner, 0, 0, [], true, false);
 }

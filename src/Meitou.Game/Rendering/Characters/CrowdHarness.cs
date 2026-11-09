@@ -18,16 +18,43 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed class CrowdHarness
 {
+    /// <summary>
+    /// The spiral's spacing between characters, in world units.
+    /// </summary>
     const float Spacing = 12;
+    /// <summary>
+    /// The idle clip of the idling half.
+    /// </summary>
     const string Idle = "idle_stand_relax";
+    /// <summary>
+    /// The clips of the walking half (lower and upper body).
+    /// </summary>
     static readonly string[] Walk = ["walk lower", "walk upper"];
 
+    /// <summary>
+    /// The generated characters' looks.
+    /// </summary>
     readonly CharacterAppearance[] _appearances;
+    /// <summary>
+    /// Each character's animation layers, their times set each frame.
+    /// </summary>
     readonly CharacterPose[][] _poses;
+    /// <summary>
+    /// Each character's place on the ground.
+    /// </summary>
     readonly Vector3[] _positions;
+    /// <summary>
+    /// Each character's heading, and its time offset into its clips.
+    /// </summary>
     readonly float[] _yaws, _phases;
+    /// <summary>
+    /// The clips' clock in seconds: the real time when interactive, a fixed pose time for stills.
+    /// </summary>
     readonly Func<float> _time;
 
+    /// <summary>
+    /// The crowd's characters, by index in each array.
+    /// </summary>
     CrowdHarness(CharacterAppearance[] appearances, Vector3[] positions, float[] yaws, float[] phases, CharacterPose[][] poses, Func<float> time)
         => (this._appearances, this._positions, this._yaws, this._phases, this._poses, this._time) = (appearances, positions, yaws, phases, poses,
                 time);

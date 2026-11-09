@@ -10,7 +10,9 @@ using Meitou.Simulation.Production;
 
 namespace Meitou.Simulation.Carrying;
 
-// The foraging job and the Rescue Allies option (docs/game/ai-tasks.md "Perma-jobs" and "Squad AI options").
+/// <summary>
+/// The foraging job and the Rescue Allies option (docs/game/ai-tasks.md "Perma-jobs" and "Squad AI options").
+/// </summary>
 public sealed partial class CarrySystem
 {
     #region Foraging

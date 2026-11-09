@@ -72,6 +72,9 @@ static class FrameGenerationSetup
         return string.Create(inv, $"{rendered * shown:0} fps  ({rendered:0} rendered, {ms:0.0} ms)");
     }
 
+    /// <summary>
+    /// The method's name as the settings and the log show it: "FSR 3", "DLSS" or "off".
+    /// </summary>
     internal static string FrameGenerationName(FrameGenerationMethod method) => method switch
     {
         FrameGenerationMethod.Fsr => "FSR 3",
@@ -88,9 +91,20 @@ static class FrameGenerationSetup
     /// </summary>
     internal sealed class SystemPointer
     {
+        /// <summary>
+        /// The pointer image last shown (null: a system cursor).
+        /// </summary>
         string? _shown;
+
+        /// <summary>
+        /// The system cursor last set.
+        /// </summary>
         StandardCursor _standard = StandardCursor.Default;
 
+        /// <summary>
+        /// Shows the pointer <paramref name="name"/> as the window's cursor: its image and hot spot, or the system arrow when the interface has no
+        /// image for it; nothing when it is already shown.
+        /// </summary>
         public void Show(ICursor cursor, PlayerInterface player, string name)
         {
             if (name == _shown) return;

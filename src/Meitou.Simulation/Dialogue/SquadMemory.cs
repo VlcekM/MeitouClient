@@ -9,9 +9,15 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public static class MemoryTag
 {
+    /// <summary>
+    /// The long-term tags (<c>CharacterPerceptionTags_LongTerm</c>).
+    /// </summary>
     public const int None = 0, Intruder = 1, Lifesaver = 2, FreedMe = 3, StoleFromMe = 4, Captor = 5, Friendly = 6,
         DefeatedMySquad = 7, SquadLostToMe = 8,
         KilledMyFriend = 9, ScrewedThisGuy = 10;
+    /// <summary>
+    /// The short-term tags the dump names (<c>CharacterPerceptionTags_ShortTerm</c>).
+    /// </summary>
     public const int Aggressor = 2, TempAlly = 3, TempEnemy = 4, Criminal = 7;
     /// <summary>
     /// Short-term tag 6 (unnamed in the dump): the squad looted or stripped the character; its NPC looting finder skips it (docs/game/carry-loot.md
@@ -40,26 +46,57 @@ public static class MemoryTag
 /// </summary>
 public sealed class SquadMemory
 {
+    /// <summary>
+    /// One squad's memory of one character: the game hour of the last note and the long-term and short-term tag bits.
+    /// </summary>
     public sealed class Entry
     {
+        /// <summary>
+        /// Game hours of the last note.
+        /// </summary>
         public double Time;
+        /// <summary>
+        /// The long-term and short-term tag bits (bit = 1 &lt;&lt; tag).
+        /// </summary>
         public uint Long, Short;
     }
 
+    /// <summary>
+    /// Orders character ids by slot, then generation.
+    /// </summary>
     static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
 
+    /// <summary>
+    /// The entries per squad and character, sorted for the hash and save order.
+    /// </summary>
     readonly SortedDictionary<(int Squad, CharacterId Who), Entry> _entries = new(Comparer<(int, CharacterId)>.Create((a, b) =>
         a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : CompareIds(a.Item2, b.Item2)));
-    // The same entries hashed, for the lookups (the relation tests make several per pair of characters); the sorted map keeps the hash and save
-    // order.
+    /// <summary>
+    /// The same entries hashed, for the lookups (the relation tests make several per pair of characters); the sorted map keeps the hash and
+    /// save order.
+    /// </summary>
     readonly Dictionary<(int Squad, CharacterId Who), Entry> _index = [];
+    /// <summary>
+    /// Per squad: its entry for the whole player faction (long-term tags and time).
+    /// </summary>
     readonly SortedDictionary<int, Entry> _player = [];
+    /// <summary>
+    /// The squads with the TEMP_ALLY flag for the player.
+    /// </summary>
     readonly SortedSet<int> _tempPlayerAlly = [];
-    // Squads holding a TEMP_ENEMY tag on someone: the aggro scan's gate (a derived index, not hashed).
+    /// <summary>
+    /// Squads holding a TEMP_ENEMY tag on someone: the aggro scan's gate (a derived index, not hashed).
+    /// </summary>
     readonly SortedSet<int> _tempEnemySquads = [];
 
+    /// <summary>
+    /// Whether the memory holds nothing that is hashed.
+    /// </summary>
     public bool IsEmpty => _entries.Count == 0 && _player.Count == 0 && _tempPlayerAlly.Count == 0;
 
+    /// <summary>
+    /// A player character, or a character of the player's faction.
+    /// </summary>
     static bool PlayerSide(World world, CharacterCold c) => c.IsPlayer || (world.Player.Faction >= 0 && c.Faction == world.Player.Faction);
 
     /// <summary>
@@ -253,18 +290,27 @@ public sealed class SquadMemory
         if (data.TempAlly) _tempPlayerAlly.Add(squad);
     }
 
+    /// <summary>
+    /// The squad's own entry for <paramref name="who"/>, made when there is none.
+    /// </summary>
     Entry Own(int squad, CharacterId who)
     {
         if (!_index.TryGetValue((squad, who), out var e)) _entries[(squad, who)] = _index[(squad, who)] = e = new Entry();
         return e;
     }
 
+    /// <summary>
+    /// The entry of <paramref name="key"/> in <paramref name="map"/>, made when there is none.
+    /// </summary>
     static Entry Get<TKey>(SortedDictionary<TKey, Entry> map, TKey key) where TKey : notnull
     {
         if (!map.TryGetValue(key, out var e)) map[key] = e = new Entry();
         return e;
     }
 
+    /// <summary>
+    /// Adds the entries, the player entries and the TEMP_ALLY squads in their sorted order to the world hash; nothing while empty.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (IsEmpty) return;
@@ -295,9 +341,21 @@ public sealed class SquadMemory
 /// </summary>
 public sealed class SquadMemoryData
 {
+    /// <summary>
+    /// One remembered character: its id (none for the player entry), the game hour of the last note and its tag bits.
+    /// </summary>
     public readonly record struct Item(CharacterId Who, double Time, uint Long, uint Short);
 
+    /// <summary>
+    /// An item per remembered character.
+    /// </summary>
     public List<Item> Entries { get; } = [];
+    /// <summary>
+    /// The squad's entry for the whole player faction; null: none.
+    /// </summary>
     public Item? Player { get; set; }
+    /// <summary>
+    /// The squad's TEMP_ALLY flag for the player.
+    /// </summary>
     public bool TempAlly { get; set; }
 }

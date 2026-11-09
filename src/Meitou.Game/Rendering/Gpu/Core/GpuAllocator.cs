@@ -2,6 +2,10 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gpu.Core;
 
+/// <summary>
+/// What memory an allocation needs: device-local, CPU-written uploads or CPU-read readbacks (<see cref="GpuAllocator.Allocate"/> picks the memory
+/// type).
+/// </summary>
 public enum MemoryKind
 {
     /// <summary>
@@ -23,34 +27,85 @@ public enum MemoryKind
 /// </summary>
 public sealed class Allocation
 {
+    /// <summary>
+    /// The block the range is carved from.
+    /// </summary>
     internal MemoryBlock Block = null!;
+    /// <summary>
+    /// Set by the first free; a second free does nothing.
+    /// </summary>
     internal bool Freed;
 
+    /// <summary>
+    /// The block's device memory.
+    /// </summary>
     public DeviceMemory Memory => Block.Memory;
+    /// <summary>
+    /// The range's offset in the block's memory, in bytes.
+    /// </summary>
     public ulong Offset { get; internal set; }
+    /// <summary>
+    /// The range's size in bytes.
+    /// </summary>
     public ulong Size { get; internal set; }
     /// <summary>
     /// The start of this range in host memory (non-zero for host-visible memory).
     /// </summary>
     public IntPtr MappedPointer { get; internal set; }
+    /// <summary>
+    /// The Vulkan memory type of the block.
+    /// </summary>
     public uint MemoryTypeIndex => Block.MemoryTypeIndex;
+    /// <summary>
+    /// Whether the block's memory is host coherent (no flush or invalidate needed).
+    /// </summary>
     public bool IsHostCoherent => Block.Coherent;
 }
 
+/// <summary>
+/// A device memory allocation the allocator carves ranges from: a pooled block or a dedicated one holding one allocation.
+/// </summary>
 internal sealed class MemoryBlock
 {
+    /// <summary>
+    /// The device memory.
+    /// </summary>
     public DeviceMemory Memory;
+    /// <summary>
+    /// The block's size in bytes.
+    /// </summary>
     public ulong Size;
+    /// <summary>
+    /// The persistently mapped host address; 0 for memory that is not host visible.
+    /// </summary>
     public IntPtr Mapped;
+    /// <summary>
+    /// The Vulkan memory type.
+    /// </summary>
     public uint MemoryTypeIndex;
+    /// <summary>
+    /// Holds optimal-tiling images (else buffers and linear images), kept apart for bufferImageGranularity.
+    /// </summary>
     public bool Optimal;
     /// <summary>
     /// The size of every allocation in it, for a block of streamed textures (<see cref="PoolKey.Slot"/>); 0 for the others.
     /// </summary>
     public ulong Slot;
+    /// <summary>
+    /// Holds one allocation of its own (above half a block, or a streamed texture with memory of its own).
+    /// </summary>
     public bool Dedicated;
+    /// <summary>
+    /// Whether the memory is host coherent.
+    /// </summary>
     public bool Coherent;
+    /// <summary>
+    /// Bytes carved out of the block.
+    /// </summary>
     public ulong Used;
+    /// <summary>
+    /// The free ranges, sorted by offset, neighbours coalesced (<see cref="GpuAllocator.InsertFree"/>).
+    /// </summary>
     public readonly List<(ulong Offset, ulong Size)> Free = new();
 }
 
@@ -66,17 +121,38 @@ readonly record struct PoolKey(uint Type, bool Optimal, ulong Slot);
 /// </summary>
 public readonly record struct BlockInfo(uint MemoryTypeIndex, bool Optimal, bool Dedicated, ulong Size, ulong Used, int FreeRanges);
 
+/// <summary>
+/// A buffer bound to memory from the allocator. Free it through <see cref="GpuAllocator.Free(BufferAllocation)"/>.
+/// </summary>
 public sealed class BufferAllocation
 {
+    /// <summary>
+    /// Set by the first free; a second free does nothing.
+    /// </summary>
     internal bool Freed;
+    /// <summary>
+    /// The Vulkan buffer.
+    /// </summary>
     public Silk.NET.Vulkan.Buffer Buffer { get; internal set; }
+    /// <summary>
+    /// The memory range the buffer is bound to.
+    /// </summary>
     public Allocation Allocation { get; internal set; } = null!;
+    /// <summary>
+    /// The buffer's size in bytes as asked for.
+    /// </summary>
     public ulong Size { get; internal set; }
+    /// <summary>
+    /// The usage flags the buffer was made with.
+    /// </summary>
     public BufferUsageFlags Usage { get; internal set; }
     /// <summary>
     /// The name given at creation (diagnostics: <see cref="GpuAllocator.Breakdown"/>).
     /// </summary>
     public string Name { get; internal set; } = "";
+    /// <summary>
+    /// The kind of memory the buffer was asked with.
+    /// </summary>
     public MemoryKind Kind { get; internal set; }
     /// <summary>
     /// Host pointer to the start of the buffer (null for device-local memory).
@@ -92,18 +168,54 @@ public sealed class BufferAllocation
     public GpuBuffer Handle => new(Index, Size);
 }
 
+/// <summary>
+/// An image bound to memory from the allocator. Free it through <see cref="GpuAllocator.Free(ImageAllocation)"/>.
+/// </summary>
 public sealed class ImageAllocation
 {
+    /// <summary>
+    /// Set by the first free; a second free does nothing.
+    /// </summary>
     internal bool Freed;
+    /// <summary>
+    /// The Vulkan image.
+    /// </summary>
     public Image Image { get; internal set; }
+    /// <summary>
+    /// The memory range the image is bound to.
+    /// </summary>
     public Allocation Allocation { get; internal set; } = null!;
+    /// <summary>
+    /// The image's format.
+    /// </summary>
     public Format Format { get; internal set; }
+    /// <summary>
+    /// The image's size in texels.
+    /// </summary>
     public Extent3D Extent { get; internal set; }
+    /// <summary>
+    /// The image's mip levels.
+    /// </summary>
     public uint MipLevels { get; internal set; }
+    /// <summary>
+    /// The image's array layers.
+    /// </summary>
     public uint ArrayLayers { get; internal set; }
+    /// <summary>
+    /// The image's sample count.
+    /// </summary>
     public SampleCountFlags Samples { get; internal set; }
+    /// <summary>
+    /// The usage flags the image was made with.
+    /// </summary>
     public ImageUsageFlags Usage { get; internal set; }
+    /// <summary>
+    /// The name given at creation (diagnostics: <see cref="GpuAllocator.Breakdown"/>).
+    /// </summary>
     public string Name { get; internal set; } = "";
+    /// <summary>
+    /// The kind of memory the image was asked with.
+    /// </summary>
     public MemoryKind Kind { get; internal set; }
 }
 
@@ -114,29 +226,89 @@ public sealed class ImageAllocation
 /// </summary>
 public sealed unsafe class GpuAllocator : IDisposable
 {
+    /// <summary>
+    /// The default block size: 64 MB.
+    /// </summary>
     public const ulong DefaultBlockSize = 64UL * 1024 * 1024;
+    /// <summary>
+    /// The smallest device-local host-visible heap counted as resizable BAR (1 GB).
+    /// </summary>
     const ulong RebarMinHeap = 1UL << 30;
+    /// <summary>
+    /// The largest upload request put in resizable-BAR memory (16 MB).
+    /// </summary>
     const ulong RebarMaxRequest = 16UL << 20;
 
+    /// <summary>
+    /// The device the memory is allocated on.
+    /// </summary>
     readonly VulkanDevice _dev;
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     readonly Vk _vk;
+    /// <summary>
+    /// The size of a pooled block in bytes.
+    /// </summary>
     readonly ulong _blockSize;
+    /// <summary>
+    /// Guards the pools, the totals and the live sets.
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// The blocks of each pool.
+    /// </summary>
     readonly Dictionary<PoolKey, List<MemoryBlock>> _pools = new();
+    /// <summary>
+    /// The buffers not yet freed (diagnostics and teardown).
+    /// </summary>
     readonly HashSet<BufferAllocation> _liveBuffers = new();
+    /// <summary>
+    /// The images not yet freed (diagnostics and teardown).
+    /// </summary>
     readonly HashSet<ImageAllocation> _liveImages = new();
+    /// <summary>
+    /// The physical device's memory types and heaps.
+    /// </summary>
     PhysicalDeviceMemoryProperties _memProps;
+    /// <summary>
+    /// Bytes of device memory held in blocks.
+    /// </summary>
     ulong _totalAllocated;
+    /// <summary>
+    /// Bytes carved out of blocks.
+    /// </summary>
     ulong _totalUsed;
+    /// <summary>
+    /// Blocks held.
+    /// </summary>
     int _blockCount;
+    /// <summary>
+    /// Allocations not yet freed.
+    /// </summary>
     int _allocationCount;
+    /// <summary>
+    /// Set by the first <see cref="Dispose"/>.
+    /// </summary>
     bool _disposed;
+    /// <summary>
+    /// Backs <see cref="Lean"/>.
+    /// </summary>
+    volatile bool _lean;
 
-    // A pool that keeps needing new blocks gets one made ahead on a worker (a spare), and blocks that empty out are given back to the driver
-    // on a worker: vkAllocateMemory of 64 MB takes 0.3 to 1 ms and sometimes 10 to 50, vkFreeMemory 0.5 to 5 and sometimes 30, and neither
-    // belongs on the render thread (2026-10-10, docs/renderer-native.md "Upload steps").
+    /// <summary>
+    /// The spare block made ahead for each pool. A pool that keeps needing new blocks gets one made ahead on a worker (a spare), and blocks that
+    /// empty out are given back to the driver on a worker: vkAllocateMemory of 64 MB takes 0.3 to 1 ms and sometimes 10 to 50, vkFreeMemory 0.5 to 5
+    /// and sometimes 30, and neither belongs on the render thread (2026-10-10, docs/renderer-native.md "Upload steps").
+    /// </summary>
     readonly Dictionary<PoolKey, MemoryBlock> _spares = new();
+    /// <summary>
+    /// The pools whose spare is being made on a worker now.
+    /// </summary>
     readonly HashSet<PoolKey> _sparing = new();
+    /// <summary>
+    /// How many new blocks each pool has needed (spares start at <see cref="SpareAfterMisses"/>).
+    /// </summary>
     readonly Dictionary<PoolKey, int> _misses = new();
     /// <summary>
     /// Spares being made and blocks being given back on workers.
@@ -147,6 +319,9 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     const int SpareAfterMisses = 2;
 
+    /// <summary>
+    /// An allocator on the device's physical memory properties, with blocks of <paramref name="blockSize"/> bytes.
+    /// </summary>
     internal GpuAllocator(VulkanDevice dev, ulong blockSize = DefaultBlockSize)
     {
         this._dev = dev;
@@ -155,6 +330,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         _vk.GetPhysicalDeviceMemoryProperties(dev.PhysicalDevice, out _memProps);
     }
 
+    /// <summary>
+    /// The size of a pooled block in bytes.
+    /// </summary>
     public ulong BlockSize => _blockSize;
     /// <summary>
     /// Bytes of device memory held in blocks.
@@ -164,7 +342,13 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// Bytes handed out to allocations.
     /// </summary>
     public ulong TotalUsedBytes { get { lock (_gate) return _totalUsed; } }
+    /// <summary>
+    /// Blocks held.
+    /// </summary>
     public int BlockCount { get { lock (_gate) return _blockCount; } }
+    /// <summary>
+    /// Allocations not yet freed.
+    /// </summary>
     public int AllocationCount { get { lock (_gate) return _allocationCount; } }
     /// <summary>
     /// Blocks made ahead on a worker for pools that keep growing (counted in <see cref="BlockCount"/> and <see cref="TotalAllocatedBytes"/>, not in
@@ -251,6 +435,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         foreach (var (_, _, line) in blocks.OrderBy(b => b.Type).ThenByDescending(b => b.Size)) w.WriteLine(line);
     }
 
+    /// <summary>
+    /// Bytes to MB (2^20).
+    /// </summary>
     static double Mb(ulong bytes) => bytes / 1048576.0;
 
     /// <summary>
@@ -352,8 +539,10 @@ public sealed unsafe class GpuAllocator : IDisposable
             if (value) Trim();
         }
     }
-    volatile bool _lean;
 
+    /// <summary>
+    /// The blocks of every pool (spares not included), for tests and diagnostics.
+    /// </summary>
     public List<BlockInfo> GetBlocks()
     {
         lock (_gate)
@@ -374,6 +563,9 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     #region Memory type choice
 
+    /// <summary>
+    /// A memory type counts as resizable BAR: device-local, host visible and coherent, on a heap of at least <see cref="RebarMinHeap"/>.
+    /// </summary>
     bool IsRebarType(uint i)
     {
         var t = _memProps.MemoryTypes[(int)i];
@@ -381,6 +573,10 @@ public sealed unsafe class GpuAllocator : IDisposable
         return (t.PropertyFlags & f) == f && _memProps.MemoryHeaps[(int)t.HeapIndex].Size >= RebarMinHeap;
     }
 
+    /// <summary>
+    /// The memory types of <paramref name="typeBits"/> that suit the kind, best first: device-local prefers types not host visible; uploads prefer
+    /// device-local coherent memory (resizable BAR for small requests); readbacks prefer cached, then coherent, then system memory.
+    /// </summary>
     List<uint> Candidates(uint typeBits, MemoryKind kind, ulong size)
     {
         var scored = new List<(int Score, uint Index)>();
@@ -437,6 +633,19 @@ public sealed unsafe class GpuAllocator : IDisposable
     #region Allocation
 
     /// <summary>
+    /// A streamed texture from this size up gets memory of its own when made on a worker (<see cref="Allocate"/>).
+    /// </summary>
+    public const ulong OwnMemoryBytes = 4UL << 20;
+    /// <summary>
+    /// A streamed slot's size is rounded up to this; a block of slots holds about <see cref="SlotBlockBytes"/> of them (one at least).
+    /// </summary>
+    const ulong SlotGranule = 64UL << 10, SlotBlockBytes = 16UL << 20;
+    /// <summary>
+    /// Backs <see cref="Failures"/>.
+    /// </summary>
+    int _failures;
+
+    /// <summary>
     /// Allocates memory for a resource. <paramref name="optimal"/>: optimal-tiling image (else buffer / linear image). <paramref name="streamed"/>: a
     /// streamed texture: from <see cref="OwnMemoryBytes"/> up, when <paramref name="ownMemory"/> (the caller is a worker, where a slow
     /// vkAllocateMemory costs no frame), memory of its own, given back the moment it is freed; else a slot in a pool of its size
@@ -486,7 +695,6 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// Allocations the driver refused after every retry (the VRAM guard enters pressure when it sees one).
     /// </summary>
     public int Failures => Volatile.Read(ref _failures);
-    int _failures;
 
     /// <summary>
     /// Whether a buffer of <paramref name="size"/> bytes in device-local memory would be carved from free space in blocks the driver already
@@ -516,14 +724,9 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     /// <summary>
-    /// A streamed texture from this size up gets memory of its own when made on a worker (<see cref="Allocate"/>).
+    /// Carves an allocation from a pool of the memory type: the best fit in its blocks (the fullest block for streamed slots), else its spare, else a
+    /// new block made outside the lock; a dedicated block for a large or own-memory request.
     /// </summary>
-    public const ulong OwnMemoryBytes = 4UL << 20;
-    /// <summary>
-    /// A streamed slot's size is rounded up to this; a block of slots holds about <see cref="SlotBlockBytes"/> of them (one at least).
-    /// </summary>
-    const ulong SlotGranule = 64UL << 10, SlotBlockBytes = 16UL << 20;
-
     Allocation AllocateFrom(uint type, ulong size, ulong alignment, bool optimal, bool streamed, bool ownMemory)
     {
         bool dedicated = size > _blockSize / 2 || streamed && ownMemory && size >= OwnMemoryBytes;
@@ -715,6 +918,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Takes a range out of a block's free list (the whole block when dedicated) and counts it.
+    /// </summary>
     Allocation Carve(MemoryBlock block, int freeIndex, ulong offset, ulong size)
     {
         if (block.Dedicated)
@@ -891,6 +1097,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         }, null);
     }
 
+    /// <summary>
+    /// Puts a range back in a block's sorted free list, coalescing it with its neighbours.
+    /// </summary>
     static void InsertFree(MemoryBlock b, ulong offset, ulong size)
     {
         var f = b.Free;
@@ -927,8 +1136,14 @@ public sealed unsafe class GpuAllocator : IDisposable
         _blockCount--;
     }
 
+    /// <summary>
+    /// The pool a block belongs to.
+    /// </summary>
     static PoolKey Key(MemoryBlock b) => new(b.MemoryTypeIndex, b.Optimal, b.Slot);
 
+    /// <summary>
+    /// <paramref name="v"/> rounded up to a multiple of <paramref name="a"/>.
+    /// </summary>
     static ulong AlignUp(ulong v, ulong a) => (v + a - 1) / a * a;
 
     /// <summary>
@@ -941,6 +1156,9 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     public void Invalidate(Allocation a, ulong offset = 0, ulong size = Vk.WholeSize) => Range(a, offset, size, true);
 
+    /// <summary>
+    /// Flushes or invalidates a range of non-coherent mapped memory, widened to the device's non-coherent atom size.
+    /// </summary>
     void Range(Allocation a, ulong offset, ulong size, bool invalidate)
     {
         if (a.Block.Coherent || a.Block.Mapped == 0)
@@ -975,6 +1193,9 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     #region Buffers and images
 
+    /// <summary>
+    /// A new buffer bound to new memory (mapped when host visible) and registered with the device. Any thread.
+    /// </summary>
     public BufferAllocation CreateBuffer(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name = null)
     {
         long profileStart = UploadProfile.Begin();
@@ -989,6 +1210,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the buffer, allocates and binds its memory, registers it with the device and names it.
+    /// </summary>
     BufferAllocation CreateBufferCore(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name)
     {
         var info = new BufferCreateInfo
@@ -1055,6 +1279,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the image, allocates and binds its memory and tracks it as live.
+    /// </summary>
     ImageAllocation CreateImageCore(in ImageCreateInfo info, MemoryKind kind, string? name, bool streamed, bool ownMemory)
     {
         VulkanException.Check(_vk.CreateImage(_dev.Device, in info, null, out var image), "vkCreateImage");
@@ -1135,6 +1362,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         UploadProfile.End(UploadProfile.Part.FreeBuffer, profileStart);
     }
 
+    /// <summary>
+    /// Destroys an image and frees its memory; null or a second free does nothing.
+    /// </summary>
     public void Free(ImageAllocation? i)
     {
         if (i == null)

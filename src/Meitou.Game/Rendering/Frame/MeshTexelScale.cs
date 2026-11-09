@@ -12,10 +12,25 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 static class MeshTexelScale
 {
+    /// <summary>
+    /// The histogram's resolution and range: 4 buckets per octave of texture stretch, from 2^-10 to 2^24 world units per texture unit.
+    /// </summary>
     const int PerOctave = 4, MinOctave = -10, MaxOctave = 24;
+
+    /// <summary>
+    /// The histogram's bucket count; one more bucket past it holds stretches beyond the range and collapsed mappings.
+    /// </summary>
     const int Buckets = (MaxOctave - MinOctave) * PerOctave;
+
+    /// <summary>
+    /// The share of the part's world area that may exceed the returned value (0.5%).
+    /// </summary>
     const double TopShare = 0.005;
 
+    /// <summary>
+    /// The world length one unit of texture coordinate spans in <paramref name="part"/>, the upper edge of the bucket the top 0.5% of its area
+    /// exceeds; infinity for a part without texture coordinates or triangles, or with more than 0.5% of its area collapsed.
+    /// </summary>
     public static float Of(ModelPart part)
     {
         if (!part.HasUv || part.Indices.Length < 3) return float.PositiveInfinity;

@@ -8,7 +8,66 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public enum AttachSlot
 {
-    Weapon, Back, Hair, Hat, Eyes, Body, Legs, None, Shirt, Boots, Gloves, Neck, Backpack, Beard, Belt,
+    /// <summary>
+    /// <c>ATTACH_WEAPON</c>. Also the slot Meitou gives carried weapons and crossbows.
+    /// </summary>
+    Weapon,
+    /// <summary>
+    /// <c>ATTACH_BACK</c>.
+    /// </summary>
+    Back,
+    /// <summary>
+    /// <c>ATTACH_HAIR</c>. The default of an ATTACHMENT without an <c>attach slot</c>; the race's <c>hairs</c> in it are hair styles.
+    /// </summary>
+    Hair,
+    /// <summary>
+    /// <c>ATTACH_HAT</c>. A worn hat hides the hair unless its <c>hide hair</c> is false.
+    /// </summary>
+    Hat,
+    /// <summary>
+    /// <c>ATTACH_EYES</c>.
+    /// </summary>
+    Eyes,
+    /// <summary>
+    /// <c>ATTACH_BODY</c>. The default of an ARMOUR without a <c>slot</c>.
+    /// </summary>
+    Body,
+    /// <summary>
+    /// <c>ATTACH_LEGS</c>.
+    /// </summary>
+    Legs,
+    /// <summary>
+    /// <c>ATTACH_NONE</c>.
+    /// </summary>
+    None,
+    /// <summary>
+    /// <c>ATTACH_SHIRT</c>.
+    /// </summary>
+    Shirt,
+    /// <summary>
+    /// <c>ATTACH_BOOTS</c>.
+    /// </summary>
+    Boots,
+    /// <summary>
+    /// <c>ATTACH_GLOVES</c>.
+    /// </summary>
+    Gloves,
+    /// <summary>
+    /// <c>ATTACH_NECK</c>.
+    /// </summary>
+    Neck,
+    /// <summary>
+    /// <c>ATTACH_BACKPACK</c>.
+    /// </summary>
+    Backpack,
+    /// <summary>
+    /// <c>ATTACH_BEARD</c>. The race's <c>hairs</c> in it are beards.
+    /// </summary>
+    Beard,
+    /// <summary>
+    /// <c>ATTACH_BELT</c>.
+    /// </summary>
+    Belt,
 }
 
 /// <summary>
@@ -31,46 +90,67 @@ public enum AttachMode
 /// </summary>
 public sealed record CharacterPart
 {
+    /// <summary>
+    /// The record the mesh belongs to (the ARMOUR, ATTACHMENT, WEAPON, LIMB_REPLACEMENT, ...).
+    /// </summary>
     public required GameRecord Record { get; init; }
+
     /// <summary>
     /// FCS file name of the mesh (as stored, e.g. <c>.\data\items\...\x.mesh</c>); the game reduces it to the bare name.
     /// </summary>
     public required string Mesh { get; init; }
+
     /// <summary>
     /// The record field the mesh came from (<c>mesh</c>, <c>mesh female</c>, <c>bare sword</c>, ...).
     /// </summary>
     public required string Field { get; init; }
+
+    /// <summary>
+    /// How the mesh joins the body: skinned with its skeleton, or attached to a bone.
+    /// </summary>
     public required AttachMode Mode { get; init; }
+
+    /// <summary>
+    /// The item's slot (ARMOUR <c>slot</c>; <see cref="AttachSlot.Weapon"/> for weapons); null when it has none.
+    /// </summary>
     public AttachSlot? Slot { get; init; }
+
     /// <summary>
     /// For <see cref="AttachMode.Bone"/>: the attachment point name (<c>hands</c>, <c>hip</c>, <c>back</c>, <c>back2</c>).
     /// </summary>
     public string? Point { get; init; }
+
     /// <summary>
     /// Added to the attachment point's position, in the bone's frame: a carried crossbow's <c>equip offset</c> along z.
     /// </summary>
     public Vector3 PointOffset { get; init; }
+
     /// <summary>
     /// The part's own placement in the item it belongs to, before the attachment point's (a loaded bolt in its crossbow); null: none.
     /// </summary>
     public Matrix4x4? Local { get; init; }
+
     /// <summary>
     /// When the part shows by the bolts loaded in its crossbow: 0 always; n &gt; 0 while at least n are (the loaded string with 1, bolt n - 1); -1
     /// while none is (the unloaded string).
     /// </summary>
     public int ShownShots { get; init; }
+
     /// <summary>
     /// The material the item was made with, if chosen (MATERIAL_SPECS_CLOTHING of clothing, MATERIAL_SPECS_WEAPON model of a weapon).
     /// </summary>
     public GameRecord? Material { get; init; }
+
     /// <summary>
     /// The COLOR_DATA a worn item is dyed with (<see cref="Gameplay.ItemColours.Shown"/>); null: undyed.
     /// </summary>
     public GameRecord? Colour { get; init; }
+
     /// <summary>
     /// When the part shows: always, or only while the weapon in hand is sheathed or drawn (the first weapon's meshes).
     /// </summary>
     public WeaponShown Shown { get; init; }
+
     /// <summary>
     /// Boots over one prosthetic leg (<c>AppearanceBase_SetupItemMaterial</c>, <c>COLLAPSE_SIDE</c>): 1 collapses the mesh's x &gt;= 0 half (the left
     /// leg's), 2 its x &lt; 0 half; 0 none.
@@ -83,7 +163,37 @@ public sealed record CharacterPart
 /// crossbow is in the hands (shooting) or not (on the back); the same for the back melee weapon (which of the two is drawn goes by the arms,
 /// docs/game/combat.md "Arms").
 /// </summary>
-public enum WeaponShown : byte { Always, Sheathed, Drawn, RangedSheathed, RangedDrawn, BackSheathed, BackDrawn }
+public enum WeaponShown : byte
+{
+    /// <summary>
+    /// Always shown.
+    /// </summary>
+    Always,
+    /// <summary>
+    /// While the hip melee weapon is sheathed, also while the crossbow or the back weapon is out.
+    /// </summary>
+    Sheathed,
+    /// <summary>
+    /// While the hip melee weapon is drawn.
+    /// </summary>
+    Drawn,
+    /// <summary>
+    /// While the crossbow is not in the hands (on the back).
+    /// </summary>
+    RangedSheathed,
+    /// <summary>
+    /// While the crossbow is in the hands (shooting).
+    /// </summary>
+    RangedDrawn,
+    /// <summary>
+    /// While the back melee weapon is sheathed.
+    /// </summary>
+    BackSheathed,
+    /// <summary>
+    /// While the back melee weapon is drawn.
+    /// </summary>
+    BackDrawn
+}
 
 /// <summary>
 /// A clothing texture layered onto the body (ARMOUR <c>vest texture</c>; character.hlsl "vest"), dyed with <paramref name="Colour"/> as the item's
@@ -105,30 +215,37 @@ public sealed record CharacterOptions
     /// Force the gender; null = from the body file, else CHARACTER <c>female chance</c> ≥ 50.
     /// </summary>
     public bool? Female { get; init; }
+
     /// <summary>
     /// Extra items (record name or string id): ARMOUR / ATTACHMENT / CONTAINER worn, WEAPON / CROSSBOW attached.
     /// </summary>
     public IReadOnlyList<string> Equip { get; init; } = [];
+
     /// <summary>
     /// Skip the CHARACTER's own clothing and weapons.
     /// </summary>
     public bool Naked { get; init; }
+
     /// <summary>
     /// Draw the first weapon: <c>bare sword</c> in the hand and <c>sheath</c> at the hip, instead of the sheathed <c>mesh</c>.
     /// </summary>
     public bool WeaponDrawn { get; init; }
+
     /// <summary>
     /// Null: always the likeliest choice; otherwise <see cref="CharacterGenerator"/> rolls a <see cref="Loadout"/> with this seed.
     /// </summary>
     public int? Seed { get; init; }
+
     /// <summary>
     /// A rolled character (race, gender, appearance, clothing, weapons); overrides <see cref="Seed"/>.
     /// </summary>
     public Loadout? Loadout { get; init; }
+
     /// <summary>
     /// With <see cref="Seed"/>: the FACTION (name or string id) the character spawns in; default its own <c>faction</c>.
     /// </summary>
     public string? Faction { get; init; }
+
     /// <summary>
     /// With <see cref="Seed"/>: the squad template's <c>race override</c> (RACE references, val0 the weight), which wins over the CHARACTER's
     /// <c>race</c> list when it has any.
@@ -144,19 +261,41 @@ public sealed class CharacterAppearance
 {
     #region Look
 
+    /// <summary>
+    /// The CHARACTER it was built from; null when built from a RACE record or an animal.
+    /// </summary>
     public GameRecord? Character { get; private init; }
+
     /// <summary>
     /// The ANIMAL_CHARACTER this animal was built from (<see cref="BuildAnimal"/>); null for people.
     /// </summary>
     public GameRecord? Animal { get; private init; }
+
+    /// <summary>
+    /// The RACE whose meshes, textures and attachment points it uses.
+    /// </summary>
     public required GameRecord Race { get; init; }
+
+    /// <summary>
+    /// Whether it uses the race's female meshes and textures.
+    /// </summary>
     public bool Female { get; private init; }
+
+    /// <summary>
+    /// Its appearance: the loadout's, else the body file (.bod2) read for it; null when none.
+    /// </summary>
     public AppearanceFile? Body { get; private init; }
+
+    /// <summary>
+    /// The CHARACTER's <c>body</c> path; null when it has none or the loadout was generated.
+    /// </summary>
     public string? BodyFile { get; private init; }
+
     /// <summary>
     /// The rolled character this was built from (with <see cref="CharacterOptions.Seed"/> or <see cref="CharacterOptions.Loadout"/>).
     /// </summary>
     public Loadout? Loadout { get; private init; }
+
     /// <summary>
     /// The FACTION it was made in (the generator's, else the CHARACTER's own <c>faction</c>): its <c>color</c> is the uniform scheme.
     /// </summary>
@@ -166,32 +305,64 @@ public sealed class CharacterAppearance
     /// Race <c>male mesh</c> / <c>female mesh</c>, or CHARACTER <c>mesh</c>.
     /// </summary>
     public string BodyMesh { get; private init; } = "";
+
+    /// <summary>
+    /// Race <c>body texture male</c> / <c>body texture female</c>.
+    /// </summary>
     public string? BodyTexture { get; private init; }
+
+    /// <summary>
+    /// Race <c>nm male</c> / <c>nm female</c>: the body normal map.
+    /// </summary>
     public string? BodyNormal { get; private init; }
+
     /// <summary>
     /// Race <c>nm male strong</c> / <c>nm male skinny</c> (female: <c>nm female ...</c>): the body normal maps a well-defined or a starving body
     /// blends towards.
     /// </summary>
     public string? BodyNormalStrong { get; private init; }
+
+    /// <summary>
+    /// Race <c>nm male skinny</c> / <c>nm female skinny</c> (see <see cref="BodyNormalStrong"/>).
+    /// </summary>
     public string? BodyNormalSkinny { get; private init; }
+
+    /// <summary>
+    /// Race <c>body mask male</c> / <c>body mask female</c>.
+    /// </summary>
     public string? BodyMask { get; private init; }
+
     /// <summary>
     /// Race <c>part map male</c> / <c>part map female</c>: the image whose colours mark the body regions worn items' <c>hide parts</c> hide
     /// (<see cref="HiddenParts"/>).
     /// </summary>
     public string? PartMap { get; private init; }
+
+    /// <summary>
+    /// The head: the body file's, else the race's first (or rolled) <c>heads male</c> / <c>heads female</c>.
+    /// </summary>
     public GameRecord? Head { get; private init; }
+
+    /// <summary>
+    /// The hair ATTACHMENT: the body file's, else rolled from the race; null when shaved, hidden by a hat or the head is cut off.
+    /// </summary>
     public GameRecord? Hair { get; private set; }
+
     /// <summary>
     /// A fixed body shape for a staged character (the Meitou title's wanderer), used instead of <see cref="CharacterShape.InputFor"/>; null in play.
     /// </summary>
     public CharacterShapeInput? Shape { get; set; }
+
+    /// <summary>
+    /// The beard ATTACHMENT from the body file; null when hidden or the head is cut off.
+    /// </summary>
     public GameRecord? Beard { get; private set; }
 
     /// <summary>
     /// Linear RGB multiplier the body shader gets as <c>skintone</c>: 1 − <c>Skin Tone</c> (white = no change).
     /// </summary>
     public Vector3 SkinToneParameter { get; private init; } = Vector3.Zero;
+
     /// <summary>
     /// Hair colour (RGB 0–1) from the body file's HSB sliders, or the race's likeliest hair colour.
     /// </summary>
@@ -201,19 +372,30 @@ public sealed class CharacterAppearance
     /// Visible meshes besides the body, in attach order.
     /// </summary>
     public List<CharacterPart> Parts { get; } = [];
+
+    /// <summary>
+    /// The clothing textures layered onto the body, in attach order.
+    /// </summary>
     public List<BodyLayer> BodyLayers { get; } = [];
+
     /// <summary>
     /// The lanterns it carries (<see cref="CarriedLights"/>): worn clothing, backpacks and belt items, or an animal's backpack.
     /// </summary>
     public List<CarriedLight> Lights { get; } = [];
+
     /// <summary>
     /// Attachment points by name: <c>hands</c> (Bip01 Prop2) plus the race's <c>attachment points</c> file.
     /// </summary>
     public Dictionary<string, AttachmentPoint> AttachmentPoints { get; } = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Pose weights from the body file, keyed by pose name (only non-zero values).
     /// </summary>
     public Dictionary<string, float> PoseWeights { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What the build could not resolve or chose to leave out, as readable lines.
+    /// </summary>
     public List<string> Notes { get; } = [];
 
     /// <summary>
@@ -234,8 +416,8 @@ public sealed class CharacterAppearance
     public bool HeadOnly { get; private set; }
 
     /// <summary>
-    /// The part-map regions the worn ARMOUR hides: the OR of their <c>hide parts</c> (bit per part-map colour, docs/characters.md "Hidden body
-    /// parts").
+    /// The part-map regions the worn ARMOUR hides: the OR of their <c>hide parts</c> (bit per part-map colour, docs/characters.md "Hidden
+    /// body parts").
     /// </summary>
     public int HiddenParts { get; private set; }
 
@@ -359,7 +541,8 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
-    /// Whether the character is female: the options', else the loadout's, the body file's, else the CHARACTER's female chance; a single-gender race is male.
+    /// Whether the character is female: the options', else the loadout's, the body file's, else the CHARACTER's female chance; a single-gender race
+    /// is male.
     /// </summary>
     static bool ResolveFemale(
         CharacterOptions options, Loadout? loadout, AppearanceFile? body, GameRecord? character, GameRecord race, List<string> notes)
@@ -699,9 +882,9 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
-    /// The limbs: the <c>--equip</c> LIMB_REPLACEMENTs in <paramref name="equipped"/>, then <paramref name="loadout"/>'s stumps and prosthetics, each
-    /// dyed by
-    /// <paramref name="dye"/> (record, the item's own colour). Boots (not <c>is locked</c>) over exactly one prosthetic leg lose that leg's half.
+    /// The limbs: the <c>--equip</c> LIMB_REPLACEMENTs in <paramref name="equipped"/>, then <paramref name="loadout"/>'s stumps and prosthetics,
+    /// each dyed by <paramref name="dye"/> (record, the item's own colour). Boots (not <c>is locked</c>) over exactly one prosthetic leg lose that
+    /// leg's half.
     /// </summary>
     void AddLimbParts(GameDatabase db, GameRecord race, bool female, IEnumerable<GameRecord> equipped, Loadout? loadout, Func<GameRecord, GameRecord?,
             GameRecord?> dye)
@@ -721,9 +904,8 @@ public sealed class CharacterAppearance
 
     /// <summary>
     /// The non-natural limbs of <paramref name="limbs"/> (<c>FUN_1400d0190</c>, <c>uses_limb_replacement</c>): a stump shows the race's <c>limb
-    /// replacement</c> entry whose
-    /// <c>slot</c> is 50 + k, a replaced limb its prosthetic (a stump's without one); a crushed limb gets no mesh (the original attaches none for
-    /// state 3) but stays hidden.
+    /// replacement</c> entry whose <c>slot</c> is 50 + k, a replaced limb its prosthetic (a stump's without one); a crushed limb gets no mesh (the
+    /// original attaches none for state 3) but stays hidden.
     /// </summary>
     void AddLimbs(GameDatabase db, GameRecord race, bool female, IReadOnlyList<LoadoutLimb?> limbs, Func<GameRecord, GameRecord?, GameRecord?> dye)
     {

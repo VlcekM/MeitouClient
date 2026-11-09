@@ -14,19 +14,40 @@ namespace Meitou.Game.Host.Cameras;
 /// </summary>
 public sealed class FreeCamera
 {
+    /// <summary>
+    /// The pitch limit, +-1.5 radians as in the viewer.
+    /// </summary>
     const float PitchLimit = 1.5f;
 
+    /// <summary>
+    /// The ground (or sea) height under a point, which the eye keeps above.
+    /// </summary>
     readonly Func<float, float, float> _ground;
+    /// <summary>
+    /// The settings the camera reads (speeds, response, clearance).
+    /// </summary>
     readonly CameraSettings _settings;
 
+    /// <summary>
+    /// A free camera over <paramref name="ground"/>; <paramref name="settings"/> default to a new set.
+    /// </summary>
     public FreeCamera(Func<float, float, float> ground, CameraSettings? settings = null)
     {
         this._ground = ground;
         this._settings = settings ?? new CameraSettings();
     }
 
+    /// <summary>
+    /// The eye.
+    /// </summary>
     public Vector3 Position { get; private set; }
+    /// <summary>
+    /// Units per second; follows the wished direction with an exponential response.
+    /// </summary>
     public Vector3 Velocity { get; private set; }
+    /// <summary>
+    /// Radians; the view's heading (0 looks along -Z), as <see cref="CameraState.Yaw"/>.
+    /// </summary>
     public float Yaw { get; private set; }
     /// <summary>
     /// Radians; positive looks down (the strategy camera's convention).
@@ -37,6 +58,9 @@ public sealed class FreeCamera
     /// </summary>
     public float ReportedDistance { get; set; } = Data.World.KenshiCamera.InitialDistance;
 
+    /// <summary>
+    /// The view direction (unit), from <see cref="Yaw"/> and <see cref="Pitch"/>.
+    /// </summary>
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>
@@ -58,6 +82,9 @@ public sealed class FreeCamera
         KeepAboveGround();
     }
 
+    /// <summary>
+    /// The camera now: the eye looking along <see cref="Forward"/>, its target <see cref="ReportedDistance"/> ahead.
+    /// </summary>
     public CameraState State
     {
         get
@@ -67,6 +94,10 @@ public sealed class FreeCamera
         }
     }
 
+    /// <summary>
+    /// One step of <paramref name="dt"/> seconds: the keys and the mouse drag turn the view, the move keys set the wished velocity (doubled with
+    /// Shift), the eye moves and is kept above the ground.
+    /// </summary>
     public void Update(float dt, ActionState a)
     {
         float turn = (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
@@ -95,6 +126,9 @@ public sealed class FreeCamera
         KeepAboveGround();
     }
 
+    /// <summary>
+    /// Lifts the eye to <see cref="CameraSettings.FreeClearance"/> above the ground under it, ending a fall.
+    /// </summary>
     void KeepAboveGround()
     {
         float min = _ground(Position.X, Position.Z) + _settings.FreeClearance;

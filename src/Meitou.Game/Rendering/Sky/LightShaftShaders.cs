@@ -21,6 +21,9 @@ static class LightShaftShaders
     /// </summary>
     public const int AtlasColumns = 8;
 
+    /// <summary>
+    /// The irradiance cube's level the light shafts read (<see cref="KenshiLighting.IrradianceLevel"/> as a GLSL literal).
+    /// </summary>
     static readonly string IrradianceLevel = KenshiLighting.IrradianceLevel.ToString("0.0##", CultureInfo.InvariantCulture);
 
     /// <summary>
@@ -391,6 +394,7 @@ static class LightShaftShaders
             }
         }
         """;
+
     /// <summary>
     /// The placed fog volumes' shadow (included by <see cref="PostProcessShaders.FogVolumes"/> before <see cref="FogVolumeShaders.Functions"/>, which
     /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, the first pass's third

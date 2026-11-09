@@ -16,25 +16,74 @@ sealed class GamePages(SettingsMenu menu)
 {
     #region Fields
 
+    /// <summary>
+    /// The Main menu transition speed slider (the sky flight's speed from the title).
+    /// </summary>
     readonly Slider _mainMenuTransitionSpeed = new("Main menu transition speed", SkyArrival.MinSpeed, SkyArrival.MaxSpeed,
         () => menu.Config.MainMenuTransitionSpeed, v => menu.Config.MainMenuTransitionSpeed = v, "0.00'x'");
+
+    /// <summary>
+    /// The In-game transition speed slider (the sky flight's speed in play).
+    /// </summary>
     readonly Slider _inGameTransitionSpeed = new("In-game transition speed", SkyArrival.MinSpeed, SkyArrival.MaxSpeed,
         () => menu.Config.InGameTransitionSpeed, v => menu.Config.InGameTransitionSpeed = v, "0.00'x'");
+
+    /// <summary>
+    /// The Character flight time slider, 0.5 to 6 seconds.
+    /// </summary>
     readonly Slider _characterFlightTime = new("Character flight time", 0.5f, 6, () => menu.Config.CharacterFlightSeconds,
         v => menu.Config.CharacterFlightSeconds = v, "0.0' s'");
 
+    /// <summary>
+    /// The camera rotation speed slider, made on first use.
+    /// </summary>
     Slider? _cameraRotateSpeed;
+
+    /// <summary>
+    /// The camera move and zoom speed sliders, made on first use.
+    /// </summary>
     Slider? _cameraMoveSpeed, _cameraZoomSpeed;
+
+    /// <summary>
+    /// The audio sliders, made on first use.
+    /// </summary>
     Slider[]? _audioSliders;
+
+    /// <summary>
+    /// The gameplay multiplier sliders, made on first use.
+    /// </summary>
     Slider[]? _gameplaySliders;
+
+    /// <summary>
+    /// The auto save time slider, made on first use.
+    /// </summary>
     Slider? _autoSaveSlider;
+
+    /// <summary>
+    /// The attackers per target slider, made on first use.
+    /// </summary>
     Slider? _attackSlotsSlider;
+
+    /// <summary>
+    /// The harpoon limit slider, made on first use.
+    /// </summary>
     Slider? _harpoonLimitSlider;
+
+    /// <summary>
+    /// The fast and fastest speed sliders, made on first use.
+    /// </summary>
     Slider? _fastSpeedSlider, _fastestSpeedSlider;
+
+    /// <summary>
+    /// The dropped items kept slider, made on first use.
+    /// </summary>
     Slider? _groundItemsSlider;
 
     #endregion
 
+    /// <summary>
+    /// The camera rotation speed slider, in half steps; a change goes to <see cref="SettingsMenu.CameraRotateSpeedChanged"/>.
+    /// </summary>
     internal Slider CameraRotateSpeed => _cameraRotateSpeed ??= new("Camera rotation speed", UserConfig.MinCameraRotateSpeed,
         UserConfig.MaxCameraRotateSpeed, () => menu.Config.CameraRotateSpeed,
         v =>
@@ -44,14 +93,24 @@ sealed class GamePages(SettingsMenu menu)
         },
         "0.#", Faithful: Data.World.KenshiCamera.DefaultRotateSpeed);
 
+    /// <summary>
+    /// The camera move speed slider (the game's default when unset).
+    /// </summary>
     Slider CameraMoveSpeed => _cameraMoveSpeed ??= CameraSpeedSlider("Camera move speed", UserConfig.MinCameraMoveSpeed,
         UserConfig.MaxCameraMoveSpeed, () => menu.Config.CameraMoveSpeed ?? Data.World.KenshiCamera.DefaultMoveSpeed,
         v => menu.Config.CameraMoveSpeed = v, Data.World.KenshiCamera.DefaultMoveSpeed);
 
+    /// <summary>
+    /// The camera zoom speed slider (the game's default when unset).
+    /// </summary>
     Slider CameraZoomSpeed => _cameraZoomSpeed ??= CameraSpeedSlider("Camera zoom speed", UserConfig.MinCameraZoomSpeed,
         UserConfig.MaxCameraZoomSpeed, () => menu.Config.CameraZoomSpeed ?? Data.World.KenshiCamera.DefaultZoomSpeed,
         v => menu.Config.CameraZoomSpeed = v, Data.World.KenshiCamera.DefaultZoomSpeed);
 
+    /// <summary>
+    /// A camera speed slider in whole steps, marked at the game's <paramref name="original"/>; a change goes to <see
+    /// cref="SettingsMenu.CameraChanged"/>.
+    /// </summary>
     Slider CameraSpeedSlider(string label, float min, float max, Func<float> get, Action<float> set, float original) =>
         new(label, min, max, get,
             v =>
@@ -118,21 +177,33 @@ sealed class GamePages(SettingsMenu menu)
             (g, v) => g with { RaidFrequency = v }),
     ];
 
+    /// <summary>
+    /// A gameplay multiplier slider in steps of 0.05, marked at 1 (the game's); a change saves through <see cref="SetGameplay"/>.
+    /// </summary>
     Slider Multiplier(string label, float min, float max, Func<GameplaySettings, float> get, Func<GameplaySettings, float, GameplaySettings> set) =>
         new(label, min, max, () => get(menu.Config.Gameplay ??= new()),
             v => SetGameplay(set(menu.Config.Gameplay ?? new(), Math.Clamp(MathF.Round(v * 20) / 20, min, max))),
             "0.##", Faithful: 1);
 
+    /// <summary>
+    /// The auto save time slider, whole minutes, marked at the game's 10.
+    /// </summary>
     Slider AutoSaveSlider => _autoSaveSlider ??= new("Auto save time (minutes)", GameplaySettings.MinAutoSaveMinutes,
         GameplaySettings.MaxAutoSaveMinutes, () => (menu.Config.Gameplay ??= new()).AutoSaveMinutes,
         v => SetGameplay((menu.Config.Gameplay ?? new()) with { AutoSaveMinutes = MathF.Round(v) }), "0", Text: v => $"{v:0} min", Faithful: 10);
 
+    /// <summary>
+    /// Sets the gameplay settings and calls <see cref="SettingsMenu.GameplayChanged"/>.
+    /// </summary>
     internal void SetGameplay(GameplaySettings value)
     {
         menu.Config.Gameplay = value;
         menu.GameplayChanged?.Invoke();
     }
 
+    /// <summary>
+    /// A volume slider 0..1 shown as a percentage, marked at the game's 0.5; a change calls <see cref="SettingsMenu.AudioChanged"/>.
+    /// </summary>
     Slider Volume(string label, Func<AudioSettings, float> get, Func<AudioSettings, float, AudioSettings> set) =>
         new(label, 0, 1, () => get(menu.Config.Audio ??= new()),
             v =>
@@ -142,12 +213,18 @@ sealed class GamePages(SettingsMenu menu)
             },
             "0.00", Text: v => $"{v * 100:0}%", Faithful: 0.5f, Scale: 100);
 
+    /// <summary>
+    /// The attackers per target slider, 1 to 5; a change goes to <see cref="SettingsMenu.AttackSlotsChanged"/>.
+    /// </summary>
     internal Slider AttackSlotsSlider => _attackSlotsSlider ??= new("Attackers per target", 1, 5, () => menu.Config.AttackSlots, v =>
     {
         menu.Config.AttackSlots = Math.Clamp((int)MathF.Round(v), 1, 5);
         menu.AttackSlotsChanged?.Invoke(menu.Config.AttackSlotsOption);
     }, "0", Faithful: UserConfig.FaithfulAttackSlots, Meitou: UserConfig.MeitouAttackSlots);
 
+    /// <summary>
+    /// The harpoon limit slider (logarithmic, whole counts), marked at the game's default.
+    /// </summary>
     Slider HarpoonLimitSlider => _harpoonLimitSlider ??= new("Harpoon limit", Simulation.Combat.RangedTuning.MinStuckLimit,
         Simulation.Combat.RangedTuning.MaxStuckLimit, () => (menu.Config.Gameplay ??= new()).HarpoonLimit,
         v => SetGameplay((menu.Config.Gameplay ?? new()) with { HarpoonLimit = ClampHarpoonLimit(v) }), "0", Logarithmic: true,
@@ -159,9 +236,15 @@ sealed class GamePages(SettingsMenu menu)
     static int ClampHarpoonLimit(float v) =>
         Math.Clamp((int)MathF.Round(v), Simulation.Combat.RangedTuning.MinStuckLimit, Simulation.Combat.RangedTuning.MaxStuckLimit);
 
+    /// <summary>
+    /// The fast speed slider, in half steps, marked at the game's default.
+    /// </summary>
     Slider FastSpeedSlider => _fastSpeedSlider ??= TimeSpeed("Fast speed", SimulationClock.MinFastSpeed, SimulationClock.MaxFastSpeed, 1,
         () => menu.Config.FastSpeed, v => menu.Config.FastSpeed = v);
 
+    /// <summary>
+    /// The fastest speed slider, in half steps, marked at the game's default.
+    /// </summary>
     Slider FastestSpeedSlider => _fastestSpeedSlider ??= TimeSpeed("Fastest speed", SimulationClock.MinFastestSpeed,
         SimulationClock.MaxFastestSpeed, 2, () => menu.Config.FastestSpeed, v => menu.Config.FastestSpeed = v);
 
@@ -177,6 +260,9 @@ sealed class GamePages(SettingsMenu menu)
             },
             "0.#", Text: v => $"{v:0.#}x", Faithful: (float)SimulationClock.DefaultSpeeds[step]);
 
+    /// <summary>
+    /// The dropped items kept slider (logarithmic), marked at Meitou's default.
+    /// </summary>
     Slider GroundItemsSlider => _groundItemsSlider ??= new("Dropped items kept", 16, Simulation.Items.GroundItems.MaxLimit,
         () => menu.Config.GroundItemLimit,
         v => menu.Config.GroundItemLimit = Math.Clamp((int)MathF.Round(v), 1, Simulation.Items.GroundItems.MaxLimit), "0", Logarithmic: true,

@@ -7,18 +7,57 @@ namespace Meitou.Game.Rendering.Gpu;
 [Flags]
 public enum Access
 {
+    /// <summary>
+    /// No access.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// Written as a colour attachment.
+    /// </summary>
     ColourTarget = 1,
+    /// <summary>
+    /// Written (and tested) as a depth attachment.
+    /// </summary>
     DepthTarget = 2,
+    /// <summary>
+    /// Read as a depth attachment (tested, not written).
+    /// </summary>
     DepthRead = 4,
+    /// <summary>
+    /// Sampled by shaders.
+    /// </summary>
     Sampled = 8,
+    /// <summary>
+    /// Read as storage by shaders.
+    /// </summary>
     StorageRead = 16,
+    /// <summary>
+    /// Written as storage by shaders.
+    /// </summary>
     StorageWrite = 32,
+    /// <summary>
+    /// Copied from.
+    /// </summary>
     TransferSrc = 64,
+    /// <summary>
+    /// Copied into.
+    /// </summary>
     TransferDst = 128,
+    /// <summary>
+    /// Read as indirect draw or dispatch arguments.
+    /// </summary>
     IndirectRead = 256,
+    /// <summary>
+    /// Read as vertex attributes or indices.
+    /// </summary>
     VertexRead = 512,
+    /// <summary>
+    /// Read as a uniform buffer.
+    /// </summary>
     UniformRead = 1024,
+    /// <summary>
+    /// Presented.
+    /// </summary>
     Present = 2048,
 
     /// <summary>
@@ -56,6 +95,9 @@ public readonly record struct GpuDependency(Access From, Access To)
 /// </summary>
 public sealed class ResourceStates
 {
+    /// <summary>
+    /// The last access of each resource, by reference.
+    /// </summary>
     readonly Dictionary<object, Access> _last = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
@@ -100,6 +142,9 @@ public sealed class ResourceStates
     /// </summary>
     public void AssumeFullBarrier() => _last.Clear();
 
+    /// <summary>
+    /// The resources tracked now (since the last full barrier).
+    /// </summary>
     public int Tracked => _last.Count;
 }
 
@@ -109,8 +154,14 @@ public sealed class ResourceStates
 /// </summary>
 public readonly ref struct GpuPass
 {
+    /// <summary>
+    /// The list the pass's label is on.
+    /// </summary>
     readonly IGpuCommandList _cmd;
 
+    /// <summary>
+    /// Records the barrier for the pass's uses and opens its debug label.
+    /// </summary>
     public GpuPass(GpuFrame frame, IGpuCommandList cmd, string label, ReadOnlySpan<PassUse> uses)
     {
         this._cmd = cmd;
@@ -118,5 +169,8 @@ public readonly ref struct GpuPass
         cmd.BeginLabel(label);
     }
 
+    /// <summary>
+    /// Closes the pass's debug label.
+    /// </summary>
     public void Dispose() => _cmd.EndLabel();
 }

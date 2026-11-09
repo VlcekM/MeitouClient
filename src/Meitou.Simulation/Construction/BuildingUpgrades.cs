@@ -10,6 +10,9 @@ namespace Meitou.Simulation.Construction;
 /// </summary>
 public static class BuildingUpgrades
 {
+    /// <summary>
+    /// The downgrade map of each database (built once, by <see cref="Build"/>).
+    /// </summary>
     static readonly ConditionalWeakTable<GameDatabase, Dictionary<string, string>> Downgrades = [];
 
     /// <summary>
@@ -27,6 +30,9 @@ public static class BuildingUpgrades
     /// </summary>
     public static string? DowngradeOf(GameDatabase db, string record) => Downgrades.GetValue(db, Build).GetValueOrDefault(record);
 
+    /// <summary>
+    /// Builds the downgrade map: for each BUILDING its first <c>upgrades to</c> target maps back to it (the first such BUILDING wins).
+    /// </summary>
     static Dictionary<string, string> Build(GameDatabase db)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);

@@ -13,6 +13,10 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
     /// </summary>
     public static readonly SkyClock Fallback = new(0, 6, 20);
 
+    /// <summary>
+    /// The CONSTANTS record's <c>latitude</c>, <c>sunrise</c> and <c>sunset</c>; <see cref="Fallback"/>'s hours when the sunset is not after the
+    /// sunrise, and <see cref="Fallback"/> when there is no record.
+    /// </summary>
     public static SkyClock FromDatabase(GameDatabase db)
     {
         var c = Gameplay.ConstantsRecord.Find(db);
@@ -65,11 +69,29 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
 /// </summary>
 public static class SkyAtmosphere
 {
+    /// <summary>
+    /// SkyX's inner (planet) radius.
+    /// </summary>
     public const float InnerRadius = 9.77501f;
+    /// <summary>
+    /// SkyX's outer (atmosphere) radius.
+    /// </summary>
     public const float OuterRadius = 10.2963f;
+    /// <summary>
+    /// SkyX's height position: where the camera sits in the atmosphere's thickness (<see cref="CameraY"/>).
+    /// </summary>
     public const float HeightPosition = 0.01f;
+    /// <summary>
+    /// SkyX's Rayleigh multiplier (Kr).
+    /// </summary>
     public const float RayleighMultiplier = 0.0022f;
+    /// <summary>
+    /// SkyX's Mie multiplier (Km).
+    /// </summary>
     public const float MieMultiplier = 0.000675f;
+    /// <summary>
+    /// SkyX's sun intensity.
+    /// </summary>
     public const float SunIntensity = 30f;
     /// <summary>
     /// The wavelengths the game gives SkyX: its setup builds (0.57, 0.54, 0.44), then stores 0.48 over the green component, which
@@ -84,6 +106,9 @@ public static class SkyAtmosphere
     /// SkyX's <c>uExposure</c>, the factor on the scattered light in HDR mode.
     /// </summary>
     public const float Exposure = 1.4f;
+    /// <summary>
+    /// SkyX's sample count along a ray.
+    /// </summary>
     public const int Samples = 4;
 
     /// <summary>
@@ -102,7 +127,13 @@ public static class SkyAtmosphere
     /// The height of SkyX's camera (its <c>uCameraPos.y</c>), above the planet's centre.
     /// </summary>
     public const float CameraY = InnerRadius + HeightPosition * Thickness;
+    /// <summary>
+    /// SkyX's <c>uKrESun</c> and <c>uKmESun</c>: the Rayleigh and Mie multipliers times the sun intensity.
+    /// </summary>
     public const float KrESun = RayleighMultiplier * SunIntensity, KmESun = MieMultiplier * SunIntensity;
+    /// <summary>
+    /// SkyX's <c>uKr4PI</c> and <c>uKm4PI</c>: the Rayleigh and Mie multipliers times 4π.
+    /// </summary>
     public const float Kr4Pi = RayleighMultiplier * 4 * MathF.PI, Km4Pi = MieMultiplier * 4 * MathF.PI;
     /// <summary>
     /// <c>1 / wavelength⁴</c> per channel (SkyX's <c>uInvWaveLength</c>).
@@ -175,6 +206,9 @@ public static class SkyXModel
         return sum;
     }
 
+    /// <summary>
+    /// <see cref="InScatter(Vector3, float, Vector3, out float)"/> without the thickness.
+    /// </summary>
     public static Vector3 InScatter(Vector3 ray, float length, Vector3 sun) => InScatter(ray, length, sun, out _);
 
     /// <summary>

@@ -9,9 +9,24 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public sealed class BoneTrack(float[] times, Vector3[] translation, Quaternion[] rotation, Vector3[] scale)
 {
+    /// <summary>
+    /// The key times in seconds, ascending.
+    /// </summary>
     public readonly float[] Times = times;
+
+    /// <summary>
+    /// The translation of each key, relative to the binding pose.
+    /// </summary>
     public readonly Vector3[] Translation = translation;
+
+    /// <summary>
+    /// The rotation of each key, relative to the binding pose.
+    /// </summary>
     public readonly Quaternion[] Rotation = rotation;
+
+    /// <summary>
+    /// The scale of each key.
+    /// </summary>
     public readonly Vector3[] Scale = scale;
 }
 
@@ -20,8 +35,19 @@ public sealed class BoneTrack(float[] times, Vector3[] translation, Quaternion[]
 /// </summary>
 public sealed class AnimationClip(string name, float length, BoneTrack?[] tracks)
 {
+    /// <summary>
+    /// The Ogre animation's name.
+    /// </summary>
     public readonly string Name = name;
+
+    /// <summary>
+    /// The animation's length in seconds.
+    /// </summary>
     public readonly float Length = length;
+
+    /// <summary>
+    /// The track of each bone handle; null where the animation does not move the bone.
+    /// </summary>
     public readonly BoneTrack?[] Tracks = tracks;
 }
 
@@ -31,17 +57,30 @@ public sealed class AnimationClip(string name, float length, BoneTrack?[] tracks
 /// </summary>
 public sealed class LayerDef(AnimationClip clip, bool[]? excluded, int[] overrides, string label, int rootMotionBone = -1)
 {
+    /// <summary>
+    /// The clip the layer samples.
+    /// </summary>
     public readonly AnimationClip Clip = clip;
+
     /// <summary>
     /// By bone handle: tracks ignored while sampling (null: none).
     /// </summary>
     public readonly bool[]? Excluded = excluded;
+
+    /// <summary>
+    /// The handles of the bones the layer overrides (blended in the second pass).
+    /// </summary>
     public readonly int[] Override = overrides;
+
+    /// <summary>
+    /// A readable name: the record name with the clip name when they differ, else the clip name.
+    /// </summary>
     public readonly string Label = label;
+
     /// <summary>
     /// The handle of <c>Bip01</c> when the clip moves the character (<see cref="AnimationMask.Relocates"/>), else -1: that track keeps only its
-    /// height, as a state with translation disabled in Kenshi's Ogre (docs/formats/ogre-skeleton.md), and the simulation moves the character by the
-    /// rest.
+    /// height, as a state with translation disabled in Kenshi's Ogre (docs/formats/ogre-skeleton.md), and the simulation moves the character by
+    /// the rest.
     /// </summary>
     public readonly int RootMotionBone = rootMotionBone;
 }
@@ -58,9 +97,24 @@ public readonly record struct ActiveLayer(LayerDef Def, float Time, float Weight
 /// </summary>
 public sealed class BonePose(int boneCount)
 {
+    /// <summary>
+    /// By bone handle: whether the bone takes this pose.
+    /// </summary>
     public readonly bool[] Set = new bool[boneCount];
+
+    /// <summary>
+    /// By bone handle: the model-space rotation.
+    /// </summary>
     public readonly Quaternion[] Rotation = new Quaternion[boneCount];
+
+    /// <summary>
+    /// By bone handle: the model-space position (used for root bones only).
+    /// </summary>
     public readonly Vector3[] Position = new Vector3[boneCount];
+
+    /// <summary>
+    /// The blend from the animated pose (0) to this one (1).
+    /// </summary>
     public float Weight = 1;
 }
 
@@ -69,8 +123,19 @@ public sealed class BonePose(int boneCount)
 /// </summary>
 public sealed class BodyShapeData(Vector3[] boneSize, Vector3[] positionalSize, float movementScale)
 {
+    /// <summary>
+    /// The bone size vector per handle (1 where no slider sets it).
+    /// </summary>
     public readonly Vector3[] BoneSize = boneSize;
+
+    /// <summary>
+    /// The positional size vector per handle (1 where no slider sets it).
+    /// </summary>
     public readonly Vector3[] PositionalSize = positionalSize;
+
+    /// <summary>
+    /// The movement scale the sliders set; it scales the animated translations.
+    /// </summary>
     public readonly float MovementScale = movementScale;
 }
 
@@ -82,33 +147,81 @@ public sealed class BodyShapeData(Vector3[] boneSize, Vector3[] positionalSize, 
 /// </summary>
 public sealed class SkeletonRig
 {
+    /// <summary>
+    /// The Ogre skeleton the rig was built from.
+    /// </summary>
     public readonly OgreSkeleton Skeleton;
+
+    /// <summary>
+    /// The number of handles (the highest bone handle + 1).
+    /// </summary>
     public readonly int BoneCount;
+
+    /// <summary>
+    /// The bone of each handle; null for handles no bone uses.
+    /// </summary>
     public readonly OgreBone?[] ByHandle;
+
     /// <summary>
     /// Handles, parents before children.
     /// </summary>
     public readonly int[] Order;
+
     /// <summary>
     /// Parent handle per handle, -1 for roots.
     /// </summary>
     public readonly int[] Parent;
+
     /// <summary>
     /// The blend mode the file stores (average in every base-game file). Kenshi switches every character's skeleton instance to cumulative when it
     /// attaches its animation controller (docs/formats/ogre-skeleton.md, <b>Verified</b>), so posing never uses it.
     /// </summary>
     public readonly bool AverageBlend;
+
+    /// <summary>
+    /// Bone handles by name (the first bone of a name wins).
+    /// </summary>
     readonly Dictionary<string, int> _handles = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The compiled clips by name (case-insensitive), null for a name no source has.
+    /// </summary>
     readonly ConcurrentDictionary<string, AnimationClip?> _clips = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The layer definitions by name (animal layers under a <c>\u0001</c> prefix), null for a name without a clip.
+    /// </summary>
     readonly ConcurrentDictionary<string, LayerDef?> _layers = new(StringComparer.OrdinalIgnoreCase);
 
-    // The binding pose in model space, with neutral shape: what the skin matrices are relative to (Ogre's OldBone::_getOffsetTransform).
+    /// <summary>
+    /// The binding pose in model space, with neutral shape: what the skin matrices are relative to (Ogre's <c>OldBone::_getOffsetTransform</c>).
+    /// </summary>
     public readonly Vector3[] BindPosition = [], BindScale = [];
+
+    /// <summary>
+    /// The inverse of each bone's binding rotation in model space (see <see cref="BindPosition"/>).
+    /// </summary>
     public readonly Quaternion[] BindRotationInverse = [];
 
-    // The skeletons the instance links (docs/animation.md, "Animation files"), read when a clip is first looked for past the own ones.
+    /// <summary>
+    /// The skeletons the instance links (docs/animation.md, "Animation files"), read when a clip is first looked for past the own ones.
+    /// </summary>
     readonly IReadOnlyList<Lazy<OgreSkeleton?>> _linked;
 
+    /// <summary>
+    /// The scratches given back, shared by every thread.
+    /// </summary>
+    readonly ConcurrentBag<PoseScratch> _scratches = [];
+
+    /// <summary>
+    /// The scratch the thread gave back last, kept on the thread: a crowd of one rig posed in parallel then takes no lock (the shared bag's
+    /// were contended).
+    /// </summary>
+    [ThreadStatic] static PoseScratch? s_threadScratch;
+
+    /// <summary>
+    /// A rig of <paramref name="skeleton"/>: its bones by handle, the parents-first order and the binding pose.
+    /// </summary>
     /// <param name="linked">The linked animation sources in link order: a clip the skeleton lacks is taken from the first that has it, its tracks
     /// applied by bone handle.</param>
     public SkeletonRig(OgreSkeleton skeleton, IReadOnlyList<Lazy<OgreSkeleton?>>? linked = null)
@@ -148,12 +261,6 @@ public sealed class SkeletonRig
         for (int h = 0; h < BoneCount; h++) BindRotationInverse[h] = Quaternion.Inverse(scratch.DerivedRotation[h]);
     }
 
-    readonly ConcurrentBag<PoseScratch> _scratches = [];
-
-    // The scratch the thread gave back last, kept on the thread: a crowd of one rig posed in parallel then takes no lock (the shared bag's were
-    // contended).
-    [ThreadStatic] static PoseScratch? s_threadScratch;
-
     /// <summary>
     /// A working set for posing on the calling thread; give it back with <see cref="Return"/>.
     /// </summary>
@@ -167,6 +274,9 @@ public sealed class SkeletonRig
         return _scratches.TryTake(out var s) ? s : new PoseScratch(this);
     }
 
+    /// <summary>
+    /// Gives <paramref name="scratch"/> back: it stays on the thread, and the one kept before goes to its rig's shared bag.
+    /// </summary>
     public void Return(PoseScratch scratch)
     {
         if (s_threadScratch is { } kept) kept.Rig._scratches.Add(kept);
@@ -190,9 +300,15 @@ public sealed class SkeletonRig
         return _clips[name] = animation is null ? null : Compile(animation);
     }
 
+    /// <summary>
+    /// The animation of <paramref name="skeleton"/> called <paramref name="name"/> (case-insensitive), or null.
+    /// </summary>
     static OgreAnimation? Find(OgreSkeleton skeleton, string name) =>
         skeleton.Animations.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The animation as flat per-bone track arrays; tracks of handles past <see cref="BoneCount"/> and empty ones are dropped.
+    /// </summary>
     AnimationClip Compile(OgreAnimation animation)
     {
         var tracks = new BoneTrack?[BoneCount];
@@ -221,6 +337,10 @@ public sealed class SkeletonRig
         return def;
     }
 
+    /// <summary>
+    /// The layer of <paramref name="name"/>: the record's mask (a creature technique's or a plain one for an animal), its clip, deleted tracks,
+    /// override bones and root-motion bone; null when no clip is found.
+    /// </summary>
     LayerDef? Build(GameDatabase? db, string name, bool animal)
     {
         var mask = !animal ? AnimationMask.Find(db, name)
@@ -264,13 +384,39 @@ public sealed class SkeletonRig
 /// </summary>
 public sealed class PoseScratch
 {
+    /// <summary>
+    /// The rig being posed.
+    /// </summary>
     readonly SkeletonRig _rig;
+
+    /// <summary>
+    /// The rig being posed (the scratch pool checks it).
+    /// </summary>
     internal SkeletonRig Rig => _rig;
+
+    /// <summary>
+    /// The local position and scale of each bone while posing.
+    /// </summary>
     readonly Vector3[] _pos, _scale;
+
+    /// <summary>
+    /// The local rotation of each bone while posing.
+    /// </summary>
     readonly Quaternion[] _rot;
+
+    /// <summary>
+    /// The posed model-space position and scale of each bone.
+    /// </summary>
     public readonly Vector3[] DerivedPosition, DerivedScale;
+
+    /// <summary>
+    /// The posed model-space rotation of each bone.
+    /// </summary>
     public readonly Quaternion[] DerivedRotation;
 
+    /// <summary>
+    /// A scratch with arrays sized for <paramref name="rig"/>.
+    /// </summary>
     public PoseScratch(SkeletonRig rig)
     {
         this._rig = rig;
@@ -278,11 +424,10 @@ public sealed class PoseScratch
         _pos = new Vector3[n];
         _scale = new Vector3[n];
         _rot = new Quaternion[n];
-        
+
         DerivedPosition = new Vector3[n];
         DerivedScale = new Vector3[n];
         DerivedRotation = new Quaternion[n];
-        
     }
 
     /// <summary>
@@ -453,12 +598,18 @@ public sealed class PoseScratch
             * Matrix4x4.CreateTranslation(DerivedPosition[h]);
     }
 
+    /// <summary>
+    /// Normalised linear interpolation from <paramref name="a"/> to <paramref name="b"/>, on the shorter arc.
+    /// </summary>
     static Quaternion Nlerp(Quaternion a, Quaternion b, float f)
     {
         if (Quaternion.Dot(a, b) < 0) b = -b;
         return Quaternion.Normalize(new Quaternion(a.X + (b.X - a.X) * f, a.Y + (b.Y - a.Y) * f, a.Z + (b.Z - a.Z) * f, a.W + (b.W - a.W) * f));
     }
 
+    /// <summary>
+    /// The track's key values at <paramref name="time"/>: clamped to the first and last keys, linearly interpolated between (rotations by nlerp).
+    /// </summary>
     static void Sample(BoneTrack track, float time, out Vector3 t, out Quaternion r, out Vector3 s)
     {
         var times = track.Times;
@@ -481,7 +632,8 @@ public sealed class PoseScratch
         while (hi - lo > 1)
         {
             int mid = (lo + hi) / 2;
-            if (times[mid] <= time) lo = mid; else hi = mid;
+            if (times[mid] <= time) lo = mid;
+            else hi = mid;
         }
         float f = (time - times[lo]) / Math.Max(times[hi] - times[lo], 1e-6f);
         t = Vector3.Lerp(track.Translation[lo], track.Translation[hi], f);

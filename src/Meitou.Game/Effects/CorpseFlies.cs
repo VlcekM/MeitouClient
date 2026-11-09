@@ -12,20 +12,43 @@ namespace Meitou.Game.Effects;
 /// </summary>
 sealed class CorpseFlies(GameHost host)
 {
+    /// <summary>
+    /// The EFFECT record of the flies ("Fly-Particle") and the AMBIENT_SOUND record of their sound ("Corpse Flies").
+    /// </summary>
     const string FlyEffectId = "55393-Newwworld.mod", FlySoundId = "95425-sfx.mod";
     /// <summary>
     /// A carried corpse's flies are placed again once it moved this far (units).
     /// </summary>
     const float FlyMove = 5;
 
-    // The corpses with flies shown (their effect key and where it stands), the records (resolved once per database) and this frame's set.
+    /// <summary>
+    /// The corpses with flies shown, by character, and where their effect stands (its key is <see cref="FlyKey"/>).
+    /// </summary>
     readonly Dictionary<CharacterId, Vector3> _flyCorpses = [];
+    /// <summary>
+    /// This frame's corpses with flies.
+    /// </summary>
     readonly HashSet<CharacterId> _flyCorpsesSeen = [];
+    /// <summary>
+    /// The corpses that lost their flies this frame, kept to avoid allocating.
+    /// </summary>
     readonly List<CharacterId> _flyCorpsesGone = [];
+    /// <summary>
+    /// The database the records were resolved for.
+    /// </summary>
     object? _flyRecordsFor;
+    /// <summary>
+    /// The flies' EFFECT record; null when the data has none.
+    /// </summary>
     Data.GameRecord? _flyEffect;
+    /// <summary>
+    /// The flies' sound; null when the data has no such record.
+    /// </summary>
     AmbientSound? _flySound;
 
+    /// <summary>
+    /// The key of a corpse's effect and emitter.
+    /// </summary>
     static string FlyKey(CharacterId id) => $"flies/{id}";
 
     /// <summary>

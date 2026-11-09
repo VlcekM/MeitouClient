@@ -6,6 +6,9 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public static class NamedViews
 {
+    /// <summary>
+    /// The views by name (case-insensitive): the options each stands for.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> Table = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
         // Shark from 2000 units at 30 degrees (the town, its water and the swamp round it, as in play), orbiting the town while measured.
@@ -37,6 +40,9 @@ public static class NamedViews
         ["hub"] = ["--world", "--town", "The Hub", "--radius", "2", "--distance", "9000", "--pitch", "10", "--yaw", "300"],
     };
 
+    /// <summary>
+    /// The views' names, comma-separated.
+    /// </summary>
     public static string Names => string.Join(", ", Table.Keys);
 
     /// <summary>

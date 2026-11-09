@@ -10,20 +10,50 @@ namespace Meitou.Simulation;
 /// </summary>
 public enum RngPurpose : uint
 {
+    /// <summary>
+    /// Tests.
+    /// </summary>
     Test = 0,
     /// <summary>
     /// The body rolls (production stats, medical rolls, hits) use this; it has the value of <see cref="Test"/> on purpose, as a distinct value would
     /// re-roll every body (changes every state hash).
     /// </summary>
     Body = 0,
+    /// <summary>
+    /// Wandering rolls (the movement's and the population's).
+    /// </summary>
     Wander = 1,
+    /// <summary>
+    /// The AI's decisions.
+    /// </summary>
     Think = 2,
+    /// <summary>
+    /// Combat rolls.
+    /// </summary>
     Combat = 3,
+    /// <summary>
+    /// Making characters, squads and items.
+    /// </summary>
     Spawn = 4,
+    /// <summary>
+    /// The item slots' restocking.
+    /// </summary>
     Loot = 5,
+    /// <summary>
+    /// The captives' and town duties' rolls.
+    /// </summary>
     Slow = 6,
+    /// <summary>
+    /// Animation choices.
+    /// </summary>
     Animation = 7,
+    /// <summary>
+    /// Flight.
+    /// </summary>
     Flee = 8,
+    /// <summary>
+    /// The hearing tests.
+    /// </summary>
     Sense = 9,
     /// <summary>
     /// Crossbow shots: the deviation cone, the damage roll and the friendly-fire pass (docs/simulation.md "Combat", ranged).
@@ -117,6 +147,9 @@ public enum RngPurpose : uint
 /// </summary>
 public static class Rng
 {
+    /// <summary>
+    /// The 64-bit golden ratio constant of SplitMix64.
+    /// </summary>
     const ulong Golden = 0x9E3779B97F4A7C15UL;
 
     /// <summary>
@@ -182,16 +215,31 @@ public static class Rng
 }
 
 /// <summary>
-/// One (seed, entity, purpose) stream: <see cref="Next"/> walks a counter, <see cref="At"/> reads a roll by a counter of the
+/// One (seed, entity, purpose) stream: <see cref="NextRoll"/> walks a counter, <see cref="At"/> reads a roll by a counter of the
 /// caller's choosing (a tick number, say), which is what systems use when the same roll must be reproducible from the key alone.
 /// </summary>
 public struct RandomStream(ulong seed, ulong entity, RngPurpose purpose)
 {
+    /// <summary>
+    /// The counter <see cref="NextRoll"/> walks.
+    /// </summary>
     ulong _counter;
 
+    /// <summary>
+    /// The next roll of the stream.
+    /// </summary>
     public ulong NextRoll() => Rng.Hash(seed, entity, purpose, _counter++);
+    /// <summary>
+    /// The next roll as a float in [0, 1) (<see cref="Rng.Float"/>).
+    /// </summary>
     public float NextFloat() => Rng.Float(NextRoll());
+    /// <summary>
+    /// The next roll as an integer in [0, <paramref name="bound"/>) (<see cref="Rng.Int"/>).
+    /// </summary>
     public int NextInt(int bound) => Rng.Int(NextRoll(), bound);
+    /// <summary>
+    /// The roll of counter <paramref name="index"/>, the stream's counter left alone.
+    /// </summary>
     public readonly ulong At(ulong index) => Rng.Hash(seed, entity, purpose, index);
 }
 
@@ -200,19 +248,55 @@ public struct RandomStream(ulong seed, ulong entity, RngPurpose purpose)
 /// </summary>
 public struct StateHasher
 {
+    /// <summary>
+    /// The hash so far.
+    /// </summary>
     ulong _h;
 
+    /// <summary>
+    /// An empty hash (the FNV-1a offset basis).
+    /// </summary>
     public StateHasher() => _h = 0xCBF29CE484222325UL;
 
+    /// <summary>
+    /// Adds a value.
+    /// </summary>
     public void Add(ulong v) => _h = Rng.Mix(_h ^ v) * 0x100000001B3UL + 0x1B873593UL;
+    /// <summary>
+    /// Adds a value.
+    /// </summary>
     public void Add(long v) => Add((ulong)v);
+    /// <summary>
+    /// Adds a value.
+    /// </summary>
     public void Add(int v) => Add((ulong)(uint)v);
+    /// <summary>
+    /// Adds a value (1 or 0).
+    /// </summary>
     public void Add(bool v) => Add(v ? 1UL : 0UL);
+    /// <summary>
+    /// Adds a value by its bits (-0 as 0).
+    /// </summary>
     public void Add(float v) => Add((ulong)(uint)BitConverter.SingleToInt32Bits(v == 0 ? 0f : v));
+    /// <summary>
+    /// Adds a value by its bits (-0 as 0).
+    /// </summary>
     public void Add(double v) => Add((ulong)BitConverter.DoubleToInt64Bits(v == 0 ? 0d : v));
+    /// <summary>
+    /// Adds X, then Y.
+    /// </summary>
     public void Add(System.Numerics.Vector2 v) { Add(v.X); Add(v.Y); }
+    /// <summary>
+    /// Adds X, Y, then Z.
+    /// </summary>
     public void Add(System.Numerics.Vector3 v) { Add(v.X); Add(v.Y); Add(v.Z); }
+    /// <summary>
+    /// Adds the slot, then the generation.
+    /// </summary>
     public void Add(CharacterId id) { Add(id.Slot); Add(id.Generation); }
 
+    /// <summary>
+    /// The hash of the values added.
+    /// </summary>
     public readonly ulong Value => Rng.Mix(_h);
 }

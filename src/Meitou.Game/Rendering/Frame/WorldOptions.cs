@@ -13,12 +13,39 @@ sealed class WorldOptions
 {
     #region Place and view
 
+    /// <summary>
+    /// <c>--at</c>: the world X/Z to load round (null: not given).
+    /// </summary>
     public double? X, Z;
+
+    /// <summary>
+    /// <c>--zone</c>: the zone whose centre to load round (null: not given).
+    /// </summary>
     public ZoneCoordinate? Zone;
+
+    /// <summary>
+    /// <c>--town</c>: part of the name of the town to load round (an FCS TOWN record; null: not given).
+    /// </summary>
     public string? Town;
+
+    /// <summary>
+    /// <c>--radius</c>: half the loaded square's side, in zones of 4608 units.
+    /// </summary>
     public float Radius = 1.5f;
+
+    /// <summary>
+    /// <c>--yaw</c>, <c>--pitch</c> (degrees) and <c>--distance</c>: the camera round the point (null: 30, 35 and the radius).
+    /// </summary>
     public float? Yaw, Pitch, Distance;
+
+    /// <summary>
+    /// <c>--screenshot</c>: the PNG to render offscreen and exit with (null: interactive).
+    /// </summary>
     public string? Screenshot;
+
+    /// <summary>
+    /// <c>--size</c>: the picture's (or window's) width and height in pixels.
+    /// </summary>
     public int Width = 1280, Height = 960;
 
     /// <summary>
@@ -35,7 +62,15 @@ sealed class WorldOptions
     /// The render size of <c>--benchmark-baseline</c>: 1080p in a window, whatever the monitor.
     /// </summary>
     public static readonly (int Width, int Height) BenchmarkBaselineSize = (1920, 1080);
+
+    /// <summary>
+    /// The renderers start without textures, without buildings and map features (<c>--no-objects</c>), and in wireframe (<c>--wireframe</c>).
+    /// </summary>
     public bool NoTextures, NoObjects, Wireframe;
+
+    /// <summary>
+    /// <c>--debug</c>: the terrain's debug view (1 the blend-map slot weights, 2 the layer weights; 0 off).
+    /// </summary>
     public int Debug;
 
     /// <summary>
@@ -54,8 +89,20 @@ sealed class WorldOptions
     /// <c>--water-grid</c>: the Meitou water grid's segments round the eye (64 to 1024; fewer for integrated GPUs).
     /// </summary>
     public int WaterGrid = WaterRenderer.DefaultGridSegments;
+
+    /// <summary>
+    /// <c>--water-ocean</c>: the Meitou water's FFT size per cascade (64, 128 or 256).
+    /// </summary>
     public int WaterOcean = OceanWaves.DefaultSize;
+
+    /// <summary>
+    /// <c>--object-distance</c> as given (null: the reach switch's mode default).
+    /// </summary>
     public float? ObjectDistance;
+
+    /// <summary>
+    /// The objects' full-detail distance for the reach switch's mode: <see cref="ObjectDistance"/> when given, else the mode's default.
+    /// </summary>
     public float ObjectDistanceFor(bool meitou) =>
         ObjectDistance ?? (meitou ? Enhancements.MeitouObjectDistance : Enhancements.FaithfulObjectDistance);
 
@@ -65,22 +112,47 @@ sealed class WorldOptions
     /// </summary>
     public float LandmarkDistanceFor(bool meitou) =>
         meitou ? ObjectDistanceFor(true) * (Enhancements.MeitouLandmarkDistance / Enhancements.MeitouObjectDistance) : 0;
+
+    /// <summary>
+    /// The terrain LOD's pixel error for the reach switch's mode: <see cref="TerrainError"/> when given, else the mode's default.
+    /// </summary>
     public float TerrainErrorFor(bool meitou) =>
         TerrainError ?? (meitou ? Enhancements.MeitouTerrainPixelError : WorldRenderOptions.DefaultTerrainPixelError);
+
+    /// <summary>
+    /// <c>--distant-range</c>: distant towns (and buildings' distant meshes) up to this many zones (0: none).
+    /// </summary>
     public float DistantZones = ObjectRanges.MaxDistantTownRangeZones;
+
+    /// <summary>
+    /// <c>--no-foliage</c>: no trees, bushes, rocks or grass.
+    /// </summary>
     public bool NoFoliage;
+
+    /// <summary>
+    /// <c>--time</c>: the time of day in game hours, for the sun.
+    /// </summary>
     public float Hour = 13;
 
     /// <summary>
     /// The viewer's clock: game hours per real minute (0: the time stays where it is set).
     /// </summary>
     public float TimeSpeed;
+
+    /// <summary>
+    /// <c>--fog</c>: where the haze is complete (the far plane follows it); <c>--material-distance</c>: beyond it the terrain shows the biomes'
+    /// ground colour.
+    /// </summary>
     public float FogDistance = 250000, MaterialDistance = 30000;
 
     /// <summary>
     /// Terrain LOD (<see cref="TerrainLod"/>): the screen-space error in render pixels (null: the reach switch's mode default).
     /// </summary>
     public float? TerrainError;
+
+    /// <summary>
+    /// <c>--no-water</c>: no water; <c>--show-keys</c>: the key list overlay starts open.
+    /// </summary>
     public bool NoWater, ShowKeys;
 
     #endregion
@@ -100,10 +172,9 @@ sealed class WorldOptions
 
     /// <summary>
     /// The game's <c>texture resolution gimping</c> (0..4; missing key: 1) and <c>water reflection</c> (0..4; missing: 2) settings
-    /// (docs/formats/settings.md).
+    /// (docs/formats/settings.md). The viewer starts at full quality (the old look); the game's missing-key defaults are
+    /// <c>TextureQuality.Default</c> (1) and <see cref="ReflectionPass.DefaultLevel"/> (2): <c>--texture-quality 1 --water-reflection 2</c>.
     /// </summary>
-    // The viewer starts at full quality (the old look); the game's missing-key defaults are TextureQuality.Default (1) and
-    // ReflectionPass.DefaultLevel (2): --texture-quality 1 --water-reflection 2.
     public int TextureQuality = 0, WaterReflection = 4;
 
     /// <summary>
@@ -126,19 +197,31 @@ sealed class WorldOptions
     /// Meitou switch (<c>gi</c>).
     /// </summary>
     public bool Gi = true, GiProbes = true;
+
+    /// <summary>
+    /// The <c>interiorgi</c> switch: bounced light indoors with the probe GI (false: the original ambient on room surfaces).
+    /// </summary>
     public bool InteriorGi = true;
 
     /// <summary>
     /// Whether the device must be made with ray queries (<c>VulkanDisplay.RayTracing</c>).
     /// </summary>
     public bool WantsRayTracing => Gi || GiDebug > 0;
-    public float? ShadowRange;   // --shadow-range as given (null: the default of the shadows switch's mode, see ShadowRangeFor)
+
+    /// <summary>
+    /// <c>--shadow-range</c> as given (null: the default of the shadows switch's mode, see <see cref="ShadowRangeFor"/>).
+    /// </summary>
+    public float? ShadowRange;
 
     /// <summary>
     /// <c>--shadow-range 0</c>: the shadow pass is made but starts off (the Tab slider's left end; it can be turned on there).
     /// </summary>
     public bool ShadowsOff;
-    public bool MeitouShadows = true;   // the shadows switch (Enhancements): Meitou by default, false the game's CSM
+
+    /// <summary>
+    /// The shadows switch (Enhancements): Meitou by default, false the game's CSM.
+    /// </summary>
+    public bool MeitouShadows = true;
 
     /// <summary>
     /// <c>--no-vsync</c>: the interactive window starts uncapped (the Tab panel's VSync).
@@ -175,6 +258,10 @@ sealed class WorldOptions
     /// <c>--range-large</c>), the medium and small ranges follow it at their default ratios.
     /// </summary>
     public bool MeitouRange = true;
+
+    /// <summary>
+    /// <c>--range-large</c>: the large size class's foliage range (null: the default).
+    /// </summary>
     public float? LargeRange;
 
     /// <summary>
@@ -184,7 +271,7 @@ sealed class WorldOptions
     public bool Impostors = true;
 
     /// <summary>
-    /// The Meitou <c>lod</c> switch: generated mesh levels for TERRAIN-mode foliage meshes (<see cref="FoliageRenderer.Lod"/>).
+    /// The Meitou <c>lod</c> switch: generated mesh levels for TERRAIN-mode foliage meshes (<see cref="Foliage.FoliageRenderer.Lod"/>).
     /// </summary>
     public bool FoliageLod = true;
 
@@ -226,27 +313,64 @@ sealed class WorldOptions
     /// the bolt alone, as the game.
     /// </summary>
     public bool MeitouTracers = true;
+
+    /// <summary>
+    /// The foliage's impostor distances, of the small and of the large meshes (null: the renderer's defaults; <c>--low-end</c> sets them).
+    /// </summary>
     public float? ImpostorDistance, LargeImpostorDistance;
+
+    /// <summary>
+    /// <c>--impostor-budget</c>: the most video memory the impostor atlases may use, in MB (null: a share of the card's budget).
+    /// </summary>
     public double? ImpostorBudgetMb;
-    public bool MeitouHaze = true; // the Meitou haze switch (default): the haze at HazeStrength; Faithful: the game's (1)
-    public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze's strength (a Tab slider), kept while the switch is Faithful
-    // the Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon (SkyRenderer.NightAir)
+
+    /// <summary>
+    /// The Meitou haze switch (default): the haze at <see cref="HazeStrength"/>; Faithful: the game's (1).
+    /// </summary>
+    public bool MeitouHaze = true;
+
+    /// <summary>
+    /// The Meitou haze's strength (a Tab slider), kept while the switch is Faithful.
+    /// </summary>
+    public float HazeStrength = Enhancements.MeitouHazeStrength;
+
+    /// <summary>
+    /// The Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon
+    /// (<c>SkyRenderer.NightAir</c>).
+    /// </summary>
     public bool NightAir = true;
-    public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
-    public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (a Tab slider)
-    // the Meitou stars switch (default): the procedural night sky (SkyRenderer.MeitouStars); false: the game's starfield texture
+
+    /// <summary>
+    /// The Meitou planetshine switch (default): the big planet lights the night (<c>SkyRenderer.Planetshine</c>).
+    /// </summary>
+    public bool Planetshine = true;
+
+    /// <summary>
+    /// The planetshine's strength, a multiple of the physical value (a Tab slider).
+    /// </summary>
+    public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength;
+
+    /// <summary>
+    /// The Meitou stars switch (default): the procedural night sky (<c>SkyRenderer.MeitouStars</c>); false: the game's starfield texture.
+    /// </summary>
     public bool MeitouStars = true;
 
-    // the Meitou clouds switch (default): the cloud layer lit by the sun through its depth (SkyRenderer.LitClouds);
-    // false: the game's flat colour
+    /// <summary>
+    /// The Meitou clouds switch (default): the cloud layer lit by the sun through its depth (<c>SkyRenderer.LitClouds</c>); false: the game's flat
+    /// colour.
+    /// </summary>
     public bool MeitouClouds = true;
 
-    // the Meitou cloudshadows switch (default): the cloud layer shades the sun on the land and water (SkyRenderer.CloudShadows);
-    // false: none, as the game
+    /// <summary>
+    /// The Meitou cloudshadows switch (default): the cloud layer shades the sun on the land and water (<c>SkyRenderer.CloudShadows</c>); false: none,
+    /// as the game.
+    /// </summary>
     public bool CloudShadows = true;
 
-    // the Meitou cloudfog switch (default): the cloud shadows fade near and inside placed fog volumes (SkyRenderer.CloudFog);
-    // false: full strength
+    /// <summary>
+    /// The Meitou cloudfog switch (default): the cloud shadows fade near and inside placed fog volumes (<c>SkyRenderer.CloudFog</c>); false: full
+    /// strength.
+    /// </summary>
     public bool CloudFog = true;
 
     #endregion
@@ -262,6 +386,10 @@ sealed class WorldOptions
     /// <c>--day</c> (null: day 0 in the viewer, the game's clock start in the game).
     /// </summary>
     public int? Day;
+
+    /// <summary>
+    /// Whether the weather scheduler runs (<see cref="Weather"/> null or "auto") rather than a forced weather.
+    /// </summary>
     public bool AutoWeather => Weather is null || Weather.Equals("auto", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -274,7 +402,15 @@ sealed class WorldOptions
     /// <c>--no-audio</c>: no sound (docs/audio.md); <c>--audio-gain &lt;dB&gt;</c> raises or lowers the whole mix (0 = the game's levels).
     /// </summary>
     public bool NoAudio;
+
+    /// <summary>
+    /// <c>--audio-gain</c>: the whole mix raised or lowered, in dB (0: the game's levels).
+    /// </summary>
     public float AudioGainDb;
+
+    /// <summary>
+    /// <c>--particle-prewarm</c>: seconds simulated before the first picture (null: each system's longest particle life).
+    /// </summary>
     public float? ParticlePrewarm;
 
     /// <summary>
@@ -286,12 +422,23 @@ sealed class WorldOptions
     /// <c>--anisotropy n</c>: the Tab panel's anisotropic filtering at start (1, 2, 4, 8 or 16; 16 leaves the textures as asked).
     /// </summary>
     public int Anisotropy = 16;
+
+    /// <summary>
+    /// <c>--clouds</c>: the cloud density forced for testing, 0..1 (null: the weather's).
+    /// </summary>
     public float? Clouds;
+
+    /// <summary>
+    /// The post-processing options: <c>--post</c>'s preset (Meitou by default) and the options after it.
+    /// </summary>
     public PostOptions Post = PostOptions.Create("meitou");
     #endregion
 
     #region Fly and cameras
 
+    /// <summary>
+    /// <c>--fly-to</c>: with <c>--screenshot</c>, the world X/Z to fly to before taking the picture (null: none).
+    /// </summary>
     public double? FlyToX, FlyToZ;
 
     /// <summary>
@@ -303,6 +450,10 @@ sealed class WorldOptions
     /// Frames of the offscreen benchmark flight (0: none), the circle's radius and the speed per frame.
     /// </summary>
     public int FlyBenchmark;
+
+    /// <summary>
+    /// The benchmark flight's circle radius and speed per frame, in world units.
+    /// </summary>
     public float FlyRadius = 12000, FlySpeed = 150;
 
     /// <summary>
@@ -323,19 +474,29 @@ sealed class WorldOptions
 
     /// <summary>
     /// The benchmark harness (docs/bench.md "Benchmark harness"): <c>--view</c> the named view, <c>--ab</c> the switch to alternate (<see
-    /// cref="AbToggles"/>) with
-    /// <c>--ab-period</c> frames per side, <c>--bench-frames</c> measured frames (default 600 with <c>--ab</c>), <c>--bench-out</c> the JSON,
-    /// <c>--bench-motion</c>
-    /// still / orbit / fly / turn, <c>--no-gpu-lock</c>, <c>--bench-compare</c> two JSON files.
+    /// cref="Bench.AbToggles"/>) with <c>--ab-period</c> frames per side, <c>--bench-frames</c> measured frames (default 600 with <c>--ab</c>),
+    /// <c>--bench-out</c> the JSON, <c>--bench-motion</c> still / orbit / fly / turn, <c>--no-gpu-lock</c>, <c>--bench-compare</c> two JSON files.
     /// </summary>
     public string? View, Ab, BenchOut;
+
+    /// <summary>
+    /// <c>--ab-period</c>: frames per side of an A/B run (at least 1); <c>--bench-frames</c>: the frames measured (0: no bench run).
+    /// </summary>
     public int AbPeriod = 1, BenchFrames;
+
+    /// <summary>
+    /// <c>--bench-motion</c>: the camera during a bench run, still, orbit, fly or turn.
+    /// </summary>
     public string BenchMotion = "still";
 
     /// <summary>
     /// <c>--bench-orbit</c> pixels of mouse drag a frame of the orbit motion.
     /// </summary>
     public float BenchOrbit = 3;
+
+    /// <summary>
+    /// <c>--no-gpu-lock</c>: do not queue on the GPU lock file while measuring.
+    /// </summary>
     public bool NoGpuLock;
 
     /// <summary>
@@ -348,6 +509,10 @@ sealed class WorldOptions
     /// (docs/bench.md "Triangles per pass").
     /// </summary>
     public bool BenchTris;
+
+    /// <summary>
+    /// <c>--bench-compare</c>: the two bench result files to print side by side.
+    /// </summary>
     public (string A, string B)? BenchCompare;
 
     /// <summary>
@@ -449,6 +614,10 @@ sealed class WorldOptions
     public const float LowEndObjectDistance = 5000, LowEndObjectLod = 0.25f, LowEndLargeRange = 5050,
         LowEndImpostorDistance = 1150, LowEndLargeImpostorDistance = 1100,
         LowEndGrassDensity = 0.1f, LowEndRenderScale = 0.83f, LowEndParticleDensity = 0.1f;
+
+    /// <summary>
+    /// The texture quality <c>--low-end</c> sets (Low).
+    /// </summary>
     public const int LowEndTextureQuality = 3;
 
     #endregion

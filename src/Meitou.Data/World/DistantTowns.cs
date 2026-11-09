@@ -34,6 +34,9 @@ public static class DistantTowns
     /// </summary>
     public const float AlbedoScale = 1.5f;
 
+    /// <summary>
+    /// The baked mesh's file name for the town of <paramref name="handle"/>.
+    /// </summary>
     public static string MeshFileName(int handle) => $"distant_{handle}.mesh";
 
     /// <summary>

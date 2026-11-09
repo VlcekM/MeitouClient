@@ -34,8 +34,8 @@ sealed class EngagedDefence : IDecisionSource
 
     /// <summary>
     /// Makes <paramref name="attacker"/> known to the player character <paramref name="victim"/> and asks the decision step to decide it again: the
-    /// forced sense through <paramref name="aggro"/> (the attacker is a seen enemy of it at once) and the engagement its Self preservation goal reads.
-    /// Serial phases only.
+    /// forced sense through <paramref name="aggro"/> (the attacker is a seen enemy of it at once) and the engagement its Self preservation goal
+    /// reads. Serial phases only.
     /// </summary>
     public void Engage(World world, AggroSystem? aggro, int victim, int attacker)
     {
@@ -65,10 +65,22 @@ sealed class EngagedDefence : IDecisionSource
 
     #region Decision source
 
+    /// <summary>
+    /// The source's name in the decision log.
+    /// </summary>
     public string Name => "32 Self preservation (engaged by a failed kidnap or knock-out)";
+    /// <summary>
+    /// A goal: it runs in the goals step.
+    /// </summary>
     public DecisionStep Step => DecisionStep.Goals;
+    /// <summary>
+    /// Goal 32 (Self preservation).
+    /// </summary>
     public int Key => 32;
 
+    /// <summary>
+    /// Runs for a player character that can fight, is free and awake, and is engaged by a living, awake attacker.
+    /// </summary>
     public DecisionCheck CanRun(World world, int slot)
     {
         var table = world.Characters;
@@ -78,6 +90,9 @@ sealed class EngagedDefence : IDecisionSource
         return EngagedFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("not engaged");
     }
 
+    /// <summary>
+    /// 1 when the attacker is within <see cref="RetaliationSystem.ImmediateReach"/>, else 0.7.
+    /// </summary>
     public float Desire(World world, int slot)
     {
         var table = world.Characters;
@@ -85,6 +100,9 @@ sealed class EngagedDefence : IDecisionSource
         return d.X * d.X + d.Z * d.Z <= RetaliationSystem.ImmediateReach * RetaliationSystem.ImmediateReach ? 1 : 0.7f;
     }
 
+    /// <summary>
+    /// Ends the engagement and gives a defensive attack order on the attacker for the next tick.
+    /// </summary>
     public void Start(World world, int slot)
     {
         var table = world.Characters;

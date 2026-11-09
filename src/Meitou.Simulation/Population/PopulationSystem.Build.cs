@@ -12,19 +12,42 @@ using Meitou.Simulation.Towns;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population's building of a town's squads and characters (pure given the seed; safe on another thread).
+/// </summary>
 public sealed partial class PopulationSystem
 {
-    // ---- building (pure given the seed; safe on another thread) ----
+    #region Building (pure given the seed; safe on another thread)
 
+    /// <summary>
+    /// One character of a built squad: its plan and its rolled look (null: none).
+    /// </summary>
     internal sealed record BuiltMember(MemberPlan Plan, CharacterAppearance? Appearance);
 
+    /// <summary>
+    /// A built squad: its plan, where it stands, its faction and its members.
+    /// </summary>
     /// <param name="NearY">The height of the spot inside a building it stands on (the floor under it is used); null: on the ground.</param>
     /// <param name="Home">The building its town gave it as its home; null: none.</param>
     internal sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members, float? NearY = null,
         TownBuilding? Home = null);
 
+    /// <summary>
+    /// A built town: its site, the load it was built for, its squads and its homes.
+    /// </summary>
     /// <param name="Homes">The town's buildings with the template housed in each (those whose template makes no squad too), for the artifacts.</param>
     sealed record BuiltTown(int Site, long LoadId, List<BuiltSquad> Squads, List<(TownBuilding Building, SquadTemplate Template)> Homes);
+
+    /// <summary>
+    /// The original's per-cent constant, the double nearest the float 0.01 (<c>0x141748288</c>), so exact products like 100 x 0.5 x 4 fall just under
+    /// their integer as there.
+    /// </summary>
+    const double BarShare = 0.009999999776482582;
+
+    /// <summary>
+    /// The height above a node a squad is made at before it drops to the floor under it (the original adds 10 to the node's Y).
+    /// </summary>
+    const float SpotLift = 10;
 
     /// <summary>
     /// The town's residents and bar squads. <paramref name="held"/>: a loaded save holds squads of the town (its pinned saved platoons), which are
@@ -102,12 +125,6 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The original's per-cent constant, the double nearest the float 0.01 (<c>0x141748288</c>), so exact products like 100 x 0.5 x 4 fall just under
-    /// their integer as there.
-    /// </summary>
-    const double BarShare = 0.009999999776482582;
-
-    /// <summary>
     /// The number of squads a bar squad entry (v0 slots, v1 per cent) makes (see <see cref="BuildTown"/>).
     /// </summary>
     internal static int BarCount(int v0, int v1, ulong seed, ulong key)
@@ -121,11 +138,6 @@ public sealed partial class PopulationSystem
 
         return n;
     }
-
-    /// <summary>
-    /// The height above a node a squad is made at before it drops to the floor under it (the original adds 10 to the node's Y).
-    /// </summary>
-    const float SpotLift = 10;
 
     /// <summary>
     /// A random node of the town's node map (null when it has none): uniform, as <c>FUN_14038b000</c>.
@@ -178,6 +190,10 @@ public sealed partial class PopulationSystem
         return new BuiltSquad(plan, position, squadFaction, members);
     }
 
+    /// <summary>
+    /// A random walkable spot within the town's placement radius (<see cref="PopulationSettings.PlacementRadiusShare"/> of its radius), tried 12
+    /// times; the town's position when none is walkable.
+    /// </summary>
     Vector2 Place(TownSite site, ulong seed, ulong key, IWalkability walk)
     {
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult * _settings.PlacementRadiusShare;
@@ -191,4 +207,6 @@ public sealed partial class PopulationSystem
 
         return centre;
     }
+
+    #endregion
 }

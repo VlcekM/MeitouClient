@@ -33,6 +33,9 @@ sealed partial class GameHost
     /// </summary>
     float? _npcRange;
 
+    /// <summary>
+    /// The character draw distance: the renderer's slider, else the settings' <c>npc range</c> (read once).
+    /// </summary>
     float NpcRange => ActiveCharacters?.DrawDistance ?? (_npcRange ??= GameplaySettings.NpcRange(Install));
 
     /// <summary>
@@ -89,6 +92,9 @@ sealed partial class GameHost
     /// </summary>
     static float DrawnYaw(CharacterSnapshot c) => float.IsNaN(c.DrawYaw) ? c.Yaw : c.DrawYaw;
 
+    /// <summary>
+    /// Indexes the previous snapshot's characters by id (<see cref="PreviousById"/>), once per snapshot.
+    /// </summary>
     internal void IndexPrevious()
     {
         var previous = Session.PreviousSnapshot;
@@ -142,16 +148,12 @@ sealed partial class GameHost
     #region Draw list
 
     /// <summary>
-    /// The edited character's idle stances, cross-faded.
+    /// The characters the portrait bar draws at the full animation rate, filled every frame.
     /// </summary>
-    EditorStances EditorStances => field ??= new(this);
-
-    /// <summary>
-    /// The looks with the tool an operator holds.
-    /// </summary>
-    internal HeldToolLooks HeldLooks => field ??= new(this);
-
     readonly HashSet<CharacterId> _fullRate = [];
+    /// <summary>
+    /// The draw keys of the characters the portraits ask for: posed however far or hidden.
+    /// </summary>
     readonly HashSet<long> _portraitKeys = [];
     /// <summary>
     /// The snapshot the distant list was made from (<see cref="AddDistant"/>), its tick and the world.
@@ -160,10 +162,29 @@ sealed partial class GameHost
 
     // By character slot, what the draw list hands the renderer, refilled every frame instead of made anew (the renderer reads them only in that
     // frame's update): the poses, the stuck bolts and the ragdoll between ticks.
+    /// <summary>
+    /// The poses by character slot.
+    /// </summary>
     CharacterPose[]?[] _posesBySlot = [];
+    /// <summary>
+    /// The stuck bolts by character slot (<see cref="_posesBySlot"/>).
+    /// </summary>
     internal StuckBoltMesh[]?[] BoltsBySlot = [];
-    // The ragdoll's two alternate, so a blended one is a new object to the renderer each frame (it poses a ragdoll again only for other bones).
+    /// <summary>
+    /// The ragdoll between ticks by character slot, in two alternating arrays, so a blended one is a new object to the renderer each frame (it poses
+    /// a ragdoll again only for other bones).
+    /// </summary>
     Data.Characters.BonePose?[] _ragdollsBySlot = [], _spareRagdollsBySlot = [];
+
+    /// <summary>
+    /// The edited character's idle stances, cross-faded.
+    /// </summary>
+    EditorStances EditorStances => field ??= new(this);
+
+    /// <summary>
+    /// The looks with the tool an operator holds.
+    /// </summary>
+    internal HeldToolLooks HeldLooks => field ??= new(this);
 
     /// <summary>
     /// Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.
@@ -318,6 +339,10 @@ sealed partial class GameHost
         return ref slots[slot];
     }
 
+    /// <summary>
+    /// Fills the list from the current and previous snapshots: in the editor only the character being edited, else every character in reach posed,
+    /// interpolated by the simulation's alpha, and those beyond it in the distant list.
+    /// </summary>
     void FillDrawListCore(CharacterDrawList list)
     {
         var current = Session.CurrentSnapshot;

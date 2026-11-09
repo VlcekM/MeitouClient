@@ -9,14 +9,33 @@ namespace Meitou.Simulation.Combat;
 /// </summary>
 sealed class AttackerIndex
 {
+    /// <summary>
+    /// Each attacker (its target, grid cell and slot), sorted by target, then cell column, row and slot.
+    /// </summary>
     (int Target, int X, int Z, int Slot)[] _attackers = [];
+    /// <summary>
+    /// Each yielder (whom it yields to, its slot), sorted by that slot.
+    /// </summary>
     (int Target, int Slot)[] _yielders = [];
+    /// <summary>
+    /// How many entries of <see cref="_attackers"/> and <see cref="_yielders"/> are used, and the slots indexed (the table's high water at the
+    /// last <see cref="Build"/>).
+    /// </summary>
     int _attackerCount, _yielderCount, _size;
 
-    // Per slot: where its attackers and its yielders start in the sorted arrays (the next slot's start ends them).
+    /// <summary>
+    /// Per slot: where its attackers and its yielders start in the sorted arrays (the next slot's start ends them).
+    /// </summary>
     int[] _attackersAt = [], _yieldersAt = [];
+    /// <summary>
+    /// Each slot's grid cell at the last <see cref="Build"/>.
+    /// </summary>
     (int X, int Z)[] _cells = [];
 
+    /// <summary>
+    /// Indexes the last tick's targets and yields (<paramref name="read"/>) of the characters alive in <paramref name="table"/>'s previous state,
+    /// with their cells in <paramref name="grid"/> (serial).
+    /// </summary>
     public void Build(CombatSlot[] read, CharacterTable table, SpatialGrid grid)
     {
         int n = table.HighWater;
@@ -68,7 +87,13 @@ sealed class AttackerIndex
         }
     }
 
+    /// <summary>
+    /// The attackers in slot order before the bucket sort (scratch of <see cref="Build"/>).
+    /// </summary>
     (int Target, int X, int Z, int Slot)[] _gathered = [];
+    /// <summary>
+    /// Each target's next free entry in <see cref="_attackers"/> while the buckets fill (scratch of <see cref="Build"/>).
+    /// </summary>
     int[] _fill = [];
 
     /// <summary>

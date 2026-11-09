@@ -14,7 +14,14 @@ namespace Meitou.Reports;
 /// </summary>
 sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClientFactory http, ILogger<Feedback> log)
 {
+    /// <summary>
+    /// The attachment kinds a form can ask for and upload, in their upload order.
+    /// </summary>
     public static readonly string[] Kinds = ["screenshot", "navmesh", "save", "log"];
+
+    /// <summary>
+    /// The longest title, text, version, camera location and mods list kept (characters), and the forms one person may start a day.
+    /// </summary>
     const int TitleMax = 100, BodyMax = 5000, VersionMax = 64, LocationMax = 200, ModsMax = 1000, PerDay = 20;
 
     /// <summary>
@@ -22,6 +29,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// </summary>
     public static long MaxBytes(string kind) => kind == "save" ? 95_000_000 : 16 << 20;
 
+    /// <summary>
+    /// The file name an attachment of <paramref name="kind"/> is stored under in the form's folder.
+    /// </summary>
     public static string FileName(string kind) => kind switch
     {
         "screenshot" => "screenshot.png",
@@ -143,6 +153,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// Deletes the form's folder and its attachments (nothing for a malformed token).
+    /// </summary>
     public void DeleteFiles(string token)
     {
         if (!ValidToken(token)) return;
@@ -172,6 +185,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         _ => row.LogSize is null,
     };
 
+    /// <summary>
+    /// The GitHub issue's text: the player's text (mentions defused), the game's details and links to the attachments with their sizes.
+    /// </summary>
     string IssueBody(FeedbackRow row)
     {
         string Link(string kind) => new Uri(config.PublicUrl, $"feedback/{row.Token}/{FileName(kind)}").AbsoluteUri;
@@ -218,6 +234,10 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// </summary>
     static string Unmention(string text) => text.Replace("@", "@​", StringComparison.Ordinal);
 
+    /// <summary>
+    /// <paramref name="s"/> trimmed, without control characters (line breaks kept when <paramref name="lines"/>) and cut to <paramref name="max"/>;
+    /// null when empty.
+    /// </summary>
     static string? Clean(string? s, int max, bool lines)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
@@ -225,6 +245,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         return s.Length > max ? s[..max] : s;
     }
 
+    /// <summary>
+    /// Whether <paramref name="token"/> has the form of a form token: 32 lower-case hexadecimal digits.
+    /// </summary>
     static bool ValidToken(string token) => token.Length == 32 && token.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 }
 

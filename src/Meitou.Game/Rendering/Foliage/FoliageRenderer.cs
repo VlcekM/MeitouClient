@@ -39,7 +39,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// Grass pages per zone side (576 units each).
     /// </summary>
     internal const int PagesPerZone = 8;
+    /// <summary>
+    /// A grass page's side in world units (<see cref="PagesPerZone"/> to a zone).
+    /// </summary>
     internal const float PageSize = WorldLayout.ZoneSize / (float)PagesPerZone;
+    /// <summary>
+    /// The size of an instance row (a matrix), in bytes.
+    /// </summary>
     const int InstanceStride = 64;
 
     /// <summary>
@@ -231,6 +237,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves the <paramref name="instances"/> of a mesh the terrain shift moves (within its circle) by its offset, onto the shifted ground.
+    /// </summary>
     void ApplyShift(FoliageMesh mesh, FoliageInstanceRecord[] instances)
     {
         if (_shift is not { } s || !s.Moves(mesh.Name)) return;
@@ -251,6 +260,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// Draw the grass / the meshes and impostors (not the TERRAIN-mode rocks) (the bench's `grass` and `foliage-meshes` switches).
     /// </summary>
     public bool DrawGrass { get; set; } = true;
+    /// <summary>
+    /// Draw the meshes and impostors (see <see cref="DrawGrass"/>).
+    /// </summary>
     public bool DrawMeshes { get; set; } = true;
     /// <summary>
     /// The view is under the loading screen (the host sets it each frame): its frames need not be smooth, so enough layouts are in flight to keep
@@ -260,6 +272,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public bool Covered { get; set; }
 
+    /// <summary>
+    /// Loads the catalog and the layout cache, compiles the mesh, prepass and grass programs, and makes the texture cache, the traced scene, the
+    /// level jobs, the GPU cull (Vulkan; Metal only with <c>MEITOU_METAL_GPU_CULL</c>) and the grass store.
+    /// </summary>
     public FoliageRenderer(IGpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
         Gpu = gpu;
@@ -325,7 +341,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// grass 8x as far by default).
     /// </summary>
     public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
+    /// <summary>
+    /// settings.cfg <c>grass range</c> (see <see cref="RangeSetting"/>).
+    /// </summary>
     public float GrassRangeSetting { get; set; } = Env("MEITOU_GRASS_RANGE", DefaultGrassRange);
+    /// <summary>
+    /// settings.cfg <c>grass density</c> (see <see cref="RangeSetting"/>).
+    /// </summary>
     public float GrassDensitySetting { get; set; } = 1;
     /// <summary>
     /// The Meitou <c>grass-velocity</c> switch (docs/render-foliage.md "Grass motion vectors"): the motion pass redraws only the swaying blades near
@@ -350,10 +372,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// The longest grass layer range in the catalog at setting 1.
     /// </summary>
     public float GrassMaxRange { get; }
+    /// <summary>
+    /// The constructor's time (the catalog and the programs), in milliseconds.
+    /// </summary>
     public double LoadMs { get; }
+    /// <summary>
+    /// Mesh and impostor instances drawn by the last <see cref="Draw"/>.
+    /// </summary>
     public int DrawnInstances { get; private set; }
+    /// <summary>
+    /// Grass blades drawn by the last <see cref="Draw"/>.
+    /// </summary>
     public int DrawnBlades { get; private set; }
+    /// <summary>
+    /// Draw calls recorded by the last <see cref="Draw"/>.
+    /// </summary>
     public int DrawCalls { get; private set; }
+    /// <summary>
+    /// CPU time of the last <see cref="Draw"/>, in milliseconds.
+    /// </summary>
     public double LastDrawCpuMs { get; private set; }
     /// <summary>
     /// The groups the last CPU cull tested (diagnostics for the parallel path).
@@ -367,6 +404,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// GPU time of the foliage draws of one frame (the main camera's draw, grass included), from timestamp queries a frame or two old.
     /// </summary>
     public double GpuMs { get; private set; }
+    /// <summary>
+    /// CPU time of the last <see cref="Update(Vector3)"/>, in milliseconds.
+    /// </summary>
     public double LastUpdateMs { get; private set; }
     /// <summary>
     /// Streaming diagnostics (the fly benchmark), ground distances from the eye, infinity when none: the nearest zone within the
@@ -374,7 +414,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// group in range whose mesh is not resident (since the last <see cref="Update"/>).
     /// </summary>
     public float NearestIncompleteZone { get; private set; } = float.PositiveInfinity;
+    /// <summary>
+    /// See <see cref="NearestIncompleteZone"/>: the nearest zone within the far reach not laid out at all.
+    /// </summary>
     public float NearestUnlaidZone { get; private set; } = float.PositiveInfinity;
+    /// <summary>
+    /// See <see cref="NearestIncompleteZone"/>: the nearest zone with a group in range whose mesh is not resident.
+    /// </summary>
     public float NearestMissingMesh { get; private set; } = float.PositiveInfinity;
     /// <summary>
     /// The nearest grass page of a laid-out zone within four fifths of its range (before the blades sink) that is not uploaded yet.
@@ -392,7 +438,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// How far small, medium and large meshes are drawn with <see cref="MeitouRange"/> (units along the ground; the Tab sliders).
     /// </summary>
     public float SmallRange { get; set; } = FoliageSizes.DefaultSmallRange;
+    /// <summary>
+    /// How far medium meshes are drawn (see <see cref="SmallRange"/>).
+    /// </summary>
     public float MediumRange { get; set; } = FoliageSizes.DefaultMediumRange;
+    /// <summary>
+    /// How far large meshes are drawn (see <see cref="SmallRange"/>).
+    /// </summary>
     public float LargeRange { get; set; } = FoliageSizes.DefaultLargeRange;
     /// <summary>
     /// The foliage's texture cache (the VRAM dump lists it).
@@ -419,12 +471,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
         }
     }
+    /// <summary>
+    /// The guard's range scale (1 without a guard).
+    /// </summary>
     float Scale => _guard?.RangeScale ?? 1f;
     /// <summary>
     /// Seconds an unused mesh stays under pressure (instead of <see cref="IdleSeconds"/>).
     /// </summary>
     public double GuardIdleSeconds { get; set; } = 2;
+    /// <summary>
+    /// The longest of the three class ranges, scaled by the guard.
+    /// </summary>
     float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange) * Scale;
+    /// <summary>
+    /// A size class's range, scaled by the guard.
+    /// </summary>
     float ClassRange(FoliageSizeClass c) => (c switch { FoliageSizeClass.Small => SmallRange, FoliageSizeClass.Medium => MediumRange,
         _ => LargeRange }) * Scale;
 
@@ -446,6 +507,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// How far ahead (seconds of the eye's current motion) the layout looks; <see cref="MaxLookahead"/> caps the distance.
     /// </summary>
     public float LookaheadSeconds { get; set; } = 1.5f;
+    /// <summary>
+    /// Problems met while loading (missing or unreadable meshes); workers add to it under its lock.
+    /// </summary>
     public List<string> Messages { get; } = [];
 
     /// <summary>
@@ -478,6 +542,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// GPU memory held by foliage meshes, textures and grass pages.
     /// </summary>
     public long ResidentBytes => _residentMeshBytes + _textures.ResidentBytes + GrassBytes() + _impostorBytes;
+    /// <summary>
+    /// The resident memory as one line: meshes and their unloads, textures, grass pages and the atlases.
+    /// </summary>
     public string ResidentDescription =>
         $"{_residentMeshBytes / 1048576.0:0} MB in {_assetsByMesh.Values.Count(a => a.Resident)} meshes ({_meshUnloads} unloaded, " +
         $"{_meshReloads} reloaded), {_textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages, {ImpostorDescription}";
@@ -501,6 +568,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts the GPU cull's draw tally again (<see cref="FoliageGpuCull.ResetTally"/>).
+    /// </summary>
     public void ResetDrawTally() => _gpuCull?.ResetTally();
 
     /// <summary>
@@ -523,6 +593,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public double? ColourTrianglesPerFrame =>
         _gpuCull is { TallyFrames: > 0 } g ? (g.Tally[0, 0] + g.Tally[0, 2] + 2.0 * g.Tally[0, 4]) / g.TallyFrames : null;
 
+    /// <summary>
+    /// A line about the content: zones laid out, their meshes and grass pages, the meshes resident and the catalog's layers.
+    /// </summary>
     public string Describe() =>
         $"{_zones.Values.Count(z => z.Ready)} zones laid out ({_zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
         $"{_zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {_assetsByMesh.Count} foliage meshes " +
@@ -547,14 +620,26 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// The eye at the last <see cref="Update(Vector3)"/>, when it was there, and its smoothed ground velocity.
     /// </summary>
     Vector3? _lastEye;
+    /// <summary>
+    /// The time of <see cref="_lastEye"/>, in seconds.
+    /// </summary>
     double _lastEyeTime;
+    /// <summary>
+    /// The eye's smoothed ground velocity (x, z), in units per second.
+    /// </summary>
     Vector2 _velocity;
 
     /// <summary>
     /// This update's wanted layouts, the zones dropped and the zones looked at (kept to reuse their storage).
     /// </summary>
     readonly List<(ZoneCoordinate Zone, FoliageZoneTier Tier, float Urgency, bool ForKept)> _wanted = [];
+    /// <summary>
+    /// Scratch: the zones dropped this update.
+    /// </summary>
     readonly List<FoliageZoneState> _dropping = [];
+    /// <summary>
+    /// Scratch: the zones looked at this update.
+    /// </summary>
     readonly HashSet<ZoneCoordinate> _candidates = [];
 
     /// <summary>
@@ -591,6 +676,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public int Areas { get => _areas; set { _areas = Math.Max(value, 1); _textures.Areas = _areas; } }
 
+    /// <summary>
+    /// The ground distance from <paramref name="zone"/> to the nearest kept point; infinity with none.
+    /// </summary>
     float NearKeptZone(ZoneCoordinate zone)
     {
         float d = float.PositiveInfinity;
@@ -615,6 +703,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         return EyeLift.Apply(groundDistance, EyeLift.Of(eye, GroundUnderEye));
     }
 
+    /// <summary>
+    /// One update: takes the finished layouts, drops the far zones, starts the wanted layouts, then the grass pages, meshes, levels, textures,
+    /// uploads (within <paramref name="settling"/>'s or the frame's budget) and atlases.
+    /// </summary>
     void Update(Vector3 eye, bool settling)
     {
         _updates++;
@@ -942,12 +1034,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         Console.WriteLine($"warning   foliage streaming did not finish in {timeoutMs / 1000} s");
     }
 
+    /// <summary>
+    /// The ground distance from <paramref name="eye"/> to the zone's square (0 inside).
+    /// </summary>
     static float ZoneDistance(ZoneCoordinate zone, Vector3 eye)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(zone);
         return BoxDistance((float)x0, (float)z0, WorldLayout.ZoneSize, eye);
     }
 
+    /// <summary>
+    /// The ground distance from <paramref name="eye"/> to the square at (<paramref name="x0"/>, <paramref name="z0"/>) of side
+    /// <paramref name="size"/> (0 inside).
+    /// </summary>
     static float BoxDistance(float x0, float z0, float size, Vector3 eye)
     {
         float dx = Math.Max(Math.Max(x0 - eye.X, eye.X - (x0 + size)), 0);
@@ -1085,6 +1184,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Forgets a zone: frees its groups' arena ranges and its grass pages.
+    /// </summary>
     void Drop(FoliageZoneState state)
     {
         FreeArena(state.Groups);
@@ -1108,13 +1210,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// between two frames (a page takes a millisecond or two, and finished ones are only collected once a frame).
     /// </summary>
     const int MaxGrassJobs = 12;
+    /// <summary>
+    /// Grass pages generating at once under the loading screen: at least four per streaming thread.
+    /// </summary>
     static readonly int CoveredGrassJobs = Math.Max(MaxGrassJobs, 4 * BackgroundWork.Threads);
+    /// <summary>
+    /// The page walk's wanted pages: distance (the eye's, else past all of the eye's for a kept point's), zone and page key.
+    /// </summary>
     readonly List<(float Distance, FoliageZoneState State, int Key)> _grassWanted = [];
     /// <summary>
     /// An eye page waited for room in the grass store last frame (<see cref="UpdateGrass"/>): kept pages are not queued meanwhile.
     /// </summary>
     bool _grassEyeWaited;
+    /// <summary>
+    /// The nearest wanted pages picked to start this frame (as many as jobs are free).
+    /// </summary>
     readonly (float Distance, FoliageZoneState State, int Key)[] _grassPicks = new (float, FoliageZoneState, int)[CoveredGrassJobs];
+    /// <summary>
+    /// Waiting work for <see cref="Pending"/>: wanted layouts not started, wanted pages not started, and the near ones among them.
+    /// </summary>
     int _zonesWaiting, _grassWaiting, _grassNear;
 
     /// <summary>
@@ -1122,7 +1236,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// made from: while those stay within <see cref="GrassWalkSlack"/> the walk would decide the same, so it is skipped.
     /// </summary>
     bool _grassSettled;
+    /// <summary>
+    /// What the last page walk was made from: the eye, the ground under it, the grass range, whether streaming was allowed, and the store's version.
+    /// </summary>
     (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) _grassWalk;
+    /// <summary>
+    /// The kept points of the last page walk.
+    /// </summary>
     Vector3[] _grassWalkKept = [];
     /// <summary>
     /// How far the eye or a kept point may move before the page walk runs again: a quarter page, well inside the half page by which a page is wanted
@@ -1376,6 +1496,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     int _meshUnloads, _meshReloads;
 
+    /// <summary>
+    /// The asset of <paramref name="mesh"/>, made on first use: its materials by the record's mode, and its decode started on a worker.
+    /// </summary>
     FoliageMeshAsset AssetFor(FoliageMesh mesh)
     {
         if (_assetsByMesh.TryGetValue(mesh, out var a)) return a;
@@ -1405,6 +1528,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         return a;
     }
 
+    /// <summary>
+    /// Reads a mesh file into a model (welded when <paramref name="weld"/>); null, with a message, when missing or unreadable.
+    /// </summary>
     Model? Decode(string name, bool weld)
     {
         var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
@@ -1422,6 +1548,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes the finished decodes: sets each mesh's bounds, size class, triangle count and texel scales and queues its upload; a failed one is
+    /// marked.
+    /// </summary>
     void PumpMeshes()
     {
         for (int i = 0; i < _decoding.Count; i++)
@@ -1514,6 +1644,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         });
     }
 
+    /// <summary>
+    /// Queues the upload of a model's parts (vertices and the indices with the trimmed list after them) in slabs, counting their bytes into
+    /// <paramref name="tally"/>.
+    /// </summary>
     void QueueModel(FoliageGpuMesh mesh, Model model, long[] tally)
     {
         foreach (var part in model.Parts)
@@ -1656,6 +1790,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public void SetView(int width, int height, float fieldOfView) => _textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
 
+    /// <summary>
+    /// Frees a mesh's buffers (after the frames in flight) and tells the traced scene.
+    /// </summary>
     void DeleteMesh(FoliageGpuMesh m)
     {
         _rays.MeshDeleted();   // the traced scene drops what it built from these buffers
@@ -1695,17 +1832,35 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     #region Drawing
 
+    /// <summary>
+    /// The CPU path's instances of one mesh in a view, drawn instanced.
+    /// </summary>
     sealed class Batch
     {
+        /// <summary>
+        /// The mesh drawn.
+        /// </summary>
         public required FoliageMeshAsset Asset;
+        /// <summary>
+        /// The instance matrices (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Matrix4x4[] Data = new Matrix4x4[64];
+        /// <summary>
+        /// How many instances, and where the first sits in the view's rows.
+        /// </summary>
         public int Count, Offset;
         /// <summary>
         /// The <see cref="Draw"/> call that last put this batch into <c>active</c> (<see cref="BatchOf"/>), and its place there.
         /// </summary>
         public long Stamp = -1;
+        /// <summary>
+        /// The batch's place in the active list (see <see cref="Stamp"/>).
+        /// </summary>
         public int Index;
 
+        /// <summary>
+        /// Appends an instance, growing <see cref="Data"/> as needed.
+        /// </summary>
         public void Add(in Matrix4x4 m)
         {
             if (Count == Data.Length) Array.Resize(ref Data, Count * 2);
@@ -1718,6 +1873,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <see cref="Draw"/>).
     /// </summary>
     readonly record struct ShadowCandidate(FoliageMeshAsset Asset, FoliageInstanceRecord[] Instances, int Index, float Mesh, float Impostor);
+    /// <summary>
+    /// The instances in range of the shadow cascades' eye, kept for the frame's further cascades.
+    /// </summary>
     readonly List<ShadowCandidate> _shadowCandidates = [];
     /// <summary>
     /// The meshes of the recording pass's work list, in order: the further cascades' batch order (<see cref="CullCandidates"/>).
@@ -1727,9 +1885,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// Counts <see cref="Draw"/> calls (<see cref="Batch.Stamp"/>).
     /// </summary>
     long _drawStamp;
+    /// <summary>
+    /// The view's frustum planes for the cull, reused.
+    /// </summary>
     readonly FoliageCullView _cullView = new();
+    /// <summary>
+    /// The update the shadow candidates were gathered in (-1: none), and the updates' count.
+    /// </summary>
     long _shadowCandidatesFrame = -1, _updates;
+    /// <summary>
+    /// The eye the shadow candidates were gathered from.
+    /// </summary>
     Vector3 _shadowCandidatesEye;
+    /// <summary>
+    /// The range the shadow candidates were gathered within.
+    /// </summary>
     float _shadowCandidatesRange;
 
     /// <summary>
@@ -2015,8 +2185,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     sealed class CandidateOutput
     {
+        /// <summary>
+        /// The visible instances' batch matrices (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Matrix4x4[] Visible = new Matrix4x4[64];
+        /// <summary>
+        /// How many matrices are used.
+        /// </summary>
         public int Count;
+        /// <summary>
+        /// The runs of one mesh: whether they are impostors, where they start in <see cref="Visible"/> and how many.
+        /// </summary>
         public readonly List<(FoliageMeshAsset Asset, bool Impostor, int Start, int Count)> Runs = [];
     }
 
@@ -2024,6 +2203,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// The groups a culling pass tests, in order (the batch order follows it), with their range for this view.
     /// </summary>
     readonly List<(FoliageGroup Group, FoliageGroupRange Range, int Parts)> _cullWork = [];
+    /// <summary>
+    /// Each work-list group's CPU cull output (kept to reuse their storage).
+    /// </summary>
     readonly List<FoliageCullOutput> _cullOutputs = [];
 
     /// <summary>
@@ -2051,6 +2233,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         return margin;
     }
 
+    /// <summary>
+    /// The CPU cull of a view: the groups in range (box-tested unless <paramref name="record"/>), every instance tested; <paramref name="record"/>:
+    /// the candidates are kept for the frame's further cascades.
+    /// </summary>
     void CullZones(Vector3 eye, WorldRenderOptions options, float maxRange, bool record)
     {
         if (record) { _shadowCandidates.Clear(); _shadowCandidateOrder.Clear(); (_shadowCandidatesFrame, _shadowCandidatesEye,
@@ -2229,19 +2415,37 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// rocks at exactly the same depth in colour (depth passes keep the nearest whatever the order), as for A1's foliage batches.
     /// </summary>
     readonly List<(FoliageMeshAsset Asset, bool Mirrored, int Level)> _gpuRockOrder = [];
+    /// <summary>
+    /// The work list's chunks (the first <see cref="_gpuChunkCount"/>), grown as needed.
+    /// </summary>
     FoliageCullChunk[] _gpuChunks = new FoliageCullChunk[1024];
+    /// <summary>
+    /// How many chunks the work list has, and the instances they hold.
+    /// </summary>
     int _gpuChunkCount, _gpuInstances;
+    /// <summary>
+    /// Each batch's first chunk (with one more for the end), and scratch for placing the chunks by batch.
+    /// </summary>
     int[] _gpuBatchStart = new int[65], _gpuCursor = new int[64];
     /// <summary>
     /// The chunks in the frame's constants, written once a frame per work list (<see cref="_gpuChunkFrame"/>).
     /// </summary>
     Transient _gpuChunkData;
+    /// <summary>
+    /// The GPU frame <see cref="_gpuChunkData"/> was written in (-1: not this work list's).
+    /// </summary>
     long _gpuChunkFrame = -1;
     /// <summary>
     /// The shadow cascades' shared work list: the frame, eye and range it was built for (as the CPU's candidates).
     /// </summary>
     long _gpuWorkFrame = -1;
+    /// <summary>
+    /// The eye the shadow cascades' work list was built from (see <see cref="_gpuWorkFrame"/>).
+    /// </summary>
     Vector3 _gpuWorkEye;
+    /// <summary>
+    /// The range the shadow cascades' work list was built within.
+    /// </summary>
     float _gpuWorkRange;
     /// <summary>
     /// The coarsened cascade's texel the work list was built for (0: not coarsened): its impostor transitions depend on it
@@ -2252,7 +2456,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// The cascade's planes the depth work list was box-tested against (<see cref="ShadowZoneBox"/>); null: the list holds every zone in range.
     /// </summary>
     Vector4[]? _gpuWorkPlanes;
+    /// <summary>
+    /// Counts the work lists ordered (<see cref="OrderGpuBatches"/>).
+    /// </summary>
     int _gpuWorkStamp;
+    /// <summary>
+    /// Scratch: the view's indirect draws (meshes, then rocks, then impostors), grown as needed.
+    /// </summary>
     FoliageCullDraw[] _gpuDraws = new FoliageCullDraw[64];
     /// <summary>
     /// The current view's cull (rows and indirect arguments), read by <see cref="RecordMeshes"/> and the rocks' draws.
@@ -2263,6 +2473,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// (<see cref="DispatchGpuCull"/>).
     /// </summary>
     readonly List<TerrainRenderer.IndirectMesh> _rockDraws = [];
+    /// <summary>
+    /// Each rock draw's batch (see <see cref="_rockDraws"/>).
+    /// </summary>
     readonly List<int> _rockDrawBatch = [];
     /// <summary>
     /// Each rock draw's first index (a generated level's place in its part's level buffer; 0 for the original).
@@ -2280,6 +2493,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     bool[] _gpuBatchShown = new bool[64];
 
+    /// <summary>
+    /// Whether the mesh is drawn as a TERRAIN-mode rock (a terrain material, with textures on).
+    /// </summary>
     static bool IsRock(FoliageMeshAsset a, WorldRenderOptions options) => a.Terrain && options.Textures;
 
     /// <summary>
@@ -2736,6 +2952,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     #region Depth only (the sun's shadow map, ShadowPass)
 
+    /// <summary>
+    /// Whether the current draw is a shadow cascade's depth (<see cref="DrawDepth"/>).
+    /// </summary>
     bool _depthPass;
     /// <summary>
     /// The cascade being drawn skips meshes smaller than this (world units, <see cref="MeshAsset.Size"/>): their shadow would cover a few texels.
@@ -2766,6 +2985,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // (BeginNativeInPass). Each draw method is split into Prepare (reads the textures and the zones' state, makes a draw list) and Record (the
     // list into one native segment: the sets and dynamic state once, per draw a push constant block and the mesh's own buffers).
 
+    /// <summary>
+    /// The kinds of segment whose pipeline state <see cref="SegmentId"/> remembers: the colour, depth, grass, motion, solid, prepass, solid prepass
+    /// and EQUAL passes.
+    /// </summary>
     const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4, PrepassKind = 5, PrepassSolidKind = 6, EqualKind = 7;
     /// <summary>
     /// The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.
@@ -2783,9 +3006,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly record struct SegmentPipeline(GpuProgram Program, AttachmentFormats Formats, BlendState Blend, ColorMask Mask,
         PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
+    /// <summary>
+    /// The id of each (kind, pipeline state) met so far.
+    /// </summary>
     readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
+    /// <summary>
+    /// The last pipeline state of each kind (with <see cref="_segmentIds"/>, so a repeat costs one compare).
+    /// </summary>
     readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[8];
+    /// <summary>
+    /// The id of each kind's last state (0: none yet).
+    /// </summary>
     readonly int[] _segmentIds = new int[8];
+    /// <summary>
+    /// The ids handed out so far.
+    /// </summary>
     int _segmentCount;
 
     /// <summary>
@@ -2824,6 +3059,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         n.PipeA = n.PipeB = null;
     }
 
+    /// <summary>
+    /// The pipeline of a part for <paramref name="segment"/>, from the part's two-entry cache (the last two segments), else made.
+    /// </summary>
     GpuPipeline PipelineFor(ref FoliageNativeMesh n, NativeProg p, int segment, DrawState state, AttachmentFormats formats, string label)
     {
         if (n.SegA == segment) return n.PipeA!.Value;
@@ -2868,20 +3106,38 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly record struct MaterialKey(bool Swizzled, bool HasDiffuse, bool Triplanar, float TileX, float TileY, int AlphaSource,
         float AlphaThreshold, bool Emissive, float Specular, uint Surface);
 
+    /// <summary>
+    /// One draw of a mesh part: its batch's instances, textures and material.
+    /// </summary>
     struct MeshDraw
     {
+        /// <summary>
+        /// The mesh part drawn.
+        /// </summary>
         public FoliageGpuPart Part;
+        /// <summary>
+        /// The batch's first row and instance count (the CPU path).
+        /// </summary>
         public uint FirstInstance, Instances;
         /// <summary>
         /// The batch's place in <c>active</c> (the GPU cull's draw reaches its batch's chunks by it).
         /// </summary>
         public int Batch;
+        /// <summary>
+        /// The textures' keys (0: none).
+        /// </summary>
         public uint Diffuse, Normal, Diffuse2, Normal2;
+        /// <summary>
+        /// What the draw sets besides its textures.
+        /// </summary>
         public MaterialKey Material;
         /// <summary>
         /// 1: uHasNormal, 2: uHasDual, 4: uUseVertexColour.
         /// </summary>
         public int PartBits;
+        /// <summary>
+        /// Drawn without back-face culling.
+        /// </summary>
         public bool DoubleSided;
     }
 
@@ -2890,6 +3146,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// stand-in for a texture not resident.
     /// </summary>
     float _textureBias;
+    /// <summary>
+    /// The stand-in's bindless index for the segment (see <see cref="_textureBias"/>).
+    /// </summary>
     uint _textureStandIn;
 
     /// <summary>
@@ -2916,6 +3175,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     uint Texture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, _textureBias, _textureStandIn);
 
+    /// <summary>
+    /// A texture's key, 0 for none.
+    /// </summary>
     static uint IdOf(WorldTexture? t) => t?.Key ?? 0;
 
     /// <summary>
@@ -2934,6 +3196,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Adds a draw per part of <paramref name="mesh"/> for batch <paramref name="b"/>, with its material's textures (none when the options turn
+    /// textures off) and cut-out.
+    /// </summary>
     void AddMesh(FoliageGpuMesh mesh, FoliageMaterial m, Batch b, WorldRenderOptions options)
     {
         uint diffuse = options.Textures ? IdOf(m.Diffuse) : 0;
@@ -2973,7 +3239,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// What a mesh segment draws: the colour, a shadow cascade's depth, the main view's depth prepass (<see cref="FoliagePrepass"/>), or the colour
     /// after it (no discards, depth EQUAL, no depth write).
     /// </summary>
-    enum MeshPass { Colour, Depth, Prepass, Equal }
+    enum MeshPass
+    {
+        /// <summary>
+        /// The colour.
+        /// </summary>
+        Colour,
+        /// <summary>
+        /// A shadow cascade's depth.
+        /// </summary>
+        Depth,
+        /// <summary>
+        /// The main view's depth prepass.
+        /// </summary>
+        Prepass,
+        /// <summary>
+        /// The colour after the prepass: no discards, depth EQUAL, no depth write.
+        /// </summary>
+        Equal
+    }
 
     /// <summary>
     /// The mesh draw list in one native segment (<paramref name="pass"/>), back faces culled unless the material is double-sided.
@@ -3195,32 +3479,87 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     sealed class MeshJob : RecordJob
     {
+        /// <summary>
+        /// One draw of the segment: plain indexed or indirect.
+        /// </summary>
         public struct Draw
         {
+            /// <summary>
+            /// Whether the draw sets the cull mode (it changed from the draw before).
+            /// </summary>
             public bool SetRaster;
+            /// <summary>
+            /// The cull mode it sets.
+            /// </summary>
             public CullMode Cull;
+            /// <summary>
+            /// The draw's pipeline.
+            /// </summary>
             public GpuPipeline Pipeline;
+            /// <summary>
+            /// The part's vertex buffers.
+            /// </summary>
             public GpuBufferBinding[] Vertices;
+            /// <summary>
+            /// The part's index buffer.
+            /// </summary>
             public GpuBufferBinding Elements;
+            /// <summary>
+            /// The draw's push constants.
+            /// </summary>
             public MeshPush Push;
             /// <summary>
             /// Indirect: the arguments' buffer (else a plain indexed draw).
             /// </summary>
             public GpuBuffer Args;
+            /// <summary>
+            /// Where its arguments are in <see cref="Args"/>.
+            /// </summary>
             public ulong ArgsOffset;
+            /// <summary>
+            /// A plain draw's index count, first index, instance count and first instance.
+            /// </summary>
             public uint IndexCount, FirstIndex, Instances, FirstInstance;
         }
 
+        /// <summary>
+        /// The renderer whose pool the job returns to.
+        /// </summary>
         public FoliageRenderer Owner = null!;
+        /// <summary>
+        /// The pass targets (viewport and scissor).
+        /// </summary>
         public PassTargets Targets = null!;
+        /// <summary>
+        /// The pass's depth, bias and raster state.
+        /// </summary>
         public DrawState State = null!;
+        /// <summary>
+        /// The segment's program (a draw may bind another of the same layout).
+        /// </summary>
         public GpuProgram Program = default;
+        /// <summary>
+        /// The native frame sets of the segment.
+        /// </summary>
         public FrameBinding Frame;
+        /// <summary>
+        /// The instance row bindings (locations 7 to 10).
+        /// </summary>
         public readonly GpuBufferBinding[] Rows = new GpuBufferBinding[4];
+        /// <summary>
+        /// The draws (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Draw[] Draws = new Draw[64];
+        /// <summary>
+        /// How many draws are recorded.
+        /// </summary>
         public int Count;
+        /// <inheritdoc/>
         public override int Size => Count;
 
+        /// <summary>
+        /// Appends a draw, growing <see cref="Draws"/> as needed.
+        /// </summary>
         public void Add(in Draw d)
         {
             if (Count == Draws.Length) Array.Resize(ref Draws, Draws.Length * 2);
@@ -3285,22 +3624,55 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     #region Grass recording
 
+    /// <summary>
+    /// One blade draw of a grass page's patch (the CPU path).
+    /// </summary>
     struct GrassDraw
     {
+        /// <summary>
+        /// The patch's blade buffer.
+        /// </summary>
         public FoliageGrassBuffer Buffer;
+        /// <summary>
+        /// Vertices per blade (12 for crossed quads, else 6), the sprite's and the colour map's texture keys (0: none).
+        /// </summary>
         public uint Vertices, Sprite, Colour;
+        /// <summary>
+        /// The page's ground distance from the eye.
+        /// </summary>
         public float Distance;
+        /// <summary>
+        /// The patch's push constants.
+        /// </summary>
         public GrassPush Push;
     }
 
+    /// <summary>
+    /// One blade draw of the grass motion pass.
+    /// </summary>
     struct MotionDraw
     {
+        /// <summary>
+        /// The patch's blade buffer.
+        /// </summary>
         public FoliageGrassBuffer Buffer;
+        /// <summary>
+        /// Vertices per blade and the sprite's texture key.
+        /// </summary>
         public uint Vertices, Sprite;
+        /// <summary>
+        /// The patch's push constants.
+        /// </summary>
         public GrassPush Push;
     }
 
+    /// <summary>
+    /// The current view's blade draws, nearest page first (<see cref="PrepareGrass"/>).
+    /// </summary>
     readonly List<GrassDraw> _grassDraws = [];
+    /// <summary>
+    /// Scratch: the pages in range with their distance, sorted nearest first.
+    /// </summary>
     readonly List<(float Distance, FoliageZoneState State, int Key, FoliageGrassPage Page)> _grassOrder = [];
 
     /// <summary>
@@ -3450,21 +3822,58 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     sealed class GrassJob : RecordJob
     {
+        /// <summary>
+        /// One blade draw: its push constants, vertices per blade, blade count and first blade.
+        /// </summary>
         public struct Draw
         {
+            /// <summary>
+            /// The patch's push constants.
+            /// </summary>
             public GrassPush Push;
+            /// <summary>
+            /// Vertices per blade, the blades shown and the first blade.
+            /// </summary>
             public uint Vertices, Instances, FirstInstance;
         }
 
+        /// <summary>
+        /// The renderer whose pool the job returns to.
+        /// </summary>
         public FoliageRenderer Owner = null!;
+        /// <summary>
+        /// The pass targets (viewport and scissor).
+        /// </summary>
         public PassTargets Targets = null!;
+        /// <summary>
+        /// The pass's raster, depth and bias state.
+        /// </summary>
         public DrawState State = null!;
+        /// <summary>
+        /// The grass program.
+        /// </summary>
         public GpuProgram Program = default;
+        /// <summary>
+        /// The native frame sets of the segment.
+        /// </summary>
         public FrameBinding Frame;
+        /// <summary>
+        /// The grass pipeline.
+        /// </summary>
         public GpuPipeline Pipeline = default;
+        /// <summary>
+        /// The blade mesh's vertex buffers.
+        /// </summary>
         public GpuBufferBinding[] Vertices = [];
+        /// <summary>
+        /// The draws (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Draw[] Draws = new Draw[64];
+        /// <summary>
+        /// How many draws are recorded.
+        /// </summary>
         public int Count;
+        /// <inheritdoc/>
         public override int Size => Count;
 
         public override void Record(IGpuCommandList cmd)
@@ -3496,21 +3905,42 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// The grass sway's phase now: <see cref="SwaySeconds"/> (else the clock) × 0.3 π, wrapped to [0, 2π).
+    /// </summary>
     float SwayPhase() => (float)((SwaySeconds ?? _clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));
 
     #endregion
 
     #region Grass motion (upscalers)
 
+    /// <summary>
+    /// This frame's view-projection as drawn (jittered) and unjittered, and last frame's unjittered one.
+    /// </summary>
     Matrix4x4 _motionViewProjection, _motionUnjittered, _previousUnjittered;
+    /// <summary>
+    /// This frame's eye for the motion pass.
+    /// </summary>
     Vector3 _motionEye;
+    /// <summary>
+    /// This frame's frustum planes for the motion pass.
+    /// </summary>
     Vector4[] _motionFrustum = [];
+    /// <summary>
+    /// Last frame's sway phase (null before the first motion pass).
+    /// </summary>
     float? _previousSwayPhase;
     /// <summary>
     /// This frame's <see cref="GrassMotionReach.Scale"/> for the motion pass (0: every blade in range).
     /// </summary>
     float _motionScale;
+    /// <summary>
+    /// <c>_motionCamera</c>: this frame's camera has been given and not drawn with; <c>_havePrevious</c>: last frame's camera and sway phase are set.
+    /// </summary>
     bool _motionCamera, _havePrevious;
+    /// <summary>
+    /// The motion pass's blade draws.
+    /// </summary>
     readonly List<MotionDraw> _motionDraws = [];
 
     /// <summary>
@@ -3602,6 +4032,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             }
     }
 
+    /// <summary>
+    /// Records the motion pass's blade draws into a guest segment: this frame's and last frame's camera and sway phase, the scene depth for the near
+    /// test.
+    /// </summary>
     void RecordMotion(MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
         var gp = _grassMotionProgram;
@@ -3648,22 +4082,46 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     #region GPU timing
 
-    // GPU timing with the frame's timestamps (QueryArena), written where the GL version wrote its timestamp queries (through the seam's
-    // Interleave: into the frame, or a host's inline secondary), read once the frame's slot has been collected (a frame ring later).
+    /// <summary>
+    /// A GPU timing with the frame's timestamps (<see cref="QueryArena"/>), written where the GL version wrote its timestamp queries (through the
+    /// seam's <c>Interleave</c>: into the frame, or a host's inline secondary), read once the frame's slot has been collected (a frame ring later):
+    /// its start and end.
+    /// </summary>
     readonly record struct Timer(QuerySlot Start, QuerySlot End);
 
+    /// <summary>
+    /// The timings not yet read.
+    /// </summary>
     readonly List<Timer> _timers = [];
+    /// <summary>
+    /// The open timing's start, and the stamp the interleaved command writes.
+    /// </summary>
     QuerySlot _timerStart, _pendingStamp;
+    /// <summary>
+    /// The interleaved command that writes <see cref="_pendingStamp"/>, made once.
+    /// </summary>
     Action<IGpuCommandList>? _recordStamp;
+    /// <summary>
+    /// The read timings summed, in milliseconds.
+    /// </summary>
     double _gpuSum;
+    /// <summary>
+    /// How many timings were read into <see cref="_gpuSum"/>.
+    /// </summary>
     int _gpuCount;
 
+    /// <summary>
+    /// Writes a timestamp into <paramref name="slot"/> where the frame is being recorded.
+    /// </summary>
     void Stamp(QuerySlot slot)
     {
         _pendingStamp = slot;
         Gpu.Interleave(_recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, _pendingStamp));
     }
 
+    /// <summary>
+    /// Starts a timing (at most 64 pending); 0, or -1 when none could start.
+    /// </summary>
     int BeginTimer()
     {
         if (_timers.Count >= 64) return -1;
@@ -3671,6 +4129,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         return _timerStart.IsValid ? 0 : -1;
     }
 
+    /// <summary>
+    /// Ends the timing <paramref name="index"/> began (nothing for -1).
+    /// </summary>
     void EndTimer(int index)
     {
         if (index < 0) return;

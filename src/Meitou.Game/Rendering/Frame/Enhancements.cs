@@ -15,14 +15,25 @@ public sealed class Enhancement(string id, string name, string faithful, string 
     /// The command-line name (<c>--meitou ao,haze</c>).
     /// </summary>
     public string Id { get; } = id;
+
+    /// <summary>
+    /// The name shown in the Tab panel.
+    /// </summary>
     public string Name { get; } = name;
 
     /// <summary>
     /// What each choice amounts to, in a word or two (shown next to it: "Faithful (off)").
     /// </summary>
     public string Faithful { get; } = faithful;
+
+    /// <summary>
+    /// What the Meitou choice amounts to, in a word or two; the live text when the switch has one (a slider's current value).
+    /// </summary>
     public string Meitou => liveMeitou?.Invoke() ?? meitou;
 
+    /// <summary>
+    /// Whether the feature is Meitou: reads and writes the live option through the switch's delegates.
+    /// </summary>
     public bool IsMeitou { get => get(); set => set(value); }
 
     /// <summary>
@@ -36,10 +47,17 @@ public sealed class Enhancement(string id, string name, string faithful, string 
     public string State => IsMeitou ? $"Meitou ({Meitou})" : $"Faithful ({Faithful})";
 }
 
+/// <summary>
+/// The remaster switches (<see cref="Enhancement"/>): the Meitou defaults they set and the list the Tab panel, <c>--meitou</c> and <c>--faithful</c>
+/// work on.
+/// </summary>
 public static class Enhancements
 {
     #region Constants
 
+    /// <summary>
+    /// The Meitou <c>haze</c> switch's strength on the sky's haze (Faithful: 1, the game's).
+    /// </summary>
     public const float MeitouHazeStrength = 0.93f;
 
     /// <summary>
@@ -67,6 +85,10 @@ public static class Enhancements
     /// <see cref="WorldRenderOptions.DefaultTerrainPixelError"/>, 10, what the viewer drew before the switch).
     /// </summary>
     public const float MeitouObjectDistance = 20000, MeitouLandmarkDistance = 150000, MeitouTerrainPixelError = 16;
+
+    /// <summary>
+    /// The objects' full-detail distance with the <c>reach</c> switch Faithful: what the viewer drew before the switch.
+    /// </summary>
     public const float FaithfulObjectDistance = 12000;
 
     #endregion
@@ -389,12 +411,19 @@ public static class Enhancements
 /// </summary>
 public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
 {
+    /// <summary>
+    /// Each switch's state when <see cref="Toggle"/> last turned Meitou off; null before the first time.
+    /// </summary>
     bool[]? _before;
 
     /// <summary>
     /// The sweep's next switch (-1: no sweep) and when it flips (<see cref="System.Diagnostics.Stopwatch"/> ticks).
     /// </summary>
     int _sweep = -1;
+
+    /// <summary>
+    /// When the sweep's next switch flips, in <see cref="System.Diagnostics.Stopwatch"/> ticks.
+    /// </summary>
     long _sweepNext;
 
     /// <summary>

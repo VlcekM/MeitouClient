@@ -6,13 +6,37 @@ namespace Meitou.Data.Ui;
 /// <summary>
 /// The FreeType hinting modes of a <c>ResourceTrueTypeFont</c> (<c>Hinting</c> property; any other value is <see cref="UseNative"/>).
 /// </summary>
-public enum MyGuiHinting { UseNative, ForceAuto, DisableAuto, DisableAll }
+public enum MyGuiHinting
+{
+    /// <summary>
+    /// <c>use_native</c>: FreeType's default loading, the font's bytecode hinting (<c>FT_LOAD_DEFAULT</c>).
+    /// </summary>
+    UseNative,
+
+    /// <summary>
+    /// <c>force_auto</c>: FreeType's auto-hinter (<c>FT_LOAD_FORCE_AUTOHINT</c>).
+    /// </summary>
+    ForceAuto,
+
+    /// <summary>
+    /// <c>disable_auto</c>: no auto-hinter (<c>FT_LOAD_NO_AUTOHINT</c>).
+    /// </summary>
+    DisableAuto,
+
+    /// <summary>
+    /// <c>disable_all</c>: no hinting (<c>FT_LOAD_NO_HINTING</c>).
+    /// </summary>
+    DisableAll
+}
 
 /// <summary>
 /// Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.
 /// </summary>
 public sealed class MyGuiCodeRanges
 {
+    /// <summary>
+    /// The ranges, sorted by first code point and not overlapping.
+    /// </summary>
     readonly (int First, int Last)[] _ranges;
 
     /// <summary>
@@ -55,6 +79,9 @@ public sealed class MyGuiCodeRanges
     /// </summary>
     public long Count => _ranges.Sum(r => (long)r.Last - r.First + 1);
 
+    /// <summary>
+    /// Whether <paramref name="codePoint"/> is in one of the ranges (binary search).
+    /// </summary>
     public bool Contains(int codePoint)
     {
         int low = 0, high = _ranges.Length - 1;

@@ -9,45 +9,96 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 internal static unsafe class FfxApi
 {
+    /// <summary>
+    /// <c>ffxApiHeader</c>: every ffx_api descriptor starts with its type and the next descriptor in its chain.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Header
     {
+        /// <summary>
+        /// The descriptor's type (a <c>FFX_API_*_DESC_TYPE_*</c> value).
+        /// </summary>
         public ulong Type;
+
+        /// <summary>
+        /// The next descriptor in the chain (0: none).
+        /// </summary>
         public nint Next;
     }
 
+    /// <summary>
+    /// <c>FfxApiDimensions2D</c>: a size in pixels.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Dimensions
     {
+        /// <summary>
+        /// The width and height.
+        /// </summary>
         public uint Width, Height;
     }
 
+    /// <summary>
+    /// <c>FfxApiFloatCoords2D</c>: a pair of floats.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Coords
     {
+        /// <summary>
+        /// The two values.
+        /// </summary>
         public float X, Y;
     }
 
+    /// <summary>
+    /// <c>FfxApiRect2D</c>: a rectangle in pixels.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Rect
     {
+        /// <summary>
+        /// The left and top corner and the size.
+        /// </summary>
         public int Left, Top, Width, Height;
     }
 
+    /// <summary>
+    /// <c>FfxApiResourceDescription</c>: what an image is.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct ResourceDescription
     {
+        /// <summary>
+        /// The resource type, its format (FfxApiSurfaceFormat), size, depth, mip count, flags and usage.
+        /// </summary>
         public uint Type, Format, Width, Height, Depth, MipCount, Flags, Usage;
     }
 
+    /// <summary>
+    /// <c>FfxApiResource</c>: a native image with its description and state.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Resource
     {
+        /// <summary>
+        /// The native image (a VkImage).
+        /// </summary>
         public nint Handle;
+
+        /// <summary>
+        /// What the image is.
+        /// </summary>
         public ResourceDescription Description;
+
+        /// <summary>
+        /// The image's state (<see cref="StateCommon"/>).
+        /// </summary>
         public uint State;
     }
 
+    /// <summary>
+    /// <c>FFX_API_RESOURCE_STATE_COMMON</c> and <c>FFX_API_RESOURCE_TYPE_TEXTURE2D</c>.
+    /// </summary>
     internal const uint StateCommon = 1, TypeTexture2D = 2;
 
     /// <summary>
@@ -55,6 +106,9 @@ internal static unsafe class FfxApi
     /// </summary>
     internal const uint FormatR8G8B8A8Unorm = 10, FormatB8G8R8A8Unorm = 14;
 
+    /// <summary>
+    /// The FfxApiSurfaceFormat of an engine format (0, unknown, for one not listed).
+    /// </summary>
     internal static uint SurfaceFormat(InternalFormat f) => f switch
     {
         InternalFormat.Rgba16F => 4,

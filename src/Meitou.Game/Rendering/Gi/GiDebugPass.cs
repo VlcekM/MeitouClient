@@ -15,21 +15,59 @@ namespace Meitou.Game.Rendering.Gi;
 /// </summary>
 sealed unsafe class GiDebugPass : IDisposable
 {
+    /// <summary>
+    /// The device the view is traced on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The debug view's compute program (<see cref="GiShaders.Debug"/>).
+    /// </summary>
     readonly GpuProgram _program;
+
+    /// <summary>
+    /// The program's pipeline.
+    /// </summary>
     readonly GpuComputePipeline _pipeline;
+
+    /// <summary>
+    /// The nearest-filtered, edge-clamped sampler the scene depth is read with.
+    /// </summary>
     readonly GpuSampler _sampler;
+
+    /// <summary>
+    /// The traced picture at the render size; made anew when the size changes.
+    /// </summary>
     GpuTexture? _output;
+
+    /// <summary>
+    /// The frames traced, which seed the rays' random directions.
+    /// </summary>
     uint _frame;
 
     /// <summary>
-    /// Bounce rays per pixel in mode 2, their length, the exposure of the picture and the grey of every surface.
+    /// Bounce rays per pixel in mode 2.
     /// </summary>
     public int Samples { get; set; } = 4;
+
+    /// <summary>
+    /// The rays' length.
+    /// </summary>
     public float RayLength { get; set; } = 4000;
+
+    /// <summary>
+    /// The exposure of the picture.
+    /// </summary>
     public float Exposure { get; set; } = 0.35f;
+
+    /// <summary>
+    /// The grey of every surface.
+    /// </summary>
     public float Albedo { get; set; } = 0.5f;
 
+    /// <summary>
+    /// Makes the debug view's program, pipeline and sampler.
+    /// </summary>
     public GiDebugPass(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -42,12 +80,30 @@ sealed unsafe class GiDebugPass : IDisposable
         _sampler = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
     }
 
+    /// <summary>
+    /// The view's uniforms, as <see cref="GiShaders.Debug"/> reads them.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Params
     {
+        /// <summary>
+        /// NDC to the position relative to the eye.
+        /// </summary>
         public Matrix4x4 Inverse;
+
+        /// <summary>
+        /// The eye relative to the scene's origin, the sun's direction (w: the rays' length) and colour, and the sky's and the ground's ambient.
+        /// </summary>
         public Vector4 Eye, SunDirection, SunColour, SkyColour, GroundColour;
+
+        /// <summary>
+        /// The picture's size, the debug mode and the frame.
+        /// </summary>
         public uint Width, Height, Mode, Frame;
+
+        /// <summary>
+        /// The bounce rays per pixel, the exposure and the surfaces' grey.
+        /// </summary>
         public Vector4 Extra;
     }
 
@@ -131,6 +187,9 @@ sealed unsafe class GiDebugPass : IDisposable
         _ctx.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Frees the picture and the program.
+    /// </summary>
     public void Dispose()
     {
         _output?.Dispose();

@@ -15,6 +15,41 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed unsafe class MetalDisplay : IDisposable
 {
+    #region Window and layer
+
+    /// <summary>
+    /// The layer on the window's content view (backs <see cref="Layer"/>).
+    /// </summary>
+    CAMetalLayer _layer;
+
+    /// <summary>
+    /// The window size in points and the framebuffer size in pixels the layer was last fitted to.
+    /// </summary>
+    int _layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight;
+    /// <summary>
+    /// The window's NSWindow (from GLFW).
+    /// </summary>
+    readonly IntPtr _nsWindow;
+    /// <summary>
+    /// The content view the layer is attached to (replaced when AppKit swaps the view).
+    /// </summary>
+    IntPtr _contentView;
+
+    /// <summary>
+    /// The <c>valueForKey:</c> selector.
+    /// </summary>
+    static readonly Selector ValueForKey = new("valueForKey:");
+
+    /// <summary>
+    /// The <c>setDrawableSize:</c> selector.
+    /// </summary>
+    static readonly Selector DrawableSizeSelector = new("setDrawableSize:");
+
+    /// <summary>
+    /// The <c>setPresentationOptions:</c> selector.
+    /// </summary>
+    static readonly Selector PresentationOptionsSelector = new("setPresentationOptions:");
+
     /// <summary>
     /// The window the game draws into.
     /// </summary>
@@ -30,13 +65,15 @@ public sealed unsafe class MetalDisplay : IDisposable
     /// </summary>
     public MTLCommandQueue Queue { get; }
 
-    CAMetalLayer _layer;
-
     /// <summary>
     /// The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).
     /// </summary>
     public CAMetalLayer Layer => _layer;
 
+    /// <summary>
+    /// Creates the window, the system default device and its queue, and a CAMetalLayer (BGRA8, three drawables, display sync as
+    /// <paramref name="vsync"/>) filling the window's content view.
+    /// </summary>
     public MetalDisplay(WindowOptions options, bool vsync = true)
     {
         ObjectiveC.LinkMetal();
@@ -79,15 +116,6 @@ public sealed unsafe class MetalDisplay : IDisposable
         SyncLayer();
     }
 
-    int _layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight;
-    readonly IntPtr _nsWindow;
-    IntPtr _contentView;
-
-    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
-    static extern IntPtr MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
-
-    static readonly Selector ValueForKey = new("valueForKey:");
-
     /// <summary>
     /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW reporting a framebuffer size.
     /// </summary>
@@ -105,15 +133,6 @@ public sealed unsafe class MetalDisplay : IDisposable
         return $"view {(view == _contentView ? "same" : "CHANGED")}, layer {(layer == Layer.NativePtr ? "same" : "CHANGED")}, " +
             $"frame {frame}, zoomed {zoomed}, visible {visible}, style 0x{style:X}";
     }
-
-    /// <summary>
-    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
-    /// setter is called directly with the two doubles the ABI passes for the struct.
-    /// </summary>
-    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
-    static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
-
-    static readonly Selector DrawableSizeSelector = new("setDrawableSize:");
 
     /// <summary>
     /// Fits the layer to the window: its frame in points and its contents scale from the framebuffer's pixels. The window can
@@ -174,11 +193,46 @@ public sealed unsafe class MetalDisplay : IDisposable
         SetPresentationOptions(app, PresentationOptionsSelector.SelPtr, fullScreen ? 10UL : 0UL);
     }
 
+    /// <summary>
+    /// The layer's actual display-sync state (diagnostic and the game's settings).
+    /// </summary>
+    public bool VSync
+    {
+        get => _layer.DisplaySyncEnabled;
+        set => _layer.DisplaySyncEnabled = value;
+    }
+
+    /// <summary>
+    /// Disposes the window.
+    /// </summary>
+    public void Dispose() => Window.Dispose();
+
+    /// <summary>
+    /// <c>objc_msgSend</c> with one pointer argument, returning a pointer.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern IntPtr MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
+
+    /// <summary>
+    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
+    /// setter is called directly with the two doubles the ABI passes for the struct.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
+
+    /// <summary>
+    /// <c>objc_msgSend</c> with one NSUInteger argument (for <c>setPresentationOptions:</c>).
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern void SetPresentationOptions(IntPtr receiver, IntPtr selector, ulong options);
 
-    static readonly Selector PresentationOptionsSelector = new("setPresentationOptions:");
+    #endregion
 
+    #region Frames
+
+    /// <summary>
+    /// When "no drawable" was last logged (Stopwatch ticks): it is logged at most once a second.
+    /// </summary>
     long _noDrawableStamp;
 
     /// <summary>
@@ -215,15 +269,6 @@ public sealed unsafe class MetalDisplay : IDisposable
     }
 
     /// <summary>
-    /// The layer's actual display-sync state (diagnostic and the game's settings).
-    /// </summary>
-    public bool VSync
-    {
-        get => _layer.DisplaySyncEnabled;
-        set => _layer.DisplaySyncEnabled = value;
-    }
-
-    /// <summary>
     /// Opens the render pass for a frame: the drawable cleared to <paramref name="clear"/>.
     /// </summary>
     public MTLRenderCommandEncoder BeginPass(MTLCommandBuffer command, CAMetalDrawable drawable, MTLClearColor clear)
@@ -252,5 +297,5 @@ public sealed unsafe class MetalDisplay : IDisposable
         command.Commit();
     }
 
-    public void Dispose() => Window.Dispose();
+    #endregion
 }

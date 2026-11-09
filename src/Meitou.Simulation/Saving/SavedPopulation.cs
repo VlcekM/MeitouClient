@@ -20,6 +20,9 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public sealed class SavedMember
 {
+    /// <summary>
+    /// The save's character.
+    /// </summary>
     public required SaveCharacter Source { get; init; }
     /// <summary>
     /// The character's slot in its platoon (its handle's <c>I</c>): finds it in a copy of the save.
@@ -43,11 +46,29 @@ public sealed class SavedMember
     /// Where it stood and which way it faced when its platoon left the world (null: the save's place).
     /// </summary>
     public Vector3? Position { get; set; }
+    /// <summary>
+    /// The way it faced when its platoon left the world (see <see cref="Position"/>).
+    /// </summary>
     public float Yaw { get; set; }
+    /// <summary>
+    /// Its stats when its platoon left the world (null: the save's).
+    /// </summary>
     public CharacterStats? Stats { get; set; }
+    /// <summary>
+    /// Its medical state when its platoon left the world (null: the save's).
+    /// </summary>
     public MedicalState? Medical { get; set; }
+    /// <summary>
+    /// Its inventory when its platoon left the world (null: the save's).
+    /// </summary>
     public Inventory? Inventory { get; set; }
+    /// <summary>
+    /// Its appearance when its platoon left the world (null: the save's).
+    /// </summary>
     public CharacterAppearance? Look { get; set; }
+    /// <summary>
+    /// Its bounties when its platoon left the world (null: the save's).
+    /// </summary>
     public Crime.BountyLedger? Bounties { get; set; }
 }
 
@@ -67,13 +88,25 @@ public sealed class SavedPlatoon
     /// original's test is not applied).
     /// </summary>
     public bool LegacyBaseTown { get; init; }
+    /// <summary>
+    /// The save's platoon.
+    /// </summary>
     public required SavePlatoon Source { get; init; }
+    /// <summary>
+    /// The save's platoon name.
+    /// </summary>
     public string Name => Source.Name;
+    /// <summary>
+    /// Whether the platoon is its town's own (see the class remarks).
+    /// </summary>
     public required bool Pinned { get; init; }
     /// <summary>
     /// The world's stand-in (-1 once it is gone: its squad was wiped out).
     /// </summary>
     public int PlatoonId { get; set; } = -1;
+    /// <summary>
+    /// The platoon's characters in the save's order.
+    /// </summary>
     public List<SavedMember> Members { get; } = [];
     /// <summary>
     /// The platoon position the members' stored positions belong to: a stand-in that travelled since takes them along.
@@ -114,13 +147,22 @@ public sealed class SavedPlatoon
     /// Its contract and <c>change AI</c>: the save's until its squad first leaves the world, then the squad's.
     /// </summary>
     public AiSave? Ai { get => _aiSet ? _ai : AiSave.Read(Source.Record); set { _ai = value; _aiSet = true; } }
+    /// <summary>
+    /// The AI written over the save's (see <see cref="Ai"/>).
+    /// </summary>
     AiSave? _ai;
+    /// <summary>
+    /// Whether <see cref="_ai"/> was set.
+    /// </summary>
     bool _aiSet;
     /// <summary>
     /// What its squad remembered when it last left the world (<see cref="MemorySet"/>; else the record's keys are the memory, read when its squad is
     /// made).
     /// </summary>
     public Dialogue.SquadMemoryData? Memory { get; set; }
+    /// <summary>
+    /// Whether <see cref="Memory"/> holds the squad's memory (else the record's keys do).
+    /// </summary>
     public bool MemorySet { get; set; }
 }
 
@@ -140,18 +182,33 @@ public sealed class SavedPopulation
     /// replacement-aware <c>basetown</c>.
     /// </summary>
     public bool MeitouWritten { get; init; }
+    /// <summary>
+    /// The save's handle table.
+    /// </summary>
     public required SaveHandles Handles { get; init; }
+    /// <summary>
+    /// The building instance id of each save record that is an instance's state.
+    /// </summary>
     public required IReadOnlyDictionary<FcsRecord, string> InstanceOf { get; init; }
     /// <summary>
     /// The instance ids of <see cref="InstanceOf"/>, as a set (made on first use).
     /// </summary>
     public IReadOnlySet<string> InstanceIds => _instanceIds ??= new(InstanceOf.Values, StringComparer.Ordinal);
+    /// <summary>
+    /// The set behind <see cref="InstanceIds"/> (null until first used).
+    /// </summary>
     HashSet<string>? _instanceIds;
+    /// <summary>
+    /// The appearances the save's characters are made with; null: none.
+    /// </summary>
     public IAppearanceSource? Appearances { get; init; }
     /// <summary>
     /// The save's clock, which is world tick 0 (bounty timers are read against it).
     /// </summary>
     public SaveClock Clock { get; init; }
+    /// <summary>
+    /// The player's faction index (-1: none).
+    /// </summary>
     public int PlayerFaction { get; init; } = -1;
     /// <summary>
     /// The squads' memories (the dialogue system's; null: none), which the platoons' <c>tags</c> keys are restored into when their squads are made.
@@ -165,6 +222,9 @@ public sealed class SavedPopulation
     /// The character a handle of the save names, when it is in the world (null otherwise).
     /// </summary>
     public CharacterId? CharacterOf(Hand h) => !h.IsNull && Spawned.TryGetValue((h.C, h.I), out var id) ? id : null;
+    /// <summary>
+    /// The save's NPC platoons the world keeps.
+    /// </summary>
     public List<SavedPlatoon> Platoons { get; } = [];
     /// <summary>
     /// The save's nests in list order: the wild layout takes them before rolling more (empty: none, e.g. a Meitou save from before nests were
@@ -255,8 +315,14 @@ public sealed class SavedPopulation
     /// Lines for the host's log (each platoon made, characters left out); taken by <see cref="TakeLog"/>.
     /// </summary>
     readonly List<string> _log = [];
+    /// <summary>
+    /// Adds a line to the host's log (any thread).
+    /// </summary>
     internal void Log(string line) { lock (_log) _log.Add(line); }
 
+    /// <summary>
+    /// Takes the log's lines and empties it.
+    /// </summary>
     public List<string> TakeLog()
     {
         lock (_log)
@@ -281,6 +347,8 @@ internal sealed record SavedParts(SaveCharacter Source, GameRecord Record, RaceD
 /// </summary>
 internal static class SavedCharacters
 {
+    #region Characters
+
     /// <summary>
     /// Reads a character's race, stats, medical state, items and look. Null (with a note) when the game data lacks its record.
     /// </summary>
@@ -479,6 +547,9 @@ internal static class SavedCharacters
         }
     }
 
+    /// <summary>
+    /// The race of a saved character: its appearance's race, else its record's (cached by id); null when it has none.
+    /// </summary>
     static RaceData? RaceOf(SaveCharacter sc, GameRecord record, GameDatabase db, Dictionary<string, RaceData?> cache)
     {
         string? id = sc.Appearance is { } a && a.References.TryGetValue("race", out var list) && list.Count > 0 ? list[0].TargetStringId : null;
@@ -486,6 +557,9 @@ internal static class SavedCharacters
         return id is null ? null : CharacterAssembly.RaceDataOf(db, id, cache);
     }
 
+    /// <summary>
+    /// The body part template of record <paramref name="id"/> (cached); null when there is no such record.
+    /// </summary>
     static BodyPartTemplate? PartOf(string id, GameDatabase db, Dictionary<string, BodyPartTemplate?> cache)
     {
         if (cache.TryGetValue(id, out var part)) return part;
@@ -495,7 +569,9 @@ internal static class SavedCharacters
         return part;
     }
 
-    // ---- NPC platoons ----
+    #endregion
+
+    #region NPC platoons
 
     /// <summary>
     /// The building of <paramref name="site"/> a saved platoon lives in: its <c>homebuilding</c> handle resolved to the zone's building state
@@ -736,4 +812,6 @@ internal static class SavedCharacters
         sp.Anchor = anchor;
         sp.StoredTick = world.Tick;
     }
+
+    #endregion
 }

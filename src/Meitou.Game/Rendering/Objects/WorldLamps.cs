@@ -17,47 +17,140 @@ internal sealed class WorldLamps : IDisposable
 {
     #region Setup
 
+    /// <summary>
+    /// The grid's size in cells per side, the index texture's width and rows (lamp numbers, every cell's list back to back), and the most lamps one
+    /// frame bins.
+    /// </summary>
     public const int Cells = 64, IndexWidth = 1024, IndexRows = 16, MaxLamps = 1024;
+
+    /// <summary>
+    /// A grid cell's side (world units).
+    /// </summary>
     public const float CellSize = 128;
+
+    /// <summary>
+    /// The most footprint edges an interior lamp's room may have, and the texels of a lamp's row in the data texture (five, then the edges).
+    /// </summary>
     internal const int MaxRoomEdges = 32, DataWidth = 5 + MaxRoomEdges;
-    // Allow for the small offset between collision masks and visible wall/floor surfaces.
+
+    /// <summary>
+    /// How far a room's clip planes and height band are widened: the small offset between collision masks and the visible wall and floor surfaces.
+    /// </summary>
     const float RoomSurfaceMargin = 0.5f;
 
+    /// <summary>
+    /// The context the textures are made and uploaded with.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The world's lamps loading on a worker (those with power and reach).
+    /// </summary>
     readonly Task<WorldLight[]> _loading;
-    // The lamps binned each frame: the world's (once loaded) and those of buildings placed during play, by building id.
+
+    /// <summary>
+    /// The lamps binned each frame: the world's (once loaded), and the list with the placed buildings' (rebuilt when they change).
+    /// </summary>
     WorldLight[]? _world, _lamps;
+
+    /// <summary>
+    /// The lamps of buildings placed during play, by building id.
+    /// </summary>
     readonly Dictionary<string, WorldLight[]> _runtime = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The power factor of each placed building's lamps, by building id (1 when not set).
+    /// </summary>
     readonly Dictionary<string, float> _runtimePower = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// <see cref="_runtime"/> changed: the lamp list is rebuilt at the next update.
+    /// </summary>
     bool _runtimeChanged;
-    // The world's lamps at the start of lamps (those of no replaced building); the placed buildings' follow.
+
+    /// <summary>
+    /// How many of the world's lamps start the lamp list (those of no replaced building); the placed buildings' follow.
+    /// </summary>
     int _worldCount;
+
+    /// <summary>
+    /// The cell, index and lamp-row textures, one of each per frame in flight.
+    /// </summary>
     readonly GpuTexture[] _cells, _index, _data;
+
+    /// <summary>
+    /// The nearest-filtering, edge-clamped sampler the shaders read the textures with.
+    /// </summary>
     readonly GpuSampler _nearest;
+
+    /// <summary>
+    /// This frame's cells: each one's first entry in the index and its lamp count.
+    /// </summary>
     readonly float[] _cellValues = new float[Cells * Cells * 2];
+
+    /// <summary>
+    /// This frame's index: the lamp numbers of every cell's list back to back.
+    /// </summary>
     readonly float[] _indexValues = new float[IndexWidth * IndexRows];
+
+    /// <summary>
+    /// This frame's lamp rows (<see cref="DataWidth"/> texels each).
+    /// </summary>
     readonly Vector4[] _dataValues = new Vector4[MaxLamps * DataWidth];
+
+    /// <summary>
+    /// This frame's binned lamps and the rooms of the interior ones.
+    /// </summary>
     readonly List<(int Lamp, InteriorVolume? Room)> _near = [];
+
+    /// <summary>
+    /// This frame's emitter ids by building (1 on, one per interior building with a binned lamp).
+    /// </summary>
     readonly Dictionary<string, uint> _emitters = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The lamps per cell while binning (the first pass counts them).
+    /// </summary>
     readonly int[] _counts = new int[Cells * Cells];
+
+    /// <summary>
+    /// The frame-in-flight slot of this frame's textures.
+    /// </summary>
     int _slot;
+
+    /// <summary>
+    /// This frame's grid (x0, z0, cell size, cells per side; 0: no lamps) as <c>uLightGrid</c>.
+    /// </summary>
     Vector4 _grid;
+
+    /// <summary>
+    /// The clock pulsing and shimmering lamps take their time from (60 steps a second).
+    /// </summary>
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
     /// <summary>
     /// Whether the lamps light the world (the bench's <c>lights</c> switch).
     /// </summary>
     public bool Enabled { get; set; } = true;
+
     /// <summary>
     /// The <c>interiorlamps</c> switch's Meitou side: night-only lamps of interior layouts shine day and night (the game: night only).
     /// </summary>
     public bool InteriorAllDay { get; set; } = true;
+
     /// <summary>
     /// The lamps of the world, once loaded; and those in this frame's grid.
     /// </summary>
     public int Count => _lamps?.Length ?? 0;
+
+    /// <summary>
+    /// The lamps binned in this frame's grid.
+    /// </summary>
     public int InGrid { get; private set; }
 
+    /// <summary>
+    /// Starts loading the world's lamps on a worker, makes the per-frame textures and publishes them and the grid as the shaders' globals.
+    /// </summary>
     public WorldLamps(IGpuContext ctx, Func<IReadOnlyList<WorldLight>> load)
     {
         this._ctx = ctx;
@@ -73,8 +166,7 @@ internal sealed class WorldLamps : IDisposable
             _index[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, IndexWidth, IndexRows, Use: use, Name: "lamp index"));
             _data[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32F, DataWidth, MaxLamps, Use: use, Name: "lamp data"));
         }
-        _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        _nearest = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
         var g = ctx.Globals;
         g.PublishUniform("uLightGrid", () => _grid);
         g.Publish("uLightCells", () => Sampled(_cells[_slot]));
@@ -82,17 +174,29 @@ internal sealed class WorldLamps : IDisposable
         g.Publish("uLightData", () => Sampled(_data[_slot]));
     }
 
+    /// <summary>
+    /// A texture with the nearest sampler.
+    /// </summary>
     SampledTexture Sampled(GpuTexture t) => new(_nearest, t.View());
 
     /// <summary>
     /// The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).
     /// </summary>
     internal (GpuTexture Cells, GpuTexture Index, GpuTexture Data) Current => (_cells[_slot], _index[_slot], _data[_slot]);
+
+    /// <summary>
+    /// The sampler for <see cref="Current"/>'s textures.
+    /// </summary>
     internal GpuSampler NearestSampler => _nearest;
+
     /// <summary>
     /// This frame's <c>uLightGrid</c> (w 0: no lamps).
     /// </summary>
     internal Vector4 Grid => _grid;
+
+    /// <summary>
+    /// The emitter id of an interior building's lamps this frame (0: none binned).
+    /// </summary>
     internal uint Emitter(string placementId) => _emitters.GetValueOrDefault(placementId);
 
     #endregion
@@ -116,12 +220,18 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     public void SetRuntimePower(string building, float factor) => _runtimePower[building] = factor;
 
+    /// <summary>
+    /// Hides the lamps of a building placed during play (it was removed).
+    /// </summary>
     public void RemoveRuntime(string building)
     {
         _runtimeChanged |= _runtime.Remove(building);
         _runtimePower.Remove(building);
     }
 
+    /// <summary>
+    /// Hides every placed building's lamps (a loaded save replaces the world).
+    /// </summary>
     public void ClearRuntime()
     {
         _runtimeChanged |= _runtime.Count > 0;
@@ -153,8 +263,14 @@ internal sealed class WorldLamps : IDisposable
 
     #region Emissive parts
 
-    // The lamps' indices by placement, rebuilt with the lamp list, and the daylight of the last update: for EmissiveDark.
+    /// <summary>
+    /// The lamps' indices by placement, rebuilt with the lamp list, for <see cref="EmissiveDark"/>.
+    /// </summary>
     Dictionary<string, List<int>> _byPlacement = [];
+
+    /// <summary>
+    /// The daylight factor of the last update, for <see cref="EmissiveDark"/>.
+    /// </summary>
     float _switchDaylight;
 
     /// <summary>
@@ -393,8 +509,14 @@ internal sealed class WorldLamps : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// A line for the log: the lamps and those around the eye.
+    /// </summary>
     public string Describe() => _lamps is null ? "loading" : $"{_lamps.Length} lamps, {InGrid} around the eye" + (Enabled ? "" : ", off");
 
+    /// <summary>
+    /// Frees the per-frame textures.
+    /// </summary>
     public void Dispose()
     {
         foreach (var t in _cells.Concat(_index).Concat(_data)) t.Dispose();

@@ -149,6 +149,9 @@ public static class SavedKit
     public static List<SaveItem> FromInventory(Inventory inventory) =>
         [.. inventory.Items.Where(i => !InventoryCommands.IsLimbSection(i.Section)).Select(FromItem)];
 
+    /// <summary>
+    /// The saved item of <paramref name="i"/>, under its own section.
+    /// </summary>
     internal static SaveItem FromItem(ItemInstance i) => FromItem(i, i.Section);
 
     /// <summary>

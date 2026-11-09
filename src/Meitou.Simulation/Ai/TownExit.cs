@@ -44,6 +44,10 @@ public static class TownExit
         return centre;
     }
 
+    /// <summary>
+    /// The point <see cref="Offset"/> beyond <paramref name="at"/> on the way out from <paramref name="centre"/>; the centre when the two are
+    /// the same.
+    /// </summary>
     static Vector2 Away(Vector2 centre, Vector2 at)
     {
         var d = at - centre;

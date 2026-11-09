@@ -25,23 +25,62 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     /// </summary>
     public const int Window = 120;
 
+    /// <summary>
+    /// The allocation alignment (256 bytes), and one MB, the unit buffer sizes are rounded to.
+    /// </summary>
     const ulong Align = 256, Megabyte = 1ul << 20;
 
+    /// <summary>
+    /// One slot per frame in flight.
+    /// </summary>
     readonly Slot[] _slots = Enumerable.Range(0, ctx.FramesInFlight).Select(_ => new Slot()).ToArray();
+    /// <summary>
+    /// The need of each of the last <see cref="Window"/> frames (a ring).
+    /// </summary>
     readonly ulong[] _recent = new ulong[Window];
+    /// <summary>
+    /// Where the next finished frame's need goes in <see cref="_recent"/>.
+    /// </summary>
     int _recentIndex;
+    /// <summary>
+    /// The slot of the current frame; -1 before the first request.
+    /// </summary>
     int _slot = -1;
+    /// <summary>
+    /// The number of the current frame; -1 before the first request.
+    /// </summary>
     long _frame = -1;
+    /// <summary>
+    /// The bytes the current frame took, and the bytes it asked for (refused requests included).
+    /// </summary>
     ulong _frameNeed, _frameDemand;
+    /// <summary>
+    /// The frames finished so far.
+    /// </summary>
     long _frames;
+    /// <summary>
+    /// The bytes all finished frames took (for <see cref="MeanNeed"/>).
+    /// </summary>
     double _totalNeed;
 
+    /// <summary>
+    /// One frame slot's buffers and its bump cursor.
+    /// </summary>
     sealed class Slot
     {
+        /// <summary>
+        /// The slot's buffers; one, except in a frame that grew.
+        /// </summary>
         public readonly List<DeviceBuffer> Buffers = [];
 
+        /// <summary>
+        /// The buffer the cursor is in.
+        /// </summary>
         public int Index;
 
+        /// <summary>
+        /// The cursor's offset in that buffer.
+        /// </summary>
         public ulong Offset;
 
         /// <summary>
@@ -49,6 +88,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         /// </summary>
         public ulong Used;
 
+        /// <summary>
+        /// The bytes of all the slot's buffers.
+        /// </summary>
         public ulong Capacity;
 
         /// <summary>
@@ -72,8 +114,14 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     /// </summary>
     public ulong LastNeed { get; private set; }
 
+    /// <summary>
+    /// The largest need of any frame so far.
+    /// </summary>
     public ulong PeakNeed { get; private set; }
 
+    /// <summary>
+    /// The mean need over all frames so far.
+    /// </summary>
     public double MeanNeed => _frames == 0 ? 0 : (double)_totalNeed / _frames;
 
     /// <summary>
@@ -86,6 +134,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     /// </summary>
     public long Overflows { get; private set; }
 
+    /// <summary>
+    /// Frames in which a request was refused.
+    /// </summary>
     public long OverflowFrames { get; private set; }
 
     /// <summary>
@@ -93,6 +144,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     /// </summary>
     public bool OverflowedThisFrame { get; private set; }
 
+    /// <summary>
+    /// Times a slot's buffers were replaced (grown, merged or shrunk).
+    /// </summary>
     public long Rebuilds { get; private set; }
 
     /// <summary>
@@ -105,6 +159,10 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     /// </summary>
     public Func<ulong, bool>? MayGrow { get; set; }
 
+    /// <summary>
+    /// On the frame's first request: closes the last frame's statistics, then rebuilds the slot when it grew, is in pieces, is over twice the
+    /// window's need or over the cap, and resets its cursor.
+    /// </summary>
     void NewFrame()
     {
         var f = ctx.Frame;
@@ -128,6 +186,10 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         (s.Index, s.Offset, s.Used, s.Grew) = (0, 0, 0, false);
     }
 
+    /// <summary>
+    /// Replaces a slot's buffers with one of <paramref name="want"/> bytes (none when nothing was needed lately); when that is refused, keeps the
+    /// largest old one.
+    /// </summary>
     void Rebuild(Slot s, ulong want, ulong window)
     {
         // The replacement is made before the old buffers go: when it is refused (the driver's memory) the slot keeps what it has, so a frame never
@@ -143,6 +205,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         Rebuilds++;
     }
 
+    /// <summary>
+    /// Keeps the largest old buffer when it is within the cap (the rest are freed by the caller).
+    /// </summary>
     void KeepLargest(Slot s, DeviceBuffer[] old)
     {
         // Keep the largest old buffer (the slot grows again by pieces if a frame needs more) and give the rest back.
@@ -160,6 +225,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         KeptOnRefusal++;
     }
 
+    /// <summary>
+    /// Records the finished frame's need and demand in the statistics and the window.
+    /// </summary>
     void EndFrame()
     {
         LastNeed = _frameNeed;
@@ -172,8 +240,14 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         if (OverflowedThisFrame) OverflowFrames++;
     }
 
+    /// <summary>
+    /// Bytes rounded up to whole MB.
+    /// </summary>
     static ulong Round(ulong bytes) => (bytes + Megabyte - 1) / Megabyte * Megabyte;
 
+    /// <summary>
+    /// Adds a buffer of <paramref name="size"/> bytes to the slot when the cap and <see cref="MayGrow"/> allow it and the driver has the memory.
+    /// </summary>
     bool TryAdd(Slot s, ulong size)
     {
         if (s.Capacity + size > Cap) return false;
@@ -236,6 +310,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         }
     }
 
+    /// <summary>
+    /// Releases every slot's buffers.
+    /// </summary>
     public void Dispose()
     {
         foreach (var s in _slots)

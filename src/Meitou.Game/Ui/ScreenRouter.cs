@@ -46,7 +46,7 @@ sealed class ScreenRouter(PlayerInterface player)
             player.WorldMap.MapAction(e.Widget);
             player.Production.ResearchAction(e);
             player.Production.CraftAction(e);
-            player.SquadWindows.AiAction(e);
+            player.SquadWindows.Ai.AiAction(e);
             player.SquadWindows.SquadsAction(e);
             player.FactionWindow.FactionAction(e);
         }
@@ -195,7 +195,7 @@ sealed class ScreenRouter(PlayerInterface player)
         player.SquadWindows.BindSquadsTab(b);
         player.Production.BindResearchTab(b);
         player.Production.BindCraftTab(b);
-        player.SquadWindows.BindFormation(b);
+        player.SquadWindows.Ai.BindFormation(b);
 
         // Editor preview markers are unrelated to the current camera and orders.
         b.Hidden.Add("CameraMarker");
@@ -228,7 +228,7 @@ sealed class ScreenRouter(PlayerInterface player)
         {
             player.Production.AddResearchContent(controls);
             player.Production.AddCraftContent(controls);
-            player.SquadWindows.AddAiContent(controls);
+            player.SquadWindows.Ai.AddAiContent(controls);
             player.SquadWindows.AddSquadsContent(controls);
             player.FactionWindow.AddFactionContent(controls);
         }

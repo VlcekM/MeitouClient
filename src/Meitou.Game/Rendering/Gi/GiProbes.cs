@@ -24,6 +24,10 @@ internal sealed unsafe class GiProbes : IDisposable
 {
     #region Constants and state
 
+    /// <summary>
+    /// The probe columns across a cascade's grid, the probes in a column, the texels across a probe's irradiance and distance tiles (borders not
+    /// counted), and the cascades.
+    /// </summary>
     public const int Columns = 32, Layers = 8, IrradianceTexels = 8, DistanceTexels = 16, Cascades = 2;
 
     /// <summary>
@@ -35,50 +39,148 @@ internal sealed unsafe class GiProbes : IDisposable
     /// The most rays per probe (the ray buffer's stride).
     /// </summary>
     public const int MaxRays = 64;
+
+    /// <summary>
+    /// The probes of a cascade, and of all cascades.
+    /// </summary>
     public const int ProbesPerCascade = Columns * Columns * Layers, Probes = ProbesPerCascade * Cascades;
 
     /// <summary>
     /// Per cascade: the spacing across, the spacing up, the rays' length.
     /// </summary>
     static readonly (float Spacing, float SpacingY, float RayLength)[] Grid = [(128, 96, 4000), (512, 384, 16000)];
-    bool _interiorGrid;
-    int _interiorLevel;
-    (float Spacing, float SpacingY, float RayLength) Layout(int cascade) =>
-        cascade == 0 && _interiorGrid ? (32, 24, Grid[0].RayLength) : Grid[cascade];
 
+    /// <summary>
+    /// Whether the first cascade's grid is the interior one (32 apart across, 24 up, around the interior's focus).
+    /// </summary>
+    bool _interiorGrid;
+
+    /// <summary>
+    /// The storey (96 units) of the interior's focus; the first cascade's bases are raised to the storey below it.
+    /// </summary>
+    int _interiorLevel;
+
+    /// <summary>
+    /// The device the probes are traced on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The program that marks probes invalid (<see cref="GiShaders.ProbeInvalidate"/>).
+    /// </summary>
     readonly GpuProgram _invalidateProgram;
+
+    /// <summary>
+    /// The invalidate program's pipeline.
+    /// </summary>
     readonly GpuComputePipeline _invalidatePipeline;
 
-    // The trace and blend programs by the rays per probe (the workgroup size): the default, and the other one once the bench's gi-rays switch asks
-    // for it.
+    /// <summary>
+    /// The trace and blend programs and their pipelines by the rays per probe (the workgroup size): the default, and the other one once the bench's
+    /// gi-rays switch asks for it.
+    /// </summary>
     readonly Dictionary<int, (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline)> _variants = [];
+
+    /// <summary>
+    /// The octahedral irradiance atlas (RGBA16F) and distance atlas (RG16F): one bordered tile per probe.
+    /// </summary>
     readonly GpuTexture _irradiance, _distance;
+
+    /// <summary>
+    /// The columns' base heights per frame slot (R32F, a row of columns per cascade): the CPU writes the frame being recorded's while the one before
+    /// may still read its own.
+    /// </summary>
     readonly GpuTexture[] _bases;
+
+    /// <summary>
+    /// The rays' results (16 bytes a ray, <see cref="MaxRays"/> per probe) and each probe's state (16 bytes; w 0: unplaced, its first blend starts
+    /// over).
+    /// </summary>
     readonly DeviceBuffer _rays, _state;
 
-    // Per frame slot: the probes this frame traces and blends, written by the CPU (GiFogHide): the probe index, bit 31 a hidden probe's slow update.
+    /// <summary>
+    /// Per frame slot: the probes this frame traces and blends, written by the CPU (<see cref="GiFogHide"/>): the probe index, bit 31 a hidden
+    /// probe's slow update.
+    /// </summary>
     readonly BufferAllocation[] _lists;
 
-    // per tile (cascade, toroidal row, toroidal column): the layers the fog hides
+    /// <summary>
+    /// Per tile (cascade, toroidal row, toroidal column): the layers the fog hides.
+    /// </summary>
     readonly byte[] _hiddenLayers = new byte[Cascades * Columns * Columns];
+
+    /// <summary>
+    /// The fog's cull state the hidden layers were worked out for: its block, hide radius and weather.
+    /// </summary>
     (object? Block, float Radius, float Weather) _hiddenState;
+
+    /// <summary>
+    /// The eye the hidden layers were worked out at.
+    /// </summary>
     Vector3 _hiddenEye;
+
+    /// <summary>
+    /// Whether <see cref="_hiddenLayers"/> holds an answer (the fog culls).
+    /// </summary>
     bool _hiddenValid;
 
     /// <summary>
     /// How far the eye may move before the hidden layers are worked out again (the reach boxes are widened by twice that).
     /// </summary>
     const float HiddenSlack = 96;
+
+    /// <summary>
+    /// The linear and the nearest sampler the atlases and the bases are read with.
+    /// </summary>
     readonly GpuSampler _linear, _nearest;
+
+    /// <summary>
+    /// Per cascade two vectors (<c>uGiGrid</c>): the grid's world origin x and z, its spacing across and up; then its toroidal offsets in columns and
+    /// twice its spacing.
+    /// </summary>
     readonly Vector4[] _grid = new Vector4[Cascades * 2];
+
+    /// <summary>
+    /// The columns' base heights, by cascade and toroidal row and column: the lowest ground under each column's cell.
+    /// </summary>
     readonly float[] _baseHeights = new float[Columns * Columns * Cascades];
+
+    /// <summary>
+    /// The grid origin each cascade was last placed at, in columns.
+    /// </summary>
     readonly (int X, int Z)[] _placed = new (int, int)[Cascades];
+
+    /// <summary>
+    /// Whether each cascade's bases were sampled already.
+    /// </summary>
     readonly bool[] _basesPlaced = new bool[Cascades];
+
+    /// <summary>
+    /// The terrain's fine window the bases were sampled from.
+    /// </summary>
     object? _placedHeights;
+
+    /// <summary>
+    /// The source of each update's random ray rotation (seeded, so runs repeat).
+    /// </summary>
     readonly Random _random = new(1);
+
+    /// <summary>
+    /// The frame slot of the last update.
+    /// </summary>
     int _slot;
+
+    /// <summary>
+    /// Whether the probes were updated at least once (the shaders read them only then).
+    /// </summary>
     bool _updated;
+
+    /// <summary>
+    /// Cascade <paramref name="cascade"/>'s spacing across, spacing up and rays' length: the interior grid's for the first while it is placed, else
+    /// <see cref="Grid"/>'s.
+    /// </summary>
+    (float Spacing, float SpacingY, float RayLength) Layout(int cascade) =>
+        cascade == 0 && _interiorGrid ? (32, 24, Grid[0].RayLength) : Grid[cascade];
 
     #endregion
 
@@ -115,6 +217,10 @@ internal sealed unsafe class GiProbes : IDisposable
     /// one (1: every round; the bench's gi-far switch).
     /// </summary>
     public int FarPeriod { get; set; } = 2;
+
+    /// <summary>
+    /// The probe updates run so far; their count picks each frame's phase.
+    /// </summary>
     public long Updates { get; private set; }
 
     /// <summary>
@@ -166,15 +272,23 @@ internal sealed unsafe class GiProbes : IDisposable
     public int HiddenPeriod { get; set; } = 16;
 
     /// <summary>
-    /// Probes this frame's list holds, and those the fog hides (all of them, not only the share of this frame) at the last list.
+    /// Probes this frame's list holds.
     /// </summary>
     public int Listed { get; private set; }
+
+    /// <summary>
+    /// The probes the fog hides per cascade (all of them, not only the share of this frame) at the last list.
+    /// </summary>
     public int[] Hidden { get; } = new int[Cascades];
 
     /// <summary>
     /// How many times the hidden layers were worked out (statistics).
     /// </summary>
     public int Solves { get; private set; }
+
+    /// <summary>
+    /// The ms spent working the hidden layers out, in total.
+    /// </summary>
     public double SolveMs { get; private set; }
 
     /// <summary>
@@ -191,6 +305,10 @@ internal sealed unsafe class GiProbes : IDisposable
 
     #region Construction
 
+    /// <summary>
+    /// Makes the programs, the atlases, the bases, the ray and state buffers and the lists, clears every probe to invalid and unplaced, and publishes
+    /// the probes' globals.
+    /// </summary>
     public GiProbes(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -348,12 +466,32 @@ internal sealed unsafe class GiProbes : IDisposable
         return (1 - k) / (1 + k);
     }
 
+    /// <summary>
+    /// The probe passes' uniform block, as the shaders' <c>Params</c> lays it out.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Constants
     {
+        /// <summary>
+        /// x 1, y this frame's phase, z the phases, w the hysteresis per update.
+        /// </summary>
         public Vector4 Params;
+
+        /// <summary>
+        /// <see cref="_grid"/>: the cascades' grids.
+        /// </summary>
         public Vector4 Grid0, Grid1, Grid2, Grid3;
+
+        /// <summary>
+        /// The frame's random rotation of the ray directions.
+        /// </summary>
         public Matrix4x4 Rotation;
+
+        /// <summary>
+        /// The traced scene's origin (w: the updates so far), the sun's light, the lighting direction, the atmosphere's maps, the objects' albedo (w:
+        /// a ground colour map present), the rays' lengths per cascade with the sleep and hidden periods, the lamps' grid and the far cascade's
+        /// period (y).
+        /// </summary>
         public Vector4 Origin, SunLight, LightDir, Maps, Albedo, RayLength, LightGrid, Extra;
     }
 
@@ -670,9 +808,15 @@ internal sealed unsafe class GiProbes : IDisposable
         DstAccess = AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.ShaderSampledReadBit,
     };
 
+    /// <summary>
+    /// A descriptor write of buffer <paramref name="info"/> at <paramref name="binding"/>.
+    /// </summary>
     static WriteDescriptorSet Buffer(uint binding, DescriptorType type, DescriptorBufferInfo* info) =>
         new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PBufferInfo = info };
 
+    /// <summary>
+    /// The image global <paramref name="name"/> with its sampler; a stand-in when it is not published yet.
+    /// </summary>
     DescriptorImageInfo Image(FrameGlobals g, string name, bool cube)
     {
         var t = g.Texture(name)?.Invoke() ?? default;
@@ -683,6 +827,9 @@ internal sealed unsafe class GiProbes : IDisposable
         return new DescriptorImageInfo(_ctx.Device.SamplerAt(standIn.Sampler.Index), _ctx.Device.ViewAt(standIn.View.Index), ImageLayout.General);
     }
 
+    /// <summary>
+    /// The uniform global <paramref name="name"/>'s value (default when it is not published).
+    /// </summary>
     static T Read<T>(FrameGlobals g, string name) where T : unmanaged
     {
         T value = default;
@@ -690,6 +837,9 @@ internal sealed unsafe class GiProbes : IDisposable
         return value;
     }
 
+    /// <summary>
+    /// A random rotation: a random axis and angle.
+    /// </summary>
     Matrix4x4 RandomRotation()
     {
         var axis = Vector3.Normalize(new Vector3(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1,
@@ -697,12 +847,18 @@ internal sealed unsafe class GiProbes : IDisposable
         return Matrix4x4.CreateFromAxisAngle(axis, _random.NextSingle() * MathF.Tau);
     }
 
+    /// <summary>
+    /// <paramref name="a"/> modulo <paramref name="n"/>, never negative.
+    /// </summary>
     static int Mod(int a, int n) => ((a % n) + n) % n;
 
     #endregion
 
     #region Diagnostics and disposal
 
+    /// <summary>
+    /// A line describing the cascades, rays, phases and fog hiding, for the log.
+    /// </summary>
     public string Describe()
     {
         string state = $"{Cascades} cascades of {Columns}×{Layers}×{Columns} probes ({Layout(0).Spacing:0} and {Grid[1].Spacing:0} apart), "
@@ -714,6 +870,9 @@ internal sealed unsafe class GiProbes : IDisposable
         return state + hidden;
     }
 
+    /// <summary>
+    /// Frees the atlases, the bases, the buffers and the programs.
+    /// </summary>
     public void Dispose()
     {
         _irradiance.Dispose();

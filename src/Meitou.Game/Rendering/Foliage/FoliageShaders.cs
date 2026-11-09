@@ -23,8 +23,15 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 static class FoliageShaders
 {
+    /// <summary>
+    /// The first attribute location of the per-instance model matrix (rows at 7 to 10, divisor 1).
+    /// </summary>
     public const int InstanceLocation = 7;
 
+    /// <summary>
+    /// The shared mesh vertex stage (<see cref="Shaders.MeshVertex"/>) with the model matrix taken from the instance attributes, the fade from row
+    /// 0's w, and an invariant position.
+    /// </summary>
     public static string MeshVertex()
     {
         string v = Shaders.MeshVertex;
@@ -98,6 +105,10 @@ static class FoliageShaders
             """;
     }
 
+    /// <summary>
+    /// The shared mesh fragment stage (<see cref="Shaders.MeshFragment"/>) for foliage: the probes read without the visibility test, the fade dither,
+    /// and the cut-out as a hard test or, with alpha to coverage, a one-pixel ramp around the threshold.
+    /// </summary>
     /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before
     /// it).</param>
     public static string MeshFragment(bool solid = false)
@@ -136,6 +147,10 @@ static class FoliageShaders
         return f;
     }
 
+    /// <summary>
+    /// The blades' vertex stage: quads built from <c>gl_VertexID</c> around each blade instance (two at right angles with <c>uCross</c>), the top
+    /// edge swaying along X, the blade sinking into the ground over the last fifth of the range, and the aerial perspective per vertex.
+    /// </summary>
     /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add:
     /// grass covers much of the screen.</remarks>
     public static readonly string GrassVertex = "#version 330 core\n" + AtmosphereShaders.Functions + """
@@ -180,6 +195,10 @@ static class FoliageShaders
         }
         """;
 
+    /// <summary>
+    /// The blades' fragment stage: the sprite's cut-out at alpha 0.6 (alpha to coverage on a multisampled target), the colour map over the zone, the
+    /// weather's wetness, lit as a surface facing straight up, then the per-vertex aerial perspective.
+    /// </summary>
     public static readonly string GrassFragment = "#version 330 core\n#define GI_NO_VISIBILITY\n" + AtmosphereShaders.Functions + """
         in vec3 vWorld;
         in vec2 vUv;
@@ -370,6 +389,9 @@ static class FoliageShaders
         ["uNearDepth"] = "textures2D[pc.nearDepth]",
     };
 
+    /// <summary>
+    /// <see cref="GrassVertex"/> in the native model (<see cref="GrassPush"/> and <see cref="ViewConstants"/>).
+    /// </summary>
     public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
 
     /// <summary>
@@ -378,7 +400,13 @@ static class FoliageShaders
     public static string GrassFragmentNative() =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers),
             inShader: true);
+    /// <summary>
+    /// <see cref="GrassMotionVertex"/> in the native model.
+    /// </summary>
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
+    /// <summary>
+    /// <see cref="GrassMotionFragment"/> in the native model.
+    /// </summary>
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 
     // ------------------------------------------------------------------ the GPU cull (docs/renderer-native.md 5.3, step A2)
@@ -428,6 +456,9 @@ static class FoliageShaders
         }
         """;
 
+    /// <summary>
+    /// The kernels' shared head: the instance, chunk and view records, the push constants, and the split and fog tests they share.
+    /// </summary>
     const string CullCommon = """
         #version 450
         layout(local_size_x = 256) in;
@@ -763,6 +794,10 @@ static class FoliageShaders
         }
         """;
 
+    /// <summary>
+    /// <paramref name="source"/> with the first match of <paramref name="pattern"/> replaced; when there is none, throws if
+    /// <paramref name="required"/>, else returns it unchanged.
+    /// </summary>
     static string Replace(string source, string pattern, string replacement, bool required)
     {
         var regex = new Regex(pattern);
@@ -781,16 +816,52 @@ static class FoliageShaders
 [StructLayout(LayoutKind.Explicit, Size = 72)]
 struct GrassPush
 {
+    /// <summary>
+    /// <c>size</c>: the blade's minimum and maximum width, minimum and maximum height.
+    /// </summary>
     [FieldOffset(0)] public Vector4 Size;
+    /// <summary>
+    /// <c>colourBounds</c>: the zone's x0, z0, x1, z1 the colour map is stretched over.
+    /// </summary>
     [FieldOffset(16)] public Vector4 ColourBounds;
+    /// <summary>
+    /// <c>sway</c>: the sway amplitude along X, in units.
+    /// </summary>
     [FieldOffset(32)] public float Sway;
+    /// <summary>
+    /// <c>range</c>: the grass layer's range.
+    /// </summary>
     [FieldOffset(36)] public float Range;
+    /// <summary>
+    /// <c>frequency</c>: the sway's spatial frequency.
+    /// </summary>
     [FieldOffset(40)] public float Frequency;
+    /// <summary>
+    /// <c>cross</c>: CROSSQUADS, two quads at right angles.
+    /// </summary>
     [FieldOffset(44)] public uint Cross;
+    /// <summary>
+    /// <c>hasColourMap</c>: the patch has a colour map.
+    /// </summary>
     [FieldOffset(48)] public uint HasColourMap;
+    /// <summary>
+    /// <c>coverage</c>: alpha to coverage on a multisampled target.
+    /// </summary>
     [FieldOffset(52)] public uint Coverage;
+    /// <summary>
+    /// <c>wireframe</c>: draws flat green for the wireframe view.
+    /// </summary>
     [FieldOffset(56)] public uint Wireframe;
+    /// <summary>
+    /// <c>sprite</c>: the sprite's bindless index.
+    /// </summary>
     [FieldOffset(60)] public uint Sprite;
+    /// <summary>
+    /// <c>colourMap</c>: the colour map's bindless index.
+    /// </summary>
     [FieldOffset(64)] public uint ColourMap;
+    /// <summary>
+    /// <c>nearDepth</c>: the bindless index of the scene depth the motion pass's near test reads.
+    /// </summary>
     [FieldOffset(68)] public uint NearDepth;
 }

@@ -13,15 +13,30 @@ namespace Meitou.Modding;
 /// </summary>
 public sealed class LoadedMod
 {
+    /// <summary>
+    /// A mod whose manifest has been read; its assemblies, entry instance, dependencies and exports are filled in as it loads.
+    /// </summary>
     internal LoadedMod(ModInfo info, CodeModManifest manifest)
     {
         Info = info;
         Manifest = manifest;
     }
 
+    /// <summary>
+    /// The mod: its name, folder and data.
+    /// </summary>
     public ModInfo Info { get; }
+    /// <summary>
+    /// The mod's code manifest.
+    /// </summary>
     public CodeModManifest Manifest { get; }
+    /// <summary>
+    /// The mod's own assemblies, as its manifest lists them, loaded into its load context.
+    /// </summary>
     public IReadOnlyList<Assembly> Assemblies { get; internal set; } = [];
+    /// <summary>
+    /// The mod's entry instance (the manifest's <c>entry</c> type); null until it is made.
+    /// </summary>
     public IMod? Instance { get; internal set; }
 
     /// <summary>
@@ -54,13 +69,31 @@ public sealed record ModHostOptions(
 /// </summary>
 public sealed class ModHost
 {
+    /// <summary>
+    /// Every loaded mod's committed registrations.
+    /// </summary>
     readonly ModRegistry _registry = new();
+    /// <summary>
+    /// The mods that loaded, in load order.
+    /// </summary>
     readonly List<LoadedMod> _mods = [];
+    /// <summary>
+    /// The player's notices, one line per mod that was left out.
+    /// </summary>
     readonly List<string> _notices = [];
+    /// <summary>
+    /// The load pass: which mods loaded and why the others were refused, for the dependency checks.
+    /// </summary>
     readonly CodeModPass _pass = new();
 
+    /// <summary>
+    /// Made only by <see cref="Load"/>.
+    /// </summary>
     ModHost() { }
 
+    /// <summary>
+    /// The mods that loaded, in load order.
+    /// </summary>
     public IReadOnlyList<LoadedMod> Mods => _mods;
 
     /// <summary>
@@ -78,7 +111,13 @@ public sealed class ModHost
     /// </summary>
     public SimulationExtensions? Simulation => _registry.Simulation.IsEmpty ? null : _registry.Simulation;
 
+    /// <summary>
+    /// Every mod's interface extensions, in load order.
+    /// </summary>
     public IReadOnlyList<IUiExtension> UiExtensions => _registry.Ui;
+    /// <summary>
+    /// Every mod's debug menu commands, in load order.
+    /// </summary>
     public IReadOnlyList<ModDebugCommand> DebugCommands => _registry.DebugCommands;
 
     /// <summary>
@@ -96,7 +135,10 @@ public sealed class ModHost
         foreach (var feed in _registry.HitFeeds)
         {
             if (feed.Faulted) continue;
-            try { feed.Run(hits); }
+            try
+            {
+                feed.Run(hits);
+            }
             catch (Exception e)
             {
                 feed.Faulted = true;
@@ -152,6 +194,9 @@ public sealed class ModHost
         return host;
     }
 
+    /// <summary>
+    /// Loads one mod (manifest, assemblies, entry instance, <see cref="IMod.Initialize"/>); a failure refuses it with a log line and a notice.
+    /// </summary>
     void TryLoad(ModInfo info, ModHostOptions options, IReadOnlyList<CodeModEntry> entries, int index)
     {
         LoadedMod? mod = null;
@@ -175,6 +220,9 @@ public sealed class ModHost
         }
     }
 
+    /// <summary>
+    /// Leaves a mod out: a log line, a notice, and its reason for the dependency checks.
+    /// </summary>
     void Refuse(string mod, string reason)
     {
         Console.Error.WriteLine($"mod       {mod}: not loaded: {reason}");
@@ -188,7 +236,10 @@ public sealed class ModHost
     LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
     {
         CodeModManifest manifest;
-        try { manifest = CodeModManifest.Read(info.CodeManifestPath); }
+        try
+        {
+            manifest = CodeModManifest.Read(info.CodeManifestPath);
+        }
         catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
@@ -235,6 +286,9 @@ public sealed class ModHost
         return imports;
     }
 
+    /// <summary>
+    /// What a mod exports: its dependencies' exports and its own assemblies, by simple name.
+    /// </summary>
     static Dictionary<string, Assembly> Exported(IReadOnlyList<Assembly> own, IReadOnlyDictionary<string, Assembly> imports)
     {
         var exports = new Dictionary<string, Assembly>(imports, StringComparer.OrdinalIgnoreCase);
@@ -242,6 +296,10 @@ public sealed class ModHost
         return exports;
     }
 
+    /// <summary>
+    /// Loads the manifest's assemblies into the mod's own load context; refuses a missing file, one of the game's assemblies or one a
+    /// dependency exports.
+    /// </summary>
     static List<Assembly> LoadAssemblies(ModInfo info, CodeModManifest manifest, IReadOnlyDictionary<string, Assembly> imports)
     {
         var context = new ModLoadContext(info.Folder, manifest.Id, imports);
@@ -259,6 +317,9 @@ public sealed class ModHost
         return loaded;
     }
 
+    /// <summary>
+    /// The mod's entry instance: its manifest's entry type, which must implement <see cref="IMod"/> and have a public parameterless constructor.
+    /// </summary>
     static IMod CreateEntry(LoadedMod mod)
     {
         var type = mod.Assemblies.Select(a => a.GetType(mod.Manifest.Entry, throwOnError: false)).FirstOrDefault(t => t is not null)
@@ -276,14 +337,20 @@ public sealed class ModHost
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
         var context = new ModContext(mod, _registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
-        try { mod.Instance!.Initialize(context); }
+        try
+        {
+            mod.Instance!.Initialize(context);
+        }
         catch
         {
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }
-        finally { context.Open = false; }
+        finally
+        {
+            context.Open = false;
+        }
         _registry.Commit(context.Id, context.Pending);
     }
 
@@ -296,8 +363,14 @@ public sealed class ModHost
         foreach (var dependency in DependencyClosure(mod))
         {
             if (dependency.Instance is not IModDependents framework) continue;
-            try { framework.DependentFailed(mod.Manifest.Id); }
-            catch (Exception e) { Console.Error.WriteLine($"mod       {dependency.Manifest.Id}: cleanup after {mod.Manifest.Id} failed: {e}"); }
+            try
+            {
+                framework.DependentFailed(mod.Manifest.Id);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"mod       {dependency.Manifest.Id}: cleanup after {mod.Manifest.Id} failed: {e}");
+            }
         }
     }
 
@@ -334,8 +407,14 @@ public sealed class ModHost
     {
         foreach (var group in SaveableSystems(world).GroupBy(s => s.Tag.ModId))
         {
-            try { files[group.Key] = ModSaveFile.Write([.. group.Select(s => (s.Tag.Name, Written(s.System)))]); }
-            catch (Exception e) { Console.Error.WriteLine($"mod       {group.Key}: save data not written: {e}"); }
+            try
+            {
+                files[group.Key] = ModSaveFile.Write([.. group.Select(s => (s.Tag.Name, Written(s.System)))]);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"mod       {group.Key}: save data not written: {e}");
+            }
         }
     }
 
@@ -354,16 +433,25 @@ public sealed class ModHost
                     if (entries.TryGetValue(tag.Name, out var data))
                         system.Read(new MemoryStream(data, writable: false));
             }
-            catch (Exception e) { Console.Error.WriteLine($"mod       {group.Key}: save data not read: {e}"); }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"mod       {group.Key}: save data not read: {e}");
+            }
         }
     }
 
+    /// <summary>
+    /// The world's systems that keep mod save data, with the mod and name they were made under.
+    /// </summary>
     IEnumerable<(IModSaveData System, ModSystemTag Tag)> SaveableSystems(World world)
     {
         foreach (var system in world.Systems)
             if (system is IModSaveData saveable && _registry.TagOf(system) is { } tag) yield return (saveable, tag);
     }
 
+    /// <summary>
+    /// A system's save data, written to a byte array.
+    /// </summary>
     static byte[] Written(IModSaveData system)
     {
         using var stream = new MemoryStream();
@@ -384,8 +472,14 @@ public sealed class ModHost
         var registrations = new List<IDisposable>();
         foreach (var extension in _registry.Ui)
         {
-            try { registrations.Add(register(extension)); }
-            catch (Exception e) { Console.Error.WriteLine($"mod       interface extension {extension.Id} not registered: {e}"); }
+            try
+            {
+                registrations.Add(register(extension));
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"mod       interface extension {extension.Id} not registered: {e}");
+            }
         }
         return registrations;
     }

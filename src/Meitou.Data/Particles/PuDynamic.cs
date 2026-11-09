@@ -2,7 +2,36 @@ using System.Numerics;
 
 namespace Meitou.Data.Particles;
 
-public enum PuDynamicKind { Fixed, Random, CurvedLinear, CurvedSpline, Oscillate }
+/// <summary>
+/// What a dynamic attribute is.
+/// </summary>
+public enum PuDynamicKind
+{
+    /// <summary>
+    /// A plain number.
+    /// </summary>
+    Fixed,
+
+    /// <summary>
+    /// <c>dyn_random</c>: uniform between a minimum and a maximum.
+    /// </summary>
+    Random,
+
+    /// <summary>
+    /// <c>dyn_curved_linear</c>: straight segments through control points.
+    /// </summary>
+    CurvedLinear,
+
+    /// <summary>
+    /// <c>dyn_curved_spline</c>: a spline through control points.
+    /// </summary>
+    CurvedSpline,
+
+    /// <summary>
+    /// <c>dyn_oscillate</c>: a sine or square wave round a base.
+    /// </summary>
+    Oscillate
+}
 
 /// <summary>
 /// A ParticleUniverse "dynamic attribute" (docs/formats/particle-universe.md): a number, or <c>dyn_random</c> (uniform between <c>min</c> and
@@ -12,6 +41,9 @@ public enum PuDynamicKind { Fixed, Random, CurvedLinear, CurvedSpline, Oscillate
 /// </summary>
 public sealed class PuDynamic
 {
+    /// <summary>
+    /// What the attribute is.
+    /// </summary>
     public PuDynamicKind Kind { get; }
     /// <summary>
     /// Fixed: the value. Random: the minimum. Oscillate: the base.
@@ -25,25 +57,49 @@ public sealed class PuDynamic
     /// The control points, sorted by x.
     /// </summary>
     public IReadOnlyList<Vector2> Points { get; }
+    /// <summary>
+    /// Oscillate: waves per unit of x.
+    /// </summary>
     public float Frequency { get; }
+    /// <summary>
+    /// Oscillate: the wave's offset, in turns.
+    /// </summary>
     public float Phase { get; }
     /// <summary>
     /// Oscillate: a square wave instead of a sine.
     /// </summary>
     public bool Square { get; }
 
+    /// <summary>
+    /// Holds the parts; the factory methods are the way in.
+    /// </summary>
     PuDynamic(PuDynamicKind kind, float a, float b, Vector2[]? points = null, float frequency = 0, float phase = 0, bool square = false)
     {
         (Kind, A, B, Points, Frequency, Phase, Square) = (kind, a, b, points ?? [], frequency, phase, square);
     }
 
+    /// <summary>
+    /// A plain number.
+    /// </summary>
     public static PuDynamic Fixed(float value) => new(PuDynamicKind.Fixed, value, value);
+    /// <summary>
+    /// <c>dyn_random</c>: uniform between <paramref name="min"/> and <paramref name="max"/>.
+    /// </summary>
     public static PuDynamic Random(float min, float max) => new(PuDynamicKind.Random, min, max);
+    /// <summary>
+    /// <c>dyn_curved_linear</c>, or <c>dyn_curved_spline</c> when <paramref name="spline"/>, through <paramref name="points"/> sorted by x.
+    /// </summary>
     public static PuDynamic Curve(IEnumerable<Vector2> points, bool spline) =>
         new(spline ? PuDynamicKind.CurvedSpline : PuDynamicKind.CurvedLinear, 0, 0, [.. points.OrderBy(p => p.X)]);
+    /// <summary>
+    /// <c>dyn_oscillate</c>: <paramref name="baseValue"/> plus <paramref name="amplitude"/> times a sine (or square) wave.
+    /// </summary>
     public static PuDynamic Oscillate(float baseValue, float amplitude, float frequency, float phase, bool square) =>
         new(PuDynamicKind.Oscillate, baseValue, amplitude, null, frequency, phase, square);
 
+    /// <summary>
+    /// Whether the attribute is a plain number.
+    /// </summary>
     public bool IsFixed => Kind == PuDynamicKind.Fixed;
 
     /// <summary>

@@ -6,10 +6,15 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// Target choice: whom a fighter attacks and when it chooses again, the best attacker of a character for one joining its fight, and the threat a
+/// fight poses.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
-    /// How long a fighter keeps its target before it chooses again (CombatClassAI +0x2f0, docs/game/combat.md "Attack slots and circling"): 1 s, 0.3 s on Hold.
+    /// How long a fighter keeps its target before it chooses again (CombatClassAI +0x2f0, docs/game/combat.md "Attack slots and circling"): 1 s,
+    /// 0.3 s on Hold.
     /// </summary>
     public const float PickSeconds = 1, HoldPickSeconds = 0.3f;
 
@@ -34,7 +39,8 @@ public sealed partial class CombatSystem
     const float EyeHeight = 15;
 
     /// <summary>
-    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is not skipped).
+    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is
+    /// not skipped).
     /// </summary>
     const float SteerLineStep = 2;
 
@@ -43,16 +49,34 @@ public sealed partial class CombatSystem
     /// </summary>
     struct Choice
     {
+        /// <summary>
+        /// The chooser's slot and its current target's (-1: none).
+        /// </summary>
         public int Self, Current;
+        /// <summary>
+        /// The chooser.
+        /// </summary>
         public CharacterCold Cold;
+        /// <summary>
+        /// Whether the chooser is the player's, holds, is down (prone) and is an animal.
+        /// </summary>
         public bool Player, Hold, Prone, Animal;
+        /// <summary>
+        /// Where a holding chooser holds.
+        /// </summary>
         public Vector3 HoldPoint;
 
         /// <summary>
         /// The AI task's target whose attackers the chooser protects (a bodyguard's), -1: none.
         /// </summary>
         public int Protectee;
+        /// <summary>
+        /// The best candidate so far (-1: none).
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// The best candidate's score.
+        /// </summary>
         public float BestScore;
 
         /// <summary>
@@ -63,6 +87,9 @@ public sealed partial class CombatSystem
 
     #region Target choice
 
+    /// <summary>
+    /// The ticks a fighter keeps its target: <see cref="HoldPickSeconds"/> on Hold, else <see cref="PickSeconds"/>, at least 1.
+    /// </summary>
     static int PickTicks(World world, CharacterCold cold)
     {
         float seconds = Orders.Holding(cold) ? HoldPickSeconds : PickSeconds;
@@ -165,12 +192,12 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those fighting the subject,
-    /// and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a looker other than the
-    /// subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts as an ally (the
-    /// subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback to the
-    /// subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by
-    /// target, counted as attackers of theirs (the AI's serial step).
+    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those
+    /// fighting the subject, and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a
+    /// looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts
+    /// as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback
+    /// to the subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this
+    /// tick by target, counted as attackers of theirs (the AI's serial step).
     /// </summary>
     public int BestAttackerOf(World world, int subject, int looker, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -224,6 +251,10 @@ public sealed partial class CombatSystem
     /// </summary>
     public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } or { Maimed: true } || c.Fighter is not { CanAttack: true };
 
+    /// <summary>
+    /// Scores candidate <paramref name="c"/> for the chooser (<see cref="TargetScore"/>) and keeps it when it beats the best; one down, caged,
+    /// carried, of the chooser's faction or squad (but the current target), off its hold post or found unreachable lately is left out.
+    /// </summary>
     void Consider(World world, ref Choice q, int c, bool protect)
     {
         var table = world.Characters;
@@ -308,7 +339,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// How many fight the character in <paramref name="slot"/> (standing fighters whose target it is), as of the last tick; any thread after Schedule.
+    /// How many fight the character in <paramref name="slot"/> (standing fighters whose target it is), as of the last tick; any thread
+    /// after Schedule.
     /// </summary>
     public int AttackerCount(World world, int slot)
     {

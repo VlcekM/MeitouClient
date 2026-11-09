@@ -34,8 +34,8 @@ internal static class NavInteriors
     public const float RuinHullJoinDistance = 5f;
 
     /// <summary>
-    /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. A doorless interior (an intact
-    /// building without doors, or a ruin) is joined along its hull instead of at its doors, a ruin within <see cref="RuinHullJoinDistance"/>.
+    /// The zone's exterior mesh with the interior meshes appended and joined; both kept and pruned polygons are carried over. A doorless interior (an
+    /// intact building without doors, or a ruin) is joined along its hull instead of at its doors, a ruin within <see cref="RuinHullJoinDistance"/>.
     /// </summary>
     public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<InteriorMesh> interiors, Action<string>? log = null)
     {
@@ -146,18 +146,6 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// The combined mesh's lists <see cref="CarryKeep"/> reads; polygons from <paramref name="ExteriorCount"/> on are the interiors'.
-    /// </summary>
-    readonly record struct KeptSet(
-        List<Vector3> Vertices,
-        List<int[]> Polygons,
-        List<int[]> Neighbours,
-        List<List<int>?> Links,
-        List<byte> Areas,
-        List<bool> Kept,
-        int ExteriorCount);
-
-    /// <summary>
     /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior
     /// polygons the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these
     /// interiors, docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass
@@ -197,7 +185,8 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// Whether exterior polygon <paramref name="p"/>'s edge <paramref name="k"/> is narrower than a portal (an exterior polygon's neighbours are exterior).
+    /// Whether exterior polygon <paramref name="p"/>'s edge <paramref name="k"/> is narrower than a portal (an exterior polygon's neighbours
+    /// are exterior).
     /// </summary>
     static bool NarrowExteriorEdge(KeptSet m, int p, int k)
     {
@@ -208,7 +197,8 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door, or a doorless one along its hull.
+    /// Links the door polygons of one interior (polygons [first, first + count)) to the exterior's door polygons of the same door, or a doorless one
+    /// along its hull.
     /// </summary>
     static void Join(
         List<Vector3> v,
@@ -242,8 +232,44 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// The joining of one interior (polygons from <paramref name="first"/> on) to the exterior's first <paramref name="exteriorCount"/> polygons of the
-    /// combined mesh: the open edges of both sides that face each other get links.
+    /// Two edges that run along each other: their midpoints and both ends within <paramref name="distance"/> in plan and <see cref="JoinHeight"/> in
+    /// height, overlapping.
+    /// </summary>
+    static bool Facing(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float distance = JoinDistance)
+    {
+        var ma = (a0 + a1) * 0.5f;
+        var mb = (b0 + b1) * 0.5f;
+        if (MathF.Abs(ma.Y - mb.Y) > JoinHeight) return false;
+
+        var d = new Vector2(a1.X - a0.X, a1.Z - a0.Z);
+        float len = d.Length();
+        if (len < 1e-4f) return false;
+
+        d /= len;
+        float Along(Vector3 p) => (p.X - a0.X) * d.X + (p.Z - a0.Z) * d.Y;
+        float Off(Vector3 p) => MathF.Abs((p.X - a0.X) * d.Y - (p.Z - a0.Z) * d.X);
+        if (Off(b0) > distance || Off(b1) > distance) return false;
+
+        float lo = Math.Min(Along(b0), Along(b1));
+        float hi = Math.Max(Along(b0), Along(b1));
+        return Math.Min(hi, len) - Math.Max(lo, 0) > 0.5f;
+    }
+
+    /// <summary>
+    /// The combined mesh's lists <see cref="CarryKeep"/> reads; polygons from <paramref name="ExteriorCount"/> on are the interiors'.
+    /// </summary>
+    readonly record struct KeptSet(
+        List<Vector3> Vertices,
+        List<int[]> Polygons,
+        List<int[]> Neighbours,
+        List<List<int>?> Links,
+        List<byte> Areas,
+        List<bool> Kept,
+        int ExteriorCount);
+
+    /// <summary>
+    /// The joining of one interior (polygons from <paramref name="first"/> on) to the exterior's first <paramref name="exteriorCount"/> polygons of
+    /// the combined mesh: the open edges of both sides that face each other get links.
     /// </summary>
     sealed class InteriorJoin(
         List<Vector3> v,
@@ -392,30 +418,6 @@ internal static class NavInteriors
 
             return joined;
         }
-    }
-
-    /// <summary>
-    /// Two edges that run along each other: their midpoints and both ends within <paramref name="distance"/> in plan and <see cref="JoinHeight"/> in
-    /// height, overlapping.
-    /// </summary>
-    static bool Facing(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float distance = JoinDistance)
-    {
-        var ma = (a0 + a1) * 0.5f;
-        var mb = (b0 + b1) * 0.5f;
-        if (MathF.Abs(ma.Y - mb.Y) > JoinHeight) return false;
-
-        var d = new Vector2(a1.X - a0.X, a1.Z - a0.Z);
-        float len = d.Length();
-        if (len < 1e-4f) return false;
-
-        d /= len;
-        float Along(Vector3 p) => (p.X - a0.X) * d.X + (p.Z - a0.Z) * d.Y;
-        float Off(Vector3 p) => MathF.Abs((p.X - a0.X) * d.Y - (p.Z - a0.Z) * d.X);
-        if (Off(b0) > distance || Off(b1) > distance) return false;
-
-        float lo = Math.Min(Along(b0), Along(b1));
-        float hi = Math.Max(Along(b0), Along(b1));
-        return Math.Min(hi, len) - Math.Max(lo, 0) > 0.5f;
     }
 }
 

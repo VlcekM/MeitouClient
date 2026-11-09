@@ -10,6 +10,9 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public static class ImpostorQuad
 {
+    /// <summary>
+    /// The A/B <c>impostor-quad</c> switch: on, the billboards span the box's outline; off, the sphere's square.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -26,5 +29,9 @@ public static class ImpostorQuad
         return x > 1023 || y > 1023 || z > 1023 ? 0 : x | y << 10 | z << 20 | 1u << 30;
     }
 
+    /// <summary>
+    /// A half extent in thousandths of <paramref name="radius"/> times 1.023 (1023 steps across the radius), rounded up; above 1023 when the box
+    /// reaches past the sphere.
+    /// </summary>
     static uint Step(float half, float radius) => (uint)MathF.Ceiling(Math.Max(half, 0) / radius * 1023f);
 }

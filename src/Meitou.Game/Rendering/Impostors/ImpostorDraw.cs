@@ -6,7 +6,32 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Impostors;
 
-internal enum ImpostorProgram { Plain, Caster, Rock, Prepass, AfterPrepass }
+/// <summary>
+/// Which of <see cref="ImpostorDraw"/>'s programs a draw uses.
+/// </summary>
+internal enum ImpostorProgram
+{
+    /// <summary>
+    /// The billboards' colour program (<see cref="ImpostorShaders.FragmentNative"/>).
+    /// </summary>
+    Plain,
+    /// <summary>
+    /// The shadow casters' depth program (<see cref="ImpostorShaders.DepthFragmentNative"/>).
+    /// </summary>
+    Caster,
+    /// <summary>
+    /// The TERRAIN-mode rocks' colour program (<see cref="ImpostorShaders.RockVertexNative"/>, <see cref="ImpostorShaders.RockFragmentNative"/>).
+    /// </summary>
+    Rock,
+    /// <summary>
+    /// The billboards' depth prepass (<see cref="ImpostorShaders.PrepassFragmentNative"/>, <see cref="ImpostorPrepass"/>).
+    /// </summary>
+    Prepass,
+    /// <summary>
+    /// The lighting after the prepass, with no discard (<see cref="ImpostorShaders.FragmentAfterPrepassNative"/>).
+    /// </summary>
+    AfterPrepass
+}
 
 /// <summary>
 /// The impostor program in the native model (<see cref="ImpostorShaders.VertexNative"/>, <see cref="ImpostorShaders.FragmentNative"/>): six vertices
@@ -17,9 +42,21 @@ internal enum ImpostorProgram { Plain, Caster, Rock, Prepass, AfterPrepass }
 /// </summary>
 internal sealed class ImpostorDraw : IDisposable
 {
+    /// <summary>
+    /// The device the programs and pipelines are made on.
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The five programs (<see cref="ImpostorProgram"/>).
+    /// </summary>
     readonly NativeProg _plain, _caster, _rock, _prepass, _afterPrepass;
+    /// <summary>
+    /// The shared six-entry index buffer (<see cref="Quad"/>).
+    /// </summary>
     readonly DeviceBuffer _quad;
+    /// <summary>
+    /// The pipelines made so far, by program, the fixed-function part of the state and the target formats.
+    /// </summary>
     readonly Dictionary<(ImpostorProgram, DrawStateKey, AttachmentFormats), GpuPipeline> _pipelines = [];
 
     /// <summary>
@@ -27,6 +64,9 @@ internal sealed class ImpostorDraw : IDisposable
     /// </summary>
     readonly record struct DrawStateKey(BlendState Blend, ColorMask Mask, PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
+    /// <summary>
+    /// Compiles the five programs against <paramref name="frame"/>'s sets and uploads the quad's indices.
+    /// </summary>
     public ImpostorDraw(IGpuContext gpu, NativeFrame frame)
     {
         this._gpu = gpu;
@@ -69,6 +109,9 @@ internal sealed class ImpostorDraw : IDisposable
         return p;
     }
 
+    /// <summary>
+    /// The program of <paramref name="which"/>.
+    /// </summary>
     NativeProg ProgramOf(ImpostorProgram which) => which switch
     {
         ImpostorProgram.Caster => _caster,
@@ -78,6 +121,9 @@ internal sealed class ImpostorDraw : IDisposable
         _ => _plain,
     };
 
+    /// <summary>
+    /// Frees the programs and the index buffer.
+    /// </summary>
     public void Dispose()
     {
         _plain.Dispose();

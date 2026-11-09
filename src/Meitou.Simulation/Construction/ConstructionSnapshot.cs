@@ -26,12 +26,24 @@ public sealed record BuildingSnapshot(
     bool Complete,
     bool Paused)
 {
+    /// <summary>
+    /// The level-data placement the site repairs (null: player-built).
+    /// </summary>
     public Meitou.Data.World.BuildingPlacement? LevelPlacement { get; init; }
 
+    /// <summary>
+    /// The BUILDING's name.
+    /// </summary>
     public string Name { get; init; } = "";
 
+    /// <summary>
+    /// Whether it is destroyed.
+    /// </summary>
     public bool Destroyed { get; init; }
 
+    /// <summary>
+    /// Whether it wants work: destroyed, incomplete or below its target.
+    /// </summary>
     public bool NeedsWork => Destroyed || !Complete || Progress < Target;
 
     /// <summary>
@@ -49,5 +61,8 @@ public sealed record BuildingSnapshot(
     /// </summary>
     public bool Public { get; init; } = true;
 
+    /// <summary>
+    /// The name of the player town it belongs to (see <see cref="Public"/>).
+    /// </summary>
     public string? TownName { get; init; }
 }

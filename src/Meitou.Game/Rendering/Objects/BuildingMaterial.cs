@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Objects;
 /// </summary>
 static class BuildingMaterial
 {
+    /// <summary>
+    /// The material of a building part's MATERIAL_SPEC record (the class summary's rules).
+    /// </summary>
     public static SurfaceMaterial FromSpec(GameRecord spec)
     {
         int type = spec.GetInt("material type");
@@ -31,5 +34,8 @@ static class BuildingMaterial
         };
     }
 
+    /// <summary>
+    /// A record's path field, or null when empty.
+    /// </summary>
     static string? Tex(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;
 }

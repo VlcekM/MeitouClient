@@ -38,7 +38,14 @@ namespace Meitou.Game.Rendering.Frame;
 /// </remarks>
 static partial class NativeShaders
 {
+    /// <summary>
+    /// The descriptor set numbers: the bindless table is set 1, the pushed set of the frame's blocks set 0.
+    /// </summary>
     public const int BindlessSet = 1, FrameSet = 0;
+
+    /// <summary>
+    /// Set 0's uniform buffer bindings: the frame block, the shadow receiver, caster and Meitou shadow blocks, the view block and the bone block.
+    /// </summary>
     public const uint FrameBinding = 0, ReceiverBinding = 1, CasterBinding = 2, MeitouBinding = 3, ViewBinding = 4, BonesBinding = 5;
 
     /// <summary>
@@ -349,12 +356,21 @@ static partial class NativeShaders
         return text;
     }
 
+    /// <summary>
+    /// The GLSL 3.30 version line the port replaces.
+    /// </summary>
     [GeneratedRegex(@"#version\s+330\s+core[^\n]*\n?")]
     private static partial Regex VersionRegex();
 
+    /// <summary>
+    /// A loose (default-block) uniform declaration: its indent, type and names.
+    /// </summary>
     [GeneratedRegex(@"(?m)^(?<indent>[ \t]*)uniform[ \t]+(?<type>\w+)[ \t]+(?<names>[^;{()]+);[^\n\r]*")]
     private static partial Regex LooseUniformRegex();
 
+    /// <summary>
+    /// A std140 uniform block's declaration, given its native set and binding by the port.
+    /// </summary>
     [GeneratedRegex(@"(?m)^(?<indent>[ \t]*)layout\(std140\)[ \t]+uniform[ \t]+(?<name>\w+)")]
     private static partial Regex BlockRegex();
 
@@ -403,32 +419,141 @@ static partial class NativeShaders
 [StructLayout(LayoutKind.Explicit, Size = 8704)]
 unsafe struct FrameConstants
 {
+    /// <summary>
+    /// <c>uAtmoSun</c>: xyz the direction to the sun (its real height).
+    /// </summary>
     [FieldOffset(0)] public Vector4 AtmoSun;
+
+    /// <summary>
+    /// <c>uAtmoLight</c>: xyz the lighting direction (the sun's with y clamped to 0), w the environment light's factor.
+    /// </summary>
     [FieldOffset(16)] public Vector4 AtmoLight;
+
+    /// <summary>
+    /// <c>uAtmoSunLight</c>: the sun colour's rgb times its w (docs/formats/lighting.md).
+    /// </summary>
     [FieldOffset(32)] public Vector3 AtmoSunLight;
+
+    /// <summary>
+    /// <c>uAtmoParams</c>: x 1 game sky / 0 simple, y the distance where the physical haze is complete, z the physical haze's scale height in world
+    /// units.
+    /// </summary>
     [FieldOffset(48)] public Vector4 AtmoParams;
+
+    /// <summary>
+    /// <c>uAtmoTau</c>: the physical haze's optical depth straight up, rgb Rayleigh's, a Mie's.
+    /// </summary>
     [FieldOffset(64)] public Vector4 AtmoTau;
+
+    /// <summary>
+    /// <c>uAtmoTint</c>: the weather's sky colour multiplier.
+    /// </summary>
     [FieldOffset(80)] public Vector3 AtmoTint;
+
+    /// <summary>
+    /// <c>uAtmoFog</c>: the weather's fog, x start, y end, z enabled.
+    /// </summary>
     [FieldOffset(96)] public Vector4 AtmoFog;
+
+    /// <summary>
+    /// <c>uAtmoFogColour</c>: the weather fog's colour.
+    /// </summary>
     [FieldOffset(112)] public Vector3 AtmoFogColour;
+
+    /// <summary>
+    /// <c>uAtmoSimple</c>: the simple sky's fog colour and the distance of complete fog.
+    /// </summary>
     [FieldOffset(128)] public Vector4 AtmoSimple;
+
+    /// <summary>
+    /// <c>uAtmoHaze</c>: Kenshi haze, x 1 when on, y start and z end of the atmosphere fog, w the weather fog's density (1 / distance).
+    /// </summary>
     [FieldOffset(144)] public Vector4 AtmoHaze;
+
+    /// <summary>
+    /// <c>uAtmoHazeCloud</c>: Kenshi haze's horizon clouds, rgb the cloud colour, a how far the haze is pulled to it.
+    /// </summary>
     [FieldOffset(160)] public Vector4 AtmoHazeCloud;
+
+    /// <summary>
+    /// <c>uAtmoAltitude</c>: x the physical haze's share, y the haze strength, z how far the eye is above the game's camera heights.
+    /// </summary>
     [FieldOffset(176)] public Vector4 AtmoAltitude;
+
+    /// <summary>
+    /// <c>uAtmoMaps</c>: x irradiance cube, y specular cube, z ambient map present (0 none, else 1 + the night ambient floor), w half the world's
+    /// width.
+    /// </summary>
     [FieldOffset(192)] public Vector4 AtmoMaps;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoIrradiance</c>, the sky's irradiance cube.
+    /// </summary>
     [FieldOffset(208)] public uint AtmoIrradiance;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoSpecular</c>, the sky's specular cube.
+    /// </summary>
     [FieldOffset(212)] public uint AtmoSpecular;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoAmbientMap</c>, the ambient map.
+    /// </summary>
     [FieldOffset(216)] public uint AtmoAmbientMap;
+
+    /// <summary>
+    /// The bindless index of <c>uShadowMap</c>, the shadow cascades (cascade i in layer i).
+    /// </summary>
     [FieldOffset(220)] public uint ShadowMap;
+
+    /// <summary>
+    /// The bindless index of <c>uShadowNoise</c>, the shadows' noise texture.
+    /// </summary>
     [FieldOffset(224)] public uint ShadowNoise;
+
+    /// <summary>
+    /// The bindless index of <c>uShadowTerrain</c>, the Meitou terrain shadow per world grid sample.
+    /// </summary>
     [FieldOffset(228)] public uint ShadowTerrain;
+
+    /// <summary>
+    /// The bindless index of <c>uShadowBlocker</c>, the cascades' half-resolution depth for the blocker search, a layer per cascade.
+    /// </summary>
     [FieldOffset(232)] public uint ShadowBlocker;
+
+    /// <summary>
+    /// The bindless index of <c>uShadowLandmark</c>, the landmarks' depth along the sun.
+    /// </summary>
     [FieldOffset(236)] public uint ShadowLandmark;
+
+    /// <summary>
+    /// <c>uWeatherWet</c>: the weather's surface values, x wetness, y rain amount (rain / 50, saturated), z game time in hours.
+    /// </summary>
     [FieldOffset(240)] public Vector4 WeatherWet;
+
+    /// <summary>
+    /// <c>uWeatherDust</c>: xyz the dust amounts (current, inside, slope; docs/formats/weather.md "Dust").
+    /// </summary>
     [FieldOffset(256)] public Vector4 WeatherDust;
+
+    /// <summary>
+    /// The bindless index of <c>uWeatherGround</c>, the terrain's whole-world ground colour map (the dust colour).
+    /// </summary>
     [FieldOffset(272)] public uint WeatherGround;
+
+    /// <summary>
+    /// The bindless index of <c>uWeatherDustNoise</c>, the dust noise texture.
+    /// </summary>
     [FieldOffset(276)] public uint WeatherDustNoise;
+
+    /// <summary>
+    /// <c>uFogVolumeEye</c>: xyz the eye, w the fog blocks' light.
+    /// </summary>
     [FieldOffset(288)] public Vector4 FogVolumeEye;
+
+    /// <summary>
+    /// <c>uFogVolumeInfo</c>: x the vec4s of <see cref="FogVolumeData"/> in use, y the sun colour's w.
+    /// </summary>
     [FieldOffset(304)] public Vector4 FogVolumeInfo;
     /// <summary>
     /// The placed fog volumes in view, packed (<see cref="FogVolumeShaders"/>): <see cref="FogVolumeShaders.MaxData"/> vec4s.
@@ -438,16 +563,44 @@ unsafe struct FrameConstants
     /// The probe GI (docs/render-gi.md): <c>uGiParams</c>, <c>uGiGrid[4]</c> and its three textures.
     /// </summary>
     [FieldOffset(8512)] public Vector4 GiParams;
+
+    /// <summary>
+    /// <c>uGiGrid[4]</c>: per cascade, the probe grid's place and spacing.
+    /// </summary>
     [FieldOffset(8528)] public fixed float GiGrid[16];
+
+    /// <summary>
+    /// The bindless index of <c>uGiIrradiance</c>, the probes' irradiance.
+    /// </summary>
     [FieldOffset(8592)] public uint GiIrradiance;
+
+    /// <summary>
+    /// The bindless index of <c>uGiDistance</c>, the probes' distances.
+    /// </summary>
     [FieldOffset(8596)] public uint GiDistance;
+
+    /// <summary>
+    /// The bindless index of <c>uGiBase</c>, the probe columns' base heights.
+    /// </summary>
     [FieldOffset(8600)] public uint GiBase;
     /// <summary>
     /// The lamps (docs/render-lights.md): <c>uLightGrid</c> and its three textures.
     /// </summary>
     [FieldOffset(8608)] public Vector4 LightGrid;
+
+    /// <summary>
+    /// The bindless index of <c>uLightCells</c>, the lamp grid's cells.
+    /// </summary>
     [FieldOffset(8624)] public uint LightCells;
+
+    /// <summary>
+    /// The bindless index of <c>uLightIndex</c>, the lamp grid's index list.
+    /// </summary>
     [FieldOffset(8628)] public uint LightIndex;
+
+    /// <summary>
+    /// The bindless index of <c>uLightData</c>, the lamps' data.
+    /// </summary>
     [FieldOffset(8632)] public uint LightData;
     /// <summary>
     /// Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.
@@ -458,8 +611,20 @@ unsafe struct FrameConstants
     /// shift, and its two textures.
     /// </summary>
     [FieldOffset(8656)] public Vector4 AtmoCloud;
+
+    /// <summary>
+    /// <c>uAtmoCloudWind</c>: legacy clouds, xy the wind shift; volume clouds, xy the map's origin and z its span.
+    /// </summary>
     [FieldOffset(8672)] public Vector4 AtmoCloudWind;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoClouds</c>, the cloud shadows' map.
+    /// </summary>
     [FieldOffset(8688)] public uint AtmoClouds;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoCloudsTile</c>, the cloud shadows' tiling texture.
+    /// </summary>
     [FieldOffset(8692)] public uint AtmoCloudsTile;
 
     /// <summary>
@@ -496,29 +661,110 @@ unsafe struct FrameConstants
 [StructLayout(LayoutKind.Explicit, Size = 784)]
 struct ViewConstants
 {
+    /// <summary>
+    /// The view's view-projection matrix.
+    /// </summary>
     [FieldOffset(0)] public Matrix4x4 ViewProjection;
+
+    /// <summary>
+    /// The previous frame's view-projection matrix (for motion vectors).
+    /// </summary>
     [FieldOffset(64)] public Matrix4x4 PreviousViewProjection;
+
+    /// <summary>
+    /// The eye in world units.
+    /// </summary>
     [FieldOffset(128)] public Vector3 Eye;
+
+    /// <summary>
+    /// <c>uTime</c>: the shaders' animation time (the foliage's sway phase).
+    /// </summary>
     [FieldOffset(140)] public float Time;
+
+    /// <summary>
+    /// <c>uLightDir</c>: the direction of the light.
+    /// </summary>
     [FieldOffset(144)] public Vector3 LightDir;
+
+    /// <summary>
+    /// <c>uPreviousTime</c>: <see cref="Time"/> of the previous frame (for motion vectors).
+    /// </summary>
     [FieldOffset(156)] public float PreviousTime;
+
+    /// <summary>
+    /// <c>uFogColour</c>: the distance haze's colour.
+    /// </summary>
     [FieldOffset(160)] public Vector3 FogColour;
+
+    /// <summary>
+    /// <c>uFogDistance</c>: the distance haze's distance (0: off; the character renderer's icon and editor views pass negative marks).
+    /// </summary>
     [FieldOffset(172)] public float FogDistance;
+
+    /// <summary>
+    /// <c>uNearPlanes</c>: the depth's planes, for turning a stored depth back into view distance.
+    /// </summary>
     [FieldOffset(176)] public Vector2 NearPlanes;
+
+    /// <summary>
+    /// The projection's jitter in NDC (the upscalers' subpixel offset).
+    /// </summary>
     [FieldOffset(184)] public Vector2 JitterNdc;
+
+    /// <summary>
+    /// The interior cut's mask texture, a bindless index (<c>InteriorMaskRenderer</c>; the main view only).
+    /// </summary>
     [FieldOffset(192)] public uint InteriorMask;
+
+    /// <summary>
+    /// Whether the interior cut applies (non-zero), set by <c>InteriorMaskRenderer.Apply</c> for the main view only.
+    /// </summary>
     [FieldOffset(196)] public uint InteriorCut;
+
+    /// <summary>
+    /// The shadow cut: how many of <see cref="CutRanges"/> apply.
+    /// </summary>
     [FieldOffset(200)] public uint CutVolumes;
+
+    /// <summary>
+    /// Padding to the next vec4.
+    /// </summary>
     [FieldOffset(204)] public uint CutPad;
+
+    /// <summary>
+    /// The shadow cut's volumes: per volume the first plane, the plane count, the lowest and highest Y.
+    /// </summary>
     [FieldOffset(208)] public CutVolumeArray CutRanges;
+
+    /// <summary>
+    /// The shadow cut volumes' footprint edges: the inward X/Z normal in xy, the offset in z (inside when dot(n, p.xz) &gt;= z).
+    /// </summary>
     [FieldOffset(272)] public CutPlaneArray CutPlanes;
 }
 
+/// <summary>
+/// Four vec4s inline: <see cref="ViewConstants.CutRanges"/>.
+/// </summary>
 [System.Runtime.CompilerServices.InlineArray(4)]
-struct CutVolumeArray { Vector4 _first; }
+struct CutVolumeArray
+{
+    /// <summary>
+    /// The first element: the runtime lays the others out after it.
+    /// </summary>
+    Vector4 _first;
+}
 
+/// <summary>
+/// Thirty-two vec4s inline: <see cref="ViewConstants.CutPlanes"/>.
+/// </summary>
 [System.Runtime.CompilerServices.InlineArray(32)]
-struct CutPlaneArray { Vector4 _first; }
+struct CutPlaneArray
+{
+    /// <summary>
+    /// The first element: the runtime lays the others out after it.
+    /// </summary>
+    Vector4 _first;
+}
 
 /// <summary>
 /// The C# side of <see cref="NativeShaders.MeshPushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).
@@ -526,31 +772,138 @@ struct CutPlaneArray { Vector4 _first; }
 [StructLayout(LayoutKind.Explicit, Size = 128)]
 struct MeshPush
 {
+    /// <summary>
+    /// The colour the diffuse is multiplied by.
+    /// </summary>
     [FieldOffset(0)] public Vector3 Tint;
+
+    /// <summary>
+    /// The triplanar mapping's scale, texture units per world unit.
+    /// </summary>
     [FieldOffset(12)] public float TriplanarScale;
+
+    /// <summary>
+    /// The colour a wireframe draw is filled with.
+    /// </summary>
     [FieldOffset(16)] public Vector3 FlatColour;
+
+    /// <summary>
+    /// The cut-out's alpha threshold (0: no cut-out).
+    /// </summary>
     [FieldOffset(28)] public float AlphaThreshold;
+
+    /// <summary>
+    /// The texture coordinates' tiling.
+    /// </summary>
     [FieldOffset(32)] public Vector2 Tile;
+
+    /// <summary>
+    /// The material's specular.
+    /// </summary>
     [FieldOffset(40)] public float Specular;
+
+    /// <summary>
+    /// Where the cut-out's alpha comes from: 0 none, 1 the diffuse alpha, 2 the normal map's alpha, 3 a diffuse channel (<see cref="AlphaChannel"/>).
+    /// </summary>
     [FieldOffset(44)] public int AlphaSource;
+
+    /// <summary>
+    /// The diffuse channel the alpha is read from when <see cref="AlphaSource"/> is 3.
+    /// </summary>
     [FieldOffset(48)] public int AlphaChannel;
+
+    /// <summary>
+    /// At 0 or more, the diffuse is that one channel of the texture, tinted; -1 off.
+    /// </summary>
     [FieldOffset(52)] public int GreyChannel;
+
+    /// <summary>
+    /// The bindless index of the diffuse texture.
+    /// </summary>
     [FieldOffset(56)] public uint Diffuse;
+
+    /// <summary>
+    /// The bindless index of the normal map.
+    /// </summary>
     [FieldOffset(60)] public uint Normal;
+
+    /// <summary>
+    /// The bindless index of the second set's diffuse (dual maps).
+    /// </summary>
     [FieldOffset(64)] public uint Diffuse2;
+
+    /// <summary>
+    /// The bindless index of the second set's normal map.
+    /// </summary>
     [FieldOffset(68)] public uint Normal2;
+
+    /// <summary>
+    /// The bindless index of the head diffuse added to the diffuse.
+    /// </summary>
     [FieldOffset(72)] public uint HeadDiffuse;
+
+    /// <summary>
+    /// The bindless index of the head normal map added to the normal.
+    /// </summary>
     [FieldOffset(76)] public uint HeadNormal;
+
+    /// <summary>
+    /// Whether the head textures are added.
+    /// </summary>
     [FieldOffset(80)] public uint HasHead;
+
+    /// <summary>
+    /// Whether the normal map is swizzled: X in alpha, Y in green, Z rebuilt.
+    /// </summary>
     [FieldOffset(84)] public uint NormalSwizzled;
+
+    /// <summary>
+    /// Whether there is a diffuse texture.
+    /// </summary>
     [FieldOffset(88)] public uint HasDiffuse;
+
+    /// <summary>
+    /// Whether there is a normal map.
+    /// </summary>
     [FieldOffset(92)] public uint HasNormal;
+
+    /// <summary>
+    /// Whether the second texture set is mixed in by the vertex alpha.
+    /// </summary>
     [FieldOffset(96)] public uint HasDual;
+
+    /// <summary>
+    /// Whether the textures are mapped triplanar in world space.
+    /// </summary>
     [FieldOffset(100)] public uint Triplanar;
+
+    /// <summary>
+    /// Whether the material is emissive.
+    /// </summary>
     [FieldOffset(104)] public uint Emissive;
+
+    /// <summary>
+    /// Whether the vertex colour is used.
+    /// </summary>
     [FieldOffset(108)] public uint UseVertexColour;
+
+    /// <summary>
+    /// Whether the draw is a wireframe in <see cref="FlatColour"/>.
+    /// </summary>
     [FieldOffset(112)] public uint Wireframe;
+
+    /// <summary>
+    /// Whether the mesh is skinned.
+    /// </summary>
     [FieldOffset(116)] public uint Skinned;
+
+    /// <summary>
+    /// Whether the draw uses alpha to coverage.
+    /// </summary>
     [FieldOffset(120)] public uint Coverage;
+
+    /// <summary>
+    /// A free word the shared shader does not read; the foliage puts its material's surface value there.
+    /// </summary>
     [FieldOffset(124)] public uint Spare;
 }

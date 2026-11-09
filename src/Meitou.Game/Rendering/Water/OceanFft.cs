@@ -13,13 +13,44 @@ namespace Meitou.Game.Rendering.Water;
 [StructLayout(LayoutKind.Sequential)]
 struct OceanPush
 {
-    public Vector4 Lengths;     // the cascades' tile sizes (units)
-    public float Time;          // game seconds modulo OceanSpectrum.RepeatSeconds
-    public float Blend;         // 0 the spectrum in slot From, 1 the one in slot To
+    /// <summary>
+    /// The cascades' tile sizes (units).
+    /// </summary>
+    public Vector4 Lengths;
+
+    /// <summary>
+    /// Game seconds modulo <see cref="OceanSpectrum.RepeatSeconds"/>.
+    /// </summary>
+    public float Time;
+
+    /// <summary>
+    /// 0: the spectrum in slot <see cref="From"/>; 1: the one in slot <see cref="To"/>.
+    /// </summary>
+    public float Blend;
+
+    /// <summary>
+    /// The spectrum slots blended from and to.
+    /// </summary>
     public uint From, To;
-    public uint Pass;           // the FFT: 0 rows, 1 columns
+
+    /// <summary>
+    /// The FFT's direction: 0 rows, 1 columns.
+    /// </summary>
+    public uint Pass;
+
+    /// <summary>
+    /// The horizontal displacement's scale (<see cref="OceanWaves.Choppiness"/>).
+    /// </summary>
     public float Choppiness;
-    public float Dt;           // game seconds since the last pass (the foam's decay)
+
+    /// <summary>
+    /// Game seconds since the last pass (the foam's decay).
+    /// </summary>
+    public float Dt;
+
+    /// <summary>
+    /// Padding to 48 bytes.
+    /// </summary>
     public uint Pad1;
 }
 
@@ -33,22 +64,34 @@ struct OceanPush
 /// </summary>
 public sealed unsafe class OceanWaves : IDisposable
 {
+    /// <summary>
+    /// Texels along a cascade's side by default.
+    /// </summary>
     public const int DefaultSize = 256;
+
     /// <summary>
     /// Game seconds over which a new spectrum replaces the old one.
     /// </summary>
     public const float BlendSeconds = 10;
+
     /// <summary>
     /// Game seconds over which the foam left by a folding crest fades to a third.
     /// </summary>
     public const float FoamSeconds = 4;
+
     /// <summary>
     /// How far the wind must turn (radians) or change (a fraction of its speed) before the spectrum is rebuilt.
     /// </summary>
     public const float RebuildAngle = 0.17f, RebuildChange = 0.12f;
 
+    /// <summary>
+    /// The wave cascades (tile sizes <see cref="OceanSpectrum.Lengths"/>).
+    /// </summary>
     const int Cascades = 3;
 
+    /// <summary>
+    /// What the three kernels share: the push block, π and complex multiplication.
+    /// </summary>
     const string Common = """
         layout(push_constant) uniform Push { vec4 lengths; float time; float blend; uint from; uint to; uint pass; float choppiness; float dt; uint pad1; } pc;
         const float PI = 3.14159265358979;
@@ -56,9 +99,11 @@ public sealed unsafe class OceanWaves : IDisposable
 
         """;
 
-    // Texel (x, y) of cascade c is the wave vector 2 pi (x - N/2, y - N/2) / L. Packs the eight real fields into four complex ones (each
-    // field's spectrum is Hermitian, so F1 + i F2 transforms into f1 + i f2): (Dx, Dz), (Dy, dDx/dz), (dDy/dx, dDy/dz), (dDx/dx, dDz/dz),
-    // with D = i k/|k| h the horizontal displacement that sharpens the crests.
+    /// <summary>
+    /// The evolve kernel: texel (x, y) of cascade c is the wave vector 2π (x - N/2, y - N/2) / L. Packs the eight real fields into four complex ones
+    /// (each field's spectrum is Hermitian, so F1 + i F2 transforms into f1 + i f2): (Dx, Dz), (Dy, dDx/dz), (dDy/dx, dDy/dz), (dDx/dx, dDz/dz), with
+    /// D = i k/|k| h the horizontal displacement that sharpens the crests.
+    /// </summary>
     const string EvolveSource = """
         layout(local_size_x = 16, local_size_y = 16) in;
         layout(std430, set = 0, binding = 0) readonly buffer Spectrum { vec4 h0[]; };
@@ -90,7 +135,9 @@ public sealed unsafe class OceanWaves : IDisposable
         }
         """;
 
-    // One workgroup per row (pass 0) or column (pass 1) of a cascade, N/2 threads each taking two elements per stage.
+    /// <summary>
+    /// The inverse FFT kernel: one workgroup per row (pass 0) or column (pass 1) of a cascade, N/2 threads each taking two elements per stage.
+    /// </summary>
     const string FftSource = """
         layout(local_size_x = N / 2u) in;
         layout(std430, set = 0, binding = 1) buffer FieldsA { vec4 fa[]; };
@@ -123,8 +170,10 @@ public sealed unsafe class OceanWaves : IDisposable
         }
         """;
 
-    // The centred wave numbers put a (-1)^(x+y) on the transform; then the fields go out as halves for the copy into the textures. Where a
-    // cascade's surface folds (its Jacobian below 0.75) foam is renewed; elsewhere it decays, so it lingers behind the crests.
+    /// <summary>
+    /// The assemble kernel: the centred wave numbers put a (-1)^(x+y) on the transform; then the fields go out as halves for the copy into the
+    /// textures. Where a cascade's surface folds (its Jacobian below 0.75) foam is renewed; elsewhere it decays, so it lingers behind the crests.
+    /// </summary>
     const string AssembleSource = """
         layout(local_size_x = 16, local_size_y = 16) in;
         layout(std430, set = 0, binding = 1) readonly buffer FieldsA { vec4 fa[]; };
@@ -145,27 +194,100 @@ public sealed unsafe class OceanWaves : IDisposable
             texels[(3u + c) * N * N + i] = uvec2(packHalf2x16(vec2(b.x, b.y)), packHalf2x16(vec2(b.z * l, b.w * l)));
         }
         """;
+
+    /// <summary>
+    /// The context the buffers, programs and passes go through.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The three compute programs.
+    /// </summary>
     readonly GpuProgram _evolve, _fft, _assemble;
+
+    /// <summary>
+    /// Their pipelines.
+    /// </summary>
     readonly GpuComputePipeline _evolvePipe, _fftPipe, _assemblePipe;
+
+    /// <summary>
+    /// The buffers: the two spectrum slots, the two field buffers the FFT ping-pongs between, the packed output and the foam.
+    /// </summary>
     readonly DeviceBuffer _spectrum, _fieldsA, _fieldsB, _output, _foam;
-    readonly GpuTexture _oceanMaps;   // layers 0..2 displacement, 3..5 slopes
+
+    /// <summary>
+    /// The wave maps: layers 0..2 displacement, 3..5 slopes (see <see cref="OceanMaps"/>).
+    /// </summary>
+    readonly GpuTexture _oceanMaps;
+
+    /// <summary>
+    /// The maps' sampler: trilinear, repeating, 8x anisotropic.
+    /// </summary>
     readonly GpuSampler _sampler;
+
+    /// <summary>
+    /// Texels in one cascade (<see cref="Size"/>²).
+    /// </summary>
     readonly ulong _texels;
 
-    // The spectra: slot `to` is shown at blend 1. A new one goes into the other slot once the blend is complete.
+    /// <summary>
+    /// The spectra's slots: slot <c>to</c> is shown at blend 1; a new spectrum goes into the other slot once the blend is complete.
+    /// </summary>
     uint _from, _to = 1;
+
+    /// <summary>
+    /// When the current blend began (game seconds; negative infinity: none, fully blended).
+    /// </summary>
     double _blendStart = double.NegativeInfinity;
+
+    /// <summary>
+    /// The wind direction the shown spectrum was built for.
+    /// </summary>
     Vector2 _builtDirection;
+
+    /// <summary>
+    /// The wind speed it was built for (-1: none yet; NaN: a test's own spectrum).
+    /// </summary>
     float _builtWind = -1;
+
+    /// <summary>
+    /// The spectrum being built on a worker (null: none).
+    /// </summary>
     Task<(Vector4[][] Spectrum, Vector2 Direction, float Wind)>? _building;
+
+    /// <summary>
+    /// A spectrum waiting to be uploaded at the next <see cref="Record"/>.
+    /// </summary>
     Vector4[][]? _upload;
+
+    /// <summary>
+    /// The upload goes into both slots (the first one, or a test's).
+    /// </summary>
     bool _uploadBoth;
+
+    /// <summary>
+    /// The game clock (seconds).
+    /// </summary>
     double _seconds;
+
+    /// <summary>
+    /// The time and blend of the last recorded pass (nothing is recorded again for the same).
+    /// </summary>
     (double Time, float Blend)? _recorded;
+
+    /// <summary>
+    /// The clock at the last pass (null: none yet).
+    /// </summary>
     double? _lastPass;
+
+    /// <summary>
+    /// The foam buffer was cleared (once, before the first pass).
+    /// </summary>
     bool _foamCleared;
 
+    /// <summary>
+    /// Makes the three kernels for a cascade side of <paramref name="size"/> (64, 128 or 256), their buffers and the mipmapped wave maps.
+    /// </summary>
     public OceanWaves(IGpuContext ctx, int size = DefaultSize)
     {
         if (size is not (64 or 128 or 256))
@@ -202,30 +324,44 @@ public sealed unsafe class OceanWaves : IDisposable
     /// Texels along a cascade's side.
     /// </summary>
     public int Size { get; }
+
     /// <summary>
     /// The horizontal displacement's scale (1: Tessendorf's, sharp crests; 0: plain heights).
     /// </summary>
     public float Choppiness { get; set; } = 1.0f;
+
     /// <summary>
     /// The cascades' tile sizes (units), w unused.
     /// </summary>
     public Vector4 Lengths => new(OceanSpectrum.Lengths[0], OceanSpectrum.Lengths[1], OceanSpectrum.Lengths[2], 0);
+
     /// <summary>
     /// Layers 0..2: per cascade displacement x, y, z (units; the horizontal ones times the choppiness) and the foam (0..1):
     /// where the crests fold it is renewed, elsewhere it fades over <see cref="FoamSeconds"/>, so foam lingers behind a crest.
     /// Layers 3..5: ∂Dy/∂x, ∂Dy/∂z, ∂Dx/∂x, ∂Dz/∂z (the last two times the choppiness).
     /// </summary>
     public SampledTexture OceanMaps => new(_sampler, _oceanMaps.View());
+
     /// <summary>
     /// Compute passes recorded so far (a paused game records none).
     /// </summary>
     public long Dispatched { get; private set; }
+
     /// <summary>
     /// GPU time of the timed passes (microseconds, summed) and their count, read a few frames late.
     /// </summary>
     public double GpuMicroseconds { get; private set; }
+
+    /// <summary>
+    /// The timed passes behind <see cref="GpuMicroseconds"/>.
+    /// </summary>
     public long GpuTimed { get; private set; }
+
+    /// <summary>
+    /// Passes whose timestamps are not read yet.
+    /// </summary>
     readonly List<(QuerySlot Begin, QuerySlot End)> _pendingTimes = [];
+
     /// <summary>
     /// A spectrum has been uploaded: before that the textures are undefined and the water must stay flat.
     /// </summary>
@@ -235,6 +371,7 @@ public sealed unsafe class OceanWaves : IDisposable
     /// For tests: the packed output (per texture, per cascade, Size² texels of four halves; displacement first).
     /// </summary>
     internal DeviceBuffer Output => _output;
+
     /// <summary>
     /// For tests: a spectrum of their own in both slots (<see cref="Update"/> then builds none).
     /// </summary>
@@ -296,6 +433,9 @@ public sealed unsafe class OceanWaves : IDisposable
         return turn > RebuildAngle || MathF.Abs(wind - _builtWind) > RebuildChange * _builtWind;
     }
 
+    /// <summary>
+    /// How far the blend into the new spectrum has come at <paramref name="s"/> game seconds (0 to 1).
+    /// </summary>
     float BlendAt(double s) => (float)Math.Clamp((s - _blendStart) / BlendSeconds, 0, 1);
 
     /// <summary>
@@ -305,23 +445,40 @@ public sealed unsafe class OceanWaves : IDisposable
     {
         CollectTimes();
         var cmd = _ctx.Frame.PreFrame;
-        bool uploaded = false;
-        if (_upload is { } s)
-        {
-            SwapInUpload(s);
-            _upload = null;
-            uploaded = true;
-            Ready = true;
-        }
+        bool uploaded = TakeUpload();
         if (!Ready) return;
+
         float blend = BlendAt(_seconds);
         double time = _seconds % OceanSpectrum.RepeatSeconds;
         if (!uploaded && _recorded is { } r && r.Time == time && r.Blend == blend) return;
-        _recorded = (time, blend);
 
+        _recorded = (time, blend);
+        RecordPasses(cmd, NextPush(time, blend));
+        Dispatched++;
+    }
+
+    /// <summary>
+    /// Swaps in the spectrum waiting to be uploaded, if any (the waves are ready from then on); true when there was one.
+    /// </summary>
+    bool TakeUpload()
+    {
+        if (_upload is not { } s) return false;
+
+        SwapInUpload(s);
+        _upload = null;
+        Ready = true;
+        return true;
+    }
+
+    /// <summary>
+    /// The push block of a pass at <paramref name="time"/> and <paramref name="blend"/>, its time step the game seconds since the last pass (at most
+    /// 1; 0 for the first), which this one becomes.
+    /// </summary>
+    OceanPush NextPush(double time, float blend)
+    {
         float dt = _lastPass is { } last ? (float)Math.Clamp(_seconds - last, 0, 1) : 0;
         _lastPass = _seconds;
-        var push = new OceanPush
+        return new OceanPush
         {
             Lengths = Lengths,
             Time = (float)time,
@@ -331,6 +488,14 @@ public sealed unsafe class OceanWaves : IDisposable
             Choppiness = Choppiness,
             Dt = dt,
         };
+    }
+
+    /// <summary>
+    /// Records the evolve, the two FFT passes and the assemble into <paramref name="cmd"/>, timed, then copies the output into the wave maps and
+    /// makes their mips.
+    /// </summary>
+    void RecordPasses(IGpuCommandList cmd, in OceanPush push)
+    {
         Span<GpuBufferBinding> b =
         [
             new(_spectrum.Handle, 0, _spectrum.Size),
@@ -370,9 +535,11 @@ public sealed unsafe class OceanWaves : IDisposable
         if (stamps.Item1.IsValid && stamps.Item2.IsValid) _pendingTimes.Add(stamps);
         cmd.EndLabel();
         FrameProfiler.PreStamp(cmd, 9);   // the water stage: the ocean's FFT is the water's
-        Dispatched++;
     }
 
+    /// <summary>
+    /// Reads the passes' timestamps that have arrived (dropping those too old to come).
+    /// </summary>
     void CollectTimes()
     {
         var q = _ctx.Frame.Timestamps;
@@ -412,6 +579,9 @@ public sealed unsafe class OceanWaves : IDisposable
         }
     }
 
+    /// <summary>
+    /// Uploads a spectrum into a slot.
+    /// </summary>
     void Write(uint slot, Vector4[][] s)
     {
         using var batch = _ctx.Uploads.Begin();
@@ -419,11 +589,17 @@ public sealed unsafe class OceanWaves : IDisposable
             batch.Write(_spectrum, ((ulong)slot * Cascades + (ulong)c) * _texels * 16, MemoryMarshal.AsBytes(s[c].AsSpan()));
     }
 
+    /// <summary>
+    /// A barrier between compute passes: storage writes before storage reads and writes.
+    /// </summary>
     static void Compute(IGpuCommandList cmd)
     {
         cmd.Barrier([new GpuDependency(Access.StorageWrite, Access.StorageRead | Access.StorageWrite)]);
     }
 
+    /// <summary>
+    /// Binds a kernel's storage buffers (by the bindings its reflection lists) and push constants, and dispatches it.
+    /// </summary>
     void Run(IGpuCommandList cmd, GpuProgram p, GpuComputePipeline pipe, ReadOnlySpan<GpuBufferBinding> b, in OceanPush push, uint x, uint y, uint z)
     {
         cmd.BindPipeline(pipe);
@@ -443,9 +619,15 @@ public sealed unsafe class OceanWaves : IDisposable
         cmd.Dispatch(x, y, z);
     }
 
+    /// <summary>
+    /// A kernel's source: GLSL 450 with <c>N</c> defined, the shared part and the body.
+    /// </summary>
     static string Kernel(string body, int n) => $"#version 450\n#define N {n}u\n" + Common + body;
 
 
+    /// <summary>
+    /// Frees the buffers, the wave maps and the programs (a spectrum build still running is left to finish).
+    /// </summary>
     public void Dispose()
     {
         _building?.ContinueWith(_ => { });

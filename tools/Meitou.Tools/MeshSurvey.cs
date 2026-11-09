@@ -6,6 +6,9 @@ using Meitou.Data.Ogre;
 /// </summary>
 static class MeshSurvey
 {
+    /// <summary>
+    /// Reads every mesh and prints the failures, the versions and the vertex elements the files use; returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install)
     {
         var files = Directory.EnumerateFiles(install.DataDirectory, "*.mesh", SearchOption.AllDirectories).ToList();

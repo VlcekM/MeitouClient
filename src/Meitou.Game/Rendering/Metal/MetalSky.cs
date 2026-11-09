@@ -19,9 +19,21 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalSky
 {
+    /// <summary>
+    /// The sky's render pipeline (BGRA8 colour, no depth).
+    /// </summary>
     readonly MTLRenderPipelineState _pipeline;
+    /// <summary>
+    /// The shared buffer the uniform block is copied into for each draw.
+    /// </summary>
     readonly MTLBuffer _uniforms;
+    /// <summary>
+    /// The fragment shader's default uniform block on the CPU.
+    /// </summary>
     readonly MetalUniformBlock _block;
+    /// <summary>
+    /// The fragment buffer index the uniform block binds at.
+    /// </summary>
     readonly int _binding;
 
     /// <summary>
@@ -74,6 +86,9 @@ public sealed class MetalSky
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
     }
 
+    /// <summary>
+    /// A Metal library compiled from <paramref name="msl"/>; throws when it does not compile.
+    /// </summary>
     static MTLLibrary Library(MTLDevice device, string msl)
     {
         NSError error = default;

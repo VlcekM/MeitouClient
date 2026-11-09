@@ -42,19 +42,64 @@ sealed class TutorialPanel(PlayerInterface player)
     /// </summary>
     const float HighlightLow = 0.1f, HighlightHigh = 0.4f, HighlightRate = 0.4f;
 
+    /// <summary>
+    /// The host's tutorial manager; null without tutorials.
+    /// </summary>
     TutorialManager? _tutorials;
+
+    /// <summary>
+    /// The tutorial texts of the active language (the pages' lines).
+    /// </summary>
     internal TutorialCatalog TutorialTexts = TutorialCatalog.From([]);
+
+    /// <summary>
+    /// The tutorial panel's layout and its line's (<c>Kenshi_TutorialPanel</c>, <c>Kenshi_TutorialTooltipPanel</c>); null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? TutorialPanelLayout, TutorialLineLayout;
+
+    /// <summary>
+    /// Item id to how long its line still flashes, seconds (a newly started item).
+    /// </summary>
     internal readonly Dictionary<int, float> TutorialFlashes = [];
+
+    /// <summary>
+    /// The item whose page the panel shows, null when none.
+    /// </summary>
     internal int? TutorialShown;
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.Stopwatch"/> timestamp of the last poll (0 before the first), for its frame time.
+    /// </summary>
     long _tutorialClock;
 
-    // The page's advance state: the 5 s timer, whether its condition was seen, and what its start remembered.
+    /// <summary>
+    /// The page's advance state: the 5 s timer, whether its condition was seen, and what its start remembered. The timer, seconds.
+    /// </summary>
     float _tutorialTimer;
+
+    /// <summary>
+    /// The page's condition was seen; the camera was zoomed (the camera page).
+    /// </summary>
     bool _tutorialSeen, _tutorialZoomed;
+
+    /// <summary>
+    /// The camera's target when the page started.
+    /// </summary>
     Vector3 _tutorialCameraTarget;
+
+    /// <summary>
+    /// The camera's distance when the page started.
+    /// </summary>
     float _tutorialCameraDistance;
+
+    /// <summary>
+    /// The PCs imprisoned when the lockpicking page first looked.
+    /// </summary>
     readonly HashSet<CharacterId> _tutorialPrisoners = [];
+
+    /// <summary>
+    /// Each PC's last position, for the movement page.
+    /// </summary>
     readonly Dictionary<CharacterId, Vector3> _tutorialLastPositions = [];
 
     /// <summary>
@@ -69,7 +114,15 @@ sealed class TutorialPanel(PlayerInterface player)
     /// condition holds.
     /// </summary>
     float _highlightAlpha, _highlightDirection = 1;
+
+    /// <summary>
+    /// The highlighted HUD part.
+    /// </summary>
     TutorialHighlight _highlightShown;
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.Stopwatch"/> timestamp of the last highlight frame (0 before the first).
+    /// </summary>
     long _highlightClock;
 
     /// <summary>
@@ -105,6 +158,9 @@ sealed class TutorialPanel(PlayerInterface player)
         if (TutorialShown is { } open && TutorialAdvanced(open, dt)) NextTutorialPage(open);
     }
 
+    /// <summary>
+    /// The page item <paramref name="id"/> is on (clamped to its pages).
+    /// </summary>
     TutorialPage PageOf(int id) =>
         TutorialCatalog.Items[id].Pages[Math.Clamp(_tutorials!.Pages[id], 0, TutorialCatalog.Items[id].Pages.Length - 1)];
 
@@ -194,6 +250,9 @@ sealed class TutorialPanel(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The next page of item <paramref name="id"/>, or its dismissal after the last.
+    /// </summary>
     void NextTutorialPage(int id)
     {
         if (_tutorials!.Pages[id] >= TutorialCatalog.Items[id].Pages.Length - 1)
@@ -206,6 +265,9 @@ sealed class TutorialPanel(PlayerInterface player)
         StartTutorialPage(id);
     }
 
+    /// <summary>
+    /// Dismisses item <paramref name="id"/>: it ends and leaves the panel.
+    /// </summary>
     void DismissTutorial(int id)
     {
         if (TutorialShown == id) TutorialShown = null;
@@ -319,6 +381,9 @@ sealed class TutorialPanel(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The Tutorials window's bindings: the titles, the selected row's page with its paging, ACTIVATE and the page buttons.
+    /// </summary>
     internal void BindTutorialsWindow(UiBindings b)
     {
         b.Text["Root"] = "TUTORIALS";
@@ -337,6 +402,9 @@ sealed class TutorialPanel(PlayerInterface player)
         if (_tutorialsPage < pages.Length - 1) b.Disabled.Remove("NextTutorialButton");
     }
 
+    /// <summary>
+    /// A Tutorials window event: a row picked, the previous or next page, or ACTIVATE (the item goes into the panel at its first page).
+    /// </summary>
     internal void TutorialsWindowAction(MyGuiEvent e)
     {
         if (e.Widget == "TutorialList" && e.Action == "select"

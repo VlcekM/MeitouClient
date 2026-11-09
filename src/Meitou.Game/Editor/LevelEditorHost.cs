@@ -15,13 +15,26 @@ namespace Meitou.Game.Editor;
 /// </summary>
 sealed class LevelEditorHost(GameHost host)
 {
+    /// <summary>
+    /// What the level editor placed and cleared in this world's level data.
+    /// </summary>
     internal readonly LevelEdits LevelEdits = new();
-    // The world the edits belong to, and the level data's buildings by key for clearing.
+    /// <summary>
+    /// The world the edits belong to; on another world they are taken back out of the level data and dropped (<see cref="LevelEditsFollowWorld"/>).
+    /// </summary>
     World? _levelEditsWorld;
-    // The edits of the game save just loaded, until the host has met the new world.
+    /// <summary>
+    /// The edits of the game save just loaded, until the host has met the new world.
+    /// </summary>
     internal IReadOnlyDictionary<ZoneCoordinate, byte[]>? PendingLevelEdits;
+    /// <summary>
+    /// The level data's buildings by key (for the level data and revision they were read from), to find one to clear.
+    /// </summary>
     (WorldLevelData Levels, int Revision, Dictionary<string, BuildingPlacement> ByKey)? _levelPlacements;
 
+    /// <summary>
+    /// Opens the level editor's top bar from the F10 menu's Tools, closing the menu.
+    /// </summary>
     internal void OpenLevelEditor()
     {
         host.DebugMenu.DebugMenuOpen = false;
@@ -37,11 +50,18 @@ sealed class LevelEditorHost(GameHost host)
         host.Player.LevelEditorPanel.ToggleLevelEditor();
     }
 
+    /// <summary>
+    /// The services the level editor's bar runs on: placing, the edits so far, clearing, the cleared test and the save, all on this world's edits.
+    /// </summary>
     internal LevelEditorServices MakeLevelEditorServices() => new()
     {
         ModName = LevelEdits.ModName,
         Place = LevelPlace,
-        Added = () => { LevelEditsFollowWorld(); return LevelEdits.Added; },
+        Added = () =>
+        {
+            LevelEditsFollowWorld();
+            return LevelEdits.Added;
+        },
         Clear = LevelClear,
         IsCleared = key => ReferenceEquals(_levelEditsWorld, host.Session.World) && LevelEdits.IsCleared(key),
         Save = LevelSave,
@@ -142,9 +162,15 @@ sealed class LevelEditorHost(GameHost host)
         return _levelPlacements.Value.ByKey;
     }
 
-    // The layout names the next LevelPlace gives its buildings (the place-building command's --interior / --exterior); null: the building's own.
+    /// <summary>
+    /// The layout names the next LevelPlace gives its buildings (the place-building command's --interior / --exterior); null: the building's own.
+    /// </summary>
     internal string? PlaceInterior, PlaceExterior;
 
+    /// <summary>
+    /// Places the confirmed ghosts as level buildings: each an edit with its ground height and layouts, applied to the level data, the world and
+    /// its town.
+    /// </summary>
     internal void LevelPlace(IReadOnlyList<QueuedGhost> ghosts)
     {
         if (host.Scene.Objects is not { } objects) return;
@@ -198,6 +224,9 @@ sealed class LevelEditorHost(GameHost host)
         host.Gpu.Particles?.SetBuildingEffects(placement.InstanceId, BuildingEffects.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
     }
 
+    /// <summary>
+    /// Clears the building of a key (one placed here or of the level data) from the edits, its town and the world; false when there is none.
+    /// </summary>
     internal bool LevelClear(string key)
     {
         if (host.Scene.Objects is not { } objects) return false;

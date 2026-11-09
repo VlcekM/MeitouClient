@@ -19,12 +19,21 @@ sealed class SkyTextures : IDisposable
     /// </summary>
     readonly IGpuContext _gpu;
 
-    // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
+    /// <summary>
+    /// The sky's native textures with the GL sampler state their GL versions had (phase 8 stage 2): stars, cloud layer (colour, normal, tile and
+    /// their smooth variants), irradiance and specularity cubes and the ambient map; null when the file was not found.
+    /// </summary>
     SampledImage? _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
         _specularCube, _ambientMap;
-    // The game's two planets' textures (SkyPlanet.All order); null when the file was not found.
+
+    /// <summary>
+    /// The game's two planets' textures (<see cref="SkyPlanet.All"/> order); null when the file was not found.
+    /// </summary>
     readonly SampledImage?[] _planetTextures = new SampledImage?[SkyPlanet.All.Length];
 
+    /// <summary>
+    /// A sky with no textures until <see cref="Load"/>.
+    /// </summary>
     public SkyTextures(IGpuContext gpu) => _gpu = gpu;
 
     /// <summary>
@@ -177,6 +186,9 @@ sealed class SkyTextures : IDisposable
         if (_cloudsTileSmooth is not null) p.Bind(program.CloudsTileSmooth, _cloudsTileSmooth.Sampled());
     }
 
+    /// <summary>
+    /// Frees every texture.
+    /// </summary>
     public void Dispose()
     {
         var textures = new[]

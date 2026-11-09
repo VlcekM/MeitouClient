@@ -9,16 +9,37 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public struct ParticleInstance
 {
+    /// <summary>
+    /// The particle's position in the caller's world frame.
+    /// </summary>
     public Vector3 Position;
+    /// <summary>
+    /// The texture rotation in radians.
+    /// </summary>
     public float Rotation;
     /// <summary>
     /// The unit direction of travel (oriented_self / perpendicular_self); zero when the particle does not move.
     /// </summary>
     public Vector3 Direction;
+    /// <summary>
+    /// The billboard's width.
+    /// </summary>
     public float Width;
+    /// <summary>
+    /// The colour, tinted by the caller; alpha is the particle's.
+    /// </summary>
     public Vector4 Colour;
+    /// <summary>
+    /// The billboard's height.
+    /// </summary>
     public float Height;
+    /// <summary>
+    /// The particle's depth size.
+    /// </summary>
     public float Depth;
+    /// <summary>
+    /// Unused; they make the struct four vec4 long.
+    /// </summary>
     public float Pad0, Pad1;
 }
 
@@ -28,6 +49,9 @@ public struct ParticleInstance
 public readonly record struct ParticleEnvironment(
     Vector2 Wind, float WindSpeedMultiplier, float EmissionScale, bool WindAffected, bool WindDirectionEmission)
 {
+    /// <summary>
+    /// No wind and every emission at its script rate.
+    /// </summary>
     public static readonly ParticleEnvironment None = new(Vector2.Zero, 1, 1, false, false);
 }
 
@@ -54,9 +78,18 @@ public sealed class ParticleSimulation
     /// </summary>
     public const float MaxStep = 1f / 20;
 
+    /// <summary>
+    /// The seeded random source of the emissions.
+    /// </summary>
     readonly Random _random;
+    /// <summary>
+    /// Each technique's particles and emitter state, in the system's technique order.
+    /// </summary>
     readonly TechniqueState[] _techniques;
 
+    /// <summary>
+    /// The system being simulated.
+    /// </summary>
     public PuSystemDef Definition { get; }
     /// <summary>
     /// The system's place in the world: the emitters' origin and the frame the observers compare positions in. Set it before <see cref="Advance"/>.
@@ -75,6 +108,9 @@ public sealed class ParticleSimulation
     /// Multiplies the particles' sizes and the scale affectors' growth, and their lives (1 for every effect but the host's one-shot bursts).
     /// </summary>
     public float Size { get; set; } = 1;
+    /// <summary>
+    /// See <see cref="Size"/>.
+    /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
     /// The system was stopped (an effect whose life is over): the emitters make nothing more and the particles live out.
@@ -84,9 +120,18 @@ public sealed class ParticleSimulation
     /// Seconds since the system started.
     /// </summary>
     public float Time { get; private set; }
+    /// <summary>
+    /// How many particles all techniques hold now.
+    /// </summary>
     public int ParticleCount => _techniques.Sum(t => t.Count);
+    /// <summary>
+    /// The system's techniques, as <see cref="TechniqueParticleCount"/> numbers them.
+    /// </summary>
     public IReadOnlyList<PuTechniqueDef> Techniques => Definition.Techniques;
 
+    /// <summary>
+    /// A simulation of <paramref name="definition"/> at time 0 with no particles, its emissions drawn from <paramref name="seed"/>.
+    /// </summary>
     public ParticleSimulation(PuSystemDef definition, int seed)
     {
         Definition = definition;
@@ -94,33 +139,90 @@ public sealed class ParticleSimulation
         _techniques = [.. definition.Techniques.Select(t => new TechniqueState(t))];
     }
 
+    /// <summary>
+    /// One emitter's running state.
+    /// </summary>
     sealed class EmitterState
     {
+        /// <summary>
+        /// The fraction of a particle carried over to the next step's emission.
+        /// </summary>
         public float Accumulator;
         /// <summary>
         /// Seconds into the emitter's current on/off cycle, and whether it is in its resting part.
         /// </summary>
         public float Clock;
+        /// <summary>
+        /// The length of the current working or resting part, in seconds; -1 before the first is drawn, infinity after the last.
+        /// </summary>
         public float Cycle = -1;
+        /// <summary>
+        /// Whether the emitter is in the resting part of its cycle.
+        /// </summary>
         public bool Resting;
+        /// <summary>
+        /// Seconds since the emitter started; its rate is read at this time.
+        /// </summary>
         public float Age;
     }
 
+    /// <summary>
+    /// One technique's particle pool, struct of arrays, with its emitters' and observers' state.
+    /// </summary>
     sealed class TechniqueState
     {
+        /// <summary>
+        /// The technique.
+        /// </summary>
         public readonly PuTechniqueDef Def;
+        /// <summary>
+        /// Each emitter's state, in the technique's emitter order.
+        /// </summary>
         public readonly EmitterState[] Emitters;
+        /// <summary>
+        /// The most particles the pool holds: the technique's visual quota.
+        /// </summary>
         public int Capacity;
+        /// <summary>
+        /// How many particles are alive; they fill the arrays from index 0.
+        /// </summary>
         public int Count;
+        /// <summary>
+        /// Per particle: position and velocity.
+        /// </summary>
         public float[] X = [], Y = [], Z = [], Vx = [], Vy = [], Vz = [];
+        /// <summary>
+        /// Per particle: age and life in seconds, sizes, texture rotation and its speed.
+        /// </summary>
         public float[] Age = [], Life = [], Width = [], Height = [], Depth = [], Rotation = [], RotationSpeed = [];
+        /// <summary>
+        /// Per particle: the colour, and the colour it was emitted with (for a multiplying colour affector).
+        /// </summary>
         public float[] R = [], G = [], B = [], A = [], Er = [], Eg = [], Eb = [], Ea = [];
+        /// <summary>
+        /// Per particle: its random seed, which the parallel affector passes hash.
+        /// </summary>
         public uint[] Seed = [];
+        /// <summary>
+        /// Per particle: the index of the emitter that made it.
+        /// </summary>
         public byte[] Emitter = [];
+        /// <summary>
+        /// Seconds since the observers last checked.
+        /// </summary>
         public float ObserverClock;
+        /// <summary>
+        /// Per affector: the randomiser's time since it last moved the particles.
+        /// </summary>
         public readonly float[] RandomiserClock;
+        /// <summary>
+        /// The technique's step count, mixed into the per-step hashes.
+        /// </summary>
         public uint Step;
 
+        /// <summary>
+        /// An empty pool for <paramref name="def"/>, sized for its first particles.
+        /// </summary>
         public TechniqueState(PuTechniqueDef def)
         {
             Def = def;
@@ -170,6 +272,9 @@ public sealed class ParticleSimulation
             Resize(Math.Min(Capacity, Math.Max(X.Length * 2, InitialPool)));
         }
 
+        /// <summary>
+        /// Removes particle <paramref name="i"/> by moving the last one into its place (the order is not kept).
+        /// </summary>
         public void Remove(int i)
         {
             int last = --Count;
@@ -230,6 +335,10 @@ public sealed class ParticleSimulation
     public static float LongestLife(PuSystemDef def) =>
         def.Techniques.SelectMany(t => t.Emitters).Select(e => e.Life.Range.Max).DefaultIfEmpty(0).Max();
 
+    /// <summary>
+    /// One step of <paramref name="dt"/> seconds: each enabled technique emits (unless stopped), ages, runs its affectors, moves and runs
+    /// its observers.
+    /// </summary>
     void Step(float dt, in ParticleEnvironment env)
     {
         Time += dt;
@@ -249,6 +358,10 @@ public sealed class ParticleSimulation
 
     #region Emission
 
+    /// <summary>
+    /// Emits each working emitter's particles for <paramref name="dt"/>: its rate at its age times the emission scale, the fraction carried over, up
+    /// to the quota.
+    /// </summary>
     void Emit(TechniqueState t, float dt, in ParticleEnvironment env)
     {
         var emitters = t.Def.Emitters;
@@ -299,6 +412,9 @@ public sealed class ParticleSimulation
         return false;
     }
 
+    /// <summary>
+    /// Makes one particle of emitter <paramref name="e"/>: its place, direction, speed, life, size, colour and seed.
+    /// </summary>
     void Spawn(TechniqueState t, int emitterIndex, PuEmitterDef e, in ParticleEnvironment env)
     {
         var scale = Definition.Scale;
@@ -439,6 +555,9 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// A random value in -0.5..0.5.
+    /// </summary>
     float Centered() => _random.NextSingle() - 0.5f;
 
     /// <summary>
@@ -460,6 +579,9 @@ public sealed class ParticleSimulation
 
     #region Ageing, affectors and motion
 
+    /// <summary>
+    /// Ages every particle by <paramref name="dt"/> and removes those past their life.
+    /// </summary>
     static void Age(TechniqueState t, float dt)
     {
         for (int i = t.Count - 1; i >= 0; i--)
@@ -469,6 +591,10 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="body"/> over 0..<paramref name="count"/>: at once below <see cref="ParallelThreshold"/>, else in 1024-particle chunks on
+    /// the thread pool.
+    /// </summary>
     static void ForRange(int count, Action<int, int> body)
     {
         if (count < ParallelThreshold)
@@ -747,6 +873,9 @@ public sealed class ParticleSimulation
         });
     }
 
+    /// <summary>
+    /// The colour at life fraction <paramref name="f"/> between the sorted keys, linearly; the end keys hold outside them.
+    /// </summary>
     static Vector4 Ramp(IReadOnlyList<(float Time, Vector4 Colour)> points, float f)
     {
         if (f <= points[0].Time) return points[0].Colour;
@@ -759,6 +888,9 @@ public sealed class ParticleSimulation
         return points[^1].Colour;
     }
 
+    /// <summary>
+    /// Moves every particle by its velocity for <paramref name="dt"/>, plus the wind when the environment says the system is wind-affected.
+    /// </summary>
     static void Move(TechniqueState t, float dt, in ParticleEnvironment env)
     {
         var wind = env.WindAffected ? env.Wind * env.WindSpeedMultiplier * dt : Vector2.Zero;
@@ -777,6 +909,9 @@ public sealed class ParticleSimulation
 
     #region Observers
 
+    /// <summary>
+    /// Runs the observers with a DoExpire handler: an OnPosition or OnTime condition that holds removes the particle.
+    /// </summary>
     void Observe(TechniqueState t, float dt)
     {
         t.ObserverClock += dt;
@@ -894,6 +1029,9 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// <paramref name="v"/> wrapped into -<paramref name="half"/>..<paramref name="half"/> modulo <paramref name="edge"/>.
+    /// </summary>
     static float WrapAxis(float v, float half, float edge)
     {
         if (v >= -half && v < half) return v;
@@ -937,6 +1075,9 @@ public sealed class ParticleSimulation
         return n;
     }
 
+    /// <summary>
+    /// How many particles technique <paramref name="index"/> holds now.
+    /// </summary>
     public int TechniqueParticleCount(int index) => _techniques[index].Count;
 
     /// <summary>
@@ -948,6 +1089,9 @@ public sealed class ParticleSimulation
         return (t.X[..t.Count], t.Y[..t.Count], t.Z[..t.Count]);
     }
 
+    /// <summary>
+    /// Copies of technique <paramref name="index"/>'s particle ages and lives (for tests).
+    /// </summary>
     public (float[] Age, float[] Life) Ages(int index)
     {
         var t = _techniques[index];

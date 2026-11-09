@@ -10,7 +10,13 @@ namespace Meitou.Game.Host;
 /// </summary>
 static class GameScreenshots
 {
+    /// <summary>
+    /// The <c>key=value</c> file in the install folder that holds the screenshot <c>count</c>.
+    /// </summary>
     public const string ConfigFile = "screens.cfg";
+    /// <summary>
+    /// The folder in the install the screenshots go to.
+    /// </summary>
     public const string Folder = "_screens";
 
     /// <summary>
@@ -23,7 +29,16 @@ static class GameScreenshots
         var lines = File.Exists(config) ? File.ReadAllLines(config).ToList() : [];
         int number = (short)AtoI(Get(lines, "count")) + 1;
         Set(lines, "count", number.ToString(CultureInfo.InvariantCulture));
-        try { File.WriteAllLines(config, lines); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        try
+        {
+            File.WriteAllLines(config, lines);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
         return Path.Combine(root, Folder, $"screenshot_{number.ToString(CultureInfo.InvariantCulture)}.png");
     }
 
@@ -35,7 +50,10 @@ static class GameScreenshots
     {
         string config = Path.Combine(root, ConfigFile);
         if (!File.Exists(config)) return 1;
-        try { return Math.Max(1, AtoI(Get(File.ReadAllLines(config).ToList(), "multiplier"))); }
+        try
+        {
+            return Math.Max(1, AtoI(Get(File.ReadAllLines(config).ToList(), "multiplier")));
+        }
         catch (IOException)
         {
             return 1;
@@ -57,6 +75,9 @@ static class GameScreenshots
         return (int)(negative ? -value : value);
     }
 
+    /// <summary>
+    /// The value of <paramref name="key"/> in the <c>key=value</c> lines; null when it is not there.
+    /// </summary>
     static string? Get(List<string> lines, string key)
     {
         foreach (var line in lines)
@@ -64,10 +85,17 @@ static class GameScreenshots
         return null;
     }
 
+    /// <summary>
+    /// Sets <paramref name="key"/> to <paramref name="value"/> in the <c>key=value</c> lines, adding the line when it is not there.
+    /// </summary>
     static void Set(List<string> lines, string key, string value)
     {
         for (int i = 0; i < lines.Count; i++)
-            if (lines[i].Split('=', 2) is [var k, _] && k.Trim() == key) { lines[i] = $"{key}={value}"; return; }
+            if (lines[i].Split('=', 2) is [var k, _] && k.Trim() == key)
+            {
+                lines[i] = $"{key}={value}";
+                return;
+            }
         lines.Add($"{key}={value}");
     }
 }

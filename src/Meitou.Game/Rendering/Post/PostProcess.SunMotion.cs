@@ -16,6 +16,9 @@ public sealed partial class PostProcess
     /// </summary>
     public bool SunMotion { get; set; } = true;
 
+    /// <summary>
+    /// Works out the sun's motion from frame to frame (<see cref="PrepareSunMotion"/>).
+    /// </summary>
     readonly SunMotionTracker _sunTracker = new();
 
     /// <summary>

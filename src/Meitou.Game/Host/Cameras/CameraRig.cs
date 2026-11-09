@@ -21,7 +21,13 @@ public sealed class CameraRig
     /// </summary>
     public const float LookRange = 20000;
 
+    /// <summary>
+    /// The previous and current tick's camera, interpolated for drawing between ticks (<see cref="At"/>).
+    /// </summary>
     readonly Interpolated<CameraState> _states;
+    /// <summary>
+    /// The ground (or sea) height under a point, for the eye and the free camera.
+    /// </summary>
     readonly Func<float, float, float> _ground;
 
     /// <summary>
@@ -41,6 +47,10 @@ public sealed class CameraRig
     /// </summary>
     public Func<float, float, float?>? Floors { get; set; }
 
+    /// <summary>
+    /// A rig on <paramref name="ground"/> (the ground or the sea, whichever is higher, at a point), starting in the strategy camera;
+    /// <paramref name="settings"/> are shared by both cameras.
+    /// </summary>
     public CameraRig(Func<float, float, float> ground, CameraSettings? settings = null)
     {
         this._ground = ground;
@@ -50,9 +60,21 @@ public sealed class CameraRig
         _states = new Interpolated<CameraState>(Strategy.State, CameraState.Lerp);
     }
 
+    /// <summary>
+    /// The settings both cameras read.
+    /// </summary>
     public CameraSettings Settings { get; }
+    /// <summary>
+    /// The strategy camera, the one at the start.
+    /// </summary>
     public StrategyCamera Strategy { get; }
+    /// <summary>
+    /// The free camera (<see cref="InputAction.ToggleFreeCamera"/>).
+    /// </summary>
     public FreeCamera Free { get; }
+    /// <summary>
+    /// Whether the free camera is the active one.
+    /// </summary>
     public bool IsFree { get; private set; }
 
     /// <summary>
@@ -123,6 +145,9 @@ public sealed class CameraRig
         if (cut) _states.Snap(next); else _states.Push(next);
     }
 
+    /// <summary>
+    /// Switches the active camera (the cut and placement rules of <see cref="CameraRig"/>).
+    /// </summary>
     void Toggle()
     {
         if (!IsFree)

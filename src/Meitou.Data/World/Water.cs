@@ -20,6 +20,9 @@ public static class WorldWater
     /// Edge length of the per-zone water planes (one zone) and of the distant water plane.
     /// </summary>
     public const float ZonePlaneSize = WorldLayout.ZoneSize;
+    /// <summary>
+    /// Edge length of the distant water plane.
+    /// </summary>
     public const float DistantPlaneSize = 500000f;
 
     /// <summary>
@@ -31,6 +34,9 @@ public static class WorldWater
     /// World maps under <c>data/newland/land/overlaymaps/</c> that the water material samples over the whole world.
     /// </summary>
     public const string ColourMap = "newland/land/overlaymaps/watercolourmap.png";
+    /// <summary>
+    /// The flow map (see <see cref="ColourMap"/>).
+    /// </summary>
     public const string FlowMap = "newland/land/overlaymaps/flowmap.png";
 }
 
@@ -40,7 +46,13 @@ public static class WorldWater
 /// </summary>
 public sealed record BiomeWater
 {
+    /// <summary>
+    /// The record's string id.
+    /// </summary>
     public required string StringId { get; init; }
+    /// <summary>
+    /// The record's name.
+    /// </summary>
     public required string Name { get; init; }
     /// <summary>
     /// Biome map colour (<c>index</c>), RGB.
@@ -62,7 +74,13 @@ public sealed record BiomeWater
     /// Shader <c>invOpacity</c>: 1 / max(<c>water visibility</c> × 10, 1).
     /// </summary>
     public required float InvOpacity { get; init; }
+    /// <summary>
+    /// Shader <c>gloss</c>: <c>water gloss</c>.
+    /// </summary>
     public required float Gloss { get; init; }
+    /// <summary>
+    /// Shader <c>glow</c>: <c>water glow</c>.
+    /// </summary>
     public required float Glow { get; init; }
     /// <summary>
     /// Shader <c>distortion</c>: (<c>water distortion</c>, <c>scum distortion</c> / mean scum scale).
@@ -72,8 +90,17 @@ public sealed record BiomeWater
     /// Texture paths as stored (null when empty): normal map, scum diffuse and normal, turbulence map.
     /// </summary>
     public string? NormalMap { get; init; }
+    /// <summary>
+    /// See <see cref="NormalMap"/>: <c>texture scum</c>.
+    /// </summary>
     public string? ScumMap { get; init; }
+    /// <summary>
+    /// See <see cref="NormalMap"/>: <c>texture scum normal</c>.
+    /// </summary>
     public string? ScumNormal { get; init; }
+    /// <summary>
+    /// See <see cref="NormalMap"/>: <c>turbulence map</c>.
+    /// </summary>
     public string? TurbulenceMap { get; init; }
 
     /// <summary>
@@ -81,6 +108,9 @@ public sealed record BiomeWater
     /// </summary>
     public const float ScaleUnit = 5000f;
 
+    /// <summary>
+    /// The water of BIOMES record <paramref name="r"/>, missing fields at their fcs.def defaults.
+    /// </summary>
     public static BiomeWater FromRecord(GameRecord r)
     {
         static string? Tex(GameRecord r, string field) => r.GetPath(field) is { Length: > 0 } p ? p : null;
@@ -117,5 +147,8 @@ public sealed record BiomeWater
         return result;
     }
 
+    /// <summary>
+    /// The install's <see cref="WorldWater.ColourMap"/>.
+    /// </summary>
     public static string ColourMapPath(GameInstall install) => Path.Combine(install.DataDirectory, WorldWater.ColourMap);
 }

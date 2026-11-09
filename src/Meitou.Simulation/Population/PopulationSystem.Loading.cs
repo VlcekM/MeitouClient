@@ -4,6 +4,9 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population behind the loading screen: the builds taken at once and the towns loaded without overrides.
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>

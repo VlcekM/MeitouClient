@@ -1,12 +1,18 @@
 namespace Meitou.Simulation.Kidnap;
 
-// The owners a save names for its slaves (the original's `slaver` handle, docs/formats/save.md "Slave state").
+/// <summary>
+/// The owners a save names for its slaves (the original's `slaver` handle, docs/formats/save.md "Slave state").
+/// </summary>
 public sealed partial class CaptiveSystem
 {
-    // How often the saved slaves still waiting for their owner are looked at (engine choice, as the carry links).
+    /// <summary>
+    /// How often the saved slaves still waiting for their owner are looked at (engine choice, as the carry links).
+    /// </summary>
     const int RestoreEveryTicks = 20;
 
-    // The table's spawn count at the last pass: an owner not in the world can only appear through a spawn, so the pass waits for one.
+    /// <summary>
+    /// The table's spawn count at the last pass: an owner not in the world can only appear through a spawn, so the pass waits for one.
+    /// </summary>
     long _slaversSeenSpawns = -1;
 
     /// <summary>
@@ -53,6 +59,9 @@ public sealed partial class CaptiveSystem
         return slots;
     }
 
+    /// <summary>
+    /// Makes a saved slave's owner its owner: the owner's faction and squad where the slave has none.
+    /// </summary>
     static void Adopt(CharacterCold slave, CharacterCold owner)
     {
         if (slave.SlaveOwner < 0) slave.SlaveOwner = owner.Faction;

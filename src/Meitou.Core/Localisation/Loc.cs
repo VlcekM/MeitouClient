@@ -12,8 +12,17 @@ namespace Meitou.Localisation;
 /// </summary>
 public static class Loc
 {
+    /// <summary>
+    /// The active language; English until <see cref="Use(GameLanguage)"/> runs.
+    /// </summary>
     static GameLanguage s_language = GameLanguage.English;
+    /// <summary>
+    /// The game's catalog of the active language (<see cref="GettextCatalog.Empty"/> for English) and Meitou's own texts in it.
+    /// </summary>
     static GettextCatalog s_catalog = GettextCatalog.Empty, s_meitou = GettextCatalog.Empty;
+    /// <summary>
+    /// The .NET culture numbers are written in for the active language; invariant until <see cref="Use(GameLanguage)"/> runs.
+    /// </summary>
     static CultureInfo s_culture = CultureInfo.InvariantCulture;
 
     /// <summary>
@@ -116,6 +125,10 @@ public static class Loc
         return result.ToString();
     }
 
+    /// <summary>
+    /// One placeholder's value as text with its <paramref name="options"/> (<c>num</c>, <c>fix</c>, <c>p=K</c>): strings as they are, numbers in
+    /// <see cref="s_culture"/> when <c>num</c> is given, else invariant.
+    /// </summary>
     static string Render(object? value, ReadOnlySpan<char> options)
     {
         if (value is null) return "";

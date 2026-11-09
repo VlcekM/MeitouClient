@@ -14,12 +14,29 @@ namespace Meitou.Game.Title;
 /// </summary>
 sealed class TitleBattle : IDisposable
 {
+    /// <summary>
+    /// How much larger than life the fighters are drawn, and their spacing round each centre.
+    /// </summary>
     const float DisplayScale = 2.5f;
 
+    /// <summary>
+    /// The fight's own world (combat and animation systems only).
+    /// </summary>
     readonly World _world;
+
+    /// <summary>
+    /// The fight centres on the road, one per pair.
+    /// </summary>
     readonly IReadOnlyList<Vector3> _centres;
+
+    /// <summary>
+    /// Seconds left over after the last whole tick, for the drawing's interpolation.
+    /// </summary>
     double _remainder;
 
+    /// <summary>
+    /// The fight: its world with damage off and medical ticks off, a paladin and a bandit at each centre, run 90 ticks in.
+    /// </summary>
     TitleBattle(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library, string paladin, string bandit, int holyNation, int bandits)
     {
@@ -43,6 +60,9 @@ sealed class TitleBattle : IDisposable
         }
     }
 
+    /// <summary>
+    /// A fight of Paladins against Dust Bandits at <paramref name="centres"/>; null (said on stderr) when a character or faction record is missing.
+    /// </summary>
     public static TitleBattle? Create(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library)
     {
@@ -76,6 +96,10 @@ sealed class TitleBattle : IDisposable
         }
     }
 
+    /// <summary>
+    /// Adds the fighters to <paramref name="list"/>: interpolated between the last two ticks, each pair kept on its centre and drawn at the display
+    /// scale.
+    /// </summary>
     public void Fill(CharacterDrawList list)
     {
         var current = _world.Snapshot.Characters;
@@ -113,6 +137,9 @@ sealed class TitleBattle : IDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the fight's world.
+    /// </summary>
     public void Dispose() => _world.Dispose();
 
     /// <summary>

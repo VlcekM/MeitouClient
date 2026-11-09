@@ -3,8 +3,9 @@ using System.Globalization;
 namespace Meitou.Data.Ui;
 
 /// <summary>
-/// A mouse pointer (<c>ResourceImageSetPointer</c>, data/gui/pointer/kenshi_pointers.xml): its image set's frame drawn <c>Size</c> pixels
-/// large (<see cref="Width"/> × <see cref="Height"/>) with <c>Point</c> (<see cref="PointX"/>, <see cref="PointY"/>: the hot spot, pointer pixels from the top left) on the mouse position.
+/// A mouse pointer (<c>ResourceImageSetPointer</c>, data/gui/pointer/kenshi_pointers.xml): its image set's frame drawn <c>Size</c> pixels large
+/// (<see cref="Width"/> × <see cref="Height"/>) with <c>Point</c> (<see cref="PointX"/>, <see cref="PointY"/>: the hot spot, pointer pixels from the
+/// top left) on the mouse position.
 /// </summary>
 public sealed record MyGuiPointer(string Name, float PointX, float PointY, float Width, float Height, MyGuiImage Image)
 {
@@ -14,6 +15,9 @@ public sealed record MyGuiPointer(string Name, float PointX, float PointY, float
     public UiRect At(float x, float y) => new(x - PointX, y - PointY, Width, Height);
 }
 
+/// <summary>
+/// Reads the mouse pointers of the loaded MyGUI resources.
+/// </summary>
 public static class MyGuiPointers
 {
     /// <summary>
@@ -36,6 +40,9 @@ public static class MyGuiPointers
         return image is null ? null : new(name, point.Value.X, point.Value.Y, size.Value.X, size.Value.Y, image);
     }
 
+    /// <summary>
+    /// Two whitespace-separated numbers; null when <paramref name="text"/> is not exactly two.
+    /// </summary>
     static (float X, float Y)? Pair(string? text)
     {
         var parts = (text ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);

@@ -108,6 +108,9 @@ public struct CombatSlot
     /// The slot of the last character that landed a blow on it (-1: none yet): it is aware of that one (<see cref="CombatSystem.Alerts"/>).
     /// </summary>
     public int HitFrom;
+    /// <summary>
+    /// Whether the last hit was heavy (above the stumble threshold) and whether it came from behind.
+    /// </summary>
     public bool HitHeavy, HitBehind;
 
     /// <summary>
@@ -142,6 +145,9 @@ public struct CombatSlot
     /// the first), which sets how close it walks in; its last technique (-1: none, or a defence since), which weighs less in the next choice.
     /// </summary>
     public float Reach;
+    /// <summary>
+    /// Its last technique (-1: none, or a defence since): it weighs less in the next choice.
+    /// </summary>
     public int LastTech;
 
     /// <summary>
@@ -186,6 +192,9 @@ public struct CombatSlot
     /// Fighting with the crossbow rather than the melee weapon; the controller's state (<see cref="RangedStates"/>).
     /// </summary>
     public bool Ranged;
+    /// <summary>
+    /// The ranged controller's state (<see cref="RangedStates"/>).
+    /// </summary>
     public byte RangedState;
 
     /// <summary>
@@ -209,6 +218,10 @@ public struct CombatSlot
     /// </summary>
     public int ShotTick;
 
+    /// <summary>
+    /// The state of a character entering the fight table: generation <paramref name="generation"/>, no target, no technique, no hit (every slot and
+    /// tick field -1 where -1 means none).
+    /// </summary>
     public static CombatSlot Fresh(int generation) => new()
     {
         Generation = generation,
@@ -228,8 +241,14 @@ public struct CombatSlot
         LastTech = -1,
     };
 
+    /// <summary>
+    /// Whether it has a target.
+    /// </summary>
     public readonly bool Fighting => TargetSlot >= 0;
 
+    /// <summary>
+    /// Adds the slot's hashed fields to <paramref name="h"/>.
+    /// </summary>
     internal readonly void Hash(ref StateHasher h)
     {
         h.Add(Generation);

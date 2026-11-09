@@ -8,8 +8,19 @@ namespace Meitou.Game.Rendering.Profiling;
 /// </summary>
 sealed class PassTimer(IGpuContext gpu)
 {
+    /// <summary>
+    /// The pairs of stamps written, oldest first, waiting to be read.
+    /// </summary>
     readonly Queue<(QuerySlot Start, QuerySlot End)> _pending = new();
+
+    /// <summary>
+    /// The open pair's start stamp, and the stamp the write callback records next.
+    /// </summary>
     QuerySlot _start, _stamp;
+
+    /// <summary>
+    /// Records <see cref="_stamp"/> into a command list; made once, so a stamp allocates nothing after the first.
+    /// </summary>
     Action<IGpuCommandList>? _write;
 
     /// <summary>
@@ -27,6 +38,9 @@ sealed class PassTimer(IGpuContext gpu)
         _start = default;
     }
 
+    /// <summary>
+    /// Allocates a timestamp and records it where the frame's commands are going; an invalid slot when the arena is full.
+    /// </summary>
     QuerySlot Write()
     {
         var arena = gpu.Frame.Timestamps;
@@ -65,10 +79,29 @@ sealed class PassTimer(IGpuContext gpu)
 /// </summary>
 sealed class FrameBlock(IGpuContext gpu, int bytes)
 {
+    /// <summary>
+    /// The block's values.
+    /// </summary>
     readonly float[] _data = new float[bytes / 4];
+
+    /// <summary>
+    /// The alignment the slices are written at: the device's uniform buffer alignment, at least 16.
+    /// </summary>
     readonly ulong _align = Math.Max(gpu.UniformBufferAlign, 16);
+
+    /// <summary>
+    /// The block's version (raised by each write), and the version last written into the frame's constants.
+    /// </summary>
     int _version = 1, _written = -1;
+
+    /// <summary>
+    /// The frame the block was last written in (-1: never).
+    /// </summary>
     long _frame = -1;
+
+    /// <summary>
+    /// Where the block was last written in the frame's constants.
+    /// </summary>
     GpuBufferBinding _binding;
 
     /// <summary>
@@ -80,6 +113,9 @@ sealed class FrameBlock(IGpuContext gpu, int bytes)
         _version++;
     }
 
+    /// <summary>
+    /// The block's binding for this frame: the slice last written, or a new one when the frame or the data changed since.
+    /// </summary>
     public GpuBufferBinding Binding()
     {
         var f = gpu.Frame;

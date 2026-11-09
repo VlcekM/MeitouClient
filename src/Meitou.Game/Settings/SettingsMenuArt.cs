@@ -9,13 +9,24 @@ namespace Meitou.Game.Settings;
 /// </summary>
 sealed class SettingsMenuArt
 {
+    /// <summary>
+    /// The texture name prefix of the settings window's art.
+    /// </summary>
     public const string Prefix = "meitou:settings:";
+
+    /// <summary>
+    /// The texture name prefix of the surfaces (versioned).
+    /// </summary>
     public static string SurfacePrefix => Prefix + "v3:";
 
     /// <summary>
     /// The window plate's pixels per UI unit; it is drawn nine-sliced, <see cref="WindowBorder"/> pixels per edge (shadow margin + corner radius).
     /// </summary>
     public const float WindowDensity = 2;
+
+    /// <summary>
+    /// The window plate's nine-slice border in pixels.
+    /// </summary>
     public const int WindowBorder = (int)((16 + 10) * WindowDensity);
 
     /// <summary>
@@ -23,6 +34,9 @@ sealed class SettingsMenuArt
     /// </summary>
     public const string LuckyrenImage = Prefix + "luckyren-mode";
 
+    /// <summary>
+    /// Bakes the Meitou surfaces (the buttons, paper and window) from the UI atlas once; nothing in the Faithful mode.
+    /// </summary>
     public void Ensure(UiPainter painter, bool meitou, Func<RgbaImage?> uiAtlas)
     {
         if (!meitou || painter.HasTexture(SurfacePrefix + "button")) return;
@@ -41,6 +55,9 @@ sealed class SettingsMenuArt
             srgb: false);
     }
 
+    /// <summary>
+    /// Uploads the luckyren Mode picture once (nothing when the resource is missing).
+    /// </summary>
     public void EnsureLuckyrenImage(UiPainter painter)
     {
         if (painter.HasTexture(LuckyrenImage)) return;

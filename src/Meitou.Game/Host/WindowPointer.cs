@@ -11,18 +11,50 @@ namespace Meitou.Game.Host;
 /// </summary>
 static partial class WindowPointer
 {
+    /// <summary>
+    /// A Win32 <c>POINT</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    struct Point { public int X, Y; }
+    struct Point
+    {
+        /// <summary>
+        /// The point's coordinates, pixels.
+        /// </summary>
+        public int X, Y;
+    }
 
+    /// <summary>
+    /// A Win32 <c>RECT</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    struct Rect { public int Left, Top, Right, Bottom; }
+    struct Rect
+    {
+        /// <summary>
+        /// The rectangle's edges, pixels.
+        /// </summary>
+        public int Left, Top, Right, Bottom;
+    }
 
+    /// <summary>
+    /// user32 <c>GetCursorPos</c>: the pointer's screen position; 0 on failure.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int GetCursorPos(out Point point);
+    /// <summary>
+    /// user32 <c>ScreenToClient</c>: a screen point to the window's client coordinates; 0 on failure.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int ScreenToClient(nint hwnd, ref Point point);
+    /// <summary>
+    /// user32 <c>GetClientRect</c>: the window's client area; 0 on failure.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int GetClientRect(nint hwnd, out Rect rect);
+    /// <summary>
+    /// user32 <c>GetForegroundWindow</c>: the window in front.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint GetForegroundWindow();
 
-    // Glfw.GetApi() creates a native context on every call; the edge-scroll check runs every frame.
+    /// <summary>
+    /// The GLFW API, got once: Glfw.GetApi() creates a native context on every call, and the edge-scroll check runs every frame.
+    /// </summary>
     static Glfw? s_glfwApi;
 
     /// <summary>

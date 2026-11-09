@@ -6,8 +6,9 @@ namespace Meitou.Simulation.Combat;
 
 /// <summary>
 /// What a character fights with: the weapon in hand (null for fists) and the worn armour, with the sums of the gear's bonuses taken once
-/// (docs/game/combat.md "Armour": the worn-gear totals of <c>FUN_140887030</c>). Cold state of <see cref="CharacterCold"/>; it changes only in the serial phases
-/// (equipping, an inventory change), never in a parallel phase. The order of <see cref="Armour"/> is the order the pieces are stacked in.
+/// (docs/game/combat.md "Armour": the worn-gear totals of <c>FUN_140887030</c>). Cold state of <see cref="CharacterCold"/>; it changes only in the
+/// serial phases (equipping, an inventory change), never in a parallel phase. The order of <see cref="Armour"/> is the order the pieces are
+/// stacked in.
 /// </summary>
 public sealed class Fighter
 {
@@ -21,10 +22,26 @@ public sealed class Fighter
     /// </summary>
     public const float NakedStealth = 1.2f;
 
+    /// <summary>
+    /// The first weapon in the <c>hip</c> section (an animal's natural weapon); null: none.
+    /// </summary>
     readonly WeaponInstance? _hip;
+    /// <summary>
+    /// Whether the right and the left arm work (<see cref="SetArms"/>).
+    /// </summary>
     bool _rightArm = true, _leftArm = true;
+    /// <summary>
+    /// The worn armour pieces, in stacking order.
+    /// </summary>
     readonly ArmourPiece[] _armour;
+    /// <summary>
+    /// Whether a backpack is worn (a fighter with one is not <see cref="Naked"/>).
+    /// </summary>
     readonly bool _backpack;
+    /// <summary>
+    /// The products over the gear behind <see cref="DexterityMult"/>, <see cref="DodgeMult"/>, assassination, the ranged skill
+    /// and <see cref="StealthMult"/>.
+    /// </summary>
     readonly float _dexterity, _dodgeMult, _assassin, _ranged, _stealth;
 
     #region Weapons and arms
@@ -61,8 +78,8 @@ public sealed class Fighter
     public float WeaponLength => Weapon?.Data.Length ?? Fists?.Data.Length ?? 0;
 
     /// <summary>
-    /// A person's fists item (its race's <c>fists lv1</c> WEAPON, else <c>FISTS</c>: 18 long in the base game): its length, kind and race multipliers, bleed and
-    /// penetration are a fist blow's; null when not set (fists then have length 0 and multipliers 1).
+    /// A person's fists item (its race's <c>fists lv1</c> WEAPON, else <c>FISTS</c>: 18 long in the base game): its length, kind and race
+    /// multipliers, bleed and penetration are a fist blow's; null when not set (fists then have length 0 and multipliers 1).
     /// </summary>
     public WeaponInstance? Fists { get; init; }
 
@@ -160,6 +177,9 @@ public sealed class Fighter
     /// </summary>
     public float AttackBonus { get; }
 
+    /// <summary>
+    /// Sum of the pieces' <c>unarmed bonus</c>.
+    /// </summary>
     public float UnarmedBonus { get; }
 
     /// <summary>
@@ -178,7 +198,8 @@ public sealed class Fighter
     public float DexterityMult => Naked ? NakedBonus : _dexterity;
 
     /// <summary>
-    /// Product of the pieces' <c>dodge mult</c> (the gear's dodge value for <see cref="DefenceFormulas.DodgeSkill"/>, x 100); 1.1 when <see cref="Naked"/>.
+    /// Product of the pieces' <c>dodge mult</c> (the gear's dodge value for <see cref="DefenceFormulas.DodgeSkill"/>, x 100); 1.1
+    /// when <see cref="Naked"/>.
     /// </summary>
     public float DodgeMult => Naked ? NakedBonus : _dodgeMult;
 
@@ -202,7 +223,8 @@ public sealed class Fighter
     public bool Naked => !IsAnimal && _armour.Length == 0 && !_backpack;
 
     /// <summary>
-    /// Product of the pieces' combat speed factors (<see cref="ArmourPiece.CombatSpeed"/>) and the backpack's: scales the speed attack animations play at.
+    /// Product of the pieces' combat speed factors (<see cref="ArmourPiece.CombatSpeed"/>) and the backpack's: scales the speed attack animations
+    /// play at.
     /// </summary>
     public float CombatSpeed { get; }
 
@@ -214,7 +236,8 @@ public sealed class Fighter
     public float AthleticsFactor { get; }
 
     /// <summary>
-    /// Sum of the pieces' <c>perception bonus</c> (CharStats <c>+0x30</c>), added to the trained perception before its multiplier (<c>FUN_140884ac0</c>).
+    /// Sum of the pieces' <c>perception bonus</c> (CharStats <c>+0x30</c>), added to the trained perception before its
+    /// multiplier (<c>FUN_140884ac0</c>).
     /// </summary>
     public int PerceptionBonus { get; }
 

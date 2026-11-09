@@ -13,6 +13,9 @@ public sealed record CodeModEnvironmentEntry(string Id, string? Version, string 
 /// </summary>
 public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeModEnvironmentEntry> Mods)
 {
+    /// <summary>
+    /// The file's <c>format</c> number this game writes and understands; <see cref="TryRead"/> rejects any other.
+    /// </summary>
     public const int FormatVersion = 1;
 
     /// <summary>
@@ -34,6 +37,9 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Writes one mod's object; <c>version</c> is left out when the mod declares none.
+    /// </summary>
     static void WriteMod(Utf8JsonWriter w, CodeModEnvironmentEntry mod)
     {
         w.WriteStartObject();
@@ -67,6 +73,9 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         }
     }
 
+    /// <summary>
+    /// Reads one entry of <c>mods</c>; null when it is not an object with string <c>id</c> and <c>name</c>.
+    /// </summary>
     static CodeModEnvironmentEntry? ReadMod(JsonElement item)
     {
         if (item.ValueKind != JsonValueKind.Object || Text(item, "id") is not { } id || Text(item, "name") is not { } name)
@@ -74,9 +83,15 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         return new CodeModEnvironmentEntry(id, Text(item, "version"), name);
     }
 
+    /// <summary>
+    /// The string property <paramref name="name"/> of <paramref name="e"/>; null when missing or not a string.
+    /// </summary>
     static string? Text(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
+    /// <summary>
+    /// The int32 property <paramref name="name"/> of <paramref name="e"/>; null when missing or not an int32 number.
+    /// </summary>
     static int? Number(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int n) ? n : null;
 
@@ -100,12 +115,21 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         return lines;
     }
 
+    /// <summary>
+    /// The mods by id, the first of an id listed twice kept.
+    /// </summary>
     static Dictionary<string, CodeModEnvironmentEntry> ById(IEnumerable<CodeModEnvironmentEntry> mods) =>
         mods.DistinctBy(m => m.Id).ToDictionary(m => m.Id, StringComparer.Ordinal);
 
+    /// <summary>
+    /// The change line for a mod the save ran that is not running now.
+    /// </summary>
     static string Gone(CodeModEnvironmentEntry mod) =>
         $"{mod.Name} ('{mod.Id}') was running when this was saved and is not now; its saved data is kept but unused";
 
+    /// <summary>
+    /// The change line for a mod whose version differs between the save and now; null when it is the same. Notes a downgrade or a major update.
+    /// </summary>
     static string? VersionChange(CodeModEnvironmentEntry saved, CodeModEnvironmentEntry running)
     {
         if (saved.Version == running.Version) return null;
@@ -116,8 +140,14 @@ public sealed record CodeModEnvironment(string GameVersion, IReadOnlyList<CodeMo
         return $"{running.Name} ('{running.Id}') was {from} when this was saved and is {to} now{note}";
     }
 
+    /// <summary>
+    /// <paramref name="text"/> as a version; null when null or not a valid one.
+    /// </summary>
     static CodeModVersion? Parse(string? text) => text is not null && CodeModVersion.TryParse(text, out var v) ? v : null;
 
+    /// <summary>
+    /// Whether the mods running both then and now load in a different relative order.
+    /// </summary>
     bool OrderChanged(CodeModEnvironment now, Dictionary<string, CodeModEnvironmentEntry> saved)
     {
         var running = now.Mods.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);

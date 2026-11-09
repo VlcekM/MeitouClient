@@ -149,6 +149,9 @@ public static class RiverFlowBake
         return half;
     }
 
+    /// <summary>
+    /// The largest distance to land within <see cref="Radius"/> texels of (<paramref name="x"/>, <paramref name="y"/>).
+    /// </summary>
     static float LargestDistanceAround(float[] d, int n, int x, int y)
     {
         float m = d[y * n + x];
@@ -166,6 +169,9 @@ public static class RiverFlowBake
         return m;
     }
 
+    /// <summary>
+    /// Texel <paramref name="k"/> is water no wider than <see cref="OpenHalfWidth"/>.
+    /// </summary>
     static bool IsRiver(bool[] wet, float[] half, int k) => wet[k] && half[k] <= OpenHalfWidth;
 
     /// <summary>
@@ -487,12 +493,19 @@ public static class RiverFlowBake
         return result;
     }
 
+    /// <summary>
+    /// Hermite smoothstep of <paramref name="x"/> between <paramref name="a"/> and <paramref name="b"/> (0 to 1).
+    /// </summary>
     static float Smooth(float a, float b, float x)
     {
         float t = Math.Clamp((x - a) / (b - a), 0f, 1f);
         return t * t * (3 - 2 * t);
     }
 
+    /// <summary>
+    /// One chamfer pass of the distance to land (texels; 0 on land): each texel takes the least of its value and its already visited neighbours' plus
+    /// 1 (straight) or √2 (diagonal), going from (<paramref name="x0"/>, <paramref name="y0"/>) by (<paramref name="dx"/>, <paramref name="dy"/>).
+    /// </summary>
     static void Sweep(float[] d, int n, int y0, int y1, int dy, int x0, int x1, int dx)
     {
         for (int y = y0; y != y1; y += dy)

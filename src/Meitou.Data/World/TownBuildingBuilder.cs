@@ -5,8 +5,9 @@ using static Meitou.Data.World.TownBuildings;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Builds the town buildings one at a time with the data the boot pass shares between them (<see cref="TownBuildings.Build"/> runs it over every level building; the level editor over
-/// a single one placed in the session, so the two make a <see cref="TownBuilding"/> the same way). Its tables are filled while it works: one builder is used by one thread.
+/// Builds the town buildings one at a time with the data the boot pass shares between them (<see cref="TownBuildings.Build"/> runs it over every
+/// level building; the level editor over a single one placed in the session, so the two make a <see cref="TownBuilding"/> the same way). Its tables
+/// are filled while it works: one builder is used by one thread.
 /// </summary>
 public sealed class TownBuildingBuilder
 {
@@ -56,6 +57,10 @@ public sealed class TownBuildingBuilder
     /// </summary>
     readonly Dictionary<(string, bool), IReadOnlySet<string>> _names = [];
 
+    /// <summary>
+    /// A builder over <paramref name="levels"/>' buildings, standing them on <paramref name="terrainHeight"/>; <paramref name="contents"/> lays out
+    /// what they hold.
+    /// </summary>
     public TownBuildingBuilder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
         bool contents = true)
     {
@@ -156,9 +161,9 @@ public sealed class TownBuildingBuilder
     }
 
     /// <summary>
-    /// The town a level-data building belongs to (docs/formats/zones.md "Town membership", Observed: the building import <c>FUN_14057cc70</c>): the nearest town whose
-    /// <see cref="Gameplay.TownData.Radius"/> holds it (X/Z, nest markers left out); else, for a record with <c>interior</c> parts, the nearest town within 10000; else none.
-    /// The state's <c>town</c> handle is not used: the game keeps it only for player towns.
+    /// The town a level-data building belongs to (docs/formats/zones.md "Town membership", Observed: the building import <c>FUN_14057cc70</c>): the
+    /// nearest town whose <see cref="Gameplay.TownData.Radius"/> holds it (X/Z, nest markers left out); else, for a record with <c>interior</c>
+    /// parts, the nearest town within 10000; else none. The state's <c>town</c> handle is not used: the game keeps it only for player towns.
     /// </summary>
     internal static TownPlacement? MemberOf(List<(TownPlacement Placement, Gameplay.TownData Town)> towns, Vector3 position, GameRecord record)
     {

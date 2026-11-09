@@ -22,10 +22,20 @@ sealed class AgentWorld(GameHost host)
     /// The camera at the last poll tick and for how many ticks in a row it did not move (0.25 s each): <c>camera-settled</c> waits for two.
     /// </summary>
     (Vector3 Eye, Vector3 Target, float Distance) _camStamp;
+
+    /// <summary>
+    /// How many poll ticks in a row the camera did not move.
+    /// </summary>
     int _camStable;
 
+    /// <summary>
+    /// The camera has not moved for two poll ticks.
+    /// </summary>
     bool CameraSettled => _camStable >= 2;
 
+    /// <summary>
+    /// Counts the poll ticks the camera has not moved (each poll tick).
+    /// </summary>
     internal void ControlCameraTick()
     {
         var c = host.Session.Camera.Current;
@@ -40,15 +50,45 @@ sealed class AgentWorld(GameHost host)
     /// </summary>
     sealed class CameraMove
     {
+        /// <summary>
+        /// The command id the reply goes to; null for none.
+        /// </summary>
         public string? Id;
+
+        /// <summary>
+        /// When the move started (Stopwatch).
+        /// </summary>
         public long Start;
+
+        /// <summary>
+        /// How long the move takes, seconds.
+        /// </summary>
         public double Seconds;
+
+        /// <summary>
+        /// The pivot at the start and at the end.
+        /// </summary>
         public Vector2 Pivot0, Pivot1;
+
+        /// <summary>
+        /// The entity whose position the end pivot follows; null for a fixed end.
+        /// </summary>
         public string? Entity;
+
+        /// <summary>
+        /// The yaw, pitch and distance at the start and at the end.
+        /// </summary>
         public float Yaw0, Yaw1, Pitch0, Pitch1, Dist0, Dist1;
+
+        /// <summary>
+        /// The camera follows the entity once the move ends.
+        /// </summary>
         public bool Follow;
     }
 
+    /// <summary>
+    /// The timed camera move running; null for none.
+    /// </summary>
     CameraMove? _cameraMove;
 
     /// <summary>
@@ -77,6 +117,9 @@ sealed class AgentWorld(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Parses <paramref name="text"/> as a finite invariant-culture float.
+    /// </summary>
     internal static bool Num(string text, out float value) =>
         float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
 
@@ -99,6 +142,9 @@ sealed class AgentWorld(GameHost host)
         return map;
     }
 
+    /// <summary>
+    /// The camera as JSON: mode, pivot, eye, yaw, pitch, zoom, field of view, focus and whether it settled.
+    /// </summary>
     string ControlCameraJson()
     {
         var c = host.Session.Camera.Current;
@@ -127,12 +173,18 @@ sealed class AgentWorld(GameHost host)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// <paramref name="radians"/> in degrees, -180 to 180.
+    /// </summary>
     static float NormalDegrees(float radians)
     {
         float d = radians * 180 / MathF.PI % 360;
         return d > 180 ? d - 360 : d <= -180 ? d + 360 : d;
     }
 
+    /// <summary>
+    /// Places the camera at <paramref name="pivot"/>, the angles and zoom not given kept.
+    /// </summary>
     void CameraPlace(Vector2 pivot, float? yaw, float? pitch, float? zoom)
     {
         var c = host.Session.Camera.Current;
@@ -1704,6 +1756,9 @@ sealed class AgentWorld(GameHost host)
         return best;
     }
 
+    /// <summary>
+    /// The least and greatest projection of <paramref name="poly"/>'s points on <paramref name="axis"/>.
+    /// </summary>
     static (float Min, float Max) Project(Vector2[] poly, Vector2 axis)
     {
         float lo = float.MaxValue, hi = float.MinValue;

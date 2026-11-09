@@ -16,6 +16,9 @@ internal sealed class StepCosts
     /// </summary>
     const double Rate = 0.25;
 
+    /// <summary>
+    /// The average ms of each kind seen.
+    /// </summary>
     readonly Dictionary<object, double> _expected = [];
 
     /// <summary>
@@ -30,6 +33,9 @@ internal sealed class StepCosts
     /// </summary>
     public double Expected(object kind) => _expected.GetValueOrDefault(kind);
 
+    /// <summary>
+    /// Adds a step of <paramref name="kind"/> that took <paramref name="ms"/> to its average (the first sets it).
+    /// </summary>
     public void Learn(object kind, double ms) => _expected[kind] = _expected.TryGetValue(kind, out var e) ? e + Rate * (ms - e) : ms;
 
     /// <summary>

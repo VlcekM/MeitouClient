@@ -13,50 +13,62 @@ using Meitou.Settings;
 
 namespace Meitou.Launcher;
 
-// The Graphics page: the settings the version Play starts describes in its settings-schema.json, written to the game's
-// meitou.user.json (GameSettings). Nothing about the settings is known here: renamed or new ones come with the release.
+/// <summary>
+/// The Graphics page: the settings the version Play starts describes in its settings-schema.json, written to the game's meitou.user.json
+/// (GameSettings). Nothing about the settings is known here: renamed or new ones come with the release.
+/// </summary>
 public sealed partial class MainWindow
 {
+    #region Page
+
+    /// <summary>
+    /// The width of a row's gutter (the feature chevron's column), in pixels.
+    /// </summary>
     const double GutterWidth = 22;
 
-    GameSettings _game = GameSettings.Load();
-    Process? _running;
-    DispatcherTimer? _graphicsSave;
-    int _schemaVersion;
     /// <summary>
-    /// The Graphics tab shown (a section's name), the schema's presets and their row, and its look.
+    /// The game's settings file as last loaded (<see cref="ShowGraphics"/> loads it again).
+    /// </summary>
+    GameSettings _game = GameSettings.Load();
+
+    /// <summary>
+    /// The game process Play started, null before; the page is locked while it has not exited.
+    /// </summary>
+    Process? _running;
+
+    /// <summary>
+    /// The schema version of the shown page, written with the settings.
+    /// </summary>
+    int _schemaVersion;
+
+    /// <summary>
+    /// The Graphics tab shown (a section's name).
     /// </summary>
     string _graphicsTab = "";
-    SettingsPresets? _presets;
-    SettingsLooks? _looks;
+
     /// <summary>
     /// Every setting the schema describes, by key (the look row counts and saves through them).
     /// </summary>
     Dictionary<string, SettingDescription> _settingByKey = [];
-    /// <summary>
-    /// The name a preset is being saved under (Save as), null when not naming.
-    /// </summary>
-    string? _namingLook;
-    ComboBox? _presetBox;
+
     /// <summary>
     /// The features the player opened (by title), kept while the page is shown again.
     /// </summary>
     readonly HashSet<string> _openGroups = [];
+
     /// <summary>
     /// The shown tab's rows: what marks each one changed, and what puts each control back to the saved value (after a feature's Reset).
     /// </summary>
     readonly List<Action> _rowMarks = [], _rowShows = [];
+
     /// <summary>
     /// A feature header's key to the settings folded under it: its row is marked, and resets, for them too.
     /// </summary>
     readonly Dictionary<string, List<SettingDescription>> _featureMembers = [];
-    /// <summary>
-    /// The last hardware detection's result line, and whether one is running.
-    /// </summary>
-    string? _detected;
-    bool _detecting;
 
-    // The schema of the version Play starts, and why there is none.
+    /// <summary>
+    /// The schema of the version Play starts, and why there is none.
+    /// </summary>
     (SettingsSchema? Schema, string? Problem) PlaySchema()
     {
         if (PlayVersion is not { } version)
@@ -211,7 +223,9 @@ public sealed partial class MainWindow
         GraphicsFooter.IsVisible = true;
     }
 
-    // Why the file may not be changed for this schema (null: it may).
+    /// <summary>
+    /// Why the file may not be changed for this schema (null: it may).
+    /// </summary>
     string? Locked(SettingsSchema schema) =>
         _game.Problem is { } problem ? problem + " Start the game once to write it again; nothing is changed here until then."
         // The keys of another layout may be gone or mean something else; the game converts the file to its own when it next starts.
@@ -221,8 +235,15 @@ public sealed partial class MainWindow
             ? $"The settings are from an older Meitou: start v{PlayVersion} once to update them, then change them here."
         : null;
 
+    /// <summary>
+    /// Whether a setting gets a row: every toggle, and a slider with a range.
+    /// </summary>
     static bool Shown(SettingDescription s) => s.Kind == SettingKind.Toggle || s.Kind == SettingKind.Slider && s.Max > s.Min;
 
+    /// <summary>
+    /// Fills the content with one tab's rows: its plain settings, then its feature groups (headers that fold their settings), with their marks and
+    /// resets.
+    /// </summary>
     void FillSection(StackPanel content, SettingsSection section)
     {
         content.Children.Clear();
@@ -248,6 +269,9 @@ public sealed partial class MainWindow
         LauncherText.TranslateTree(content, _originalUiText);
     }
 
+    /// <summary>
+    /// A setting's row by its kind: a switch or toggle, a two-label check, a choice, a modes row or a slider; shown only while its condition holds.
+    /// </summary>
     Border SettingRow(SettingDescription s)
     {
         var row = s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
@@ -360,12 +384,21 @@ public sealed partial class MainWindow
         };
     }
 
+    /// <summary>
+    /// <paramref name="label"/> without the group's name in front ("Shadows quality" in Shadows: "Quality"); as it is otherwise.
+    /// </summary>
     static string WithinGroup(string label, string group) =>
         label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
             ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..] : label;
 
+    /// <summary>
+    /// A section heading in capitals.
+    /// </summary>
     TextBlock Section(string text) => new() { Classes = { "caps" }, Text = Tr(text).ToUpperInvariant(), Margin = new(0, 14, 0, 2) };
 
+    /// <summary>
+    /// A row: the name and description on the left, the control in a column <paramref name="width"/> pixels wide on the right.
+    /// </summary>
     static Border Row(string name, string description, Control control, int width)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,{width}") };
@@ -379,6 +412,20 @@ public sealed partial class MainWindow
         grid.Children.Add(control);
         return new Border { Classes = { "row" }, Child = grid };
     }
+
+    #endregion
+
+    #region Looks
+
+    /// <summary>
+    /// The schema's look (the named sets of look settings), null when it has none.
+    /// </summary>
+    SettingsLooks? _looks;
+
+    /// <summary>
+    /// The name a preset is being saved under (Save as), null when not naming.
+    /// </summary>
+    string? _namingLook;
 
     /// <summary>
     /// A look the row offers: the schema's (Meitou first, then the examples) or one of the player's (its file).
@@ -698,6 +745,30 @@ public sealed partial class MainWindow
         return all;
     }
 
+    #endregion
+
+    #region Presets and detection
+
+    /// <summary>
+    /// The schema's quality presets, null when it has none.
+    /// </summary>
+    SettingsPresets? _presets;
+
+    /// <summary>
+    /// The preset row's combo box, null while the page has none.
+    /// </summary>
+    ComboBox? _presetBox;
+
+    /// <summary>
+    /// The last hardware detection's result line, null before one.
+    /// </summary>
+    string? _detected;
+
+    /// <summary>
+    /// A hardware detection is running.
+    /// </summary>
+    bool _detecting;
+
     /// <summary>
     /// The quality preset: the one the game saved its settings at, or one chosen here, which the game applies when it next starts.
     /// </summary>
@@ -851,6 +922,10 @@ public sealed partial class MainWindow
             box.Tag = null;
         }
     }
+
+    #endregion
+
+    #region Setting rows
 
     /// <summary>
     /// A setting's value: saved, else the game's start value (a top-level one: the schema's default).
@@ -1092,6 +1167,9 @@ public sealed partial class MainWindow
         return new Border { Child = new StackPanel { Children = { row, custom } } };
     }
 
+    /// <summary>
+    /// Writes a setting's value: into <c>graphics</c> for a graphics setting, else as a top-level key.
+    /// </summary>
     void WriteSetting(SettingDescription s, float value)
     {
         if (s.Graphics) _game.SetGraphics(s.Key, value);
@@ -1191,7 +1269,18 @@ public sealed partial class MainWindow
         text.LostFocus += (_, _) => Commit();
     }
 
-    // Dragging a slider writes the file once it rests, not on every step.
+    #endregion
+
+    #region Saving
+
+    /// <summary>
+    /// The timer that writes the settings 300 ms after the last change; null before the first.
+    /// </summary>
+    DispatcherTimer? _graphicsSave;
+
+    /// <summary>
+    /// Dragging a slider writes the file once it rests, not on every step.
+    /// </summary>
     void SaveGameSoon()
     {
         _graphicsSave ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => SaveGame());
@@ -1199,6 +1288,9 @@ public sealed partial class MainWindow
         _graphicsSave.Start();
     }
 
+    /// <summary>
+    /// Writes the settings file now (a pending timed save stopped), saying so in the status line.
+    /// </summary>
     void SaveGame()
     {
         _graphicsSave?.Stop();
@@ -1211,4 +1303,6 @@ public sealed partial class MainWindow
             Status(Tr("Could not write {1}: {2}", GameSettings.FileName, e.Message));
         }
     }
+
+    #endregion
 }

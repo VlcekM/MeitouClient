@@ -48,6 +48,10 @@ public static class ObjectLodGen
     /// <c>screen-lod</c>).
     /// </summary>
     public static float TriPixels { get; set; } = 1.5f;
+
+    /// <summary>
+    /// The multiple of the tolerance a level may deviate by when its mean triangle is under <see cref="TriPixels"/> (see there).
+    /// </summary>
     public static float Multiple { get; set; } = 2f;
 
     /// <summary>
@@ -65,6 +69,10 @@ public static class ObjectLodGen
     /// Counters for the load-time report: meshes built, read from the cache, and the milliseconds the builds took (all threads summed).
     /// </summary>
     public static int Built, Cached, Skipped;
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.Stopwatch"/> ticks the builds took, all threads summed (see <see cref="Built"/>).
+    /// </summary>
     public static long BuildTicks;
 
     /// <summary>
@@ -77,11 +85,25 @@ public static class ObjectLodGen
     /// </summary>
     public sealed class Plan
     {
+        /// <summary>
+        /// The merged levels, the file's first.
+        /// </summary>
         public required Entry[] Levels;
+
+        /// <summary>
+        /// How a draw picks among them, with or without the generated ones.
+        /// </summary>
         public required LodCurve Curve;
+
+        /// <summary>
+        /// The generated levels' index lists (from the cache or built).
+        /// </summary>
         public required FoliageLodSet Set;
     }
 
+    /// <summary>
+    /// Each mesh's plan by key (null: no generated levels), made once and kept.
+    /// </summary>
     static readonly ConcurrentDictionary<string, Plan?> Plans = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -100,6 +122,10 @@ public static class ObjectLodGen
         return plan;
     }
 
+    /// <summary>
+    /// Makes a mesh's plan: none for a mesh with skinned parts, manual levels or fewer than <see cref="MinTriangles"/> triangles; else its generated
+    /// levels (<see cref="Load"/>) merged with the file's.
+    /// </summary>
     static Plan? Make(string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian, string variant)
     {
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
@@ -121,6 +147,9 @@ public static class ObjectLodGen
         return Merge(fileLevels.Select(l => l.Distance).ToArray(), file, generated, set.Triangles, set);
     }
 
+    /// <summary>
+    /// The mesh's generated levels: from the disk cache, else built and saved there (null when the mesh file cannot be read).
+    /// </summary>
     static FoliageLodSet? Load(string path, Model model, float radius, string variant)
     {
         string file;
@@ -290,7 +319,15 @@ public sealed class LodCurve(float[] all, bool[] isGenerated, float[] generated,
     /// The distances of every merged level.
     /// </summary>
     public float[] All => all;
+
+    /// <summary>
+    /// The distances picked among: with the generated levels when <see cref="ObjectLodGen.Enabled"/>, else the file's only.
+    /// </summary>
     float[] Active => ObjectLodGen.Enabled ? generated : plain;
+
+    /// <summary>
+    /// The merged level of each entry of <see cref="Active"/>.
+    /// </summary>
     int[] Map => ObjectLodGen.Enabled ? generatedMap : plainMap;
 
     /// <summary>

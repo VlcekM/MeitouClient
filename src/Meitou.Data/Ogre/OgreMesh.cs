@@ -12,6 +12,9 @@ public sealed class OgreMesh
     /// </summary>
     public string Version { get; set; } = "";
 
+    /// <summary>
+    /// The header's skeletally-animated flag.
+    /// </summary>
     public bool SkeletallyAnimated { get; set; }
 
     /// <summary>
@@ -19,6 +22,9 @@ public sealed class OgreMesh
     /// </summary>
     public OgreVertexData? SharedVertexData { get; set; }
 
+    /// <summary>
+    /// The submeshes in file order.
+    /// </summary>
     public List<OgreSubMesh> SubMeshes { get; } = [];
 
     /// <summary>
@@ -31,6 +37,9 @@ public sealed class OgreMesh
     /// </summary>
     public List<OgreBoneAssignment> BoneAssignments { get; } = [];
 
+    /// <summary>
+    /// The bounding box and radius (chunk 0x9000); null when the file has none.
+    /// </summary>
     public OgreBounds? Bounds { get; set; }
 
     /// <summary>
@@ -38,6 +47,9 @@ public sealed class OgreMesh
     /// </summary>
     public Dictionary<int, string> SubMeshNames { get; } = [];
 
+    /// <summary>
+    /// The level-of-detail levels (chunk 0x8000); null when the mesh has none.
+    /// </summary>
     public OgreLod? Lod { get; set; }
 
     /// <summary>
@@ -57,9 +69,21 @@ public sealed class OgreMesh
 /// </summary>
 public sealed class OgrePose
 {
+    /// <summary>
+    /// The pose's name.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The vertex set the pose moves: 0 the shared vertices, else submesh index + 1.
+    /// </summary>
     public ushort Target { get; set; }
+    /// <summary>
+    /// Whether the pose's vertices carry normal offsets too.
+    /// </summary>
     public bool IncludesNormals { get; set; }
+    /// <summary>
+    /// The pose's vertex offsets in file order.
+    /// </summary>
     public List<OgrePoseVertex> Vertices { get; } = [];
 }
 
@@ -68,10 +92,22 @@ public sealed class OgrePose
 /// </summary>
 public readonly record struct OgrePoseVertex(uint Index, Vector3 Offset, Vector3 Normal);
 
+/// <summary>
+/// A submesh: its material, its indices and its own or the shared vertices.
+/// </summary>
 public sealed class OgreSubMesh
 {
+    /// <summary>
+    /// The name of the material the submesh is drawn with.
+    /// </summary>
     public string MaterialName { get; set; } = "";
+    /// <summary>
+    /// Whether the submesh's indices refer to the mesh's <see cref="OgreMesh.SharedVertexData"/>.
+    /// </summary>
     public bool UseSharedVertices { get; set; }
+    /// <summary>
+    /// The submesh's index buffer; <see cref="OgreIndexBuffer.Empty"/> until read.
+    /// </summary>
     public OgreIndexBuffer Indices { get; set; } = OgreIndexBuffer.Empty;
 
     /// <summary>
@@ -79,8 +115,17 @@ public sealed class OgreSubMesh
     /// </summary>
     public OgreVertexData? VertexData { get; set; }
 
+    /// <summary>
+    /// How the indices form primitives (chunk 0x4010); default triangle list.
+    /// </summary>
     public OgreOperationType Operation { get; set; } = OgreOperationType.TriangleList;
+    /// <summary>
+    /// Bone weights for the submesh's own <see cref="VertexData"/>.
+    /// </summary>
     public List<OgreBoneAssignment> BoneAssignments { get; } = [];
+    /// <summary>
+    /// <c>set_texture_alias</c> pairs of the submesh (chunk 0x4200): alias, texture name.
+    /// </summary>
     public Dictionary<string, string> TextureAliases { get; } = [];
 }
 
@@ -89,12 +134,24 @@ public sealed class OgreSubMesh
 /// </summary>
 public sealed record OgreIndexBuffer(bool Is32Bit, uint[] Indices)
 {
+    /// <summary>
+    /// No indices.
+    /// </summary>
     public static readonly OgreIndexBuffer Empty = new(false, []);
 }
 
+/// <summary>
+/// A vertex set: its count, the element declaration and the raw buffers.
+/// </summary>
 public sealed class OgreVertexData
 {
+    /// <summary>
+    /// How many vertices each buffer holds.
+    /// </summary>
     public uint VertexCount { get; set; }
+    /// <summary>
+    /// The vertex declaration's elements in file order.
+    /// </summary>
     public List<OgreVertexElement> Elements { get; } = [];
 
     /// <summary>
@@ -102,6 +159,10 @@ public sealed class OgreVertexData
     /// </summary>
     public Dictionary<ushort, OgreVertexBuffer> Buffers { get; } = [];
 
+    /// <summary>
+    /// The element with <paramref name="semantic"/> and <paramref name="index"/> (e.g. the second texture coordinate set is index 1); null
+    /// when absent.
+    /// </summary>
     public OgreVertexElement? Find(OgreVertexSemantic semantic, int index = 0) =>
         Elements.FirstOrDefault(e => e.Semantic == semantic && e.Index == index);
 
@@ -147,16 +208,35 @@ public sealed class OgreVertexData
     }
 }
 
+/// <summary>
+/// One vertex buffer: bytes per vertex and the raw data.
+/// </summary>
 public sealed record OgreVertexBuffer(ushort VertexSize, byte[] Data);
 
+/// <summary>
+/// One element of a vertex declaration: the buffer it reads from, its type and meaning, its byte offset in a vertex and its index among elements of
+/// that meaning.
+/// </summary>
 public sealed record OgreVertexElement(ushort Source, OgreVertexElementType Type, OgreVertexSemantic Semantic, ushort Offset, ushort Index);
 
+/// <summary>
+/// One bone weight: the vertex, the bone (index into the skeleton) and the weight.
+/// </summary>
 public readonly record struct OgreBoneAssignment(uint VertexIndex, ushort BoneIndex, float Weight);
 
+/// <summary>
+/// A mesh's bounding box and bounding sphere radius, in mesh space.
+/// </summary>
 public readonly record struct OgreBounds(Vector3 Min, Vector3 Max, float Radius);
 
+/// <summary>
+/// A mesh's level-of-detail levels (chunk 0x8000).
+/// </summary>
 public sealed class OgreLod
 {
+    /// <summary>
+    /// The LOD strategy name, e.g. distance.
+    /// </summary>
     public string Strategy { get; set; } = "";
 
     /// <summary>
@@ -165,6 +245,9 @@ public sealed class OgreLod
     public List<OgreLodLevel> Levels { get; } = [];
 }
 
+/// <summary>
+/// One LOD level after the full-detail one.
+/// </summary>
 public sealed class OgreLodLevel
 {
     /// <summary>
@@ -187,44 +270,234 @@ public sealed class OgreLodLevel
 /// <param name="SharedBufferLevel">1-based LOD level whose buffer this level reuses, or null for its own <see cref="Buffer"/>.</param>
 public sealed record OgreLodFaces(uint IndexCount, uint IndexStart, int? SharedBufferLevel, OgreIndexBuffer? Buffer);
 
+/// <summary>
+/// How a submesh's indices form primitives (Ogre's <c>RenderOperation::OperationType</c>).
+/// </summary>
 public enum OgreOperationType : ushort
 {
+    /// <summary>
+    /// Each index is a point.
+    /// </summary>
     PointList = 1,
+    /// <summary>
+    /// Each pair of indices is a line.
+    /// </summary>
     LineList = 2,
+    /// <summary>
+    /// The indices form one connected line.
+    /// </summary>
     LineStrip = 3,
+    /// <summary>
+    /// Each three indices are a triangle.
+    /// </summary>
     TriangleList = 4,
+    /// <summary>
+    /// Each index after the first two makes a triangle with the previous two.
+    /// </summary>
     TriangleStrip = 5,
+    /// <summary>
+    /// Each index after the first two makes a triangle with the first and the previous one.
+    /// </summary>
     TriangleFan = 6,
 }
 
+/// <summary>
+/// What a vertex element holds (Ogre's <c>VertexElementSemantic</c>).
+/// </summary>
 public enum OgreVertexSemantic : ushort
 {
+    /// <summary>
+    /// The vertex position.
+    /// </summary>
     Position = 1,
+    /// <summary>
+    /// Skinning weights.
+    /// </summary>
     BlendWeights = 2,
+    /// <summary>
+    /// Skinning bone indices.
+    /// </summary>
     BlendIndices = 3,
+    /// <summary>
+    /// The vertex normal.
+    /// </summary>
     Normal = 4,
+    /// <summary>
+    /// The diffuse vertex colour.
+    /// </summary>
     Diffuse = 5,
+    /// <summary>
+    /// The specular vertex colour.
+    /// </summary>
     Specular = 6,
+    /// <summary>
+    /// A texture coordinate set (<see cref="OgreVertexElement.Index"/> picks which).
+    /// </summary>
     TextureCoordinates = 7,
+    /// <summary>
+    /// The binormal (bitangent).
+    /// </summary>
     Binormal = 8,
+    /// <summary>
+    /// The tangent.
+    /// </summary>
     Tangent = 9,
 }
 
+/// <summary>
+/// How a vertex element is stored (Ogre's <c>VertexElementType</c>).
+/// </summary>
 public enum OgreVertexElementType : ushort
 {
-    Float1 = 0, Float2 = 1, Float3 = 2, Float4 = 3,
+    /// <summary>
+    /// One float.
+    /// </summary>
+    Float1 = 0,
+
+    /// <summary>
+    /// Two floats.
+    /// </summary>
+    Float2 = 1,
+
+    /// <summary>
+    /// Three floats.
+    /// </summary>
+    Float3 = 2,
+
+    /// <summary>
+    /// Four floats.
+    /// </summary>
+    Float4 = 3,
+
+    /// <summary>
+    /// A packed colour of four bytes in the render system's order.
+    /// </summary>
     Colour = 4,
-    Short1 = 5, Short2 = 6, Short3 = 7, Short4 = 8,
+
+    /// <summary>
+    /// One 16-bit signed integer.
+    /// </summary>
+    Short1 = 5,
+
+    /// <summary>
+    /// Two 16-bit signed integers.
+    /// </summary>
+    Short2 = 6,
+
+    /// <summary>
+    /// Three 16-bit signed integers.
+    /// </summary>
+    Short3 = 7,
+
+    /// <summary>
+    /// Four 16-bit signed integers.
+    /// </summary>
+    Short4 = 8,
+
+    /// <summary>
+    /// Four bytes.
+    /// </summary>
     UByte4 = 9,
-    ColourArgb = 10, ColourAbgr = 11,
-    Double1 = 12, Double2 = 13, Double3 = 14, Double4 = 15,
-    UShort1 = 16, UShort2 = 17, UShort3 = 18, UShort4 = 19,
-    Int1 = 20, Int2 = 21, Int3 = 22, Int4 = 23,
-    UInt1 = 24, UInt2 = 25, UInt3 = 26, UInt4 = 27,
+
+    /// <summary>
+    /// A packed colour of four bytes, ARGB.
+    /// </summary>
+    ColourArgb = 10,
+
+    /// <summary>
+    /// A packed colour of four bytes, ABGR.
+    /// </summary>
+    ColourAbgr = 11,
+
+    /// <summary>
+    /// One double.
+    /// </summary>
+    Double1 = 12,
+
+    /// <summary>
+    /// Two doubles.
+    /// </summary>
+    Double2 = 13,
+
+    /// <summary>
+    /// Three doubles.
+    /// </summary>
+    Double3 = 14,
+
+    /// <summary>
+    /// Four doubles.
+    /// </summary>
+    Double4 = 15,
+
+    /// <summary>
+    /// One 16-bit unsigned integer.
+    /// </summary>
+    UShort1 = 16,
+
+    /// <summary>
+    /// Two 16-bit unsigned integers.
+    /// </summary>
+    UShort2 = 17,
+
+    /// <summary>
+    /// Three 16-bit unsigned integers.
+    /// </summary>
+    UShort3 = 18,
+
+    /// <summary>
+    /// Four 16-bit unsigned integers.
+    /// </summary>
+    UShort4 = 19,
+
+    /// <summary>
+    /// One 32-bit signed integer.
+    /// </summary>
+    Int1 = 20,
+
+    /// <summary>
+    /// Two 32-bit signed integers.
+    /// </summary>
+    Int2 = 21,
+
+    /// <summary>
+    /// Three 32-bit signed integers.
+    /// </summary>
+    Int3 = 22,
+
+    /// <summary>
+    /// Four 32-bit signed integers.
+    /// </summary>
+    Int4 = 23,
+
+    /// <summary>
+    /// One 32-bit unsigned integer.
+    /// </summary>
+    UInt1 = 24,
+
+    /// <summary>
+    /// Two 32-bit unsigned integers.
+    /// </summary>
+    UInt2 = 25,
+
+    /// <summary>
+    /// Three 32-bit unsigned integers.
+    /// </summary>
+    UInt3 = 26,
+
+    /// <summary>
+    /// Four 32-bit unsigned integers.
+    /// </summary>
+    UInt4 = 27,
 }
 
+/// <summary>
+/// Sizes of the vertex element types.
+/// </summary>
 public static class OgreVertexElementTypeExtensions
 {
+    /// <summary>
+    /// How many values an element of type <paramref name="t"/> holds; a colour or UByte4 counts four.
+    /// </summary>
     public static int ComponentCount(this OgreVertexElementType t) => t switch
     {
         OgreVertexElementType.Colour or OgreVertexElementType.ColourArgb or OgreVertexElementType.ColourAbgr
@@ -258,32 +531,116 @@ public static class OgreVertexElementTypeExtensions
 /// </summary>
 public enum OgreMeshChunk : ushort
 {
+    /// <summary>
+    /// The file header with the serializer version.
+    /// </summary>
     Header = 0x1000,
+    /// <summary>
+    /// The mesh: the skeletally-animated flag, then its sub-chunks.
+    /// </summary>
     Mesh = 0x3000,
+    /// <summary>
+    /// A submesh: material, shared-vertices flag and indices.
+    /// </summary>
     SubMesh = 0x4000,
+    /// <summary>
+    /// A submesh's operation type.
+    /// </summary>
     SubMeshOperation = 0x4010,
+    /// <summary>
+    /// A bone weight of a submesh's own vertices.
+    /// </summary>
     SubMeshBoneAssignment = 0x4100,
+    /// <summary>
+    /// A submesh's texture alias.
+    /// </summary>
     SubMeshTextureAlias = 0x4200,
+    /// <summary>
+    /// A vertex set with its vertex count.
+    /// </summary>
     Geometry = 0x5000,
+    /// <summary>
+    /// A vertex set's declaration.
+    /// </summary>
     GeometryVertexDeclaration = 0x5100,
+    /// <summary>
+    /// One element of a declaration.
+    /// </summary>
     GeometryVertexElement = 0x5110,
+    /// <summary>
+    /// A vertex buffer's bind index and vertex size.
+    /// </summary>
     GeometryVertexBuffer = 0x5200,
+    /// <summary>
+    /// A vertex buffer's data.
+    /// </summary>
     GeometryVertexBufferData = 0x5210,
+    /// <summary>
+    /// The name of the mesh's <c>.skeleton</c>.
+    /// </summary>
     MeshSkeletonLink = 0x6000,
+    /// <summary>
+    /// A bone weight of the shared vertices.
+    /// </summary>
     MeshBoneAssignment = 0x7000,
+    /// <summary>
+    /// The LOD block: strategy and level count.
+    /// </summary>
     MeshLodLevel = 0x8000,
+    /// <summary>
+    /// One LOD level's value.
+    /// </summary>
     MeshLodUsage = 0x8100,
+    /// <summary>
+    /// A manual LOD level's mesh name.
+    /// </summary>
     MeshLodManual = 0x8110,
+    /// <summary>
+    /// A generated LOD level's indices of one submesh.
+    /// </summary>
     MeshLodGenerated = 0x8120,
+    /// <summary>
+    /// The bounding box and radius.
+    /// </summary>
     MeshBounds = 0x9000,
+    /// <summary>
+    /// The table of submesh names.
+    /// </summary>
     SubMeshNameTable = 0xA000,
+    /// <summary>
+    /// One submesh's name.
+    /// </summary>
     SubMeshNameTableElement = 0xA100,
+    /// <summary>
+    /// Edge lists for stencil shadows; walked, not kept.
+    /// </summary>
     EdgeLists = 0xB000,
+    /// <summary>
+    /// The edge list of one LOD; not kept.
+    /// </summary>
     EdgeListLod = 0xB100,
+    /// <summary>
+    /// An edge group; not kept.
+    /// </summary>
     EdgeGroup = 0xB110,
+    /// <summary>
+    /// The poses (morph targets).
+    /// </summary>
     Poses = 0xC000,
+    /// <summary>
+    /// One pose.
+    /// </summary>
     Pose = 0xC100,
+    /// <summary>
+    /// One vertex offset of a pose.
+    /// </summary>
     PoseVertex = 0xC111,
+    /// <summary>
+    /// Vertex animations; skipped by length.
+    /// </summary>
     Animations = 0xD000,
+    /// <summary>
+    /// A submesh's extreme points; skipped by length.
+    /// </summary>
     TableExtremes = 0xE000,
 }

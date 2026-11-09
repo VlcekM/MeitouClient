@@ -11,25 +11,73 @@ namespace Meitou.Simulation.Crime;
 /// </summary>
 public enum CrimeCode
 {
+    /// <summary>
+    /// No crime: a pending crime with this code is never booked.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// Code 1, Enslaving: 100 by the table, but the game adds nothing for it (economy.md 11.2).
+    /// </summary>
     Enslaving = 1,
+    /// <summary>
+    /// Code 2, Burglary (the editor's <c>CRIME_LOCKPICKING</c>): 1000.
+    /// </summary>
     Burglary = 2,
+    /// <summary>
+    /// Code 3, Theft: 2500.
+    /// </summary>
     Theft = 3,
+    /// <summary>
+    /// Code 4, Murder: 5000.
+    /// </summary>
     Murder = 4,
+    /// <summary>
+    /// Code 5, Assault: 500.
+    /// </summary>
     Assault = 5,
+    /// <summary>
+    /// Code 6, Treason (the editor's <c>CRIME_ASSAULT_VIP</c>): 50000.
+    /// </summary>
     Treason = 6,
+    /// <summary>
+    /// Code 7, labelled "Terrorism" by the game (the editor's <c>CRIME_SLAVE_FREEING</c>; lifting a prisoner out of a cage): 5000.
+    /// </summary>
     Terrorism = 7,
+    /// <summary>
+    /// Code 8, Smuggling: 5000.
+    /// </summary>
     Smuggling = 8,
     /// <summary>
     /// A second code the game's name table also calls "Terrorism" (economy.md Unknowns); an Assault on some victims becomes it.
     /// </summary>
     Terrorism2 = 9,
+    /// <summary>
+    /// Code 10, Looting: 500.
+    /// </summary>
     Looting = 10,
+    /// <summary>
+    /// Code 11, Trespassing: 100.
+    /// </summary>
     Trespassing = 11,
+    /// <summary>
+    /// Code 12, Escaping Prison: 2500.
+    /// </summary>
     EscapingPrison = 12,
+    /// <summary>
+    /// Code 13, Fencing: 1000.
+    /// </summary>
     Fencing = 13,
+    /// <summary>
+    /// Code 14, Crop Theft (the editor's <c>CRIME_FARM_EATING</c>): 500.
+    /// </summary>
     CropTheft = 14,
+    /// <summary>
+    /// Code 15, Kidnapping: 5000.
+    /// </summary>
     Kidnapping = 15,
+    /// <summary>
+    /// Code 16, Uniform Theft: 2500.
+    /// </summary>
     UniformTheft = 16,
 }
 
@@ -96,8 +144,17 @@ public static class CrimeTable
 /// </summary>
 public sealed class BountyEntry
 {
+    /// <summary>
+    /// The faction index the entry is kept under (a booking faction, <see cref="CrimeFactions.BookingOf"/>).
+    /// </summary>
     public required int Faction { get; init; }
+    /// <summary>
+    /// The faction's name, for the HUD.
+    /// </summary>
     public required string FactionName { get; init; }
+    /// <summary>
+    /// The bounty in cats.
+    /// </summary>
     public int Amount { get; set; }
     /// <summary>
     /// Bit <c>1 &lt;&lt; code</c> for each crime booked into this entry.
@@ -108,6 +165,9 @@ public sealed class BountyEntry
     /// the police no longer go after it.
     /// </summary>
     public bool Claimed { get; set; }
+    /// <summary>
+    /// The world tick of the last raise (the save's <c>bountyexp</c> in game hours, converted at the save boundary); the lifetime counts from it.
+    /// </summary>
     public long RaisedTick { get; set; }
 }
 
@@ -117,9 +177,18 @@ public sealed class BountyEntry
 /// </summary>
 public sealed class BountyLedger
 {
+    /// <summary>
+    /// The entries in faction order.
+    /// </summary>
     readonly List<BountyEntry> _entries = [];
 
+    /// <summary>
+    /// The entries, read-only, in faction order.
+    /// </summary>
     public IReadOnlyList<BountyEntry> Entries => _entries;
+    /// <summary>
+    /// How many factions have an entry.
+    /// </summary>
     public int Count => _entries.Count;
 
     /// <summary>
@@ -185,8 +254,14 @@ public sealed class BountyLedger
         return entry;
     }
 
+    /// <summary>
+    /// Drops <paramref name="entry"/>; false when it was not in the ledger.
+    /// </summary>
     public bool Remove(BountyEntry entry) => _entries.Remove(entry);
 
+    /// <summary>
+    /// Adds the entries (faction, amount, crimes, claimed, raise tick) in faction order to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x426F756E);   // "Boun"
@@ -209,9 +284,21 @@ public sealed class BountyLedger
 /// </summary>
 public sealed class TownAlarm
 {
+    /// <summary>
+    /// The town the alarm was raised in.
+    /// </summary>
     public required int Town { get; init; }
+    /// <summary>
+    /// The crime it is for.
+    /// </summary>
     public required CrimeCode Code { get; init; }
+    /// <summary>
+    /// The faction the crime was against.
+    /// </summary>
     public required int Faction { get; init; }
+    /// <summary>
+    /// Where it was raised; overwritten by a repeated raise.
+    /// </summary>
     public System.Numerics.Vector3 Position { get; set; }
     /// <summary>
     /// The indoor volume the culprit was in when the alarm was raised (<see cref="SightMap.PlaceOf"/>; the original's location handle <c>+0x40</c>,
@@ -238,9 +325,21 @@ public sealed class TownAlarm
 /// </summary>
 public sealed class PendingCrime
 {
+    /// <summary>
+    /// The crime; a new code clears <see cref="Booked"/>.
+    /// </summary>
     public required CrimeCode Code { get; set; }
+    /// <summary>
+    /// The faction the crime was against.
+    /// </summary>
     public required int VictimFaction { get; set; }
+    /// <summary>
+    /// The victim character, <see cref="CharacterId.None"/> for none.
+    /// </summary>
     public CharacterId Victim { get; set; } = CharacterId.None;
+    /// <summary>
+    /// Game seconds the crime stays fresh: counted down by the crime tick, cleared at or below 0; a witness sets it to 20 again.
+    /// </summary>
     public float Timer { get; set; }
     /// <summary>
     /// Booked as a bounty already (the game's <c>+0xa4</c>): a crime is booked once; a new code clears it.
@@ -251,6 +350,9 @@ public sealed class PendingCrime
     /// </summary>
     public bool Witnessed { get; set; }
 
+    /// <summary>
+    /// Adds the pending crime (code, victim faction, victim, timer, booked, witnessed) to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x50656E64);   // "Pend"
@@ -283,8 +385,8 @@ public sealed record PutInCageOrder(IReadOnlyList<CharacterId> Carriers) : Order
 
 /// <summary>
 /// A bounty line for the HUD (selected characters only): who wants the character, how much, for what, and the hours left (infinity: never
-/// expires).</summary> <summary>One bounty for the HUD; <see cref="Local"/>: the local faction's (the cage owner's while imprisoned, else the town
-/// the character stands in; docs/game/ui-screens.md section 4).
+/// expires). <see cref="Local"/>: the local faction's (the cage owner's while imprisoned, else the town the character stands in;
+/// docs/game/ui-screens.md section 4).
 /// </summary>
 public readonly record struct BountyLine(string Faction, int Amount, string Crimes, double HoursLeft, bool Local = false);
 
@@ -316,8 +418,30 @@ public sealed record CrimeSettings
 /// <summary>
 /// What the crime system did: a crime set pending, seen, booked, or a bounty that expired.
 /// </summary>
-public enum CrimeEventKind { Pending, Witnessed, Booked, Expired }
+public enum CrimeEventKind
+{
+    /// <summary>
+    /// A crime was set pending on the culprit.
+    /// </summary>
+    Pending,
+    /// <summary>
+    /// A witness saw it.
+    /// </summary>
+    Witnessed,
+    /// <summary>
+    /// It was booked as a bounty.
+    /// </summary>
+    Booked,
+    /// <summary>
+    /// A bounty expired.
+    /// </summary>
+    Expired
+}
 
+/// <summary>
+/// One crime log line: the tick, what happened, the culprit, the crime code, the faction, the amount and the witness (<see cref="CharacterId.None"/>
+/// for none).
+/// </summary>
 public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, CharacterId Culprit, CrimeCode Code, int Faction,
     int Amount, CharacterId Witness);
 
@@ -326,9 +450,18 @@ public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, Charact
 /// </summary>
 public sealed class CrimeFactions
 {
+    /// <summary>
+    /// Per faction: books bounties, lawless, a bandit faction, hunts bounties (built once from the relations).
+    /// </summary>
     readonly bool[] _books, _lawless, _bandit, _hunters;
+    /// <summary>
+    /// Per faction: its booking faction (<see cref="BookingKey"/>), -1 for none.
+    /// </summary>
     readonly int[] _booking;
 
+    /// <summary>
+    /// Builds the per-faction flags from <paramref name="relations"/>: the booking key and the hunters after the first pass.
+    /// </summary>
     public CrimeFactions(FactionRelations relations)
     {
         Relations = relations;
@@ -379,6 +512,9 @@ public sealed class CrimeFactions
     /// </summary>
     public bool Hunts(int f) => Relations.Contains(f) && _hunters[f];
 
+    /// <summary>
+    /// The faction table the flags were built from.
+    /// </summary>
     public FactionRelations Relations { get; }
 
     /// <summary>
@@ -394,6 +530,12 @@ public sealed class CrimeFactions
     /// (<c>FUN_1403554b0</c>).
     /// </summary>
     public bool NotReal(int f) => Relations.Contains(f) && Relations.Factions[f].NotReal;
+    /// <summary>
+    /// The faction is of <c>fundamental type</c> BANDIT.
+    /// </summary>
     public bool Bandit(int f) => Relations.Contains(f) && _bandit[f];
+    /// <summary>
+    /// The faction's name, "?" for an unknown index.
+    /// </summary>
     public string NameOf(int f) => Relations.Contains(f) ? Relations.Factions[f].Name : "?";
 }

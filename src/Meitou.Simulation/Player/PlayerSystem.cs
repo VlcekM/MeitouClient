@@ -84,9 +84,11 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         if (name.Length > FactionNameLength) name = name[..FactionNameLength];
         if (!player.Exists || name == PlayerFactionName(world)) return;
         // FUN_1402e7950: any other faction already named so. (The data's names; the player's own old name is free again.)
-        if (data is not null
-                && data.Factions.Where((f,
-                        i) => i != player.Faction).Any(f => f.Name == name)) { world.Post("This faction name already exists"); return; }
+        if (data is not null && data.Factions.Where((f, i) => i != player.Faction).Any(f => f.Name == name))
+        {
+            world.Post("This faction name already exists");
+            return;
+        }
         player.FactionName = name == data?.Factions[player.Faction].Name ? null : name;
     }
 

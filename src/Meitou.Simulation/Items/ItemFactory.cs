@@ -10,13 +10,28 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<Meitou.Data.Gameplay.Combat.CombatDatabase>? combat = null)
 {
+    /// <summary>
+    /// The facts of each record asked for so far (null: an unknown record); shared with the build thread.
+    /// </summary>
     readonly ConcurrentDictionary<string, ItemInfo?> _infos = new();
 
+    /// <summary>
+    /// The game data the items are made from.
+    /// </summary>
     public GameDatabase Db { get; } = db;
+    /// <summary>
+    /// The game constants (<c>food quality mult</c>, <c>weapon inventory weight mult</c>).
+    /// </summary>
     public GameConstants Constants { get; } = constants;
 
+    /// <summary>
+    /// The carrying and eating facts of record <paramref name="recordId"/>, cached; null for an unknown record.
+    /// </summary>
     public ItemInfo? Info(string recordId) => _infos.GetOrAdd(recordId, id => Db.Find(id) is { } r ? ItemInfo.From(r) : null);
 
+    /// <summary>
+    /// The prosthetic data of each record asked for so far.
+    /// </summary>
     readonly ConcurrentDictionary<string, Meitou.Data.Gameplay.Bodies.LimbReplacement?> _limbs = new(StringComparer.Ordinal);
     /// <summary>
     /// The prosthetic data of a LIMB_REPLACEMENT record (null for another record).
@@ -30,12 +45,21 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     /// </summary>
     public ItemInstance? CheapestFood() => Create(CheapestFoodId() ?? "");
 
+    /// <summary>
+    /// The id of <see cref="CheapestFood"/>'s record, found once.
+    /// </summary>
     readonly Lazy<string?> _cheapestFoodId = new(() => db.OfType(FcsRecordType.Item).Select(ItemInfo.From).Where(i => i.IsFood && i.Charges > 0)
         // the factory is shared with the build thread, hence Lazy
         .OrderBy(i => i.Value / i.Charges).ThenBy(i => i.Id, StringComparer.Ordinal).FirstOrDefault()?.Id);
 
+    /// <summary>
+    /// The id of <see cref="CheapestFood"/>'s record.
+    /// </summary>
     string? CheapestFoodId() => _cheapestFoodId.Value;
 
+    /// <summary>
+    /// The id of the money item (the ITEM named <see cref="Trading.Market.MoneyItemName"/>, the first by id), found once.
+    /// </summary>
     readonly Lazy<string?> _moneyId = new(() => db.OfType(FcsRecordType.Item).Where(r => r.Name == Trading.Market.MoneyItemName)
         .Select(r => r.StringId).OrderBy(id => id, StringComparer.Ordinal).FirstOrDefault());
 
@@ -56,6 +80,9 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
         if (amount > 0 && Create(money, amount) is { } cats) inventory.Add(cats);
     }
 
+    /// <summary>
+    /// The armour data of each ARMOUR record asked for so far.
+    /// </summary>
     readonly ConcurrentDictionary<string, Meitou.Data.Gameplay.Combat.ArmourData?> _armourData = new();
 
     /// <summary>
@@ -117,6 +144,10 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     public GameRecord? ResearchOf(ItemInstance item) => item.Type == FcsRecordType.Blueprint
             && Db.Find(item.CompanyId) is { Type: FcsRecordType.Research } r ? r : null;
 
+    /// <summary>
+    /// A new instance of <paramref name="info"/>'s record as an item of <paramref name="type"/>: its colour, section, race limits, lock, weight
+    /// and charges.
+    /// </summary>
     ItemInstance Make(ItemInfo info, FcsRecordType type, int quantity, float quality)
     {
         bool weapon = info.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow;

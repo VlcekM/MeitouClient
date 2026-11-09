@@ -26,6 +26,9 @@ namespace Meitou.Simulation.Weather;
 /// </summary>
 public sealed class WeatherSystem(GameConstants constants) : ITickSystem
 {
+    /// <summary>
+    /// The CONSTANTS the acid, burning and gas harm reads.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
 
     /// <summary>
@@ -74,7 +77,13 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     /// </summary>
     public const int EveryTicks = 5;
 
+    /// <summary>
+    /// Per character and dialogue event: the tick before which it does not fire again (cleared past 4096 entries).
+    /// </summary>
     readonly Dictionary<(CharacterId, int), long> _eventAfter = [];
+    /// <summary>
+    /// Whether each building record is a shelter (<c>is shelter</c>), read once.
+    /// </summary>
     readonly Dictionary<string, bool> _shelterRecords = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -311,4 +320,34 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
 /// <summary>
 /// The status notice of a weather effect that hurt a player character this tick (docs/formats/weather.md "Effects on characters"); the HUD words it.
 /// </summary>
-public enum WeatherNotice : byte { None, AcidWater, AcidFeet, AcidRain, Dust, Burning, Gas }
+public enum WeatherNotice : byte
+{
+    /// <summary>
+    /// No notice.
+    /// </summary>
+    None,
+    /// <summary>
+    /// Acid water hurt it.
+    /// </summary>
+    AcidWater,
+    /// <summary>
+    /// Acid ground hurt its bare feet.
+    /// </summary>
+    AcidFeet,
+    /// <summary>
+    /// Acid rain hurt it.
+    /// </summary>
+    AcidRain,
+    /// <summary>
+    /// A dust storm (shown with the protection).
+    /// </summary>
+    Dust,
+    /// <summary>
+    /// Burning hurt it.
+    /// </summary>
+    Burning,
+    /// <summary>
+    /// Poison gas hurt it.
+    /// </summary>
+    Gas
+}

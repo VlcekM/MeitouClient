@@ -7,24 +7,59 @@ using Meitou.Game.Rendering.Profiling;
 
 namespace Meitou.Game.Rendering.Characters;
 
+/// <summary>
+/// The characters' motion vectors for the temporal upscalers: drawn inside the post chain's object-motion pass with this and last frame's palettes,
+/// transforms and cameras.
+/// </summary>
 internal sealed unsafe partial class CharacterRenderer
 {
     /// <summary>
     /// Set by the host when the temporal upscalers run: the palettes of last frame are kept for <see cref="DrawMotion"/>.
     /// </summary>
     public bool Motion { get; set; }
+    /// <summary>
+    /// Whether the object-motion callback of the post chain has been set (once).
+    /// </summary>
     bool _motionHooked;
 
     // The characters' motion for the temporal upscalers (PostProcess.ObjectMotion).
 
+    /// <summary>
+    /// This frame's view-projection as drawn (jittered) and unjittered, last frame's unjittered one, and the same three for positions relative to the
+    /// eye (the rotation-only matrices).
+    /// </summary>
     Matrix4x4 _motionViewProjection, _motionUnjittered, _previousUnjittered, _motionRelative, _motionRelativeUnjittered, _previousRelativeUnjittered;
+    /// <summary>
+    /// Last frame's eye, for the move between the relative matrices.
+    /// </summary>
     Vector3 _previousEye;
+    /// <summary>
+    /// Whether this frame's camera came with the relative matrices.
+    /// </summary>
     bool _motionHasRelative;
+    /// <summary>
+    /// This frame's frustum planes for the motion view.
+    /// </summary>
     Vector4[] _motionFrustum = [];
+    /// <summary>
+    /// This frame's eye.
+    /// </summary>
     Vector3 _motionEye;
+    /// <summary>
+    /// <c>_motionCamera</c>: this frame's camera has been given and not yet drawn with; <c>_havePreviousCamera</c>: last frame's matrices are set.
+    /// </summary>
     bool _motionCamera, _havePreviousCamera;
+    /// <summary>
+    /// How many motion passes were drawn, for the statistics.
+    /// </summary>
     int _motionCalls;
+    /// <summary>
+    /// The scene depth texture's bindless index for the motion pass's push constants.
+    /// </summary>
     uint _motionDepth;
+    /// <summary>
+    /// The scene depth texture registered for the motion pass and its bindless index, registered again when the texture changes.
+    /// </summary>
     (SampledTexture Texture, uint Index)? _motionDepthIndex;
 
     /// <summary>

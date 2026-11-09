@@ -11,5 +11,8 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public static class ImpostorPrepass
 {
+    /// <summary>
+    /// The A/B <c>impostor-prepass</c> switch: on, the billboards get their own depth prepass in the main colour view.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 }

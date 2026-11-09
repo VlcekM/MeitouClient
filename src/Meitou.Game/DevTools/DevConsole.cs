@@ -33,26 +33,90 @@ public sealed record ConsoleCommand(string Name, string Usage, string Help, Acti
 /// </summary>
 public sealed class DevConsole
 {
-    public enum Kind { Input, Info, Error }
+    /// <summary>
+    /// A scrollback line's kind.
+    /// </summary>
+    public enum Kind
+    {
+        /// <summary>
+        /// A line the player submitted.
+        /// </summary>
+        Input,
 
+        /// <summary>
+        /// Output.
+        /// </summary>
+        Info,
+
+        /// <summary>
+        /// An error.
+        /// </summary>
+        Error,
+    }
+
+    /// <summary>
+    /// A scrollback line and its kind.
+    /// </summary>
     public readonly record struct Line(string Text, Kind Kind);
 
+    /// <summary>
+    /// The scrollback's and the history's lengths.
+    /// </summary>
     const int MaxLines = 100, MaxHistory = 50;
 
+    /// <summary>
+    /// The commands by name (case-insensitive).
+    /// </summary>
     readonly Dictionary<string, ConsoleCommand> _commands = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The scrollback, oldest first.
+    /// </summary>
     readonly List<Line> _lines = [];
+
+    /// <summary>
+    /// The lines submitted, oldest first.
+    /// </summary>
     readonly List<string> _history = [];
+
+    /// <summary>
+    /// The history line shown; -1 while the input is the player's own.
+    /// </summary>
     int _historyAt = -1;
+
+    /// <summary>
+    /// The input typed before the history was walked.
+    /// </summary>
     string _draft = "";
 
+    /// <summary>
+    /// The console is open.
+    /// </summary>
     public bool Open { get; set; }
+
+    /// <summary>
+    /// The input line.
+    /// </summary>
     public string Input { get; private set; } = "";
+
+    /// <summary>
+    /// The caret's place in the input line.
+    /// </summary>
     public int Caret { get; private set; }
+
     /// <summary>
     /// How many visual lines the scrollback is scrolled up from the newest.
     /// </summary>
     public int Scroll { get; set; }
+
+    /// <summary>
+    /// The scrollback, oldest first.
+    /// </summary>
     public IReadOnlyList<Line> Lines => _lines;
+
+    /// <summary>
+    /// The commands, by name.
+    /// </summary>
     public IEnumerable<ConsoleCommand> Commands => _commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
 
     /// <summary>
@@ -60,6 +124,9 @@ public sealed class DevConsole
     /// </summary>
     public Action<string, Kind>? Tap { get; set; }
 
+    /// <summary>
+    /// Adds <paramref name="command"/>, replacing one of its name.
+    /// </summary>
     public void Register(ConsoleCommand command) => _commands[command.Name] = command;
 
     /// <summary>
@@ -95,8 +162,14 @@ public sealed class DevConsole
         Scroll = 0;
     }
 
+    /// <summary>
+    /// Prints <paramref name="text"/> as an error.
+    /// </summary>
     public void Error(string text) => Print(text, Kind.Error);
 
+    /// <summary>
+    /// Empties the scrollback.
+    /// </summary>
     public void Clear()
     {
         _lines.Clear();
@@ -105,29 +178,47 @@ public sealed class DevConsole
 
     // ---- editing
 
+    /// <summary>
+    /// Types <paramref name="c"/> at the caret (not a control character or the toggle key's own).
+    /// </summary>
     public void Type(char c)
     {
         if (char.IsControl(c) || c == '`') return;   // the toggle key's own character
         Input = Input.Insert(Caret++, c.ToString());
     }
 
+    /// <summary>
+    /// Types <paramref name="text"/>, line ends as spaces.
+    /// </summary>
     public void Paste(string text)
     {
         foreach (char c in text.ReplaceLineEndings(" ")) Type(c);
     }
 
+    /// <summary>
+    /// Deletes the character before the caret.
+    /// </summary>
     public void Backspace()
     {
         if (Caret > 0) Input = Input.Remove(--Caret, 1);
     }
 
+    /// <summary>
+    /// Deletes the character after the caret.
+    /// </summary>
     public void Delete()
     {
         if (Caret < Input.Length) Input = Input.Remove(Caret, 1);
     }
 
+    /// <summary>
+    /// Puts the caret at <paramref name="to"/>, within the input.
+    /// </summary>
     public void MoveCaret(int to) => Caret = Math.Clamp(to, 0, Input.Length);
 
+    /// <summary>
+    /// Walks the history up (-1) or down (+1); past the newest the typed input comes back.
+    /// </summary>
     public void HistoryStep(int direction)
     {
         if (_history.Count == 0) return;
@@ -149,6 +240,9 @@ public sealed class DevConsole
         SetInput(_history[_historyAt]);
     }
 
+    /// <summary>
+    /// Sets the input line with the caret at its end.
+    /// </summary>
     void SetInput(string text) => (Input, Caret) = (text, text.Length);
 
     /// <summary>
@@ -223,6 +317,9 @@ public sealed class DevConsole
         return row[b.Length];
     }
 
+    /// <summary>
+    /// The command named <paramref name="name"/>; null for none.
+    /// </summary>
     public ConsoleCommand? Find(string name) => _commands.GetValueOrDefault(name);
 
     /// <summary>
@@ -313,8 +410,14 @@ public sealed class DevConsole
         Caret = start + fill.Length;
     }
 
+    /// <summary>
+    /// <paramref name="word"/> in double quotes when it holds a space (the closing quote with <paramref name="close"/>).
+    /// </summary>
     static string Quote(string word, bool close) => word.Contains(' ') ? $"\"{word}{(close ? "\"" : "")}" : word;
 
+    /// <summary>
+    /// The longest common prefix of <paramref name="a"/> and <paramref name="b"/>, ignoring case.
+    /// </summary>
     static string CommonPrefix(string a, string b)
     {
         int n = 0;

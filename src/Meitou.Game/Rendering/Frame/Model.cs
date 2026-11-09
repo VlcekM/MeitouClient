@@ -11,8 +11,19 @@ namespace Meitou.Game.Rendering.Frame;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Vertex
 {
+    /// <summary>
+    /// The vertex position in the mesh's space.
+    /// </summary>
     public Vector3 Position;
+
+    /// <summary>
+    /// The vertex normal.
+    /// </summary>
     public Vector3 Normal;
+
+    /// <summary>
+    /// The texture coordinates of the first set.
+    /// </summary>
     public Vector2 Uv;
 
     /// <summary>
@@ -29,20 +40,61 @@ public struct Vertex
     /// Four bone handles, one byte each.
     /// </summary>
     public uint Bones;
+
+    /// <summary>
+    /// The four bone weights matching <see cref="Bones"/>, normalised (all zero: not skinned).
+    /// </summary>
     public Vector4 Weights;
 
+    /// <summary>
+    /// The struct's size in bytes.
+    /// </summary>
     public static readonly int Size = Marshal.SizeOf<Vertex>();
 }
 
+/// <summary>
+/// One submesh of a <see cref="Model"/>: its material and triangle list over its own vertices.
+/// </summary>
 public sealed class ModelPart
 {
+    /// <summary>
+    /// The submesh's index in the Ogre mesh.
+    /// </summary>
     public required int SubMeshIndex { get; init; }
+
+    /// <summary>
+    /// The material name the mesh gives the submesh.
+    /// </summary>
     public required string MaterialName { get; init; }
+
+    /// <summary>
+    /// The submesh's vertices, deinterleaved into <see cref="Vertex"/>.
+    /// </summary>
     public required Vertex[] Vertices { get; init; }
+
+    /// <summary>
+    /// The triangle list over <see cref="Vertices"/> (strips and fans converted).
+    /// </summary>
     public required uint[] Indices { get; init; }
+
+    /// <summary>
+    /// Whether the vertex data has texture coordinates.
+    /// </summary>
     public bool HasUv { get; init; }
+
+    /// <summary>
+    /// Whether the vertex data has tangents.
+    /// </summary>
     public bool HasTangents { get; init; }
+
+    /// <summary>
+    /// Whether the vertex data has vertex colours.
+    /// </summary>
     public bool HasColours { get; init; }
+
+    /// <summary>
+    /// Whether the vertices carry bone weights (built from the bone assignments for a skeleton).
+    /// </summary>
     public bool Skinned { get; init; }
 
     /// <summary>
@@ -57,12 +109,34 @@ public sealed class ModelPart
 /// </summary>
 public sealed class Model
 {
+    /// <summary>
+    /// The submeshes that are drawn, in mesh order (empty vertex data and unsupported operations left out).
+    /// </summary>
     public List<ModelPart> Parts { get; } = [];
+
+    /// <summary>
+    /// The smallest corner of the vertices' bounds (the origin when there are no parts).
+    /// </summary>
     public Vector3 Min { get; private set; }
+
+    /// <summary>
+    /// The largest corner of the vertices' bounds (1, 1, 1 when there are no parts).
+    /// </summary>
     public Vector3 Max { get; private set; }
+
+    /// <summary>
+    /// What the build left out or could not read, one line each.
+    /// </summary>
     public List<string> Warnings { get; } = [];
 
+    /// <summary>
+    /// The middle of the bounds.
+    /// </summary>
     public Vector3 Center => (Min + Max) / 2;
+
+    /// <summary>
+    /// Half the bounds' diagonal (at least 0.001).
+    /// </summary>
     public float Radius => Math.Max((Max - Min).Length() / 2, 1e-3f);
 
     /// <summary>
@@ -96,6 +170,9 @@ public sealed class Model
         return Parts.Count == 0 ? (Min, Max) : (min, max);
     }
 
+    /// <summary>
+    /// The model of <paramref name="mesh"/>: a part per drawable submesh with its vertices and indices, and the bounds of them all.
+    /// </summary>
     /// <param name="boneCount">Bones in the skeleton the mesh will be skinned with, or null to drop skinning.</param>
     /// <param name="gameBinormals">Characters: the tangent's w makes cross(normal, tangent) × w the game's binormal, the mesh's BINORMAL × the
     /// stored w (1 when the tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD").
@@ -136,6 +213,10 @@ public sealed class Model
         return model;
     }
 
+    /// <summary>
+    /// Submesh <paramref name="s"/>'s indices as a triangle list: a list as it is, a strip or fan converted; null (with a warning) for another
+    /// operation.
+    /// </summary>
     static uint[]? Triangulate(OgreSubMesh sub, List<string> warnings, int s)
     {
         var src = sub.Indices.Indices;
@@ -166,6 +247,10 @@ public sealed class Model
         }
     }
 
+    /// <summary>
+    /// Submesh <paramref name="s"/>'s vertices read into <see cref="Vertex"/> and skinned from <paramref name="assignments"/>, with its triangle list
+    /// <paramref name="indices"/>.
+    /// </summary>
     static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices,
         List<string> warnings, bool gameBinormals, bool tangentSign)
     {
@@ -274,6 +359,10 @@ public sealed class Model
         }
     }
 
+    /// <summary>
+    /// The floats of <paramref name="semantic"/>'s element in <paramref name="vd"/> and its component count; null (0 components) when the data has
+    /// none.
+    /// </summary>
     static float[]? Floats(OgreVertexData vd, OgreVertexSemantic semantic, out int components)
     {
         components = 0;

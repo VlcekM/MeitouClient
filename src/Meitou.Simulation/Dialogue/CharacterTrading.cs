@@ -14,7 +14,21 @@ namespace Meitou.Simulation.Dialogue;
 /// 43, <c>CharacterTrading_PrisonerBailout</c>; Meitou shows bail as a conversation list, <see cref="DialogueSystem"/>) and animals (DA 48,
 /// <c>CharacterTrading_AnimalBuying</c>).
 /// </summary>
-public enum CharacterTradeKind : byte { SlaveSelling, SlaveBuying, AnimalBuying }
+public enum CharacterTradeKind : byte
+{
+    /// <summary>
+    /// The player sells slaves (<c>CharacterTrading_SlaveSelling</c>).
+    /// </summary>
+    SlaveSelling,
+    /// <summary>
+    /// The player buys slaves (<c>CharacterTrading_SlaveBuying</c>).
+    /// </summary>
+    SlaveBuying,
+    /// <summary>
+    /// The player buys animals (DA 48, <c>CharacterTrading_AnimalBuying</c>).
+    /// </summary>
+    AnimalBuying
+}
 
 /// <summary>
 /// One row of the window (<c>Kenshi_CharacterSelectionBox</c>): the character, its name, its price and the label/value lines of its two stats panels.
@@ -386,7 +400,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// (<see cref="TamedStats"/>) and joins the player as a recruit does; what its backpack held goes back to the seller's squad, each item into the
     /// first backpack of the seller's squad members (from the last member back) that takes it, the rest destroyed. Then the total is taken from the
     /// player's money. The original then opens the in-play character editor (mode 1) on the animals bought, none when none was
-    /// (<see cref="OpenAnimalEditor"/>).
+    /// (<see cref="DialogueSystem.OpenAnimalEditor"/>).
     /// </summary>
     void BuyAnimals(World world, CharacterTrade t, int seller, List<(int Slot, CharacterCold Cold, long Price)> chosen, long total)
     {

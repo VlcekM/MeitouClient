@@ -18,41 +18,141 @@ sealed class PostComposite : IDisposable
 {
     #region Setup
 
+    /// <summary>
+    /// The luminance measure's side in pixels, and its mip count (256 down to 1).
+    /// </summary>
     const int LuminanceSize = 256, LuminanceLevels = 9;
+    /// <summary>
+    /// The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s), as <see cref="PostProcess"/>'s.
+    /// </summary>
     const float AdaptationRate = 0.5f;
 
+    /// <summary>
+    /// The device the passes run on.
+    /// </summary>
     readonly IGpuContext _ctx;
+    /// <summary>
+    /// The composite, luminance and adaptation programs.
+    /// </summary>
     readonly LegacyProgram _composite, _luminance, _adapt;
+    /// <summary>
+    /// The composite program's uniforms.
+    /// </summary>
     readonly UniformHandle _exposure, _useAo, _dither, _auto, _tone, _toneMix, _grade, _saturation, _contrast, _night, _balance, _sceneSize;
+    /// <summary>
+    /// The luminance program's cell size, and the adaptation program's level, blend and band.
+    /// </summary>
     readonly UniformHandle _lumCell, _adaptLevel, _adaptBlend, _adaptBand;
+    /// <summary>
+    /// The samplers: the composite's scene, occlusion and adapted luminance, the luminance pass's scene, the adaptation pass's luminance and last
+    /// value.
+    /// </summary>
     readonly SamplerSlot _sceneSlot, _aoSlot, _adaptedSlot, _lumSceneSlot, _lumSlot, _lastSlot;
 
+    /// <summary>
+    /// The SSAO pass.
+    /// </summary>
     readonly SsaoPass _ssao;
+    /// <summary>
+    /// The SSAO blur pass.
+    /// </summary>
     readonly BlurPass _blur;
+    /// <summary>
+    /// The occlusion's multiply pass.
+    /// </summary>
     readonly ApplyPass _apply;
+    /// <summary>
+    /// The fog volumes pass.
+    /// </summary>
     readonly FogPass _fog;
+    /// <summary>
+    /// The light shafts' inject pass.
+    /// </summary>
     readonly ShaftInjectPass _shaftInjectP;
+    /// <summary>
+    /// The light shafts' integrate pass.
+    /// </summary>
     readonly ShaftIntegratePass _shaftIntegrateP;
+    /// <summary>
+    /// The light shafts' scatter pass.
+    /// </summary>
     readonly ShaftScatterPass _shaftScatterP;
+    /// <summary>
+    /// The light shafts' apply pass.
+    /// </summary>
     readonly ShaftApplyPass _shaftApplyP;
+    /// <summary>
+    /// The FXAA pass.
+    /// </summary>
     readonly FxaaPass _fxaa;
+    /// <summary>
+    /// SMAA's three passes.
+    /// </summary>
     readonly SmaaPasses _smaa;
+    /// <summary>
+    /// The heat haze pass.
+    /// </summary>
     readonly HeatHazePass _haze;
+    /// <summary>
+    /// The low-resolution particles' depth downsample pass.
+    /// </summary>
     readonly ParticleDepthPass _particleDepthP;
+    /// <summary>
+    /// The low-resolution particles' composite pass.
+    /// </summary>
     readonly ParticleCompositePass _particleCompositeP;
+    /// <summary>
+    /// The low-resolution particles' coverage pass.
+    /// </summary>
     readonly ParticleCoveragePass _particleCoverageP;
+    /// <summary>
+    /// The pass pipelines made so far, by program, target format and state.
+    /// </summary>
     readonly Dictionary<(GpuProgram Program, InternalFormat Format, DrawState State), GraphicsPipelineDesc> _pipelines = [];
+    /// <summary>
+    /// The clamped samplers: linear (the scene), mipmapped nearest (the luminance), linear, nearest and trilinear.
+    /// </summary>
     readonly SampledTexture _sceneSampler, _luminanceSampler, _plainSampler, _pointSampler, _linearMipSampler;
 
+    /// <summary>
+    /// The luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong).
+    /// </summary>
     GpuTexture? _luminanceTarget, _adaptA, _adaptB;
+    /// <summary>
+    /// The LDR picture, FXAA's (or SMAA's) output, and SMAA's edges and weights; made when a frame needs them.
+    /// </summary>
     GpuTexture? _ldr, _ldrFxaa, _smaaEdges, _smaaWeights;
+    /// <summary>
+    /// The SSAO's half-size targets.
+    /// </summary>
     GpuTexture? _aoA, _aoB;
+    /// <summary>
+    /// The light shafts' injected, light and scatter atlases.
+    /// </summary>
     GpuTexture? _shaftInjected, _shaftLight, _shaftScatter;
+    /// <summary>
+    /// The heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze).
+    /// </summary>
     GpuTexture? _flowTexture, _perturbationTexture;
+    /// <summary>
+    /// This frame's shafts' grid, range, tan and darkening, which the fog volumes' shadow reads (default: no shafts).
+    /// </summary>
     (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) _shaftFrame;
+    /// <summary>
+    /// The scene and display sizes the targets were made for.
+    /// </summary>
     int _sceneWidth, _sceneHeight, _displayWidth, _displayHeight;
+    /// <summary>
+    /// The timestamp of the last adaptation (0: none yet), for the smoothing.
+    /// </summary>
     long _adaptClock;
+    /// <summary>
+    /// Whether the adapted target holds a value.
+    /// </summary>
     bool _adaptedValid;
+    /// <summary>
+    /// Adaptation passes since the targets were made (up to 2: both ping-pong targets seeded).
+    /// </summary>
     int _adaptedFrames;
 
     /// <summary>
@@ -61,6 +161,9 @@ sealed class PostComposite : IDisposable
     public readonly record struct SceneInputs(Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect, float Near, float Far,
         bool CharactersDrawn = true, float? WaterHeight = null);
 
+    /// <summary>
+    /// Compiles the composite, exposure and fullscreen pass programs and looks up their uniforms.
+    /// </summary>
     /// <param name="flipY">The backend's render targets are not stored flipped (Metal's are not: the present flips the picture,
     /// where Vulkan's negative viewport does the flip into the target itself), so the fullscreen passes sample the scene bottom-up.</param>
     public PostComposite(IGpuContext ctx, bool flipY = false)
@@ -442,6 +545,9 @@ sealed class PostComposite : IDisposable
             Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts scatter"));
     }
 
+    /// <summary>
+    /// The placed fog volumes in one pass over <paramref name="scene"/>, shadowed by this frame's shafts.
+    /// </summary>
     void RunFogVolumes(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
     {
         var f = _fog;
@@ -473,6 +579,9 @@ sealed class PostComposite : IDisposable
         Fullscreen(cmd, f.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
     }
 
+    /// <summary>
+    /// The SSAO at half size, blurred, then multiplied into <paramref name="scene"/>.
+    /// </summary>
     void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
     {
         int w = Math.Max((scene.Desc.Width + 1) / 2, 1), h = Math.Max((scene.Desc.Height + 1) / 2, 1);
@@ -532,10 +641,16 @@ sealed class PostComposite : IDisposable
 
     #region Targets
 
+    /// <summary>
+    /// A clamped sampler with the GL filters <paramref name="min"/> and <paramref name="mag"/>, no LOD bias.
+    /// </summary>
     SampledTexture Sample(TextureMinFilter min, TextureMagFilter mag) =>
         new(_ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat,
             false, DepthFunction.Lequal, false, 1, false, 0)), default);
 
+    /// <summary>
+    /// Notes the scene size; a new one drops the SSAO targets.
+    /// </summary>
     void EnsureScene(int w, int h)
     {
         if (w == _sceneWidth && h == _sceneHeight) return;
@@ -548,6 +663,9 @@ sealed class PostComposite : IDisposable
         _aoA = _aoB = null;
     }
 
+    /// <summary>
+    /// Notes the display size; a new one drops the LDR, FXAA and SMAA targets.
+    /// </summary>
     void EnsureDisplay(int w, int h)
     {
         if (w == _displayWidth && h == _displayHeight) return;
@@ -560,6 +678,9 @@ sealed class PostComposite : IDisposable
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = null;
     }
 
+    /// <summary>
+    /// Makes the exposure targets once, and the LDR, FXAA and SMAA targets the options need.
+    /// </summary>
     void MakeTargets(PostOptions o, bool temporal)
     {
         if (_luminanceTarget is null)
@@ -596,6 +717,9 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// Uploads a heat haze texture: BC1 as it is, else decoded to RGBA8, with its mips.
+    /// </summary>
     GpuTexture HazeTexture(DdsFile dds, string name)
     {
         bool bc1 = dds.Format == DdsFormat.Bc1;
@@ -723,6 +847,9 @@ sealed class PostComposite : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Frees the targets, the textures, the programs and the passes.
+    /// </summary>
     public void Dispose()
     {
         _luminanceTarget?.Dispose();
@@ -760,15 +887,34 @@ sealed class PostComposite : IDisposable
 
     #region Pass classes
 
+    /// <summary>
+    /// One full-screen program: the vertex shader given with a fragment shader.
+    /// </summary>
     abstract class Pass(IGpuContext ctx, string vertex, string fragment, string name)
     {
+        /// <summary>
+        /// The program.
+        /// </summary>
         public readonly LegacyProgram P = LegacyProgram.Create(ctx, vertex, fragment, name);
     }
 
+    /// <summary>
+    /// The SSAO (<see cref="PostProcessShaders.Ssao"/>).
+    /// </summary>
     sealed class SsaoPass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uDepth</c>, <c>uMask</c>.
+        /// </summary>
         public readonly SamplerSlot Depth, Mask;
+        /// <summary>
+        /// The program's uniforms <c>uTan</c>, <c>uNearFar</c>, <c>uSize</c>, <c>uRadius</c>, <c>uStrength</c>, <c>uFadeStart</c>, <c>uFadeEnd</c>,
+        /// <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uSsaoEye</c>, <c>uCharacterOccluder</c>, <c>uWaterY</c>.
+        /// </summary>
         public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public SsaoPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
@@ -779,26 +925,63 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// The SSAO's blur (<see cref="PostProcessShaders.SsaoBlur"/>).
+    /// </summary>
     sealed class BlurPass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uAo</c>, <c>uMask</c>.
+        /// </summary>
         public readonly SamplerSlot Ao, Mask;
+        /// <summary>
+        /// The program's uniforms <c>uStep</c>, <c>uCharacterAo</c>.
+        /// </summary>
         public readonly UniformHandle Step, CharacterAo;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public BlurPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.SsaoBlur, "post ssao blur") =>
             (Ao, Mask, Step, CharacterAo) = (P.Sampler("uAo"), P.Sampler("uMask"), P.Uniform("uStep"), P.Uniform("uCharacterAo"));
     }
 
+    /// <summary>
+    /// The occlusion multiplied into the scene colour (<see cref="PostProcessShaders.SsaoApply"/>).
+    /// </summary>
     sealed class ApplyPass : Pass
     {
+        /// <summary>
+        /// The program's sampler <c>uAo</c>.
+        /// </summary>
         public readonly SamplerSlot Ao;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ApplyPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.SsaoApply, "post ssao apply") =>
             Ao = P.Sampler("uAo");
     }
 
+    /// <summary>
+    /// The placed fog volumes (<see cref="PostProcessShaders.FogVolumes"/>).
+    /// </summary>
     sealed class FogPass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uShaftInjected</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, ShaftInjected;
+        /// <summary>
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uWaterY</c>.
+        /// </summary>
         public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, WaterY;
+        /// <summary>
+        /// The program's uniforms <c>uShaftGrid</c>, <c>uShaftRange</c>, <c>uShaftTan</c>, <c>uShaftRight</c>, <c>uShaftUp</c>, <c>uShaftBack</c>,
+        /// <c>uShaftFog</c>.
+        /// </summary>
         public readonly UniformHandle ShaftGrid, ShaftRange, ShaftTan, ShaftRight, ShaftUp, ShaftBack, ShaftFog;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FogPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.FogVolumes, "post fog volumes")
         {
             NearDepth = P.Sampler("uNearDepth");
@@ -811,9 +994,19 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// A light shafts pass: the grid's shared uniforms.
+    /// </summary>
     abstract class ShaftPass : Pass
     {
+        /// <summary>
+        /// The program's uniforms <c>uShaftGrid</c>, <c>uShaftRange</c>, <c>uShaftEye</c>, <c>uShaftTan</c>, <c>uShaftRight</c>, <c>uShaftUp</c>,
+        /// <c>uShaftBack</c>.
+        /// </summary>
         public readonly UniformHandle Grid, Range, Eye, Tan, Right, Up, Back;
+        /// <summary>
+        /// Compiles the program and resolves the shared uniforms.
+        /// </summary>
         protected ShaftPass(IGpuContext ctx, string vertex, string fragment, string name) : base(ctx, vertex, fragment, name)
         {
             (Grid, Range, Eye, Tan) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"));
@@ -821,32 +1014,74 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// The shafts' inject pass (<see cref="LightShaftShaders.Inject"/>).
+    /// </summary>
     sealed class ShaftInjectPass : ShaftPass
     {
+        /// <summary>
+        /// The program's uniform <c>uShaftSamples</c>.
+        /// </summary>
         public readonly UniformHandle Samples;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftInjectPass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Inject, "post shafts inject") =>
             Samples = P.Uniform("uShaftSamples");
     }
 
+    /// <summary>
+    /// The shafts' integrate pass (<see cref="LightShaftShaders.Integrate"/>).
+    /// </summary>
     sealed class ShaftIntegratePass : ShaftPass
     {
+        /// <summary>
+        /// The program's sampler <c>uShaftInjected</c>.
+        /// </summary>
         public readonly SamplerSlot Injected;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftIntegratePass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Integrate, "post shafts integrate") =>
             Injected = P.Sampler("uShaftInjected");
     }
 
+    /// <summary>
+    /// The shafts' scatter pass (<see cref="LightShaftShaders.Scatter"/>).
+    /// </summary>
     sealed class ShaftScatterPass : ShaftPass
     {
+        /// <summary>
+        /// The program's sampler <c>uShaftInjected</c>.
+        /// </summary>
         public readonly SamplerSlot Injected;
+        /// <summary>
+        /// The program's uniform <c>uShaftAir</c>.
+        /// </summary>
         public readonly UniformHandle Air;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftScatterPass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Scatter, "post shafts scatter") =>
             (Injected, Air) = (P.Sampler("uShaftInjected"), P.Uniform("uShaftAir"));
     }
 
+    /// <summary>
+    /// The shafts' apply pass (<see cref="LightShaftShaders.Apply"/>).
+    /// </summary>
     sealed class ShaftApplyPass : ShaftPass
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uShaftLight</c>, <c>uShaftScatter</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, Light, Scatter;
+        /// <summary>
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uWaterY</c>, <c>uShaftAtlas</c>, <c>uShaftParams</c>, <c>uShaftAir</c>.
+        /// </summary>
         public readonly UniformHandle NearPlanes, WaterY, Atlas, Params, Air;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftApplyPass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Apply, "post shafts apply")
         {
             (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
@@ -856,10 +1091,22 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// The game's FXAA (<see cref="PostProcessShaders.Fxaa"/>).
+    /// </summary>
     sealed class FxaaPass : Pass
     {
+        /// <summary>
+        /// The program's sampler <c>uImage</c>.
+        /// </summary>
         public readonly SamplerSlot Image;
+        /// <summary>
+        /// The program's uniform <c>uTexel</c>.
+        /// </summary>
         public readonly UniformHandle Texel;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FxaaPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Fxaa, "post fxaa") =>
             (Image, Texel) = (P.Sampler("uImage"), P.Uniform("uTexel"));
     }
@@ -869,8 +1116,17 @@ sealed class PostComposite : IDisposable
     /// </summary>
     sealed class SmaaPasses
     {
+        /// <summary>
+        /// The edges, weights and blend programs.
+        /// </summary>
         public readonly LegacyProgram Edges, Weights, Blend;
+        /// <summary>
+        /// The samplers: the edges pass's <c>uImage</c>, the weights pass's <c>uEdges</c>, the blend pass's <c>uImage</c> and <c>uWeights</c>.
+        /// </summary>
         public readonly SamplerSlot EdgesImage, WeightsEdges, BlendImage, BlendWeights;
+        /// <summary>
+        /// Compiles the three programs and resolves their samplers.
+        /// </summary>
         public SmaaPasses(IGpuContext ctx, string vertex)
         {
             Edges = LegacyProgram.Create(ctx, vertex, PostProcessShaders.SmaaEdges, "post smaa edges");
@@ -879,13 +1135,28 @@ sealed class PostComposite : IDisposable
             (EdgesImage, WeightsEdges) = (Edges.Sampler("uImage"), Weights.Sampler("uEdges"));
             (BlendImage, BlendWeights) = (Blend.Sampler("uImage"), Blend.Sampler("uWeights"));
         }
+        /// <summary>
+        /// Frees the three programs.
+        /// </summary>
         public void Dispose() { Edges.Dispose(); Weights.Dispose(); Blend.Dispose(); }
     }
 
+    /// <summary>
+    /// The game's heat haze (<see cref="PostProcessShaders.HeatHaze"/>).
+    /// </summary>
     sealed class HeatHazePass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uFlow</c>, <c>uPerturbation</c>, <c>uDepth</c>, <c>uImage</c>.
+        /// </summary>
         public readonly SamplerSlot Flow, Perturbation, Depth, Image;
+        /// <summary>
+        /// The program's uniforms <c>uPhase</c>, <c>uAmount</c>, <c>uTan</c>, <c>uNearFar</c>, <c>uFarClip</c>, <c>uHasDepth</c>.
+        /// </summary>
         public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public HeatHazePass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.HeatHaze, "post heat haze")
         {
             (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
@@ -894,19 +1165,43 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// The low-resolution particles' depth downsample (<see cref="PostProcessShaders.ParticleDepth"/>).
+    /// </summary>
     sealed class ParticleDepthPass : Pass
     {
+        /// <summary>
+        /// The program's sampler <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Depth;
+        /// <summary>
+        /// The program's uniforms <c>uFullSize</c>, <c>uDiv</c>, <c>uLayer</c>, <c>uPlanes</c>.
+        /// </summary>
         public readonly UniformHandle FullSize, Div, Layer, Planes;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleDepthPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleDepth, "post particle depth") =>
             (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"),
                     P.Uniform("uPlanes"));
     }
 
+    /// <summary>
+    /// The low-resolution particles over the scene (<see cref="PostProcessShaders.ParticleComposite"/>).
+    /// </summary>
     sealed class ParticleCompositePass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uAccum</c>, <c>uLowDepth</c>, <c>uAccumFar</c>, <c>uLowDepthFar</c>, <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
+        /// <summary>
+        /// The program's uniforms <c>uLowSize</c>, <c>uNearPlanes</c>, <c>uDiv</c>, <c>uScale</c>, <c>uFootprint</c>.
+        /// </summary>
         public readonly UniformHandle LowSize, NearPlanes, Div, Scale, Footprint;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleCompositePass(IGpuContext ctx, string vertex) : base(ctx, vertex,
             PostProcessShaders.ParticleComposite, "post particle composite")
         {
@@ -917,10 +1212,22 @@ sealed class PostComposite : IDisposable
         }
     }
 
+    /// <summary>
+    /// The low-resolution particles' coverage for the reactive mask (<see cref="PostProcessShaders.ParticleCoverage"/>).
+    /// </summary>
     sealed class ParticleCoveragePass : Pass
     {
+        /// <summary>
+        /// The program's samplers <c>uAccum</c>, <c>uLowDepth</c>, <c>uAccumFar</c>, <c>uLowDepthFar</c>, <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
+        /// <summary>
+        /// The program's uniforms <c>uLowSize</c>, <c>uNearPlanes</c>, <c>uDiv</c>, <c>uFullSize</c>, <c>uLimit</c>.
+        /// </summary>
         public readonly UniformHandle LowSize, NearPlanes, Div, FullSize, Limit;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleCoveragePass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleCoverage, "post particle coverage")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));

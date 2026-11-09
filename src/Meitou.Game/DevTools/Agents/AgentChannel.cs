@@ -21,53 +21,117 @@ sealed class AgentChannel(GameHost host)
     /// The whole interface hidden (F7, or the <c>hud hide</c> console command).
     /// </summary>
     internal bool InterfaceHidden;
+
+    /// <summary>
+    /// The control directory (<c>--control-dir</c>, else <c>MEITOU_CONTROL_DIR</c>; null without one), and the <c>--exec</c> list not yet run.
+    /// </summary>
     internal string? ControlDir, ExecPending;
+
     /// <summary>
     /// When the world was first seen loaded (for the setup's settle wait), and the exit code the run ends with (0, or 3 when a setup command failed).
     /// </summary>
     long _setupLoadedAt, _shotDueAt;
+
     /// <summary>
     /// --screenshot-after: the setup is done and the timer runs (shotDueAt), or the picture was asked for and its save ends the run.
     /// </summary>
     bool _autoShotTimer, _autoShotAsked;
+
+    /// <summary>
+    /// The exit code the run ends with: 0, or 3 when a setup command failed.
+    /// </summary>
     internal int ControlExitCode;
+
+    /// <summary>
+    /// The Stopwatch time of the next command file poll (every 0.25 s).
+    /// </summary>
     long _nextControlPoll;
+
     /// <summary>
     /// The settings window of the interactive loop (null in the one-shot modes), for the console commands.
     /// </summary>
     internal SettingsMenu? SettingsPanel;
+
     /// <summary>
     /// The id whose result waits for the screenshot's frame to be saved, and the file it goes to.
     /// </summary>
     internal string? ShotWaitId, ShotPath, CurrentControlId;
+
     /// <summary>
     /// Structured result of the running control command (raw JSON), for the file channel; the console keeps its printed text.
     /// </summary>
     internal string? ControlData;
+
     /// <summary>
     /// Event stream: on by default, last snapshot, event counter, start time; pending wait-for conditions; replies held a few frames to report
     /// "changed".
     /// </summary>
     internal bool ControlEvents = true, ControlReplyDeferred;
+
+    /// <summary>
+    /// The snapshot of the last poll tick; null before the first.
+    /// </summary>
     ControlSnap? _lastSnap;
+
+    /// <summary>
+    /// The last event's sequence number.
+    /// </summary>
     private long _controlSeq;
+
+    /// <summary>
+    /// When the channel started (Stopwatch), the events' clock.
+    /// </summary>
     private readonly long _controlStart = Stopwatch.GetTimestamp();
+
+    /// <summary>
+    /// The pending wait-for conditions.
+    /// </summary>
     readonly List<ControlWait> _controlWaits = [];
+
+    /// <summary>
+    /// The replies held a few frames to report whether the screen or page changed.
+    /// </summary>
     readonly List<ControlSettle> _controlSettles = [];
 
     /// <summary>
     /// The small state diffed every poll tick for events and changed.
     /// </summary>
     sealed record ControlSnap(string Screens, string Screen, string Page, bool Loaded, string Mode, int Selected);
+
+    /// <summary>
+    /// A pending wait-for: the command id, the condition's key and value, the deadline and start (Stopwatch) and the timeout in seconds.
+    /// </summary>
     sealed record ControlWait(string Id, string Key, string Value, long Deadline, long Started, double TimeoutSeconds);
+
+    /// <summary>
+    /// A reply held a few frames: its id, text, data and the snapshot before the command, written with "changed" when the frames are up.
+    /// </summary>
     sealed class ControlSettle(string id, string text, string? data, ControlSnap before)
     {
+        /// <summary>
+        /// The command id and the reply text.
+        /// </summary>
         public string Id = id, Text = text;
+
+        /// <summary>
+        /// The reply's raw JSON data; null for none.
+        /// </summary>
         public string? Data = data;
+
+        /// <summary>
+        /// The snapshot before the command.
+        /// </summary>
         public ControlSnap Before = before;
+
+        /// <summary>
+        /// The frames left before the reply is written.
+        /// </summary>
         public int Frames = 4;
     }
 
+    /// <summary>
+    /// Reads the control directory (made when missing) and the <c>--exec</c> list.
+    /// </summary>
     internal void InitControl()
     {
         ControlDir = host.GameOptions.ControlDir ?? Environment.GetEnvironmentVariable("MEITOU_CONTROL_DIR");
@@ -154,7 +218,11 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
+    /// <summary>
+    /// The setup commands not yet run.
+    /// </summary>
     readonly Queue<string> _execQueue = new();
+
     /// <summary>
     /// The setup command whose deferred reply (wait-for, order move --wait, spawn-at) is still pending; the setup list goes on when it arrives.
     /// </summary>
@@ -190,6 +258,9 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Ends the setup list after <paramref name="part"/> failed: exit code 3, the rest skipped.
+    /// </summary>
     void ExecFailed(string part)
     {
         Console.WriteLine($"setup     setup failed: '{part}' (the rest was skipped)");
@@ -264,8 +335,14 @@ sealed class AgentChannel(GameHost host)
         con.Print(ControlDir is null ? json : $"{json.Length} bytes of JSON");
     }
 
+    /// <summary>
+    /// Seconds since the channel started, two decimals.
+    /// </summary>
     double ControlNow() => Math.Round(Stopwatch.GetElapsedTime(_controlStart).TotalSeconds, 2);
 
+    /// <summary>
+    /// The open screens, with <c>settings</c> when the settings window shows.
+    /// </summary>
     IReadOnlyList<string> ControlScreenSet()
     {
         var l = new List<string>(host.Player.OpenScreens);
@@ -273,6 +350,9 @@ sealed class AgentChannel(GameHost host)
         return l;
     }
 
+    /// <summary>
+    /// The snapshot diffed for events: the open screens, the top screen, the settings page, loaded, the UI mode and the selection count.
+    /// </summary>
     ControlSnap ControlSnapshot()
     {
         bool loaded = !host.Covered && !host.Player.TitleOpen;
@@ -299,8 +379,13 @@ sealed class AgentChannel(GameHost host)
         {
             if (old.Screens != now.Screens)
             {
-                ControlEvent("screen", w => { w.WriteString("screen",
-                    now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });
+                ControlEvent("screen", w =>
+                {
+                    w.WriteString("screen", now.Screen);
+                    w.WriteStartArray("screens");
+                    foreach (string s in ControlScreenSet()) w.WriteStringValue(s);
+                    w.WriteEndArray();
+                });
             }
             if (old.Page != now.Page)
                 ControlEvent("settings-page", w => w.WriteString("page", now.Page.Length > 0 ? now.Page : null));
@@ -325,6 +410,9 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Appends event <paramref name="kind"/> to <c>out</c>: its sequence number, time and the data <paramref name="data"/> writes.
+    /// </summary>
     void ControlEvent(string kind, Action<Utf8JsonWriter> data)
     {
         using var stream = new MemoryStream();
@@ -349,6 +437,10 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Whether wait-for condition <paramref name="key"/> = <paramref name="value"/> holds now (screen, settings page, loaded, mode, widget, no
+    /// widget, else the world layer's).
+    /// </summary>
     bool WaitHolds(string key, string value, ControlSnap now)
     {
         switch (key)
@@ -365,6 +457,9 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Replies to a wait-for: ok or timeout, with the key, value and the real milliseconds waited.
+    /// </summary>
     void WaitReply(ControlWait wt, bool ok)
     {
         double ms = Math.Round(Stopwatch.GetElapsedTime(wt.Started).TotalMilliseconds);
@@ -467,6 +562,9 @@ sealed class AgentChannel(GameHost host)
 
     // ---- commands
 
+    /// <summary>
+    /// The top screen's name: settings, loading, title, debug-menu, the last open screen, else world.
+    /// </summary>
     string ControlScreen()
     {
         if (SettingsPanel?.Visible == true) return "settings";
@@ -476,6 +574,9 @@ sealed class AgentChannel(GameHost host)
         return host.Player.OpenScreens.Count > 0 ? host.Player.OpenScreens[^1] : "world";
     }
 
+    /// <summary>
+    /// The state JSON: the screens, UI mode, console, settings page, the world's state when loaded, pause, speed and the save read.
+    /// </summary>
     string ControlState()
     {
         using var stream = new MemoryStream();
@@ -500,6 +601,9 @@ sealed class AgentChannel(GameHost host)
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// Writes the world's state: the selection count, the shown tick, the first selected character's id and position, and the camera's target.
+    /// </summary>
     void WriteWorldState(Utf8JsonWriter w)
     {
         var snapshot = host.Session.CurrentSnapshot;
@@ -799,6 +903,9 @@ sealed class AgentChannel(GameHost host)
         return list;
     }
 
+    /// <summary>
+    /// Writes widget <paramref name="x"/> with its index: label, rectangle, id, screen and, for a slider, its fraction and display text.
+    /// </summary>
     void WriteWidget(Utf8JsonWriter w, int i, ControlWidget x)
     {
         w.WriteStartObject();
@@ -817,6 +924,9 @@ sealed class AgentChannel(GameHost host)
         w.WriteEndObject();
     }
 
+    /// <summary>
+    /// The widgets as a JSON array.
+    /// </summary>
     string WidgetsJson(IEnumerable<(int Index, ControlWidget Widget)> items)
     {
         using var stream = new MemoryStream();
@@ -829,6 +939,9 @@ sealed class AgentChannel(GameHost host)
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// <c>ui-tree</c>: prints every widget with its index, label, rectangle and id; the data holds them as JSON.
+    /// </summary>
     void ControlUiTree(DevConsole con)
     {
         var widgets = ControlWidgets();
@@ -923,6 +1036,9 @@ sealed class AgentChannel(GameHost host)
         return pool[0].Widget;
     }
 
+    /// <summary>
+    /// <c>ui-click</c>: clicks the widget the arguments find (not a slider).
+    /// </summary>
     void ControlUiClick(IReadOnlyList<string> args, DevConsole con)
     {
         if (ControlFind("ui-click", args, con) is not { } w) return;
@@ -936,6 +1052,9 @@ sealed class AgentChannel(GameHost host)
         con.Print($"clicked {w.Label}");
     }
 
+    /// <summary>
+    /// <c>ui-set</c>: sets the slider the arguments find to a fraction 0..1.
+    /// </summary>
     void ControlUiSet(IReadOnlyList<string> args, DevConsole con)
     {
         if (args.Count < 2 || !float.TryParse(args[^1], System.Globalization.NumberStyles.Float,

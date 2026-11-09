@@ -17,51 +17,103 @@ using Meitou.Simulation.Weather;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// Makes the drawable half of a character (rolled by <see cref="CharacterGenerator"/>); null when it cannot be made.
-/// </summary>
-
-/// <summary>
 /// Zone activation and town residents (docs/game/game-loop.md "Update, threads and budget", factions-squads-towns.md 6.4). The active zones are the
-/// loaded ones (<see cref="RefreshLoaded"/>): the 3 x 3 block round the camera's focus (a <see cref="FocusCommand"/>) and the box of +-340 units round each
-/// player character, with a ring of one more zone when <c>Fast zone hopping</c> is on (<see cref="ZoneActivation"/>). A placed town in an active zone gets its resident squads (squad
-/// factory, then characters rolled by the generator); when its zone is no longer active for <see cref="PopulationSettings.TownUnloadGraceSeconds"/>
-/// its characters are removed (the original turns the squads into abstract "unloaded" ones, which the AI stage will do). The
-/// characters are built on a background thread when <see cref="PopulationSettings.Background"/> is set and taken in at the first tick
-/// after they are ready.
-/// <para>Residents (docs/game/factions-squads-towns.md "Town residents"): the resident table (<see cref="ResidentHomes.Entries"/>) is housed in the town's buildings
-/// and each squad made at a node of its home (<c>PopulationHomes.cs</c>); a town without building data puts each entry's v0 squads at random spots within
-/// <see cref="PopulationSettings.PlacementRadiusShare"/> of the town radius round its placed position, on dry ground (engine choice). Bar squads, the roaming squads (<c>PopulationRoaming.cs</c>) and the wild, homeless squads and nests (<c>PopulationWild.cs</c>), are made here too.</para>
+/// loaded ones (<see cref="RefreshLoaded"/>): the 3 x 3 block round the camera's focus (a <see cref="FocusCommand"/>) and the box of +-340 units
+/// round each player character, with a ring of one more zone when <c>Fast zone hopping</c> is on (<see cref="ZoneActivation"/>). A placed town in an
+/// active zone gets its resident squads (squad factory, then characters rolled by the generator); when its zone is no longer active for
+/// <see cref="PopulationSettings.TownUnloadGraceSeconds"/> its characters are removed (the original turns the squads into abstract "unloaded" ones,
+/// which the AI stage will do). The characters are built on a background thread when <see cref="PopulationSettings.Background"/> is set and taken in
+/// at the first tick after they are ready.
+/// <para>Residents (docs/game/factions-squads-towns.md "Town residents"): the resident table (<see cref="ResidentHomes.Entries"/>) is housed in the
+/// town's buildings and each squad made at a node of its home (<c>PopulationHomes.cs</c>); a town without building data puts each entry's v0 squads
+/// at random spots within <see cref="PopulationSettings.PlacementRadiusShare"/> of the town radius round its placed position, on dry ground (engine
+/// choice). Bar squads, the roaming squads (<c>PopulationRoaming.cs</c>) and the wild, homeless squads and nests (<c>PopulationWild.cs</c>), are made
+/// here too.</para>
 /// </summary>
 public sealed partial class PopulationSystem : ITickSystem, IDisposable
 {
+    /// <summary>
+    /// The population's data.
+    /// </summary>
     readonly PopulationData _data;
+    /// <summary>
+    /// The population's settings.
+    /// </summary>
     readonly PopulationSettings _settings;
+    /// <summary>
+    /// Assembles the characters made (race, stats, medical state, inventory, fighter).
+    /// </summary>
     readonly CharacterAssembly _assembly;
+    /// <summary>
+    /// Each site's resident state, by site index.
+    /// </summary>
     readonly SiteState[] _states;
 
-    // The zones the towns are centred in (a town is made when its zone is active).
+    /// <summary>
+    /// The zones the towns are centred in (a town is made when its zone is active).
+    /// </summary>
     readonly HashSet<ZoneCoordinate> _centres;
+    /// <summary>
+    /// The towns built and ready to be taken in at the next tick.
+    /// </summary>
     readonly ConcurrentQueue<BuiltTown> _built = new();
+    /// <summary>
+    /// The build thread's work queue (null: built on the tick's thread, <see cref="PopulationSettings.Background"/> off).
+    /// </summary>
     readonly BlockingCollection<Action>? _work;
+    /// <summary>
+    /// The build thread (null without <see cref="_work"/>).
+    /// </summary>
     readonly Thread? _worker;
+    /// <summary>
+    /// The camera's focus of the last <see cref="FocusCommand"/> (null: none yet).
+    /// </summary>
     Vector3? _focus;
 
-    // The zones active as of the last look (the loaded ones), and the set the next look fills (swapped, so a look allocates nothing; the host reads ActiveZones within a frame only).
+    /// <summary>
+    /// The zones active as of the last look (the loaded ones), and the set the next look fills (swapped, so a look allocates nothing; the host reads
+    /// ActiveZones within a frame only).
+    /// </summary>
     HashSet<ZoneCoordinate> _active = [], _spareActive = [];
 
-    // The player's characters, whose box is asked for at each look, and the zones of that box (a scratch set).
+    /// <summary>
+    /// The player's characters, whose box is asked for at each look, and the zones of that box (a scratch set).
+    /// </summary>
     readonly List<Vector3> _players = [];
+    /// <summary>
+    /// The zones of the player's box (see <see cref="_players"/>).
+    /// </summary>
     readonly HashSet<ZoneCoordinate> _boxZones = [];
 
-    // The original's loaded zones (ZoneLoad): each zone with the tick until which its latest request keeps it loaded (RefreshLoaded).
+    /// <summary>
+    /// The original's loaded zones (ZoneLoad): each zone with the tick until which its latest request keeps it loaded (RefreshLoaded).
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, long> _loadedUntil = [];
+    /// <summary>
+    /// The zone the 3 x 3 block round the camera is centred on (null: none yet; recentred when the camera strays).
+    /// </summary>
     ZoneCoordinate? _loadCentre;
 
+    /// <summary>
+    /// A town site's resident state: its status, the tick it unloads at, its load number and its squads.
+    /// </summary>
     sealed class SiteState
     {
+        /// <summary>
+        /// Where its residents are in their life.
+        /// </summary>
         public SiteStatus Status;
+        /// <summary>
+        /// The tick at which its residents are removed (-1: not unloading).
+        /// </summary>
         public long UnloadAtTick = -1;
+        /// <summary>
+        /// The number of its latest load: a build of an older one is dropped when it arrives.
+        /// </summary>
         public long LoadId;
+        /// <summary>
+        /// Its resident squads' ids.
+        /// </summary>
         public readonly List<int> Squads = [];
         /// <summary>
         /// A nest's top-up is being built.
@@ -81,6 +133,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         public bool Repopulate;
     }
 
+    /// <summary>
+    /// Makes the system over the population data (and its settings: the defaults when null), with the build thread when
+    /// <see cref="PopulationSettings.Background"/> is set.
+    /// </summary>
     public PopulationSystem(PopulationData data, PopulationSettings? settings = null)
     {
         this._data = data;
@@ -107,7 +163,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// The off-screen switches (<see cref="PopulationSettings.KeepRoamers"/> and the next two), changed live by the host.
     /// </summary>
     public bool KeepRoamers { get; set; }
+    /// <summary>
+    /// The off-screen fights switch (<see cref="PopulationSettings.OffscreenFights"/>), changed live by the host.
+    /// </summary>
     public bool OffscreenFights { get; set; }
+    /// <summary>
+    /// The off-screen healing switch (<see cref="PopulationSettings.OffscreenHealing"/>), changed live by the host.
+    /// </summary>
     public bool OffscreenHealing { get; set; }
     /// <summary>
     /// The campaign inheritance switch (<see cref="PopulationSettings.CampaignAncestorsOnce"/>), changed live by the host.
@@ -128,6 +190,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     public const double ScheduleAfterHours = 1;
 
+    /// <summary>
+    /// The world states of this world, answered live (see <see cref="States"/>).
+    /// </summary>
     readonly WorldStates _live;
     /// <summary>
     /// The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world
@@ -141,17 +206,36 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void RefreshStates(World world) => _live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction);
 
+    /// <summary>
+    /// Whether the tick takes every build and drains the roaming and wild queues at once (set behind the loading screen).
+    /// </summary>
     bool _drainAll;
 
+    /// <summary>
+    /// The population's data.
+    /// </summary>
     public PopulationData Data => _data;
+    /// <summary>
+    /// The population's settings.
+    /// </summary>
     public PopulationSettings Settings => _settings;
+    /// <summary>
+    /// Where the residents of site <paramref name="site"/> are in their life.
+    /// </summary>
     public SiteStatus StatusOf(int site) => _states[site].Status;
     /// <summary>
     /// The zones active as of the last look: the loaded zones (<see cref="RefreshLoaded"/>), where the squads, the items and the navmesh are kept.
     /// </summary>
     public IReadOnlyCollection<ZoneCoordinate> ActiveZones => _active;
+    /// <summary>
+    /// The camera's focus of the last <see cref="FocusCommand"/> (null: none yet).
+    /// </summary>
     public Vector3? Focus => _focus;
 
+    /// <summary>
+    /// The commands and the population's start of a tick: the artifacts, formations and forced speeds set up once, the camera's focus, the builds
+    /// taken in.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         EnsureArtifacts(world);
@@ -191,13 +275,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The RACE <c>severed limbs</c> item of <paramref name="limb"/> on the ground, if the race has one for it (docs/game/character-stats.md "Limb replacements and robots"). The original drops it at the
-    /// limb's <c>bone name 2</c> and lets physics take it; here it lies flat beside the character on that side (an engine choice), turned by a roll of the tick, and the host
+    /// The RACE <c>severed limbs</c> item of <paramref name="limb"/> on the ground, if the race has one for it
+    /// (docs/game/character-stats.md "Limb replacements and robots"). The original drops it at the limb's <c>bone name 2</c> and lets
+    /// physics take it; here it lies flat beside the character on that side (an engine choice), turned by a roll of the tick, and the host
     /// drops it from that bone's place (<see cref="FallSource"/>).
     /// </summary>
     void DropSeveredLimb(World world, int slot, CharacterCold cold, int limb)
     {
-        // The first entry of the slot whose record exists (FUN_14064edc0: one whose target did not resolve is skipped, and with none nothing drops; the stump and wound stay).
+        // The first entry of the slot whose record exists (FUN_14064edc0: one whose target did not resolve is skipped, and with none nothing drops;
+        // the stump and wound stay).
         ItemInstance? item = null;
         foreach (var severed in cold.Race?.SeveredLimbs ?? [])
             if (severed.Slot == limb && (item = _data.Items.Create(severed.TargetStringId)) is not null) break;
@@ -208,7 +294,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         var ahead = new Vector3(MathF.Sin(hot.Yaw), 0, MathF.Cos(hot.Yaw));
         float yaw = Rng.Float(Rng.Hash(world.Seed, (ulong)slot, RngPurpose.Loot, (ulong)world.Tick)) * MathF.Tau;
 
-        // On the ground under that spot (a drop beside a character on a slope or a step would otherwise hang at its feet's height), as an item dropped from the inventory.
+        // On the ground under that spot (a drop beside a character on a slope or a step would otherwise hang at its feet's height), as an item
+        // dropped from the inventory.
         var at = hot.Position + right * (5 * side) + ahead * forward;
         at.Y = world.Walkability.GroundHeight(at.X, at.Z, hot.Position.Y);
 
@@ -220,12 +307,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 : null);
     }
 
+    /// <summary>
+    /// The population's slow-world step: factions met, nests topped up, the world states refreshed and towns discovered every tick; on every
+    /// <see cref="PopulationSettings.CheckEveryTicks"/> the zones, towns, squads and campaigns.
+    /// </summary>
     public void SlowWorld(World world)
     {
         MeetFactions(world);
         TopUpNest(world);
 
-        // The original answers a world state from the live unique table (FUN_1409a7e00), so the copy is taken every tick (cheap while nothing changed), not at the look.
+        // The original answers a world state from the live unique table (FUN_1409a7e00), so the copy is taken every tick (cheap while nothing
+        // changed), not at the look.
         RefreshStates(world);
         TickDiscover(world);
         if (world.Tick % _settings.CheckEveryTicks != 0) { if (_wars is not null) StepWarManager(world); return; }
@@ -248,6 +340,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// (docs/game/ui-screens.md "Map").
     /// </summary>
     public const float DiscoverRange = 8500;
+    /// <summary>
+    /// The discover range of a town type: twice <see cref="DiscoverRange"/> for a town, half for a nest or ruins.
+    /// </summary>
     static float DiscoverRangeOf(TownType type) => DiscoverRange * (type == TownType.Town ? 2 : type is TownType.Nest or TownType.Ruins ? 0.5f : 1);
 
     /// <summary>
@@ -259,9 +354,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     readonly List<(Vector2 At, ZoneCoordinate Zone)> _viewers = [];
 
+    /// <summary>
+    /// Runs <see cref="Discover"/> once a real-time second has added up.
+    /// </summary>
     void TickDiscover(World world)
     {
-        // Real time, not simulated (FUN_14092f6b0, Verified): the unscaled frame time adds up while the game runs (a pause adds nothing: no tick) and a check runs once it reaches a second.
+        // Real time, not simulated (FUN_14092f6b0, Verified): the unscaled frame time adds up while the game runs (a pause adds nothing: no tick) and
+        // a check runs once it reaches a second.
         _discoverClock += world.TickSeconds / MathF.Max(world.PhysicsSpeed, 0.01f);
         if (_discoverClock < DiscoverEverySeconds) return;
         _discoverClock = 0;
@@ -272,12 +371,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// Real seconds between two town discovery checks (<c>DAT_14167c308</c>).
     /// </summary>
     public const float DiscoverEverySeconds = 1;
+    /// <summary>
+    /// The real time added up since the last discover check, in seconds.
+    /// </summary>
     float _discoverClock;
 
     /// <summary>
-    /// Towns and camps a player character comes within <see cref="ExploreRange"/> of become discovered and explored, and their faction known; ones not yet discovered within
-    /// <see cref="DiscoverRangeOf"/> become discovered, with a "Discovered" message for a town (none for nests and camps). A character counts only for
-    /// places within one zone of it: a place's own zone or, for a town, one of its <see cref="TownSite.Coverage"/> zones (docs/game/ui-screens.md "Map").
+    /// Towns and camps a player character comes within <see cref="ExploreRange"/> of become discovered and explored, and their faction known; ones
+    /// not yet discovered within <see cref="DiscoverRangeOf"/> become discovered, with a "Discovered" message for a town (none for nests and camps).
+    /// A character counts only for places within one zone of it: a place's own zone or, for a town, one of its <see cref="TownSite.Coverage"/> zones
+    /// (docs/game/ui-screens.md "Map").
     /// </summary>
     void Discover(World world)
     {
@@ -337,8 +440,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     const float CameraReach = 2250;
 
     /// <summary>
-    /// The camera focus counts as one more viewer when it lies inside the zone grid (<c>FUN_14092f6b0</c>:166-173). Meitou's camera is unclamped, so the original's pull-in is applied first:
-    /// beyond <see cref="CameraReach"/> (XZ) of the nearest player character the focus is taken that far from it, toward the focus.
+    /// The camera focus counts as one more viewer when it lies inside the zone grid (<c>FUN_14092f6b0</c>:166-173). Meitou's camera is unclamped, so
+    /// the original's pull-in is applied first: beyond <see cref="CameraReach"/> (XZ) of the nearest player character the focus is taken that far
+    /// from it, toward the focus.
     /// </summary>
     void AddFocusViewer(World world)
     {
@@ -355,9 +459,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// A sense update that finds this many characters in sight range also takes everyone within <see cref="CrowdReach"/> (<c>FUN_1407866d0</c>).
     /// </summary>
     const int CrowdCount = 40;
+    /// <summary>
+    /// The reach within which a crowded sense update also takes everyone (see <see cref="CrowdCount"/>).
+    /// </summary>
     const float CrowdReach = 250;
 
+    /// <summary>
+    /// The combat system, looked up on first need (a fight target is met too).
+    /// </summary>
     Combat.CombatSystem? _fights;
+    /// <summary>
+    /// The lock system, looked up on first need (its gate regions shorten the sight inside town walls).
+    /// </summary>
     Locks.LockSystem? _locks;
 
     /// <summary>
@@ -367,10 +480,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         c is { IsPlayer: true, DiedTick: < 0, CarriedBy.IsNone: true } && c.Medical?.Incapacitated != true;
 
     /// <summary>
-    /// The player's characters meet the factions round them (docs/game/factions-squads-towns.md "Factions met"; <c>FUN_14085a8d0</c>, <c>FUN_1408593d0</c>): on its turn (one tick in
-    /// <see cref="PopulationSettings.CheckEveryTicks"/>, by slot), each one not unconscious, dead or carried meets the faction of every character within its sight range on the ground plane,
-    /// seen or not, the dead, the down and animals too, and of its fight target. Not during the character creation. Inside town walls (a gate code above 0, docs/game/pathfinding.md
-    /// "Gate codes") 500 takes the place of the outdoor sight.
+    /// The player's characters meet the factions round them (docs/game/factions-squads-towns.md "Factions met"; <c>FUN_14085a8d0</c>,
+    /// <c>FUN_1408593d0</c>): on its turn (one tick in <see cref="PopulationSettings.CheckEveryTicks"/>, by slot), each one not unconscious, dead or
+    /// carried meets the faction of every character within its sight range on the ground plane, seen or not, the dead, the down and animals too, and
+    /// of its fight target. Not during the character creation. Inside town walls (a gate code above 0, docs/game/pathfinding.md "Gate codes") 500
+    /// takes the place of the outdoor sight.
     /// </summary>
     void MeetFactions(World world)
     {
@@ -407,11 +521,14 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
+    /// <summary>
+    /// A viewer at <paramref name="at"/>: its ground-plane point and its zone.
+    /// </summary>
     static (Vector2 At, ZoneCoordinate Zone) Viewer(Vector3 at) => (new(at.X, at.Z), WorldLayout.ZoneOf(at.X, at.Z));
 
     /// <summary>
-    /// The squared XZ distance from a place to the nearest viewer in or next to its <paramref name="zone"/> or one of its <paramref name="coverage"/> zones
-    /// (infinity when none).
+    /// The squared XZ distance from a place to the nearest viewer in or next to its <paramref name="zone"/> or one of its <paramref name="coverage"/>
+    /// zones (infinity when none).
     /// </summary>
     float NearestViewer(Vector2 place, ZoneCoordinate zone, IReadOnlyList<ZoneCoordinate> coverage)
     {
@@ -429,11 +546,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The zones the original has loaded (docs/game/character-stats.md "Corpses", <c>FUN_140a0f820</c>, <c>FUN_140a0f080</c>, <c>FUN_140a0b830</c>, <c>FUN_140a0f640</c>,
-    /// <b>Verified</b>), which decide what the squads, the corpses and the navmesh keep: the block of one zone each side round a centre zone, asked for again at every look (the
-    /// centre moves to the camera's zone only once the camera is more than <see cref="ZoneActivation.RecentreDistance"/> from the centre zone's middle on either axis; kept
-    /// <see cref="ZoneActivation.LoadedLingerSeconds"/> after), and the box round each player character (<see cref="ZoneActivation.Box"/>, a ring of one more zone when Fast zone
-    /// hopping is on; kept <see cref="ZoneActivation.BoxLingerSeconds"/> after). A zone stays loaded until the latest of its requests has run out.
+    /// The zones the original has loaded (docs/game/character-stats.md "Corpses", <c>FUN_140a0f820</c>, <c>FUN_140a0f080</c>, <c>FUN_140a0b830</c>,
+    /// <c>FUN_140a0f640</c>, <b>Verified</b>), which decide what the squads, the corpses and the navmesh keep: the block of one zone each side round
+    /// a centre zone, asked for again at every look (the centre moves to the camera's zone only once the camera is more than
+    /// <see cref="ZoneActivation.RecentreDistance"/> from the centre zone's middle on either axis; kept
+    /// <see cref="ZoneActivation.LoadedLingerSeconds"/> after), and the box round each player character (<see cref="ZoneActivation.Box"/>, a ring of
+    /// one more zone when Fast zone hopping is on; kept <see cref="ZoneActivation.BoxLingerSeconds"/> after). A zone stays loaded until the latest of
+    /// its requests has run out.
     /// </summary>
     void RefreshLoaded(World world, Vector3 camera)
     {
@@ -455,7 +574,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         _boxZones.Clear();
         foreach (var p in _players) ZoneActivation.AddZonesAround(p, ring, _boxZones);
 
-        // A platoon of the player's faction asks for the box round its place as a player character does, unloaded (FUN_1407ebf30) or loaded (FUN_1404ffad0, both call FUN_140a0f640), so it is made and stays active.
+        // A platoon of the player's faction asks for the box round its place as a player character does, unloaded (FUN_1407ebf30) or loaded
+        // (FUN_1404ffad0, both call FUN_140a0f640), so it is made and stays active.
         if (world.Platoons.Count > 0 && PlayerFactionOf(world) is >= 0 and var player)
         {
             foreach (var p in world.Platoons.All)
@@ -471,15 +591,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The requested zones that are also ready (<see cref="ZoneGate"/>: the host's navmesh for it exists; none set: all): the zones the original flags loaded (<c>FUN_140a0f820</c>:66-96 sets the loaded flags only once
-    /// every zone of the load list is accepted, state 4 to 5, <b>Verified</b>). Characters, corpses and zone content follow this set; the squads' own relevance and the host's navmesh loading follow the requested one.
+    /// The requested zones that are also ready (<see cref="ZoneGate"/>: the host's navmesh for it exists; none set: all): the zones the original
+    /// flags loaded (<c>FUN_140a0f820</c>:66-96 sets the loaded flags only once every zone of the load list is accepted, state 4 to 5,
+    /// <b>Verified</b>). Characters, corpses and zone content follow this set; the squads' own relevance and the host's navmesh loading follow the
+    /// requested one.
     /// </summary>
     HashSet<ZoneCoordinate> Ready(IEnumerable<ZoneCoordinate> requested) =>
         ZoneGate is { } gate ? [.. requested.Where(z => gate(z))] : [.. requested];
 
     /// <summary>
-    /// A loaded town asks for every zone of its list, its own and its coverage, with no ring and the largest timer among those already loaded (<c>FUN_140929b20</c>, <b>Verified</b>), so the
-    /// zones of a town lapse together.
+    /// A loaded town asks for every zone of its list, its own and its coverage, with no ring and the largest timer among those already loaded
+    /// (<c>FUN_140929b20</c>, <b>Verified</b>), so the zones of a town lapse together.
     /// </summary>
     void AskTownZones()
     {
@@ -494,6 +616,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether one of the site's coverage zones is active.
+    /// </summary>
     bool CoverageActive(TownSite site)
     {
         foreach (var zone in site.Coverage) if (_active.Contains(zone)) return true;
@@ -501,8 +626,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The zone lingers count real seconds, not game time (<c>FUN_140a0b830</c>, <b>Verified</b>: the timers drop by the unscaled frame time): at game speed s
-    /// game time runs s times faster than the clock, so L real seconds are L x s seconds of ticks. A paused world runs no ticks, so its zones simply stay.
+    /// The zone lingers count real seconds, not game time (<c>FUN_140a0b830</c>, <b>Verified</b>: the timers drop by the unscaled frame time): at
+    /// game speed s game time runs s times faster than the clock, so L real seconds are L x s seconds of ticks. A paused world runs no ticks, so its
+    /// zones simply stay.
     /// </summary>
     static float LingerSpeed(World world) => world.PhysicsSpeed > 0 ? world.PhysicsSpeed : 1;
 
@@ -515,9 +641,14 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (!_loadedUntil.TryGetValue(zone, out long was) || was < until) _loadedUntil[zone] = until;
     }
 
+    /// <summary>
+    /// Works out the active zones from the player's characters and the camera focus (<see cref="RefreshLoaded"/>), then loads the towns in them and
+    /// unloads the others after their grace, and steps the wild sites.
+    /// </summary>
     void RefreshZones(World world)
     {
-        // The player's characters ask for the box round them (the player's faction, docs/game/character-stats.md "Corpses"); the camera focus centres the block, and alone it does without a player.
+        // The player's characters ask for the box round them (the player's faction, docs/game/character-stats.md "Corpses"); the camera focus centres
+        // the block, and alone it does without a player.
         _players.Clear();
         if (world.Player.Exists)
         {
@@ -561,8 +692,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Whether a living member of one of a wild site's squads stands in an active zone (a nest then stays loaded). A town does not use it: its squads are platoons that unload by their own
-    /// place (<see cref="KeepLoaded"/>).
+    /// Whether a living member of one of a wild site's squads stands in an active zone (a nest then stays loaded). A town does not use it: its squads
+    /// are platoons that unload by their own place (<see cref="KeepLoaded"/>).
     /// </summary>
     bool AnyMemberActive(World world, SiteState state)
     {
@@ -586,6 +717,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     public Func<ZoneCoordinate, bool>? ZoneGate { get; set; }
 
+    /// <summary>
+    /// Starts loading a town: its replacement or held squads settled, its residents built (on the build thread when there is one, else made at once);
+    /// a zone gate that says no leaves it for the next look.
+    /// </summary>
     void Load(World world, TownSite site, SiteState state)
     {
         if (ZoneGate is { } gate && !gate(site.Zone)) return;   // retried at the next look
@@ -596,8 +731,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         var walk = world.Walkability;
         EnsurePools(world);
 
-        // A town made once (its pools say so) never makes residents again; its own squads that lost too many are made afresh (docs/simulation.md "Off-screen tier").
-        // A town that has just been replaced makes the replacement's residents, as the original treats its zone as fresh; the squads it had stay.
+        // A town made once (its pools say so) never makes residents again; its own squads that lost too many are made afresh (docs/simulation.md
+        // "Off-screen tier"). A town that has just been replaced makes the replacement's residents, as the original treats its zone as fresh; the
+        // squads it had stay.
         bool replaced = Replace(world, site);
         bool held = !replaced && (HoldsSquads(world, site.Index) || PoolsOf(site.Index) is { Started: true });
         if (held) CheckRegeneration(world, site.Index);
@@ -616,13 +752,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether towns are being loaded behind the loading screen (they keep their TOWN: no override is checked then).
+    /// </summary>
     bool _loadingScreen;
 
     /// <summary>
-    /// The original's <c>ZoneManager::checkForRepopulateTown</c> at a town's load (docs/game/factions-squads-towns.md "Town overrides"): not behind the loading screen, nor for a town of the player's faction;
-    /// of the current TOWN's <c>override town</c> list, the entries whose every <c>world state</c> holds, weighted by how many they have (none: never), other than the
-    /// replacement in place; the heaviest, the first of equals, takes the town's place. A town replaced whose new residents have not been made yet (the original's
-    /// <c>updatedTownOverrides</c>) answers yes again without looking. Either way its zone is reset (<see cref="ResetZone"/>). Whether the town is to be made afresh.
+    /// The original's <c>ZoneManager::checkForRepopulateTown</c> at a town's load (docs/game/factions-squads-towns.md "Town overrides"): not behind
+    /// the loading screen, nor for a town of the player's faction; of the current TOWN's <c>override town</c> list, the entries whose every <c>world
+    /// state</c> holds, weighted by how many they have (none: never), other than the replacement in place; the heaviest, the first of equals, takes
+    /// the town's place. A town replaced whose new residents have not been made yet (the original's <c>updatedTownOverrides</c>) answers yes again
+    /// without looking. Either way its zone is reset (<see cref="ResetZone"/>). Whether the town is to be made afresh.
     /// </summary>
     bool Replace(World world, TownSite site)
     {
@@ -658,9 +798,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// What the original drops from a replaced town's zone file (<c>FUN_1409fe340</c>, docs/game/factions-squads-towns.md "Town overrides"): the state of the town's buildings in
-    /// that zone that are not the player's (they come back as the level has them, under the town's faction now), the item slots' timers there (due at once), and every loose
-    /// item in the zone. The town's buildings in other zones change owner only.
+    /// What the original drops from a replaced town's zone file (<c>FUN_1409fe340</c>, docs/game/factions-squads-towns.md "Town overrides"): the
+    /// state of the town's buildings in that zone that are not the player's (they come back as the level has them, under the town's faction now), the
+    /// item slots' timers there (due at once), and every loose item in the zone. The town's buildings in other zones change owner only.
     /// </summary>
     void ResetZone(World world, TownSite site)
     {
@@ -672,8 +812,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The town leaves the world: each squad it made becomes a pinned platoon that keeps its characters (<see cref="StoredSquad"/>), so the town is made of them next
-    /// time and a save writes them (docs/simulation.md "Population"). A squad with no one alive left is dropped.
+    /// The town leaves the world: each squad it made becomes a pinned platoon that keeps its characters (<see cref="StoredSquad"/>), so the town is
+    /// made of them next time and a save writes them (docs/simulation.md "Population"). A squad with no one alive left is dropped.
     /// </summary>
     void Unload(World world, int site, SiteState state)
     {
@@ -687,7 +827,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             var at = Store(world, squad, stored);
             world.Squads.Remove(id);
 
-            // A squad with no one alive left is declared dead, unless its template `regenerates` and its town lives: then it is made afresh next time (CM_REFRESH).
+            // A squad with no one alive left is declared dead, unless its template `regenerates` and its town lives: then it is made afresh next
+            // time (CM_REFRESH).
             bool refresh = stored.Members.Count == 0 && Regenerates(squad.TemplateId, site);
             if (stored.Members.Count == 0 && !refresh)
             {
@@ -716,9 +857,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A town squad with a living member in the loaded box of an active zone is not stored with its town: it stays in the world as a pinned platoon that unloads on its own, as the original
-    /// checks each platoon by its place (<c>FUN_1404febd0</c>, after 4 s outside every loaded zone; a zone's unload touches no platoon, <c>FUN_1409fe980</c>), so a squad chasing the player
-    /// away from home does not vanish with its town. One carrying a player character is kept wherever it is (<see cref="SquadCarriesPlayer"/>). True when it was kept.
+    /// A town squad with a living member in the loaded box of an active zone is not stored with its town: it stays in the world as a pinned platoon
+    /// that unloads on its own, as the original checks each platoon by its place (<c>FUN_1404febd0</c>, after 4 s outside every loaded zone; a zone's
+    /// unload touches no platoon, <c>FUN_1409fe980</c>), so a squad chasing the player away from home does not vanish with its town. One carrying a
+    /// player character is kept wherever it is (<see cref="SquadCarriesPlayer"/>). True when it was kept.
     /// </summary>
     bool KeepLoaded(World world, int site, Squad squad)
     {
@@ -765,6 +907,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         Reset(state);
     }
 
+    /// <summary>
+    /// Resets a site's state to unloaded with no squads (a build still in flight is dropped when it arrives).
+    /// </summary>
     static void Reset(SiteState state)
     {
         state.Squads.Clear();
@@ -776,8 +921,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Whether a loaded save holds squads of the town: a pinned saved platoon of the site, made now or not, other than a never-made stand-in (<see cref="Platoon.Unmade"/>).
-    /// They are then the town's whole population and it makes no residents or bar squads of its own (<see cref="BuildTown"/>, docs/simulation.md "Saves").
+    /// Whether a loaded save holds squads of the town: a pinned saved platoon of the site, made now or not, other than a never-made stand-in
+    /// (<see cref="Platoon.Unmade"/>). They are then the town's whole population and it makes no residents or bar squads of its own
+    /// (<see cref="BuildTown"/>, docs/simulation.md "Saves").
     /// </summary>
     bool HoldsSquads(World world, int site)
     {
@@ -787,8 +933,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A town that makes its own residents at its load (not held: its pool not <c>started</c> and no other squad of the save's) drops its never-made stand-ins, which would
-    /// double them; their records stay in the save as they are (engine choice: an original save of a made town has <c>started</c>, so this is only a save without pool state).
+    /// A town that makes its own residents at its load (not held: its pool not <c>started</c> and no other squad of the save's) drops its never-made
+    /// stand-ins, which would double them; their records stay in the save as they are (engine choice: an original save of a made town has
+    /// <c>started</c>, so this is only a save without pool state).
     /// </summary>
     static void DropUnmade(World world, int site)
     {
@@ -802,6 +949,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes a built town into the world: its fixtures, item slots and squads.
+    /// </summary>
     void Spawn(World world, BuiltTown town)
     {
         var site = _data.Sites[town.Site];
@@ -814,8 +964,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.ItemSlots.RegisterSite(world, _data, town.Site);
         StandTownCamp(world, site);
 
-        // Each home is set up for its template before its residents are made (FUN_14057f1f0).
-        // The platoon is made for every home, members or not (FUN_14057f4c0 stamps its template's designation on the building, FUN_140583a10 then stocks a home whose template made nothing).
+        // Each home is set up for its template before its residents are made (FUN_14057f1f0). The platoon is made for every home, members or not
+        // (FUN_14057f4c0 stamps its template's designation on the building, FUN_140583a10 then stocks a home whose template made nothing).
         var trade = world.SystemOf<Trading.TradeSystem>();
         int townFaction = site.Town.Faction is { } townFactionId ? _data.FactionIndex(townFactionId) : -1;
         var stocked = town.Squads.Where(s => s.Home is not null).Select(s => s.Home!.Key).ToHashSet(StringComparer.Ordinal);
@@ -826,14 +976,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             if (!stocked.Contains(home.Key)) trade?.StockEmptyHome(world, home, template, town.Site, townFaction);
         }
 
-        // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole, docs/formats/save.md "Zone files"),
-        // but for the centre zone of another town: a file there would tell the original that town was made, with no residents saved for it.
+        // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole,
+        // docs/formats/save.md "Zone files"), but for the centre zone of another town: a file there would tell the original that town was made, with
+        // no residents saved for it.
         foreach (var b in site.Buildings)
             if (b.Zone == site.Zone || !_centres.Contains(b.Zone)) world.VisitedZones.Add(b.Zone);
         var centre = new Vector2(site.Position.X, site.Position.Z);
         foreach (var made in town.Squads)
         {
-            // A gate has no nodes and its origin is inside the wall, ~110 from the opening: its residents are made at their gate guard's post (engine choice).
+            // A gate has no nodes and its origin is inside the wall, ~110 from the opening: its residents are made at their gate guard's post
+            // (engine choice).
             var built = made.Home is { IsGate: true } gate && !HasNode(gate) && Ai.AiSystem.PostOf(world, gate, centre) is { } post
                 && Ai.AiSystem.FrontOf(post) is var front ? made with { Position = new Vector2(front.X, front.Z), NearY = front.Y + SpotLift } : made;
             var squad = SpawnSquad(world, built, site, radius);
@@ -854,10 +1006,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A housed squad's <c>prisoners</c> (the squad factory <c>FUN_140583a10</c>, <b>Observed</b>; docs/simulation.md "Cages, beds and locks"): only with a home building, each entry
-    /// a squad of its template's <c>faction</c> (else the owner squad's), each member imprisoned in a random free cage of the home, its lock set. <b>Engine choices</b>: members
-    /// beyond the free cages are not made (the original drops one and stops placing); the prisoners are held without a sentence (<see cref="CharacterCold.Kidnapped"/>), so no
-    /// release round frees them and no bail is offered (the original's served test for them is <b>Unknown</b>).
+    /// A housed squad's <c>prisoners</c> (the squad factory <c>FUN_140583a10</c>, <b>Observed</b>; docs/simulation.md "Cages, beds and locks"): only
+    /// with a home building, each entry a squad of its template's <c>faction</c> (else the owner squad's), each member imprisoned in a random free
+    /// cage of the home, its lock set. <b>Engine choices</b>: members beyond the free cages are not made (the original drops one and stops placing);
+    /// the prisoners are held without a sentence (<see cref="CharacterCold.Kidnapped"/>), so no release round frees them and no bail is offered (the
+    /// original's served test for them is <b>Unknown</b>).
     /// </summary>
     void MakePrisoners(World world, BuiltSquad owner, Squad squad, TownSite site, float radius, SiteState state)
     {
@@ -888,10 +1041,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A squad's <c>slaves</c> (the squad factory's recursive slave squads, role 4; docs/game/factions-squads-towns.md "Squad factory"): each planned slave squad is made as a squad of its
-    /// template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's faction, shaven and chained (<b>Verified</b>). <b>Engine choices</b>: they are made at the owner squad's spot; with a
-    /// home building, each goes into a random free cage of it (their package's goal is Slave get in Cage, which Meitou does not act out), those left over stand by the owner squad.
-    /// Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>).
+    /// A squad's <c>slaves</c> (the squad factory's recursive slave squads, role 4; docs/game/factions-squads-towns.md "Squad factory"): each planned
+    /// slave squad is made as a squad of its template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's
+    /// faction, shaven and chained (<b>Verified</b>). <b>Engine choices</b>: they are made at the owner squad's spot; with a home building, each goes
+    /// into a random free cage of it (their package's goal is Slave get in Cage, which Meitou does not act out), those left over stand by the owner
+    /// squad. Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>).
     /// </summary>
     void MakeSlaves(World world, BuiltSquad owner, Squad squad, TownSite site, float radius, SiteState state)
     {
@@ -923,7 +1077,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 // Every member, the leader too, gets member type 4 after the recursive squad is made (FUN_140583a10); the squad's leader pointer stays.
                 (c.SlaveState, c.SlaveOwner, c.SlaveMaster, c.Role) = (1, squad.Faction, squad.Id, (int)SquadRole.Slave);
 
-                // Then shaven and chained (FUN_140583a10: shaveHead, setChainedMode), so the owner's watchers see a processed slave and leave it be (#356).
+                // Then shaven and chained (FUN_140583a10: shaveHead, setChainedMode), so the owner's watchers see a processed slave and leave it
+                // be (#356).
                 if (c.Fighter is not { IsAnimal: true }) c.Shaved = true;
                 _assembly.Chain(c);
                 if (cages.Count == 0) continue;
@@ -934,6 +1089,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
+    /// <summary>
+    /// The last 256 lines of the town and campaign log.
+    /// </summary>
     readonly List<string> _townLog = [];
     /// <summary>
     /// A line for each town whose squads were made since the last call (for the host's log; not part of the state).
@@ -945,6 +1103,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return list;
     }
 
+    /// <summary>
+    /// Makes a built squad in the world: its members as characters at their spots, its home noted for its template.
+    /// </summary>
     Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false,
         float yaw = 0, bool pinned = false, HashSet<int>? gated = null, bool wild = false)
     {
@@ -1069,9 +1230,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or without an owner (<c>FUN_14062b210</c>,
-    /// <b>Verified</b>; a saved character is not touched): 1, 2 and 3 are kept. The owner is the faction of the town the squad belongs to, else none (-1). The setter's message
-    /// and obedient-slave job (<c>FUN_1405a4940</c>) are not run, as for the start squad before.
+    /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or
+    /// without an owner (<c>FUN_14062b210</c>, <b>Verified</b>; a saved character is not touched): 1, 2 and 3 are kept. The owner is the faction of
+    /// the town the squad belongs to, else none (-1). The setter's message and obedient-slave job (<c>FUN_1405a4940</c>) are not run, as for the
+    /// start squad before.
     /// </summary>
     void ApplyRecordSlave(CharacterCold cold, GameRecord? record, TownSite? site)
     {
@@ -1091,10 +1253,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             : null;
 
     /// <summary>
-    /// The unique-character gate (<c>FUN_1405836e0</c>, docs/game/factions-squads-towns.md "Unique characters") on the members of a squad about to be made, in the serial
-    /// phase so two squads planned at once cannot both make one: a free unique is claimed and made; a claimed one (made elsewhere, dead) is replaced by its first
-    /// <c>unique replacement spawn</c> (not gated, with a look rolled now; an animal keeps its look) or by nobody. The <c>animals</c> lists go through the same gate (<c>FUN_140583a10</c>). When the leader is
-    /// gone the first member left leads. <paramref name="only"/>: the member indexes to gate, the rest pass (a new game's squad: only what its templates made).
+    /// The unique-character gate (<c>FUN_1405836e0</c>, docs/game/factions-squads-towns.md "Unique characters") on the members of a squad about to be
+    /// made, in the serial phase so two squads planned at once cannot both make one: a free unique is claimed and made; a claimed one (made
+    /// elsewhere, dead) is replaced by its first <c>unique replacement spawn</c> (not gated, with a look rolled now; an animal keeps its look) or by
+    /// nobody. The <c>animals</c> lists go through the same gate (<c>FUN_140583a10</c>). When the leader is gone the first member left leads.
+    /// <paramref name="only"/>: the member indexes to gate, the rest pass (a new game's squad: only what its templates made).
     /// </summary>
     List<BuiltMember> GateUniques(World world, BuiltSquad built, int squadId, HashSet<int>? only = null)
     {
@@ -1131,8 +1294,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The unique members of a platoon that leaves the world for good without being kept (despawned, or remade from its template): the living are freed to be made again,
-    /// as the original's unload does for a free and well unique (<c>FUN_1409a8120</c>); with <paramref name="killed"/> (an off-screen defeat) they die instead.
+    /// The unique members of a platoon that leaves the world for good without being kept (despawned, or remade from its template): the living are
+    /// freed to be made again, as the original's unload does for a free and well unique (<c>FUN_1409a8120</c>); with <paramref name="killed"/> (an
+    /// off-screen defeat) they die instead.
     /// </summary>
     void ReleaseUniques(World world, Platoon p, bool killed = false)
     {
@@ -1160,8 +1324,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// One member: dead, it dies in the registry; alive, its entry is erased when this character holds it (<paramref name="holder"/>, or none for one not in the world), so a
-    /// copy made as another's replacement (a unique naming itself) never frees the first.
+    /// One member: dead, it dies in the registry; alive, its entry is erased when this character holds it (<paramref name="holder"/>, or none for one
+    /// not in the world), so a copy made as another's replacement (a unique naming itself) never frees the first.
     /// </summary>
     void ReleaseUnique(World world, string recordId, CharacterId holder, bool dead, int faction = -1)
     {
@@ -1173,10 +1337,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The unique characters in the world, at every population look (the original's per-character refresh <c>FUN_1405cf470</c> and its death and imprisonment hooks,
-    /// docs/game/factions-squads-towns.md "Unique characters"): dead → 0 (killed by the player's: set by the combat commit); in a cage or restraint → 2 (player: the cage's
-    /// owner is the player's); alive and carried by one of a faction neither its own nor allied → 2 (player: the carrier is the player's); captured but neither held nor
-    /// carried → 1, player cleared (engine summary of the original's ally and town tests); in the player's faction and alive though marked dead → 1.
+    /// The unique characters in the world, at every population look (the original's per-character refresh <c>FUN_1405cf470</c> and its death and
+    /// imprisonment hooks, docs/game/factions-squads-towns.md "Unique characters"): dead → 0 (killed by the player's: set by the combat commit); in a
+    /// cage or restraint → 2 (player: the cage's owner is the player's); alive and carried by one of a faction neither its own nor allied → 2
+    /// (player: the carrier is the player's); captured but neither held nor carried → 1, player cleared (engine summary of the original's ally and
+    /// town tests); in the player's faction and alive though marked dead → 1.
     /// </summary>
     void RefreshUniques(World world)
     {
@@ -1223,9 +1388,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// State 2 returns to 1 for a character of the player's faction, or standing in a town (its <c>+0x1a0 -> +0x88</c>) that is friendly to it (<c>FUN_1405cf470</c>, <b>Verified</b>): the town's
-    /// faction regards the character's faction as an ally (<c>FUN_1406b2630</c>), or it is the squad's home town, or its faction is the character's own. Not while carried or caged (the caller's branches).
-    /// A free unique elsewhere stays in state 2.
+    /// State 2 returns to 1 for a character of the player's faction, or standing in a town (its <c>+0x1a0 -> +0x88</c>) that is friendly to it
+    /// (<c>FUN_1405cf470</c>, <b>Verified</b>): the town's faction regards the character's faction as an ally (<c>FUN_1406b2630</c>), or it is the
+    /// squad's home town, or its faction is the character's own. Not while carried or caged (the caller's branches). A free unique elsewhere stays in
+    /// state 2.
     /// </summary>
     internal bool FreeAgain(World world, CharacterCold cold, Vector3 at, int playerFaction)
     {
@@ -1246,6 +1412,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     static float Ground(IWalkability walk, float x, float z, float? nearY) => nearY is { } y ? walk.GroundHeight(x, z, y) : walk.GroundHeight(x, z);
 
+    /// <summary>
+    /// Whether <see cref="Dispose"/> ran.
+    /// </summary>
     bool _disposed;
 
     /// <summary>

@@ -8,8 +8,10 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 
-// Disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through it, and the faction a
-// disguised character passes for.
+/// <summary>
+/// The arrest system's disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through
+/// it, and the faction a disguised character passes for.
+/// </summary>
 public sealed partial class ArrestSystem
 {
     /// <summary>
@@ -34,6 +36,9 @@ public sealed partial class ArrestSystem
     /// </summary>
     public PopulationData? Towns { get; set; }
 
+    /// <summary>
+    /// Per looker and disguised target: the see-through meter (through at above 1), filled while the looker sees the target and drained otherwise.
+    /// </summary>
     readonly Dictionary<(CharacterId Looker, CharacterId Target), float> _disguiseMeters = [];
 
     /// <summary>
@@ -161,6 +166,9 @@ public sealed partial class ArrestSystem
         return (5 * a + (a - 5 * a) * Math.Clamp(v, 0, 1)) * (4 + (1 - 4) * Orders.SpotAlertness);
     }
 
+    /// <summary>
+    /// Sets the looker tooltip mark <paramref name="mark"/> of <paramref name="c"/> to <see cref="MarkSeconds"/>.
+    /// </summary>
     static void Mark(CharacterCold c, int mark) => (c.DisguiseMarks ??= new float[3])[mark] = MarkSeconds;
 
     /// <summary>
@@ -209,6 +217,9 @@ public sealed partial class ArrestSystem
         return owner == faction || !relations.Contains(faction) || !relations.IsHostile(faction, owner);
     }
 
+    /// <summary>
+    /// Adds the see-through meters in looker and target slot order to the world hash, only while there are any.
+    /// </summary>
     void HashDisguise(ref StateHasher hasher)
     {
         if (_disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before

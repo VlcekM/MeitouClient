@@ -8,7 +8,18 @@ namespace Meitou.Launcher;
 /// <summary>
 /// What a GitHub release of this repository is: the game (tags <c>v&lt;version&gt;</c>) or the launcher (<c>launcher-v&lt;version&gt;</c>).
 /// </summary>
-public enum ReleaseKind { Game, Launcher }
+public enum ReleaseKind
+{
+    /// <summary>
+    /// A game release (tag <c>v&lt;version&gt;</c>).
+    /// </summary>
+    Game,
+
+    /// <summary>
+    /// A launcher release (tag <c>launcher-v&lt;version&gt;</c>).
+    /// </summary>
+    Launcher,
+}
 
 /// <summary>
 /// A file attached to a release: its name, download URL, size in bytes and GitHub's digest (<c>sha256:&lt;hex&gt;</c>) when listed.

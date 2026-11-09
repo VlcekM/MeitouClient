@@ -17,6 +17,9 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 internal static class ShopSave
 {
+    /// <summary>
+    /// The PLATOON keys: the original's restock time, and Meitou's stock and fill key.
+    /// </summary>
     public const string RefreshKey = "inventory refresh time", StockKey = "meitou shop", FillsKey = "meitou shop fills";
 
     /// <summary>
@@ -56,6 +59,9 @@ internal static class ShopSave
         return shop;
     }
 
+    /// <summary>
+    /// A fresh unfilled shop of the squad's template with the saved stock <paramref name="text"/>; null when the template has no shop.
+    /// </summary>
     static Shop? Unfilled(string text, Squad squad, PopulationData data)
     {
         var shop = TradeSystem.UnfilledShop(squad, TradeSystem.TemplateRecord(data, squad.TemplateId));

@@ -16,6 +16,9 @@ static class SolidHits
     /// </summary>
     const float Chunk = 32;
 
+    /// <summary>
+    /// This thread's list for the buildings' triangles near a segment.
+    /// </summary>
     [ThreadStatic]
     static List<Vector3>? s_triangles;
 

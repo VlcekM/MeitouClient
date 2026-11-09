@@ -7,7 +7,95 @@ namespace Meitou.Game.Ui;
 /// </summary>
 public enum UiEditKey
 {
-    Left, Right, Home, End, Backspace, Delete, SelectAll, Up, Down, PageUp, PageDown, DocumentStart, DocumentEnd, Undo, Redo, Copy, Cut, Paste,
+    /// <summary>
+    /// One character left.
+    /// </summary>
+    Left,
+
+    /// <summary>
+    /// One character right.
+    /// </summary>
+    Right,
+
+    /// <summary>
+    /// The line's start.
+    /// </summary>
+    Home,
+
+    /// <summary>
+    /// The line's end.
+    /// </summary>
+    End,
+
+    /// <summary>
+    /// Erases the selection or the character before the caret.
+    /// </summary>
+    Backspace,
+
+    /// <summary>
+    /// Erases the selection or the character after the caret.
+    /// </summary>
+    Delete,
+
+    /// <summary>
+    /// Selects the whole text.
+    /// </summary>
+    SelectAll,
+
+    /// <summary>
+    /// One line up (a single-line box: the start).
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// One line down (a single-line box: the end).
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// As Up.
+    /// </summary>
+    PageUp,
+
+    /// <summary>
+    /// As Down.
+    /// </summary>
+    PageDown,
+
+    /// <summary>
+    /// The text's start (Ctrl+Home).
+    /// </summary>
+    DocumentStart,
+
+    /// <summary>
+    /// The text's end (Ctrl+End).
+    /// </summary>
+    DocumentEnd,
+
+    /// <summary>
+    /// Goes back one edit.
+    /// </summary>
+    Undo,
+
+    /// <summary>
+    /// Goes forward one undone edit.
+    /// </summary>
+    Redo,
+
+    /// <summary>
+    /// Copies the selection (nothing in a password box).
+    /// </summary>
+    Copy,
+
+    /// <summary>
+    /// Copies and removes the selection.
+    /// </summary>
+    Cut,
+
+    /// <summary>
+    /// Inserts the clipboard's text.
+    /// </summary>
+    Paste,
 }
 
 /// <summary>
@@ -17,15 +105,34 @@ public enum UiEditKey
 /// </summary>
 public sealed class UiTextBuffer(string text = "")
 {
+    /// <summary>
+    /// The undo steps kept.
+    /// </summary>
     const int MaxUndo = 128;
 
+    /// <summary>
+    /// The text and caret an undo or redo step goes back to.
+    /// </summary>
     readonly record struct State(string Text, int Caret);
 
+    /// <summary>
+    /// The undo and redo steps, oldest first.
+    /// </summary>
     readonly List<State> _undo = [], _redo = [];
+
+    /// <summary>
+    /// The selection's other end (the caret's when nothing is selected).
+    /// </summary>
     int _anchor = text.Length;
 
+    /// <summary>
+    /// The box's text.
+    /// </summary>
     public string Text { get; private set; } = text;
 
+    /// <summary>
+    /// The caret's index in the text.
+    /// </summary>
     public int Caret { get; private set; } = text.Length;
 
     /// <summary>
@@ -53,12 +160,24 @@ public sealed class UiTextBuffer(string text = "")
     /// </summary>
     public bool ReadOnly { get; init; }
 
+    /// <summary>
+    /// Where the selection starts.
+    /// </summary>
     public int SelectionStart => Math.Min(_anchor, Caret);
 
+    /// <summary>
+    /// How many characters are selected.
+    /// </summary>
     public int SelectionLength => Math.Abs(_anchor - Caret);
 
+    /// <summary>
+    /// The selected text.
+    /// </summary>
     public string SelectedText => Text.Substring(SelectionStart, SelectionLength);
 
+    /// <summary>
+    /// The index one character before <paramref name="at"/> (a surrogate pair as one).
+    /// </summary>
     int Previous(int at)
     {
         if (at <= 0) return 0;
@@ -67,6 +186,9 @@ public sealed class UiTextBuffer(string text = "")
         return pair ? at - 2 : at - 1;
     }
 
+    /// <summary>
+    /// The index one character after <paramref name="at"/> (a surrogate pair as one).
+    /// </summary>
     int Next(int at)
     {
         if (at >= Text.Length) return Text.Length;
@@ -75,8 +197,14 @@ public sealed class UiTextBuffer(string text = "")
         return pair ? at + 2 : at + 1;
     }
 
+    /// <summary>
+    /// The start of the line holding <paramref name="at"/> (0 in a single-line box).
+    /// </summary>
     int LineStart(int at) => MultiLine && at > 0 ? Text.LastIndexOf('\n', at - 1) + 1 : 0;
 
+    /// <summary>
+    /// The end of the line holding <paramref name="at"/> (the text's end in a single-line box).
+    /// </summary>
     int LineEnd(int at) => MultiLine && Text.IndexOf('\n', at) is var end and >= 0 ? end : Text.Length;
 
     /// <summary>
@@ -143,6 +271,10 @@ public sealed class UiTextBuffer(string text = "")
         if (!extend) _anchor = Caret;
     }
 
+    /// <summary>
+    /// A caret or editing key: select all, undo, redo, erase, or a caret move (selecting with <paramref name="extend"/>); Up and Down go to the ends
+    /// of a single-line box.
+    /// </summary>
     public void Key(UiEditKey key, bool extend = false)
     {
         switch (key)
@@ -171,6 +303,9 @@ public sealed class UiTextBuffer(string text = "")
         if (!extend) _anchor = Caret;
     }
 
+    /// <summary>
+    /// The caret's place one line up, at most the line's length in; 0 on the first line.
+    /// </summary>
     int LineAbove()
     {
         int start = LineStart(Caret);
@@ -180,6 +315,9 @@ public sealed class UiTextBuffer(string text = "")
         return previous + Math.Min(Caret - start, start - 1 - previous);
     }
 
+    /// <summary>
+    /// The caret's place one line down, at most the line's length in; the end on the last line.
+    /// </summary>
     int LineBelow()
     {
         int end = LineEnd(Caret);
@@ -189,6 +327,9 @@ public sealed class UiTextBuffer(string text = "")
         return next + Math.Min(Caret - LineStart(Caret), LineEnd(next) - next);
     }
 
+    /// <summary>
+    /// Backspace (<paramref name="backwards"/>) or Delete: removes the selection, else one character; one undo step.
+    /// </summary>
     void Erase(bool backwards)
     {
         if (ReadOnly) return;
@@ -208,6 +349,9 @@ public sealed class UiTextBuffer(string text = "")
         Commit(before);
     }
 
+    /// <summary>
+    /// Removes the selected text (the caret at its start); false when nothing was selected.
+    /// </summary>
     bool RemoveSelection()
     {
         int start = SelectionStart, length = SelectionLength;
@@ -231,6 +375,9 @@ public sealed class UiTextBuffer(string text = "")
         if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
     }
 
+    /// <summary>
+    /// Goes back one undo step, keeping the present for redo.
+    /// </summary>
     void Undo()
     {
         if (_undo.Count == 0) return;
@@ -242,6 +389,9 @@ public sealed class UiTextBuffer(string text = "")
         Caret = _anchor = Math.Min(prior.Caret, Text.Length);
     }
 
+    /// <summary>
+    /// Goes forward one redo step, keeping the present for undo.
+    /// </summary>
     void Redo()
     {
         if (_redo.Count == 0) return;

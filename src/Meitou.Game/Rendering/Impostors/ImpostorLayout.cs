@@ -119,10 +119,19 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public const float SmallMinimumRadius = 2;
 
+    /// <summary>
+    /// The fewest triangles a mesh needs for the small class.
+    /// </summary>
     public const int SmallMinimumTriangles = 100;
 
+    /// <summary>
+    /// The small class's frame size in pixels.
+    /// </summary>
     public const int SmallFrame = 32;
 
+    /// <summary>
+    /// The small class's frames per atlas side.
+    /// </summary>
     public const int SmallGrid = 12;
 
     /// <summary>
@@ -135,8 +144,14 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public const float ReferenceHeight = 1080;
 
+    /// <summary>
+    /// The transition distance (units) the frame size and the bake's texture detail are chosen for (see <see cref="ReferenceHeight"/>).
+    /// </summary>
     public const float ReferenceDistance = 4000;
 
+    /// <summary>
+    /// The tangent of half the reference camera's 50 degree vertical field of view.
+    /// </summary>
     static readonly float HalfFovTan = MathF.Tan(25 * MathF.PI / 180);
 
     /// <summary>
@@ -149,12 +164,24 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public const float Magnification = 1.4f;
 
+    /// <summary>
+    /// The smallest frame of the medium and large classes, in pixels.
+    /// </summary>
     public const int MinFrame = 64;
 
+    /// <summary>
+    /// The largest frame of a mesh's atlas (not a rock's), in pixels.
+    /// </summary>
     public const int MaxFrame = 256;
 
+    /// <summary>
+    /// A fixed 128-pixel class on the default grid.
+    /// </summary>
     public static readonly ImpostorClass Medium = new("medium", 128, DefaultGrid);
 
+    /// <summary>
+    /// A fixed 256-pixel class on the default grid.
+    /// </summary>
     public static readonly ImpostorClass Large = new("large", 256, DefaultGrid);
 
     /// <summary>
@@ -201,6 +228,11 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public static ImpostorClass? ForRock(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, RockMaxFrame, rock: true);
 
+    /// <summary>
+    /// The class of a largest instance radius under the frame cap <paramref name="maxFrame"/>: the small class below <see cref="MinimumRadius"/>,
+    /// else the frame doubled from <see cref="MinFrame"/> until it holds the screen size over <see cref="Magnification"/>; a <paramref name="rock"/>
+    /// past the cap also gets its <see cref="Knee"/>.
+    /// </summary>
     static ImpostorClass? For(float worldRadius, int triangles, int maxFrame, bool rock = false)
     {
         if (worldRadius < MinimumRadius)
@@ -237,5 +269,8 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public int Levels => BitOperations.Log2((uint)FramePixels) - 1;
 
+    /// <summary>
+    /// The atlas's side in pixels at level 0.
+    /// </summary>
     public int AtlasPixels => FramePixels * Grid;
 }

@@ -24,13 +24,14 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     public const float RepathDistance = 12, RepathSeconds = 0.5f;
 
     /// <summary>
-    /// How long a chase along a path lasts at least after a fighter met a blocked line (<b>Verified</b> literal 2.0, <c>FUN_14060c8b0</c>'s timer +0x14c).
+    /// How long a chase along a path lasts at least after a fighter met a blocked line (<b>Verified</b> literal 2.0, <c>FUN_14060c8b0</c>'s
+    /// timer +0x14c).
     /// </summary>
     public const float PathChaseSeconds = 2;
 
     /// <summary>
-    /// How long a target the fighter found no path to is left out of its target choice (<b>Verified</b> literal 20, <c>AITaskSytem::notifyPathImpossible</c>;
-    /// read as seconds).
+    /// How long a target the fighter found no path to is left out of its target choice (<b>Verified</b> literal 20,
+    /// <c>AITaskSytem::notifyPathImpossible</c>; read as seconds).
     /// </summary>
     public const float PathFailureSeconds = 20;
 
@@ -46,14 +47,18 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 
     #region Pursuit
 
+    /// <summary>
+    /// The pursuit's schedule (parallel by blocks of slots): each attacker writes only its own slot from its target's place and the last tick's
+    /// fight states.
+    /// </summary>
     public void Schedule(World world)
     {
         var table = world.Characters;
         int count = table.HighWater;
         combat.IndexAttackers(world);   // for FightersAt: this schedule runs before combat's
 
-        // Each attacker writes only its own slot and reads its target's place and the combat state of the last tick, so the slots run in parallel in any order.
-        // A far character pursues at its step, the step covering the ticks since its last (the far cadence, World.Steps).
+        // Each attacker writes only its own slot and reads its target's place and the combat state of the last tick, so the slots run in parallel in
+        // any order. A far character pursues at its step, the step covering the ticks since its last (the far cadence, World.Steps).
         world.ParallelFor((count + SlotsPerJob - 1) / SlotsPerJob, job =>
         {
             for (int i = job * SlotsPerJob, end = Math.Min(count, i + SlotsPerJob); i < end; i++)
@@ -126,7 +131,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         bool shooting = st.Ranged && st.RangedState != (byte)RangedStates.Closing;
         bool holding = HoldsBack(cold, n.Position, next, t);
 
-        // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the band, no paths.
+        // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the
+        // band, no paths.
         if (Steer(world, i, ref n, cold, st, t, holding)) return;
 
         float stand = CombatTuning.StandGap(st.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
@@ -239,7 +245,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Asks a new path to <paramref name="goal"/> on the floor at <paramref name="targetHeight"/>; the next comes RepathSeconds later at the earliest.
+    /// Asks a new path to <paramref name="goal"/> on the floor at <paramref name="targetHeight"/>; the next comes RepathSeconds later at
+    /// the earliest.
     /// </summary>
     static void AskPath(ref CharacterHot n, CharacterCold cold, Vector2 goal, float targetHeight)
     {
@@ -339,8 +346,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 
     /// <summary>
     /// The look-at it faces (<see cref="SteerState.Face"/>): its target while it swings (the attack start, <c>FUN_140666400</c>; the swing update
-    /// <c>FUN_14060a590</c>) and in its footwork (state 5, <c>FUN_1402b3180</c>), the swing its defence follows (the defence update, not during a block of a rear
-    /// direction), else the last one (the wait, state 6, writes none).
+    /// <c>FUN_14060a590</c>) and in its footwork (state 5, <c>FUN_1402b3180</c>), the swing its defence follows (the defence update, not during a
+    /// block of a rear direction), else the last one (the wait, state 6, writes none).
     /// </summary>
     int LookAt(World world, in CombatSlot st, int t, int last)
     {
@@ -439,8 +446,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 
     /// <summary>
     /// Puts <paramref name="target"/> on <paramref name="cold"/>'s path failures for <see cref="PathFailureSeconds"/> (<c>notifyPathImpossible</c>
-    /// <c>FUN_140796ed0</c>, as a task walk that cannot get to its target reports it: the AI plan step <c>FUN_14050d970</c> and <c>AI::isWithinChoppingRange</c>
-    /// <c>FUN_14059c6d0</c>, <b>Verified</b> callers). Lapsed entries are dropped, not tested again.
+    /// <c>FUN_140796ed0</c>, as a task walk that cannot get to its target reports it: the AI plan step <c>FUN_14050d970</c> and
+    /// <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b> callers). Lapsed entries are dropped, not tested again.
     /// </summary>
     internal static void GiveUp(World world, CharacterCold cold, CharacterId target)
     {
@@ -496,6 +503,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// </summary>
     public const float ProtectReach = 150;
 
+    /// <summary>
+    /// The living bodyguards (characters with a follow order) in slot order, listed once per check for the guard search.
+    /// </summary>
     readonly List<int> _guards = [];
 
     /// <summary>
@@ -503,15 +513,28 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// (<see cref="CombatSystem.Alerts"/>, or a shot for a shooter).
     /// </summary>
     int[] _alertSlot = [], _alertGeneration = [];
+    /// <summary>
+    /// Per attacker slot: the tick its target was taken.
+    /// </summary>
     long[] _alertTick = [];
+    /// <summary>
+    /// Per attacker slot: whether its target has been alerted, and whether that happened this tick.
+    /// </summary>
     bool[] _alerted = [], _justAlerted = [];
 
+    /// <summary>
+    /// The joiners of a fight grouped by the attacker each takes on, in the order first chosen (scratch of the fight join).
+    /// </summary>
     readonly List<(int Foe, List<CharacterId> Joiners)> _byFoe = [];
 
     /// <summary>
-    /// This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>), for the decision step's Self preservation.
+    /// This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>), for the decision step's
+    /// Self preservation.
     /// </summary>
     readonly Dictionary<int, int> _selfFoes = [];
+    /// <summary>
+    /// The tick <see cref="_selfFoes"/> was made at; it holds nothing on any other tick.
+    /// </summary>
     long _selfFoesTick = -1;
 
     /// <summary>
@@ -519,6 +542,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// </summary>
     public PopulationData? Towns { get; set; }
 
+    /// <summary>
+    /// Registers the two goals the player characters fight by: 15 Protect allies and 32 Self preservation.
+    /// </summary>
     public void RegisterSources(DecisionSystem decisions)
     {
         decisions.Register(new JoinFight(this));
@@ -538,17 +564,33 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// </summary>
     sealed class JoinFight(RetaliationSystem owner) : IDecisionSource
     {
+        /// <summary>
+        /// The source's name in the decision log.
+        /// </summary>
         public string Name => "15 Protect allies";
 
+        /// <summary>
+        /// A goal: it runs in the goals step.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Goals;
 
+        /// <summary>
+        /// Goal 15.
+        /// </summary>
         public int Key => 15;
 
-        // Passive zeroes it even in a fight (FUN_140599b90, Verified).
+        /// <summary>
+        /// The desire: 0 while Passive, else the best ally's value (<see cref="ProtectDesire"/>), else 0.7. Passive zeroes it even in a fight
+        /// (FUN_140599b90, Verified).
+        /// </summary>
         public float Desire(World world, int slot) =>
             (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0
                 ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
 
+        /// <summary>
+        /// Runs while its defence (row 13) is the character's fight; else while it may help (able, not Passive, not sneaking outside a fight, not an
+        /// obedient slave) and an attacker of an ally is in reach.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var table = world.Characters;
@@ -570,6 +612,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             return DecisionCheck.No(owner.BestAlly(world, slot, out _, out _) > 0 ? "no attacker of the ally in reach" : "no fighting ally in sight");
         }
 
+        /// <summary>
+        /// Gives a defensive attack order on the planned foe for the next tick.
+        /// </summary>
         public void Start(World world, int slot)
         {
             var table = world.Characters;
@@ -702,6 +747,11 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         return world.Characters.Next[a].Alive && world.Characters.Cold(a) is { Medical.Incapacitated: false } ? a : -1;
     }
 
+    /// <summary>
+    /// Records <paramref name="a"/> as this tick's attacker of player character <paramref name="t"/> (the first one only) when it targets it, is not
+    /// incapacitated, is within <see cref="SelfDefenceReach"/> (a gunning character does not take a ranged attacker) and passes a holding character's
+    /// post test.
+    /// </summary>
     void OfferSelf(CharacterTable table, int a, int t)
     {
         var next = table.Next;
@@ -731,12 +781,24 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// </summary>
     sealed class SelfPreservation(RetaliationSystem owner) : IDecisionSource
     {
+        /// <summary>
+        /// The source's name in the decision log.
+        /// </summary>
         public string Name => "32 Self preservation";
 
+        /// <summary>
+        /// A goal: it runs in the goals step.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Goals;
 
+        /// <summary>
+        /// Goal 32.
+        /// </summary>
         public int Key => 32;
 
+        /// <summary>
+        /// Runs while its defence (row 13) is the character's fight; else for one that can fight, is free and awake, and has this tick's attacker.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var table = world.Characters;
@@ -750,6 +812,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             return owner.SelfFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no attacker in range");
         }
 
+        /// <summary>
+        /// 1 with the attacker within <see cref="ImmediateReach"/>, else 0.7 (also while its fight goes on).
+        /// </summary>
         public float Desire(World world, int slot)
         {
             int a = owner.SelfFoe(world, slot);
@@ -761,6 +826,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             return d.X * d.X + d.Z * d.Z <= ImmediateReach * ImmediateReach ? 1 : 0.7f;
         }
 
+        /// <summary>
+        /// Gives a defensive attack order on this tick's attacker for the next tick.
+        /// </summary>
         public void Start(World world, int slot)
         {
             var table = world.Characters;
@@ -878,7 +946,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         var defenders = new List<CharacterId>();
 
-        // A player character's own defence is the decision step's (Self preservation, OfferSelf); it is taken here, so it joins no other fight of this pass.
+        // A player character's own defence is the decision step's (Self preservation, OfferSelf); it is taken here, so it joins no other fight of
+        // this pass.
         if (SelfDefends(table, t, taken, next[a].Position))
         {
             defenders.Add(new(t, next[t].Generation));
@@ -907,14 +976,15 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         if (defenders.Count == 0) return;
 
-        // The engine started these this tick (a follow row's fight, a bodyguard's own defence, an NPC's): the decision step leaves the player's alone this tick.
+        // The engine started these this tick (a follow row's fight, a bodyguard's own defence, an NPC's): the decision step leaves the player's alone
+        // this tick.
         foreach (var d in defenders)
         {
             if (table.Cold(d.Slot) is { IsPlayer: true }) world.Decisions.Claim(world, d.Slot);
         }
 
-        // Each one joining the attacked character's fight takes the attacker AI::findAttackerOf scores best for it (FUN_14099c3b0, Verified): grouped by that
-        // attacker, in the order first chosen. The attacked character itself answers this attacker.
+        // Each one joining the attacked character's fight takes the attacker AI::findAttackerOf scores best for it (FUN_14099c3b0, Verified): grouped
+        // by that attacker, in the order first chosen. The attacked character itself answers this attacker.
         _byFoe.Clear();
         foreach (var d in defenders)
         {
@@ -977,11 +1047,11 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The characters whose follow row (31 Staying close, 45 Bodyguard, 289) runs on <paramref name="slot"/> defend it against <paramref name="attacker"/> within
-    /// <see cref="ImmediateReach"/> of it, in slot order, never against a character of their own faction: the rows need state 16 (no threat within 40 of the
-    /// followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of" provides (docs/game/ai-tasks.md
-    /// "Precedence"); the fight is a step of the row, which the decision step follows again after it (<see cref="MovementSystem.FollowAgain"/>). A
-    /// bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
+    /// The characters whose follow row (31 Staying close, 45 Bodyguard, 289) runs on <paramref name="slot"/> defend it against
+    /// <paramref name="attacker"/> within <see cref="ImmediateReach"/> of it, in slot order, never against a character of their own faction: the rows
+    /// need state 16 (no threat within 40 of the followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of"
+    /// provides (docs/game/ai-tasks.md "Precedence"); the fight is a step of the row, which the decision step follows again after it
+    /// (<see cref="MovementSystem.FollowAgain"/>). A bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
     /// </summary>
     static void Guards(World world, CharacterTable table, int slot, int attacker, List<CharacterId> defenders, HashSet<int> taken, List<int> guards)
     {
@@ -1052,6 +1122,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0
             && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
 
+    /// <summary>
+    /// Whether the character can answer a fight: not taken yet, not already attacking, a fighter that is free, awake and not fleeing; an NPC also not
+    /// crawling and not about to flee.
+    /// </summary>
     static bool Able(CharacterTable table, int slot, HashSet<int> taken, out CharacterCold cold, out byte task)
     {
         task = table.Next[slot].Task;

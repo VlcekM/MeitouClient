@@ -28,6 +28,9 @@ public sealed record GetInCageOrder(IReadOnlyList<CharacterId> Characters, strin
 /// </summary>
 public sealed partial class LockSystem
 {
+    /// <summary>
+    /// The Set Free order: a player character frees a conscious prisoner from its cage.
+    /// </summary>
     void SetFreeInput(World world, SetFreeOrder order)
     {
         var table = world.Characters;
@@ -41,8 +44,14 @@ public sealed partial class LockSystem
             StartWork(world, best, CharacterTask.GoTo, TaskType.ReleasePrisoner, cage.Id, order.Prisoner, queued: order.Queued);
     }
 
+    /// <summary>
+    /// Whether a character is conscious (Set Free's precondition 125).
+    /// </summary>
     static bool Conscious(CharacterCold c) => CharacterFacts.Conscious(c);   // Set Free's precondition 125
 
+    /// <summary>
+    /// The Get In order: the nearest player character able to gets into the free cage.
+    /// </summary>
     void GetInInput(World world, GetInCageOrder order)
     {
         var table = world.Characters;
@@ -82,6 +91,9 @@ public sealed partial class LockSystem
     static bool Redirected(in CharacterHot n, Vector2 at, float reach) =>
         n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, at) > MathF.Max(reach, IWalkability.FloorSearch);
 
+    /// <summary>
+    /// Clears a character's lock work.
+    /// </summary>
     static void ClearWork(CharacterCold c)
     {
         c.PickingLock = null;
@@ -132,6 +144,9 @@ public sealed partial class LockSystem
         }
     }
 
+    /// <summary>
+    /// How often the AI's shackled characters are looked at for an escape (see <see cref="ShackleEscapes"/>).
+    /// </summary>
     const int EscapeEveryTicks = 30;
 
     /// <summary>

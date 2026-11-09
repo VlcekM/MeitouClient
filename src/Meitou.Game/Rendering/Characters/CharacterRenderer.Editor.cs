@@ -29,15 +29,36 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public EditorStageRequest? StageRequest { get; set; }
 
+    /// <summary>
+    /// The stage picture (RGBA8 at the request's size) and its depth, remade when the size changes.
+    /// </summary>
     GpuTexture? _stageColour, _stageDepth;
+    /// <summary>
+    /// <see cref="_stageColour"/> with a clamped bilinear sampler.
+    /// </summary>
     SampledTexture? _stageSampled;
 
-    // The enhanced stage (Look): the half-float picture the character and the platform are drawn into, resolved into stageColour.
+    /// <summary>
+    /// The enhanced stage (<see cref="Look"/>): the half-float picture the character and the platform are drawn into, and its depth, resolved into
+    /// <see cref="_stageColour"/>.
+    /// </summary>
     GpuTexture? _stageHdr, _stageHdrDepth;
+    /// <summary>
+    /// <see cref="_stageHdr"/> sampled for the resolve.
+    /// </summary>
     SampledTexture _stageHdrSampled;
+    /// <summary>
+    /// The enhanced stage's supersampling each way (0: none made).
+    /// </summary>
     int _stageHdrScale;
 
+    /// <summary>
+    /// Backing field of <see cref="Look"/>.
+    /// </summary>
     PreviewLook _look;
+    /// <summary>
+    /// The resolve of the enhanced stage, portraits and icons, made on first use.
+    /// </summary>
     PreviewResolve? _preview;
 
     /// <summary>
@@ -165,6 +186,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     void ReleaseStage() => DisposeStageHdr();
 
+    /// <summary>
+    /// Frees the enhanced stage picture and its depth.
+    /// </summary>
     void DisposeStageHdr()
     {
         _stageHdr?.Dispose();
@@ -216,6 +240,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     static Vector3 Ground(in Live l) => l.World.Translation + new Vector3(0, l.Asset.GroundOffset, 0);
 
+    /// <summary>
+    /// Makes the stage picture and its depth at <paramref name="width"/> × <paramref name="height"/>, freeing the old ones.
+    /// </summary>
     void MakeStage(int width, int height)
     {
         DisposeStage();
@@ -227,6 +254,9 @@ internal sealed unsafe partial class CharacterRenderer
             _stageColour.View());
     }
 
+    /// <summary>
+    /// Frees the stage pictures, the enhanced portraits' square and the resolve.
+    /// </summary>
     void DisposeStage()
     {
         _stageColour?.Dispose();

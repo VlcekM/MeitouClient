@@ -48,8 +48,8 @@ public static class FoliageGrassField
         Generate(patch, ground, x0, z0, size, out prefixes, densitySetting) is { } blades ? [.. blades] : [];
 
     /// <summary>
-    /// <see cref="BladesWithPrefixes"/> into an array rented from <see cref="System.Buffers.ArrayPool{T}.Shared"/> (empty, not rented, without blades): its first
-    /// <paramref name="floats"/> hold the blades. The caller returns it.
+    /// <see cref="BladesWithPrefixes"/> into an array rented from <see cref="System.Buffers.ArrayPool{T}.Shared"/> (empty, not rented, without
+    /// blades): its first <paramref name="floats"/> hold the blades. The caller returns it.
     /// </summary>
     public static float[] RentBladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes,
         out int floats, float densitySetting = 1)
@@ -72,8 +72,8 @@ public static class FoliageGrassField
         prefixes = new int[PrefixSteps + 1];
         int candidates = (int)(grass.PerSquareUnit * densitySetting * size * size);
         if (candidates <= 0) return null;
-        // Where the patch's density is 0 throughout the page every candidate is dropped (it keeps a blade only for a random number below the density), so none is drawn:
-        // most pages of a zone's patches, and most of a town's loading-screen grass time.
+        // Where the patch's density is 0 throughout the page every candidate is dropped (it keeps a blade only for a random number below the
+        // density), so none is drawn: most pages of a zone's patches, and most of a town's loading-screen grass time.
         if (!AnyDensity(patch, x0, z0, size)) return null;
         uint seed = FoliageNoise.Hash((int)MathF.Floor(x0), (int)MathF.Floor(z0)) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u
             ^ (uint)patch.Channel;

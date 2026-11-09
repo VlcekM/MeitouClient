@@ -11,9 +11,21 @@ public static class VolumetricClouds
     /// The slab's default base and top (the base is a Meitou setting, <c>SkyRenderer.CloudHeight</c>; the slab keeps its thickness).
     /// </summary>
     public const float Bottom = 12000, Top = 19000, Thickness = Top - Bottom, MaxDistance = 500000;
+    /// <summary>
+    /// The range of the cloud height setting.
+    /// </summary>
     public const float MinBottom = 4000, MaxBottom = 40000;
+    /// <summary>
+    /// The world sizes over which the pattern, shape and detail noises repeat.
+    /// </summary>
     public const float PatternPeriod = 120000, ShapePeriod = 40000, DetailPeriod = 10000;
+    /// <summary>
+    /// The cloud's extinction per unit of density and length, and the world span of the cloud shadow map.
+    /// </summary>
     public const float Extinction = 0.0012f, ShadowSpan = 320000;
+    /// <summary>
+    /// Texels per side of the noise volume, of a padded atlas tile, and of the 8 × 8 tile atlas.
+    /// </summary>
     public const int NoiseSize = 64, TileSize = NoiseSize + 2, AtlasSize = TileSize * 8;
 
     /// <summary>
@@ -36,6 +48,9 @@ public static class VolumetricClouds
         return true;
     }
 
+    /// <summary>
+    /// A value 0..1 for the lattice point (x, y, z), repeating every <paramref name="period"/>.
+    /// </summary>
     static float Hash(int x, int y, int z, int period)
     {
         uint h = (uint)(((x % period + period) % period) * 73856093)
@@ -61,6 +76,9 @@ public static class VolumetricClouds
             f.Z);
     }
 
+    /// <summary>
+    /// Periodic cellular noise: 1 minus the distance to the nearest feature point, clamped to 0..1.
+    /// </summary>
     static float Worley(Vector3 p, int period)
     {
         var cell = new Vector3(MathF.Floor(p.X), MathF.Floor(p.Y), MathF.Floor(p.Z));

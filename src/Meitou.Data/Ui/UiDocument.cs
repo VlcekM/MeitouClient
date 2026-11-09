@@ -27,6 +27,9 @@ public sealed partial class UiBindings
     /// Scale pixel-based template chrome along with viewport-relative layouts.
     /// </summary>
     public float TemplateScale { get; set; } = 1;
+    /// <summary>
+    /// Captions the code sets, by widget name; <see cref="Coded"/> translates a message of the game's catalog.
+    /// </summary>
     public Dictionary<string, string> Text { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -34,29 +37,68 @@ public sealed partial class UiBindings
     /// captions through gettext; a layout's own captions stay as written). Null when the code set nothing.
     /// </summary>
     public string? Coded(string key) => Text.TryGetValue(key, out var text) ? Loc.Tr(text) : null;
+    /// <summary>
+    /// Each widget's action, by widget name, or by <c>owner@event</c> for a template part's event.
+    /// </summary>
     public Dictionary<string, string> Actions { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Widgets left out by name, with everything under them.
+    /// </summary>
     public HashSet<string> Hidden { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Widgets shown disabled by name; their children are disabled too.
+    /// </summary>
     public HashSet<string> Disabled { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Widgets left out by instance (one of several of a name), with everything under them.
+    /// </summary>
     public HashSet<MyGuiWidget> HiddenWidgets { get; } = [];
+    /// <summary>
+    /// Screen rectangles that replace a widget's layout position, by widget name.
+    /// </summary>
     public Dictionary<string, UiRect> Positions { get; } = new(StringComparer.Ordinal);
     /// <summary>
     /// Parent-relative runtime geometry, including anonymous layout panels.
     /// </summary>
     public Dictionary<MyGuiWidget, UiRect> RelativePositions { get; } = [];
+    /// <summary>
+    /// The selected tab of each TabControl, by widget name; 0 when unset.
+    /// </summary>
     public Dictionary<string, int> SelectedTabs { get; } = new(StringComparer.Ordinal);
     /// <summary>
     /// A TabControl whose buttons are made at run time (one per player squad): their captions; the selected button shows the first page (MyGUI adds
     /// TabItems so).
     /// </summary>
     public Dictionary<string, IReadOnlyList<string>> TabCaptions { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The filled fraction (0..1) of each bound progress widget, by widget name: a ProgressBar template's fill, else the widget cut to it.
+    /// </summary>
     public Dictionary<string, float> Progress { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The skin state each widget shows (its <c>State</c> property), by widget name.
+    /// </summary>
     public Dictionary<string, string> States { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Properties set over each widget's layout ones, by widget name.
+    /// </summary>
     public Dictionary<string, IReadOnlyDictionary<string, string>> Properties { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The rows of each list widget, by widget name (or by the name its <c>ListSource</c> property gives).
+    /// </summary>
     public Dictionary<string, IReadOnlyList<UiListItem>> Lists { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The selected row of each list, by name; -1 when unset.
+    /// </summary>
     public Dictionary<string, int> SelectedItems { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// How far each list or scroll bar is scrolled, by widget name.
+    /// </summary>
     public Dictionary<string, float> ScrollOffsets { get; } = new(StringComparer.Ordinal);
 }
 
+/// <summary>
+/// Arranges MyGUI layouts into the <see cref="UiControl"/> lists both frontends paint and hit-test.
+/// </summary>
 public static partial class MyGuiPresentation
 {
     /// <summary>
@@ -246,6 +288,9 @@ public static partial class MyGuiPresentation
             "", "", trackSkin, enabled, new Dictionary<string, string>(StringComparer.Ordinal), default, Pickable: false, Clip: result[place].Clip));
     }
 
+    /// <summary>
+    /// The index of <paramref name="layer"/> in <paramref name="layers"/>; -1 when absent.
+    /// </summary>
     static int IndexOfLayer(this IReadOnlyList<string> layers, string layer)
     {
         for (int i = 0; i < layers.Count; i++) if (layers[i] == layer) return i;

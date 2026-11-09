@@ -10,54 +10,85 @@ namespace Meitou.Simulation.Population;
 /// <summary>
 /// What fills a wild site: the homeless squads of an area sector (6.2) or the roaming pool of a nest (6.3).
 /// </summary>
-public enum WildKind : byte { Sector, Nest }
+public enum WildKind : byte
+{
+    /// <summary>
+    /// An area sector's homeless squads (6.2).
+    /// </summary>
+    Sector,
+    /// <summary>
+    /// A nest's roaming pool (6.3).
+    /// </summary>
+    Nest
+}
 
 /// <summary>
 /// A place in the wild that gets squads while its zone is active: an area sector (one zone cell and its BIOME_GROUP) or a nest of a biome group.
-/// <see cref="Spots"/> are the seeded candidate centres of a nest (the first walkable one is used when it loads); a sector has none. <see cref="SaveInstance"/> is the
-/// town-list entry of a nest that came from a save (its one spot is the saved position). <see cref="Key"/> keys a nest's squads: its layout roll's, or for a saved nest no roll
-/// gives, its entry's (so a nest makes the same squads whatever its index).
+/// <see cref="Spots"/> are the seeded candidate centres of a nest (the first walkable one is used when it loads); a sector has none.
+/// <see cref="SaveInstance"/> is the town-list entry of a nest that came from a save (its one spot is the saved position). <see cref="Key"/> keys a
+/// nest's squads: its layout roll's, or for a saved nest no roll gives, its entry's (so a nest makes the same squads whatever its index).
 /// </summary>
 public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int Group, TownData? Nest, int Faction, IReadOnlyList<Vector2> Spots,
     string? SaveInstance = null, ulong Key = 0);
 
 /// <summary>
-/// The wild population (docs/game/factions-squads-towns.md 6.2, 6.3): homeless squads of the area sectors and the animals (and camps) of the nests. Runs
-/// only when <see cref="PopulationData.Biomes"/> is set.
+/// The wild population (docs/game/factions-squads-towns.md 6.2, 6.3): homeless squads of the area sectors and the animals (and camps) of the nests.
+/// Runs only when <see cref="PopulationData.Biomes"/> is set.
 /// <list type="bullet">
 /// <item><b>Sectors</b> (6.2; patrols and the area tick's refill in <c>PopulationHomeless.cs</c>). Every zone cell is a sector of its BIOME_GROUP.
 /// When its zone activates it gets ceil(P x <c>homeless spawn amount</c>) squads: what the original's area tick reaches for a sector loaded alone (it
-/// spawns while the island's population is below P x the sum of the amounts and the sector's own count below its share; with one sector that stops
-/// at the ceiling), but no more than the island's room (<see cref="IslandRoom"/>: the sum over the loaded sectors less their squads and the save's
-/// homeless squads in them). The counters a and b and the "town nearby" halving are not modelled (engine choice).
-/// Template weights are 6.2's homeless branch,
-/// <c>max(0, v0 - k x count)</c> with k = (sum of v0) / (P x amount) and the counts of this sector's own picks; world-state gated templates are skipped.
-/// The spot: a random point of the sector, pushed out of the nearest town to twice its radius and out of other towns of another faction to their radius,
-/// at least <see cref="PopulationSettings.HomelessPlayerDistance"/> from every player character, walkable; 40 tries (the original's 4 rounds of 10), else
-/// that squad is not made. A sector whose nearest town is the player's makes none, and so does one whose own town is a nest with roaming squads.</item>
-/// <item><b>Nests</b> (6.3). The original adds one nest per area tick until a group has <c>num nests</c> x the nests multiplier; here the layout is made at
-/// once from the world seed (engine choice; the end state is the same count): each nest's TOWN is a weighted pick from the group's <c>nests</c> (v0, 0 as
-/// 100, the TOWN's <c>world state</c> gate), its place a seeded cell of the group's area with candidate spots away from placed towns, or for groups with
-/// <c>nests at fixed markers only</c> one of the placed NEST_MARKER towns of the area. When its zone activates the nest fills its roaming pool to
-/// its pool's floor(<c>pop2</c>) members (0.7 x <c>nest resident population</c> at first; <c>PopulationPools.cs</c>) from the TOWN's <c>roaming squads</c> (weight max(0, v0 - count), k = 1; an entry whose expected
-/// size passes the free capacity is skipped, unless the pool is empty and more than 4 are free), the squads wandering round the nest. While loaded it tops up one squad
-/// per look and can be wiped out for good (<c>PopulationPools.cs</c>).</item>
-/// <item><b>Saves</b> (docs/formats/save.md "Nests", "Wild and nest platoons"): a loaded save's nests are the layout's first (at their saved places), the
-/// seeded roll (with the seed the save restores) only tops each group up to its count, leaving out the rolls whose nests the save holds, so a Meitou save
-/// (which writes only the nests that have loaded) loads with its other nests where they were. The save's wild platoons stay as themselves: a nest's counts its members against the nest's pool, a
-/// homeless one counts as one of its sector's squads (the sector its position is in), so a site makes only the rest.</item>
+/// spawns while the island's population is below P x the sum of the amounts and the sector's own count below its share; with one sector that stops at
+/// the ceiling), but no more than the island's room (<see cref="IslandRoom"/>: the sum over the loaded sectors less their squads and the save's
+/// homeless squads in them). The counters a and b and the "town nearby" halving are not modelled (engine choice). Template weights are 6.2's homeless branch, <c>max(0, v0 - k x count)</c> with k = (sum of v0) / (P x amount) and the counts of this
+/// sector's own picks; world-state gated templates are skipped. The spot: a random point of the sector, pushed out of the nearest town to twice its
+/// radius and out of other towns of another faction to their radius, at least <see cref="PopulationSettings.HomelessPlayerDistance"/> from every
+/// player character, walkable; 40 tries (the original's 4 rounds of 10), else that squad is not made. A sector whose nearest town is the player's
+/// makes none, and so does one whose own town is a nest with roaming squads.</item>
+/// <item><b>Nests</b> (6.3). The original adds one nest per area tick until a group has <c>num nests</c> x the nests multiplier; here the layout is
+/// made at once from the world seed (engine choice; the end state is the same count): each nest's TOWN is a weighted pick from the group's
+/// <c>nests</c> (v0, 0 as 100, the TOWN's <c>world state</c> gate), its place a seeded cell of the group's area with candidate spots away from placed
+/// towns, or for groups with <c>nests at fixed markers only</c> one of the placed NEST_MARKER towns of the area. When its zone activates the nest
+/// fills its roaming pool to its pool's floor(<c>pop2</c>) members (0.7 x <c>nest resident population</c> at first; <c>PopulationPools.cs</c>) from
+/// the TOWN's <c>roaming squads</c> (weight max(0, v0 - count), k = 1; an entry whose expected size passes the free capacity is skipped, unless the
+/// pool is empty and more than 4 are free), the squads wandering round the nest. While loaded it tops up one squad per look and can be wiped out for
+/// good (<c>PopulationPools.cs</c>).</item>
+/// <item><b>Saves</b> (docs/formats/save.md "Nests", "Wild and nest platoons"): a loaded save's nests are the layout's first (at their saved places),
+/// the seeded roll (with the seed the save restores) only tops each group up to its count, leaving out the rolls whose nests the save holds, so a
+/// Meitou save (which writes only the nests that have loaded) loads with its other nests where they were. The save's wild platoons stay as
+/// themselves: a nest's counts its members against the nest's pool, a homeless one counts as one of its sector's squads (the sector its position is
+/// in), so a site makes only the rest.</item>
 /// <item><b>Loading</b> follows the towns: the same zone gate, the same unload grace; the squads are built on the population thread and taken in at a
-/// tick boundary; on unload they are removed. Every roll is keyed by the world seed and the sector's zone or the nest's index and the squad's number, never
-/// by the tick, so a reload makes the same squads (their spots can differ when the player stands elsewhere).</item>
+/// tick boundary; on unload they are removed. Every roll is keyed by the world seed and the sector's zone or the nest's index and the squad's number,
+/// never by the tick, so a reload makes the same squads (their spots can differ when the player stands elsewhere).</item>
 /// </list>
 /// </summary>
 public sealed partial class PopulationSystem
 {
+    #region Wild sites and their state
+
+    /// <summary>
+    /// The wild squads built on the build thread, waiting to be taken in.
+    /// </summary>
     readonly ConcurrentQueue<BuiltWild> _builtWild = new();
+    /// <summary>
+    /// The wild sites of the world's biome map (null: not laid out yet, or no biome data).
+    /// </summary>
     List<WildSite>? _wildSites;
+    /// <summary>
+    /// Each wild site's state, by wild site.
+    /// </summary>
     SiteState[] _wildStates = [];
+    /// <summary>
+    /// The wild sites by the zone they are in.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, List<int>> _wildByZone = [];
+    /// <summary>
+    /// The wild sites loaded or loading, in index order.
+    /// </summary>
     readonly SortedSet<int> _wildLoaded = [];
+    /// <summary>
+    /// A scratch list of wild sites for <see cref="StepWild"/>.
+    /// </summary>
     readonly List<int> _wildBuffer = [];
 
     /// <summary>
@@ -65,6 +96,16 @@ public sealed partial class PopulationSystem
     /// when it loads.
     /// </summary>
     readonly SortedDictionary<int, List<KeptWild>> _keptWild = [];
+
+    /// <summary>
+    /// The nest each nest squad was made for, by squad id (see <see cref="NestOf"/>).
+    /// </summary>
+    readonly Dictionary<int, TownData> _nestSquads = [];
+
+    /// <summary>
+    /// The wild squads made since the last take of the log.
+    /// </summary>
+    readonly List<WildSpawn> _wildLog = [];
 
     /// <summary>
     /// A kept wild squad: its characters, what it was made from and the circle it keeps to.
@@ -77,8 +118,9 @@ public sealed partial class PopulationSystem
     internal IReadOnlyList<KeptWild> KeptWildOf(int site) => _keptWild.TryGetValue(site, out var kept) ? kept : [];
 
     /// <summary>
-    /// A wild site's squads, built. <paramref name="Rolls"/>: the nest rolls used (the next top-up's keys follow them); <paramref name="Exhausted"/>: a nest roll found no entry that fits or
-    /// weighs anything; <paramref name="Layout"/>: what a loading nest scatters (<see cref="NestFurniture"/>).
+    /// A wild site's squads, built. <paramref name="Rolls"/>: the nest rolls used (the next top-up's keys follow them);
+    /// <paramref name="Exhausted"/>: a nest roll found no entry that fits or weighs anything; <paramref name="Layout"/>: what a loading nest
+    /// scatters (<see cref="NestFurniture"/>).
     /// </summary>
     sealed record BuiltWild(int Site, long LoadId, Vector2 Centre, List<BuiltSquad> Squads, int Rolls = 0, bool Exhausted = false, bool TopUp = false,
         NestLayout? Layout = null);
@@ -101,7 +143,9 @@ public sealed partial class PopulationSystem
     /// </summary>
     public TownData? NestOf(int squad) => _nestSquads.GetValueOrDefault(squad);
 
-    readonly Dictionary<int, TownData> _nestSquads = [];
+    /// <summary>
+    /// Where the squads of wild site <paramref name="site"/> are in their life.
+    /// </summary>
     public SiteStatus WildStatusOf(int site) => _wildStates[site].Status;
     /// <summary>
     /// The squad ids a wild site has now.
@@ -112,7 +156,6 @@ public sealed partial class PopulationSystem
     /// </summary>
     internal Vector2? WildCentreOf(int site) => site >= 0 && site < _wildCentres.Length ? _wildCentres[site] : null;
 
-    readonly List<WildSpawn> _wildLog = [];
     /// <summary>
     /// A wild squad made: when, by a sector or a nest (its biome group or nest name), the squad, its members.
     /// </summary>
@@ -127,8 +170,13 @@ public sealed partial class PopulationSystem
         return list;
     }
 
-    // ---- the layout (pure given the data, the settings and the seed) ----
+    #endregion
 
+    #region The layout (pure given the data, the settings and the seed)
+
+    /// <summary>
+    /// Lays out the wild sites once, when the data has a biome map (with a loaded save's nests first).
+    /// </summary>
     void EnsureWild(World world)
     {
         if (_wildSites is not null || _data.Biomes is not { } biomes) return;
@@ -147,8 +195,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The save's wild platoons to their sites (a nest platoon to the site of its nest, a homeless one to the sector it stands in), and the nests the save's player knows
-    /// (their states' <c>discovered</c> / <c>explored</c>) to the map.
+    /// The save's wild platoons to their sites (a nest platoon to the site of its nest, a homeless one to the sector it stands in), and the nests the
+    /// save's player knows (their states' <c>discovered</c> / <c>explored</c>) to the map.
     /// </summary>
     void BindSavedWild(World world, Saving.SavedPopulation saved)
     {
@@ -194,7 +242,13 @@ public sealed partial class PopulationSystem
     /// saves reuse them.
     /// </summary>
     readonly Dictionary<int, (string Instance, Data.Save.Hand Handle)> _nestSaveIds = [];
+    /// <summary>
+    /// The save instance and handle remembered for nest site <paramref name="site"/>; false when none is.
+    /// </summary>
     internal bool NestSaveId(int site, out (string Instance, Data.Save.Hand Handle) id) => _nestSaveIds.TryGetValue(site, out id);
+    /// <summary>
+    /// Remembers the save instance and handle of nest site <paramref name="site"/>.
+    /// </summary>
     internal void RememberNest(int site, string instance, Data.Save.Hand handle) => _nestSaveIds[site] = (instance, handle);
 
     /// <summary>
@@ -202,6 +256,9 @@ public sealed partial class PopulationSystem
     /// </summary>
     sealed record WildHold(int Squads, int Members, Dictionary<string, int> Templates);
 
+    /// <summary>
+    /// What the save's kept wild platoons bound to the site hold; null when none does.
+    /// </summary>
     WildHold? HoldOf(World world, int site)
     {
         WildHold? hold = null;
@@ -234,8 +291,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The sectors (every in-map zone whose group has homeless spawns), then the nests of every group in record order: the <paramref name="saved"/> nests in it (a save's),
-    /// then rolled ones up to the group's count.
+    /// The sectors (every in-map zone whose group has homeless spawns), then the nests of every group in record order: the <paramref name="saved"/>
+    /// nests in it (a save's), then rolled ones up to the group's count.
     /// </summary>
     public static List<WildSite> BuildWildSites(PopulationData data, PopulationSettings settings, BiomeMap biomes, ulong seed,
         IReadOnlyList<Saving.SavedNest>? saved = null, IWorldStates? states = null)
@@ -383,10 +440,10 @@ public sealed partial class PopulationSystem
                 count = Math.Min(count, markers.Count);
             }
 
-            // The roll runs in a fixed order as for a world without a save and leaves out each roll whose nest the save holds (a saved nest stands at one of its spots,
-            // or its marker: a Meitou save writes a rolled nest at the spot it loaded at), until the group has its count. A save holds only the nests made so far
-            // (docs/formats/save.md "Nests"), so whichever of them it holds, the others come out as before: a left-out roll takes no room, a held one is never rolled
-            // twice, and the saved nest takes over that roll's key.
+            // The roll runs in a fixed order as for a world without a save and leaves out each roll whose nest the save holds (a saved nest stands at
+            // one of its spots, or its marker: a Meitou save writes a rolled nest at the spot it loaded at), until the group has its count. A save
+            // holds only the nests made so far (docs/formats/save.md "Nests"), so whichever of them it holds, the others come out as before: a
+            // left-out roll takes no room, a held one is never rolled twice, and the saved nest takes over that roll's key.
             int room = count - mine.Count;
             for (int i = 0; i < count && room > 0; i++)
             {
@@ -476,8 +533,23 @@ public sealed partial class PopulationSystem
         return false;
     }
 
-    // ---- the look, in the slow phase (after the towns) ----
+    #endregion
 
+    #region The look, in the slow phase (after the towns)
+
+    /// <summary>
+    /// The build being spawned one squad per tick (docs/game/ai.md "Squad factory queue"), and the next of its squads.
+    /// </summary>
+    (BuiltWild Build, int Next)? _spawningWild;
+
+    /// <summary>
+    /// The wild builds taken from the queue, waiting to spawn.
+    /// </summary>
+    readonly List<BuiltWild> _readyWild = [];
+
+    /// <summary>
+    /// The wild step: the sites of the active zones load, the loaded ones unload once inactive past <paramref name="grace"/>.
+    /// </summary>
     void StepWild(World world, long grace)
     {
         EnsureWild(world);
@@ -518,8 +590,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The Meitou <see cref="KeepWild"/> unload: each squad of the site with someone alive keeps its characters (<see cref="StoredSquad"/>), so the site makes the same ones,
-    /// wounds and all, where they stood when it loads again; nothing leaves a nest's pool. Faithful: they are dropped and a nest pays for the hurt ones (<c>PayNestDespawn</c>).
+    /// The Meitou <see cref="KeepWild"/> unload: each squad of the site with someone alive keeps its characters (<see cref="StoredSquad"/>), so the
+    /// site makes the same ones, wounds and all, where they stood when it loads again; nothing leaves a nest's pool. Faithful: they are dropped and a
+    /// nest pays for the hurt ones (<c>PayNestDespawn</c>).
     /// </summary>
     void KeepWildSquads(World world, int site, SiteState state)
     {
@@ -588,6 +661,9 @@ public sealed partial class PopulationSystem
         }
     }
 
+    /// <summary>
+    /// Starts loading a wild site: its squads built (on the build thread when there is one) with the players' spots it keeps clear of.
+    /// </summary>
     void LoadWild(World world, WildSite site, SiteState state)
     {
         if (ZoneGate is { } gate && !gate(site.Zone)) return;   // retried at the next look
@@ -601,7 +677,8 @@ public sealed partial class PopulationSystem
         var hold = HoldOf(world, site.Index);
         if (site.Kind == WildKind.Nest)
         {
-            // The nest's pool (docs/simulation.md "Off-screen tier"): up to its current max, less the save's members it holds; a wiped-out nest makes none.
+            // The nest's pool (docs/simulation.md "Off-screen tier"): up to its current max, less the save's members it holds; a wiped-out nest
+            // makes none.
             var pools = NestPools(world, site);
             int cap = pools.Ded ? 0 : (int)MathF.Floor(pools.Roaming.Current);
             var counts = new int[site.Nest!.RoamingSquads.Count];
@@ -641,6 +718,9 @@ public sealed partial class PopulationSystem
         return (int)MathF.Max(0, MathF.Ceiling(target - load - 1e-4f));
     }
 
+    /// <summary>
+    /// The living player characters' places on the ground plane.
+    /// </summary>
     static Vector2[] PlayerSpots(World world)
     {
         var list = new List<Vector2>();
@@ -655,14 +735,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The build being spawned one squad per tick (docs/game/ai.md "Squad factory queue"), and the next of its squads.
-    /// </summary>
-    (BuiltWild Build, int Next)? _spawningWild;
-    readonly List<BuiltWild> _readyWild = [];
-
-    /// <summary>
-    /// Spawns at most one squad of the finished wild builds (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
-    /// Returns whether it made one. A build is finished (its site marked loaded, the nest scattered) with its last squad.
+    /// Spawns at most one squad of the finished wild builds (the original builds one queued squad request per rendered frame,
+    /// <c>FUN_140583310</c>; a tick stands for a frame here). Returns whether it made one. A build is finished (its site marked loaded, the nest
+    /// scattered) with its last squad.
     /// </summary>
     bool DrainWild(World world)
     {
@@ -699,6 +774,10 @@ public sealed partial class PopulationSystem
         EndWild(world, b);
     }
 
+    /// <summary>
+    /// Begins spawning a wild build: false when the site was unloaded meanwhile; else its state takes the build's rolls, a nest's centre and camp are
+    /// stood up.
+    /// </summary>
     bool BeginWild(World world, BuiltWild b)
     {
         var state = _wildStates[b.Site];
@@ -712,6 +791,9 @@ public sealed partial class PopulationSystem
         return true;
     }
 
+    /// <summary>
+    /// Makes one squad of a wild build in the world; a nest's wanders round it.
+    /// </summary>
     void SpawnWildSquad(World world, BuiltWild b, BuiltSquad built)
     {
         var state = _wildStates[b.Site];
@@ -732,6 +814,9 @@ public sealed partial class PopulationSystem
         }
     }
 
+    /// <summary>
+    /// A wild build is done: the site is loaded; a nest that ran out of rolls may be wiped out for good.
+    /// </summary>
     void EndWild(World world, BuiltWild b)
     {
         var state = _wildStates[b.Site];
@@ -742,9 +827,19 @@ public sealed partial class PopulationSystem
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);
     }
 
+    /// <summary>
+    /// The radius a nest's squads wander in: its town radius, at least 100.
+    /// </summary>
     static float NestRadius(TownData nest) => Math.Max(nest.SizeRadius * nest.TownRadiusMult, 100);
 
-    // ---- building (pure given its arguments; any thread) ----
+    #endregion
+
+    #region Building (pure given its arguments; any thread)
+
+    /// <summary>
+    /// How near a town a nest marker may not be used (<b>Verified</b>, 6,250,000 squared in <c>FUN_1408f6350</c>).
+    /// </summary>
+    const float MarkerTownGap = 2500;
 
     /// <summary>
     /// The number of homeless squads a sector loaded on its own reaches (6.2): ceil(P x amount).
@@ -791,6 +886,9 @@ public sealed partial class PopulationSystem
         return last;
     }
 
+    /// <summary>
+    /// Whether a squad template exists, is a template and its world states pass now.
+    /// </summary>
     bool TemplateUsable(string id) =>
         _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r)
             && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0));
@@ -846,16 +944,14 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// How near a town a nest marker may not be used (<b>Verified</b>, 6,250,000 squared in <c>FUN_1408f6350</c>).
+    /// The placed town nearest <paramref name="p"/> (no nest markers, points of interest or null towns), with its distance.
     /// </summary>
-    const float MarkerTownGap = 2500;
-
     TownSite? NearestTown(Vector2 p, out float distance) => NearestTown(_data, p, out distance);
 
     /// <summary>
-    /// The nest that is a sector's own town (<c>FUN_1408f62e0</c>: the town nearest the sector's centre, when it stands in the sector): the nearest nest site
-    /// when no level-data town is nearer and it stands in the sector, or the nearest level-data town when it is a nest standing in the sector, else null.
-    /// A rolled nest counts at its first spot (it settles among its spots as it loads).
+    /// The nest that is a sector's own town (<c>FUN_1408f62e0</c>: the town nearest the sector's centre, when it stands in the sector): the nearest
+    /// nest site when no level-data town is nearer and it stands in the sector, or the nearest level-data town when it is a nest standing in the
+    /// sector, else null. A rolled nest counts at its first spot (it settles among its spots as it loads).
     /// </summary>
     TownData? OwnNest(WildSite sector, Vector2 centre)
     {
@@ -872,6 +968,10 @@ public sealed partial class PopulationSystem
         return town is { Town.Type: TownType.Nest } && town.Zone == sector.Zone ? town.Town : null;
     }
 
+    /// <summary>
+    /// The placed town of <paramref name="data"/> nearest <paramref name="p"/> (no nest markers, points of interest or null towns), with its
+    /// distance; null when there is none.
+    /// </summary>
     static TownSite? NearestTown(PopulationData data, Vector2 p, out float distance)
     {
         TownSite? best = null;
@@ -913,6 +1013,9 @@ public sealed partial class PopulationSystem
         return null;
     }
 
+    /// <summary>
+    /// Pushes <paramref name="p"/> out of the town's radius times <paramref name="share"/> (a point at the centre goes +X).
+    /// </summary>
     static Vector2 PushOut(Vector2 p, TownSite town, float share)
     {
         var c = new Vector2(town.Position.X, town.Position.Z);
@@ -923,6 +1026,9 @@ public sealed partial class PopulationSystem
         return len < 1e-3f ? c + new Vector2(r, 0) : c + d / len * r;
     }
 
+    /// <summary>
+    /// Builds a nest's roaming squads as it loads: its centre (the budget's, else its first walkable spot) and the squads its pool lacks.
+    /// </summary>
     BuiltWild BuildNest(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, NestBudget budget)
     {
         var squads = new List<BuiltSquad>();
@@ -994,4 +1100,6 @@ public sealed partial class PopulationSystem
         var layout = topUp ? null : NestFurniture.Scatter(_data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");
         return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, layout);
     }
+
+    #endregion
 }

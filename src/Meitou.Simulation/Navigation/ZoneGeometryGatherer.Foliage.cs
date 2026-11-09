@@ -5,6 +5,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The foliage of a gather: the foliage objects of the zone and its neighbours, as cutters or collision shapes.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     #region Foliage

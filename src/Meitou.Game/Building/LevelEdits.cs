@@ -21,13 +21,34 @@ public sealed class LevelEdits
     /// </summary>
     public const string MarkerFile = "meitou-level-editor.txt";
 
+    /// <summary>
+    /// The buildings the editor placed this session, by placement key.
+    /// </summary>
     readonly Dictionary<string, BuildingPlacement> _added = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The level-data buildings the editor cleared, by placement key.
+    /// </summary>
     readonly Dictionary<string, BuildingPlacement> _cleared = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Per zone, the number the next placed building's instance id takes (above the zone's highest <c>nextId</c>).
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, int> _nextId = [];
 
+    /// <summary>
+    /// The buildings the editor placed.
+    /// </summary>
     public IReadOnlyCollection<BuildingPlacement> Added => _added.Values;
+    /// <summary>
+    /// The level-data buildings the editor cleared.
+    /// </summary>
     public IReadOnlyCollection<BuildingPlacement> Cleared => _cleared.Values;
+    /// <summary>
+    /// Whether the level-data building with this key was cleared.
+    /// </summary>
     public bool IsCleared(string key) => _cleared.ContainsKey(key);
+    /// <summary>
+    /// Whether nothing was placed or cleared.
+    /// </summary>
     public bool IsEmpty => _added.Count == 0 && _cleared.Count == 0;
 
     /// <summary>
@@ -63,6 +84,9 @@ public sealed class LevelEdits
         return _cleared.TryAdd(placement.Key, placement) ? false : null;
     }
 
+    /// <summary>
+    /// Drops every edit (a new world or level data).
+    /// </summary>
     public void Forget()
     {
         _added.Clear();
@@ -87,6 +111,10 @@ public sealed class LevelEdits
     /// </summary>
     public static FcsFile RestoredFile(BuildingPlacement placement) => EditFile(placement, "", cleared: false, withState: false);
 
+    /// <summary>
+    /// A zone file with the building list entry of <paramref name="p"/>: no target when <paramref name="cleared"/>, else its building with its state
+    /// id (and, with <paramref name="withState"/>, its state record).
+    /// </summary>
     static FcsFile EditFile(BuildingPlacement p, string recordName, bool cleared, bool withState = true)
     {
         var data = new FcsFile { FileType = FcsFileType.V15 };
@@ -102,6 +130,9 @@ public sealed class LevelEdits
         return data;
     }
 
+    /// <summary>
+    /// The GAMESTATE_BUILDING state id of an instance: the instance id with <c>-S</c> and the record type in hex.
+    /// </summary>
     static string StateIdOf(string instance)
     {
         string type = ((int)FcsRecordType.GamestateBuilding).ToString("x", System.Globalization.CultureInfo.InvariantCulture);
@@ -139,9 +170,16 @@ public sealed class LevelEdits
         return files;
     }
 
+    /// <summary>
+    /// The zones with an edit, by row, then column.
+    /// </summary>
     List<ZoneCoordinate> EditedZones() =>
         [.. _added.Values.Concat(_cleared.Values).Select(p => p.Zone).Distinct().OrderBy(z => z.Y).ThenBy(z => z.X)];
 
+    /// <summary>
+    /// A zone's file: <paramref name="data"/> with the zone's cleared entries and placed buildings (with their states) put in, the building list
+    /// last, the next id raised past the edits', and the zone's slot list as the trailer.
+    /// </summary>
     byte[] ZoneBytes(ZoneCoordinate zone, FcsFile data, WorldLevelData levels, Func<string, string> recordName)
     {
         var list = data.Records.FirstOrDefault(r => r.StringId == WorldLevelData.BuildingListId);
@@ -179,6 +217,9 @@ public sealed class LevelEdits
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Puts the instance into the building list, replacing one of the same id.
+    /// </summary>
     static void Put(FcsRecord list, FcsInstance instance)
     {
         list.Instances.RemoveAll(i => i.Id == instance.Id);
@@ -194,8 +235,14 @@ public sealed class LevelEdits
         var placed = new List<BuildingPlacement>();
         var clearedKeys = new List<string>();
         FcsFile data;
-        try { data = LevelFile.Read(bytes).Data; }
-        catch (Exception e) when (e is FcsFormatException or EndOfStreamException or InvalidDataException) { return (placed, clearedKeys); }
+        try
+        {
+            data = LevelFile.Read(bytes).Data;
+        }
+        catch (Exception e) when (e is FcsFormatException or EndOfStreamException or InvalidDataException)
+        {
+            return (placed, clearedKeys);
+        }
         var states = data.Records.ToDictionary(r => r.StringId, StringComparer.Ordinal);
         foreach (var list in data.Records.Where(r => r.StringId == WorldLevelData.BuildingListId))
             foreach (var i in list.Instances)
@@ -247,7 +294,8 @@ public sealed class LevelEdits
         state.Ints["floornum"] = 0;
         state.Ints["flags"] = 1;   // bit 0: outside
         state.Strings["name"] = name;
-        // The layouts the player (or the agent-playtest place-building command) chose: the keys a level building's state carries (docs/formats/zones.md).
+        // The layouts the player (or the agent-playtest place-building command) chose: the keys a level building's state
+        // carries (docs/formats/zones.md).
         if (p.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;
         if (p.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
         return state;

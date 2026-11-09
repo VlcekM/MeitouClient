@@ -9,8 +9,8 @@ namespace Meitou.Game.Rendering.Overlays;
 /// <summary>
 /// A debug view of the navigation mesh (Meitou only, docs/game/pathfinding.md "Meitou debug view"): translucent polygons and their edges over the
 /// finished picture, fainter where the scene hides them (sorted against the scene's depth like <see cref="MarkerRenderer"/>). The host hands it the
-/// geometry with
-/// <see cref="SetMesh"/>, camera-independent, relative to an origin; nothing is drawn until then or while <see cref="Visible"/> is false.
+/// geometry with <see cref="SetMesh"/>, camera-independent, relative to an origin; nothing is drawn until then or while <see cref="Visible"/> is
+/// false.
 /// </summary>
 public sealed unsafe class NavmeshOverlayRenderer : IDisposable
 {
@@ -19,6 +19,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
     /// </summary>
     public const int Stride = 7;
 
+    /// <summary>
+    /// The vertex shader: the vertex placed relative to the eye, with its colour.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec3 aPos;
@@ -33,6 +36,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The fragment shader: the colour premultiplied, a quarter as strong where the scene's depth hides it.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec4 vColour;
@@ -48,15 +54,54 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The device the overlay is drawn on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The overlay's program (<see cref="Vertex"/>, <see cref="Fragment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The pipelines of the polygons (triangles) and of their edges (lines).
+    /// </summary>
     readonly NativeSegment _triangles, _lines;
+
+    /// <summary>
+    /// The vertex layout: position and RGBA, <see cref="Stride"/> floats a vertex.
+    /// </summary>
     readonly VertexArrayBindings _vertexSource;
+
+    /// <summary>
+    /// The vertex buffer at the position's and the colour's offset, bound for the draws.
+    /// </summary>
     readonly GpuBufferBinding[] _bindings = new GpuBufferBinding[2];
+
+    /// <summary>
+    /// The program's uniforms: the view-projection, the origin's offset from the eye and the scene depth's scale.
+    /// </summary>
     readonly UniformHandle _viewProjection, _offset, _depthScale;
+
+    /// <summary>
+    /// The program's scene depth slot.
+    /// </summary>
     readonly SamplerSlot _sceneDepth;
+
+    /// <summary>
+    /// The polygons' and the edges' vertices (null: none).
+    /// </summary>
     DeviceBuffer? _fill, _edges;
+
+    /// <summary>
+    /// The vertex counts of the polygons and of the edges.
+    /// </summary>
     int _fillCount, _edgeCount;
+
+    /// <summary>
+    /// The world point the mesh's positions are relative to.
+    /// </summary>
     Vector3 _origin;
 
     /// <summary>
@@ -64,6 +109,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
     /// </summary>
     public bool Visible { get; set; }
 
+    /// <summary>
+    /// Makes the program, its two pipelines and the vertex layout; the geometry comes with <see cref="SetMesh"/>.
+    /// </summary>
     public NavmeshOverlayRenderer(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -102,6 +150,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         (_fill, _fillCount, _edges, _edgeCount) = (null, 0, null, 0);
     }
 
+    /// <summary>
+    /// <paramref name="data"/> uploaded into a new vertex buffer named <paramref name="name"/>, with its vertex count; null and 0 when empty.
+    /// </summary>
     (DeviceBuffer?, int) Upload(float[] data, string name)
     {
         if (data.Length == 0) return (null, 0);
@@ -137,6 +188,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         _gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Draws <paramref name="count"/> vertices of <paramref name="buffer"/> with <paramref name="segment"/>'s pipeline; nothing when there are none.
+    /// </summary>
     void Draw(IGpuCommandList cmd, DrawState state, PassTargets t, NativeSegment segment, DeviceBuffer? buffer, int count)
     {
         if (buffer is null || count == 0) return;
@@ -148,6 +202,9 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         cmd.Draw((uint)count, 1, 0, 0);
     }
 
+    /// <summary>
+    /// Frees the geometry.
+    /// </summary>
     public void Dispose()
     {
         _fill?.Dispose();

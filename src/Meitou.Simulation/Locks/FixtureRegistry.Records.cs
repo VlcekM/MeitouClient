@@ -24,10 +24,19 @@ public sealed class BuildingRecord
     public string? Template { get; set; }
 }
 
+/// <summary>
+/// The registry's building records: the designation, template and public day of the houses squads were housed in.
+/// </summary>
 public sealed partial class FixtureRegistry
 {
+    /// <summary>
+    /// Meitou's GAMESTATE_BUILDING keys of a building record (designation, template) and the original's <c>is public day</c>.
+    /// </summary>
     const string DesignationKey = "meitou designation", TemplateKey = "meitou template", PublicDayKey = "is public day";
 
+    /// <summary>
+    /// The building records by building key.
+    /// </summary>
     readonly Dictionary<string, BuildingRecord> _records = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -35,6 +44,9 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public BuildingRecord? RecordOf(string building) => _records.GetValueOrDefault(building);
 
+    /// <summary>
+    /// The record of a building, made when absent.
+    /// </summary>
     BuildingRecord RecordFor(string building) => _records.TryGetValue(building, out var r) ? r : _records[building] = new BuildingRecord();
 
     /// <summary>
@@ -74,6 +86,9 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public bool? PublicFlagOf(string building) => PublicOf(building) ?? PublicDayOf(building);
 
+    /// <summary>
+    /// Reads a building record from its state (nothing without Meitou's keys).
+    /// </summary>
     void ReadRecord(string building, FcsRecord state)
     {
         if (!state.Ints.ContainsKey(DesignationKey) && !state.Strings.ContainsKey(TemplateKey)) return;
@@ -85,6 +100,9 @@ public sealed partial class FixtureRegistry
         };
     }
 
+    /// <summary>
+    /// Writes a building record into its state.
+    /// </summary>
     void WriteRecord(string building, FcsRecord state)
     {
         if (!_records.TryGetValue(building, out var r)) return;
@@ -94,6 +112,9 @@ public sealed partial class FixtureRegistry
         if (r.PublicDay is { } open && !_publicFlags.ContainsKey(building)) state.Bools[PublicDayKey] = open;
     }
 
+    /// <summary>
+    /// Adds the building records to the world's state hash, once any squad was housed.
+    /// </summary>
     void HashRecords(ref StateHasher h)
     {
         if (_records.Count == 0) return;   // only once a squad was housed, so worlds without one hash as before

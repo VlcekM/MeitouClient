@@ -14,9 +14,15 @@ static class MacSupport
     /// </summary>
     public const string HomebrewVulkanCommand = "brew install molten-vk vulkan-loader";
 
+    /// <summary>
+    /// Whether Metal can be used: macOS on Apple silicon (arm64).
+    /// </summary>
     public static bool MetalAvailable =>
         OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
 
+    /// <summary>
+    /// libc's <c>sysctlbyname</c>, for the Mac's memory size.
+    /// </summary>
     [DllImport("libc", SetLastError = true)]
     static extern int sysctlbyname(string name, out ulong oldp, ref ulong oldlenp, IntPtr newp, ulong newlen);
 
@@ -54,6 +60,9 @@ static class MacSupport
         return Candidates(existing).FirstOrDefault(dir => File.Exists(Path.Combine(dir, "libvulkan.1.dylib")));
     }
 
+    /// <summary>
+    /// Whether the Vulkan loader (Homebrew's) is installed.
+    /// </summary>
     public static bool VulkanAvailable => VulkanLoaderDirectory() is not null;
 
     /// <summary>
@@ -82,13 +91,19 @@ static class MacSupport
         return true;
     }
 
+    /// <summary>
+    /// The folders to look for MoltenVK in: those of <paramref name="existing"/> (a DYLD_LIBRARY_PATH), then Homebrew's two prefixes.
+    /// </summary>
     static string[] Candidates(string? existing) =>
         (existing ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)
             .Concat(["/opt/homebrew/lib", "/usr/local/lib"])
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-    // The loader is looked up by name from DYLD_LIBRARY_PATH; the ICD JSON still points MoltenVK at its absolute Homebrew path.
+    /// <summary>
+    /// The loader is looked up by name from DYLD_LIBRARY_PATH; the ICD JSON still points MoltenVK at its absolute Homebrew path. Links the loader
+    /// (and MoltenVK when found) into the data folder's <c>vulkan</c> folder and returns it; null when that fails.
+    /// </summary>
     static string? LinkLibraries(string source, string? molten)
     {
         try
@@ -107,6 +122,9 @@ static class MacSupport
         }
     }
 
+    /// <summary>
+    /// Makes <paramref name="path"/> a symbolic link to <paramref name="target"/>, replacing what is there (nothing when they are the same file).
+    /// </summary>
     static void Link(string path, string target)
     {
         if (Path.GetFullPath(path) == Path.GetFullPath(target)) return;

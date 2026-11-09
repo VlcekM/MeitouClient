@@ -44,13 +44,14 @@ public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int 
 /// <c>%LOCALAPPDATA%\Meitou\foliage\&lt;key&gt;\z&lt;X&gt;.&lt;Y&gt;.&lt;w|f&gt;.mfl</c> (or the constructor's root; never in the repository),
 /// one file per zone and layout kind (whole or far only). The key is a hash of everything the layout reads: the foliage records (every field of the
 /// layers, meshes and grass types reached from the biomes), the towns, the size and write time of the heightmap, blend file, biome map and overlay
-/// tiles, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change alters what the layout places, so an edit elsewhere
-/// keeps the cache (<see cref="FoliageLayoutCacheKey"/>). Settings (foliage and grass range, grass density) are not inputs of the layout and are not in it.
+/// tiles, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change alters what the layout places, so an edit
+/// elsewhere keeps the cache (<see cref="FoliageLayoutCacheKey"/>). Settings (foliage and grass range, grass density) are not inputs of the layout
+/// and are not in it.
 /// </para>
 /// <para>
 /// A file is written to a temporary name and moved into place, carries its key, zone, sizes and a checksum, and is read whole: anything that does not
-/// verify (truncated, other key, wrong zone, bad checksum, a mesh or layer id the catalog does not have) is a miss and is placed again. The folder is kept
-/// in bounds by <see cref="Upkeep"/>. Thread-safe.
+/// verify (truncated, other key, wrong zone, bad checksum, a mesh or layer id the catalog does not have) is a miss and is placed again. The folder is
+/// kept in bounds by <see cref="Upkeep"/>. Thread-safe.
 /// </para>
 /// </summary>
 public sealed class FoliageLayoutCache
@@ -99,6 +100,10 @@ public sealed class FoliageLayoutCache
     /// </summary>
     long _loadTicks, _computeTicks, _savedMicros, _bytesRead, _bytesWritten;
 
+    /// <summary>
+    /// A cache for <paramref name="install"/>'s layouts of <paramref name="catalog"/> with <paramref name="towns"/>, in its own key's folder under
+    /// <paramref name="root"/> (default the local application data's <c>Meitou/foliage</c>), kept within <paramref name="maxBytes"/>.
+    /// </summary>
     public FoliageLayoutCache(GameInstall install, FoliageCatalog catalog, IEnumerable<FoliageTown> towns, string? root = null, long? maxBytes = null)
     {
         this._catalog = catalog;
@@ -135,6 +140,7 @@ public sealed class FoliageLayoutCache
         get => Upkeep.MaxBytes;
         set => Upkeep.MaxBytes = value;
     }
+
     /// <summary>
     /// The folder of this key's files.
     /// </summary>
@@ -166,8 +172,9 @@ public sealed class FoliageLayoutCache
         Fetch(zone, farOnly, grouped: false) is { } f ? (f.Zone, f.Ground) : null;
 
     /// <summary>
-    /// Like <see cref="TryLoad"/>, with the instances already grouped for the renderer (<see cref="GroupedFoliageZone"/>; its zone's instance list is empty): the
-    /// records are built straight from the file's, so the zone's 56-byte-per-instance list and the copies grouping it made are never allocated.
+    /// Like <see cref="TryLoad"/>, with the instances already grouped for the renderer (<see cref="GroupedFoliageZone"/>; its zone's instance list is
+    /// empty): the records are built straight from the file's, so the zone's 56-byte-per-instance list and the copies grouping it made are
+    /// never allocated.
     /// </summary>
     public GroupedFoliageZone? TryLoadGrouped(ZoneCoordinate zone, bool farOnly) => Fetch(zone, farOnly, grouped: true)?.Grouped;
 
@@ -268,8 +275,8 @@ public sealed class FoliageLayoutCache
     }
 
     /// <summary>
-    /// Parses and verifies the first <paramref name="fileLength"/> bytes; null when they are not a valid entry for this key, zone and kind. A short read
-    /// throws (<see cref="InvalidDataException"/>), as does an id the catalog lacks.
+    /// Parses and verifies the first <paramref name="fileLength"/> bytes; null when they are not a valid entry for this key, zone and kind. A short
+    /// read throws (<see cref="InvalidDataException"/>), as does an id the catalog lacks.
     /// </summary>
     Decoded? Decode(byte[] bytes, int fileLength, ZoneCoordinate zone, bool farOnly, bool grouped)
     {
@@ -391,8 +398,8 @@ public sealed class FoliageLayoutCache
     }
 
     /// <summary>
-    /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order, bit-identical records),
-    /// in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
+    /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order,
+    /// bit-identical records), in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
     /// </summary>
     static GroupedFoliageZone GroupDisk(FoliageZone zone, FoliageGround ground, ReadOnlySpan<InstanceOnDisk> disk, FoliageMesh[] meshes,
         FoliageLayer[] layers)
@@ -540,8 +547,8 @@ public sealed class FoliageLayoutCache
     }
 
     /// <summary>
-    /// Numbers the meshes and layers the zone uses in order of first use; false when one is not the catalog's own object (what is read back is looked up
-    /// by id in the catalog) or there are more than a 16-bit index holds.
+    /// Numbers the meshes and layers the zone uses in order of first use; false when one is not the catalog's own object (what is read back is looked
+    /// up by id in the catalog) or there are more than a 16-bit index holds.
     /// </summary>
     bool IndexReferences(FoliageZone laid, Dictionary<FoliageMesh, int> meshIndex, Dictionary<FoliageLayer, int> layerIndex)
     {

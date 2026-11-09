@@ -14,15 +14,30 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
+    /// <summary>
+    /// The upload command pool of each frame slot (reset when the slot's frame begins).
+    /// </summary>
     CommandPool[]? _uploadPools;
+    /// <summary>
+    /// The upload command buffer of each frame slot (the frame's pre-frame commands).
+    /// </summary>
     CommandBuffer[]? _uploadBuffers;
 
     /// <summary>
     /// Per slot: the upload buffers a <see cref="SubmitAndWait"/> went on in, and how many this frame used.
     /// </summary>
     List<CommandBuffer>[]? _uploadExtras;
+    /// <summary>
+    /// Per slot: how many of <see cref="_uploadExtras"/> this frame used.
+    /// </summary>
     int[]? _uploadExtrasUsed;
+    /// <summary>
+    /// Per slot: the frame's first and last timestamps.
+    /// </summary>
     (QuerySlot Begin, QuerySlot End)[]? _frameStamps;
+    /// <summary>
+    /// Per slot: the pre-frame buffer's end timestamp (only while <see cref="PreFrameStamps"/>).
+    /// </summary>
     QuerySlot[]? _preFrameEnd;
 
     /// <summary>
@@ -41,6 +56,9 @@ public sealed unsafe partial class GpuContext
     /// </summary>
     internal static bool ProfilePreFrame;
 
+    /// <summary>
+    /// <c>MEITOU_PASS_STATS=1</c>: the pre-frame GPU time is measured.
+    /// </summary>
     static readonly bool PassStats = Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1";
 
     /// <summary>
@@ -78,12 +96,18 @@ public sealed unsafe partial class GpuContext
     internal (QuerySlot Begin, QuerySlot End) CurrentFrameStamps => _frameStamps is null ? default : _frameStamps[Device.Frames.Slot];
 
     /// <summary>
-    /// Stopwatch ticks spent waiting for a free frame slot and submitting, since the context was made.
+    /// Stopwatch ticks spent waiting for a free frame slot, since the context was made.
     /// </summary>
     public long FenceWaitTicks { get; private set; }
 
+    /// <summary>
+    /// Stopwatch ticks spent submitting frames, since the context was made.
+    /// </summary>
     public long SubmitTicks { get; private set; }
 
+    /// <summary>
+    /// Whether the pre-frame buffer gets its end timestamp (pass stats, the spike log or the profiler).
+    /// </summary>
     static bool PreFrameStamps => PassStats || SpikeLog.Enabled || ProfilePreFrame;
 
     /// <summary>
@@ -126,6 +150,9 @@ public sealed unsafe partial class GpuContext
             PreFrameGpuMs = (pe - pb) / 1e6;
     }
 
+    /// <summary>
+    /// Allocates the frame's first timestamp and writes it at the start of the pre-frame buffer.
+    /// </summary>
     void StartFrameStamps(int slot)
     {
         ref var stamps = ref _frameStamps![slot];
@@ -163,6 +190,9 @@ public sealed unsafe partial class GpuContext
         StageClock.Lap(StageClock.Submit, gpuTimestamp: false);
     }
 
+    /// <summary>
+    /// Writes the frame's last timestamp, and the pre-frame buffer's end timestamp while <see cref="PreFrameStamps"/>.
+    /// </summary>
     void WriteEndStamps(int slot)
     {
         var end = Frame.Timestamps.Allocate();
@@ -183,6 +213,9 @@ public sealed unsafe partial class GpuContext
         }
     }
 
+    /// <summary>
+    /// Begins recording an upload command buffer, with a full barrier first.
+    /// </summary>
     void BeginUploads(CommandBuffer upload)
     {
         var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
@@ -248,6 +281,9 @@ public sealed unsafe partial class GpuContext
         Device.Vk.CmdPipelineBarrier2(cb, &info);
     }
 
+    /// <summary>
+    /// Makes each frame slot's upload pool and buffer and the per-slot tables, on the first frame.
+    /// </summary>
     void EnsureUploadBuffers()
     {
         if (_uploadPools is not null) return;
@@ -271,6 +307,9 @@ public sealed unsafe partial class GpuContext
         }
     }
 
+    /// <summary>
+    /// A new primary command buffer from <paramref name="pool"/>.
+    /// </summary>
     CommandBuffer AllocateUploadBuffer(CommandPool pool)
     {
         var ai = new CommandBufferAllocateInfo
@@ -285,6 +324,9 @@ public sealed unsafe partial class GpuContext
         return cb;
     }
 
+    /// <summary>
+    /// Destroys the upload command pools (and with them their buffers).
+    /// </summary>
     void DisposeFrameLoop()
     {
         if (_uploadPools is null) return;

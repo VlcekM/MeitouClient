@@ -28,10 +28,22 @@ public sealed class ImpostorAssembler
     /// </summary>
     static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> MapPools = new();
 
+    /// <summary>
+    /// The per-frame filtering arrays (<see cref="Scratch"/>) by frame size and level count, shared by the bakes.
+    /// </summary>
     static readonly ConcurrentDictionary<(int Frame, int Levels), ConcurrentBag<Scratch>> Pools = new();
 
+    /// <summary>
+    /// Frames per atlas side.
+    /// </summary>
     readonly int _grid;
+    /// <summary>
+    /// The frame size in pixels at level 0.
+    /// </summary>
     readonly int _frame;
+    /// <summary>
+    /// The mip levels per frame.
+    /// </summary>
     readonly int _levels;
 
     /// <summary>
@@ -39,9 +51,19 @@ public sealed class ImpostorAssembler
     /// </summary>
     readonly byte[][][] _maps;
 
+    /// <summary>
+    /// The coverage-weighted gloss summed over the atlas's frames (see <see cref="_glossWeight"/>).
+    /// </summary>
     double _glossSum;
+    /// <summary>
+    /// The coverage the gloss sum is weighted by; the atlas's gloss is their ratio (0.3 when nothing is covered).
+    /// </summary>
     double _glossWeight;
 
+    /// <summary>
+    /// An assembler for a <paramref name="grid"/> × <paramref name="grid"/> atlas of <paramref name="frame"/>-pixel frames with
+    /// <paramref name="levels"/> levels, its maps taken from the pool when a finished bake of the same size left them.
+    /// </summary>
     public ImpostorAssembler(int grid, int frame, int levels)
     {
         (this._grid, this._frame, this._levels) = (grid, frame, levels);
@@ -292,6 +314,10 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Writes one frame's level <paramref name="level"/> (<paramref name="size"/> pixels a side) into the atlas maps at its cell: the albedo with the
+    /// cut-out (coverage times <paramref name="scale"/> at least 0.5) in alpha, and the octahedral normal in red and green.
+    /// </summary>
     void Store(int column, int row, int level, int size, float[] cov, float scale, float[] alb, float[] nrm)
     {
         int atlas = _grid * size;
@@ -319,6 +345,9 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Filters the frame at <paramref name="column"/>, <paramref name="row"/> with arrays from the pool (returned afterwards).
+    /// </summary>
     unsafe void Frame(int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
         var pool = Pools.GetOrAdd((_frame, _levels), _ => new());
@@ -333,6 +362,10 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Filters one frame from the rendered row's albedo, normal and gloss bytes: undoes the premultiplication, fills the empty pixels, builds the
+    /// levels and stores them.
+    /// </summary>
     unsafe void Frame(Scratch scratch, int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
         int f = _frame, width = _grid * f, n = f * f;
@@ -400,6 +433,9 @@ public sealed class ImpostorAssembler
     /// </summary>
     sealed class Scratch
     {
+        /// <summary>
+        /// Level 0's coverage, albedo (3 a pixel), normal (3 a pixel) and the fill's level-0 weights.
+        /// </summary>
         public readonly float[] Cov, Alb, Nrm, FillWeight0;
 
         /// <summary>
@@ -412,6 +448,9 @@ public sealed class ImpostorAssembler
         /// </summary>
         public readonly float[][] FillValue, FillWeight;
 
+        /// <summary>
+        /// The arrays for <paramref name="frame"/>-pixel frames with <paramref name="levels"/> levels.
+        /// </summary>
         public Scratch(int frame, int levels)
         {
             int n = frame * frame;

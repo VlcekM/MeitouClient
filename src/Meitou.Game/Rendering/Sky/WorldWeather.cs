@@ -15,27 +15,61 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public sealed class WorldWeather
 {
+    /// <summary>
+    /// The real time since the last update (at most 0.25 s a frame; 0 for a held frame).
+    /// </summary>
     readonly Stopwatch _clock = new();
+
+    /// <summary>
+    /// The game time of the last update (null: none yet; a jump of over an hour or backwards is a teleport).
+    /// </summary>
     WeatherTime? _last;
+
+    /// <summary>
+    /// The region serial last logged (-1: log the next one).
+    /// </summary>
     int _lastSerial = -1;
+
+    /// <summary>
+    /// The forced weather last logged.
+    /// </summary>
     string _lastForced = "";
-    Vector3? _eye;   // the camera of the last update
+
+    /// <summary>
+    /// The camera of the last update.
+    /// </summary>
+    Vector3? _eye;
 
     /// <summary>
     /// The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.
     /// </summary>
     public ZoneCoordinate? CameraZone => _eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
 
+    /// <summary>
+    /// Finds the weather effects' records (null: no particles).
+    /// </summary>
     readonly Data.GameDatabase? _database;
+
+    /// <summary>
+    /// Each weather's effect list, made once from its records.
+    /// </summary>
     readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> _effectLists = new(ReferenceEqualityComparer.Instance);
 
+    /// <summary>
+    /// Hooks <paramref name="world"/>'s scheduler; <paramref name="database"/> supplies the effects' records.
+    /// </summary>
     public WorldWeather(WeatherWorld world, Data.GameDatabase? database = null) => (World, this._database) = (world, database);
 
+    /// <summary>
+    /// The weather scheduler: regions, their weathers and the current state.
+    /// </summary>
     public WeatherWorld World { get; }
+
     /// <summary>
     /// The state of the last <see cref="Update"/>.
     /// </summary>
     public WeatherState State => World.Current;
+
     /// <summary>
     /// The frame times of the last update (the sky's cloud drift steps by <see cref="FrameTimes.Game"/>).
     /// </summary>
@@ -45,15 +79,22 @@ public sealed class WorldWeather
     /// The game day (the viewer's <c>--day</c> and its day keys, the game's clock).
     /// </summary>
     public int Day { get; set; }
+
     /// <summary>
     /// The game speed (1 in the viewer) and whether the game is paused (never in the viewer).
     /// </summary>
     public float GameSpeed { get; set; } = 1;
+
+    /// <summary>
+    /// The game is paused: the game timers stand (never in the viewer).
+    /// </summary>
     public bool Paused { get; set; }
+
     /// <summary>
     /// Overrides the cloud drift (<c>--cloud-wind</c>); null follows the weather's wind.
     /// </summary>
     public Vector2? CloudWindOverride { get; set; }
+
     /// <summary>
     /// Writes the weather change lines to the console.
     /// </summary>
@@ -113,6 +154,9 @@ public sealed class WorldWeather
         _last = now;
     }
 
+    /// <summary>
+    /// The weather region the camera is in (the scheduler's, else by the last eye).
+    /// </summary>
     WeatherRegion? Here => World.CameraRegion ?? (_eye is { } e ? World.RegionAt(e.X, e.Z) : null);
 
     /// <summary>
@@ -184,6 +228,9 @@ public sealed class WorldWeather
         };
     }
 
+    /// <summary>
+    /// Logs a change of weather (with <see cref="Log"/>): the forced one by name, else the camera region's when its weather changes.
+    /// </summary>
     void LogChange(WeatherState s)
     {
         if (!Log) return;
@@ -201,6 +248,9 @@ public sealed class WorldWeather
         Console.WriteLine($"weather   {Describe()}");
     }
 
+    /// <summary>
+    /// The region index last logged (-1: none).
+    /// </summary>
     int _lastRegion = -1;
 
     /// <summary>

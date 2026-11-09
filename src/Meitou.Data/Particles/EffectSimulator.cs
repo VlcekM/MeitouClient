@@ -15,9 +15,18 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public sealed class EffectSimulator : IDisposable
 {
+    /// <summary>
+    /// The jobs waiting for the worker.
+    /// </summary>
     readonly BlockingCollection<Job> _queue = [];
+    /// <summary>
+    /// The worker (background, above-normal priority) that runs the queued jobs.
+    /// </summary>
     readonly Thread _thread;
 
+    /// <summary>
+    /// Starts the worker.
+    /// </summary>
     public EffectSimulator()
     {
         _thread = new Thread(() =>
@@ -38,6 +47,9 @@ public sealed class EffectSimulator : IDisposable
         return job;
     }
 
+    /// <summary>
+    /// Takes no more jobs; the worker ends once the queue is empty.
+    /// </summary>
     public void Dispose() => _queue.CompleteAdding();
 
     /// <summary>
@@ -45,13 +57,34 @@ public sealed class EffectSimulator : IDisposable
     /// </summary>
     public sealed class Job
     {
+        /// <summary>
+        /// The units the job runs.
+        /// </summary>
         readonly EffectUnit[] _units;
+        /// <summary>
+        /// Set once every unit has run (at once for a job with none).
+        /// </summary>
         readonly ManualResetEventSlim _done = new(false);
+        /// <summary>
+        /// Stopwatch timestamp of the job's making.
+        /// </summary>
         readonly long _queuedAt = Stopwatch.GetTimestamp();
+        /// <summary>
+        /// Stopwatch timestamp of the first unit's start.
+        /// </summary>
         long _startedAt;
+        /// <summary>
+        /// Interlocked counters: whether a thread has started the job, the next unit to claim, and the units finished.
+        /// </summary>
         int _started, _next, _finished;
+        /// <summary>
+        /// The first exception a unit threw, rethrown by <see cref="Wait"/>.
+        /// </summary>
         ExceptionDispatchInfo? _failure;
 
+        /// <summary>
+        /// A job of <paramref name="units"/>, done at once when there are none.
+        /// </summary>
         internal Job(EffectUnit[] units)
         {
             this._units = units;
@@ -63,7 +96,13 @@ public sealed class EffectSimulator : IDisposable
         /// returned).
         /// </summary>
         public long QueueTicks { get; private set; }
+        /// <summary>
+        /// Stopwatch ticks from the first unit's start to the last unit's end (valid once <see cref="Wait"/> has returned).
+        /// </summary>
         public long RunTicks { get; private set; }
+        /// <summary>
+        /// Whether every unit has run.
+        /// </summary>
         public bool IsCompleted => _done.IsSet;
 
         /// <summary>

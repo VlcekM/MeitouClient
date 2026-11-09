@@ -11,8 +11,14 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class BedSave
 {
+    /// <summary>
+    /// The CAMERA key prefixes of a paid bed: the bed's fixture id and the game hour of the payment, each followed by the entry's number.
+    /// </summary>
     public const string BedKey = "meitou rent bed", HoursKey = "meitou rent hours";
 
+    /// <summary>
+    /// Writes the paid bed rents still running over the camera record's (the old entries removed first).
+    /// </summary>
     public static void Write(FcsRecord camera, World world)
     {
         for (int i = 0; camera.Strings.ContainsKey(BedKey + i); i++)
@@ -34,6 +40,9 @@ public static class BedSave
         }
     }
 
+    /// <summary>
+    /// Reads the paid bed rents back into the world's bed system.
+    /// </summary>
     public static void Read(FcsRecord camera, World world)
     {
         if (world.Systems.OfType<BedSystem>().FirstOrDefault() is not { } beds) return;

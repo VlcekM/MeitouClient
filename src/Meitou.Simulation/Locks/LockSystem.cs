@@ -38,11 +38,23 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     /// </summary>
     public const float Reach = 15;
 
+    /// <summary>
+    /// The lock-picking rolls and XP.
+    /// </summary>
     public Lockpicking Picking { get; } = new(constants, options);
+    /// <summary>
+    /// The crime system that hears of break-ins (null: none).
+    /// </summary>
     public Crime.CrimeSystem? Crimes { get; set; }
 
+    /// <summary>
+    /// The characters an order names, else the player's selection.
+    /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
+    /// <summary>
+    /// The lock orders: buying a house, picking and forcing locks, cages, shackles, doors and the gate regions.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
@@ -149,6 +161,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     /// </summary>
     internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
 
+    /// <summary>
+    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work and the escapes.
+    /// </summary>
     public void SlowWorld(World world)
     {
         world.Fixtures.HoldCaged(world);

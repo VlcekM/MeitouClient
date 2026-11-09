@@ -32,6 +32,9 @@ sealed class TitleMenu(PlayerInterface player)
         return translated == plain ? upper : translated.ToUpperInvariant();
     }
 
+    /// <summary>
+    /// The texture names of the menu's surfaces: the card, the plates, the key chip and the vignette (with their hover states).
+    /// </summary>
     const string MenuCard = "meitou:menu:card", MenuCardHover = "meitou:menu:card-hover", MenuPlate = "meitou:menu:plate",
         MenuPlateHover = "meitou:menu:plate-hover:v2", MenuKey = "meitou:menu:key", MenuVignette = "meitou:menu:vignette";
 
@@ -50,6 +53,9 @@ sealed class TitleMenu(PlayerInterface player)
         ("OptionsButton", "Options"), ("CreditsButton", "Credits"), ("ExitButton", "Exit"),
     ];
 
+    /// <summary>
+    /// The Meitou menu's buttons below the card: widget, caption and icon crop in the UI atlas.
+    /// </summary>
     static readonly (string Widget, string Caption, UiRect Icon)[] MenuButtons =
     [
         ("NewGameButton", "NEW GAME", new(108, 88, 33, 37)), ("LoadGameButton", "LOAD GAME", new(222, 90, 32, 23)),
@@ -58,12 +64,34 @@ sealed class TitleMenu(PlayerInterface player)
         ("ExitButton", "EXIT", new(202, 126, 30, 36)),
     ];
 
+    /// <summary>
+    /// A colour from 0-255 channels.
+    /// </summary>
     static Vector4 Hex(int r, int g, int b, float a = 1) => new(r / 255f, g / 255f, b / 255f, a);
+
+    /// <summary>
+    /// The kit's inks: main, light, paper and danger.
+    /// </summary>
     static readonly Vector4 InkMain = Hex(175, 166, 139), InkLight = Hex(217, 206, 184), InkPaper = Hex(20, 8, 6), InkDanger = Hex(191, 72, 52);
 
+    /// <summary>
+    /// The scale the menu's surfaces were baked at (<see cref="MenuArtReady"/>).
+    /// </summary>
     float _menuArtScale;
+
+    /// <summary>
+    /// Each button's hover progress (0..1) and when it was last updated (Stopwatch).
+    /// </summary>
     Dictionary<string, (float Progress, long At)>? _menuHover;
+
+    /// <summary>
+    /// The tight icon box per atlas crop (<see cref="TightIconBounds"/>).
+    /// </summary>
     readonly Dictionary<UiRect, UiRect> _menuIconBounds = [];
+
+    /// <summary>
+    /// The Continue card's save (the newest: folder and time written) and its info, read again when the save changes.
+    /// </summary>
     (string Folder, DateTime Modified, SaveSlotInfo? Info) _continueInfo;
 
     /// <summary>
@@ -76,6 +104,9 @@ sealed class TitleMenu(PlayerInterface player)
     /// </summary>
     public ModReport? Mods { get; set; }
 
+    /// <summary>
+    /// The texture name of the title's wordmark.
+    /// </summary>
     internal const string TitleLogoTexture = "meitou:title-logo";
 
     /// <summary>
@@ -83,6 +114,9 @@ sealed class TitleMenu(PlayerInterface player)
     /// </summary>
     public Func<RgbaImage?>? TitleLogoSource { get; set; }
 
+    /// <summary>
+    /// The wordmark, made once from <see cref="TitleLogoSource"/>.
+    /// </summary>
     Lazy<RgbaImage?>? _titleLogo;
 
     /// <summary>
@@ -90,6 +124,9 @@ sealed class TitleMenu(PlayerInterface player)
     /// </summary>
     float MenuScale => player.Height / 900f;
 
+    /// <summary>
+    /// Button <paramref name="name"/>'s eased hover progress (0..1), moved towards <paramref name="hovered"/> over 0.16 s.
+    /// </summary>
     float TitleHover(string name, bool hovered)
     {
         var states = _menuHover ??= [];

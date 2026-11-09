@@ -105,6 +105,10 @@ internal static class NavSideSteps
         }
     }
 
+    /// <summary>
+    /// Sets the connection of <paramref name="span"/> in direction <paramref name="d"/> to <paramref name="con"/> (a compact span is rebuilt to
+    /// change it).
+    /// </summary>
     static void SetCon(RcCompactHeightfield chf, int span, int d, int con)
     {
         var builder = RcCompactSpanBuilder.NewBuilder(ref chf.spans[span]);
@@ -161,6 +165,10 @@ internal static class NavSideSteps
         return NearTerrain(chf, terrain, x, z, i) || NearTerrain(chf, terrain, nx, nz, j);
     }
 
+    /// <summary>
+    /// Whether span <paramref name="i"/> of cell (<paramref name="x"/>, <paramref name="z"/>) lies within <see cref="TerrainSlack"/> of the terrain
+    /// under the cell's centre; false where the window has no height.
+    /// </summary>
     static bool NearTerrain(RcCompactHeightfield chf, HeightWindow terrain, int x, int z, int i)
     {
         if (!terrain.TryHeightAt(chf.bmin.X + (x + 0.5f) * chf.cs, chf.bmin.Z + (z + 0.5f) * chf.cs, out float ground))

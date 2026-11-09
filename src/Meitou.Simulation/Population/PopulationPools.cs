@@ -11,8 +11,17 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public sealed class PoolState
 {
+    /// <summary>
+    /// The desired max (<c>popd</c> / <c>popd2</c>).
+    /// </summary>
     public int Desired { get; set; }
+    /// <summary>
+    /// The current max (<c>pop</c> / <c>pop2</c>).
+    /// </summary>
     public float Current { get; set; }
+    /// <summary>
+    /// The game hour it last grew at (not saved).
+    /// </summary>
     public double Stamp { get; set; }
 
     /// <summary>
@@ -28,18 +37,37 @@ public sealed class PoolState
         Current = MathF.Min(Desired, Current + (float)(h * GrowthPerHour));
     }
 
+    /// <summary>
+    /// The current max's growth per game hour (<see cref="Grow"/>).
+    /// </summary>
     public const double GrowthPerHour = 3600.0 / 33 * 0.5 * 0.004;
 }
 
 /// <summary>
-/// A town's or nest's two pools (1 residents, 2 roaming) and its flags: made once (<c>started</c>), wiped out (<c>ded</c>) and when (<c>tod</c>, game hours).
+/// A town's or nest's two pools (1 residents, 2 roaming) and its flags: made once (<c>started</c>), wiped out (<c>ded</c>) and when (<c>tod</c>,
+/// game hours).
 /// </summary>
 public sealed class SitePools
 {
+    /// <summary>
+    /// Pool 1, the residents.
+    /// </summary>
     public PoolState Residents { get; } = new();
+    /// <summary>
+    /// Pool 2, the roaming squads.
+    /// </summary>
     public PoolState Roaming { get; } = new();
+    /// <summary>
+    /// <c>started</c>: the site was made once.
+    /// </summary>
     public bool Started { get; set; }
+    /// <summary>
+    /// <c>ded</c>: the site was wiped out.
+    /// </summary>
     public bool Ded { get; set; }
+    /// <summary>
+    /// <c>tod</c>: the game hour it was wiped out.
+    /// </summary>
     public float DiedAt { get; set; }
 
     /// <summary>
@@ -94,6 +122,9 @@ public sealed partial class PopulationSystem
 {
     #region Pools
 
+    /// <summary>
+    /// Each town site's pools, by site (null: not made yet).
+    /// </summary>
     SitePools?[] _townPools = [];
 
     /// <summary>
@@ -268,8 +299,14 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool Regenerates(Platoon p) => p.Pinned && TownAlive(p.Origin) && _data.Db.Find(p.TemplateId)?.GetBool("regenerates") == true;
 
+    /// <summary>
+    /// Whether a squad of <paramref name="templateId"/> of a living town is made again (its template's <c>regenerates</c>).
+    /// </summary>
     bool Regenerates(string templateId, int site) => TownAlive(site) && _data.Db.Find(templateId)?.GetBool("regenerates") == true;
 
+    /// <summary>
+    /// Whether a town site's pools say it is not wiped out.
+    /// </summary>
     bool TownAlive(int site) => site >= 0 && site < _townPools.Length && _townPools[site] is not { Ded: true };
 
     /// <summary>
@@ -472,6 +509,9 @@ public sealed partial class PopulationSystem
 
     #region Nests
 
+    /// <summary>
+    /// Each nest site's pools, by wild site.
+    /// </summary>
     readonly Dictionary<int, SitePools> _nestPools = [];
 
     /// <summary>
@@ -485,7 +525,13 @@ public sealed partial class PopulationSystem
     /// </summary>
     public const float NestGuardRadius = 1250;
 
+    /// <summary>
+    /// The wild sites that are nests (null: not listed yet; listed again when the wild sites change).
+    /// </summary>
     int[]? _nests;
+    /// <summary>
+    /// The wild site count <see cref="_nests"/> was listed for.
+    /// </summary>
     int _nestsOf;
 
     /// <summary>
@@ -537,7 +583,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on the ground.
+    /// Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on
+    /// the ground.
     /// </summary>
     bool FocusBlocksNest(World world, Vector2 centre) =>
         _focus is { } f
@@ -638,8 +685,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A nest that could make no squad (no entry fits or weighs anything) and has no squad left standing is wiped out for good (<c>FUN_140927440</c>,
-    /// <c>Nest::vfunc_103</c>): <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here (its rule is
-    /// Unknown): a squad with someone alive.
+    /// <c>Nest::vfunc_103</c>): <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here
+    /// (its rule is Unknown): a squad with someone alive.
     /// </summary>
     void CheckWipe(World world, WildSite site, SiteState state)
     {

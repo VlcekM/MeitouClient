@@ -25,12 +25,18 @@ public sealed class GameClock
     /// The CONSTANTS record's values in the shipped data (Verified: <c>sunrise</c> 5, <c>sunset</c> 23, <c>days per year</c> 100).
     /// </summary>
     public const double DefaultSunrise = 5, DefaultSunset = 23;
+    /// <summary>
+    /// The CONSTANTS record's <c>days per year</c> in the shipped data (see <see cref="DefaultSunrise"/>).
+    /// </summary>
     public const int DefaultDaysPerYear = 100;
     /// <summary>
     /// Length of the daylight ramps after sunrise and before sunset, in game hours (Observed, <c>FUN_14066cb50</c>).
     /// </summary>
     public const double RampHours = 2;
 
+    /// <summary>
+    /// A clock starting at <paramref name="startDay"/> and <paramref name="startHour"/> with the day's sunrise, sunset and year length.
+    /// </summary>
     public GameClock(double startHour = DefaultStartHour, long startDay = DefaultStartDay,
         double sunrise = DefaultSunrise, double sunset = DefaultSunset, int daysPerYear = DefaultDaysPerYear)
     {
@@ -45,10 +51,25 @@ public sealed class GameClock
         DaysPerYear = daysPerYear;
     }
 
+    /// <summary>
+    /// The hour of day the clock started at.
+    /// </summary>
     public double StartHour { get; private set; }
+    /// <summary>
+    /// The day the clock started on.
+    /// </summary>
     public long StartDay { get; private set; }
+    /// <summary>
+    /// The hour of sunrise.
+    /// </summary>
     public double Sunrise { get; }
+    /// <summary>
+    /// The hour of sunset.
+    /// </summary>
     public double Sunset { get; }
+    /// <summary>
+    /// The days of a year.
+    /// </summary>
     public int DaysPerYear { get; }
 
     /// <summary>
@@ -87,6 +108,9 @@ public sealed class GameClock
     /// </summary>
     public double HourOfDay => HourOf(TotalHours);
 
+    /// <summary>
+    /// The time of day of <paramref name="totalHours"/>, in [0, 24).
+    /// </summary>
     static double HourOf(double totalHours)
     {
         double h = totalHours % 24;
@@ -137,8 +161,14 @@ public sealed class GameClock
     /// </summary>
     public string DayText => Loc.Tr("Day: {1,num}", Day);
 
+    /// <summary>
+    /// Whether <paramref name="hour"/> is between sunrise and sunset.
+    /// </summary>
     public bool IsDay(double hour) => hour > Sunrise && hour < Sunset;
 
+    /// <summary>
+    /// The daylight factor at <paramref name="hour"/>: 0 at night, ramping up over <see cref="RampHours"/> after sunrise and down before sunset.
+    /// </summary>
     public double DaylightAt(double hour)
     {
         if (!IsDay(hour)) return 0;

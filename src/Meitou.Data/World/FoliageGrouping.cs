@@ -10,15 +10,25 @@ namespace Meitou.Data.World;
 public sealed record FoliageInstanceGroup(FoliageMesh Mesh, FoliageLayer Layer, FoliageInstanceRecord[] Instances, float MaxScale);
 
 /// <summary>
-/// A laid-out zone with its instances already grouped by (mesh, layer), in the order each pair first appears, each instance in the order placed (what the renderer
-/// built from <see cref="FoliageZone.Instances"/> on its worker with <c>GroupBy</c>). <see cref="Zone"/> has the grass patches, <see cref="FoliageZone.Resources"/>
-/// and <see cref="FoliageZone.Complete"/> but an empty <see cref="FoliageZone.Instances"/>: they are in <see cref="Groups"/>, which a layout read back from the cache
-/// fills straight from the file's records (<see cref="FoliageLayoutCache.TryLoadGrouped"/>), without the 56-byte-per-instance list and the copies grouping it made.
+/// A laid-out zone with its instances already grouped by (mesh, layer), in the order each pair first appears, each instance in the order placed (what
+/// the renderer built from <see cref="FoliageZone.Instances"/> on its worker with <c>GroupBy</c>). <see cref="Zone"/> has the grass patches,
+/// <see cref="FoliageZone.Resources"/> and <see cref="FoliageZone.Complete"/> but an empty <see cref="FoliageZone.Instances"/>: they are in
+/// <see cref="Groups"/>, which a layout read back from the cache fills straight from the file's records
+/// (<see cref="FoliageLayoutCache.TryLoadGrouped"/>), without the 56-byte-per-instance list and the copies grouping it made.
 /// </summary>
 public sealed class GroupedFoliageZone
 {
+    /// <summary>
+    /// The zone, with an empty instance list.
+    /// </summary>
     public required FoliageZone Zone { get; init; }
+    /// <summary>
+    /// The ground it was placed on; null outside the grid.
+    /// </summary>
     public required FoliageGround? Ground { get; init; }
+    /// <summary>
+    /// The instances by (mesh, layer), in the order each pair first appears.
+    /// </summary>
     public required List<FoliageInstanceGroup> Groups { get; init; }
     /// <summary>
     /// The number of instances over all groups.
@@ -28,6 +38,9 @@ public sealed class GroupedFoliageZone
     /// Lowest and highest placed instance (0 and 0 when there are none).
     /// </summary>
     public required float MinY { get; init; }
+    /// <summary>
+    /// See <see cref="MinY"/>.
+    /// </summary>
     public required float MaxY { get; init; }
 }
 

@@ -14,8 +14,14 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class MemorySave
 {
+    /// <summary>
+    /// The original's PLATOON key prefixes of a remembered character: its handle, the long and short tag bit sets and the last note's time.
+    /// </summary>
     public const string HandleKey = "tags", LongKey = "taglong", ShortKey = "tagshort", TimeKey = "tagtime";
 
+    /// <summary>
+    /// Meitou's PLATOON keys of the player faction's entry (long and short tags, time) and of the squad's TEMP_ALLY flag for the player.
+    /// </summary>
     public const string PlayerLongKey = "meitou tags player long", PlayerShortKey = "meitou tags player short",
         PlayerTimeKey = "meitou tags player time",
         TempAllyKey = "meitou temp ally";
@@ -75,6 +81,9 @@ public static class MemorySave
         return data;
     }
 
+    /// <summary>
+    /// Removes every memory key of a platoon record.
+    /// </summary>
     static void Clear(FcsRecord platoon)
     {
         for (int i = 0; platoon.Ints.ContainsKey(LongKey + i) || platoon.Ints.ContainsKey(HandleKey + i + "I"); i++)

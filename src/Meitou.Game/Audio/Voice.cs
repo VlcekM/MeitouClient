@@ -7,32 +7,85 @@ namespace Meitou.Game.Audio;
 /// </summary>
 sealed class Voice : IDisposable
 {
-    readonly MediaClip _clip;
-
-    public MediaClip Clip => _clip;
-    // The source: the shared decoded samples (pcm, read from pcmRead, interleaved), else the stream.
-    NVorbis.VorbisReader? _reader;
-    readonly float[]? _pcm;
-    long _pcmRead;
-    readonly float[] _decoded;
-    int _decodedFrames;
-    double _position;
-    int _playsLeft;
-    readonly int _plays;
-    // Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent,
-    // sought on the next mix.
-    double _cursor, _owed;
-    long _toSkip, _limit;
-    bool _ended, _final;
-    float _lastLeft, _lastRight;
-    readonly float[] _lastSend = new float[2 * MaxSends];
-    bool _started;
-
     /// <summary>
     /// The most auxiliary buses a voice can feed (a node lists four user-defined sends).
     /// </summary>
     public const int MaxSends = 4;
+    /// <summary>
+    /// The clip this voice plays.
+    /// </summary>
+    readonly MediaClip _clip;
+    /// <summary>
+    /// The source when the clip streams: its Ogg Vorbis reader, reopened on each rewind; null when the clip's samples are shared (<see cref="_pcm"/>,
+    /// read from <see cref="_pcmRead"/>, interleaved).
+    /// </summary>
+    NVorbis.VorbisReader? _reader;
+    /// <summary>
+    /// The clip's shared decoded samples, interleaved (<see cref="PcmCache"/>); null when the clip streams.
+    /// </summary>
+    readonly float[]? _pcm;
+    /// <summary>
+    /// The next sample of <see cref="_pcm"/> to read.
+    /// </summary>
+    long _pcmRead;
+    /// <summary>
+    /// The decoded frames being played, interleaved: room for 4096 frames.
+    /// </summary>
+    readonly float[] _decoded;
+    /// <summary>
+    /// How many frames of <see cref="_decoded"/> hold samples.
+    /// </summary>
+    int _decodedFrames;
+    /// <summary>
+    /// The play position in <see cref="_decoded"/>, in source frames (fractional: resampling interpolates between two).
+    /// </summary>
+    double _position;
+    /// <summary>
+    /// Plays left, counting the current one; 0 forever.
+    /// </summary>
+    int _playsLeft;
+    /// <summary>
+    /// How many times the clip is played; 0 forever.
+    /// </summary>
+    readonly int _plays;
+    /// <summary>
+    /// Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent, sought on the
+    /// next mix.
+    /// </summary>
+    double _cursor, _owed;
+    /// <summary>
+    /// Source frames still to drop from the start (a music clip's trim), and those still to play after them (-1 no limit).
+    /// </summary>
+    long _toSkip, _limit;
+    /// <summary>
+    /// The voice has finished (no more frames, or a seek failed); the clip's last play has been decoded.
+    /// </summary>
+    bool _ended, _final;
+    /// <summary>
+    /// The gains the last block ended at, per side: the next block ramps from them.
+    /// </summary>
+    float _lastLeft, _lastRight;
+    /// <summary>
+    /// The gains each auxiliary send's last block ended at (left and right per send).
+    /// </summary>
+    readonly float[] _lastSend = new float[2 * MaxSends];
+    /// <summary>
+    /// Whether the voice has mixed a block yet: the first takes its gains at once, without a ramp.
+    /// </summary>
+    bool _started;
+    /// <summary>
+    /// The one-pole low-pass filter's state, per side.
+    /// </summary>
     readonly float[] _lowPass = new float[2];
+    /// <summary>
+    /// The source frames one play decodes to (the decoder's count, the WEM header's when it has none): what the silent clock counts plays in.
+    /// </summary>
+    readonly long _framesPerPlay;
+
+    /// <summary>
+    /// The clip this voice plays.
+    /// </summary>
+    public MediaClip Clip => _clip;
 
     /// <summary>
     /// <paramref name="plays"/>: how many times to play the clip; 0 = forever. <paramref name="skipFrames"/> source frames are dropped from the start
@@ -66,6 +119,9 @@ sealed class Voice : IDisposable
         _decoded = new float[4096 * clip.Channels];
     }
 
+    /// <summary>
+    /// A fresh Ogg Vorbis reader on the clip's data, at its start.
+    /// </summary>
     NVorbis.VorbisReader Open() => new(new MemoryStream(_clip.Ogg, writable: false), closeOnDispose: true);
 
     /// <summary>
@@ -95,15 +151,15 @@ sealed class Voice : IDisposable
         if (frame > 0) _reader.SeekTo(frame);
     }
 
+    /// <summary>
+    /// The voice has finished: no more frames, or a seek failed.
+    /// </summary>
     public bool Ended => _ended;
 
     /// <summary>
     /// Whether <see cref="Skip"/> can keep this voice's place: a plain clip, not a trimmed music clip.
     /// </summary>
     public bool CanSkip => _toSkip == 0 && _limit < 0 && _framesPerPlay > 0;
-
-    // The source frames one play decodes to (the decoder's count, the WEM header's when it has none): what the silent clock counts plays in.
-    readonly long _framesPerPlay;
 
     /// <summary>
     /// The voice is silent for <paramref name="frames"/> output frames (the first <paramref name="first"/> not yet started): its clock runs on
@@ -142,7 +198,10 @@ sealed class Voice : IDisposable
             return;
         }
         long within = Math.Clamp((long)(_cursor - (double)done * _framesPerPlay), 0, _framesPerPlay - 1);
-        try { Rewind(within); }
+        try
+        {
+            Rewind(within);
+        }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IOException)
         {
             // A seek the stream does not allow ends the voice, never the mix.
@@ -268,6 +327,9 @@ sealed class Voice : IDisposable
         return _position + 1 < _decodedFrames || (_final && _position < _decodedFrames);
     }
 
+    /// <summary>
+    /// Closes the stream's reader, if any.
+    /// </summary>
     public void Dispose() => _reader?.Dispose();
 }
 
@@ -288,9 +350,21 @@ sealed record MediaClip(uint Id, byte[] Ogg, int Channels, int SampleRate, int F
 /// </summary>
 sealed class PcmCache
 {
+    /// <summary>
+    /// Clips longer than this many seconds stream instead of being decoded whole.
+    /// </summary>
     public const double MaxSeconds = 20;
+    /// <summary>
+    /// The most bytes of decoded samples kept (256 MB); a clip that would go past it streams.
+    /// </summary>
     public const long BudgetBytes = 256L << 20;
+    /// <summary>
+    /// The decoded samples by clip id; null for a clip that streams.
+    /// </summary>
     readonly Dictionary<uint, float[]?> _clips = [];
+    /// <summary>
+    /// The bytes of decoded samples held.
+    /// </summary>
     long _bytes;
 
     /// <summary>
@@ -307,6 +381,9 @@ sealed class PcmCache
         return pcm;
     }
 
+    /// <summary>
+    /// The whole clip's samples, interleaved; null when it cannot be decoded (it then streams).
+    /// </summary>
     static float[]? Decode(MediaClip clip)
     {
         try

@@ -16,6 +16,9 @@ public sealed class GpuFeatureException(string message) : Exception(message);
 public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool DrawIndirectFirstInstance, bool DrawIndirectCount,
     bool ShaderDrawParameters, bool PushDescriptors, bool DebugLabels)
 {
+    /// <summary>
+    /// What the device has enabled of the features the native API cares about.
+    /// </summary>
     public static GpuFeatures Of(VulkanDevice d) => new(d.HasBindless, d.MultiDrawIndirect, d.DrawIndirectFirstInstance, d.DrawIndirectCount,
         d.ShaderDrawParameters, d.HasPushDescriptor, d.DebugUtils is not null);
 
@@ -52,6 +55,10 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
 /// </summary>
 public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 {
+    /// <summary>
+    /// The context for a device: checks the required features (throws <see cref="GpuFeatureException"/> without them), then makes the shared services
+    /// and the frame.
+    /// </summary>
     public GpuContext(VulkanDevice device)
     {
         _standIns = new StandInTextures(this);   // made first, as its fields were initialised before the constructor ran
@@ -71,8 +78,14 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         Frame = new GpuFrame(this);
     }
 
+    /// <summary>
+    /// The Vulkan device.
+    /// </summary>
     public VulkanDevice Device { get; }
 
+    /// <summary>
+    /// What the device offers of the native API's features (checked at construction).
+    /// </summary>
     public GpuFeatures Features { get; }
 
     /// <summary>
@@ -80,18 +93,37 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// </summary>
     public FrameGlobals Globals { get; } = new();
 
+    /// <summary>
+    /// What GL reads where nothing is bound: the dummy vertex buffer and the 1×1 stand-in textures (<see cref="GpuDefaults"/>).
+    /// </summary>
     public GpuDefaults Defaults { get; }
 
+    /// <summary>
+    /// The sampler cache.
+    /// </summary>
     public SamplerCache Samplers { get; }
 
+    /// <summary>
+    /// The shader library.
+    /// </summary>
     public ShaderLibrary Shaders { get; }
 
+    /// <summary>
+    /// The pipeline cache.
+    /// </summary>
     public PipelineLibrary Pipelines { get; }
 
+    /// <inheritdoc/>
     public IGpuBindlessTable Bindless { get; }
 
+    /// <summary>
+    /// The uploads (staging copies into buffers and textures).
+    /// </summary>
     public Uploader Uploads { get; }
 
+    /// <summary>
+    /// The frame being recorded.
+    /// </summary>
     public GpuFrame Frame { get; }
 
     /// <summary>
@@ -104,10 +136,13 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// </summary>
     IGpuShaders IGpuContext.Shaders => Shaders;
 
+    /// <inheritdoc/>
     IGpuPipelines IGpuContext.Pipelines => Pipelines;
 
+    /// <inheritdoc/>
     IGpuSamplers IGpuContext.Samplers => Samplers;
 
+    /// <inheritdoc/>
     IGpuUploads IGpuContext.Uploads => Uploads;
 
     /// <summary>
@@ -128,6 +163,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// <inheritdoc/>
     public bool HasRayQuery => Device.HasRayQuery;
 
+    /// <summary>
+    /// Whether the device has tessellation shaders.
+    /// </summary>
     public bool HasTessellation => Device.HasTessellation;
 
     /// <inheritdoc/>
@@ -146,6 +184,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// <inheritdoc/>
     public bool ConstantVertexAttributes => true;
 
+    /// <summary>
+    /// True: Vulkan's render targets have row 0 at the bottom.
+    /// </summary>
     public bool RenderTargetsBottomUp => true;
 
     /// <inheritdoc/>
@@ -195,6 +236,10 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         }
     }
 
+    /// <summary>
+    /// Waits for the device to go idle, then releases the frame, the frame loop, the pipelines, the bindless table, the shaders, the sets, the
+    /// stand-ins, the samplers and the defaults.
+    /// </summary>
     public void Dispose()
     {
         Device.WaitIdle();
@@ -211,6 +256,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 
     #region Sets
 
+    /// <summary>
+    /// The descriptor pools the persistent sets come from, destroyed at teardown.
+    /// </summary>
     readonly List<DescriptorPool> _persistentPools = [];
 
     /// <summary>
@@ -318,6 +366,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         return set;
     }
 
+    /// <summary>
+    /// Destroys the persistent descriptor pools (their sets go with them).
+    /// </summary>
     void DisposeSets()
     {
         foreach (var p in _persistentPools) Device.Vk.DestroyDescriptorPool(Device.Device, p, null);
@@ -403,6 +454,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// </summary>
     internal GpuTexture BorrowTexture(TextureDesc desc, Image image) => new(this, desc, Device.AddTexture(image, null, owned: false, desc));
 
+    /// <summary>
+    /// The Vulkan image create info of a texture description: a 2D optimal-tiling image (six layers per cube), its usage from the description's uses.
+    /// </summary>
     static ImageCreateInfo ImageInfo(TextureDesc desc)
     {
         var usage = (ImageUsageFlags)0;
@@ -431,6 +485,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         };
     }
 
+    /// <summary>
+    /// Records a barrier moving a whole image from undefined to GENERAL layout (everything after waits on it).
+    /// </summary>
     internal static void ToGeneral(Vk vk, CommandBuffer cb, Image image, ImageAspectFlags aspect)
     {
         var barrier = new ImageMemoryBarrier2
@@ -479,6 +536,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 
     #region Host recording
 
+    /// <summary>
+    /// The pooled jobs that record a clear as a segment of its own while the host takes secondaries.
+    /// </summary>
     readonly JobPool<ClearJob> _clearJobs = new();
 
     /// <summary>
@@ -533,12 +593,30 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         Frame.Parallel.Add(depth && !colour ? "clear depth" : "clear", job);
     }
 
+    /// <summary>
+    /// A clear recorded as a guest segment, returned to its owner's pool when done.
+    /// </summary>
     sealed class ClearJob : RecordJob
     {
+        /// <summary>
+        /// The context whose pool the job returns to.
+        /// </summary>
         public GpuContext Owner = null!;
+        /// <summary>
+        /// Whether the colour and the depth attachment are cleared.
+        /// </summary>
         public bool Colour, Depth;
+        /// <summary>
+        /// The colour value.
+        /// </summary>
         public ClearColour ColourValue;
+        /// <summary>
+        /// The depth value.
+        /// </summary>
         public float DepthValue;
+        /// <summary>
+        /// The rectangle cleared, in pixels.
+        /// </summary>
         public PixelRect Rect;
 
         public override void Record(IGpuCommandList cmd) => cmd.Clear(Colour, ColourValue, Depth, DepthValue, Rect);

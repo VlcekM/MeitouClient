@@ -15,8 +15,14 @@ public readonly record struct VertexInput(uint Location, InternalFormat Format, 
 /// </summary>
 public sealed class VertexLayout : IEquatable<VertexLayout>
 {
+    /// <summary>
+    /// The hash of the inputs, made once at construction.
+    /// </summary>
     readonly int _hash;
 
+    /// <summary>
+    /// A layout of the inputs, hashed once.
+    /// </summary>
     public VertexLayout(params VertexInput[] inputs)
     {
         Inputs = inputs;
@@ -25,9 +31,18 @@ public sealed class VertexLayout : IEquatable<VertexLayout>
         _hash = h.ToHashCode();
     }
 
+    /// <summary>
+    /// The vertex inputs by location.
+    /// </summary>
     public VertexInput[] Inputs { get; }
+    /// <summary>
+    /// No vertex inputs.
+    /// </summary>
     public static readonly VertexLayout Empty = new();
 
+    /// <summary>
+    /// Equal when the inputs are (compared after the hash).
+    /// </summary>
     public bool Equals(VertexLayout? other) =>
         other is not null && (ReferenceEquals(this, other) || _hash == other._hash && Inputs.AsSpan().SequenceEqual(other.Inputs));
     public override bool Equals(object? obj) => obj is VertexLayout v && Equals(v);
@@ -51,6 +66,9 @@ public readonly record struct BlendState(bool Enable, BlendingFactor Src = Blend
     BlendOperation ColourOp = BlendOperation.Add, BlendOperation AlphaOp = BlendOperation.Add, BlendingFactor? AlphaSrc = null,
     BlendingFactor? AlphaDst = null)
 {
+    /// <summary>
+    /// Blending off.
+    /// </summary>
     public static readonly BlendState Off = new(false);
 }
 
@@ -62,7 +80,9 @@ public readonly record struct GraphicsPipelineDesc(
     GpuProgram Program, VertexLayout Vertex, PrimitiveType Topology, AttachmentFormats Targets,
     BlendState Blend, ColorMask ColourMask, PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp, string Name = "")
 {
-    // The name is for labels and logs: two descs that differ only by name are the same pipeline.
+    /// <summary>
+    /// Equality without the name: the name is for labels and logs, so two descs that differ only by name are the same pipeline.
+    /// </summary>
     public bool Equals(GraphicsPipelineDesc other) => Program == other.Program && Vertex.Equals(other.Vertex) && Topology == other.Topology &&
         Targets == other.Targets && Blend == other.Blend && ColourMask == other.ColourMask && Polygon == other.Polygon &&
         AlphaToCoverage == other.AlphaToCoverage && DepthClamp == other.DepthClamp;
@@ -71,8 +91,14 @@ public readonly record struct GraphicsPipelineDesc(
         HashCode.Combine(Program, Vertex, Topology, Targets, Blend, ColourMask, Polygon, HashCode.Combine(AlphaToCoverage, DepthClamp));
 }
 
+/// <summary>
+/// Everything a compute pipeline is made from: its program (the name is for labels only).
+/// </summary>
 public readonly record struct ComputePipelineDesc(GpuProgram Program, string Name = "")
 {
+    /// <summary>
+    /// Equality by program only (the name is for labels).
+    /// </summary>
     public bool Equals(ComputePipelineDesc other) => Program == other.Program;
     public override int GetHashCode() => Program.GetHashCode();
 }
@@ -188,6 +214,9 @@ public static unsafe class PipelineFactory
         }
     }
 
+    /// <summary>
+    /// The vertex input state of <paramref name="n"/> bindings with one attribute each.
+    /// </summary>
     static PipelineVertexInputStateCreateInfo VertexInputState(int n, VertexInputBindingDescription* vbind, VertexInputAttributeDescription* vattr)
     {
         return new PipelineVertexInputStateCreateInfo
@@ -200,6 +229,9 @@ public static unsafe class PipelineFactory
         };
     }
 
+    /// <summary>
+    /// The rasterization state: line polygons only where the device fills them (else <see cref="GlConventions.VkPolygon"/>'s), depth clamp as asked.
+    /// </summary>
     static PipelineRasterizationStateCreateInfo RasterizationState(VulkanDevice device, bool depthClamp, PolygonKind polygon)
     {
         var mode = polygon == PolygonKind.Line && device.FillModeNonSolid ? PolygonMode.Line : GlConventions.VkPolygon(polygon);
@@ -212,6 +244,9 @@ public static unsafe class PipelineFactory
         };
     }
 
+    /// <summary>
+    /// The multisample state: the targets' sample count and alpha to coverage.
+    /// </summary>
     static PipelineMultisampleStateCreateInfo MultisampleState(AttachmentFormats targets, bool alphaToCoverage)
     {
         return new PipelineMultisampleStateCreateInfo
@@ -249,6 +284,9 @@ public static unsafe class PipelineFactory
         return colourCount;
     }
 
+    /// <summary>
+    /// The colour blend state over the filled attachments.
+    /// </summary>
     static PipelineColorBlendStateCreateInfo ColourBlendState(uint colourCount, PipelineColorBlendAttachmentState* attachments)
     {
         return new PipelineColorBlendStateCreateInfo
@@ -259,6 +297,9 @@ public static unsafe class PipelineFactory
         };
     }
 
+    /// <summary>
+    /// The dynamic state info over <see cref="Dynamic"/> (the states the command list sets).
+    /// </summary>
     static PipelineDynamicStateCreateInfo DynamicStateInfo(DynamicState* dynamics)
     {
         return new PipelineDynamicStateCreateInfo
@@ -269,6 +310,9 @@ public static unsafe class PipelineFactory
         };
     }
 
+    /// <summary>
+    /// The dynamic rendering formats: the colour attachments, the depth format, and stencil for the depth-stencil formats.
+    /// </summary>
     static PipelineRenderingCreateInfo RenderingInfo(AttachmentFormats targets, uint colourCount, Format* colourFormats)
     {
         bool stencil = targets.Depth is InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8;
@@ -282,6 +326,9 @@ public static unsafe class PipelineFactory
         };
     }
 
+    /// <summary>
+    /// The fragment shading rate state for a rendering with a shading rate attachment.
+    /// </summary>
     static PipelineFragmentShadingRateStateCreateInfoKHR ShadingRateState()
     {
         // A rendering with a shading rate attachment (Formats.ShadingRate): the pipeline keeps its own rate (1x1) and takes the attachment's.
@@ -341,6 +388,9 @@ public static unsafe class PipelineFactory
         return tessellated;
     }
 
+    /// <summary>
+    /// A compute pipeline of the module's <c>main</c> entry point and the layout.
+    /// </summary>
     public static Pipeline CreateCompute(VulkanDevice device, ShaderModule module, PipelineLayout layout)
     {
         fixed (byte* name = "main"u8)
@@ -374,17 +424,38 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
 {
     #region State
 
+    /// <summary>
+    /// The device the pipelines are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The shader library the programs' modules and layouts come from.
+    /// </summary>
     readonly ShaderLibrary _shaders;
+    /// <summary>
+    /// The graphics pipelines by description.
+    /// </summary>
     readonly Dictionary<GraphicsPipelineDesc, Pipeline> _graphics = [];
+    /// <summary>
+    /// The compute pipelines by description.
+    /// </summary>
     readonly Dictionary<ComputePipelineDesc, Pipeline> _compute = [];
+    /// <summary>
+    /// The bench's variants with a replaced fragment module, by description (<see cref="GetWithFragment"/>).
+    /// </summary>
     readonly Dictionary<GraphicsPipelineDesc, Pipeline> _variants = [];
+    /// <summary>
+    /// Guards the three caches (the recording threads and the prepare tasks use them).
+    /// </summary>
     readonly object _gate = new();
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// A library making pipelines on the device from <paramref name="shaders"/>' programs.
+    /// </summary>
     public PipelineLibrary(VulkanDevice device, ShaderLibrary shaders)
     {
         this._device = device;
@@ -400,6 +471,9 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
     /// </summary>
     public int LatePipelines { get; private set; }
 
+    /// <summary>
+    /// The graphics and compute pipelines made so far.
+    /// </summary>
     public int Count
     {
         get
@@ -408,6 +482,9 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
         }
     }
 
+    /// <summary>
+    /// Makes the pipelines of the descriptions not made yet, in parallel on the thread pool (a race keeps the first made).
+    /// </summary>
     public Task Prepare(IEnumerable<GraphicsPipelineDesc> descs)
     {
         var todo = descs.Distinct().Where(d => { lock (_gate) return !_graphics.ContainsKey(d); }).ToArray();
@@ -442,6 +519,7 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
         return new GpuPipeline(desc, made.Handle);
     }
 
+    /// <inheritdoc/>
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
     {
         lock (_gate)
@@ -463,6 +541,7 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
         return new GpuPipeline(desc, created.Handle);
     }
 
+    /// <inheritdoc/>
     public GpuComputePipeline Get(in ComputePipelineDesc desc)
     {
         lock (_gate)
@@ -502,6 +581,10 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
 
     #region Create
 
+    /// <summary>
+    /// Makes a graphics pipeline of a description, with <paramref name="fragment"/> in place of the program's fragment module when given; names it
+    /// after the description.
+    /// </summary>
     Pipeline Create(in GraphicsPipelineDesc d, ShaderModule fragment = default)
     {
         var p = _shaders.Backend(d.Program);
@@ -549,6 +632,9 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
         _device.Frames.DeferDelete(() => { foreach (var p in doomed) vk.DestroyPipeline(dev, p, null); });
     }
 
+    /// <summary>
+    /// Destroys every pipeline at once, the variants included.
+    /// </summary>
     public void Dispose()
     {
         foreach (var p in _graphics.Values) _device.Vk.DestroyPipeline(_device.Device, p, null);

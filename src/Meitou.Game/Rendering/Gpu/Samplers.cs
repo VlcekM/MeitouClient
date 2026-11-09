@@ -42,12 +42,27 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
 /// </summary>
 public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
 {
+    /// <summary>
+    /// The device the samplers are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The made samplers' indices in the device's sampler table, by their (device-adjusted) description.
+    /// </summary>
     readonly Dictionary<SamplerDesc, int> _samplers = [];
+    /// <summary>
+    /// Backs <see cref="MaxAnisotropy"/>.
+    /// </summary>
     int _maxAnisotropy = 16;
 
+    /// <summary>
+    /// An empty cache on <paramref name="device"/>.
+    /// </summary>
     public SamplerCache(VulkanDevice device) => this._device = device;
 
+    /// <summary>
+    /// How many samplers are made.
+    /// </summary>
     public int Count => _samplers.Count;
 
     /// <summary>
@@ -64,8 +79,15 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
         }
     }
 
+    /// <summary>
+    /// Bumped by every change of <see cref="MaxAnisotropy"/>.
+    /// </summary>
     public int Generation { get; private set; }
 
+    /// <summary>
+    /// The sampler for <paramref name="desc"/> with its anisotropy capped by <see cref="MaxAnisotropy"/> (1 without device anisotropy); made on first
+    /// use.
+    /// </summary>
     public GpuSampler Get(in SamplerDesc desc)
     {
         var key = _device.SamplerAnisotropy
@@ -102,6 +124,9 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
         return new GpuSampler(_samplers[key], key);
     }
 
+    /// <summary>
+    /// Destroys every sampler made.
+    /// </summary>
     public void Dispose()
     {
         foreach (var s in _samplers.Values) _device.Vk.DestroySampler(_device.Device, _device.SamplerAt(s), null);

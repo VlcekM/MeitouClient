@@ -2,11 +2,74 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Gpu.Shaders;
 
-public enum ScalarKind { Float, Int, UInt, Bool }
+/// <summary>
+/// The scalar type of a reflected member, sampler result or interface variable.
+/// </summary>
+public enum ScalarKind
+{
+    /// <summary>
+    /// 32-bit float (also anything the parser does not know).
+    /// </summary>
+    Float,
+    /// <summary>
+    /// Signed integer.
+    /// </summary>
+    Int,
+    /// <summary>
+    /// Unsigned integer (a bool in a block reads as this).
+    /// </summary>
+    UInt,
+    /// <summary>
+    /// Boolean.
+    /// </summary>
+    Bool
+}
 
-public enum SamplerDimension { Dim1D, Dim2D, Dim3D, Cube, Other }
+/// <summary>
+/// A sampled image's dimensionality (SPIR-V's <c>Dim</c>).
+/// </summary>
+public enum SamplerDimension
+{
+    /// <summary>
+    /// One-dimensional.
+    /// </summary>
+    Dim1D,
+    /// <summary>
+    /// Two-dimensional.
+    /// </summary>
+    Dim2D,
+    /// <summary>
+    /// Three-dimensional.
+    /// </summary>
+    Dim3D,
+    /// <summary>
+    /// A cube map.
+    /// </summary>
+    Cube,
+    /// <summary>
+    /// Any other SPIR-V dimensionality.
+    /// </summary>
+    Other
+}
 
-public enum BlockKind { Uniform, PushConstant, StorageBuffer }
+/// <summary>
+/// What kind of block a <see cref="UniformBlockInfo"/> is.
+/// </summary>
+public enum BlockKind
+{
+    /// <summary>
+    /// A uniform buffer block (the default block included).
+    /// </summary>
+    Uniform,
+    /// <summary>
+    /// The push-constant block.
+    /// </summary>
+    PushConstant,
+    /// <summary>
+    /// A shader storage buffer block.
+    /// </summary>
+    StorageBuffer
+}
 
 /// <summary>
 /// A member of a uniform block (a loose GLSL uniform for the default block).
@@ -21,6 +84,9 @@ public enum BlockKind { Uniform, PushConstant, StorageBuffer }
 public sealed record BlockMember(string Name, int Offset, int Size, ScalarKind Kind, int Columns, int Rows, int ArrayLength, int ArrayStride,
     int MatrixStride, bool RowMajor)
 {
+    /// <summary>
+    /// Whether the member is a matrix (more than one column).
+    /// </summary>
     public bool IsMatrix => Columns > 1;
 }
 
@@ -34,12 +100,24 @@ public sealed class UniformBlockInfo
     /// </summary>
     public required string Name { get; init; }
 
+    /// <summary>
+    /// The block variable's name (empty when the SPIR-V names none).
+    /// </summary>
     public required string InstanceName { get; init; }
 
+    /// <summary>
+    /// Uniform, push constant or storage block.
+    /// </summary>
     public required BlockKind Kind { get; init; }
 
+    /// <summary>
+    /// The descriptor set (0 when undecorated, as push constants are).
+    /// </summary>
     public required int Set { get; init; }
 
+    /// <summary>
+    /// The binding; -1 for push constants.
+    /// </summary>
     public required int Binding { get; init; }
 
     /// <summary>
@@ -47,8 +125,14 @@ public sealed class UniformBlockInfo
     /// </summary>
     public required int Size { get; init; }
 
+    /// <summary>
+    /// The members, flattened.
+    /// </summary>
     public required IReadOnlyList<BlockMember> Members { get; init; }
 
+    /// <summary>
+    /// Whether this is GL's default block (the loose uniforms).
+    /// </summary>
     public bool IsDefault => Name == "gl_DefaultUniformBlock";
 }
 
@@ -91,8 +175,14 @@ public readonly record struct UniformLookup(UniformBlockInfo Block, BlockMember 
 /// </summary>
 public sealed class ShaderReflection
 {
+    /// <summary>
+    /// The uniform, push constant and storage blocks that are used.
+    /// </summary>
     public required IReadOnlyList<UniformBlockInfo> Blocks { get; init; }
 
+    /// <summary>
+    /// The samplers that are used.
+    /// </summary>
     public required IReadOnlyList<SamplerInfo> Samplers { get; init; }
 
     /// <summary>
@@ -100,8 +190,14 @@ public sealed class ShaderReflection
     /// </summary>
     public IReadOnlyList<StorageImageInfo> StorageImages { get; init; } = [];
 
+    /// <summary>
+    /// The stage inputs, by location.
+    /// </summary>
     public required IReadOnlyList<InterfaceVariable> Inputs { get; init; }
 
+    /// <summary>
+    /// The stage outputs, by location.
+    /// </summary>
     public required IReadOnlyList<InterfaceVariable> Outputs { get; init; }
 
     /// <summary>
@@ -110,8 +206,14 @@ public sealed class ShaderReflection
     /// </summary>
     public IReadOnlyList<string> Inactive { get; init; } = [];
 
+    /// <summary>
+    /// The default block (the loose uniforms); null when the module has none.
+    /// </summary>
     public UniformBlockInfo? DefaultBlock => Blocks.FirstOrDefault(b => b.IsDefault);
 
+    /// <summary>
+    /// A used sampler by GLSL name; null when there is none.
+    /// </summary>
     public SamplerInfo? FindSampler(string name) => Samplers.FirstOrDefault(s => s.Name == name);
 
     /// <summary>
@@ -133,6 +235,9 @@ public sealed class ShaderReflection
         return null;
     }
 
+    /// <summary>
+    /// A member of a block by name, or an element of an array member by <c>name[i]</c>; null when absent or out of range.
+    /// </summary>
     static UniformLookup? Match(UniformBlockInfo block, string name)
     {
         foreach (var m in block.Members)

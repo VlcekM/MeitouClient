@@ -6,15 +6,25 @@ namespace Meitou.Data.Fcs;
 /// </summary>
 public sealed class FcsSchema
 {
+    /// <summary>
+    /// The fields of each record type by its fcs.def section name (<c>BUILDING</c>, ...), in declaration order; a section listing several types adds
+    /// its fields to each.
+    /// </summary>
     readonly Dictionary<string, List<FcsFieldDef>> _fieldsByType = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The reference lists each type declares <c>OWNED</c> (holding child records owned by the record).
+    /// </summary>
+    readonly Dictionary<string, HashSet<string>> _ownedByType = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Record type names in order of first appearance.
     /// </summary>
     public IEnumerable<string> TypeNames => _fieldsByType.Keys;
 
-    readonly Dictionary<string, HashSet<string>> _ownedByType = new(StringComparer.Ordinal);
-
+    /// <summary>
+    /// The fields of <paramref name="typeName"/> in declaration order; empty for a type fcs.def does not name.
+    /// </summary>
     public IReadOnlyList<FcsFieldDef> FieldsOf(string typeName) =>
         _fieldsByType.TryGetValue(typeName, out var fields) ? fields : [];
 
@@ -40,8 +50,15 @@ public sealed class FcsSchema
         return null;
     }
 
+    /// <summary>
+    /// Reads and parses the fcs.def file at <paramref name="path"/>.
+    /// </summary>
     public static FcsSchema Load(string path) => Parse(File.ReadAllLines(path));
 
+    /// <summary>
+    /// Parses fcs.def lines: <c>[TYPE,...]</c> section headers, <c>OWNED:</c> lines and fields; comments, category headings, translation flags and
+    /// editor conditions are skipped. Malformed lines throw with their line number.
+    /// </summary>
     public static FcsSchema Parse(IEnumerable<string> lines)
     {
         var schema = new FcsSchema();
@@ -94,6 +111,9 @@ public sealed class FcsSchema
         return schema;
     }
 
+    /// <summary>
+    /// Parses a field line's value part: the default (quoted or bare), parenthesised groups, bare modifier words and a quoted description.
+    /// </summary>
     static FcsFieldDef ParseField(string name, string rest, int lineNumber)
     {
         int i = 0;
@@ -139,6 +159,10 @@ public sealed class FcsSchema
         };
     }
 
+    /// <summary>
+    /// The kind of a field from the form of its default: quoted (string, or filename with a <c>|</c> filter), True/False, <c>#</c> colour,
+    /// <c>TEXTURE_</c>, int, float, dotted enum, or an upper-case type name (reference, or instance with two groups).
+    /// </summary>
     static FcsFieldKind Classify(string value, bool quoted, List<string> groups)
     {
         if (quoted) return value.Contains('|') ? FcsFieldKind.Filename : FcsFieldKind.String;
@@ -154,6 +178,10 @@ public sealed class FcsSchema
         return FcsFieldKind.Unknown;
     }
 
+    /// <summary>
+    /// Reads a quoted string starting at <paramref name="i"/> (on the opening quote) and moves past the closing one and the space after it; a
+    /// backslash and the character after it are kept as written.
+    /// </summary>
     static string ReadQuoted(string s, ref int i, int lineNumber)
     {
         var sb = new System.Text.StringBuilder();
@@ -175,6 +203,9 @@ public sealed class FcsSchema
         throw new FormatException($"fcs.def line {lineNumber}: unterminated string.");
     }
 
+    /// <summary>
+    /// Moves <paramref name="i"/> past whitespace.
+    /// </summary>
     static void SkipSpace(string s, ref int i)
     {
         while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
@@ -201,12 +232,30 @@ public sealed record FcsFieldDef(
     public bool IsLooped => Modifiers.Contains("looped");
 }
 
+/// <summary>
+/// What a field holds, as <see cref="FcsSchema"/> classifies it from the default written in fcs.def.
+/// </summary>
 public enum FcsFieldKind
 {
+    /// <summary>
+    /// A default no rule matched.
+    /// </summary>
     Unknown,
+    /// <summary>
+    /// <c>True</c> / <c>False</c>.
+    /// </summary>
     Bool,
+    /// <summary>
+    /// An integer default.
+    /// </summary>
     Int,
+    /// <summary>
+    /// A decimal default that is not an integer.
+    /// </summary>
     Float,
+    /// <summary>
+    /// A quoted default with no <c>|</c> file filter.
+    /// </summary>
     String,
     /// <summary>
     /// A file path; the default is an editor file filter like <c>"Ogre mesh|*.mesh"</c>.

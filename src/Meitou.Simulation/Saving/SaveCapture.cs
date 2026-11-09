@@ -26,7 +26,8 @@ public sealed class SaveCaptureOptions
     public IReadOnlyList<string> DataFiles { get; init; } = LoadOrder.BaseFiles;
 
     /// <summary>
-    /// The placed towns of the level data, in order. A new save (no loaded one to carry on) writes a default state for each; without them it has no town states.
+    /// The placed towns of the level data, in order. A new save (no loaded one to carry on) writes a default state for each; without them it has no
+    /// town states.
     /// </summary>
     public IReadOnlyList<TownPlacement>? Placements { get; init; }
 
@@ -92,7 +93,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// <paramref name="prepared"/> is a <see cref="PrepareBase"/> made with the same <paramref name="loaded"/> (null: made here, which is the slow part).
+    /// <paramref name="prepared"/> is a <see cref="PrepareBase"/> made with the same <paramref name="loaded"/> (null: made here, which is the
+    /// slow part).
     /// </summary>
     public static SaveGame Capture(World world, PopulationData data, SaveClock clock, LoadedSave? loaded = null, SaveCaptureOptions? options = null,
         SaveBuilder? prepared = null)
@@ -124,7 +126,8 @@ public static partial class SaveCapture
         // The war states name the campaign platoons by the handles they were just written with.
         WriteWars(game, world, data, loaded, fresh, outposts);
 
-        // The wild: the nests made so far in the town list the original's way, and the wild squads in the world as new platoons of their nest or sector.
+        // The wild: the nests made so far in the town list the original's way, and the wild squads in the world as new platoons of their nest
+        // or sector.
         WriteWild(builder, world, data, options, clock, buildings, races, campItems);
 
         WriteMemories();
@@ -255,22 +258,48 @@ public static partial class SaveCapture
     /// </summary>
     sealed class MemoryPass
     {
+        /// <summary>
+        /// The handle each character written got.
+        /// </summary>
         public readonly Dictionary<CharacterId, Hand> Handles = [];
+        /// <summary>
+        /// The platoon records to put a squad's memory on, with the memory (null: none).
+        /// </summary>
         public readonly List<(FcsRecord Record, SquadMemoryData? Data)> Targets = [];
+        /// <summary>
+        /// The carry links to write once every character has a handle: a state record and the carried or carrying partner.
+        /// </summary>
         public readonly List<(FcsRecord State, CharacterId Partner)> Carries = [];
+        /// <summary>
+        /// The orders whose target character's handle is written once every character has one: the AI record, the key prefix and the target.
+        /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> OrderTargets = [];
+        /// <summary>
+        /// The saved items whose <c>ownedby</c> names a character.
+        /// </summary>
         public readonly List<(SaveItem Item, CharacterId Owner)> Owners = [];
     }
 
+    /// <summary>
+    /// The capture running on this thread (null: none).
+    /// </summary>
     [ThreadStatic] static MemoryPass? s_memoryPass;
 
+    /// <summary>
+    /// The squads' memories of the world's dialogue system; null without one.
+    /// </summary>
     static Dialogue.SquadMemory? MemoryOf(World world) => world.Systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault()?.Memory;
 
     /// <summary>
-    /// Puts a squad's memory (null: none, which clears the record's) on a platoon record once the capture has written every character (<see cref="MemorySave"/>).
+    /// Puts a squad's memory (null: none, which clears the record's) on a platoon record once the capture has written every
+    /// character (<see cref="MemorySave"/>).
     /// </summary>
     static void NoteMemory(FcsRecord record, SquadMemoryData? data) => s_memoryPass?.Targets.Add((record, data));
 
+    /// <summary>
+    /// Writes what the capture held back once every character has a handle: the squads' memories, the carry links, the orders' targets and the
+    /// items' owners.
+    /// </summary>
     static void WriteMemories()
     {
         if (s_memoryPass is not { } pass) return;
@@ -305,6 +334,9 @@ public static partial class SaveCapture
     /// </summary>
     internal const string CampInstancePrefix = "meitou-nest:";
 
+    /// <summary>
+    /// Adds every faction of the data to a new save, each with its relation table (none for the player's), rank and global trust.
+    /// </summary>
     static void AddFreshFactions(SaveBuilder builder, PopulationData data)
     {
         for (int a = 0; a < data.Factions.Count; a++)
@@ -322,6 +354,9 @@ public static partial class SaveCapture
         }
     }
 
+    /// <summary>
+    /// Adds the towns of the capture's placements to a new save, with the handles of their level states.
+    /// </summary>
     static void AddFreshTowns(SaveBuilder builder, PopulationData data, SaveCaptureOptions options)
     {
         if (options.Placements is null) return;
@@ -332,7 +367,8 @@ public static partial class SaveCapture
 
             var town = TownData.From(record);
 
-            // The level state's handle, as the original keeps it (docs/formats/save.md "Object handles"): the buildings' and platoons' town handles name it.
+            // The level state's handle, as the original keeps it (docs/formats/save.md "Object handles"): the buildings' and platoons' town handles
+            // name it.
             Hand? hand = p.StateId is not null && options.Levels?.Level.Find(p.StateId) is { } level && level.Ints.ContainsKey("handI")
                 ? new Hand(level.GetInt("handTYPE"), level.GetInt("handC"), level.GetInt("handCS"), level.GetInt("handI"), level.GetInt("handS"))
                 : null;
@@ -433,6 +469,10 @@ public static partial class SaveCapture
         }
     }
 
+    /// <summary>
+    /// Writes the factions' prosperity and platoon counters back into the save, and the global trust, rank and relations the world changed
+    /// since loading.
+    /// </summary>
     static void UpdateFactions(SaveGame game, PopulationData data, LoadedSave? loaded, World world, PopulationSystem? population)
     {
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -523,13 +563,14 @@ public static partial class SaveCapture
         var spawned = loaded?.SpawnedSlots ?? [];
         var seen = new HashSet<(string Platoon, int Slot)>();
 
-        // The player's squads in order (their `squad index`), then any other squad holding characters of a loaded platoon (a prisoner or slave kept in it).
+        // The player's squads in order (their `squad index`), then any other squad holding characters of a loaded platoon (a prisoner or slave kept
+        // in it).
         var order = SquadManagement.PlayerSquads(world);
         var kept = new HashSet<string>(StringComparer.Ordinal);
         foreach (var squad in order.Concat(world.Squads.All.Where(s => s.PlatoonId < 0 && !order.Contains(s))))
         {
-            // A member of a loaded platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the file); only the
-            // resident squads the population system made, which have no link, are left out by the player test.
+            // A member of a loaded platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the file);
+            // only the resident squads the population system made, which have no link, are left out by the player test.
             var alive = squad.Members.Where(m => table.IsAlive(m) && (table.Cold(m.Slot)!.IsPlayer || table.Cold(m.Slot)!.Save is not null)).ToList();
             int index = order.IndexOf(squad);
 
@@ -643,6 +684,9 @@ public static partial class SaveCapture
         return $"{factionName}_{n}";
     }
 
+    /// <summary>
+    /// Sets the platoon's character count on the platoon and its collection records.
+    /// </summary>
     static void SetCharCount(SavePlatoon platoon)
     {
         platoon.CharCount = platoon.Characters.Count;
@@ -651,9 +695,9 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// One character as it is in the world into its platoon file: its records (<paramref name="sc"/>), or new ones when null. Place and facing, name, leader flag,
-    /// bounties, crime marks, the player's orders (<paramref name="orders"/>, the player's squads), bed or cage; stats and medical state (from the host, else the
-    /// loaded ones, else defaults for a new one); a new one's look; what it carries.
+    /// One character as it is in the world into its platoon file: its records (<paramref name="sc"/>), or new ones when null. Place and facing, name,
+    /// leader flag, bounties, crime marks, the player's orders (<paramref name="orders"/>, the player's squads), bed or cage; stats and medical state
+    /// (from the host, else the loaded ones, else defaults for a new one); a new one's look; what it carries.
     /// </summary>
     static SaveCharacter WriteCharacter(
         SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
@@ -763,6 +807,9 @@ public static partial class SaveCapture
         db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
             .FirstOrDefault(s => s?.Type == FcsRecordType.Stats)?.GetFloat("warrior spirit") ?? 0;
 
+    /// <summary>
+    /// Writes a character's stats and medical state into its records (a new character gets fresh ones).
+    /// </summary>
     static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data,
         Dictionary<string, RaceData?> races)
     {
@@ -783,6 +830,9 @@ public static partial class SaveCapture
         }
     }
 
+    /// <summary>
+    /// The race of a character record (cached by id); null when it has none.
+    /// </summary>
     static RaceData? RaceOf(string recordId, GameDatabase db, Dictionary<string, RaceData?> cache)
     {
         if (db.Find(recordId) is not { } record || CharacterAssembly.RaceId(record) is not { } id) return null;
@@ -852,8 +902,9 @@ public static partial class SaveCapture
     const int ZoneContainerSerial = 11111;
 
     /// <summary>
-    /// The save's NPC platoons (docs/simulation.md "Saves"): a stand-in that travelled gets its position and package; one whose characters were in the world gets
-    /// them as they are (in the world now) or were (when it left): place, facing, body, kit, bounties; a character whose body is gone leaves the file.
+    /// The save's NPC platoons (docs/simulation.md "Saves"): a stand-in that travelled gets its position and package; one whose characters were in
+    /// the world gets them as they are (in the world now) or were (when it left): place, facing, body, kit, bounties; a character whose body is gone
+    /// leaves the file.
     /// </summary>
     static void WriteSavedNpcs(
         SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
@@ -1336,7 +1387,8 @@ public static partial class SaveCapture
     static Vector3 Ground(World world, Vector2 at) => new(at.X, world.Walkability.GroundHeight(at.X, at.Y), at.Y);
 
     /// <summary>
-    /// Whether a squad of the player's is within 500 of a place (X, Z): the original's saver keeps a dead platoon then (<c>FUN_140372ef0</c>, 250000 squared).
+    /// Whether a squad of the player's is within 500 of a place (X, Z): the original's saver keeps a dead platoon then (<c>FUN_140372ef0</c>,
+    /// 250000 squared).
     /// </summary>
     static bool PlayerNear(World world, Vector2 at)
     {
@@ -1467,6 +1519,9 @@ public static partial class SaveCapture
         return state;
     }
 
+    /// <summary>
+    /// Takes the next record id of the save file.
+    /// </summary>
     static int NextRecordId(SaveFile file)
     {
         int id = file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;

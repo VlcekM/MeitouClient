@@ -8,7 +8,13 @@ namespace Meitou.Simulation.Ai;
 /// </summary>
 public readonly record struct PlanTarget(byte Kind, Vector3 Position)
 {
+    /// <summary>
+    /// The kind of no target.
+    /// </summary>
     public const byte None = 0;
+    /// <summary>
+    /// Whether this is no target.
+    /// </summary>
     public bool IsNone => Kind == None;
 }
 
@@ -67,6 +73,9 @@ public sealed class TaskPlanner
     /// </summary>
     const int MaxDepth = 50;
 
+    /// <summary>
+    /// The worker thread's planner (<see cref="Local"/>).
+    /// </summary>
     [ThreadStatic] static TaskPlanner? s_local;
 
     /// <summary>
@@ -74,17 +83,45 @@ public sealed class TaskPlanner
     /// </summary>
     public static TaskPlanner Local => s_local ??= new TaskPlanner();
 
+    /// <summary>
+    /// A search node: the row, the target it is planned for and the target its effect must hold for, the cost so far and the estimate, its parent and
+    /// whether it was expanded.
+    /// </summary>
     struct Node
     {
+        /// <summary>
+        /// The TaskData row of the node.
+        /// </summary>
         public TaskDataRow Row;
+        /// <summary>
+        /// The target the row is planned for, and the one its effect must hold for (none for a finder row).
+        /// </summary>
         public PlanTarget Target, EffectTarget;
+        /// <summary>
+        /// The node's desire so far and its estimate; their sum is its value.
+        /// </summary>
         public float G, H;
+        /// <summary>
+        /// The node it was expanded from (-1: the root).
+        /// </summary>
         public int Parent;
+        /// <summary>
+        /// Whether the node was taken off the open list.
+        /// </summary>
         public bool Closed;
     }
 
+    /// <summary>
+    /// The nodes of the current search.
+    /// </summary>
     readonly Node[] _nodes = new Node[MaxNodes];
+    /// <summary>
+    /// The open nodes' indexes.
+    /// </summary>
     readonly List<int> _open = new(MaxNodes);
+    /// <summary>
+    /// The nodes made in the current search.
+    /// </summary>
     int _count;
 
     /// <summary>
@@ -120,8 +157,15 @@ public sealed class TaskPlanner
         return 0;
     }
 
+    /// <summary>
+    /// A node's value: its desire so far plus its estimate.
+    /// </summary>
     float Value(int i) => _nodes[i].G + _nodes[i].H;
 
+    /// <summary>
+    /// Makes a node for <paramref name="row"/> and <paramref name="target"/>; -1 when the node cap is reached or the desire is 0 or less (a
+    /// dead end).
+    /// </summary>
     int Make(TaskDataRow row, PlanTarget target, float desire, int parent)
     {
         if (_count >= MaxNodes) return -1;
@@ -207,6 +251,9 @@ public sealed class TaskPlanner
         }
     }
 
+    /// <summary>
+    /// Whether a node of <paramref name="type"/> for <paramref name="target"/> was made in this search.
+    /// </summary>
     bool Seen(TaskType type, PlanTarget target)
     {
         for (int k = 0; k < _count; k++)

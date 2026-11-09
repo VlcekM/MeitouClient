@@ -202,8 +202,8 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
 
     /// <summary>
     /// The world camera on the editor's orbit (the stage's eye and pivot, <see cref="CharacterRenderer.EditorCamera"/>), the pivot moved sideways on
-    /// the picture to the middle of the space between the editor's panels (<see cref="CharacterEditorHost.EditorStageShift"/>) by moving the camera across, not by the
-    /// projection.
+    /// the picture to the middle of the space between the editor's panels (<see cref="CharacterEditorHost.EditorStageShift"/>) by moving the camera
+    /// across, not by the projection.
     /// </summary>
     void PlaceEditorCamera(EditorBar bar, int width, int height)
     {

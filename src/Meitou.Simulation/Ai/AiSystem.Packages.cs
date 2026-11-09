@@ -11,8 +11,8 @@ namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// The package classes with rules of their own beyond the patrol, bar and retreat (docs/game/ai.md "Package classes", decoded from their vtables;
-/// docs/simulation.md "AI", Package classes): the wandering trader (16), the passing-by assault on a player town (29) and the occupation of it that follows
-/// (30). All run in the serial step.
+/// docs/simulation.md "AI", Package classes): the wandering trader (16), the passing-by assault on a player town (29) and the occupation of it that
+/// follows (30). All run in the serial step.
 /// </summary>
 public sealed partial class AiSystem
 {
@@ -64,8 +64,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The town a point is in (the original's <c>FUN_1402688d0</c>: the nearest town of any kind but a nest marker, when the point is within its radius,
-    /// <c>FUN_140926d50</c>): placed towns by <see cref="TownData.Radius"/>, the player's by <see cref="Construction.PlayerTown.Radius"/>.
+    /// The town a point is in (the original's <c>FUN_1402688d0</c>: the nearest town of any kind but a nest marker, when the point is within its
+    /// radius, <c>FUN_140926d50</c>): placed towns by <see cref="TownData.Radius"/>, the player's by <see cref="Construction.PlayerTown.Radius"/>.
     /// </summary>
     internal CampaignTown CurrentTown(World world, Vector3 p) => TownAt(data, world, p);
 
@@ -94,10 +94,10 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The character's status town (the original's status <c>+0x88</c>, written by <c>FUN_1405a51e0</c> before each status update, docs/game/ai-tasks.md
-    /// "Status town"), from its position and its <paramref name="current"/> one: the nearest placed town of the player's faction within 1.25 x its radius;
-    /// else the current town within 1.5 x its radius, or, with none, the nearest placed town within its radius; else the nearest player town within the same
-    /// reach. The original's walled-town and building steps are not modelled.
+    /// The character's status town (the original's status <c>+0x88</c>, written by <c>FUN_1405a51e0</c> before each status update,
+    /// docs/game/ai-tasks.md "Status town"), from its position and its <paramref name="current"/> one: the nearest placed town of the player's
+    /// faction within 1.25 x its radius; else the current town within 1.5 x its radius, or, with none, the nearest placed town within its radius;
+    /// else the nearest player town within the same reach. The original's walled-town and building steps are not modelled.
     /// </summary>
     internal static CampaignTown StatusTownAt(PopulationData data, World world, Vector3 p, CampaignTown current)
     {
@@ -111,8 +111,14 @@ public sealed partial class AiSystem
         return NearestPlayerTown(world, at) is { } built && Reaches(at, built, reach) ? built.Town : CampaignTown.None;
     }
 
+    /// <summary>
+    /// A campaign town with the centre and radius it is placed at.
+    /// </summary>
     readonly record struct PlacedTown(CampaignTown Town, Vector2 Centre, float Radius);
 
+    /// <summary>
+    /// Whether <paramref name="at"/> is within <paramref name="factor"/> times the town's radius of its centre.
+    /// </summary>
     static bool Reaches(Vector2 at, PlacedTown town, float factor)
     {
         float r = town.Radius * factor;
@@ -138,6 +144,9 @@ public sealed partial class AiSystem
         return best;
     }
 
+    /// <summary>
+    /// The player town whose centre is nearest <paramref name="at"/>; null when the player has none.
+    /// </summary>
     static PlacedTown? NearestPlayerTown(World world, Vector2 at)
     {
         PlacedTown? best = null;
@@ -151,6 +160,10 @@ public sealed partial class AiSystem
         return best;
     }
 
+    /// <summary>
+    /// Where campaign town <paramref name="t"/> stands: a town site's position and radius, or a player town's; null when it is not (or no
+    /// longer) there.
+    /// </summary>
     static PlacedTown? TownPlace(PopulationData data, World world, CampaignTown t)
     {
         if (t.Site >= 0)
@@ -179,7 +192,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The radius of the running package's mission town: its site's size radius times the town's multiplier, else the player town's radius; 0 without one.
+    /// The radius of the running package's mission town: its site's size radius times the town's multiplier, else the player town's radius; 0
+    /// without one.
     /// </summary>
     float DestinationRadius(World world, Blackboard board) =>
         board.Destination.Site >= 0
@@ -246,10 +260,10 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The update of Contract_HiredAlly (12), Contract_UntilOutOfDanger (14) and Contract_DefendPlayerBase (15) (<c>FUN_1402910e0</c>, <c>FUN_140290f90</c>,
-    /// <c>FUN_140291410</c>, <b>Verified</b>): the package's mission target, a character, is tagged TEMP ALLY (3) in the squad's memory each update; the defend
-    /// package does so only once it has its player town (else it runs its start). The sensing hook (<see cref="AggroSystem"/> <c>EmployerTags</c>)
-    /// tags the employer's faction as it is seen, separately.
+    /// The update of Contract_HiredAlly (12), Contract_UntilOutOfDanger (14) and Contract_DefendPlayerBase (15) (<c>FUN_1402910e0</c>,
+    /// <c>FUN_140290f90</c>, <c>FUN_140291410</c>, <b>Verified</b>): the package's mission target, a character, is tagged TEMP ALLY (3) in the
+    /// squad's memory each update; the defend package does so only once it has its player town (else it runs its start). The sensing hook
+    /// (<see cref="AggroSystem"/> <c>EmployerTags</c>) tags the employer's faction as it is seen, separately.
     /// </summary>
     void TagMissionTarget(World world, Squad squad, Blackboard board)
     {
@@ -271,12 +285,15 @@ public sealed partial class AiSystem
         !squad.TownOwn && (InPrivateOutpost(world, board) || board.TraderState != 2 || ReadyToLeave(world, board));
 
     /// <summary>
-    /// Ready to go on (<c>FUN_1402868c0</c>): in a player town that is not public (<see cref="Construction.PlayerTown.Public"/>) at once; else after its stay
-    /// (<see cref="Blackboard.TraderWait"/> hours since it came into the town) and only between 06:00 and 20:59.
+    /// Ready to go on (<c>FUN_1402868c0</c>): in a player town that is not public (<see cref="Construction.PlayerTown.Public"/>) at once; else after
+    /// its stay (<see cref="Blackboard.TraderWait"/> hours since it came into the town) and only between 06:00 and 20:59.
     /// </summary>
     static bool ReadyToLeave(World world, Blackboard board) =>
         InPrivateOutpost(world, board) || board.TraderWait <= world.GameHours - board.InTownSince && world.Hour is > 5 and < 21;
 
+    /// <summary>
+    /// Whether the board's town is a player outpost that is not public.
+    /// </summary>
     static bool InPrivateOutpost(World world, Blackboard board) =>
         board.InTown.PlayerTown > 0 && world.Buildings.FindTown(board.InTown.PlayerTown)?.Public != true;
 
@@ -333,6 +350,9 @@ public sealed partial class AiSystem
         world.Characters.IsAlive(id) && world.Characters.TryResolveNext(id, out int s)
             && world.Characters.Cold(s)!.Medical is not { Incapacitated: true };
 
+    /// <summary>
+    /// The squad's members that are up (<see cref="Up"/>).
+    /// </summary>
     int MembersUp(World world, Squad squad)
     {
         int n = 0;
@@ -341,7 +361,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of a point.
+    /// Whether someone of <paramref name="faction"/> (the player's characters for the player's faction) is up within <paramref name="range"/> of
+    /// a point.
     /// </summary>
     bool FactionNear(World world, int faction, Vector2 at, float range)
     {
@@ -357,6 +378,9 @@ public sealed partial class AiSystem
         return false;
     }
 
+    /// <summary>
+    /// Whether a character belongs to <paramref name="faction"/>: its own faction, or a player character when the faction is the player's.
+    /// </summary>
     bool OfFaction(World world, CharacterCold c, int faction) =>
         c.Faction == faction || c.IsPlayer && faction == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
 
@@ -412,9 +436,9 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Engine choice: the members' posts move into the town they assault or hold (a ring round its centre by member), so their idle and their node and bed
-    /// goals, which have no building there, stay in it (the original's ransacking goal, <c>Task_PatrolTownViolent</c>, has a target finder Meitou lacks);
-    /// with <paramref name="say"/> each says it.
+    /// Engine choice: the members' posts move into the town they assault or hold (a ring round its centre by member), so their idle and their node
+    /// and bed goals, which have no building there, stay in it (the original's ransacking goal, <c>Task_PatrolTownViolent</c>, has a target finder
+    /// Meitou lacks); with <paramref name="say"/> each says it.
     /// </summary>
     static void PostsInto(World world, Squad squad, Vector2 centre, int? say)
     {
@@ -466,7 +490,8 @@ public sealed partial class AiSystem
     internal static bool Stands(CharacterCold c, bool inMissionTown) => inMissionTown && !c.IsImprisoned && CharacterFacts.PostureZero(c);
 
     /// <summary>
-    /// The start rule's part of the target set: every person of the attacked faction within <see cref="AssaultReach"/> of the mission town (<c>FUN_1402900c0</c>).
+    /// The start rule's part of the target set: every person of the attacked faction within <see cref="AssaultReach"/> of the mission
+    /// town (<c>FUN_1402900c0</c>).
     /// </summary>
     void SeedAssaultTargets(World world, Blackboard board)
     {
@@ -497,7 +522,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether the assault hands over to its <c>Leads to</c>, the occupation (vtable +0x90, <c>FUN_14028ea90</c>): intact, no defender standing and at least 2 up.
+    /// Whether the assault hands over to its <c>Leads to</c>, the occupation (vtable +0x90, <c>FUN_14028ea90</c>): intact, no defender standing and
+    /// at least 2 up.
     /// </summary>
     bool AssaultMayLead(World world, Squad squad, Blackboard board) =>
         board.Intact && !DefenderStanding(world, board) && MembersUp(world, squad) >= 2;
@@ -507,7 +533,8 @@ public sealed partial class AiSystem
     #region Occupation
 
     /// <summary>
-    /// The occupation ends after this long with no able member in the town (<b>Observed</b>: 4 of the timer the finished test adds to, read as game seconds).
+    /// The occupation ends after this long with no able member in the town (<b>Observed</b>: 4 of the timer the finished test adds to, read as
+    /// game seconds).
     /// </summary>
     const float OccupyGiveUp = 4;
 
@@ -536,10 +563,15 @@ public sealed partial class AiSystem
     void OccupyStarted(World world, Squad squad, Blackboard board) => Occupy(world, squad, board, TakenOverPlayerTown);
 
     /// <summary>
-    /// An occupier come back into the world (<see cref="Blackboard.Resume"/>): the occupation's state again from the town it is in, without the members' line.
+    /// An occupier come back into the world (<see cref="Blackboard.Resume"/>): the occupation's state again from the town it is in, without the
+    /// members' line.
     /// </summary>
     void OccupyResumed(World world, Squad squad, Blackboard board) => Occupy(world, squad, board, null);
 
+    /// <summary>
+    /// Occupies the player town the squad stands in: the town becomes its destination, the town's owner its enemy, and its members take posts round
+    /// the town's position (<paramref name="say"/>: the line they say, if any).
+    /// </summary>
     void Occupy(World world, Squad squad, Blackboard board, int? say)
     {
         board.OccupyAway = 0;
@@ -630,7 +662,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The occupation gives way (vtable +0x38, <c>FUN_140296150</c>): "{1} squad has been removed from {2}" (its faction, the town) while the town stands.
+    /// The occupation gives way (vtable +0x38, <c>FUN_140296150</c>): "{1} squad has been removed from {2}" (its faction, the town) while the
+    /// town stands.
     /// </summary>
     void OccupyEnded(World world, Squad squad, Blackboard board)
     {
@@ -671,8 +704,8 @@ public sealed partial class AiSystem
     readonly List<(Squad From, Squad Into)> _merges = [];
 
     /// <summary>
-    /// The members not dead (a body stays on its squad's roll until it decays; the original's count, squad +0x58 and platoon +0xa4, is read as the living ones,
-    /// <b>Unknown</b>).
+    /// The members not dead (a body stays on its squad's roll until it decays; the original's count, squad +0x58 and platoon +0xa4, is read as the
+    /// living ones, <b>Unknown</b>).
     /// </summary>
     static int Living(World world, Squad squad)
     {
@@ -683,9 +716,10 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether a refugee package may start (vtable +0x60, <c>FUN_140288ed0</c>): its leader is a slave or an escaped slave (the status object's first int,
-    /// <c>FUN_1405c8aa0</c>: <see cref="CharacterCold.SlaveState"/> above 0) and the squad has fewer than 3 members. The original also starts it when its home
-    /// town's vfunc 0x288 holds (<c>TownBase +0xe0 → +8</c>, read as "destroyed"); Meitou's towns are never destroyed, so that half is not built.
+    /// Whether a refugee package may start (vtable +0x60, <c>FUN_140288ed0</c>): its leader is a slave or an escaped slave (the status object's first
+    /// int, <c>FUN_1405c8aa0</c>: <see cref="CharacterCold.SlaveState"/> above 0) and the squad has fewer than 3 members. The original also starts it
+    /// when its home town's vfunc 0x288 holds (<c>TownBase +0xe0 → +8</c>, read as "destroyed"); Meitou's towns are never destroyed, so that half is
+    /// not built.
     /// </summary>
     static bool RefugeeCanStart(World world, Squad squad) =>
         world.Characters.TryResolveNext(squad.Leader, out int leader) && world.Characters.Cold(leader)!.SlaveState > 0 && Living(world, squad) < 3;
@@ -744,6 +778,10 @@ public sealed partial class AiSystem
         _merges.Add((squad, target));
     }
 
+    /// <summary>
+    /// The nearest intact squad of the same faction with more than 2 living members in the same platoon cell as <paramref name="at"/>; null when
+    /// there is none.
+    /// </summary>
     Squad? RefugeeTargetFor(World world, Squad squad, Vector3 at)
     {
         Squad? best = null;
@@ -760,10 +798,14 @@ public sealed partial class AiSystem
         return best;
     }
 
+    /// <summary>
+    /// The platoon cell (0..63) of one world coordinate (<see cref="PlatoonCell"/> wide, from <see cref="PlatoonCellOffset"/>).
+    /// </summary>
     static int PlatoonCellOf(float v) => Math.Clamp((int)((v + PlatoonCellOffset) / PlatoonCell), 0, 63);
 
     /// <summary>
-    /// Folds the squads <see cref="StepRefugee"/> queued into theirs (after the look; a squad that was itself folded away meanwhile waits for the next).
+    /// Folds the squads <see cref="StepRefugee"/> queued into theirs (after the look; a squad that was itself folded away meanwhile waits for
+    /// the next).
     /// </summary>
     void ApplyMerges(World world)
     {

@@ -14,9 +14,24 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class DialogueWindow(PlayerInterface player)
 {
+    /// <summary>
+    /// The choices' text colour and their hover colour.
+    /// </summary>
     static readonly Vector4 ChoiceColour = new(0xb3 / 255f, 0xb3 / 255f, 0xb3 / 255f, 1), ChoiceHover = new(0, 1, 0, 1);
+
+    /// <summary>
+    /// The conversation window is shown, and its end was sent.
+    /// </summary>
     internal bool ConversationShown, ConversationEndSent;
+
+    /// <summary>
+    /// The id of the last dialogue request handled.
+    /// </summary>
     long _dialogueRequestHandled;
+
+    /// <summary>
+    /// The NPC line shown; a new one scrolls the box back to the top.
+    /// </summary>
     string? _dialogueText;
 
     /// <summary>
@@ -62,6 +77,9 @@ sealed class DialogueWindow(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The dialogue window's bindings: the names, the NPC line (scrolled to the top when new) and the choices.
+    /// </summary>
     internal void BindDialogueScreen(UiBindings b)
     {
         if (player.Session.CurrentSnapshot.Conversation is not { } talk) return;
@@ -106,6 +124,9 @@ sealed class DialogueWindow(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// A choice picked: it goes to the world.
+    /// </summary>
     internal void DialogueAction(MyGuiEvent e)
     {
         if (!e.Action.StartsWith("dialogue-choice:", StringComparison.Ordinal)) return;

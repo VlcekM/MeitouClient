@@ -82,11 +82,34 @@ static class WorldGpuBuilder
     sealed class GpuBuild(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions options, Action<string>? step,
         Action<Task>? wait)
     {
+        /// <summary>
+        /// The device the world's renderers are made on.
+        /// </summary>
         public IGpuContext Context => context;
+
+        /// <summary>
+        /// The game install the assets are read from.
+        /// </summary>
         public GameInstall Install => install;
+
+        /// <summary>
+        /// The loaded region the renderers draw.
+        /// </summary>
         public WorldScene Scene => scene;
+
+        /// <summary>
+        /// Where the meshes, textures and materials are found.
+        /// </summary>
         public AssetLocator Assets => assets;
+
+        /// <summary>
+        /// The options the world was started with.
+        /// </summary>
         public WorldOptions Options => options;
+
+        /// <summary>
+        /// Started with the build; its time is quoted in the build's log lines.
+        /// </summary>
         public Stopwatch Watch { get; } = Stopwatch.StartNew();
 
         /// <summary>

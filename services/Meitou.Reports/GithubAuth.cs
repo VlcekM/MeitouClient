@@ -12,10 +12,24 @@ namespace Meitou.Reports;
 /// </summary>
 sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAuth> log)
 {
+    /// <summary>
+    /// One token refresh at a time.
+    /// </summary>
     readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>
+    /// The installation token in use, null before the first.
+    /// </summary>
     string? _token;
+
+    /// <summary>
+    /// When <see cref="_token"/> expires.
+    /// </summary>
     DateTimeOffset _expires;
 
+    /// <summary>
+    /// Whether issues can be opened: a GitHub App (id and key) or a fixed token is set.
+    /// </summary>
     public bool Configured => config.GithubAppId is not null && config.GithubAppKey is not null || config.GithubToken is not null;
 
     /// <summary>
@@ -52,6 +66,9 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
         }
     }
 
+    /// <summary>
+    /// Sends one GitHub API request authorised with <paramref name="jwt"/> (a bearer token); the response's JSON, null when it failed (logged).
+    /// </summary>
     async Task<JsonNode?> Send(HttpMethod method, string url, string jwt)
     {
         using var request = new HttpRequestMessage(method, url);
@@ -80,5 +97,8 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
         return signing + "." + Base64Url(signature);
     }
 
+    /// <summary>
+    /// <paramref name="bytes"/> in URL-safe Base64 without padding (for the JWT).
+    /// </summary>
     static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }

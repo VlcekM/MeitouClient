@@ -10,6 +10,9 @@ namespace Meitou.Simulation;
 /// </summary>
 sealed class SystemPhases
 {
+    /// <summary>
+    /// Reads which phases <paramref name="system"/> implements and makes their delegates.
+    /// </summary>
     public SystemPhases(World world, ITickSystem system, int index)
     {
         Index = index;
@@ -25,9 +28,21 @@ sealed class SystemPhases
     /// </summary>
     public int Index { get; }
 
+    /// <summary>
+    /// The Think phase over partition i (null: not implemented).
+    /// </summary>
     public Action<int>? Think { get; }
+    /// <summary>
+    /// The Move phase over partition i (null: not implemented).
+    /// </summary>
     public Action<int>? Move { get; }
+    /// <summary>
+    /// The BeforeAct phase over partition i (null: not implemented).
+    /// </summary>
     public Action<int>? BeforeAct { get; }
+    /// <summary>
+    /// The Act phase over partition i, into its buffer (null: not implemented).
+    /// </summary>
     public Action<int>? Act { get; }
 
     /// <summary>

@@ -28,6 +28,11 @@ sealed record FeedbackRow(
 /// </summary>
 sealed class Store(NpgsqlDataSource db)
 {
+    #region Schema
+
+    /// <summary>
+    /// Creates the tables and indexes when missing and adds the columns later versions use.
+    /// </summary>
     public async Task Migrate()
     {
         await using var cmd = db.CreateCommand("""
@@ -73,6 +78,13 @@ sealed class Store(NpgsqlDataSource db)
         await cmd.ExecuteNonQueryAsync();
     }
 
+    #endregion
+
+    #region Play reports
+
+    /// <summary>
+    /// Stores one report (its log gzipped, if any) and returns its id.
+    /// </summary>
     public async Task<long> Add(string row, string verdict, string build, string platform, bool? modded, string? note, string source,
         string reporter, bool trusted, byte[]? gzippedLog)
     {
@@ -137,6 +149,9 @@ sealed class Store(NpgsqlDataSource db)
         return list;
     }
 
+    /// <summary>
+    /// The newest reports since <paramref name="since"/>, of one row or all (<paramref name="row"/> null), at most <paramref name="limit"/>.
+    /// </summary>
     public async Task<List<Report>> List(DateTimeOffset since, string? row, int limit)
     {
         await using var cmd = db.CreateCommand("""
@@ -157,6 +172,9 @@ sealed class Store(NpgsqlDataSource db)
         return list;
     }
 
+    /// <summary>
+    /// A report's gzipped log, null when it has none or the report is gone.
+    /// </summary>
     public async Task<byte[]?> Log(long id)
     {
         await using var cmd = db.CreateCommand("select log from reports where id = $1");
@@ -164,6 +182,9 @@ sealed class Store(NpgsqlDataSource db)
         return await cmd.ExecuteScalarAsync() as byte[];
     }
 
+    /// <summary>
+    /// Deletes a report; false when there was none.
+    /// </summary>
     public async Task<bool> Delete(long id)
     {
         await using var cmd = db.CreateCommand("delete from reports where id = $1");
@@ -171,6 +192,13 @@ sealed class Store(NpgsqlDataSource db)
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
 
+    #endregion
+
+    #region Feedback
+
+    /// <summary>
+    /// Stores a new feedback form under its token (not yet sent: no issue).
+    /// </summary>
     public async Task AddFeedback(string token, string reporter, string title, string? body, string version, string? commit, string platform,
         string[] mods, string[] wants, string? discord, string? location)
     {
@@ -203,6 +231,9 @@ sealed class Store(NpgsqlDataSource db)
         return (int)(long)(await cmd.ExecuteScalarAsync())!;
     }
 
+    /// <summary>
+    /// The feedback form of <paramref name="token"/>, null when there is none.
+    /// </summary>
     public async Task<FeedbackRow?> GetFeedback(string token)
     {
         await using var cmd = db.CreateCommand("""
@@ -233,6 +264,9 @@ sealed class Store(NpgsqlDataSource db)
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>
+    /// Records the GitHub issue a form became.
+    /// </summary>
     public async Task SetFeedbackIssue(string token, int number, string url)
     {
         await using var cmd = db.CreateCommand("update feedback set issue = $2, issue_url = $3 where token = $1");
@@ -255,10 +289,15 @@ sealed class Store(NpgsqlDataSource db)
         return tokens;
     }
 
+    /// <summary>
+    /// Deletes a feedback form; false when there was none.
+    /// </summary>
     public async Task<bool> DeleteFeedback(string token)
     {
         await using var cmd = db.CreateCommand("delete from feedback where token = $1");
         cmd.Parameters.Add(new() { Value = token });
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
+
+    #endregion
 }

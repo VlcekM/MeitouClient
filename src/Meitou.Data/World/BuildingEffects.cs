@@ -4,7 +4,8 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// The EFFECT instances of the world's placed buildings and of their exterior layout objects (docs/formats/lights.md, "Effects on buildings"),
-/// placed by <see cref="WorldObjectLayout.Building(GameDatabase, GameRecord, string, Vector3, Quaternion, BuildingState?, List{PlacedLight}?, List{PlacedEffect}?)"/>.
+/// placed by
+/// <see cref="WorldObjectLayout.Building(GameDatabase, GameRecord, string, Vector3, Quaternion, BuildingState?, List{PlacedLight}?, List{PlacedEffect}?)"/>.
 /// Interior layouts are left out.
 /// </summary>
 public static class BuildingEffects

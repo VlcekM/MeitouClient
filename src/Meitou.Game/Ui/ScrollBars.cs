@@ -9,7 +9,14 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class ScrollBars(PlayerInterface player)
 {
+    /// <summary>
+    /// The scroll offsets of the scrolled windows and HUD lists, pixels, by id.
+    /// </summary>
     internal readonly Dictionary<string, float> InventoryScroll = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Each scrolled view's rectangle and its greatest scroll, by id.
+    /// </summary>
     internal readonly Dictionary<string, (UiRect View, float Maximum)> InventoryViews = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -76,6 +83,9 @@ sealed class ScrollBars(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The wheel over a scrolled window's view scrolls it; false elsewhere.
+    /// </summary>
     internal bool InventoryWheel(Vector2 p, float steps)
     {
         if (player.FaithfulScreens.HitTest(p) is not { } hit || !InventoryViews.TryGetValue(hit.Screen, out var view)
@@ -86,6 +96,9 @@ sealed class ScrollBars(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// Scrolls view <paramref name="id"/> by three cells a wheel step, within its range.
+    /// </summary>
     internal void ScrollInventory(string id, float steps)
     {
         if (InventoryViews.TryGetValue(id, out var view))

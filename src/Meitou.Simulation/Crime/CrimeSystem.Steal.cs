@@ -114,7 +114,21 @@ public sealed partial class CrimeSystem
     /// <summary>
     /// How the item left its owner's window (the three transfer paths of docs/game/carry-loot.md "Theft and witnesses").
     /// </summary>
-    public enum TakeKind { RightClick, Drag, Give }
+    public enum TakeKind
+    {
+        /// <summary>
+        /// A right click (<c>FUN_140713d20</c>).
+        /// </summary>
+        RightClick,
+        /// <summary>
+        /// A drag (<c>FUN_140715560</c>).
+        /// </summary>
+        Drag,
+        /// <summary>
+        /// A give (<c>FUN_140712490</c>).
+        /// </summary>
+        Give
+    }
 
     /// <summary>
     /// <c>InventoryGUI::isStealing</c> (<c>FUN_140711740</c>, <b>Verified</b>; docs/game/carry-loot.md "Stolen ownership") for a take out of a
@@ -131,6 +145,9 @@ public sealed partial class CrimeSystem
     public static bool IsStealing(World world, Locks.Fixture container) =>
         !NotReal(world, container.Owner) && world.SystemOf<Construction.ConstructionSystem>()?.Data(container.RecordId)?.Category != "CAMPING";
 
+    /// <summary>
+    /// Whether <paramref name="faction"/> is <c>not real</c> (false without a crime system).
+    /// </summary>
     static bool NotReal(World world, int faction) => world.SystemOf<CrimeSystem>()?.Factions.NotReal(faction) == true;
 
     /// <summary>

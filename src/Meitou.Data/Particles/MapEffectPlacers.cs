@@ -18,6 +18,10 @@ public sealed record MapEffectPlacement(EffectRecord Effect, Vector3 Position, s
 /// </summary>
 public static class MapEffectPlacers
 {
+    /// <summary>
+    /// Every effect placed by a placer in <paramref name="features"/>: each placement of a MAP_FEATURES record with an EFFECT instance that is not
+    /// cleared, at the placement's position plus the instance's offset scaled and rotated by the placement; each EFFECT is read once.
+    /// </summary>
     public static List<MapEffectPlacement> Find(GameDatabase db, MapFeatureFile features)
     {
         var effects = new Dictionary<string, EffectRecord>(StringComparer.Ordinal);

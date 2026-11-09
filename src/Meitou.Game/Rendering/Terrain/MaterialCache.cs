@@ -11,6 +11,9 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public static class TerrainMaterialCache
 {
+    /// <summary>
+    /// The cache is used (false: every pixel shades the layers; the levels keep what they hold).
+    /// </summary>
     public static bool Enabled { get; set; } = !GpuContext.DiagNoMaterialCache;
 }
 
@@ -25,20 +28,70 @@ public static class TerrainMaterialCache
 /// </summary>
 sealed class MaterialCache : IDisposable
 {
+    /// <summary>
+    /// The levels, their side in texels, the snap step of a level's origin in texels, the rows a refresh bakes a frame and the rows a first bake
+    /// bakes a frame.
+    /// </summary>
     const int CacheLevels = 4, CacheSide = 2048, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
+
+    /// <summary>
+    /// Level 0's texel (world units); level k's is this × 2^k.
+    /// </summary>
     const float CacheTexel = 0.25f;
 
+    /// <summary>
+    /// The levels' albedo and normal (2D arrays of RGBA8, one layer per level; null until the first <see cref="Record"/> with the biomes loaded).
+    /// </summary>
     GpuTexture? _cacheAlbedo, _cacheNormal;
+
+    /// <summary>
+    /// Their bindless indices (<see cref="uint.MaxValue"/>: none).
+    /// </summary>
     uint _cacheAlbedoIndex = uint.MaxValue, _cacheNormalIndex = uint.MaxValue;
+
+    /// <summary>
+    /// The bake program.
+    /// </summary>
     TerrainProgram? _cacheProgram;
+
+    /// <summary>
+    /// Its pipeline (made on the first bake).
+    /// </summary>
     GpuPipeline? _cachePipeline;
+
+    /// <summary>
+    /// The memory budget refused the levels (they are never made).
+    /// </summary>
     bool _cacheRefused;
-    // Per level: the origin drawn from (w 0: not valid); a first bake's origin and rows done (-1: none running); a refresh's next row and rows left.
+
+    /// <summary>
+    /// Per level: the origin drawn from (x, z, texel, side; w 0: not valid).
+    /// </summary>
     readonly Vector4[] _cacheOrigin = new Vector4[CacheLevels];
+
+    /// <summary>
+    /// Per level: the origin a first bake draws to.
+    /// </summary>
     readonly Vector2[] _cacheTarget = new Vector2[CacheLevels];
+
+    /// <summary>
+    /// Per level: a first bake's rows done (-1: none running).
+    /// </summary>
     readonly int[] _cacheBuilt = [-1, -1, -1, -1];
+
+    /// <summary>
+    /// Per level: a refresh's next row, and its rows left.
+    /// </summary>
     readonly int[] _cacheCursor = new int[CacheLevels], _cacheStale = new int[CacheLevels];
+
+    /// <summary>
+    /// The <see cref="CacheKey"/> of the inputs the levels were baked from.
+    /// </summary>
     int _cacheKey;
+
+    /// <summary>
+    /// Within this distance of the eye (0.3 × the least biome fade distance) the biomes' distance fade has not begun; the bake has none.
+    /// </summary>
     float _cacheReach;
 
     /// <summary>
@@ -66,6 +119,9 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     readonly ulong _uniformAlign;
 
+    /// <summary>
+    /// A cache for <paramref name="terrain"/>'s material; the levels are made on the first <see cref="Record"/> that needs them.
+    /// </summary>
     public MaterialCache(TerrainRenderer terrain, IGpuContext gpu, NativeFrame nativeFrame, GpuSetLayout constantsLayout, ulong uniformAlign)
     {
         _terrain = terrain;
@@ -75,6 +131,9 @@ sealed class MaterialCache : IDisposable
         _uniformAlign = uniformAlign;
     }
 
+    /// <summary>
+    /// The levels' bytes: albedo and normal, RGBA8, <see cref="CacheLevels"/> × <see cref="CacheSide"/>² each (128 MB).
+    /// </summary>
     static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
     /// <summary>
@@ -213,6 +272,9 @@ sealed class MaterialCache : IDisposable
 
     }
 
+    /// <summary>
+    /// Makes the levels, their bindless entries and the bake program, unless the memory budget refuses them (then never again).
+    /// </summary>
     bool CreateCache(TerrainTextures t)
     {
         if (t.Guard is { } guard && !guard.Allows((ulong)CacheBytes))
@@ -359,6 +421,9 @@ sealed class MaterialCache : IDisposable
         (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach) = (_cacheAlbedoIndex, _cacheNormalIndex, CacheLevels, _cacheReach);
     }
 
+    /// <summary>
+    /// Frees the levels, their bindless entries and the program.
+    /// </summary>
     public void Dispose()
     {
         if (_cacheAlbedoIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheAlbedoIndex);

@@ -8,71 +8,152 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 /// </summary>
 public static class SpirvReflection
 {
+    /// <summary>
+    /// The SPIR-V magic number, the module's first word.
+    /// </summary>
     const uint MagicNumber = 0x07230203;
 
-    // opcodes
+    /// <summary>
+    /// The SPIR-V opcodes the parser reads, with the SPIR-V specification's values.
+    /// </summary>
     const int OpName = 5, OpMemberName = 6, OpTypeVoid = 19, OpTypeBool = 20, OpTypeInt = 21, OpTypeFloat = 22, OpTypeVector = 23,
         OpTypeMatrix = 24, OpTypeImage = 25, OpTypeSampler = 26, OpTypeSampledImage = 27, OpTypeArray = 28, OpTypeRuntimeArray = 29,
         OpTypeStruct = 30, OpTypePointer = 32, OpConstant = 43, OpFunction = 54, OpFunctionCall = 57, OpImageTexelPointer = 60, OpLoad = 61,
         OpStore = 62, OpAccessChain = 65, OpInBoundsAccessChain = 66, OpCopyObject = 83, OpVariable = 59, OpDecorate = 71, OpMemberDecorate = 72;
 
-    // decorations
+    /// <summary>
+    /// The SPIR-V decorations the parser reads, with the SPIR-V specification's values.
+    /// </summary>
     const int DecBufferBlock = 3, DecRowMajor = 4, DecArrayStride = 6, DecMatrixStride = 7, DecBuiltIn = 11,
         DecLocation = 30, DecBinding = 33, DecDescriptorSet = 34, DecOffset = 35;
 
-    // storage classes
+    /// <summary>
+    /// The SPIR-V storage classes the parser reads, with the SPIR-V specification's values.
+    /// </summary>
     const int ScUniformConstant = 0, ScInput = 1, ScUniform = 2, ScOutput = 3, ScPushConstant = 9, ScStorageBuffer = 12;
 
+    /// <summary>
+    /// A SPIR-V type by its declaring instruction (the parser's model of <c>OpType*</c>).
+    /// </summary>
     abstract record SType;
 
+    /// <summary>
+    /// <c>OpTypeVoid</c>.
+    /// </summary>
     sealed record Void : SType;
 
+    /// <summary>
+    /// <c>OpTypeBool</c>.
+    /// </summary>
     sealed record Bool : SType;
 
+    /// <summary>
+    /// <c>OpTypeInt</c>: the width in bits and the signedness.
+    /// </summary>
     sealed record Int(int Width, bool Signed) : SType;
 
+    /// <summary>
+    /// <c>OpTypeFloat</c>: the width in bits.
+    /// </summary>
     sealed record Float(int Width) : SType;
 
+    /// <summary>
+    /// <c>OpTypeVector</c>: the component type's id and the component count.
+    /// </summary>
     sealed record Vector(uint Component, int Count) : SType;
 
+    /// <summary>
+    /// <c>OpTypeMatrix</c>: the column type's id and the column count.
+    /// </summary>
     sealed record Matrix(uint Column, int Columns) : SType;
 
-    // Sampled: the sampled type; Usage: 1 sampled, 2 storage
+    /// <summary>
+    /// <c>OpTypeImage</c>. Sampled: the sampled type's id; Dim, Depth, Arrayed and Ms as the instruction gives them; Usage: 1 sampled, 2 storage.
+    /// </summary>
     sealed record Image(uint Sampled, int Dim, int Depth, bool Arrayed, bool Ms, uint Usage = 0) : SType;
 
+    /// <summary>
+    /// <c>OpTypeSampler</c>.
+    /// </summary>
     sealed record Sampler : SType;
 
+    /// <summary>
+    /// <c>OpTypeSampledImage</c>: the image type's id.
+    /// </summary>
     sealed record SampledImage(uint Image) : SType;
 
+    /// <summary>
+    /// <c>OpTypeArray</c>: the element type's id and the id of the constant holding the length.
+    /// </summary>
     sealed record Array(uint Element, uint LengthId) : SType;
 
+    /// <summary>
+    /// <c>OpTypeRuntimeArray</c>: the element type's id.
+    /// </summary>
     sealed record RuntimeArray(uint Element) : SType;
 
+    /// <summary>
+    /// <c>OpTypeStruct</c>: the member types' ids.
+    /// </summary>
     sealed record Struct(uint[] Members) : SType;
 
+    /// <summary>
+    /// <c>OpTypePointer</c>: the storage class and the pointee type's id.
+    /// </summary>
     sealed record Pointer(int Storage, uint Pointee) : SType;
 
+    /// <summary>
+    /// What one pass over the word stream gathers: types, names, constants, decorations, variables and the variables the functions use.
+    /// </summary>
     sealed class Module
     {
+        /// <summary>
+        /// The types by result id.
+        /// </summary>
         public readonly Dictionary<uint, SType> Types = [];
+        /// <summary>
+        /// The <c>OpName</c> names by id.
+        /// </summary>
         public readonly Dictionary<uint, string> Names = [];
+        /// <summary>
+        /// The <c>OpMemberName</c> names by struct id and member index.
+        /// </summary>
         public readonly Dictionary<(uint, int), string> MemberNames = [];
+        /// <summary>
+        /// The values of 32-bit <c>OpConstant</c>s by result id (array lengths).
+        /// </summary>
         public readonly Dictionary<uint, uint> Constants = [];
 
-        // id -> decoration -> first operand
+        /// <summary>
+        /// The decorations by id: decoration to its first operand (0 when it has none).
+        /// </summary>
         public readonly Dictionary<uint, Dictionary<int, uint>> Decorations = [];
 
-        // (struct, member) -> decoration -> first operand
+        /// <summary>
+        /// The member decorations by struct id and member index: decoration to its first operand (0 when it has none).
+        /// </summary>
         public readonly Dictionary<(uint, int), Dictionary<int, uint>> MemberDecorations = [];
 
+        /// <summary>
+        /// The global <c>OpVariable</c>s: the result id, the pointer type's id and the storage class.
+        /// </summary>
         public readonly List<(uint Id, uint Type, int Storage)> Variables = [];
 
-        // variables a function body loads, stores, indexes or passes on
+        /// <summary>
+        /// The variables a function body loads, stores, indexes or passes on (the rest are inactive).
+        /// </summary>
         public readonly HashSet<uint> Used = [];
 
+        /// <summary>
+        /// The stream has reached the first <c>OpFunction</c> (uses are counted from there).
+        /// </summary>
         public bool InFunction;
     }
 
+    /// <summary>
+    /// Reflects a SPIR-V module: its uniform, push-constant and storage blocks, samplers, storage images and stage interface; throws when the bytes
+    /// are not a whole module.
+    /// </summary>
     public static ShaderReflection Parse(byte[] spirv)
     {
         ArgumentNullException.ThrowIfNull(spirv);
@@ -95,6 +176,9 @@ public static class SpirvReflection
         return Build(m);
     }
 
+    /// <summary>
+    /// Reads one instruction: a function body's uses and the names; everything else goes to <see cref="ReadType"/>.
+    /// </summary>
     static void ReadInstruction(Module m, int op, ReadOnlySpan<uint> a)
     {
         switch (op)
@@ -123,6 +207,9 @@ public static class SpirvReflection
         }
     }
 
+    /// <summary>
+    /// Reads a type, constant, variable or decoration instruction; other opcodes are ignored.
+    /// </summary>
     static void ReadType(Module m, int op, ReadOnlySpan<uint> a)
     {
         switch (op)
@@ -149,6 +236,9 @@ public static class SpirvReflection
         }
     }
 
+    /// <summary>
+    /// Records a decoration of an id.
+    /// </summary>
     static void ReadDecoration(Module m, ReadOnlySpan<uint> a)
     {
         if (!m.Decorations.TryGetValue(a[0], out var d)) m.Decorations[a[0]] = d = [];
@@ -156,6 +246,9 @@ public static class SpirvReflection
         d[(int)a[1]] = a.Length > 2 ? a[2] : 0;
     }
 
+    /// <summary>
+    /// Records a decoration of a struct member.
+    /// </summary>
     static void ReadMemberDecoration(Module m, ReadOnlySpan<uint> a)
     {
         var key = (a[0], (int)a[1]);
@@ -164,6 +257,9 @@ public static class SpirvReflection
         d[(int)a[2]] = a.Length > 3 ? a[3] : 0;
     }
 
+    /// <summary>
+    /// A NUL-terminated UTF-8 literal string packed in words.
+    /// </summary>
     static string Str(ReadOnlySpan<uint> words)
     {
         var bytes = new List<byte>();
@@ -181,6 +277,9 @@ public static class SpirvReflection
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
+    /// <summary>
+    /// Turns the gathered module into the reflection: each variable by its storage class, interface variables sorted by location.
+    /// </summary>
     static ShaderReflection Build(Module m)
     {
         var blocks = new List<UniformBlockInfo>();
@@ -330,6 +429,9 @@ public static class SpirvReflection
         (storage == ScInput ? inputs : outputs).Add(new InterfaceVariable(name, (int)loc, kind, cols, rows, len));
     }
 
+    /// <summary>
+    /// The innermost element type of a (possibly nested) array type.
+    /// </summary>
     static uint StripArrays(Module m, uint t)
     {
         while (m.Types.GetValueOrDefault(t) is Array a) t = a.Element;
@@ -337,8 +439,14 @@ public static class SpirvReflection
         return t;
     }
 
+    /// <summary>
+    /// An array type's length from its length constant; 0 when the constant is unknown.
+    /// </summary>
     static int ArrayLength(Module m, Array a) => m.Constants.TryGetValue(a.LengthId, out uint n) ? (int)n : 0;
 
+    /// <summary>
+    /// The scalar kind of a type (of its components or elements); float for anything else.
+    /// </summary>
     static ScalarKind ScalarOf(Module m, uint t) => m.Types.GetValueOrDefault(t) switch
     {
         Float => ScalarKind.Float,
@@ -351,6 +459,9 @@ public static class SpirvReflection
         _ => ScalarKind.Float,
     };
 
+    /// <summary>
+    /// A type's scalar kind, columns and rows (a vector is one column; a scalar 1×1).
+    /// </summary>
     static (ScalarKind Kind, int Cols, int Rows) Shape(Module m, uint t) => m.Types.GetValueOrDefault(t) switch
     {
         Vector v => (ScalarOf(m, v.Component), 1, v.Count),
@@ -358,6 +469,9 @@ public static class SpirvReflection
         _ => (ScalarOf(m, t), 1, 1),
     };
 
+    /// <summary>
+    /// The bytes of a type's scalar (bool 4); 4 for anything else.
+    /// </summary>
     static int ScalarBytes(Module m, uint t) => m.Types.GetValueOrDefault(t) switch
     {
         Float f => f.Width / 8,
@@ -381,6 +495,9 @@ public static class SpirvReflection
         return AddTyped(m, typeId, name, offset, dec, into);
     }
 
+    /// <summary>
+    /// Adds a member of a type at an offset (flattening structs and arrays of arrays, sized from its strides) and returns the byte just past it.
+    /// </summary>
     static int AddTyped(Module m, uint typeId, string name, int offset, Dictionary<int, uint> dec, List<BlockMember> into)
     {
         int arrayLen = 0, arrayStride = 0;

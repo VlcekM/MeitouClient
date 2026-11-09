@@ -11,14 +11,20 @@ namespace Meitou.Simulation.Perception;
 /// </summary>
 sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData levels, BuildingLayouts layouts) : ISightSource
 {
+    /// <summary>
+    /// The <c>interior mask</c> collision files read so far.
+    /// </summary>
     readonly InteriorCollisions _collisions = new(install);
 
+    /// <inheritdoc/>
     public InteriorVolume? Room(TownBuilding building) =>
         building.Resolved is { } r ? InteriorVolume.For(db, r.Record, building.Key, r.Position, r.Placement.Rotation, _collisions) : null;
 
+    /// <inheritdoc/>
     public IReadOnlyList<WorldLight> Lights(TownBuilding building) =>
         building.Resolved is { } r ? WorldLights.ForBuilding(db, levels, r, layouts) : [];
 
+    /// <inheritdoc/>
     public bool EnforcesCeiling(TownBuilding building) => db.Find(building.BuildingId)?.GetBool("enforce ceiling") == true;
 
     /// <summary>

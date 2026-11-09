@@ -3,9 +3,12 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// Hits and their consequences: choosing the part a blow lands on, the damage, cut-off limbs and prosthetics, and the knock-out and death rules.
+/// </summary>
 public sealed partial class MedicalState
 {
-    // ------------------------------------------------------------------ hits
+    #region Hits
 
     /// <summary>
     /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no
@@ -50,6 +53,9 @@ public sealed partial class MedicalState
         return changed;
     }
 
+    /// <summary>
+    /// The next roll of the character's medical stream, 0..1 (the world seed, the character's key and the roll counter).
+    /// </summary>
     float NextRoll(in MedicalContext ctx) => BodyRolls.Float(ctx.Seed, ctx.CharacterKey, BodyRolls.MedicalDomain, _rollCounter++);
 
     /// <summary>
@@ -77,6 +83,9 @@ public sealed partial class MedicalState
         return chosen;
     }
 
+    /// <summary>
+    /// The part a weighted roll picks (<see cref="Weight"/>); the last part when no part has weight.
+    /// </summary>
     int Rolled(in MedicalContext ctx, bool lowStrike, bool directionSix)
     {
         float total = 0;
@@ -118,6 +127,10 @@ public sealed partial class MedicalState
     /// </summary>
     static bool Alive(HealthPart p) => p.Flesh > -p.MaxHp;
 
+    /// <summary>
+    /// A part's weight in the hit roll: 0 for a part already gone, the stump of an arm or leg, or an arm or head on a low strike; else its hit weight
+    /// times <see cref="HealthPart.HitMult"/> (the weight alone for hit direction 6).
+    /// </summary>
     static float Weight(HealthPart p, bool lowStrike, bool directionSix)
     {
         if (!Alive(p)) return 0;
@@ -155,6 +168,10 @@ public sealed partial class MedicalState
         LegCollapse(events);
     }
 
+    /// <summary>
+    /// The checks after a part's damage: the part-down event, a blow leaving a vital part down restarts the KO timer, and a destroyed part kills
+    /// (vital) or is cut off by the dismemberment rule (a blow needs Rare and an original or crushed limb, a tick Frequent and an original one).
+    /// </summary>
     void CheckPart(int index, in MedicalContext ctx, List<MedicalEvent>? events, bool inHitPath)
     {
         if (Dead) return;
@@ -231,7 +248,21 @@ public sealed partial class MedicalState
     /// <summary>
     /// Posture 0 (<c>PS_NORMAL</c>) as of the end of the last <see cref="Tick"/>, or unknown before the first.
     /// </summary>
-    enum PostureState : byte { Unknown, Normal, Other }
+    enum PostureState : byte
+    {
+        /// <summary>
+        /// No tick has set it yet (the first tick after a load or a new state).
+        /// </summary>
+        Unknown,
+        /// <summary>
+        /// Posture 0 (<c>PS_NORMAL</c>): standing.
+        /// </summary>
+        Normal,
+        /// <summary>
+        /// Any other posture.
+        /// </summary>
+        Other
+    }
 
     /// <summary>
     /// The posture the character update last set (the original's <c>getProneState</c>, refreshed once a tick from <see cref="Standing"/>): a
@@ -240,6 +271,9 @@ public sealed partial class MedicalState
     /// </summary>
     PostureState _posture;
 
+    /// <summary>
+    /// Whether the posture is normal: the last tick's, or <see cref="Standing"/> while it is unknown.
+    /// </summary>
     bool PostureNormal => _posture == PostureState.Unknown ? Standing : _posture == PostureState.Normal;
 
     /// <summary>
@@ -336,8 +370,13 @@ public sealed partial class MedicalState
         p.WasDown = p.IsDown;
     }
 
-    // ------------------------------------------------------------------ KO and death
+    #endregion
 
+    #region KO and death
+
+    /// <summary>
+    /// Knocks the character out for its rolled KO time (<see cref="KoTime"/>).
+    /// </summary>
     void StartKo(in MedicalContext ctx, List<MedicalEvent>? events) => ApplyKo(KoTime(ctx), events);
 
     /// <summary>
@@ -359,6 +398,10 @@ public sealed partial class MedicalState
     /// </summary>
     public void KnockOut(float seconds, List<MedicalEvent>? events = null) => ApplyKo(seconds, events);
 
+    /// <summary>
+    /// Knocks the character out for <paramref name="seconds"/>, or keeps the longer of the running KO and it; ends playing dead. Nothing for
+    /// one dead.
+    /// </summary>
     void ApplyKo(float seconds, List<MedicalEvent>? events)
     {
         if (Dead) return;
@@ -408,6 +451,9 @@ public sealed partial class MedicalState
     /// </summary>
     public void Kill(List<MedicalEvent>? events = null) => Die(DeathCause.VitalPart, events);
 
+    /// <summary>
+    /// Kills the character with <paramref name="cause"/> (nothing for one already dead).
+    /// </summary>
     void Die(DeathCause cause, List<MedicalEvent>? events)
     {
         if (Dead) return;
@@ -437,4 +483,5 @@ public sealed partial class MedicalState
         else if (BloodKo && Blood <= -25 && !Unconscious) StartKo(ctx, events);
     }
 
+    #endregion
 }

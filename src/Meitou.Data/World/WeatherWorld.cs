@@ -31,21 +31,57 @@ public sealed class WeatherWorld
     /// </summary>
     public const float FogSampleOffset = 1300;
 
+    /// <summary>
+    /// The areas map: which region each cell belongs to.
+    /// </summary>
     readonly WeatherAreas _areas;
+    /// <summary>
+    /// Each region's position in <see cref="Regions"/>, by string id.
+    /// </summary>
     readonly Dictionary<string, int> _regionIndex = new(StringComparer.Ordinal);
 
-    // camera side
+    /// <summary>
+    /// Whether a camera position has been seen, and whether the next update snaps the values (<see cref="Snap"/>).
+    /// </summary>
     bool _hasCamera, _snapRequested;
+    /// <summary>
+    /// The camera position of the last update, in the ground plane.
+    /// </summary>
     Vector2 _lastCamera;
+    /// <summary>
+    /// The cell the camera region is read from; it changes only past <see cref="RegionHysteresis"/>.
+    /// </summary>
     int _cellX, _cellZ;
+    /// <summary>
+    /// The weather the sky transition runs towards; null before the first update.
+    /// </summary>
     WeatherDef? _skyWeather;
+    /// <summary>
+    /// The sky colour multiplier at the start of the transition, at its end, and now.
+    /// </summary>
     Vector3 _skyFrom = Vector3.One, _skyTo = Vector3.One, _sky = Vector3.One;
+    /// <summary>
+    /// The cloud density at the start of the transition, at its end, and now, and the game seconds of the transition run.
+    /// </summary>
     float _cloudFrom, _cloudTo, _cloud, _skyElapsed;
+    /// <summary>
+    /// The settling wetness, dust, dust slope and heat haze.
+    /// </summary>
     float _wetness, _dustX, _dustSlope, _heatHaze;
 
+    /// <summary>
+    /// The weather being forced; null when the scheduler decides.
+    /// </summary>
     WeatherDef? _forced;
+    /// <summary>
+    /// The forced weather's strength (0..1).
+    /// </summary>
     float _forcedStrength = 1;
 
+    /// <summary>
+    /// The world of <paramref name="data"/> and <paramref name="areas"/>: each region's schedule started at <paramref name="start"/> from
+    /// <paramref name="seed"/>.
+    /// </summary>
     public WeatherWorld(WeatherData data, WeatherAreas areas, int seed, WeatherTime start)
     {
         Data = data;
@@ -68,8 +104,17 @@ public sealed class WeatherWorld
     public static WeatherWorld Create(GameDatabase db, GameInstall install, int seed, WeatherTime start) =>
         new(WeatherDataReader.Read(db), WeatherAreas.Load(install), seed, start);
 
+    /// <summary>
+    /// The weather records.
+    /// </summary>
     public WeatherData Data { get; }
+    /// <summary>
+    /// The areas map.
+    /// </summary>
     public WeatherAreas Areas => _areas;
+    /// <summary>
+    /// The world's seed of the regions' random sources.
+    /// </summary>
     public int Seed { get; }
 
     /// <summary>
@@ -107,6 +152,9 @@ public sealed class WeatherWorld
     /// </summary>
     public WeatherRegion? Region(string name) => Data.FindRegion(name) is { } def ? RegionOf(def) : null;
 
+    /// <summary>
+    /// The schedule of region <paramref name="def"/>.
+    /// </summary>
     public WeatherRegion RegionOf(RegionDef def) => Regions[_regionIndex[def.StringId]];
 
     /// <summary>
@@ -334,6 +382,10 @@ public sealed class WeatherWorld
         return list;
     }
 
+    /// <summary>
+    /// The fog at <paramref name="camera"/>: the regions' fogs at <paramref name="minute"/> weighted by <see cref="FogWeights"/>, colour and distance
+    /// averaged over the fog that is on; with no fog on, off with <paramref name="fallback"/>'s colour and distance.
+    /// </summary>
     (float Enabled, Vector3 Colour, float Distance) BlendFog(Vector2 camera, double minute, WeatherRegion fallback)
     {
         float enabled = 0, onWeight = 0, distance = 0;

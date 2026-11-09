@@ -28,6 +28,9 @@ public static class WeatherRamps
     /// </summary>
     public const float DustSlopeRate = 0.1f;
 
+    /// <summary>
+    /// One step of wetness towards <paramref name="target"/> over <paramref name="dt"/> (<see cref="WetnessRise"/>, <see cref="WetnessDry"/>).
+    /// </summary>
     public static float Wetness(float current, float target, float dt)
     {
         if (current < target) return MathF.Min(target, current + WetnessRise * dt);
@@ -43,6 +46,9 @@ public static class WeatherRamps
         return current;
     }
 
+    /// <summary>
+    /// One step of the dust slope towards <paramref name="target"/> over <paramref name="dt"/> (<see cref="DustSlopeRate"/>).
+    /// </summary>
     public static float DustSlope(float current, float target, float dt)
     {
         float step = DustSlopeRate * dt;

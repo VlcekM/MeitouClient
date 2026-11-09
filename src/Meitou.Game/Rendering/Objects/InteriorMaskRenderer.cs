@@ -28,6 +28,9 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     /// </summary>
     const float Range = 3000;
 
+    /// <summary>
+    /// The vertex stage: a mask mesh's position through <c>uMvp</c>.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec3 aPos;
@@ -35,9 +38,11 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         void main() { gl_Position = uMvp * vec4(aPos, 1.0); }
         """;
 
-    // Every face writes its view depth + 1 (the game's value, interiormask.hlsl) to R (min blend: the nearest) and A (max blend: the farthest). The
-    // game splits the faces by facing instead; for a closed mesh seen from outside the nearest face is a front face and the farthest a back face, the
-    // same. With the eye inside the building's hull (uInside) every face it sees is a back face: the game's R stays 0, so here R = 0.
+    /// <summary>
+    /// Every face writes its view depth + 1 (the game's value, interiormask.hlsl) to R (min blend: the nearest) and A (max blend: the farthest). The
+    /// game splits the faces by facing instead; for a closed mesh seen from outside the nearest face is a front face and the farthest a back face,
+    /// the same. With the eye inside the building's hull (<c>uInside</c>) every face it sees is a back face: the game's R stays 0, so here R = 0.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         out vec4 fragColour;
@@ -49,20 +54,69 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The context the target, meshes and draws go through.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The objects renderer, which lists the loaded buildings' masks near the eye and finds the mask mesh files.
+    /// </summary>
     readonly WorldObjectRenderer _objects;
+
+    /// <summary>
+    /// The mask program (GL source, recorded natively through <see cref="_segment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The native segment the mask draws are recorded in.
+    /// </summary>
     readonly NativeSegment _segment;
+
+    /// <summary>
+    /// The program's <c>uMvp</c> and <c>uInside</c> uniforms.
+    /// </summary>
     readonly UniformHandle _mvp, _inside;
+
+    /// <summary>
+    /// The mask meshes' vertex input: one position stream, 12 bytes a vertex.
+    /// </summary>
     readonly VertexArrayBindings _vertexSource;
+
+    /// <summary>
+    /// This frame's buildings with masks near the eye.
+    /// </summary>
     readonly List<InteriorVolume> _near = [];
+
+    /// <summary>
+    /// This frame's drawn masks' X/Z boxes (<see cref="Boxes"/>).
+    /// </summary>
     readonly List<(Vector2 Min, Vector2 Max)> _boxes = [];
-    // the building of each box (its PlacementId)
+
+    /// <summary>
+    /// The building of each box in <see cref="_boxes"/> (its placement id).
+    /// </summary>
     readonly List<string> _boxOwners = [];
+
+    /// <summary>
+    /// The buildings whose masks this frame drew (<see cref="Drew"/>).
+    /// </summary>
     readonly HashSet<string> _drawnOwners = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The target (RGBA16F, the scene's size), kept while the size holds.
+    /// </summary>
     GpuTexture? _target;
+
+    /// <summary>
+    /// The target's bindless entry, made when first read and freed when the target is remade.
+    /// </summary>
     (GpuTexture Texture, uint Index)? _bindless;
 
+    /// <summary>
+    /// Makes the mask program, its segment and its vertex input.
+    /// </summary>
     internal InteriorMaskRenderer(IGpuContext gpu, WorldObjectRenderer objects)
     {
         this._gpu = gpu;
@@ -283,16 +337,30 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
 
     #region Meshes and sampler
 
+    /// <summary>
+    /// A building's interior mask mesh, loaded once from the record's file (no vertices when not found or unreadable).
+    /// </summary>
     sealed class MaskMesh
     {
+        /// <summary>
+        /// The positions (three floats a vertex; null: none).
+        /// </summary>
         public DeviceBuffer? Vertices;
+
+        /// <summary>
+        /// The vertices to draw.
+        /// </summary>
         public int Count;
+
         /// <summary>
         /// The bounds of the positions, in building space.
         /// </summary>
         public Vector3 Min, Max;
     }
 
+    /// <summary>
+    /// The mask meshes by the record's path (case-insensitive).
+    /// </summary>
     readonly Dictionary<string, MaskMesh> _meshes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -334,11 +402,16 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         return mesh;
     }
 
-    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    /// <summary>
+    /// The nearest-filtering, edge-clamped sampler the target is read with.
+    /// </summary>
+    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
 
     #endregion
 
+    /// <summary>
+    /// Frees the target's bindless entry, the target and the mask meshes.
+    /// </summary>
     public void Dispose()
     {
         if (_bindless is { } b) _gpu.Bindless.Free(BindlessKind.Texture2D, b.Index);

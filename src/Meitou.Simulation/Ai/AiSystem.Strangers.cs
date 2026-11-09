@@ -8,6 +8,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's stranger states: whether someone not of the house is in a home (state 141).
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>
@@ -30,15 +33,42 @@ public sealed partial class AiSystem
     /// </summary>
     bool StrangersInHouse(World world, Blackboard board, int slot) => board.OwnHome is { } home && StrangerInHome(world, home, slot);
 
+    /// <summary>
+    /// The state of one stranger scan of a home: who scans, what it compares against, and whether it found someone.
+    /// </summary>
     struct StrangerScan
     {
+        /// <summary>
+        /// The world scanned.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The faction relations it judges by.
+        /// </summary>
         public FactionRelations Relations;
+        /// <summary>
+        /// The character table scanned.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The character whose home is scanned.
+        /// </summary>
         public CharacterCold Me;
+        /// <summary>
+        /// The home's building instance id.
+        /// </summary>
         public string Home;
+        /// <summary>
+        /// The scanning character's slot, its faction and the player's faction.
+        /// </summary>
         public int Self, Faction, Player;
+        /// <summary>
+        /// The outdoor reach of the scan.
+        /// </summary>
         public float Outdoor;
+        /// <summary>
+        /// Whether a stranger was found.
+        /// </summary>
         public bool Found;
     }
 

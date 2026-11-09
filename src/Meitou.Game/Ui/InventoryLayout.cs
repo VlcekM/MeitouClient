@@ -13,6 +13,9 @@ sealed class InventoryLayout(PlayerInterface player)
 {
     #region Window placement
 
+    /// <summary>
+    /// A window's geometry at the inventory scale: a bag window sized to its bag, the trader's own.
+    /// </summary>
     internal void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = player.InventoryScale;
@@ -29,6 +32,9 @@ sealed class InventoryLayout(PlayerInterface player)
         if (id == "trader") player.TradeWindows.BindTraderGeometry(b);
     }
 
+    /// <summary>
+    /// Places the bag window: in the window row while a loot window is open, else beside the inventory on its left.
+    /// </summary>
     internal void PlaceBagWindow()
     {
         if (player.FaithfulScreens.IsOpen("loot"))
@@ -210,6 +216,9 @@ sealed class InventoryLayout(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Sizes the equipment slots and the main grid in cells, with their tile size.
+    /// </summary>
     internal void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid)
     {
         foreach (string section in new[] { "main", "backpack_attach", "back", "hip", "shirt", "head", "legs", "boots", "armour", "belt" })

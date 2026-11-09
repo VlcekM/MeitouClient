@@ -11,6 +11,10 @@ namespace Meitou.Simulation.Towns;
 /// </summary>
 static class TownEdits
 {
+    /// <summary>
+    /// Places <paramref name="building"/> in <paramref name="town"/>, replacing a building of the same key, and registers it when the town
+    /// is registered.
+    /// </summary>
     public static void Place(World world, PopulationData data, string town, TownBuilding building)
     {
         Clear(world, data, building.Key);   // a key placed again replaces the old one
@@ -19,6 +23,9 @@ static class TownEdits
         world.ItemSlots.PlaceBuilding(world, data, site, building);
     }
 
+    /// <summary>
+    /// Takes the building of <paramref name="key"/> away, and removes it from the registries when its town is registered.
+    /// </summary>
     public static void Clear(World world, PopulationData data, string key)
     {
         if (data.TakeBuilding(key) is not ( >= 0 and var site, { } taken)) return;

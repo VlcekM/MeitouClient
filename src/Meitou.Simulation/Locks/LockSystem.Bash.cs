@@ -320,6 +320,9 @@ public sealed partial class LockSystem
         }
     }
 
+    /// <summary>
+    /// The planner's view of an attacker whose target is shut in a building, reused across plans.
+    /// </summary>
     readonly DoorPlan _doorPlan = new();
 
     /// <summary>
@@ -374,12 +377,30 @@ public sealed partial class LockSystem
         return centre + n * BashStandOff;
     }
 
+    /// <summary>
+    /// The state of one scan for a body in the basher's way.
+    /// </summary>
     struct WayScan
     {
+        /// <summary>
+        /// The character table scanned.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The basher's slot.
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The basher's place and the unit way it faces.
+        /// </summary>
         public Vector2 At, Face;
+        /// <summary>
+        /// The basher's radius, and the distance to the leaf (the line stops there).
+        /// </summary>
         public float Radius, Leaf;
+        /// <summary>
+        /// Whether a body is in the way.
+        /// </summary>
         public bool Found;
     }
 
@@ -411,6 +432,9 @@ public sealed partial class LockSystem
         return scan.Found;
     }
 
+    /// <summary>
+    /// Ends a character's bash: its bash state cleared and its task stopped.
+    /// </summary>
     static void StopBashing(CharacterTable table, int s, CharacterCold c)
     {
         c.Bashing = null;

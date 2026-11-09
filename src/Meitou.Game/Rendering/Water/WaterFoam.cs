@@ -8,6 +8,9 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 public static class WaterFoam
 {
+    /// <summary>
+    /// Texels along the pattern's side.
+    /// </summary>
     public const int Size = 256;
 
     /// <summary>
@@ -27,6 +30,9 @@ public static class WaterFoam
         return pixels;
     }
 
+    /// <summary>
+    /// Writes pixel (<paramref name="x"/>, <paramref name="y"/>): the lace, the patches and the bubbles (A 255).
+    /// </summary>
     static void BakePixel(byte[] pixels, int x, int y)
     {
         float u = (x + 0.5f) / Size;
@@ -72,6 +78,9 @@ public static class WaterFoam
         return 1 - Smooth(0.02f, 0.16f, edge);
     }
 
+    /// <summary>
+    /// A 0..1 value as a byte (rounded, clamped).
+    /// </summary>
     static byte Byte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255), 0, 255);
 
     /// <summary>
@@ -93,12 +102,18 @@ public static class WaterFoam
         return top + (bottom - top) * fy;
     }
 
+    /// <summary>
+    /// Hermite smoothstep of <paramref name="x"/> between <paramref name="a"/> and <paramref name="b"/> (0 to 1).
+    /// </summary>
     static float Smooth(float a, float b, float x)
     {
         float t = Math.Clamp((x - a) / (b - a), 0, 1);
         return t * t * (3 - 2 * t);
     }
 
+    /// <summary>
+    /// A 32-bit hash of a cell and a seed.
+    /// </summary>
     static uint Hash(uint x, uint y, uint seed)
     {
         uint h = x * 0x8DA6B343u ^ y * 0xD8163841u ^ seed * 0xCB1AB31Fu;

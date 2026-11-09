@@ -10,27 +10,29 @@ namespace Meitou.Simulation.Production;
 public sealed record OperateOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 
 /// <summary>
-/// Gives characters (the selection when empty) the job an order of <paramref name="Type"/> on a player building becomes, at the end of their job lists (the original's Shift with an order;
-/// <see cref="PermaJobs.Add"/>).
+/// Gives characters (the selection when empty) the job an order of <paramref name="Type"/> on a player building becomes, at the end of their job
+/// lists (the original's Shift with an order; <see cref="PermaJobs.Add"/>).
 /// </summary>
 public sealed record AddJob(IReadOnlyList<CharacterId> Characters, Meitou.Data.Gameplay.Ai.TaskType Type, string Site) : SimCommand;
 
 /// <summary>
-/// Gives characters (the selection when empty) the job an order of <paramref name="Ordered"/> on a character becomes, untargeted, at the end of their job lists (Shift with First Aid,
-/// Splint Injuries, an attack or a loot; <see cref="PermaJobs.Add"/>): 25 → 58 Medic (60 → 57 Robotics, which a first aid on a robot <paramref name="Target"/> is), 249 → 250 Splint
-/// Rigging, 4 / 5 / 61 → 16 Attacking enemies, 26 → 238 Foraging animals.
+/// Gives characters (the selection when empty) the job an order of <paramref name="Ordered"/> on a character becomes, untargeted, at the end of their
+/// job lists (Shift with First Aid, Splint Injuries, an attack or a loot; <see cref="PermaJobs.Add"/>): 25 → 58 Medic (60 → 57 Robotics, which a
+/// first aid on a robot <paramref name="Target"/> is), 249 → 250 Splint Rigging, 4 / 5 / 61 → 16 Attacking enemies, 26 → 238 Foraging animals.
 /// </summary>
 public sealed record AddOrderJob(IReadOnlyList<CharacterId> Characters, Meitou.Data.Gameplay.Ai.TaskType Ordered, CharacterId Target) : SimCommand;
 
 /// <summary>
-/// The original's order 146 USE_TURRET on a complete turret of the player's (function 12): the nearest of the characters (the selection when empty) that can act operates it, standing at
-/// its gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>); the combat system fires it (docs/simulation.md "Production", "Combat").
+/// The original's order 146 USE_TURRET on a complete turret of the player's (function 12): the nearest of the characters (the selection when empty)
+/// that can act operates it, standing at its gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>); the combat system fires it (docs/simulation.md
+/// "Production", "Combat").
 /// </summary>
 public sealed record UseTurretOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 
 /// <summary>
-/// The original's order 136 FEED_CORPSE_INTO_MACHINE without Shift (Corpse Disposal on a corpse machine): each of the characters carrying a dead body takes it to an incinerator as the
-/// corpse disposal job does. <b>Engine reading</b>: the order's condition 99 is taken as carrying a dead body, and the body goes to the nearest free incinerator, as the job's.
+/// The original's order 136 FEED_CORPSE_INTO_MACHINE without Shift (Corpse Disposal on a corpse machine): each of the characters carrying a dead body
+/// takes it to an incinerator as the corpse disposal job does. <b>Engine reading</b>: the order's condition 99 is taken as carrying a dead body, and
+/// the body goes to the nearest free incinerator, as the job's.
 /// </summary>
 public sealed record DisposeCorpseOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 
@@ -46,20 +48,25 @@ public sealed record RemoveJob(CharacterId Character, int Index) : SimCommand;
 public sealed record MoveJob(CharacterId Character, int From, int To) : SimCommand;
 
 /// <summary>
-/// A character puts an item of its own into a machine: <paramref name="Slot"/> k into recipe input k (as many units as the input still takes), -1 into the storage grid at
-/// (<paramref name="X"/>, <paramref name="Y"/>), or with X below 0 where it first fits (stacks of it first, <see cref="Inventory.Add"/>). <paramref name="Count"/> above 0 moves at most that
-/// many units (a right click moves one), 0 the whole stack. The character must stand within <see cref="ProductionSettings.TransferReach"/> of the building.
+/// A character puts an item of its own into a machine: <paramref name="Slot"/> k into recipe input k (as many units as the input still takes), -1
+/// into the storage grid at (<paramref name="X"/>, <paramref name="Y"/>), or with X below 0 where it first fits (stacks of it first,
+/// <see cref="Inventory.Add"/>). <paramref name="Count"/> above 0 moves at most that many units (a right click moves one), 0 the whole stack. The
+/// character must stand within <see cref="ProductionSettings.TransferReach"/> of the building.
 /// </summary>
 public sealed record PutInMachine(CharacterId Character, InventoryItemToken Item, string Site, int Slot, int X = 0, int Y = 0,
     int Count = 0) : SimCommand;
 
 /// <summary>
-/// A character takes from a machine: <paramref name="Slot"/> -2 the output's items, k the items of input k, -1 the storage item at <paramref name="Index"/>; into its inventory where they first
-/// fit (a storage item as the right click's move, <see cref="InventoryCommands.MoveInto"/>: its open bag first with <see cref="BagFirst"/>). <paramref name="Count"/> above 0 takes at most that
+/// A character takes from a machine: <paramref name="Slot"/> -2 the output's items, k the items of input k, -1 the storage item at
+/// <paramref name="Index"/>; into its inventory where they first fit (a storage item as the right click's move,
+/// <see cref="InventoryCommands.MoveInto"/>: its open bag first with <see cref="BagFirst"/>). <paramref name="Count"/> above 0 takes at most that
 /// many units, 0 all. Dragging goes through the held item (<see cref="LiftItem"/>).
 /// </summary>
 public sealed record TakeFromMachine(CharacterId Character, string Site, int Slot, int Index = 0, int Count = 0) : SimCommand
 {
+    /// <summary>
+    /// A storage item goes into the character's open bag first (the right click's move).
+    /// </summary>
     public bool BagFirst { get; init; }
 }
 

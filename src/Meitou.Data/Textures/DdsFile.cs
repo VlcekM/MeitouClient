@@ -11,7 +11,13 @@ public sealed class DdsFile
     /// </summary>
     public required byte[] Data { get; init; }
 
+    /// <summary>
+    /// Width of the full-size level in pixels.
+    /// </summary>
     public int Width { get; init; }
+    /// <summary>
+    /// Height of the full-size level in pixels.
+    /// </summary>
     public int Height { get; init; }
 
     /// <summary>
@@ -30,9 +36,18 @@ public sealed class DdsFile
     /// </summary>
     public int ImageCount { get; init; } = 1;
 
+    /// <summary>
+    /// Whether the images are cube faces (a legacy cubemap or a DX10 cube array).
+    /// </summary>
     public bool IsCubemap { get; init; }
+    /// <summary>
+    /// Whether the texture is a volume texture of <see cref="Depth"/> slices.
+    /// </summary>
     public bool IsVolume { get; init; }
 
+    /// <summary>
+    /// The surface format the data is stored in.
+    /// </summary>
     public DdsFormat Format { get; init; }
 
     /// <summary>
@@ -70,6 +85,9 @@ public sealed class DdsFile
     /// </summary>
     public int TrailingBytes => Data.Length - (Surfaces.Count == 0 ? HeaderSize : Surfaces[^1].Offset + Surfaces[^1].Length);
 
+    /// <summary>
+    /// The surface of mip <paramref name="level"/> of image <paramref name="image"/>.
+    /// </summary>
     public DdsSurface Surface(int image, int level) => Surfaces[image * MipCount + level];
 
     /// <summary>
@@ -94,6 +112,9 @@ public sealed class DdsFile
         Surfaces = surfaces,
     };
 
+    /// <summary>
+    /// The bytes of <paramref name="surface"/> in <see cref="Data"/>.
+    /// </summary>
     public ReadOnlySpan<byte> SurfaceData(DdsSurface surface) => Data.AsSpan(surface.Offset, surface.Length);
 
     public override string ToString() =>
@@ -151,7 +172,13 @@ public enum DdsFormat
 /// <param name="Luminance">True when <see cref="Red"/> is a luminance (grey) channel.</param>
 public sealed record DdsPixelMasks(int BitCount, uint Red, uint Green, uint Blue, uint Alpha, bool Luminance = false)
 {
+    /// <summary>
+    /// Bytes per pixel of the uncompressed format.
+    /// </summary>
     public int BytesPerPixel => BitCount / 8;
 }
 
+/// <summary>
+/// Bad or unsupported DDS data, thrown by <see cref="DdsReader"/>.
+/// </summary>
 public sealed class DdsFormatException(string message) : Exception(message);

@@ -10,6 +10,9 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 /// </summary>
 public static class SamplerBudget
 {
+    /// <summary>
+    /// The direct combined-image-sampler slots Metal gives a fragment stage.
+    /// </summary>
     public const int MetalFragmentLimit = 16;
 
     /// <summary>

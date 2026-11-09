@@ -140,18 +140,39 @@ static class WorldCommandLine
     /// </summary>
     sealed class OptionReader(string[] args)
     {
+        /// <summary>
+        /// The index of <see cref="Current"/> in the arguments; -1 before the first <see cref="MoveNext"/>.
+        /// </summary>
         int _at = -1;
 
+        /// <summary>
+        /// The option at hand.
+        /// </summary>
         public string Current => args[_at];
 
+        /// <summary>
+        /// Steps to the next argument; false past the last.
+        /// </summary>
         public bool MoveNext() => ++_at < args.Length;
 
+        /// <summary>
+        /// Consumes and returns the value after <see cref="Current"/>; throws when there is none.
+        /// </summary>
         public string Next() => _at + 1 < args.Length ? args[++_at] : throw new ArgumentException($"{Current} needs a value");
 
+        /// <summary>
+        /// The next value as an invariant-culture float.
+        /// </summary>
         public float Float() => float.Parse(Next(), CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// The next value as an invariant-culture integer.
+        /// </summary>
         public int Int() => int.Parse(Next(), CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// The next value as two invariant-culture numbers <c>a,b</c>; throws when it is not two.
+        /// </summary>
         public (double, double) Pair()
         {
             string option = Current;

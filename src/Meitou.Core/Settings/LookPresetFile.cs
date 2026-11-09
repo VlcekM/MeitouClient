@@ -26,6 +26,9 @@ public static class LookPresetFile
     /// </summary>
     public const int MaxShareJson = 64 * 1024;
 
+    /// <summary>
+    /// The preset in a preset file's <paramref name="json"/>, its name cleaned; null when it is not one. A missing <c>meitou</c> reads as <c>?</c>.
+    /// </summary>
     public static LookPresetData? Read(string json)
     {
         try
@@ -51,6 +54,9 @@ public static class LookPresetFile
         return clean.Length > 0 ? clean : "Unnamed";
     }
 
+    /// <summary>
+    /// The preset file's indented JSON: <c>format</c> 1, <c>name</c>, <c>meitou</c> (the version that made it) and <c>values</c>.
+    /// </summary>
     public static string Write(LookPresetData look)
     {
         using var buffer = new MemoryStream();
@@ -68,6 +74,9 @@ public static class LookPresetFile
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
+    /// <summary>
+    /// The preset's share code: <c>MT1:</c> and its <see cref="Write"/> JSON, deflated and in base64.
+    /// </summary>
     public static string ShareCode(LookPresetData look)
     {
         using var buffer = new MemoryStream();

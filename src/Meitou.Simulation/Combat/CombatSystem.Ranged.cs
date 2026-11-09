@@ -77,6 +77,9 @@ public static class RangedTuning
     public const float MaxHullReach = 80;
 }
 
+/// <summary>
+/// The ranged fight: the crossbow controller, its shots and reloads, the bolts in flight and their hits, and the line of fire.
+/// </summary>
 public sealed partial class CombatSystem : IProjectileSource
 {
     /// <summary>
@@ -99,12 +102,30 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     readonly ProjectileFlight _projectiles = new();
 
+    /// <summary>
+    /// The state of <see cref="FirstHull"/>'s grid query.
+    /// </summary>
     struct LineScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The shooter's slot (never hit).
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The segment's start and its whole length as a vector.
+        /// </summary>
         public Vector3 From, Seg;
+        /// <summary>
+        /// The segment fraction of the nearest hull entry so far (1: none).
+        /// </summary>
         public float Best;
+        /// <summary>
+        /// The slot whose hull is entered first so far (-1: none).
+        /// </summary>
         public int Hit;
     }
 
@@ -113,6 +134,9 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     readonly struct BoltCover(ulong seed, ulong victimKey, int bolt) : ICoverRoll
     {
+        /// <summary>
+        /// The roll for armour <paramref name="piece"/> covering the bolt.
+        /// </summary>
         public float Roll(int piece) =>
             CombatRolls.Float(seed, victimKey, CombatRoll.Cover, ((ulong)0xB017 << 48) ^ ((ulong)(uint)bolt << 8) ^ (uint)piece);
     }
@@ -138,6 +162,10 @@ public sealed partial class CombatSystem : IProjectileSource
 
     #region Geometry
 
+    /// <summary>
+    /// The muzzle of a crossbow held by <paramref name="c"/>: in front of it by <see cref="RangedTuning.BarrelForward"/>
+    /// at <see cref="RangedTuning.BarrelHeight"/>.
+    /// </summary>
     static Vector3 Barrel(in CharacterHot c) =>
         c.Position + new Vector3(MathF.Sin(c.Yaw) * RangedTuning.BarrelForward, RangedTuning.BarrelHeight,
             MathF.Cos(c.Yaw) * RangedTuning.BarrelForward);
@@ -205,7 +233,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Whether <paramref name="shooter"/> (of <paramref name="faction"/>) counts <paramref name="other"/> as an enemy for the line of fire and friendly fire.
+    /// Whether <paramref name="shooter"/> (of <paramref name="faction"/>) counts <paramref name="other"/> as an enemy for the line of fire and
+    /// friendly fire.
     /// </summary>
     internal bool Hostile(CharacterTable table, int shooter, int shooterGeneration, int faction, int target, int other)
     {
@@ -223,18 +252,18 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Has a click hull for bolts and the line of fire: alive, with a body, not down (the original takes the hull away while a whole-body or carry ragdoll runs,
-    /// <c>FUN_1405d0db0</c> → <c>FUN_14065fe40</c>, <b>Observed</b>; Meitou counts every down character as ragdolled).
+    /// Has a click hull for bolts and the line of fire: alive, with a body, not down (the original takes the hull away while a whole-body or carry
+    /// ragdoll runs, <c>FUN_1405d0db0</c> → <c>FUN_14065fe40</c>, <b>Observed</b>; Meitou counts every down character as ragdolled).
     /// </summary>
     internal static bool Shootable(ReadOnlySpan<CharacterHot> state, CharacterTable table, int slot) =>
         state[slot].Alive && table.Cold(slot) is { Medical.Incapacitated: false, Race: not null };
 
     /// <summary>
-    /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from <paramref name="from"/> through
-    /// <paramref name="to"/> (the original's is unbounded; here <paramref name="reach"/> long at least) and the first thing it meets of the click hulls, the terrain
-    /// and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any enemy's lets it go (1), the target's included;
-    /// the terrain lets it go (it names no object); a building closes in (0) when it is nearer the shooter than the target is (feet to feet), else
-    /// lets it go; nothing met fires.
+    /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from
+    /// <paramref name="from"/> through <paramref name="to"/> (the original's is unbounded; here <paramref name="reach"/> long at least) and the first
+    /// thing it meets of the click hulls, the terrain and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any
+    /// enemy's lets it go (1), the target's included; the terrain lets it go (it names no object); a building closes in (0) when it is nearer the
+    /// shooter than the target is (feet to feet), else lets it go; nothing met fires.
     /// </summary>
     int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach)
     {
@@ -301,11 +330,11 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Controller
 
     /// <summary>
-    /// A threat within <see cref="RetaliationSystem.ImmediateReach"/> (the planner's <c>iAmBeingMeleeAttacked immediate</c>, Character +0x2b0, recomputed by
-    /// <c>FUN_1404378f0</c> over the threats list, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"): one of the senses' threats
-    /// (<see cref="SenseBlock.Threats"/>) by full 3D squared distance (strictly under the reach squared), not down (staying low or crawling still
-    /// count), not in a bed or cage, not carried, not getting up, and not behind a gate that is not open between them (<c>FUN_140598450</c>,
-    /// <see cref="Locks.LockSystem.NotBlocked"/>).
+    /// A threat within <see cref="RetaliationSystem.ImmediateReach"/> (the planner's <c>iAmBeingMeleeAttacked immediate</c>, Character +0x2b0,
+    /// recomputed by <c>FUN_1404378f0</c> over the threats list, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"): one of the
+    /// senses' threats (<see cref="SenseBlock.Threats"/>) by full 3D squared distance (strictly under the reach squared), not down (staying low or
+    /// crawling still count), not in a bed or cage, not carried, not getting up, and not behind a gate that is not open between them
+    /// (<c>FUN_140598450</c>, <see cref="Locks.LockSystem.NotBlocked"/>).
     /// </summary>
     internal bool ImmediateThreat(World world, int self)
     {
@@ -334,6 +363,9 @@ public sealed partial class CombatSystem : IProjectileSource
         return false;
     }
 
+    /// <summary>
+    /// The drawn-weapon kind of the fighter's melee weapon; none unarmed.
+    /// </summary>
     internal static WeaponKinds MeleeDrawn(Fighter f) =>
         f.Weapon is { } w && !f.Unarmed ? HandHold.OfCategory(w.Data.AnimationCategory).Weapon : WeaponKinds.None;
 
@@ -389,9 +421,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The shooting gate (<c>FUN_1407f2840</c>, docs/game/combat.md "Arms"): bolts loaded or ammunition, both arms (a crossbow is weapon category Bow,
-    /// <c>FUN_1409991d0</c>; losing one puts it away, <c>FUN_1405cc230</c>), the posture (vfunc 0x368) 0 (not staying low or crawling) and, for the shooting rows'
-    /// <c>!me swim</c> (139), not swimming (water state 3).
+    /// The shooting gate (<c>FUN_1407f2840</c>, docs/game/combat.md "Arms"): bolts loaded or ammunition, both arms (a crossbow is weapon category
+    /// Bow, <c>FUN_1409991d0</c>; losing one puts it away, <c>FUN_1405cc230</c>), the posture (vfunc 0x368) 0 (not staying low or crawling) and, for
+    /// the shooting rows' <c>!me swim</c> (139), not swimming (water state 3).
     /// </summary>
     static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
     {
@@ -410,7 +442,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     void TickRanged(World world, int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, int now, float dt)
     {
-        // The shooting task's update sets Character +0x198 to Crossbows (35) every tick (Task_RangedAttack FUN_14033bfb0): the HUD's Current Skill line.
+        // The shooting task's update sets Character +0x198 to Crossbows (35) every tick (Task_RangedAttack FUN_14033bfb0): the HUD's Current
+        // Skill line.
         cold.UseSkill(StatsEnumerated.Crossbows, world.Tick);
         cold.RangedCombatMode = true;
         if (s.Loaded <= 0)
@@ -494,9 +527,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Walking towards the target (state 1, <c>FUN_140438c70</c>): in range, the closing ray (<see cref="ClosingRayPasses"/>) passing adds to the timer and past
-    /// <see cref="RangedTuning.ClearToAim"/> the shooter stops (state 0, it aims from the next tick); a ray that does not pass sets the timer to 0. Out of range the
-    /// timer stays.
+    /// Walking towards the target (state 1, <c>FUN_140438c70</c>): in range, the closing ray (<see cref="ClosingRayPasses"/>) passing adds to the
+    /// timer and past <see cref="RangedTuning.ClearToAim"/> the shooter stops (state 0, it aims from the next tick); a ray that does not pass sets
+    /// the timer to 0. Out of range the timer stays.
     /// </summary>
     void Close(World world, int i, int t, ref CombatSlot s, Vector3 barrel, bool inRange, float dt)
     {
@@ -573,6 +606,9 @@ public sealed partial class CombatSystem : IProjectileSource
 
     #region Shots and reloads
 
+    /// <summary>
+    /// A finished reload: one bolt is taken from the shooter's inventory.
+    /// </summary>
     void ApplyReload(World world, in Effect e)
     {
         var cold = world.Characters.Cold(e.Source);
@@ -765,7 +801,8 @@ public sealed partial class CombatSystem : IProjectileSource
             HitReplan(dc, world.Tick);
         }
 
-        // The bolt hit's relation events (FUN_140439c90: none without a shooter; a bolt that was not meant for the victim is a minor knock-out and no hit).
+        // The bolt hit's relation events (FUN_140439c90: none without a shooter; a bolt that was not meant for the victim is a minor knock-out and
+        // no hit).
         if (shooterAlive) Deeds?.Blow(world, p.Shooter, v, medical.Incapacitated, death, bolt: true, aimed: intended);
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(v)) is { } unique) world.Uniques.Died(unique, p.ShooterIsPlayer, dc.Faction);
         if (death && world.Luckyren) dc.Burst = new Vector2(p.Direction.X, p.Direction.Z);
@@ -833,8 +870,8 @@ public sealed partial class CombatSystem : IProjectileSource
 }
 
 /// <summary>
-/// The ranged controller's State line numbers (<see cref="CombatSystem.RangedLineOf"/>): reloading (else aiming), the gun's loaded and full shots (gun
-/// <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (gun <c>+0xe0</c>) and a powered gun without power.
+/// The ranged controller's State line numbers (<see cref="CombatSystem.RangedLineOf"/>): reloading (else aiming), the gun's loaded and full shots
+/// (gun <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (gun <c>+0xe0</c>) and a powered gun without power.
 /// </summary>
 public readonly record struct RangedLineView(bool Reloading, int Loaded, int Shots, float ReloadLeft, bool NoPower);
 
@@ -843,7 +880,16 @@ public readonly record struct RangedLineView(bool Reloading, int Loaded, int Sho
 /// </summary>
 public enum RangedPose : byte
 {
+    /// <summary>
+    /// Aiming (the aim clip's first half).
+    /// </summary>
     Aim,
+    /// <summary>
+    /// Just shot (the aim clip's second half, for <see cref="CombatSystem.ShotSeconds"/>).
+    /// </summary>
     Shot,
+    /// <summary>
+    /// Reloading.
+    /// </summary>
     Reload,
 }

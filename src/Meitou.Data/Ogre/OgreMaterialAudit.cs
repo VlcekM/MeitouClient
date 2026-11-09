@@ -9,10 +9,25 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public sealed class OgreMaterialAudit
 {
+    /// <summary>
+    /// How many <c>.mesh</c> files under data/ were checked.
+    /// </summary>
     public int MeshFiles { get; private set; }
+    /// <summary>
+    /// The meshes that did not read (relative path, error), by path.
+    /// </summary>
     public List<(string File, string Error)> MeshFailures { get; } = [];
+    /// <summary>
+    /// How many submeshes the meshes that read have.
+    /// </summary>
     public int SubMeshes { get; private set; }
+    /// <summary>
+    /// How many of those name a material the library defines.
+    /// </summary>
     public int ResolvedSubMeshes { get; private set; }
+    /// <summary>
+    /// How many submeshes carry texture aliases.
+    /// </summary>
     public int SubMeshesWithTextureAliases { get; private set; }
 
     /// <summary>
@@ -35,6 +50,9 @@ public sealed class OgreMaterialAudit
     /// </summary>
     public int TextureReferences { get; private set; }
 
+    /// <summary>
+    /// Every texture name the library's texture units use, ignoring case.
+    /// </summary>
     public SortedSet<string> Textures { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -47,7 +65,13 @@ public sealed class OgreMaterialAudit
     /// </summary>
     public int UnitsWithoutTexture { get; private set; }
 
+    /// <summary>
+    /// How many of <see cref="MeshMaterials"/> the library defines.
+    /// </summary>
     public int ResolvedMeshMaterials => MeshMaterials.Count - UnresolvedMaterials.Count;
+    /// <summary>
+    /// How many of <see cref="Textures"/> exist as files.
+    /// </summary>
     public int FoundTextures => Textures.Count - MissingTextures.Count;
 
     /// <param name="files">Where texture names are looked up (by bare name).</param>

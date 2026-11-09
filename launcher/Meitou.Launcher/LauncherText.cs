@@ -19,10 +19,15 @@ static class LauncherText
     /// </summary>
     static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox"];
 
+    /// <summary>
+    /// The active language's catalog; empty for English.
+    /// </summary>
     static GettextCatalog s_catalog = GettextCatalog.Empty;
 
-    // Translated text -> its English source, over every catalog loaded so far: a control first seen with a translated text (made after a
-    // language switch) can still be turned back to English.
+    /// <summary>
+    /// Translated text -> its English source, over every catalog loaded so far: a control first seen with a translated text (made after a language
+    /// switch) can still be turned back to English.
+    /// </summary>
     static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal);
 
     /// <summary>

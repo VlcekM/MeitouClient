@@ -14,6 +14,9 @@ namespace Meitou.Simulation.Player;
 [Flags]
 public enum CharacterOrders : ushort
 {
+    /// <summary>
+    /// No toggle set.
+    /// </summary>
     None = 0,
     /// <summary>
     /// Defensive mode: +20 melee defence (the combat code's guarding state) and no attacks of its own (the button's tooltip, Verified).
@@ -105,8 +108,17 @@ public sealed record RunSpeedCommand(IReadOnlyList<CharacterId> Characters, int 
 /// </summary>
 public enum ManoeuvreMode : byte
 {
+    /// <summary>
+    /// HOLD_GROUND (0): targets within twice the meiDistance and its tolerance (<see cref="Combat.TargetScore.RangeOf"/>); no order sets it.
+    /// </summary>
     HoldGround = 0,
+    /// <summary>
+    /// STAY_CLOSE (1), set by NEAR (9): targets near the centre of movement, which every order move sets.
+    /// </summary>
     StayClose = 1,
+    /// <summary>
+    /// ROAM_FAR (2), set by FAR (8) and every character's default: the plain range term, the centre of movement unused.
+    /// </summary>
     RoamFar = 2,
 }
 
@@ -143,14 +155,23 @@ public static class Orders
         (CharacterOrders.Taunt, "taunt mode"), (CharacterOrders.Sneak, "stealth"),
     ];
 
+    /// <summary>
+    /// The GAMESTATE_CHARACTER key of the character's speed mode.
+    /// </summary>
     public const string SpeedModeKey = "speed mode";
     /// <summary>
     /// The jobs switch as older Meitou saves wrote it (GAMESTATE_CHARACTER): read, never written; the original's key is GAMESTATE_AI <c>jobs</c>
     /// (<see cref="Saving.PermaJobSave"/>).
     /// </summary>
     public const string JobsKey = "meitou jobs enabled";
+    /// <summary>
+    /// The toggles a new player character starts with: jobs and ranged on.
+    /// </summary>
     public const CharacterOrders PlayerDefaults = CharacterOrders.Jobs | CharacterOrders.Ranged;
 
+    /// <summary>
+    /// Whether <paramref name="cold"/> has <paramref name="order"/> on; false for null.
+    /// </summary>
     public static bool Has(CharacterCold? cold, CharacterOrders order) => cold is not null && (cold.Orders & order) != 0;
 
     /// <summary>
@@ -195,7 +216,7 @@ public static class Orders
 
     /// <summary>
     /// The stealth term s of a character in [0, 1] (<c>FUN_140884850</c>): its stealth skill x 0.75 while carrying someone, x 2 while crawling
-    /// (posture not 0), x the encumbrance factor, x the body term (<see cref="MedicalState.StealthBodyFactor"/>), x the gear's factor
+    /// (posture not 0), x the encumbrance factor, x the body term (<see cref="Bodies.MedicalState.StealthBodyFactor"/>), x the gear's factor
     /// (<see cref="Combat.Fighter.StealthMult"/>), x the fitted limbs' factor, x 0.01. Not the stat multiplier's table: the game never sends stealth
     /// through it.
     /// </summary>

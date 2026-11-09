@@ -30,6 +30,9 @@ sealed record ModRow(string Name, int? Version, string Author, string Descriptio
 /// </summary>
 sealed class ModReport(List<ModRow> rows, List<string> otherIssues, int enabled, int loaded, string? customList)
 {
+    /// <summary>
+    /// One row per mod in the load order list.
+    /// </summary>
     public IReadOnlyList<ModRow> Rows => rows;
 
     /// <summary>
@@ -57,6 +60,9 @@ sealed class ModReport(List<ModRow> rows, List<string> otherIssues, int enabled,
     /// </summary>
     public string? CustomList => customList;
 
+    /// <summary>
+    /// The problems in total: every row's issues and the others.
+    /// </summary>
     public int Problems => rows.Sum(r => r.Issues.Count) + otherIssues.Count;
 
     /// <summary>

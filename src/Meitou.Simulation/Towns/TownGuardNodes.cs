@@ -15,6 +15,9 @@ namespace Meitou.Simulation.Towns;
 /// </summary>
 public static class TownGuardNodes
 {
+    /// <summary>
+    /// The side shift of a node, how far under the door's point its Y lies, and the distance within which a node counts as there already.
+    /// </summary>
     const float Shift = 19, DropY = 10, Same = 1;
 
     /// <summary>
