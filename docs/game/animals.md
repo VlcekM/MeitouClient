@@ -103,7 +103,10 @@ from the start.
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).
-- No inventory-window filter on the flag was found: the items show while the owner lives (**Observed**, absence in the decompile).
+- No inventory-window filter on the flag was found (**Observed**, absence in the decompile). The player's own animal's inventory window
+  shows no main grid at all, so they are out of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**,
+  original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
+  window keeps the grid).
 - Unknown: `FUN_1405a59a0` (reads record 3979's `death items`); whether the flag changes weight.
 
 Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
