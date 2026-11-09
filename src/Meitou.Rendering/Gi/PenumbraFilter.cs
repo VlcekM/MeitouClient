@@ -36,6 +36,7 @@ sealed unsafe class PenumbraFilter : IDisposable
         {
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
             vec4 size;         // width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns)
+            vec4 options;      // x: the blue channel names what the channels hold; only taps with the pixel's own name are read
         } p;
 
         vec3 pointAt(ivec2 px)
@@ -58,10 +59,13 @@ sealed unsafe class PenumbraFilter : IDisposable
             return len > 1e-8 ? g / len : vec3(0.0, 1.0, 0.0);
         }
 
-        // A tap on the pixel's own surface: a receiver (alpha not -1) within the plane's tolerance.
+        float ownName;
+
+        // A tap on the pixel's own surface: a receiver (alpha not -1) within the plane's tolerance, holding the same things as the pixel.
         bool onSurface(ivec2 q, vec3 at, vec3 n, float tolerance)
         {
             if (!inside(q) || texelFetch(uIn, q, 0).a < 0.0) return false;
+            if (p.options.x > 0.5 && abs(texelFetch(uIn, q, 0).b - ownName) > 0.5) return false;
             return abs(dot(pointAt(q) - at, n)) < tolerance;
         }
 
@@ -97,6 +101,7 @@ sealed unsafe class PenumbraFilter : IDisposable
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (!inside(px)) return;
             vec4 c = texelFetch(uIn, px, 0);
+            ownName = c.b;
             bool rows = p.size.w < 0.5;
             if (c.a < 0.0) { imageStore(uOut, px, c); return; }   // no receiver: kept, and left out of its neighbours
             vec3 at = pointAt(px);
@@ -134,7 +139,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     struct Params
     {
         public Matrix4x4 Inverse;
-        public Vector4 Size;
+        public Vector4 Size, Options;
     }
 
     readonly GpuContext ctx;
@@ -159,17 +164,18 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// Both passes into <paramref name="cmd"/>, after the rays (a full barrier before each pass and after the last). <paramref name="inverse"/>: NDC, jittered as the frame was, to the
     /// position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth.
     /// </summary>
-    public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope)
+    /// <param name="named">The blue channel names what the others hold (the lamps' pair): only taps with the pixel's name are read.</param>
+    public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, bool named = false)
     {
-        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0);
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, named);
         cmd.Barrier(BarrierBatch.Full);
-        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, named);
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass)
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named)
     {
-        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass) };
+        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, 0, 0) };
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         DescriptorImageInfo Sampled(GpuTexture texture) => new(ctx.Device.SamplerAt(sampler.Index), ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
         var images = stackalloc DescriptorImageInfo[4];

@@ -7,7 +7,7 @@ namespace Meitou.Rendering.Gi;
 static class LampShadowShaders
 {
     /// <summary>Most lamps a pixel traces.</summary>
-    public const int MinLamps = 2, MaxLamps = 4;
+    public const int MinLamps = 2, MaxLamps = 2;
 
     /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), and the lamp's radius its penumbra is filtered for (a flame or a bulb in its glass, 20 cm).</summary>
     const string Constants = """
@@ -27,14 +27,30 @@ static class LampShadowShaders
         vec3 pickLight[LAMP_SLOTS];
         int picked = 0;
 
-        float lampNote(int lamp, vec3 light, uint emitter)
+        float lampAttenuation(float d, float radius);
+
+        vec3 rankPlane;   // the drawn surface's plane at the pixel (lampPlane)
+
+        // Ranks a lamp reaching the point by its light on the drawn plane (attenuation, cone, the plane's turn): not the shading normal, whose bumps would change which lamps a pixel traces,
+        // the neighbouring pixels' slots would then hold other lamps and the filter would draw their borders along the ripples.
+        void lampRank(int lamp, vec3 l, float d, float radius)
         {
-            float weight = dot(light, vec3(0.2126, 0.7152, 0.0722));
+            vec4 c = texelFetch(uLightData, ivec2(1, lamp), 0);
+            vec4 s2 = texelFetch(uLightData, ivec2(3, lamp), 0);
+            float weight = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)) * lampAttenuation(d, radius) * max(dot(rankPlane, l), 0.02);
+            if (c.w > 0.5)
+            {
+                vec4 s = texelFetch(uLightData, ivec2(2, lamp), 0);
+                float cosAngle = dot(s.xyz, -l);
+                if (cosAngle <= s.w) return;
+                weight *= s2.x - s.w < 1e-5 ? 1.0 : clamp(pow(clamp((cosAngle - s.w) / (s2.x - s.w), 0.0, 1.0), s2.y), 0.0, 1.0);
+            }
+            if (weight <= 0.0) return;
             int at = picked;
             if (picked == LAMP_SLOTS)
             {
                 at = LAMP_SLOTS - 1;
-                if (weight <= pickWeight[at]) return 1.0;
+                if (weight <= pickWeight[at]) return;
             }
             else picked++;
             for (; at > 0 && pickWeight[at - 1] < weight; at--)
@@ -45,12 +61,19 @@ static class LampShadowShaders
                 pickLight[at] = pickLight[at - 1];
             }
             pickLamp[at] = lamp;
-            pickEmitter[at] = emitter;
+            pickEmitter[at] = uint(s2.w);
             pickWeight[at] = weight;
-            pickLight[at] = light;
+            pickLight[at] = vec3(0.0);
+        }
+        // The light of a ranked lamp at this surface.
+        float lampNote(int lamp, vec3 light)
+        {
+            for (int i = 0; i < picked; i++)
+                if (pickLamp[i] == lamp) pickLight[i] = light;
             return 1.0;
         }
-        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampNote(lamp, radiance * diffuseNl, emitter)
+        #define LAMP_RANK(lamp, l, d, radius) lampRank(lamp, l, d, radius)
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampNote(lamp, radiance * diffuseNl)
 
         """;
 
@@ -98,12 +121,12 @@ static class LampShadowShaders
             g /= len;
             return dot(g, n) < 0.0 ? -g : g;
         }
-        // The share of the traced lamps' light the occluders take from a pixel (rgb, per channel) and the widest penumbra their blockers leave at it (a: world units, 0 none; PenumbraFilter);
-        // total: that light, per unit of albedo. The filter averages the share, the same on a ripple's two slopes: the light itself is not, and its mean left the slopes turned to the
-        // lamp lit inside a shadow (a thin orange line along a wall's foot and the ripples).
-        vec4 lostLight(ivec2 px, out vec3 total)
+        // Per traced lamp, in the lamps' index order so a slot means one lamp across the neighbouring pixels: whether occluders block it (r, g; the filter softens these) and its light per
+        // unit of albedo (totals), and the penumbra their blockers leave (a: world units, 0 none; PenumbraFilter). Each lamp is filtered apart: a mean of the light, or of one share of two
+        // lamps together, follows the slopes of the ground and left them lit or mottled inside a shadow (a thin orange line along a wall's foot, a pale trail moving with a character).
+        vec4 lostLight(ivec2 px, out vec3 total0, out vec3 total1)
         {
-            total = vec3(0.0);
+            total0 = total1 = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             if ((surface.w & 256u) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
             float z = depthAt(px);
@@ -111,14 +134,24 @@ static class LampShadowShaders
             vec3 world = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 diffuse = vec3(0.0), specular = vec3(0.0);
+            rankPlane = lampPlane(px, world, n);
             lampLight(world, n, normalize(uGiEye - world), 1.0, 1.0, diffuse, specular);
             // No lamp lights it (turned away from them all, or out of their reach): no receiver either. Read as unblocked, a caster's side turned from the lamp lit the
             // shadowed ground at its foot through the penumbra filter, as the sun's did (PenumbraFilter).
-            if (picked == 0) return vec4(0.0, 0.0, 0.0, -1.0);
+            vec3 anyLight = vec3(0.0);
+            for (int i = 0; i < picked; i++) anyLight += pickLight[i];
+            if (dot(anyLight, vec3(1.0)) <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0);
             // Off the surface's plane by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
-            vec3 from = world - uOrigin + lampPlane(px, world, n) * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
-            vec3 lost = vec3(0.0), lit = vec3(0.0);
-            float spread = 0.0;
+            vec3 from = world - uOrigin + rankPlane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
+            if (picked == 2 && pickLamp[0] > pickLamp[1])
+            {
+                int lamp = pickLamp[0]; pickLamp[0] = pickLamp[1]; pickLamp[1] = lamp;
+                uint emitter = pickEmitter[0]; pickEmitter[0] = pickEmitter[1]; pickEmitter[1] = emitter;
+                vec3 light = pickLight[0]; pickLight[0] = pickLight[1]; pickLight[1] = light;
+            }
+            vec3 lit = vec3(0.0);
+            vec2 blocked = vec2(0.0);
+            float spread = 0.0, takenAll = 0.0;
             for (int i = 0; i < picked; i++)
             {
                 lit += pickLight[i];
@@ -126,12 +159,20 @@ static class LampShadowShaders
                 vec3 target = p.xyz - uOrigin;   // the lamp's centre, the same every frame; its size is the filter's
                 float t = lampBlocker(from, target, p.w, pickEmitter[i]);
                 if (t <= 0.0) continue;
-                lost += pickLight[i];
-                // A lamp LAMP_SIZE across seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver.
-                spread = max(spread, LAMP_SIZE * t / max(length(target - from) - t, 1.0));
+                blocked[i] = 1.0;
+                // A lamp LAMP_SIZE across seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver, weighted by the light that blocker takes.
+                float taken = dot(pickLight[i], vec3(0.2126, 0.7152, 0.0722));
+                spread += taken * LAMP_SIZE * t / max(length(target - from) - t, 1.0);
+                takenAll += taken;
             }
-            total = lit * 3.14159265358979 * LAMP_DIFFUSE;
-            return vec4(lost / max(lit, vec3(1e-6)), spread);
+            // One radius serves all the lamps of a pixel: a faint lamp's far blocker must not set it for the strong lamp's fine shadows (a character's shadow from a faint lamp, too weak
+            // to see, blurred the ripples' own shadows along it: a pale mottled trail moving with the character).
+            float litAll = dot(lit, vec3(0.2126, 0.7152, 0.0722));
+            spread = takenAll > 0.15 * litAll && takenAll > 0.0 ? spread / takenAll : 0.0;
+            total0 = pickLight[0] * 3.14159265358979 * LAMP_DIFFUSE;
+            if (picked > 1) total1 = pickLight[1] * 3.14159265358979 * LAMP_DIFFUSE;
+            // The pair of lamps the slots hold, as a small whole number (a half float keeps it exact): the filter reads only the taps holding the same pair.
+            return vec4(blocked, float(((pickLamp[0] + 1) * 37 + (picked > 1 ? (pickLamp[1] + 1) * 101 : 0)) % 1021), spread);
         }
 
         """;
@@ -168,6 +209,7 @@ static class LampShadowShaders
         };
         layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
         layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
+        layout(set = 0, binding = 10, rgba16f) uniform writeonly image2D uTotal1;
         layout(set = 0, binding = 6) uniform sampler2D uLightCells;
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 8) uniform sampler2D uLightData;
@@ -181,9 +223,10 @@ static class LampShadowShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
-            vec3 total;
-            imageStore(uLost, px, lostLight(px, total));
-            imageStore(uTotal, px, vec4(total, 0.0));
+            vec3 total0, total1;
+            imageStore(uLost, px, lostLight(px, total0, total1));
+            imageStore(uTotal, px, vec4(total0, 0.0));
+            imageStore(uTotal1, px, vec4(total1, 0.0));
         }
         """;
 
@@ -197,11 +240,13 @@ static class LampShadowShaders
         uniform usampler2D uAlbedo;
         uniform sampler2D uLost;
         uniform sampler2D uTotal;
+        uniform sampler2D uTotal1;
 
         void main()
         {
             ivec2 px = ivec2(floor(gl_FragCoord.xy));
-            vec3 lost = texelFetch(uLost, px, 0).rgb * texelFetch(uTotal, px, 0).rgb;
+            vec2 blocked = texelFetch(uLost, px, 0).rg;
+            vec3 lost = blocked.r * texelFetch(uTotal, px, 0).rgb + blocked.g * texelFetch(uTotal1, px, 0).rgb;
             if (max(lost.r, max(lost.g, lost.b)) <= 0.0) discard;
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             vec3 p = positionAt(px, depthAt(px));

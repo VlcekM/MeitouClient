@@ -128,7 +128,7 @@ public sealed class PostOptions
     public bool CameraCut;
     /// <summary>Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the game's: lamps cast no shadows.</summary>
     public bool LampShadows;
-    /// <summary>The most lamps a pixel traces (2 to 4, <c>--lamp-shadow-lamps</c>); read once, when the pass is made.</summary>
+    /// <summary>The most lamps a pixel traces (2, <c>--lamp-shadow-lamps</c>); read once, when the pass is made.</summary>
     public int LampShadowLamps = 2;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
     public float Exposure = 1;

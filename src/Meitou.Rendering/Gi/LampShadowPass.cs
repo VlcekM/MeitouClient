@@ -15,7 +15,7 @@ readonly record struct LampShadowView(Vector3 Right, Vector3 Up, Vector3 Back, V
 /// </summary>
 sealed unsafe class LampShadowPass : IDisposable
 {
-    const int Bindings = 10;
+    const int Bindings = 11;
 
     readonly GpuContext ctx;
     readonly GpuProgram program;
@@ -31,7 +31,7 @@ sealed unsafe class LampShadowPass : IDisposable
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
-            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (10, DescriptorType.StorageImage),
         ], GpuSetLayout.Bindless);
         pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(program, "lamp shadow trace"));
         sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
@@ -48,7 +48,7 @@ sealed unsafe class LampShadowPass : IDisposable
     /// Traces into <paramref name="lost"/>, then filters it by the lamps' size into <paramref name="filtered"/> (<see cref="PenumbraFilter"/>, through <paramref name="scratch"/>;
     /// <paramref name="inverse"/>: NDC, jittered as the frame was, to the position relative to the eye). <paramref name="scene"/> has this frame's top level.
     /// </summary>
-    public void Run(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total, GpuTexture scratch, GpuTexture filtered, in LampShadowView view,
+    public void Run(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total, GpuTexture total1, GpuTexture scratch, GpuTexture filtered, in LampShadowView view,
         in Matrix4x4 inverse)
     {
         var parameters = new Params
@@ -67,17 +67,17 @@ sealed unsafe class LampShadowPass : IDisposable
         var cmd = (CommandList)ctx.BeginNative("lamp shadows");
         cmd.BeginLabel("lamp shadows");
         cmd.Barrier(BarrierBatch.Full);
-        Push(cmd, scene, lamps, depth, surface, lost, total, constants);
+        Push(cmd, scene, lamps, depth, surface, lost, total, total1, constants);
         cmd.BindPipeline(pipeline);
         cmd.BindBindlessTable(program, 1, GpuBindPoint.Compute);
         cmd.Dispatch((uint)(((int)view.Size.X + 7) / 8), (uint)(((int)view.Size.Y + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
-        penumbra.Run(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, (int)view.Size.X, (int)view.Size.Y), inverse, view.Footprint);
+        penumbra.Run(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, (int)view.Size.X, (int)view.Size.Y), inverse, view.Footprint, named: true);
         cmd.EndLabel();
         ctx.EndNative(cmd);
     }
 
-    void Push(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total, Transient constants)
+    void Push(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total, GpuTexture total1, Transient constants)
     {
         var (cells, index, data) = lamps.Current;
         var images = stackalloc DescriptorImageInfo[5];
@@ -88,6 +88,7 @@ sealed unsafe class LampShadowPass : IDisposable
         images[4] = Image(data);
         var storage = new DescriptorImageInfo(default, ctx.Device.ViewAt(lost.View().Index), ImageLayout.General);
         var storageTotal = new DescriptorImageInfo(default, ctx.Device.ViewAt(total.View().Index), ImageLayout.General);
+        var storageTotal1 = new DescriptorImageInfo(default, ctx.Device.ViewAt(total1.View().Index), ImageLayout.General);
         var top = scene.Top!.Handle;
         var asWrite = new WriteDescriptorSetAccelerationStructureKHR
         {
@@ -113,6 +114,10 @@ sealed unsafe class LampShadowPass : IDisposable
         writes[9] = new WriteDescriptorSet
         {
             SType = StructureType.WriteDescriptorSet, DstBinding = 9, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storageTotal,
+        };
+        writes[10] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, DstBinding = 10, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storageTotal1,
         };
         cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
     }

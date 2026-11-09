@@ -408,7 +408,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory, tracedTerm, tracedMask, tracedScratch, tracedFiltered, lampScratch, lampFiltered, lampTotal }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory, tracedTerm, tracedMask, tracedScratch, tracedFiltered, lampScratch, lampFiltered, lampTotal, lampTotal1 }.OfType<Target2D>();
 
     void Free()
     {
@@ -418,7 +418,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         rateBuiltFrame = long.MinValue;
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
-        tracedTerm = tracedMask = tracedScratch = tracedFiltered = lampScratch = lampFiltered = lampTotal = giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
+        tracedTerm = tracedMask = tracedScratch = tracedFiltered = lampScratch = lampFiltered = lampTotal = lampTotal1 = giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
         FreeMotionBlur();
         FreeDepthOfField();

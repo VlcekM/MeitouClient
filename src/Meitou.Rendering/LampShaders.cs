@@ -60,6 +60,9 @@ static class LampShaders
                 }
                 #endif
                 vec3 l = toLamp / max(d, 1e-4);
+                #ifdef LAMP_RANK
+                LAMP_RANK(lamp, l, d, p.w);
+                #endif
                 float nl = dot(n, l);
                 #ifdef LAMP_SKIN
                 // The characters' Meitou skin (CharacterShaders.lampSkinDiffuse): the lamp's diffuse term wraps past the terminator as the sun's does.
