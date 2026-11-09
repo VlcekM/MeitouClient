@@ -117,8 +117,8 @@ if (tri)
         var bindless = GpuSetLayout.Bindless;
         triProgram = ctx.Shaders.Native(tableVertex, tableFragment, "tri table", [GpuSetLayout.Fixed([]), bindless, GpuSetLayout.Fixed([])], 4);
         triLayout = new VertexLayout(
-            new VertexInput(0, InternalFormat.RG32f, 16, false),
-            new VertexInput(1, InternalFormat.RG32f, 16, false));
+            new VertexInput(0, InternalFormat.Rg32F, 16, false),
+            new VertexInput(1, InternalFormat.Rg32F, 16, false));
         float[] tableVerticesData = [-1, -1, 0, 0,   1, -1, 1, 0,   1, 1, 1, 1,   -1, 1, 0, 1];
         uint[] tableIndices = [0, 1, 2, 0, 2, 3];
         using var tableBatch = ctx.Uploads.Begin();
@@ -140,10 +140,10 @@ if (tri)
         var cube = tableBatch.Create(new TextureDesc(InternalFormat.Rgba8, 1, 1, Kind: TextureKind.Cube,
             Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "table cube"));
         for (int face = 0; face < 6; face++) tableBatch.Write(cube, 0, face, new PixelRect(0, 0, 1, 1), black);
-        var uint2D = tableBatch.Create(new TextureDesc(InternalFormat.R32ui, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
+        var uint2D = tableBatch.Create(new TextureDesc(InternalFormat.R32Ui, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
                 Name: "table uint"));
         tableBatch.Write(uint2D, 0, 0, new PixelRect(0, 0, 1, 1), black);
-        var int2D = tableBatch.Create(new TextureDesc(InternalFormat.R32i, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
+        var int2D = tableBatch.Create(new TextureDesc(InternalFormat.R32I, 1, 1, Use: TextureUse.Sampled | TextureUse.TransferDst,
                 Name: "table int"));
         tableBatch.Write(int2D, 0, 0, new PixelRect(0, 0, 1, 1), black);
         bindlessTable.Register(red.Texture, sampler);                                        // index 0
@@ -163,8 +163,8 @@ if (tri)
         var set2 = GpuSetLayout.Fixed([new GpuSlot(0, GpuSlotKind.UniformBuffer, GpuStage.Fragment, OffsetAtBind: true)]);
         triProgram = ctx.Shaders.Native(vertex, fragment, "tri", [set0, GpuSetLayout.Fixed([]), set2], 8);
         triLayout = new VertexLayout(
-            new VertexInput(0, InternalFormat.RG32f, 24, false),    // one interleaved buffer, each location its own binding (VkGl's)
-            new VertexInput(1, InternalFormat.Rgba32f, 24, false));
+            new VertexInput(0, InternalFormat.Rg32F, 24, false),    // one interleaved buffer, each location its own binding (VkGl's)
+            new VertexInput(1, InternalFormat.Rgba32F, 24, false));
         float[] vertices = [-1, -1, 1, 0, 0, 1,   1, -1, 0, 1, 0, 1,   1, 1, 0, 0, 1, 1,   -1, 1, 1, 1, 0, 1];
         uint[] indices = [0, 1, 2, 0, 2, 3];
         float[] identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
