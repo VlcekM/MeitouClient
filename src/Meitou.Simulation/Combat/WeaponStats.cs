@@ -15,9 +15,11 @@ namespace Meitou.Simulation.Combat;
 /// <param name="Weight">The larger of weight kg x the manufacturer's weight mod and 40 x blunt multiplier x weight mult x the weapon inventory weight multiplier.</param>
 /// <param name="AttackMod">The record's attack mod plus the model's.</param>
 /// <param name="DefenceMod">The record's defence mod plus the model's.</param>
-public readonly record struct WeaponStats(float Quality, float CutMultiplier, float BluntMultiplier, float MinCut, float Weight, int AttackMod, int DefenceMod, int IndoorsMod)
+public readonly record struct WeaponStats(float Quality, float CutMultiplier, float BluntMultiplier, float MinCut, float Weight, int AttackMod,
+    int DefenceMod, int IndoorsMod)
 {
-    public static WeaponStats Compute(float quality, WeaponData weapon, WeaponManufacturer manufacturer, WeaponMaterial material, CombatConstants constants)
+    public static WeaponStats Compute(float quality, WeaponData weapon, WeaponManufacturer manufacturer, WeaponMaterial material,
+        CombatConstants constants)
     {
         float q = Math.Clamp(quality, 0, 1);
         float cut = Lerp(q, 0.3f, 2f) * weapon.CutDamageMultiplier * manufacturer.CutDamageMod;
@@ -25,7 +27,8 @@ public readonly record struct WeaponStats(float Quality, float CutMultiplier, fl
         float minCut = weapon.MinCutDamageMult * manufacturer.MinCutDamage;
         float weight = MathF.Max(weapon.WeightKg * manufacturer.WeightMod, 40 * blunt * weapon.WeightMult * constants.WeaponInventoryWeightMult);
 
-        return new WeaponStats(q, cut, blunt, minCut, weight, weapon.AttackMod + material.AttackMod, weapon.DefenceMod + material.DefenceMod, weapon.IndoorsMod);
+        return new WeaponStats(q, cut, blunt, minCut, weight, weapon.AttackMod + material.AttackMod,
+            weapon.DefenceMod + material.DefenceMod, weapon.IndoorsMod);
     }
 
     /// <summary>
@@ -56,7 +59,8 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
 
     public bool CanBlock => Data.CanBlock;
 
-    public static WeaponInstance Create(float quality, WeaponData data, WeaponManufacturer? manufacturer, WeaponMaterial? material, CombatConstants constants) =>
+    public static WeaponInstance Create(float quality, WeaponData data, WeaponManufacturer? manufacturer, WeaponMaterial? material,
+        CombatConstants constants) =>
         new(data, WeaponStats.Compute(quality, data, manufacturer ?? WeaponManufacturer.Neutral, material ?? WeaponMaterial.None, constants));
 
     public static StatsEnumerated SkillOf(int category) => category switch

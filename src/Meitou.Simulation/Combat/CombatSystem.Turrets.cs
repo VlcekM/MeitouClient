@@ -28,7 +28,8 @@ public readonly record struct TurretView(string BuildingId, string GunId, Vector
 /// the loaded and full shots, the share of the running reload still to go (1 while none runs), the GUN_DATA reload times and the gunner's Crossbows
 /// level (null: none).
 /// </summary>
-public readonly record struct TurretPanelView(string Instance, float Range, float AimSpeed, float Deviation, float Mount, float Height, float UserSkill, float? Perception)
+public readonly record struct TurretPanelView(string Instance, float Range, float AimSpeed, float Deviation, float Mount, float Height,
+    float UserSkill, float? Perception)
 {
     public int? HeightMetres { get; init; }
 
@@ -207,7 +208,8 @@ public sealed partial class CombatSystem
         {
             if (t.Loaded > 0) return true;
 
-            float s = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Turrets), Eff(cold, StatsEnumerated.Dexterity), cold.Fighter?.DexterityMult ?? 1);
+            float s = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Turrets), Eff(cold, StatsEnumerated.Dexterity),
+                cold.Fighter?.DexterityMult ?? 1);
             t.ReloadTime = RangedFormulas.ReloadTime(s, gun.ReloadTimeMin, gun.ReloadTimeMax);
             t.ReloadLeft = t.ReloadTime;
             t.Reloading = true;
@@ -263,7 +265,8 @@ public sealed partial class CombatSystem
         var prev = table.Previous;
         var at = prev[g].Position;
         float range = t.Gun.Gun.Range;
-        int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration ? t.Target : -1;
+        int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration
+            ? t.Target : -1;
 
         int kept = KeptTurretOrder(world, g, gc);
         if (kept >= 0) return kept;
@@ -463,7 +466,8 @@ public sealed partial class CombatSystem
         float u = Rng.Float(Rng.Hash(world.Seed, t.Entity, RngPurpose.Ranged, counter));
         float spin = Rng.Float(Rng.Hash(world.Seed, t.Entity, RngPurpose.Ranged, counter + 1));
         float w = Rng.Float(Rng.Hash(world.Seed, t.Entity, RngPurpose.Ranged, counter + 2));
-        float deviation = RangedFormulas.Deviation(gun.AccuracyDeviationAtZeroSkill, Eff(cold, StatsEnumerated.Turrets), Eff(cold, StatsEnumerated.Perception));
+        float deviation = RangedFormulas.Deviation(gun.AccuracyDeviationAtZeroSkill, Eff(cold, StatsEnumerated.Turrets),
+            Eff(cold, StatsEnumerated.Perception));
         var dir = RangedFormulas.Deviate(forward, u * deviation, spin);
         float hm = RangedFormulas.HeightFactor(muzzle.Y, prev[target].Position.Y) * t.Mount;
         var (lo, hi) = TurretFormulas.PierceEnds(t.Gun.Damage * t.DamageMult);

@@ -261,7 +261,8 @@ public static class ShopFiller
             11 => "item spawns resident small",
             _ => null,
         };
-        return list is null ? [] : [.. faction.GetReferences(list).Select(r => new RecordLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
+        return list is null
+            ? [] : [.. faction.GetReferences(list).Select(r => new RecordLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
     }
 
     /// <summary>

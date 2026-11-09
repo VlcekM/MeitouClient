@@ -164,87 +164,114 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
-        var table = world.Characters;
-        var player = world.Player;
         foreach (var command in commands)
         {
             if (Ordered(command) is { } ordered) WantsToGetUp(world, ordered);
-            switch (command)
-            {
-                case SelectCommand select:
-                    Select(world, select);
-                    break;
-                case SquadCommand squadCommand:
-                    SquadManagement.Apply(world, data, squadCommand);
-                    break;
-                case SeenDiscoveriesCommand:
-                    player.SeeDiscoveries();
-                    break;
-                case InspectCommand inspect:
-                    player.Inspected = inspect.Target;
-                    if (table.TryResolveNext(inspect.Target, out int inspected))
-                        player.Meet(table.Cold(inspected)!.Faction);
-                    break;
-                case ShowInventoryCommand show:
-                    player.InventoryShown.Clear();
-                    player.InventoryShown.AddRange(show.Targets);
-                    break;
-                case Items.OpenContainerOrder open:
-                    ContainerAccess.OpenContainerInput(world, open, _pickUps);
-                    break;
-                case Items.CloseContainer:
-                    player.OpenContainer = player.OpeningContainer = null;
-                    player.OpenLoot = player.OpeningLoot = CharacterId.None;
-                    break;
-                case InspectBuildingCommand building:
-                    player.InspectedBuilding = building.Instance;
-                    // The original selects a building with a door as that door; Meitou keeps a building's owner on its doors and other fixtures.
-                    if (building.Instance is { } instance && world.Fixtures.OfBuilding(instance) is var fixtures)
-                        player.Meet((fixtures.FirstOrDefault(f => f.Kind == Locks.FixtureKind.Door) ?? fixtures.FirstOrDefault())?.Owner ?? -1);
-                    break;
-                case StopCommand stop:
-                    Stop(world, stop);
-                    break;
-                case Items.ReadMapItem read:
-                    ReadMap(world, read);
-                    break;
-                case Items.HeldCommand held:
-                    _held.Input(world, held);
-                    break;
-                case Items.QuickMoveItem quick:
-                    _quickMoves.QuickMove(world, quick);
-                    break;
-                case RenameFactionCommand rename:
-                    RenameFaction(world, rename.Name);
-                    break;
-                case SquadAiCommand option:
-                    player.SquadAi = option.On ? player.SquadAi | option.Option : player.SquadAi & ~option.Option;
-                    break;
-                case SquadFormationCommand formation:
-                    SquadAiKeys.SetFormation(world, player.Faction, (int)formation.Formation, data?.Factions);
-                    break;
-                case OrdersCommand or RunSpeedCommand or StandUpCommand or ManoeuvreCommand:
-                    Orders.Apply(world, command);
-                    break;
-                case Editing.EditCharacter edit:
-                    if (data is not null) Editing.CharacterEditing.Apply(world, data, edit);
-                    break;
-                case DebugCommand debug:
-                    DebugCheats.Apply(world, data, _assembly, debug);
-                    break;
-                case Editing.FinishCreation:
-                    if (player.InCreation) Editing.CharacterEditing.EndCreation(world, _assembly);
-                    player.InCreation = false;
-                    break;
-                case Items.PickUpItemOrder pick:
-                    _pickUps.PickUpInput(world, pick);
-                    break;
-                case Items.ArrangeInventory arrange:
-                    if (table.TryResolveNext(arrange.Character, out int character)
-                            && table.Cold(character) is { IsPlayer: true, Inventory: { } carried } &&
-                        !Items.InventoryCommands.Arrange(carried)) world.Post("Cannot arrange inventory: the items do not fit.");
-                    break;
-            }
+            if (!ApplyViewCommand(world, command)) ApplyActionCommand(world, command);
+        }
+    }
+
+    /// <summary>
+    /// Applies a command of the selection, the squads, the discoveries, the inspected character or building, or the inventory and container
+    /// windows; false for any other.
+    /// </summary>
+    bool ApplyViewCommand(World world, SimCommand command)
+    {
+        var table = world.Characters;
+        var player = world.Player;
+        switch (command)
+        {
+            case SelectCommand select:
+                Select(world, select);
+                break;
+            case SquadCommand squadCommand:
+                SquadManagement.Apply(world, data, squadCommand);
+                break;
+            case SeenDiscoveriesCommand:
+                player.SeeDiscoveries();
+                break;
+            case InspectCommand inspect:
+                player.Inspected = inspect.Target;
+                if (table.TryResolveNext(inspect.Target, out int inspected))
+                    player.Meet(table.Cold(inspected)!.Faction);
+                break;
+            case ShowInventoryCommand show:
+                player.InventoryShown.Clear();
+                player.InventoryShown.AddRange(show.Targets);
+                break;
+            case Items.OpenContainerOrder open:
+                ContainerAccess.OpenContainerInput(world, open, _pickUps);
+                break;
+            case Items.CloseContainer:
+                player.OpenContainer = player.OpeningContainer = null;
+                player.OpenLoot = player.OpeningLoot = CharacterId.None;
+                break;
+            case InspectBuildingCommand building:
+                player.InspectedBuilding = building.Instance;
+
+                // The original selects a building with a door as that door; Meitou keeps a building's owner on its doors and other fixtures.
+                if (building.Instance is { } instance && world.Fixtures.OfBuilding(instance) is var fixtures)
+                    player.Meet((fixtures.FirstOrDefault(f => f.Kind == Locks.FixtureKind.Door) ?? fixtures.FirstOrDefault())?.Owner ?? -1);
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Applies an order, item, faction, squad, editing or debug command.
+    /// </summary>
+    void ApplyActionCommand(World world, SimCommand command)
+    {
+        var table = world.Characters;
+        var player = world.Player;
+        switch (command)
+        {
+            case StopCommand stop:
+                Stop(world, stop);
+                break;
+            case Items.ReadMapItem read:
+                ReadMap(world, read);
+                break;
+            case Items.HeldCommand held:
+                _held.Input(world, held);
+                break;
+            case Items.QuickMoveItem quick:
+                _quickMoves.QuickMove(world, quick);
+                break;
+            case RenameFactionCommand rename:
+                RenameFaction(world, rename.Name);
+                break;
+            case SquadAiCommand option:
+                player.SquadAi = option.On ? player.SquadAi | option.Option : player.SquadAi & ~option.Option;
+                break;
+            case SquadFormationCommand formation:
+                SquadAiKeys.SetFormation(world, player.Faction, (int)formation.Formation, data?.Factions);
+                break;
+            case OrdersCommand or RunSpeedCommand or StandUpCommand or ManoeuvreCommand:
+                Orders.Apply(world, command);
+                break;
+            case Editing.EditCharacter edit:
+                if (data is not null) Editing.CharacterEditing.Apply(world, data, edit);
+                break;
+            case DebugCommand debug:
+                DebugCheats.Apply(world, data, _assembly, debug);
+                break;
+            case Editing.FinishCreation:
+                if (player.InCreation) Editing.CharacterEditing.EndCreation(world, _assembly);
+                player.InCreation = false;
+                break;
+            case Items.PickUpItemOrder pick:
+                _pickUps.PickUpInput(world, pick);
+                break;
+            case Items.ArrangeInventory arrange:
+                if (table.TryResolveNext(arrange.Character, out int character)
+                    && table.Cold(character) is { IsPlayer: true, Inventory: { } carried } && !Items.InventoryCommands.Arrange(carried))
+                {
+                    world.Post("Cannot arrange inventory: the items do not fit.");
+                }
+                break;
         }
     }
 

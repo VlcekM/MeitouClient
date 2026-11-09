@@ -84,7 +84,8 @@ public sealed partial class CombatSystem
 
         var tech = _techniques[(int)e.Position.X];
         var prev = table.Previous;
-        int direction = HitOutcomes.Facing(tech.DirectionOf(blow), HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
+        int direction = HitOutcomes.Facing(tech.DirectionOf(blow),
+            HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
 
         // The defender was in the attack zone when the blow arrived (Strike); its own block or dodge decides the outcome.
         CombatTechnique? reaction = dSlot.ReactTech >= 0 && !dSlot.Down && now >= dSlot.StunUntil ? _techniques[dSlot.ReactTech] : null;
@@ -97,7 +98,8 @@ public sealed partial class CombatSystem
         // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck →
         // CombatClass::removeAttackerH on the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker
         // asks again before its next swing.
-        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation) dSlot.Engaged = false;
+        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation)
+            dSlot.Engaged = false;
 
         switch (outcome)
         {
@@ -112,7 +114,8 @@ public sealed partial class CombatSystem
                 dSlot.Dodges++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
-                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge,
+                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
@@ -252,7 +255,8 @@ public sealed partial class CombatSystem
                     table.LimbsChanged.Enqueue((v, medical.Parts[ev.Part].Template.LimbSlot));
 
                     // LOST_LEG / LOST_ARM
-                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None, medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71)
+                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None,
+                        medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71)
                     {
                         Tick = world.Tick + 1,
                     });
@@ -271,7 +275,8 @@ public sealed partial class CombatSystem
     {
         var table = world.Characters;
         bool knockedOut = !medical.Incapacitated && Meitou.Simulation.Locks.LockSystem.WornShackles(dc) is not null
-            && CombatRolls.Float(world.Seed, Rng.Key(table.IdOf(d)), CombatRoll.Shackled, CombatRolls.BlowCounter(a, seq, blow, 0)) < ShackledKnockout;
+            && CombatRolls.Float(world.Seed, Rng.Key(table.IdOf(d)), CombatRoll.Shackled,
+                CombatRolls.BlowCounter(a, seq, blow, 0)) < ShackledKnockout;
         if (!knockedOut) return false;
 
         medical.KnockOut(medical.PutDownKoSeconds(ctx, 0.002f));
@@ -359,7 +364,8 @@ public sealed partial class CombatSystem
     /// </summary>
     readonly struct CoverRoll(ulong seed, ulong defenderKey, int attacker, int attackSeq, int blow) : ICoverRoll
     {
-        public float Roll(int piece) => CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
+        public float Roll(int piece) =>
+            CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
     }
 
     /// <summary>
@@ -371,7 +377,8 @@ public sealed partial class CombatSystem
 
         var id = world.Characters.IdOf(d);
         bool tagged = Memory is { } memory && world.Player.Squad >= 0;
-        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed)
+        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer,
+            dc.Medical!.Parts[part].Template.Name, damage, absorbed)
             with
         {
             TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy),
@@ -510,7 +517,8 @@ public sealed partial class CombatSystem
         var df = defender.Fighter!;
         float aStrength = StrengthFactor(attacker, af);
         var attackerWeapon = af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill;
-        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon, Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
+        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon,
+            Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
         if (defenderEvent is { } ev)
         {
             float dStrength = StrengthFactor(defender, df);
@@ -522,7 +530,8 @@ public sealed partial class CombatSystem
 
     float StrengthFactor(CharacterCold c, Fighter f) => f.Unarmed
         ? 1 - f.EncumbranceFactor
-        : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength], c.Medical!.StatMultiplier(StatsEnumerated.Strength));
+        : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength],
+            c.Medical!.StatMultiplier(StatsEnumerated.Strength));
 
     #endregion
 }

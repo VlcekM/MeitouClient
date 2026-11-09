@@ -327,7 +327,11 @@ internal sealed partial class ZoneGeometryGatherer
             if (Vector3.Dot(n, centre) + d > -0.5f) return null; // the centre on a face: no volume to speak of
             bool known = false;
             foreach (var q in planes)
-                if (Vector3.Dot(n, new Vector3(q.X, q.Y, q.Z)) > 0.9999f && MathF.Abs(d - q.W) < 0.1f) { known = true; break; }
+                if (Vector3.Dot(n, new Vector3(q.X, q.Y, q.Z)) > 0.9999f && MathF.Abs(d - q.W) < 0.1f)
+                {
+                    known = true;
+                    break;
+                }
             if (!known) planes.Add(new Vector4(n, d));
         }
         return planes.Count < 4 ? null : new NavSolid([.. planes], new Vector2(lo.X, lo.Z), new Vector2(hi.X, hi.Z));

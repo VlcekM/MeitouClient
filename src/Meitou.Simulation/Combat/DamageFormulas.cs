@@ -129,7 +129,8 @@ public static class DamageFormulas
         CombatConstants c)
     {
         var (cut, blunt) = Unarmed(rating, toughness, strength, c);
-        float scale = GeneralMultiplier(damageOutput) * (fists is null ? 1 : KindMultiplier(fists.Data, kind) * RaceMultiplier(fists.Data, targetRace));
+        float scale =
+            GeneralMultiplier(damageOutput) * (fists is null ? 1 : KindMultiplier(fists.Data, kind) * RaceMultiplier(fists.Data, targetRace));
 
         return new DamagePacket(cut * scale, blunt * scale, 0, 0, fists?.Data.BleedMult ?? 1, fists?.Data.ArmourPenetration ?? 0);
     }

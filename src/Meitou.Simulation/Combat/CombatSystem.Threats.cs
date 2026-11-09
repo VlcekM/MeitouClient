@@ -64,7 +64,8 @@ public sealed partial class CombatSystem
         if (CharacterFacts.Senses(world, self) is not { } senses) return false;
 
         foreach (var id in senses.Threats)
-            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !_read[id.Slot].Down) return true;
+            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !_read[id.Slot].Down)
+                return true;
 
         return false;
     }

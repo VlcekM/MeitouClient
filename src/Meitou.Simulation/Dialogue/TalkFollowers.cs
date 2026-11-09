@@ -40,7 +40,8 @@ sealed class TalkFollowers(DialogueSystem system)
             bool talking = system.LeadsTalk(who);
             if (talking && table.TryResolveNext(who, out _) && DialogueSystem.Position(world, whom) is not null) continue;
             _followers.Remove(who);
-            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom && table.Next[s].Task == (byte)CharacterTask.Follow)
+            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom
+                && table.Next[s].Task == (byte)CharacterTask.Follow)
             {
                 cold.FollowOrder = CharacterId.None;
                 TaskStart.Stand(table, s);
@@ -53,7 +54,11 @@ sealed class TalkFollowers(DialogueSystem system)
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
-        foreach (var (who, whom) in _followers) { hasher.Add(who); hasher.Add(whom); }
+        foreach (var (who, whom) in _followers)
+        {
+            hasher.Add(who);
+            hasher.Add(whom);
+        }
     }
 
     /// <summary>

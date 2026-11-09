@@ -231,7 +231,8 @@ internal static class NavGeometry
     /// <paramref name="maxGap"/> of it (on X/Z) at both ends of the overlap. <paramref name="lo"/>, <paramref name="hi"/>: the overlap as fractions of a0 a1;
     /// <paramref name="yLo"/>, <paramref name="yHi"/>: b's heights there.
     /// </summary>
-    public static bool FacingOverlap(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float maxGap, out float lo, out float hi, out float yLo, out float yHi)
+    public static bool FacingOverlap(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float maxGap, out float lo, out float hi,
+        out float yLo, out float yHi)
     {
         lo = hi = yLo = yHi = 0;
         var d = a1 - a0;

@@ -285,7 +285,11 @@ public sealed class PlatoonRegistry
                 // Only for stored squads, so worlds without them hash as before.
                 h.Add(stored.Members.Count);
                 foreach (var m in stored.Members) h.Add(m.Position);
-                if (stored.Dead.Count > 0) { h.Add(0x44656164); h.Add(stored.Dead.Count); }
+                if (stored.Dead.Count > 0)
+                {
+                    h.Add(0x44656164);
+                    h.Add(stored.Dead.Count);
+                }
                 h.Add(stored.Anchor);
                 h.Add(stored.Pinned);
             }

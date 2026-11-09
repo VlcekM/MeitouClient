@@ -61,7 +61,8 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     MapFeatureFile Features() =>
-        _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(_install) : new MapFeatureFile();
+        _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath))
+            ? MapFeatureFile.Open(_install) : new MapFeatureFile();
 
     /// <summary>
     /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits

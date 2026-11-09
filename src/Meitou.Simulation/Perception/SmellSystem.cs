@@ -141,7 +141,8 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         var table = world.Characters;
         foreach (var squad in world.Squads.All)
         {
-            if (squad.Ai is null || squad.Members.Count == 0 || !table.TryResolveNext(squad.Leader, out int lead) || table.Cold(lead) is not { Fighter.IsAnimal: true } leader)
+            if (squad.Ai is null || squad.Members.Count == 0 || !table.TryResolveNext(squad.Leader, out int lead)
+                || table.Cold(lead) is not { Fighter.IsAnimal: true } leader)
                 continue;
 
             int role = (int)AiSystem.RoleOf(squad, squad.Leader, leader);

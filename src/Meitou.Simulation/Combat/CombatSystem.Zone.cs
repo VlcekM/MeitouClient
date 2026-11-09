@@ -237,9 +237,11 @@ public sealed partial class CombatSystem
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var raw = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str,
+                fighter.FistsItem, TargetKind.None,
                 null, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None,
+            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str,
+                fighter.Weapon!, TargetKind.None,
                 null, fighter.DamageOutput, _combat);
         var packet = Powered(raw, tech, blow);
         float f = 2 * packet.Blunt + 0.5f * packet.Cut;

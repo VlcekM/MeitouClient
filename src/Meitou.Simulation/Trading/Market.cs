@@ -183,7 +183,8 @@ public sealed class Market
             case FcsRecordType.Weapon or FcsRecordType.Crossbow:
                 {
                     int stored = BaseValue(item);
-                    return sell ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
+                    return sell
+                        ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
                 }
             case FcsRecordType.Armour:
                 {
@@ -196,7 +197,8 @@ public sealed class Market
                 }
             case FcsRecordType.MapItem or FcsRecordType.Blueprint:
                 {
-                    int value = item.Type == FcsRecordType.Blueprint ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
+                    int value = item.Type == FcsRecordType.Blueprint
+                        ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
                     if (!sell) return (int)(t * value);
 
                     return (int)(t * value * (item.Type == FcsRecordType.MapItem ? k.LootPriceMult : k.LootPriceMultGear));

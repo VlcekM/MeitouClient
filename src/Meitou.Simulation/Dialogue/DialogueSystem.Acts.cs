@@ -18,7 +18,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     void FlagFrom(World world, CharacterCold mc, CharacterId me, CharacterId who, CharacterCold wc, int tag)
     {
-        if (tag == MemoryTag.TempEnemy && (_data.Relations.Contains(mc.Faction) && _data.Relations.Contains(wc.Faction) && _data.Relations.IsAlly(mc.Faction, wc.Faction)
+        if (tag == MemoryTag.TempEnemy
+            && (_data.Relations.Contains(mc.Faction) && _data.Relations.Contains(wc.Faction) && _data.Relations.IsAlly(mc.Faction, wc.Faction)
             || RegardsFriendly(world, me, mc, who, wc))) return;
         Memory.Flag(world, mc.SquadId, who, tag);
     }
@@ -63,7 +64,8 @@ public sealed partial class DialogueSystem
     public void Captured(World world, int captor, int captive)
     {
         var table = world.Characters;
-        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null) Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
+        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null)
+            Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
         Forgive(world, captor, table.IdOf(captive));
     }
 
@@ -97,7 +99,8 @@ public sealed partial class DialogueSystem
         }
     }
 
-    bool AlliedFactions(int a, int b) => a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
+    bool AlliedFactions(int a, int b) =>
+        a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
 
     /// <summary>
     /// Event 13 UNLOCK_MY_CAGE_OR_SHACKLES fired by a freed prisoner at its liberator (<c>FUN_140684990</c>, <b>Observed</b>): unless the speaker's
@@ -154,7 +157,11 @@ public sealed partial class DialogueSystem
         if (table.Cold(a) is not { } ac || table.Cold(b) is not { } bc || ac.Faction == bc.Faction) return 0;
         var (ida, idb) = (table.IdOf(a), table.IdOf(b));
         var (ab, _) = Memory.Read(world, ac.SquadId, idb);
-        if (Has(ab, MemoryTag.TempEnemy) || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Has(Memory.Read(world, bc.SquadId, ida).Short, MemoryTag.TempEnemy)) return 1;
+        if (Has(ab, MemoryTag.TempEnemy)
+            || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Has(Memory.Read(world, bc.SquadId, ida).Short, MemoryTag.TempEnemy))
+        {
+            return 1;
+        }
         return Has(ab, MemoryTag.TempAlly) ? -1 : 0;
     }
 
@@ -229,7 +236,8 @@ public sealed partial class DialogueSystem
         var away = new Vector2(here.X - from.X, here.Z - from.Z);
         away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : Vector2.UnitX;
         float r = Rng.Float(NextRoll(world, me));
-        TaskStart.Walk(world, s, new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r), SpeedMode.Free, TaskType.RunAwayForced, TaskSource.Npc);
+        TaskStart.Walk(world, s, new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r), SpeedMode.Free,
+            TaskType.RunAwayForced, TaskSource.Npc);
     }
 
     /// <summary>
@@ -242,7 +250,8 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (mc.IsPlayer || !table.TryResolveNext(me, out int s) || world.Squads.Find(mc.SquadId) is not { } squad) return;
         Vector2 home = squad.Ai?.Home is { } h ? new(h.Position.X, h.Position.Z)
-            : squad.Ai is { Town: >= 0 } board && board.Town < _data.Sites.Count ? new(_data.Sites[board.Town].Position.X, _data.Sites[board.Town].Position.Z)
+            : squad.Ai is { Town: >= 0 } board && board.Town < _data.Sites.Count
+                ? new(_data.Sites[board.Town].Position.X, _data.Sites[board.Town].Position.Z)
             : squad.HomeCentre;
         TaskStart.Walk(world, s, home, SpeedMode.Walk, TaskType.GoHomebuilding, TaskSource.Npc);
     }
@@ -267,13 +276,22 @@ public sealed partial class DialogueSystem
     void Separate(World world, CharacterId who)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { } old || old.Members.Count <= 1) return;
+        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { } old
+            || old.Members.Count <= 1)
+        {
+            return;
+        }
         var at = table.Next[s].Position;
         Squad squad;
-        if (c.IsPlayer) squad = SquadManagement.NewSquad(world, _data.Db, at, _data.Relations.Contains(c.Faction) && _data.Factions[c.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        if (c.IsPlayer)
+        {
+            squad = SquadManagement.NewSquad(world, _data.Db, at,
+                _data.Relations.Contains(c.Faction) && _data.Factions[c.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        }
         else
         {
-            squad = new Squad { Id = world.Squads.NextId(), TemplateId = old.TemplateId, Faction = old.Faction, Position = at, HomeCentre = new(at.X, at.Z), HomeRadius = old.HomeRadius };
+            squad = new Squad { Id = world.Squads.NextId(), TemplateId = old.TemplateId, Faction = old.Faction, Position = at,
+                HomeCentre = new(at.X, at.Z), HomeRadius = old.HomeRadius };
             world.Squads.Add(squad);
             c.Ai = null;
             c.Role = (int)SquadRole.Leader;

@@ -143,7 +143,8 @@ public sealed partial class NavmeshWalkability
                         {
                             if (!m.Kept[p] || !seen.Add(p) || ClosedDoor(m, p, doors)) continue;
 
-                            if (from.X < ix.Min[p].X - reach || from.X > ix.Max[p].X + reach || from.Z < ix.Min[p].Y - reach || from.Z > ix.Max[p].Y + reach)
+                            if (from.X < ix.Min[p].X - reach || from.X > ix.Max[p].X + reach || from.Z < ix.Min[p].Y - reach
+                                || from.Z > ix.Max[p].Y + reach)
                                 continue;
 
                             AddWalls(m, p, from, reach, doors, walls);

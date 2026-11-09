@@ -19,7 +19,11 @@ public sealed partial class DialogueSystem
     bool Recruit(World world, Conversation c, CharacterId me, bool withEditor)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(me, out int slot) || table.Cold(slot) is not { IsPlayer: false } || Cold(world, c.Player) is not { IsPlayer: true } tc) return true;
+        if (!table.TryResolveNext(me, out int slot) || table.Cold(slot) is not { IsPlayer: false }
+            || Cold(world, c.Player) is not { IsPlayer: true } tc)
+        {
+            return true;
+        }
         if (PlayerHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
         {
             world.Post("It looks like your squad is a little full.");
@@ -52,7 +56,11 @@ public sealed partial class DialogueSystem
     internal static Squad? ActiveSquad(World world)
     {
         if (world.Squads.Find(world.Player.Squad) is { } cached) return cached;
-        if (world.Player.Selection.Select(id => Cold(world, id)).FirstOrDefault(s => s is { IsPlayer: true }) is { } selected && world.Squads.Find(selected.SquadId) is { } selectedSquad) return selectedSquad;
+        if (world.Player.Selection.Select(id => Cold(world, id)).FirstOrDefault(s => s is { IsPlayer: true }) is { } selected
+            && world.Squads.Find(selected.SquadId) is { } selectedSquad)
+        {
+            return selectedSquad;
+        }
         return SquadManagement.PlayerSquads(world).FirstOrDefault();
     }
 
@@ -63,8 +71,13 @@ public sealed partial class DialogueSystem
     /// </summary>
     void ExtraSquadAtTheCap(World world, Squad active, GameConstants limits)
     {
-        if (PlayerHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize || SquadManagement.PlayerSquads(world).Count < limits.MaxSquads) return;
-        SquadManagement.NewSquad(world, _data.Db, active.Position, _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless", active.TemplateId);
+        if (PlayerHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
+            || SquadManagement.PlayerSquads(world).Count < limits.MaxSquads)
+        {
+            return;
+        }
+        SquadManagement.NewSquad(world, _data.Db, active.Position,
+            _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless", active.TemplateId);
     }
 
     /// <summary>
@@ -80,7 +93,10 @@ public sealed partial class DialogueSystem
         if (ActiveSquad(world) is not { } squad) return false;
         ExtraSquadAtTheCap(world, squad, limits);
         if (squad.Members.Count >= limits.MaxSquadSize)
-            squad = SquadManagement.NewSquad(world, _data.Db, table.Next[slot].Position, _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        {
+            squad = SquadManagement.NewSquad(world, _data.Db, table.Next[slot].Position,
+                _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        }
 
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
@@ -95,7 +111,11 @@ public sealed partial class DialogueSystem
         mc.Fleeing = false;
         mc.Pending = null;
         mc.Jobs.Clear();   // an NPC's list, if any, does not carry over
-        if (mc.Inventory is { } kit) foreach (var piece in kit.All()) piece.Uniform = "";   // a recruit's clothes are no longer a faction's uniform (economy.md "Unknowns", Observed)
+        // a recruit's clothes are no longer a faction's uniform (economy.md "Unknowns", Observed)
+        if (mc.Inventory is { } kit)
+        {
+            foreach (var piece in kit.All()) piece.Uniform = "";
+        }
         mc.Save = null;   // written as a new member of the player's platoon; the save's old slot of it is removed
         table.Next[slot].Mode = SpeedMode.Free;   // the original's speed mode 2
         TaskStart.Stand(table, slot);

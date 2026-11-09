@@ -182,7 +182,8 @@ sealed class TurretManning
         float e = 1;
         if (gun.IsConsumer) e = world.Machines.Find(id) is { } m ? m.HasPower ? m.Power : 0 : 0;
 
-        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), 1, e, world.Research.Upgrade(site.Record).ProductionMult);
+        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), 1, e,
+            world.Research.Upgrade(site.Record).ProductionMult);
     }
 
     /// <summary>
@@ -191,7 +192,8 @@ sealed class TurretManning
     Post? NpcPost(World world, TurretCatalog catalog, int i, CharacterCold cold)
     {
         var n = world.Characters.Next[i];
-        if (cold.Ai is not { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } || n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold))
+        if (cold.Ai is not { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } || n.Task != (byte)CharacterTask.Idle
+            || !Ai.AiSystem.Holds(n, cold))
             return null;
         if (!board.TurretClaims.TryGetValue(i, out int claimed) || (uint)claimed >= (uint)board.Turrets.Count) return null;
         if (board.Turrets[claimed] is not { Turret: { } post } building) return null;
