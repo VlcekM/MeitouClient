@@ -321,9 +321,9 @@ sealed class WorldObjects : IDisposable
     internal BuildingFloors Floors => _floors ??= new BuildingFloors(this);
 
     /// <summary>
-    /// The floors of the buildings placed in a zone that characters can stand on: not destroyed ones, nor those whose path mode ignores them or that
-    /// are furniture (the parts the game's ground ray has no group for), with their ground materials. The floor collision itself is made later, per
-    /// building (<see cref="BuildingFloor.Make"/>). Safe from a worker thread.
+    /// The floors of the buildings placed in a zone that characters can stand on, ruins included (on their destroyed collision): not those whose path
+    /// mode ignores them or that are furniture (the parts the game's ground ray has no group for), with their ground materials. The floor collision
+    /// itself is made later, per building (<see cref="BuildingFloor.Make"/>). Safe from a worker thread.
     /// </summary>
     internal BuildingFloor[] FloorsOf(ZoneCoordinate zone)
     {
@@ -332,7 +332,7 @@ sealed class WorldObjects : IDisposable
         foreach (var placement in BuildingPlacements.Overlay(FixedIn(zone), RuntimeIn(zone)))
         {
             if (BuildingPlacements.Resolve(placement, Database, Levels,
-                    map.HeightAt) is not { Destroyed: false } resolved || resolved.Record.Type != Data.Fcs.FcsRecordType.Building) continue;
+                    map.HeightAt) is not { } resolved || resolved.Record.Type != Data.Fcs.FcsRecordType.Building) continue;
             var (b, record, position) = (placement, resolved.Record, resolved.Position);
             if (record.GetInt("path mode", 2) == 0 || record.GetBool("is exterior furniture") || record.GetBool("is interior furniture")) continue;
             float scale = record.GetFloat("scale", 1);
@@ -344,7 +344,7 @@ sealed class WorldObjects : IDisposable
                 Position = position,
                 Interior = record.GetInt("interior material", 3),
                 Exterior = record.GetInt("exterior material", 2),
-                Make = () => FloorSurfaces.For(Database, record, b.Key, position, b.Rotation, node, collisions),
+                Make = () => FloorSurfaces.For(Database, record, b.Key, position, b.Rotation, node, collisions, resolved.Destroyed),
             });
         }
         return [.. result];

@@ -340,21 +340,23 @@ public sealed partial class FloorSurfaces
     /// The surfaces of a building placed with <paramref name="node"/> (position, rotation, scale; part collision is in building space): its parts
     /// with their <c>interior</c> list, leaving out doors, <c>passable</c> parts, <c>is unwalkable roof</c> parts, a <c>path mode</c> IGNORE
     /// building's parts and furniture (the groups the ray does not test). Parts without a mesh are not laid out, so their collision is missing
-    /// (engine limit).
+    /// (engine limit). A <paramref name="destroyed"/> building (a ruin) is laid out as the navmesh lays it out: its parts' <c>destroyed collision</c>
+    /// where they have one, no <c>interior</c> list.
     /// </summary>
     public static FloorSurfaces For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, Matrix4x4 node,
-        InteriorCollisions collision)
+        InteriorCollisions collision, bool destroyed = false)
     {
         var result = new FloorSurfaces();
         // IGNORE: no floor groups
         if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture"))
             return result;
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState { WithInterior = true }))
+        var state = new BuildingState(destroyed) { WithInterior = !destroyed };
+        foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, state))
         {
             var part = p.Source;
             if (p.Owner != building || part.GetBool("passable") || !seen.Add(part.StringId)) continue;
-            if (collision.Mesh(part.GetPath("xml collision")) is not { } mesh) continue;
+            if (collision.Mesh(p.CollisionPath(destroyed)) is not { } mesh) continue;
             // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal
             // under the building.
             bool roof = part.GetBool("is unwalkable roof");
