@@ -271,9 +271,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         // The light level the stat multiplier's light term reads (the original's Character +0xd8, kept by the senses).
         medical.Light = world.Sight.Light(i);
 
-        // The load: the inventory weight, plus carry person weight while carrying someone, against the strength the injuries leave
+        // The load: inventory weight without a living owner's death items, plus carry person weight, against the strength the injuries leave
         // (character-stats.md "Encumbrance and carrying").
-        float load = cold.Inventory?.ContentWeight(world.Player.Held) ?? 0;
+        float load = cold.Inventory?.ContentWeight(world.Player.Held, skipDeath: !medical.Dead) ?? 0;
         bool carrying = !cold.Carrying.IsNone;
         float encumbrance = load <= 0 && !carrying
             ? 1

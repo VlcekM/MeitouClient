@@ -327,7 +327,14 @@ public sealed class ItemInstance
     /// The weight this item and what is in it add to the load: a bag's contents count times its <see cref="ContentsFactor"/> only while it is worn,
     /// in full anywhere else (<c>FUN_140749160</c>, docs/game/ui-screens.md "Backpack rows").
     /// </summary>
-    public float Weight => UnitWeight * Quantity + (Contents?.ContentWeight() ?? 0) * (Section == "backpack_attach" ? ContentsFactor : 1);
+    public float Weight => WeightOf(skipDeath: false);
+
+    /// <summary>
+    /// <see cref="Weight"/>; with <paramref name="skipDeath"/> the death items among its contents weigh nothing
+    /// (<see cref="Inventory.ContentWeight(bool)"/>).
+    /// </summary>
+    public float WeightOf(bool skipDeath) =>
+        UnitWeight * Quantity + (Contents?.ContentWeight(skipDeath) ?? 0) * (Section == "backpack_attach" ? ContentsFactor : 1);
 
     /// <summary>
     /// How full the item (a stack's partly used unit) is, 0 to 1, for the inventory cell's charge bar, whose width is charges / maximum

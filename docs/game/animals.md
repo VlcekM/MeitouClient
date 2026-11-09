@@ -107,7 +107,9 @@ from the start.
   shows no main grid at all, so they are out of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**,
   original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
   window keeps the grid).
-- Unknown: `FUN_1405a59a0` (reads record 3979's `death items`); whether the flag changes weight.
+- Death items weigh nothing for a living owner (**Observed**, original: a Garru pup with a 6 kg backpack and 14 flagged 1 kg meat/skin items
+  shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. A dead owner's are **Unknown**.
+  Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
 Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.

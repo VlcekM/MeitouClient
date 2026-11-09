@@ -767,12 +767,13 @@ public sealed partial class World
             .ToArray());
 
     /// <summary>
-    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included, as
-    /// the original's panel <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum and the burden factor from the holder's strength.
+    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included
+    /// and a living holder's death items left out, as the original's panel <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum from the
+    /// holder's strength times the stats multiplier (an animal's age) and the burden factor from its strength.
     /// </summary>
     InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants)
     {
-        float items = grid.ContentWeight(Player.Held);
+        float items = grid.ContentWeight(Player.Held, skipDeath: cold.Medical is not { Dead: true });
         bool carrying = !cold.Carrying.IsNone;
         float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
         var stats = constants is null ? null : cold.Stats;
@@ -780,7 +781,7 @@ public sealed partial class World
             ItemsOf(grid, cold.Faction, population))
         {
             TotalWeight = constants is null ? items : Encumbrance.CarriedWeight(constants, items, carrying),
-            CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength, strengthMult),
+            CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength * stats.Scale, strengthMult),
             Burden = stats is null || items <= 0 && !carrying ? 1 : Encumbrance.Factor(constants!, items, carrying, stats.Strength, strengthMult),
         };
     }
