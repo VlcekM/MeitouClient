@@ -36,7 +36,7 @@ public sealed unsafe partial class PostProcess
         var (colour, depth, surface) = (sceneColour, sceneDepth, giAlbedo);
         if (!Options.LampShadows || GiResolve <= 0 || surface is null || colour is null || depth is null || !haveScene) return;
         if (scene?.Top is null || lamps is null || lamps.Grid.W <= 0 || !SupportsStorage(InternalFormat.Rgba16f)) return;
-        if (lamps.Tiles is not null && scene.CharactersShown == 0) return;   // with the tiles the rays are for the characters alone
+        if (lamps.Tiles is not null && scene.CharactersShown == 0 && scene.MovingObjects == 0) return;   // with the tiles the rays are for what moves alone
 
         MarkScene();
         var lost = lampLost ??= MakeLampLost();

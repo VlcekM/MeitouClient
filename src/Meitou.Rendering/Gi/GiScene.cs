@@ -203,6 +203,8 @@ internal sealed unsafe class GiScene : IDisposable
         instances.Clear();
         records.Clear();
         objectCasters.Clear();
+        MovingObjects = 0;
+        movingNames.Clear();
         BuiltThisFrame = 0;
         seg = null;
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the bottom-level builds and the top level apart.
@@ -332,7 +334,7 @@ internal sealed unsafe class GiScene : IDisposable
     readonly List<(ulong Hash, Vector3 Centre, float Radius)> objectCasters = [], foliageCasterList = [];
     ulong casterTotal;
 
-    /// <summary>Goes up when something that casts a cached shadow came, went or moved (a building, a tree, a zone streamed in).</summary>
+    /// <summary>Goes up when something that casts a cached shadow came, went or settled (a building, a tree, a zone streamed in).</summary>
     public long CasterVersion { get; private set; }
 
     static ulong CasterHash(ulong blas, in Matrix4x4 m) =>
@@ -367,6 +369,11 @@ internal sealed unsafe class GiScene : IDisposable
         CasterVersion++;
     }
 
+    /// <summary>How many objects of this frame's scene have moved in the last second, and (debug) their meshes.</summary>
+    public int MovingObjects { get; private set; }
+    readonly List<string> movingNames = [];
+    public string MovingDescribe => string.Join(", ", movingNames.GroupBy(n => n).OrderByDescending(g => g.Count()).Take(6).Select(g => $"{g.Key} x{g.Count()}"));
+
     /// <summary>How many characters the traced scene holds this frame.</summary>
     public int CharactersShown => people?.Shown ?? 0;
 
@@ -400,8 +407,16 @@ internal sealed unsafe class GiScene : IDisposable
         var world = inst.Transform;
         // What keeps moving (a lift, a rotor, a falling thing) counts only once it has stood still a while: the lamps round it would be traced again every frame. A door counts at once, its shadow must follow it.
         ulong casterHash = CasterHash(entry.Blas.Address, in world);
-        if (inst.CasterHash != casterHash) (inst.CasterHash, inst.CasterChanged) = (casterHash, frame);
-        if (inst.Placed.DoorIndex >= 0 || frame - inst.CasterChanged >= CasterSettleFrames) objectCasters.Add((casterHash, inst.Centre, inst.Radius));
+        // First seen it stands still; an object that has moved in the last second is for the lamps' per-pixel rays, and goes into their tiles once it has stopped.
+        if (inst.CasterHash == 0) (inst.CasterHash, inst.CasterChanged) = (casterHash, frame - CasterSettleFrames);
+        else if (inst.CasterHash != casterHash) (inst.CasterHash, inst.CasterChanged) = (casterHash, frame);
+        bool moving = frame - inst.CasterChanged < CasterSettleFrames;
+        if (moving)
+        {
+            MovingObjects++;
+            if (movingNames.Count < 64) movingNames.Add(System.IO.Path.GetFileName(inst.Placed.MeshPath));
+        }
+        else objectCasters.Add((casterHash, inst.Centre, inst.Radius));
         world.Translation -= Origin;
         uint first = (uint)records.Count;
         bool cut = false;
@@ -415,7 +430,7 @@ internal sealed unsafe class GiScene : IDisposable
             records.Add(record);
         }
         var flags = GeometryInstanceFlagsKHR.TriangleFacingCullDisableBitKhr | (cut ? GeometryInstanceFlagsKHR.ForceNoOpaqueBitKhr : 0);
-        instances.Add(InstanceRecord.Of(world, first, TracedSunShaders.Objects, entry.Blas.Address, flags));
+        instances.Add(InstanceRecord.Of(world, first, moving ? TracedSunShaders.Moving : TracedSunShaders.Objects, entry.Blas.Address, flags));
     }
 
     /// <summary>The traced sun's grass: its structures, within their budget, and its instances (nearest first, after everything else).</summary>

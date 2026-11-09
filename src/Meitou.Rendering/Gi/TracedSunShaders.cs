@@ -13,9 +13,11 @@ static class TracedSunShaders
     /// Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/>, <see cref="Grass"/> and <see cref="Characters"/> are the
     /// casters' alone: the lamps' shadow rays see everything (<see cref="LampMask"/>).
     /// </summary>
-    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40;
-    public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse;
+    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40, Moving = 0x80;
+    public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse | Moving;
     public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
+    /// <summary>What the per-pixel lamp rays see beside the tiles: what moves (characters, and an object that has moved in the last second, <see cref="Moving"/>).</summary>
+    public const byte LampMovers = Characters | Moving;
     /// <summary>What a lamp's cached tile holds (LampTiles): what stands still and does not follow the eye, the ground apart as it takes its own ray.</summary>
     public const byte LampTileObjects = Objects | Foliage | SmallFoliage, LampTileGround = TerrainFine | TerrainCoarse;
 
@@ -54,7 +56,7 @@ static class TracedSunShaders
             return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= cut;
         }
         """;
-    const byte Solids = Objects | Foliage | SmallFoliage | Characters;
+    const byte Solids = Objects | Foliage | SmallFoliage | Characters | Moving;
     /// <summary>What the visibility volume's rays see besides the terrain (<see cref="TracedSunVolume"/>): every solid the surfaces' rays see; no grass (a ray from the air).</summary>
     public const byte VolumeSolids = Solids;
 

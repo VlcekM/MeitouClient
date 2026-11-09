@@ -60,7 +60,7 @@ sealed unsafe class LampShadowPass : IDisposable
             Eye = new Vector4(view.Eye, 0),
             Origin = new Vector4(scene.Origin, 0),
             PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
-            Size = new Vector4(view.Size, lamps.Tiles is null ? TracedSunShaders.LampMask : TracedSunShaders.Characters, 0),
+            Size = new Vector4(view.Size, lamps.Tiles is null ? TracedSunShaders.LampMask : TracedSunShaders.LampMovers, 0),
         };
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
 

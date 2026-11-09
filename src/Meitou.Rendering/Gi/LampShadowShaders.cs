@@ -98,7 +98,7 @@ static class LampShadowShaders
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
-            // With the tiles the characters alone, the still world is in the tiles; without them everything the scene holds (TracedSunShaders.LampMask).
+            // With the tiles what moves alone (TracedSunShaders.LampMovers), the still world is in the tiles; without them everything the scene holds (TracedSunShaders.LampMask).
             rayQueryInitializeEXT(shadow, uScene, flags, uint(uRayMask.x), from, 0.0, ray / d, tMax);
             while (rayQueryProceedEXT(shadow))
             {

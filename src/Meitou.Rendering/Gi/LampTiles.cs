@@ -331,7 +331,7 @@ sealed unsafe class LampTiles : IDisposable
         cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
     }
 
-    public string Describe() => $"{entries.Values.Count(e => e.Ready)} tiles of {entries.Count} lamps, last frame {FilledLast} filled ({RaysLast} rays), {WaitingLast} waiting";
+    public string Describe() => $"{entries.Values.Count(e => e.Ready)} tiles of {entries.Count} lamps, last frame {FilledLast} filled ({RaysLast} rays), {WaitingLast} waiting; {scene?.MovingObjects} objects moving: {scene?.MovingDescribe}";
 
     public void Dispose()
     {
