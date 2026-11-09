@@ -168,7 +168,8 @@ sealed class BattleScenario(GameHost host)
                 offsets[i] = new Vector2((i - first - (inRank - 1) / 2f) * spacing, sign * (front + rank * spacing));
             }
             // Facing +Z is yaw 0; a look of its own per fighter.
-            fighters.AddRange(population.SpawnSandboxSquad(world, record, new Vector2(_battleSpot.X, _battleSpot.Z), offsets, side == 0 ? 0 : MathF.PI, side * 1000 + 1, faction));
+            fighters.AddRange(population.SpawnSandboxSquad(world, record, new Vector2(_battleSpot.X, _battleSpot.Z), offsets, side == 0 ? 0 : MathF.PI,
+                side * 1000 + 1, faction));
         }
         _battleOrderedAt = -1;
         BattleOver = false;
@@ -193,7 +194,9 @@ sealed class BattleScenario(GameHost host)
         {
             BattleOver = true;
             int winner = standing[0].Count > 0 ? 0 : standing[1].Count > 0 ? 1 : -1;
-            string result = winner < 0 ? "nobody left standing" : $"{_battleSides[winner].Name} win, {standing[winner].Count} of {_battleSides[winner].Count} standing";
+            string result = winner < 0
+                ? "nobody left standing"
+                : $"{_battleSides[winner].Name} win, {standing[winner].Count} of {_battleSides[winner].Count} standing";
             Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)}: {result} after {world.Tick * world.TickSeconds:0.0} s");
             host.Player.Notice($"Battle over: {result} (Backspace restarts)");
             return;
@@ -226,7 +229,8 @@ sealed class BattleScenario(GameHost host)
             foreach (var id in standing[side])
             {
                 var st = combat.StateOf(id);
-                if (st.TargetSlot < 0 || st.Engaged || st.Ranged || st.AttackTech >= 0 || at.GetValueOrDefault(st.TargetSlot) <= CombatSystem.MaxEngaged) continue;
+                if (st.TargetSlot < 0 || st.Engaged || st.Ranged || st.AttackTech >= 0
+                    || at.GetValueOrDefault(st.TargetSlot) <= CombatSystem.MaxEngaged) continue;
                 var here = Ground(id);
                 CharacterId? best = null;
                 float bestDistance = float.MaxValue;

@@ -239,7 +239,15 @@ sealed class LoadingScreen : IDisposable
     /// <summary>
     /// Starts the bar again (a new load between scenes), with a new tip and picture.
     /// </summary>
-    public void Restart() { _shown = 0; _from = _to = 0; _exitStart = null; _drawn = false; _released = false; Pick(); }
+    public void Restart()
+    {
+        _shown = 0;
+        _from = _to = 0;
+        _exitStart = null;
+        _drawn = false;
+        _released = false;
+        Pick();
+    }
 
     bool _released;
 
@@ -287,6 +295,16 @@ sealed class LoadingScreen : IDisposable
         float slide = (box.Width + margin + 8 * s) * departure;
         box = box with { X = box.X - slide };
         tipBox = tipBox with { X = tipBox.X + slide };
+        DrawPanels(width, height, background, opacity, s, box, tipBox);
+        DrawProgressRow(width, height, s, box, progress);
+    }
+
+    /// <summary>
+    /// The layout's panels round <paramref name="box"/> (the loading panel) and <paramref name="tipBox"/> (the tip), over the picture; a plain
+    /// panel without the layout.
+    /// </summary>
+    void DrawPanels(int width, int height, bool background, float opacity, float s, UiRect box, UiRect tipBox)
+    {
         if (_painter is not null && _layout is not null && _resources is not null)
         {
             var b = new UiBindings();
@@ -313,7 +331,13 @@ sealed class LoadingScreen : IDisposable
             _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
         }
         else _overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
+    }
 
+    /// <summary>
+    /// The loading panel's row: LOADING... and the running step, the spinner and the progress bar along the panel's bottom.
+    /// </summary>
+    void DrawProgressRow(int width, int height, float s, UiRect box, float progress)
+    {
         // The bar along the panel's bottom; above it LOADING... and the running step on the left, the spinner on the right.
         float pad = 16 * s, barHeight = 10 * s;
         float x0 = box.X + pad, x1 = box.X + box.Width - pad, barTop = box.Y + box.Height - pad - barHeight;
@@ -329,8 +353,21 @@ sealed class LoadingScreen : IDisposable
         }
         else textEnd = x0 + _overlay.Text("LOADING...", x0, cy - _overlay.LineHeight / 2, DebugOverlay.TextColour);
 
-        // The spinner at the right end: twelve spokes, the bright one going round once a second.
         float outer = Math.Min(rowHeight * 0.45f, 22 * s), inner = outer * 0.45f, cx = x1 - outer;
+        DrawSpinner(cx, cy, outer, inner, s);
+        if (_label.Length > 0 && textEnd + 12 * s + _label.Length * _overlay.CharWidth <= cx - outer - 12 * s)
+            _overlay.Text(_label, textEnd + 12 * s, cy - _overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
+        _overlay.Rect(x0 - 2, barTop - 2, x1 + 2, barTop + barHeight + 2, new Vector4(0.35f, 0.31f, 0.24f, 1));
+        _overlay.Rect(x0, barTop, x1, barTop + barHeight, new Vector4(0.08f, 0.07f, 0.06f, 1));
+        _overlay.Rect(x0, barTop, x0 + (x1 - x0) * progress, barTop + barHeight, new Vector4(0.78f, 0.66f, 0.42f, 1));
+        _overlay.Flush(width, height);
+    }
+
+    /// <summary>
+    /// The spinner at the right end: twelve spokes, the bright one going round once a second.
+    /// </summary>
+    void DrawSpinner(float cx, float cy, float outer, float inner, float s)
+    {
         double turn = _clock.Elapsed.TotalSeconds % 1;
         const int spokes = 12;
         for (int i = 0; i < spokes; i++)
@@ -341,12 +378,6 @@ sealed class LoadingScreen : IDisposable
             _overlay.Line(cx + MathF.Sin(a) * inner, cy - MathF.Cos(a) * inner, cx + MathF.Sin(a) * outer,
                 cy - MathF.Cos(a) * outer, Math.Max(2, 3 * s), colour);
         }
-        if (_label.Length > 0 && textEnd + 12 * s + _label.Length * _overlay.CharWidth <= cx - outer - 12 * s)
-            _overlay.Text(_label, textEnd + 12 * s, cy - _overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
-        _overlay.Rect(x0 - 2, barTop - 2, x1 + 2, barTop + barHeight + 2, new Vector4(0.35f, 0.31f, 0.24f, 1));
-        _overlay.Rect(x0, barTop, x1, barTop + barHeight, new Vector4(0.08f, 0.07f, 0.06f, 1));
-        _overlay.Rect(x0, barTop, x0 + (x1 - x0) * progress, barTop + barHeight, new Vector4(0.78f, 0.66f, 0.42f, 1));
-        _overlay.Flush(width, height);
     }
 
     /// <summary>
@@ -381,5 +412,9 @@ sealed class LoadingScreen : IDisposable
         _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
     }
 
-    public void Dispose() { _painter?.Dispose(); _stamp?.Dispose(); }
+    public void Dispose()
+    {
+        _painter?.Dispose();
+        _stamp?.Dispose();
+    }
 }

@@ -43,7 +43,11 @@ sealed class BloodDecals(GameHost host)
     /// </summary>
     internal void SetUpBlood(IGpuContext context)
     {
-        host.Gpu.Debris ??= new DebrisRenderer(context, host.Gpu.Objects?.Resolver, host.Assets.Find) { SharedTextures = () => host.Gpu.Characters?.Textures };   // made now: its shaders compile here, not at the first burst
+        // Made now: its shaders compile here, not at the first burst.
+        host.Gpu.Debris ??= new DebrisRenderer(context, host.Gpu.Objects?.Resolver, host.Assets.Find)
+        {
+            SharedTextures = () => host.Gpu.Characters?.Textures,
+        };
         host.Gpu.Particles?.PrepareBursts(Debris.BurstSplash, Debris.BurstSpray, SparksSystem);
         if (host.Gpu.Decals is not null || AudioSystem.Setting(host.Install, "Blood", 1) == 0) return;
         var files = BloodTextureFiles(host.Assets.Configured);

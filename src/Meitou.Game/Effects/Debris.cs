@@ -306,7 +306,8 @@ sealed class Debris(GameHost host)
             if (!p.Stuck)
             {
                 if (!_boltLaunches.TryGetValue(p.Id, out var launch))
-                    _boltLaunches[p.Id] = launch = (host.Gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
+                    _boltLaunches[p.Id] = launch =
+                        (host.Gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
                 float left = 1 - Vector3.Distance(at, launch.From) / LaunchBlend;
                 if (left > 0) at += launch.Gap * left;
                 _boltHeads[p.Id] = (at, launch.From + launch.Gap);

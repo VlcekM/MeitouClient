@@ -260,7 +260,8 @@ sealed class LevelEditorHost(GameHost host)
                 Data.Fcs.FcsWriter.WriteFile(new Data.Fcs.FcsFile { Author = "Meitou", Description = "Buildings placed with Meitou's level editor" },
                     data);
             var zones = LevelEdits.Save(Path.Combine(mod, "leveldata"), objects.Levels, id => host.Scene.Database?.Find(id)?.Name ?? id);
-            Console.WriteLine($"level     saved {LevelEdits.Added.Count} placed and {LevelEdits.Cleared.Count} cleared buildings in {zones.Count} zones to {mod}");
+            Console.WriteLine($"level     saved {LevelEdits.Added.Count} placed and {LevelEdits.Cleared.Count} cleared buildings "
+                + $"in {zones.Count} zones to {mod}");
             return $"Saved mod {LevelEdits.ModName}";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

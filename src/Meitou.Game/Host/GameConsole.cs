@@ -64,9 +64,11 @@ static partial class GameConsole
             if (e is not FileLoadException { HResult: PolicyBlocked } blocked) continue;
             string file = Path.GetFileName(blocked.FileName ?? "") is { Length: > 0 } name ? name : "a game file";
             string text = $"Windows blocked {file}, so Meitou has to close.\n\n" +
-                "Meitou's files are not code-signed yet, and Smart App Control blocks unsigned files that Microsoft does not know. To play, turn it off in " +
+                "Meitou's files are not code-signed yet, and Smart App Control blocks unsigned files that Microsoft does not know. " +
+                "To play, turn it off in " +
                 "Windows Security > App & browser control > Smart App Control settings. On some Windows versions it cannot be turned back on " +
-                "without reinstalling Windows.\n\nIf Smart App Control is already off, an App Control policy set by your organisation blocked the file.";
+                "without reinstalling Windows.\n\n" +
+                "If Smart App Control is already off, an App Control policy set by your organisation blocked the file.";
             Console.Error.WriteLine($"blocked   {text.Replace("\n\n", " ")}");
             MessageBoxW(0, text, "Meitou", MessageBoxIconError | MessageBoxTopmost | MessageBoxSetForeground);
             return;

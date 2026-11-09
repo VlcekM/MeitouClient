@@ -93,7 +93,9 @@ sealed class FeedbackCapture(GameHost host)
     {
         var c = System.Globalization.CultureInfo.InvariantCulture;
         var (t, e) = (host.Camera.Target, host.Camera.Eye);
-        return string.Create(c, $"target {t.X:0}, {t.Y:0}, {t.Z:0}; eye {e.X:0}, {e.Y:0}, {e.Z:0}; yaw {host.Camera.Yaw * 180 / MathF.PI:0}, pitch {host.Camera.Pitch * 180 / MathF.PI:0}, boom {host.Camera.Distance:0}");
+        return string.Create(c, $"target {t.X:0}, {t.Y:0}, {t.Z:0}; eye {e.X:0}, {e.Y:0}, {e.Z:0}; ")
+            + string.Create(c, $"yaw {host.Camera.Yaw * 180 / MathF.PI:0}, pitch {host.Camera.Pitch * 180 / MathF.PI:0}, ")
+            + string.Create(c, $"boom {host.Camera.Distance:0}");
     }
 
     /// <summary>

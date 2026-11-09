@@ -49,8 +49,16 @@ sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<stri
     {
         yield return name;
         if (OperatingSystem.IsWindows()) yield return name + ".dll";
-        else if (OperatingSystem.IsMacOS()) { yield return name + ".dylib"; yield return "lib" + name + ".dylib"; }
-        else { yield return name + ".so"; yield return "lib" + name + ".so"; }
+        else if (OperatingSystem.IsMacOS())
+        {
+            yield return name + ".dylib";
+            yield return "lib" + name + ".dylib";
+        }
+        else
+        {
+            yield return name + ".so";
+            yield return "lib" + name + ".so";
+        }
     }
 
     /// <summary>

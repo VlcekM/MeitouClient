@@ -255,6 +255,55 @@ public static class WallLine
         total = MathF.Min(total, MaxRun);
         end = new Vector3(start.X + dir.X * total, end.Y, start.Z + dir.Z * total);
 
+        var (smoothed, along) = Profile(set, ground, start, dir, total);
+        float startOffset = start.Y - smoothed[0].Y, endOffset = end.Y - At(along, smoothed, total);
+        var cur = start;
+        float rem = total;
+        var before = smoothed[1] - smoothed[0];
+        for (int count = 0; ;)
+        {
+            int k = NextPiece(set, rem);
+            if (k < 0) break;
+            var piece = set.Pieces[k];
+            float len = piece.LinkLength;
+            var flatAt = new Vector3(cur.X + dir.X * len, 0, cur.Z + dir.Z * len);
+            float s = Vector3.Dot(new Vector3(flatAt.X - start.X, 0, flatAt.Z - start.Z), dir);
+            int seg = Segment(along, s);
+            float t = (s - along[seg]) / MathF.Max(along[seg + 1] - along[seg], 1e-6f);
+            if (t > 2) break;
+            var p = Vector3.Lerp(smoothed[seg], smoothed[seg + 1], t);
+            p.Y += endOffset + (rem - len) / total * (startOffset - endOffset);
+            var toward = p - cur;
+            if (toward.LengthSquared() < 1e-9f) break;
+            p = cur + Vector3.Normalize(toward) * (len - stretch);
+            var d = p - cur;
+
+            // A rising piece steeper than the wall's max slope is not placed: the run goes on straight (FUN_14042a4b0 -> FUN_14042a2b0) and ends.
+            if (p.Y > cur.Y && Angle(dir, d) > set.MaxSlope)
+            {
+                var fromStart = new Vector3(cur.X - start.X, 0, cur.Z - start.Z);
+                cur = Straight(set, pieces, smoothed, Segment(along, Vector3.Dot(fromStart, dir)), cur, before, reversed);
+                break;
+            }
+
+            AddBend(set, pieces, cur, before, d, reversed);
+            pieces.Add(reversed ? Facing(piece, p, cur) : Facing(piece, cur, p));
+            if (piece.LinkType == Single) set.Used[k] = true;
+            before = d;
+            cur = p;
+            rem = Vector3.Distance(end, cur);
+            count++;
+            if (rem < StopDistance || Vector3.Dot(new Vector3(end.X - cur.X, 0, end.Z - cur.Z), dir) < 0 || count > MaxPieces) break;
+        }
+        return Vector3.Dot(new Vector3(cur.X - end.X, 0, cur.Z - end.Z), dir);
+    }
+
+    /// <summary>
+    /// The run's terrain profile: ground points a step (half the longest piece) apart along the slope from <paramref name="start"/>, smoothed,
+    /// and each point's distance along <paramref name="dir"/>.
+    /// </summary>
+    static (Vector3[] Smoothed, List<float> Along) Profile(PieceSet set, Func<float, float, float> ground, Vector3 start, Vector3 dir, float total)
+    {
         // The profile: ground points a step apart along the slope, then each lowered towards its neighbours' mean (never raised).
         float step = set.Longest.LinkLength * 0.5f;
         if (step <= 0) step = 10;
@@ -273,72 +322,61 @@ public static class WallLine
         var smoothed = profile.ToArray();
         for (int i = 1; i < profile.Count - 1; i++)
             smoothed[i].Y = MathF.Min(profile[i].Y, 0.25f * profile[i - 1].Y + 0.5f * profile[i].Y + 0.25f * profile[i + 1].Y);
+        return (smoothed, along);
+    }
 
-        float startOffset = start.Y - smoothed[0].Y, endOffset = end.Y - At(total);
-        var cur = start;
-        float rem = total;
-        var before = smoothed[1] - smoothed[0];
-        for (int count = 0; ;)
+    /// <summary>
+    /// The first unused piece shorter than <paramref name="rem"/> plus <see cref="PieceTolerance"/>; -1 when none is.
+    /// </summary>
+    static int NextPiece(PieceSet set, float rem)
+    {
+        int k = -1;
+        for (int i = 0; i < set.Pieces.Count; i++)
         {
-            int k = -1;
-            for (int i = 0; i < set.Pieces.Count; i++)
-                if (!set.Used[i] && set.Pieces[i].LinkLength < rem + PieceTolerance) { k = i; break; }
-            if (k < 0) break;
-            var piece = set.Pieces[k];
-            float len = piece.LinkLength;
-            var flatAt = new Vector3(cur.X + dir.X * len, 0, cur.Z + dir.Z * len);
-            float s = Vector3.Dot(new Vector3(flatAt.X - start.X, 0, flatAt.Z - start.Z), dir);
-            int seg = Segment(s);
-            float t = (s - along[seg]) / MathF.Max(along[seg + 1] - along[seg], 1e-6f);
-            if (t > 2) break;
-            var p = Vector3.Lerp(smoothed[seg], smoothed[seg + 1], t);
-            p.Y += endOffset + (rem - len) / total * (startOffset - endOffset);
-            var toward = p - cur;
-            if (toward.LengthSquared() < 1e-9f) break;
-            p = cur + Vector3.Normalize(toward) * (len - stretch);
-            var d = p - cur;
-
-            // A rising piece steeper than the wall's max slope is not placed: the run goes on straight (FUN_14042a4b0 -> FUN_14042a2b0) and ends.
-            if (p.Y > cur.Y && Angle(dir, d) > set.MaxSlope)
+            if (!set.Used[i] && set.Pieces[i].LinkLength < rem + PieceTolerance)
             {
-                var fromStart = new Vector3(cur.X - start.X, 0, cur.Z - start.Z);
-                cur = Straight(set, pieces, smoothed, Segment(Vector3.Dot(fromStart, dir)), cur, before, reversed);
+                k = i;
                 break;
             }
-
-            float bend = Angle(before, d);
-            if (Vector3.Normalize(d).Y - Vector3.Normalize(before).Y > 0) bend = -bend;
-            if (bend > BendDegrees && set.Shortest.LinkType != Single)
-            {
-                var bisector = Vector3.Normalize(Vector3.Normalize(d) + Vector3.Normalize(before)) * (set.Shortest.LinkLength / 2);
-                pieces.Add(reversed ? Facing(set.Shortest, cur + bisector, cur - bisector) : Facing(set.Shortest, cur - bisector, cur + bisector));
-            }
-            else if (bend < -BendDegrees && set.Wedge is { } wedge)
-                pieces.Add(reversed ? Facing(wedge, cur, cur - d) : Facing(wedge, cur, cur + before));
-
-            pieces.Add(reversed ? Facing(piece, p, cur) : Facing(piece, cur, p));
-            if (piece.LinkType == Single) set.Used[k] = true;
-            before = d;
-            cur = p;
-            rem = Vector3.Distance(end, cur);
-            count++;
-            if (rem < StopDistance || Vector3.Dot(new Vector3(end.X - cur.X, 0, end.Z - cur.Z), dir) < 0 || count > MaxPieces) break;
         }
-        return Vector3.Dot(new Vector3(cur.X - end.X, 0, cur.Z - end.Z), dir);
+        return k;
+    }
 
-        int Segment(float s)
+    /// <summary>
+    /// The piece at a bend of the run at <paramref name="cur"/>: a short piece over a crest, a wedge in a valley, none below
+    /// <see cref="BendDegrees"/>.
+    /// </summary>
+    static void AddBend(PieceSet set, List<WallPiece> pieces, Vector3 cur, Vector3 before, Vector3 d, bool reversed)
+    {
+        float bend = Angle(before, d);
+        if (Vector3.Normalize(d).Y - Vector3.Normalize(before).Y > 0) bend = -bend;
+        if (bend > BendDegrees && set.Shortest.LinkType != Single)
         {
-            for (int i = 0; i < along.Count - 2; i++)
-                if (s <= along[i + 1]) return i;
-            return along.Count - 2;
+            var bisector = Vector3.Normalize(Vector3.Normalize(d) + Vector3.Normalize(before)) * (set.Shortest.LinkLength / 2);
+            pieces.Add(reversed ? Facing(set.Shortest, cur + bisector, cur - bisector) : Facing(set.Shortest, cur - bisector, cur + bisector));
         }
+        else if (bend < -BendDegrees && set.Wedge is { } wedge)
+            pieces.Add(reversed ? Facing(wedge, cur, cur - d) : Facing(wedge, cur, cur + before));
+    }
 
-        float At(float s)
-        {
-            int i = Segment(s);
-            float t = Math.Clamp((s - along[i]) / MathF.Max(along[i + 1] - along[i], 1e-6f), 0, 1);
-            return float.Lerp(smoothed[i].Y, smoothed[i + 1].Y, t);
-        }
+    /// <summary>
+    /// The profile segment holding distance <paramref name="s"/> along the run (the last one past its end).
+    /// </summary>
+    static int Segment(List<float> along, float s)
+    {
+        for (int i = 0; i < along.Count - 2; i++)
+            if (s <= along[i + 1]) return i;
+        return along.Count - 2;
+    }
+
+    /// <summary>
+    /// The smoothed profile's height at distance <paramref name="s"/> along the run.
+    /// </summary>
+    static float At(List<float> along, Vector3[] smoothed, float s)
+    {
+        int i = Segment(along, s);
+        float t = Math.Clamp((s - along[i]) / MathF.Max(along[i + 1] - along[i], 1e-6f), 0, 1);
+        return float.Lerp(smoothed[i].Y, smoothed[i + 1].Y, t);
     }
 
     /// <summary>

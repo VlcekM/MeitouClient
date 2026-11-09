@@ -264,10 +264,34 @@ sealed class BuildingSync(GameHost host)
         var parts = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var icons = new BuildingIcons(Path.Combine(host.Install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<PlacementTown>? towns = null;
-        // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
-        Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
-        // The towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision).
-        int townOfRevision = -1;
+        return new Building.BuildServices
+        {
+            Menu = new Building.BuildMenu([.. BuildData().Values]),
+            ItemName = id => db.Find(id)?.Name ?? id,
+            Description = id => db.Find(id)?.GetString("description") ?? "",
+            Parts = id =>
+            {
+                if (parts.TryGetValue(id, out var cached)) return cached;
+                return parts[id] = db.Find(id) is { } record
+                    ? WorldObjectLayout.Building(db, record, "ghost:" + id, Vector3.Zero, Quaternion.Identity, new BuildingState())
+                    : [];
+            },
+            IconFile = icons.Find,
+            Placement = MakePlacementServices(db, footprints),
+            WorldInfo = MakeWorldInfo(db),
+            Towns = () => towns ??= host.PopData is { } d ? [.. d.Sites.Select(s => new PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
+            PlayerFactionId = () => host.PopData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id
+                : "",
+            DrawGhosts = draws => host.ActiveObjects?.SetGhosts(draws),
+        };
+    }
+
+    /// <summary>
+    /// The build mode's placement services: the ground, the collision footprints round and along a ghost, the floors it can stand on and the
+    /// mine and farm readout.
+    /// </summary>
+    Building.PlacementServices MakePlacementServices(Data.GameDatabase db, Simulation.Navigation.BuildingFootprints footprints)
+    {
         var pickable = new Dictionary<string, bool>(StringComparer.Ordinal);
         // Resource and node buildings are not selectable objects (TownBuildings leaves them out too).
         bool Pickable(string record) => pickable.TryGetValue(record, out bool known) ? known
@@ -288,78 +312,92 @@ sealed class BuildingSync(GameHost host)
             lastReadout = (record, at, readout);
             return readout;
         }
-        return new Building.BuildServices
+        return new Building.PlacementServices
         {
-            Menu = new Building.BuildMenu([.. BuildData().Values]),
-            ItemName = id => db.Find(id)?.Name ?? id,
-            Description = id => db.Find(id)?.GetString("description") ?? "",
-            Parts = id =>
-            {
-                if (parts.TryGetValue(id, out var cached)) return cached;
-                return parts[id] = db.Find(id) is { } record
-                    ? WorldObjectLayout.Building(db, record, "ghost:" + id, Vector3.Zero, Quaternion.Identity, new BuildingState())
-                    : [];
-            },
-            IconFile = icons.Find,
-            Placement = new Building.PlacementServices
-            {
-                Ground = host.ActiveGround,
-                Footprint = footprints.Of,
-                CollisionMesh = footprints.Mesh,
-                CollisionFile = footprints.File,
-                Plot = footprints.Plot,
-                PartBounds = footprints.PartBounds,
-                LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
-                StaticAround = footprints.StaticAround,
-                StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
-                StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
-                // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
-                FloorAlong = (origin, direction, length) => host.Gpu.Objects?.FloorHit(origin, direction,
-                    host.Interiors.ViewedFloorValue, length) is { } hit
-                    ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position), Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart) }) : null,
-                Readout = Readout,
-            },
-            WorldInfo = placement =>
-            {
-                var (zone, instance) = (placement.Zone, placement.InstanceId);
-                if ((townOf is null || townOfRevision != host.PopData?.BuildingsRevision) && host.PopData is { } d)
-                {
-                    townOfRevision = d.BuildingsRevision;
-                    townOf = [];
-                    foreach (var site in d.Sites)
-                    {
-                        // A building whose state names no owner belongs to its town's faction (the original re-owns a town's buildings to it).
-                        string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var townFaction
-                            && townFaction < d.Factions.Count ? d.Factions[townFaction].Name : null;
-                        for (int i = 0; i < site.Buildings.Count; i++)
-                        {
-                            var b = site.Buildings[i];
-                            string? buildingOwner = b.OwnerFactionId is { } id
-                                ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner;
-                            townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, buildingOwner, site.Index, i);
-                        }
-                    }
-                }
-                var levels = host.Scene.Objects?.Levels;
-                var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb)
-                    ? zoneDb.Find(stateId) : null;
-                var info = townOf is not null && townOf.TryGetValue((zone, instance), out var found) ? found
-                    : default((string Town, string? Owner, int Site, int Index)?);
-                var building = info is { } at && host.PopData is { } live && at.Site < live.Sites.Count
-                    && at.Index < live.Sites[at.Site].Buildings.Count
-                    ? live.Sites[at.Site].Buildings[at.Index] : null;
-                var saved = host.Session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
-                var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
-                var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
-                return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                    host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
-                        : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
-            },
-            Towns = () => towns ??= host.PopData is { } d ? [.. d.Sites.Select(s => new PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
-            PlayerFactionId = () => host.PopData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id
-                : "",
-            DrawGhosts = draws => host.ActiveObjects?.SetGhosts(draws),
+            Ground = host.ActiveGround,
+            Footprint = footprints.Of,
+            CollisionMesh = footprints.Mesh,
+            CollisionFile = footprints.File,
+            Plot = footprints.Plot,
+            PartBounds = footprints.PartBounds,
+            LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
+            StaticAround = footprints.StaticAround,
+            StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
+            StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
+            FloorAlong = GhostFloorAlong,
+            Readout = Readout,
         };
+    }
+
+    /// <summary>
+    /// The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
+    /// </summary>
+    (Vector3 Position, Building.GhostFloor Floor)? GhostFloorAlong(Vector3 origin, Vector3 direction, float length)
+    {
+        if (host.Gpu.Objects?.FloorHit(origin, direction, host.Interiors.ViewedFloorValue, length) is not { } hit) return null;
+
+        var floor = GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with
+        {
+            Ceiling = hit.Room.CeilingAbove(hit.Position),
+            Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart),
+        };
+        return (hit.Position, floor);
+    }
+
+    /// <summary>
+    /// What the selection shows of a level building: its name and type, its town and owner, whether it is public and destroyed.
+    /// </summary>
+    Func<BuildingPlacement, Building.WorldBuildingInfo> MakeWorldInfo(Data.GameDatabase db)
+    {
+        // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
+        Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
+        // The towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision).
+        int townOfRevision = -1;
+        return placement =>
+        {
+            var (zone, instance) = (placement.Zone, placement.InstanceId);
+            if ((townOf is null || townOfRevision != host.PopData?.BuildingsRevision) && host.PopData is { } d)
+            {
+                townOfRevision = d.BuildingsRevision;
+                townOf = TownBuildings(d);
+            }
+            var levels = host.Scene.Objects?.Levels;
+            var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb)
+                ? zoneDb.Find(stateId) : null;
+            var info = townOf is not null && townOf.TryGetValue((zone, instance), out var found) ? found
+                : default((string Town, string? Owner, int Site, int Index)?);
+            var building = info is { } at && host.PopData is { } live && at.Site < live.Sites.Count
+                && at.Index < live.Sites[at.Site].Buildings.Count
+                ? live.Sites[at.Site].Buildings[at.Index] : null;
+            var saved = host.Session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
+            var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
+            var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
+            return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
+                host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
+                    : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
+        };
+    }
+
+    /// <summary>
+    /// Each town building of <paramref name="d"/> by zone and instance: its town, its owner's name and its site and index in the site's buildings.
+    /// </summary>
+    static Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)> TownBuildings(PopulationData d)
+    {
+        Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)> townOf = [];
+        foreach (var site in d.Sites)
+        {
+            // A building whose state names no owner belongs to its town's faction (the original re-owns a town's buildings to it).
+            string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var townFaction
+                && townFaction < d.Factions.Count ? d.Factions[townFaction].Name : null;
+            for (int i = 0; i < site.Buildings.Count; i++)
+            {
+                var b = site.Buildings[i];
+                string? buildingOwner = b.OwnerFactionId is { } id
+                    ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner;
+                townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, buildingOwner, site.Index, i);
+            }
+        }
+        return townOf;
     }
 
     /// <summary>

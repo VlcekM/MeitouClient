@@ -42,7 +42,11 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
     internal void ExportLook(CharacterDraft draft, string installRoot)
     {
         string name = draft.Name.Trim();
-        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) { player.Notice($"Can't export: '{name}' is not a valid file name.", true); return; }
+        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            player.Notice($"Can't export: '{name}' is not a valid file name.", true);
+            return;
+        }
         string relative = ExportFolder + name + BodyExtension;
         try
         {
@@ -50,7 +54,10 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
             Data.Fcs.FcsWriter.WriteFile(draft.Export(), Path.Combine(installRoot, relative));
             player.Notice(Loc.Tr("Character '{1}' exported to file {2}", name, "./" + relative));
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { player.Notice($"Can't export '{name}': {e.Message}", true); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            player.Notice($"Can't export '{name}': {e.Message}", true);
+        }
     }
 
     /// <summary>
@@ -70,7 +77,11 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
         var entries = new List<UiListItem>();
         try
         {
-            foreach (string name in new[] { ".." }.Concat(Directory.EnumerateDirectories(full).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)))
+            var folders = new[] { ".." }.Concat(Directory.EnumerateDirectories(full)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal));
+            foreach (string name in folders)
                 entries.Add(new(FolderEntry + folder + "/" + name, "[" + name + "]"));
             foreach (string name in Directory.EnumerateFiles(full, "*" + BodyExtension).Select(Path.GetFileName).OfType<string>()
                     .Order(StringComparer.Ordinal))
@@ -97,12 +108,19 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
             appearance = AppearanceFile.Read(Path.Combine(data.InstallRoot, path)).Record;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or Data.Fcs.FcsFormatException or InvalidDataException)
-        { player.Notice(Loc.Tr("Error loading appearance file '{1}'. The file is in an old format or invalid.", file), true); return; }
+        {
+            player.Notice(Loc.Tr("Error loading appearance file '{1}'. The file is in an old format or invalid.", file), true);
+            return;
+        }
         bool female = appearance.Bools.TryGetValue("sex female", out var f) && f;
         bool allowed = CharacterDraft.RaceOf(data.Db, appearance) is { } race && (s.Kind == EditKind.Creation
             ? CharacterEditorPanel.IndexOf(panel.EditorRaces(data.Db), race) >= 0
             : race.StringId == draft.Race.StringId && (female == draft.Female || race.GetBool("single gender")));
-        if (!allowed || !draft.Import(appearance)) { player.Notice($"Can't import '{file}': this character can't take that race or sex.", true); return; }
+        if (!allowed || !draft.Import(appearance))
+        {
+            player.Notice($"Can't import '{file}': this character can't take that race or sex.", true);
+            return;
+        }
         player.FaithfulScreens.Close("file");
     }
 
@@ -135,7 +153,11 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
         b.Text["Root"] = "Import character";
         b.Text["ButtonOpenSave"] = Loc.Tr("Import").ToUpperInvariant();
         b.Text["ButtonCancel"] = Loc.Tr("Cancel").ToUpperInvariant();
-        foreach (string name in new[] { "ButtonCancel", "ButtonOpenSave", "ButtonUp" }) { b.Disabled.Remove(name); b.Actions[name] = name; }
+        foreach (string name in new[] { "ButtonCancel", "ButtonOpenSave", "ButtonUp" })
+        {
+            b.Disabled.Remove(name);
+            b.Actions[name] = name;
+        }
         if (_importChoice is null) b.Disabled.Add("ButtonOpenSave");
         b.Hidden.Add("EditFileName");
         b.Text["CurrentFolder"] = _importFolder;

@@ -93,7 +93,13 @@ public sealed class WorldSession : IDisposable
     /// <summary>
     /// The wall time (ms) of the last ticks run ahead, 0 once taken (for the profiler).
     /// </summary>
-    public double TakeAheadMs() { double ms = _aheadMs; _aheadMs = 0; return ms; }
+    public double TakeAheadMs()
+    {
+        double ms = _aheadMs;
+        _aheadMs = 0;
+        return ms;
+    }
+
     /// <summary>
     /// The last ticks run ahead's ms, left for <see cref="TakeAheadMs"/>.
     /// </summary>

@@ -30,7 +30,10 @@ public sealed class AnimationSoundEvents
     public static AnimationSoundEvents FromDatabase(GameDatabase db)
     {
         var result = new AnimationSoundEvents();
-        var types = new[] { FcsRecordType.Animation, FcsRecordType.AnimalAnimation, FcsRecordType.CombatTechnique, FcsRecordType.BuildingFunctionality };
+        var types = new[]
+        {
+            FcsRecordType.Animation, FcsRecordType.AnimalAnimation, FcsRecordType.CombatTechnique, FcsRecordType.BuildingFunctionality,
+        };
         foreach (var type in types)
         {
             foreach (var record in db.OfType(type))

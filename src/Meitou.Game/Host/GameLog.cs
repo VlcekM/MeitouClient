@@ -76,8 +76,24 @@ sealed class GameLog : TextWriter
         }
     }
 
-    public override void Write(char value) { lock (_gate) { _writer.Write(value); Trim(value == '\n'); } }
-    public override void Write(string? value) { lock (_gate) { _writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
+    public override void Write(char value)
+    {
+        lock (_gate)
+        {
+            _writer.Write(value);
+            Trim(value == '\n');
+        }
+    }
+
+    public override void Write(string? value)
+    {
+        lock (_gate)
+        {
+            _writer.Write(value);
+            Trim(value is { Length: > 0 } && value[^1] == '\n');
+        }
+    }
+
     public override void Write(char[] buffer, int index, int count)
     {
         lock (_gate)
@@ -86,7 +102,15 @@ sealed class GameLog : TextWriter
             Trim(count > 0 && buffer[index + count - 1] == '\n');
         }
     }
-    public override void WriteLine(string? value) { lock (_gate) { _writer.WriteLine(value); Trim(true); } }
+
+    public override void WriteLine(string? value)
+    {
+        lock (_gate)
+        {
+            _writer.WriteLine(value);
+            Trim(true);
+        }
+    }
 
     void Trim(bool lineEnd)
     {
@@ -103,6 +127,7 @@ sealed class GameLog : TextWriter
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             lock (_gate)
             {
                 _disposed = true;
@@ -111,6 +136,7 @@ sealed class GameLog : TextWriter
                 _writer.Dispose();
                 _lineEnded.Set();
             }
+        }
         base.Dispose(disposing);
     }
 }
@@ -121,9 +147,34 @@ sealed class GameLog : TextWriter
 sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
     public override Encoding Encoding => second.Encoding;
-    public override void Write(char value) { first.Write(value); second.Write(value); }
-    public override void Write(string? value) { first.Write(value); second.Write(value); }
-    public override void Write(char[] buffer, int index, int count) { first.Write(buffer, index, count); second.Write(buffer, index, count); }
-    public override void WriteLine(string? value) { first.WriteLine(value); second.WriteLine(value); }
-    public override void Flush() { first.Flush(); second.Flush(); }
+
+    public override void Write(char value)
+    {
+        first.Write(value);
+        second.Write(value);
+    }
+
+    public override void Write(string? value)
+    {
+        first.Write(value);
+        second.Write(value);
+    }
+
+    public override void Write(char[] buffer, int index, int count)
+    {
+        first.Write(buffer, index, count);
+        second.Write(buffer, index, count);
+    }
+
+    public override void WriteLine(string? value)
+    {
+        first.WriteLine(value);
+        second.WriteLine(value);
+    }
+
+    public override void Flush()
+    {
+        first.Flush();
+        second.Flush();
+    }
 }

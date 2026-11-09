@@ -95,7 +95,11 @@ sealed partial class GameHost
             if (!load.Stages.TryDequeue(out var stage))
             {
                 // The sky fades to black before the destination is drawn under it.
-                if (SkyArrival is { Fade: < 1 } covering) { covering.Cover(); return; }
+                if (SkyArrival is { Fade: < 1 } covering)
+                {
+                    covering.Cover();
+                    return;
+                }
                 ActiveSceneLoad = null;
                 ReportLoading($"scene loaded in {load.Clock.Elapsed.TotalSeconds:0.0} s");
                 BeginWarm();
@@ -178,7 +182,10 @@ sealed partial class GameHost
         {
             sceneReady = true;
             if (_guardSeconds - seconds < GuardWait)
-                Console.WriteLine($"loading   stopped waiting for content held back by memory pressure (VramGuard, {Gpu.Guard!.Fraction * 100:0}% of the {Gpu.Guard.BudgetBytes / 1048576} MB budget)");
+            {
+                Console.WriteLine($"loading   stopped waiting for content held back by memory pressure (VramGuard, {Gpu.Guard!.Fraction * 100:0}% "
+                    + $"of the {Gpu.Guard.BudgetBytes / 1048576} MB budget)");
+            }
         }
         if (CharacterEditor.PendingCreation is not null && !TitleScreen.TitleVisible && charactersReady)
         {
@@ -193,15 +200,7 @@ sealed partial class GameHost
         if (!sceneReady)
         {
             SmoothSeconds = ReadySeconds = 0;
-            if (_warmSeconds >= _nextWarmReport)
-            {
-                _nextWarmReport = _warmSeconds + 5;
-                int pendingLooks = Gpu.Characters is { } characterRenderer
-                    ? TitleScreen.TitleVisible ? characterRenderer.PendingLoads
-                        : Session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
-                    : 0;
-                Console.WriteLine($"loading   {(TitleScreen.TitleVisible ? "menu" : "game")} still preparing: terrain {(Gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {Gpu.Objects?.Pending ?? 0}{(Gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {Gpu.Foliage?.LoadingPending ?? 0}{(Gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleScreen.TitleVisible ? TitleScreen.TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {Gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
-            }
+            if (_warmSeconds >= _nextWarmReport) ReportPreparing(populationReady, charactersReady);
             return;
         }
         if (TitleScreen.TitleVisible && !_titleWarmFinalized && _loadingDisplay is { } display)
@@ -221,6 +220,25 @@ sealed partial class GameHost
         Loading?.Finish();
         SkyArrival?.Arrive();
         ReportLoading($"the view warmed up in {_warmSeconds:0.0} s");
+    }
+
+    /// <summary>
+    /// The loading report every 5 s while the view is not ready: what each part (terrain, objects, foliage, population, characters) waits for.
+    /// </summary>
+    void ReportPreparing(bool populationReady, bool charactersReady)
+    {
+        _nextWarmReport = _warmSeconds + 5;
+        int pendingLooks = Gpu.Characters is { } characterRenderer
+            ? TitleScreen.TitleVisible ? characterRenderer.PendingLoads
+                : Session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
+            : 0;
+        bool charactersDone = TitleScreen.TitleVisible ? TitleScreen.TitleCharactersReady : charactersReady;
+        Console.WriteLine($"loading   {(TitleScreen.TitleVisible ? "menu" : "game")} still preparing: "
+            + $"terrain {(Gpu.Streamer?.Idle == false ? "pending" : "ready")}, "
+            + $"objects {Gpu.Objects?.Pending ?? 0}{(Gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, "
+            + $"foliage {Gpu.Foliage?.LoadingPending ?? 0}{(Gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, "
+            + $"population {(populationReady ? "ready" : "pending")}, "
+            + $"characters {(charactersDone ? "ready" : $"pending ({pendingLooks} looks; {Gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
     }
 
     /// <summary>

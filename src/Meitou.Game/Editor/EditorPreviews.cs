@@ -112,7 +112,11 @@ sealed class EditorPreviews(CharacterEditorPanel panel)
             entry = entry with { Version = draft.Version, Clothes = clothes };
         }
         _previews[id] = entry;
-        if (entry.Pending is { } waiting && !ReferenceEquals(waiting, _warmedPending)) { _warmedPending = waiting; PreviewFetch?.Invoke(waiting); }
+        if (entry.Pending is { } waiting && !ReferenceEquals(waiting, _warmedPending))
+        {
+            _warmedPending = waiting;
+            PreviewFetch?.Invoke(waiting);
+        }
         Anticipate(id, draft, loadout, own);
         return entry.Shown ?? own;
     }
