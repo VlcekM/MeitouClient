@@ -65,6 +65,17 @@ sealed unsafe class PenumbraFilter : IDisposable
             return abs(dot(pointAt(q) - at, n)) < tolerance;
         }
 
+        // Whether a neighbour lies on a surface turned away from this one.
+        bool onCrease(ivec2 px, vec3 n)
+        {
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 q = px + ivec2(k < 2 ? k * 2 - 1 : 0, k < 2 ? 0 : k * 2 - 5);
+                if (inside(q) && dot(plane(q, pointAt(q)), n) < 0.6) return true;
+            }
+            return false;
+        }
+
         // The penumbra's radius in pixels from the blockers round the pixel (0: none within the search).
         float searchRadius(ivec2 px, vec3 at, vec3 n, float footprint, float own)
         {
@@ -106,11 +117,16 @@ sealed unsafe class PenumbraFilter : IDisposable
                 {
                     ivec2 q = px + axis * (k * side);
                     if (!onSurface(q, at, n, tolerance)) continue;
+                    // A tap beyond a crease (a wall's foot: its pixels pass the plane's tolerance there) is another surface, with other lamps' light.
+                    if (dot(plane(q, pointAt(q)), n) < 0.6) continue;
                     sum += texelFetch(uIn, q, 0).rgb * w;
                     weight += w;
                 }
             }
-            imageStore(uOut, px, vec4(sum / weight, radius));
+            vec3 result = sum / weight;
+            // On a crease (a wall's foot) the pixel's own ray stands: what lies round it is another surface, and even a sliver of it left a lit line along the foot.
+            if (any(greaterThan(abs(result - c.rgb), vec3(0.02))) && onCrease(px, n)) result = c.rgb;
+            imageStore(uOut, px, vec4(result, radius));
         }
         """;
 

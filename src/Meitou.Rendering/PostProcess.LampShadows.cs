@@ -16,8 +16,8 @@ public sealed unsafe partial class PostProcess
 
     sealed class LampShadowApplyPass : GiPass
     {
-        public readonly SamplerSlot Lost;
-        public LampShadowApplyPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.Apply, "post lamp shadows") => Lost = P.Sampler("uLost");
+        public readonly SamplerSlot Lost, Total;
+        public LampShadowApplyPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.Apply, "post lamp shadows") => (Lost, Total) = (P.Sampler("uLost"), P.Sampler("uTotal"));
     }
 
     sealed class LampShadowFloorPass(GpuContext gpu) : FullscreenProgram(gpu, Gi.LampShadowShaders.Floor, "post lamp shadow floor");
@@ -25,7 +25,7 @@ public sealed unsafe partial class PostProcess
     Gi.LampShadowPass? lampShadowTrace;
     LampShadowApplyPass? lampShadowApply;
     LampShadowFloorPass? lampShadowFloor;
-    Target2D? lampLost, lampScratch, lampFiltered;
+    Target2D? lampLost, lampTotal, lampScratch, lampFiltered;
 
     /// <summary>NDC, jittered as the scene was drawn, to the position relative to the eye (set by the world frame before the scene; the penumbra filters reconstruct with it).</summary>
     internal Matrix4x4 SceneToEye { get; set; }
@@ -39,15 +39,17 @@ public sealed unsafe partial class PostProcess
 
         MarkScene();
         var lost = lampLost ??= MakeLampLost();
+        var total = lampTotal ??= MakeLampLost();
         var scratch = lampScratch ??= MakeLampLost();
         var filtered = lampFiltered ??= MakeLampLost();
         CloseSegment();
         var trace = lampShadowTrace ??= new Gi.LampShadowPass(Gpu, Options.LampShadowLamps);
-        trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
+        trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
 
         var a = lampShadowApply ??= new LampShadowApplyPass(Gpu);
         SetGiView(a);
         Bind(a.P, a.Lost, filtered);
+        Bind(a.P, a.Total, total);
         a.P.ApplyGlobals();   // the haze's uniforms
         Draw(a.P, colour.Attachment, colour.Format, width, height, width, height, LampShadowState);
         var floor = lampShadowFloor ??= new LampShadowFloorPass(Gpu);

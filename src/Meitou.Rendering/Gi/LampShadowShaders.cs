@@ -1,8 +1,8 @@
 namespace Meitou.Rendering.Gi;
 
 /// <summary>
-/// The lamps' traced shadows (docs/render-lights.md "Traced lamp shadows"): <see cref="Trace"/> finds per pixel what the lamps' diffuse light lost to
-/// occluders, <see cref="Apply"/> takes it off the finished scene and <see cref="Floor"/> keeps the scene above zero.
+/// The lamps' traced shadows (docs/render-lights.md "Traced lamp shadows"): <see cref="Trace"/> finds per pixel which share of the traced lamps' diffuse light occluders take, and how
+/// much light that is of, <see cref="Apply"/> takes it off the finished scene and <see cref="Floor"/> keeps the scene above zero.
 /// </summary>
 static class LampShadowShaders
 {
@@ -98,9 +98,12 @@ static class LampShadowShaders
             g /= len;
             return dot(g, n) < 0.0 ? -g : g;
         }
-        // What the occluded lamps took from a pixel, per unit of albedo (rgb), and the widest penumbra their blockers leave at it (a: world units, 0 none; PenumbraFilter).
-        vec4 lostLight(ivec2 px)
+        // The share of the traced lamps' light the occluders take from a pixel (rgb, per channel) and the widest penumbra their blockers leave at it (a: world units, 0 none; PenumbraFilter);
+        // total: that light, per unit of albedo. The filter averages the share, the same on a ripple's two slopes: the light itself is not, and its mean left the slopes turned to the
+        // lamp lit inside a shadow (a thin orange line along a wall's foot and the ripples).
+        vec4 lostLight(ivec2 px, out vec3 total)
         {
+            total = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             if ((surface.w & 256u) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
             float z = depthAt(px);
@@ -114,10 +117,11 @@ static class LampShadowShaders
             if (picked == 0) return vec4(0.0, 0.0, 0.0, -1.0);
             // Off the surface's plane by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
             vec3 from = world - uOrigin + lampPlane(px, world, n) * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
-            vec3 lost = vec3(0.0);
+            vec3 lost = vec3(0.0), lit = vec3(0.0);
             float spread = 0.0;
             for (int i = 0; i < picked; i++)
             {
+                lit += pickLight[i];
                 vec4 p = texelFetch(uLightData, ivec2(0, pickLamp[i]), 0);
                 vec3 target = p.xyz - uOrigin;   // the lamp's centre, the same every frame; its size is the filter's
                 float t = lampBlocker(from, target, p.w, pickEmitter[i]);
@@ -126,7 +130,8 @@ static class LampShadowShaders
                 // A lamp LAMP_SIZE across seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver.
                 spread = max(spread, LAMP_SIZE * t / max(length(target - from) - t, 1.0));
             }
-            return vec4(lost * 3.14159265358979 * LAMP_DIFFUSE, spread);
+            total = lit * 3.14159265358979 * LAMP_DIFFUSE;
+            return vec4(lost / max(lit, vec3(1e-6)), spread);
         }
 
         """;
@@ -162,6 +167,7 @@ static class LampShadowShaders
             vec2 uFullSize;
         };
         layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
+        layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
         layout(set = 0, binding = 6) uniform sampler2D uLightCells;
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 8) uniform sampler2D uLightData;
@@ -175,7 +181,9 @@ static class LampShadowShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
-            imageStore(uLost, px, lostLight(px));
+            vec3 total;
+            imageStore(uLost, px, lostLight(px, total));
+            imageStore(uTotal, px, vec4(total, 0.0));
         }
         """;
 
@@ -188,11 +196,12 @@ static class LampShadowShaders
         out vec4 fragColour;
         uniform usampler2D uAlbedo;
         uniform sampler2D uLost;
+        uniform sampler2D uTotal;
 
         void main()
         {
             ivec2 px = ivec2(floor(gl_FragCoord.xy));
-            vec3 lost = texelFetch(uLost, px, 0).rgb;
+            vec3 lost = texelFetch(uLost, px, 0).rgb * texelFetch(uTotal, px, 0).rgb;
             if (max(lost.r, max(lost.g, lost.b)) <= 0.0) discard;
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             vec3 p = positionAt(px, depthAt(px));
