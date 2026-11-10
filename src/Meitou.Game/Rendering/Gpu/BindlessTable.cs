@@ -236,6 +236,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         _sets = new DescriptorSet[slots];
         _setIndices = new int[slots];
         _applied = new long[slots];
+        _vacated = new List<(BindlessKind, uint)>[slots];
         for (int i = 0; i < slots; i++)
         {
             var ai = new DescriptorSetAllocateInfo
@@ -247,6 +248,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             VulkanException.Check(device.Vk.AllocateDescriptorSets(device.Device, &ai, &set), "vkAllocateDescriptorSets");
             _sets[i] = set;
             _setIndices[i] = device.AddSet(set);
+            _vacated[i] = [];
         }
     }
 
@@ -369,8 +371,8 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     public void Update(BindlessHandle handle, in SampledTexture texture) => Update(handle.Kind, handle.Index, texture);
 
     /// <summary>
-    /// Releases an index once the frames in flight are done with it. Draws recorded earlier in the open frame still read the entry; slots that have
-    /// not seen it yet skip it (its view may be destroyed before they replay the journal).
+    /// Releases an index once the frames in flight are done with it. Draws recorded earlier in the open frame still read the entry; the slots'
+    /// sets get the array's stand-in at their next begin (its view may be destroyed by then), or keep the old descriptor in an array without one.
     /// </summary>
     public void Free(BindlessKind kind, uint index)
     {
@@ -392,6 +394,27 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// The (array, index) pairs already written in the current <see cref="Apply"/> (each is written once, the newest entry).
     /// </summary>
     readonly HashSet<(BindlessKind, uint)> _written = [];
+
+    /// <summary>
+    /// The descriptors the current <see cref="Apply"/> writes.
+    /// </summary>
+    readonly List<(BindlessKind Kind, uint Index, SampledTexture Texture)> _writes = [];
+
+    /// <summary>
+    /// Per array: what a freed index reads from the next begin of each slot on (<see cref="SetStandIn"/>; none: the old descriptor stays).
+    /// </summary>
+    readonly SampledTexture[] _standIns = new SampledTexture[ArrayCount];
+
+    /// <summary>
+    /// Per slot: the indices freed while its frame was open, given the stand-in at its next begin.
+    /// </summary>
+    readonly List<(BindlessKind Kind, uint Index)>[] _vacated;
+
+    /// <summary>
+    /// Sets what a freed index of <paramref name="kind"/> reads once the frames that could read its texture have finished, in place of a
+    /// descriptor whose view is destroyed: a draw that still holds the index samples the stand-in.
+    /// </summary>
+    public void SetStandIn(BindlessKind kind, in SampledTexture standIn) => _standIns[(int)kind] = standIn;
 
     /// <summary>
     /// At the start of a frame in <paramref name="slot"/> (the slot's previous frame has finished): the journal's new entries are written into the
@@ -417,48 +440,20 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
 
     /// <summary>
     /// Writes the journal's entries the slot has not seen, newest first, each (array, index) once: an entry overwritten later is skipped (its
-    /// view may be gone by now). At a frame's begin an index freed later is skipped too. At the end of the open frame it is still written:
-    /// the frame's draws may have read it before the free, and its view lives until the frame has finished (deferred deletion).
+    /// view may be gone by now). At a frame's begin an index freed since gets the array's stand-in (<see cref="SetStandIn"/>), so a draw that
+    /// still reads it samples that rather than a destroyed view (issue #319). At the end of the open frame a freed index is still written: the
+    /// frame's draws may have read it before the free, and its view lives until the frame has finished (deferred deletion); the stand-in follows
+    /// at the slot's next begin.
     /// </summary>
     void Apply(int slot, bool endOfFrame)
     {
         long end = _journalBase + _journal.Count;
         long from = Math.Max(_applied[slot], _journalBase);
-        int n = (int)(end - from);
-        if (n > 0)
-        {
-            var writes = new WriteDescriptorSet[n];
-            var infos = new DescriptorImageInfo[n];
-            int count = 0;
-            _written.Clear();
-            fixed (DescriptorImageInfo* pi = infos)
-            fixed (WriteDescriptorSet* pw = writes)
-            {
-                for (int i = n - 1; i >= 0; i--)
-                {
-                    var (kind, index, t) = _journal[(int)(from - _journalBase) + i];
-                    if (t.IsNull)
-                    {
-                        if (!endOfFrame) _written.Add((kind, index));
-                        continue;
-                    }
-                    if (!_written.Add((kind, index))) continue;
-                    pi[count] = new DescriptorImageInfo(_device.SamplerAt(t.Sampler.Index), _device.ViewAt(t.View.Index), ImageLayout.General);
-                    pw[count] = new WriteDescriptorSet
-                    {
-                        SType = StructureType.WriteDescriptorSet,
-                        DstSet = _sets[slot],
-                        DstBinding = (uint)kind,
-                        DstArrayElement = index,
-                        DescriptorCount = 1,
-                        DescriptorType = DescriptorType.CombinedImageSampler,
-                        PImageInfo = &pi[count],
-                    };
-                    count++;
-                }
-                if (count > 0) _device.Vk.UpdateDescriptorSets(_device.Device, (uint)count, pw, 0, null);
-            }
-        }
+        _written.Clear();
+        _writes.Clear();
+        Collect(slot, (int)(from - _journalBase), (int)(end - from), endOfFrame);
+        if (!endOfFrame) CollectVacated(slot);
+        Write(slot);
         _applied[slot] = end;
 
         // Drop what every slot has seen.
@@ -468,6 +463,75 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         {
             _journal.RemoveRange(0, drop);
             _journalBase = seen;
+        }
+    }
+
+    /// <summary>
+    /// Gathers the entries <paramref name="n"/> from <paramref name="first"/> of the journal, newest first, into <see cref="_writes"/>.
+    /// </summary>
+    void Collect(int slot, int first, int n, bool endOfFrame)
+    {
+        for (int i = n - 1; i >= 0; i--)
+        {
+            var (kind, index, t) = _journal[first + i];
+            if (t.IsNull)
+            {
+                if (endOfFrame) _vacated[slot].Add((kind, index));
+                else if (_written.Add((kind, index))) StandInAt(kind, index);
+                continue;
+            }
+
+            if (_written.Add((kind, index))) _writes.Add((kind, index, t));
+        }
+    }
+
+    /// <summary>
+    /// The stand-in for the indices freed while the slot's last frame was open, unless a newer entry took them.
+    /// </summary>
+    void CollectVacated(int slot)
+    {
+        foreach (var (kind, index) in _vacated[slot])
+            if (_written.Add((kind, index))) StandInAt(kind, index);
+        _vacated[slot].Clear();
+    }
+
+    /// <summary>
+    /// Queues the array's stand-in at a freed index (nothing for an array without one).
+    /// </summary>
+    void StandInAt(BindlessKind kind, uint index)
+    {
+        var standIn = _standIns[(int)kind];
+        if (!standIn.IsNull) _writes.Add((kind, index, standIn));
+    }
+
+    /// <summary>
+    /// Writes <see cref="_writes"/> into the slot's set.
+    /// </summary>
+    void Write(int slot)
+    {
+        int count = _writes.Count;
+        if (count == 0) return;
+        var writes = new WriteDescriptorSet[count];
+        var infos = new DescriptorImageInfo[count];
+        fixed (DescriptorImageInfo* pi = infos)
+        fixed (WriteDescriptorSet* pw = writes)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var (kind, index, t) = _writes[i];
+                pi[i] = new DescriptorImageInfo(_device.SamplerAt(t.Sampler.Index), _device.ViewAt(t.View.Index), ImageLayout.General);
+                pw[i] = new WriteDescriptorSet
+                {
+                    SType = StructureType.WriteDescriptorSet,
+                    DstSet = _sets[slot],
+                    DstBinding = (uint)kind,
+                    DstArrayElement = index,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    PImageInfo = &pi[i],
+                };
+            }
+            _device.Vk.UpdateDescriptorSets(_device.Device, (uint)count, pw, 0, null);
         }
     }
 

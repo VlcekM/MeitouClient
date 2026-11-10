@@ -74,8 +74,22 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         var bindless = new BindlessTable(device);
         Bindless = bindless;
         Shaders.BindlessLayout = bindless.Layout;
+        SetFreedStandIns(bindless);
         Uploads = new Uploader(this);
         Frame = new GpuFrame(this);
+    }
+
+    /// <summary>
+    /// What a freed index of the float colour arrays reads (<see cref="BindlessTable.SetStandIn"/>): their stand-ins, (0, 0, 0, 1).
+    /// </summary>
+    void SetFreedStandIns(BindlessTable bindless)
+    {
+        bindless.SetStandIn(BindlessKind.Texture2D, StandIn(SamplerDimension.Dim2D, arrayed: false));
+        bindless.SetStandIn(BindlessKind.Texture2DArray, StandIn(SamplerDimension.Dim2D, arrayed: true));
+        bindless.SetStandIn(BindlessKind.Cube, StandIn(SamplerDimension.Cube, arrayed: false));
+
+        SampledTexture StandIn(SamplerDimension dimension, bool arrayed) =>
+            _standIns.For(new SamplerInfo("", 0, 0, dimension, arrayed, false, false, ScalarKind.Float, 0));
     }
 
     /// <summary>

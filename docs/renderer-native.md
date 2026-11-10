@@ -73,7 +73,9 @@ The resources and the commands below them are the same question: [resource-layer
 BindlessTable has seven typed sampler arrays (BindlessKind bindings0..6). Per-slot descriptor
 journal replays at begin/before submission; freed indices wait for consumers. Updating an index
 changes every submitted draw using it, including already-recorded draws. Use new indices for
-mid-frame binding changes. Tables/views/globals are render-thread state.
+mid-frame binding changes. At a slot's next begin a freed 2D, 2D-array or cube index points at the
+stand-in, so a reader holding a stale index samples (0,0,0,1) instead of a destroyed view (issue #319:
+AMD lost the device on such a read). Tables/views/globals are render-thread state.
 `ScalarOf` lists the integer `InternalFormat`s (unsigned or signed samplers); all others sample as
 float. Verified by `BindlessTests.Integer_textures_read_back_exact_values_through_the_bindless_arrays`
 (integer routing and texels).
