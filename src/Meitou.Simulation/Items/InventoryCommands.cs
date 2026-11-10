@@ -11,9 +11,10 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality);
 /// <summary>
-/// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange"/> on the character's grids.
+/// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange(Inventory, bool)"/> on the grid of the window
+/// pressed: the character's main grid, or the worn bag's when <paramref name="Bag"/>.
 /// </summary>
-public sealed record ArrangeInventory(CharacterId Character) : SimCommand;
+public sealed record ArrangeInventory(CharacterId Character, bool Bag = false) : SimCommand;
 
 /// <summary>
 /// Moving items between inventory sections and grids, and the sections' rules.
@@ -275,10 +276,22 @@ public static class InventoryCommands
     /// by its area, then by its width, largest first (a stable sort); the first order in which everything fits is kept, otherwise every item goes
     /// back where it was (false).
     /// </summary>
-    public static bool Arrange(Inventory root)
+    public static bool Arrange(Inventory root) => Arrange([(root, "main"), (root.Backpack?.Contents, "backpack_content")]);
+
+    /// <summary>
+    /// The ARRANGE button of one window (<c>FUN_14070f740</c>, <b>Observed</b>: it arranges only the inventory its window shows, its vtable
+    /// <c>+0x70</c>): the main grid, or the worn bag's when <paramref name="bag"/>; as <see cref="Arrange(Inventory)"/> otherwise.
+    /// </summary>
+    public static bool Arrange(Inventory root, bool bag) =>
+        Arrange(bag ? [(root.Backpack?.Contents, "backpack_content")] : [(root, "main")]);
+
+    /// <summary>
+    /// Arranges <paramref name="sections"/> (a grid and the section of it arranged; a missing grid is skipped) as <see cref="Arrange(Inventory)"/>.
+    /// </summary>
+    static bool Arrange((Inventory? Grid, string Section)[] sections)
     {
         var grids = new List<(Inventory Grid, string Section, ItemInstance[] Items)>();
-        foreach (var (grid, section) in new[] { (root, "main"), (root.Backpack?.Contents, "backpack_content") })
+        foreach (var (grid, section) in sections)
             if (grid is not null) grids.Add((grid, section, [.. grid.Items]));
         var saved = grids.SelectMany(g => g.Items).Select(i => (Item: i, i.X, i.Y, i.Quantity, i.Charges)).ToArray();
         void Restore()

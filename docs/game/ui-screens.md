@@ -1101,7 +1101,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     section starts from 1; then max(value, section minimum) x section multiplier.
   - Auto-add (`FUN_14074c8b0`): tops up stacks, then the first free spot row by row from the top, left to right, in limit-sized stacks. ARRANGE (`FUN_14070f740`, `General_Click`): every
     section (unless flagged) is emptied and re-added by auto-add (partial stacks merge) in a sorted order, pass 1 by the longest footprint side, pass 2 by area, pass 3 by width, all
-    descending; the first pass where everything fits wins, else the old positions are restored.
+    descending; the first pass where everything fits wins, else the old positions are restored. Each window's button arranges only the inventory that window shows (its
+    vtable `+0x70`): the pocket window's ARRANGE leaves the worn bag alone and the bag window's leaves the pockets (**Observed**: decompile, and vanilla per #524).
   - Loading a saved inventory (`FUN_14074c0e0`, **Verified** by decompile; the INVENTORY_STATE's items in file order): each item is looked up by its `section` name; it goes to its saved `inventory x` / `inventory y`
     only if the section exists and accepts it (`FUN_14074bc30`), the footprint lies inside the section's width and height and `FUN_1407466f0` finds no item of that section overlapping it. Otherwise it is
     auto-added to the inventory (`FUN_140745c80` to `FUN_14074bd20`: the sections that accept it, the backpack's last, each by `FUN_14074c8b0`), and when nothing has room it is not added (lost). No saved

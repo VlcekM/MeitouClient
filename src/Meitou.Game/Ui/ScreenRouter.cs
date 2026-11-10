@@ -60,7 +60,10 @@ sealed class ScreenRouter(PlayerInterface player)
             if (e.Widget == "OpenBagButton") player.InventoryWindows.ToggleBag(player.InventoryWindows.WindowCharacter(e.Screen));
             else if (e.Widget == "LimbsButton") player.InventoryWindows.ToggleLimbs();
             else if (e.Widget == "ArrangeButton" && player.InventoryWindows.WindowCharacter(e.Screen) is { } lead)
-                player.Say(new Simulation.Items.ArrangeInventory(lead.Id) { Tick = player.Session.World.Tick });
+            {
+                bool bag = InventoryWindows.ScreenKind(e.Screen) == "bag";
+                player.Say(new Simulation.Items.ArrangeInventory(lead.Id, bag) { Tick = player.Session.World.Tick });
+            }
         }
     }
 
