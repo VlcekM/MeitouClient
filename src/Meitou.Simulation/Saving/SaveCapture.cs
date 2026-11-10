@@ -275,6 +275,11 @@ public static partial class SaveCapture
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> OrderTargets = [];
         /// <summary>
+        /// The jobs on a character (Staying close, Bodyguard) whose target's handle is written once every character has one, so a character new to
+        /// this save is named too (#447); one not saved keeps the handle the job was written with.
+        /// </summary>
+        public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> JobTargets = [];
+        /// <summary>
         /// The saved items whose <c>ownedby</c> names a character.
         /// </summary>
         public readonly List<(SaveItem Item, CharacterId Owner)> Owners = [];
@@ -315,6 +320,10 @@ public static partial class SaveCapture
         // The queued orders name their target character the same way (`tjobT<i>`); one not saved leaves the null handle.
         foreach (var (record, prefix, who) in pass.OrderTargets)
             (pass.Handles.TryGetValue(who, out var hand2) ? hand2 : Hand.Null).Write(record, prefix);
+        foreach (var (record, prefix, who) in pass.JobTargets)
+        {
+            if (pass.Handles.TryGetValue(who, out var hand3)) hand3.Write(record, prefix);
+        }
 
         // Stolen items name the robbed character (`ownedby`); one not saved leaves the null handle the item was written with.
         SavedKit.OwnerNotes = null;
@@ -765,7 +774,12 @@ public static partial class SaveCapture
         SlaveSave.Write(g, cold, data);
         DialogueSave.Write(g, cold);
         if (orders) Orders.Write(g, cold);
-        if (orders && sc.Ai is { } ai) PermaJobSave.Write(ai, cold, world.Buildings, buildings, who => HandOf(world, who));
+        if (orders && sc.Ai is { } ai)
+        {
+            PermaJobSave.Write(ai, cold, world.Buildings, buildings, who => HandOf(world, who));
+            DeferJobTargets(ai, cold);
+        }
+
         if (orders && sc.Ai is { } queueAi)
         {
             OrderSave.Write(queueAi, cold, world, buildings, (record, prefix, who) =>
@@ -795,7 +809,22 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The handle of a queued job's target character: the one it was written with, or the null handle when it is not in the world.
+    /// Holds back the target handles of the character's jobs on a character until every character has one (<see cref="MemoryPass.JobTargets"/>).
+    /// </summary>
+    static void DeferJobTargets(FcsRecord ai, CharacterCold cold)
+    {
+        if (s_memoryPass is not { } pass) return;
+
+        for (int i = 0; i < cold.Jobs.Count; i++)
+        {
+            var job = cold.Jobs[i];
+            if (job.Site is null && !job.Character.IsNone) pass.JobTargets.Add((ai, PermaJobSave.TargetKey(i), job.Character));
+        }
+    }
+
+    /// <summary>
+    /// The handle of a queued job's target character: the one it was written with, or the null handle when it is not in the world or has no save
+    /// link yet (one recruited since the load; <see cref="DeferJobTargets"/> covers that).
     /// </summary>
     static Hand HandOf(World world, CharacterId who) =>
         world.Characters.TryResolveNext(who, out int target) && world.Characters.Cold(target)?.Save is { } link ? link.Source.Handle : Hand.Null;

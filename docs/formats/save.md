@@ -524,7 +524,8 @@ and again when a saved or stored platoon comes in, since a town's saved platoons
 the original keys as read; a changed one without a building handle writes `in something` 0 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 
 Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs`, `pjob<i>`, `pjobT<i>` ([perma-jobs](../game/ai-tasks.md#perma-jobs)), plus
-Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle). The squad AI options are CAMERA bools (**Verified**, writer
+Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle); a job on a character writes that character's handle once
+every character has one, as `tjobT<i>`, so one new to the save is named too. The squad AI options are CAMERA bools (**Verified**, writer
 `FUN_1403eb710`; the key of each option and new-game values in [squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine
 (not `stay`, `eject`), an absent one keeps its default.
 

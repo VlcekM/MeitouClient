@@ -22,6 +22,11 @@ public static class PermaJobSave
     const string Type = "pjob", Target = "pjobT", MeitouSite = "meitou pjob", Switch = "jobs";
 
     /// <summary>
+    /// The handle key of job <paramref name="i"/>'s target.
+    /// </summary>
+    public static string TargetKey(int i) => Target + i;
+
+    /// <summary>
     /// Writes the list (the old entries are cleared first) and the switch.
     /// </summary>
     public static void Write(
