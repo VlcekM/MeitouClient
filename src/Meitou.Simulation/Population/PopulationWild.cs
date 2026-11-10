@@ -498,7 +498,7 @@ public sealed partial class PopulationSystem
                 for (int t = 0; t < 16 && spots.Count < 8; t++)
                 {
                     var p = new Vector2(minX + Rng.Float(Place()) * (maxX - minX), minZ + Rng.Float(Place()) * (maxZ - minZ));
-                    if (!NearTown(_data, p, 2) && !Wet(p)) spots.Add(p);
+                    if (!NearTown(_data, p, 2) && !Refused(p)) spots.Add(p);
                 }
 
                 if (spots.Count == 0) return false;
@@ -521,9 +521,10 @@ public sealed partial class PopulationSystem
         }
 
         /// <summary>
-        /// Whether a spot's terrain is under <see cref="SpawnFloor"/>.
+        /// Whether the original's spot finder refuses a spot at layout time: terrain under <see cref="SpawnFloor"/> or a black pixel of the
+        /// areas map (the gate code is tested when the nest loads, <see cref="BuildNest"/>).
         /// </summary>
-        bool Wet(Vector2 p) => _terrain is not null && _terrain(p.X, p.Y) < SpawnFloor;
+        bool Refused(Vector2 p) => _terrain is not null && _terrain(p.X, p.Y) < SpawnFloor || !_biomes.IsPainted(p.X, p.Y);
 
         /// <summary>
         /// A saved nest added as a site of the group.
@@ -700,6 +701,7 @@ public sealed partial class PopulationSystem
         long loadId = state.LoadId;
         ulong seed = world.Seed;
         var walk = world.Walkability;
+        var regions = RegionsOf(world);
         var players = PlayerSpots(world);
         var hold = HoldOf(world, site.Index);
         if (site.Kind == WildKind.Nest)
@@ -711,8 +713,8 @@ public sealed partial class PopulationSystem
             var counts = new int[site.Nest!.RoamingSquads.Count];
             for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(site.Nest.RoamingSquads[i].Id);
             var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64);
-            if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, players, budget));
-            else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, players, budget)));
+            if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, players, budget));
+            else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, players, budget)));
             return;
         }
 
@@ -721,8 +723,8 @@ public sealed partial class PopulationSystem
         int share = HomelessCount(_data.Biomes!.Groups[site.Group], _settings.PopulationMultiplier);
         state.Planned = Math.Max(0, Math.Min(share, held + room) - held);
 
-        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold, room: room));
-        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold, room: room)));
+        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, regions, players, hold, room: room));
+        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, regions, players, hold, room: room)));
     }
 
     /// <summary>
@@ -926,8 +928,8 @@ public sealed partial class PopulationSystem
     /// A sector's squads as it loads, or with <paramref name="topUp"/> ≥ 0 the one squad of the area tick's refill number <paramref name="topUp"/>
     /// (<c>PopulationHomeless.cs</c>).
     /// </summary>
-    BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, WildHold? hold, int topUp = -1,
-        int room = int.MaxValue)
+    BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Locks.IGateRegions? regions, Vector2[] players, WildHold? hold,
+        int topUp = -1, int room = int.MaxValue)
     {
         var squads = new List<BuiltSquad>();
         var group = _data.Biomes!.Groups[site.Group];
@@ -963,7 +965,7 @@ public sealed partial class PopulationSystem
             counts[e]++;
             var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
             int faction = _data.SpawnFactionOf(template);
-            if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, players) is not { } spot) continue;
+            if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players) is not { } spot) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
         }
 
@@ -1017,9 +1019,10 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The spot of a homeless squad (6.2, <c>FUN_1408f50d0</c>): 40 seeded tries of a point of the sector, pushed out of towns and away from the
-    /// player.
+    /// player, walkable and not <see cref="SpotRefused"/>.
     /// </summary>
-    Vector2? PlaceInSector(float minX, float minZ, float maxX, float maxZ, int faction, ulong seed, ulong key, IWalkability walk, Vector2[] players)
+    Vector2? PlaceInSector(float minX, float minZ, float maxX, float maxZ, int faction, ulong seed, ulong key, IWalkability walk,
+        Locks.IGateRegions? regions, Vector2[] players)
     {
         for (int t = 0; t < 40; t++)
         {
@@ -1035,12 +1038,27 @@ public sealed partial class PopulationSystem
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
-            if (tooClose || walk.TerrainHeight(p.X, p.Y) < SpawnFloor || !walk.IsWalkable(p.X, p.Y)) continue;
+            if (tooClose || SpotRefused(p, walk, regions) || !walk.IsWalkable(p.X, p.Y)) continue;
             return p;
         }
 
         return null;
     }
+
+    /// <summary>
+    /// Whether the original's spot finder refuses a point (<c>FUN_1408f50d0</c>, <b>Verified</b>): terrain under <see cref="SpawnFloor"/>, a black
+    /// pixel of the areas map, or ground inside town walls (gate code above 0, <c>NavMesh::getGateCode</c>; only where the navmesh is loaded).
+    /// </summary>
+    bool SpotRefused(Vector2 p, IWalkability walk, Locks.IGateRegions? regions)
+    {
+        if (walk.TerrainHeight(p.X, p.Y) < SpawnFloor || _data.Biomes?.IsPainted(p.X, p.Y) == false) return true;
+        return regions?.CodeAt(new Vector3(p.X, walk.GroundHeight(p.X, p.Y), p.Y)) > 0;
+    }
+
+    /// <summary>
+    /// The world's gate codes, when the lock system has them.
+    /// </summary>
+    static Locks.IGateRegions? RegionsOf(World world) => world.SystemOf<Locks.LockSystem>()?.Regions;
 
     /// <summary>
     /// Pushes <paramref name="p"/> out of the town's radius times <paramref name="share"/> (a point at the centre goes +X).
@@ -1056,9 +1074,10 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Builds a nest's roaming squads as it loads: its centre (the budget's, else its first walkable spot) and the squads its pool lacks.
+    /// Builds a nest's roaming squads as it loads: its centre (the budget's, else its first walkable spot not inside town walls) and the squads its
+    /// pool lacks.
     /// </summary>
-    BuiltWild BuildNest(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, NestBudget budget)
+    BuiltWild BuildNest(WildSite site, long loadId, ulong seed, IWalkability walk, Locks.IGateRegions? regions, Vector2[] players, NestBudget budget)
     {
         var squads = new List<BuiltSquad>();
         var nest = site.Nest!;
@@ -1066,7 +1085,7 @@ public sealed partial class PopulationSystem
         if (centre is null)
         {
             foreach (var s in site.Spots)
-                if (walk.IsWalkable(s.X, s.Y)) { centre = s; break; }
+                if (walk.IsWalkable(s.X, s.Y) && !SpotRefused(s, walk, regions)) { centre = s; break; }
         }
 
         bool topUp = budget.Centre is not null;

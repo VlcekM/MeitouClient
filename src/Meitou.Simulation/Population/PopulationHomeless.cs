@@ -299,7 +299,8 @@ public sealed partial class PopulationSystem
         }
 
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(tx, tz);
-        return PlaceInSector(minX, minZ, maxX, maxZ, squad.Faction, world.Seed, key, world.Walkability, []) is { } spot ? (spot, false) : null;
+        var spot = PlaceInSector(minX, minZ, maxX, maxZ, squad.Faction, world.Seed, key, world.Walkability, RegionsOf(world), []);
+        return spot is { } placed ? (placed, false) : null;
     }
 
     /// <summary>
@@ -523,6 +524,7 @@ public sealed partial class PopulationSystem
     {
         ulong seed = world.Seed;
         var walk = world.Walkability;
+        var regions = RegionsOf(world);
         var players = PlayerSpots(world);
 
         // One job builds them in order until a squad is made; the sectors it did not reach come back empty so their pending marks clear.
@@ -534,7 +536,7 @@ public sealed partial class PopulationSystem
             {
                 var b = made
                     ? new BuiltWild(t.Site.Index, t.LoadId, default, [], TopUp: true)
-                    : BuildSector(t.Site, t.LoadId, seed, walk, players, t.Hold, t.Number);
+                    : BuildSector(t.Site, t.LoadId, seed, walk, regions, players, t.Hold, t.Number);
                 made |= b.Squads.Count > 0;
                 results.Add(b);
             }

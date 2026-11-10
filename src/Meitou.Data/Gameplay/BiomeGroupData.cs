@@ -88,17 +88,23 @@ public sealed class BiomeMap
     /// Each cell's index into <see cref="Groups"/> (-1: none), row by row (z then x).
     /// </summary>
     readonly int[] _cells;
+    /// <summary>
+    /// The areas map painted (null: none, every point is painted).
+    /// </summary>
+    readonly WeatherAreas? _areas;
 
     /// <summary>
     /// A map of <paramref name="groups"/> with each of the 64 x 64 cells' group index (row by row); another cell count throws.
+    /// <paramref name="areas"/>: the areas map <see cref="IsPainted"/> reads.
     /// </summary>
-    public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups)
+    public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups, WeatherAreas? areas = null)
     {
         if (cellGroups.Length != WeatherAreas.Cells * WeatherAreas.Cells)
             throw new ArgumentException("Expected 64 x 64 cells.", nameof(cellGroups));
 
         Groups = groups;
         _cells = cellGroups;
+        _areas = areas;
     }
 
     /// <summary>
@@ -110,6 +116,11 @@ public sealed class BiomeMap
     /// The group of a cell, a position in <see cref="Groups"/>; -1 outside the map or when no group applies.
     /// </summary>
     public int GroupOf(int cx, int cz) => WeatherAreas.InMap(cx, cz) ? _cells[cz * WeatherAreas.Cells + cx] : -1;
+
+    /// <summary>
+    /// Whether the areas map is not black at a world point (<see cref="WeatherAreas.IsPainted"/>); true without a map.
+    /// </summary>
+    public bool IsPainted(float x, float z) => _areas?.IsPainted(x, z) ?? true;
 
     /// <summary>
     /// Paints the cells from the areas map's colours (null: every cell is NONE).
@@ -132,7 +143,7 @@ public sealed class BiomeMap
                 cells[z * WeatherAreas.Cells + x] = areas is not null && byColour.TryGetValue(colour, out int g) ? g : none;
             }
 
-        return new BiomeMap(groups, cells);
+        return new BiomeMap(groups, cells, areas);
     }
 
     /// <summary>

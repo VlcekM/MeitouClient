@@ -647,11 +647,12 @@ public sealed partial class PopulationSystem
         long loadId = state.LoadId;
         ulong seed = world.Seed;
         var walk = world.Walkability;
+        var regions = RegionsOf(world);
         var spots = players;
         if (_work is null)
-            SpawnWild(world, BuildNest(site, loadId, seed, walk, spots, budget));
+            SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, spots, budget));
         else
-            _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, spots, budget)));
+            _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, spots, budget)));
     }
 
     /// <summary>

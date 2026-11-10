@@ -338,29 +338,31 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// Every nest of the wild layout with the terrain height at each candidate spot; flags a first spot or all spots under the original's
-    /// spawn-spot floor (95, docs/game/factions-squads-towns.md "Nests").
+    /// Every nest of the wild layout with the terrain height at each candidate spot; flags a first spot or all spots the original's spot finder
+    /// refuses: under its floor (95) or on a black pixel of the areas map (docs/game/factions-squads-towns.md "Spot finder").
     /// </summary>
     static void Nests(ProbeWorld probe)
     {
         var population = probe.World.Systems.OfType<PopulationSystem>().First();
         var walk = probe.World.Walkability;
+        var biomes = probe.Data.Biomes!;
         int nests = 0, firstWet = 0, allWet = 0;
         foreach (var site in population.WildSites.Where(s => s.Kind == WildKind.Nest && s.Spots.Count > 0))
         {
             var heights = site.Spots.Select(s => walk.TerrainHeight(s.X, s.Y)).ToArray();
-            bool first = heights[0] < 95, all = heights.All(h => h < 95);
+            var refused = site.Spots.Select((s, i) => heights[i] < 95 || !biomes.IsPainted(s.X, s.Y)).ToArray();
+            bool first = refused[0], all = refused.All(r => r);
             nests++;
             if (first) firstWet++;
             if (all) allWet++;
             if (!first) continue;
 
-            string flag = all ? "ALL WET" : "first wet";
+            string flag = all ? "ALL REFUSED" : "first refused";
             string spots = string.Join(" ", heights.Select(h => h.ToString("F0")));
             Console.WriteLine($"{flag} nest {site.Index} '{site.Nest?.Name}' at {site.Spots[0]:F0} spots [{spots}]");
         }
 
-        Console.WriteLine($"{nests} nests, first spot under 95: {firstWet}, every spot under 95: {allWet}");
+        Console.WriteLine($"{nests} nests, first spot refused: {firstWet}, every spot refused: {allWet}");
     }
 
     /// <summary>
@@ -394,7 +396,7 @@ static class SaveProbe
         Console.Error.WriteLine("""
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
-              nests                    the wild layout's nests whose first candidate spot is under water
+              nests                    the wild layout's nests whose first candidate spot the original would refuse
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)

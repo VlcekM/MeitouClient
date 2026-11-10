@@ -34,17 +34,34 @@ public sealed class WeatherAreas
     /// The offset of the camera's region lookup (<see cref="CameraCellOf"/>): 32 × 4608 + 9.
     /// </summary>
     const float CameraOrigin = 147465f;
+    /// <summary>
+    /// The world's half extent the map spans on each axis (<c>FUN_1408fb580</c>: the rectangle (-147456, -147456) to (147456, 147456)).
+    /// </summary>
+    const float HalfExtent = 147456f;
 
     /// <summary>
     /// Each cell's colour (0xRRGGBB), row-major (z, then x).
     /// </summary>
     readonly int[] _colours;
+    /// <summary>
+    /// Whether each pixel of the map is not black, row-major (z, then x); null: every point counts as painted.
+    /// </summary>
+    readonly bool[]? _painted;
+    /// <summary>
+    /// The pixels per side of <see cref="_painted"/>.
+    /// </summary>
+    readonly int _side;
 
     /// <param name="colours">Row-major (z, then x), 64 × 64 entries, 0xRRGGBB.</param>
-    public WeatherAreas(int[] colours)
+    /// <param name="painted">Each pixel's not-black flag, row-major, <paramref name="side"/> squared entries; null: every point is painted.</param>
+    /// <param name="side">The pixels per side of <paramref name="painted"/>.</param>
+    public WeatherAreas(int[] colours, bool[]? painted = null, int side = 0)
     {
         if (colours.Length != Cells * Cells) throw new ArgumentException($"Expected {Cells * Cells} cells.", nameof(colours));
+        if (painted is not null && painted.Length != side * side) throw new ArgumentException("Expected side x side pixels.", nameof(painted));
         this._colours = colours;
+        _painted = painted;
+        _side = side;
     }
 
     /// <summary>
@@ -77,7 +94,41 @@ public sealed class WeatherAreas
                 var (r, g, b, _) = image[x * pw + pw / 2, z * ph + ph / 2];
                 colours[z * Cells + x] = r << 16 | g << 8 | b;
             }
-        return new WeatherAreas(colours);
+
+        return image.Width == image.Height ? new WeatherAreas(colours, Painted(image), image.Width) : new WeatherAreas(colours);
+    }
+
+    /// <summary>
+    /// Each pixel's not-black flag, row-major.
+    /// </summary>
+    static bool[] Painted(RgbaImage image)
+    {
+        var painted = new bool[image.Width * image.Height];
+        for (int z = 0; z < image.Height; z++)
+            for (int x = 0; x < image.Width; x++)
+            {
+                var (r, g, b, _) = image[x, z];
+                painted[z * image.Width + x] = (r | g | b) != 0;
+            }
+
+        return painted;
+    }
+
+    /// <summary>
+    /// Whether the map's pixel at world (<paramref name="x"/>, <paramref name="z"/>) is not black: the spawn-spot test of <c>FUN_1408f4d70</c>
+    /// (<b>Verified</b>: the pixel <c>(int)((coordinate + 147456) / (294912 / pixels))</c> per axis, a coordinate below the map taking pixel 0 and
+    /// one beyond it the last, any of its three bytes non-zero).
+    /// </summary>
+    public bool IsPainted(float x, float z) => _painted is null || _painted[PixelOf(z) * _side + PixelOf(x)];
+
+    /// <summary>
+    /// The pixel row or column of a world coordinate (<see cref="IsPainted"/>).
+    /// </summary>
+    int PixelOf(float coordinate)
+    {
+        if (coordinate < -HalfExtent) return 0;
+        if (coordinate > HalfExtent) return _side - 1;
+        return Math.Min((int)((coordinate + HalfExtent) / (2 * HalfExtent / _side)), _side - 1);
     }
 
     /// <summary>
