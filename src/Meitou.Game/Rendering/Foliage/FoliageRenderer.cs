@@ -1094,6 +1094,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// and they give way to the eye's: while an eye page waits for room in the full store, the kept page farthest from its point is freed (one a
     /// frame).
     /// </summary>
+    /// <summary>How many pages may move in and out of a full store per frame, and how many generated pages may wait for room.</summary>
+    const int GrassMovesPerFrame = 16, MaxGrassWaiting = 64;
+    readonly record struct GrassCandidate(float Distance, ZoneState State, int Key, GrassPage Page);
+    readonly List<GrassCandidate> _grassNearestWaiting = [], _grassFarthestHeld = [];
+
+    /// <summary>Into <paramref name="list"/>, sorted with the best first (sign 1: the smallest distance, -1: the largest), at most <see cref="GrassMovesPerFrame"/>.</summary>
+    static void KeepBest(List<GrassCandidate> list, GrassCandidate c, int sign)
+    {
+        int at = list.Count;
+        while (at > 0 && (list[at - 1].Distance - c.Distance) * sign > 0) at--;
+        if (at >= GrassMovesPerFrame) return;
+        list.Insert(at, c);
+        if (list.Count > GrassMovesPerFrame) list.RemoveAt(list.Count - 1);
+    }
+
     void UpdateGrass(Vector3 eye, IReadOnlyList<Vector3> kept, bool settling)
     {
         GrowGrassStore();
@@ -1111,6 +1126,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         // The kept page to free for a waiting eye page (farthest from its point) and whether an eye page waits.
         bool eyeWaiting = false;
+        int waitingPages = 0;
+        _grassNearestWaiting.Clear();
+        _grassFarthestHeld.Clear();
         GrassPage? victim = null;
         ZoneState? victimState = null;
         int victimKey = 0;
@@ -1144,7 +1162,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         else if (dk < range + PageSize * 0.5f) _grassWanted.Add((2 * range + PageSize + dk, state, key));   // after all of the eye's
                         continue;
                     }
-                    if (eyeWants && page.PendingBlades is not null) eyeWaiting = true;
+                    if (eyeWants && page.PendingBlades is not null)
+                    {
+                        eyeWaiting = true;
+                        waitingPages++;
+                        KeepBest(_grassNearestWaiting, new(d, state, key, page), 1);
+                    }
+                    if (_grassFull && page.Buffers is not null && page.Job is null && (_grassFarthestHeld.Count < GrassMovesPerFrame || d > _grassFarthestHeld[^1].Distance)
+                        && page.Buffers.Any(b => b.Count > 0))
+                        KeepBest(_grassFarthestHeld, new(d, state, key, page), -1);
                     if (page.Job is not null || page.PendingBlades is not null || page.Buffers is null)
                         unsettled = true;
                     if (!eyeWants && page.Buffers is not null && page.Job is null && dk > victimDistance && dk <= range + PageSize * 2)
@@ -1167,7 +1193,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                             (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (result.Blades, result.Floats, result.Prefixes);
                         else TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
                     }
-                    else if (page.PendingBlades is not null && (eyeWants || !_grassEyeWaited)) TryQueuePage(state, key, page, page.PendingBlades,
+                    else if (page.PendingBlades is not null && !_grassFull && (eyeWants || !_grassEyeWaited)) TryQueuePage(state, key, page, page.PendingBlades,
                             page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
         }
@@ -1185,14 +1211,37 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             victimState!.Pages.Remove(victimKey);
             _grassFull = false;   // the waiting page tries the room next frame
         }
+        // The store holds the grass nearest the eye: farther pages give way to nearer ones, the nearest waiting first (the walk's order would leave holes round the camera).
+        if (_grassNearestWaiting.Count > 0)
+        {
+            float nearest = _grassNearestWaiting[0].Distance;
+            if (_grassFull)
+                foreach (var held in _grassFarthestHeld)
+                {
+                    if (held.Distance <= nearest + PageSize) break;
+                    FreePage(held.Page);
+                    held.State.Pages.Remove(held.Key);
+                }
+            _grassFull = false;
+            foreach (var waiting in _grassNearestWaiting)
+                if (waiting.Page.PendingBlades is not null && !QueuePage(waiting.State, waiting.Key, waiting.Page, waiting.Page.PendingBlades!, waiting.Page.PendingFloats!, waiting.Page.PendingPrefixes!))
+                {
+                    _grassFull = true;
+                    break;
+                }
+        }
 
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
         // so changing the setting never regenerates them (Draw shows a prefix). Only the nearest free jobs' worth is picked: sorting every
         // missing page (tens of thousands at a long grass range) took milliseconds a frame.
         _grassWaiting = _grassWanted.Count;
         int free = _guard is { Streaming: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
+        // With a full store and pages of the eye's waiting, only a page nearer than they are is worth making: the others would only hold their blades in memory.
+        float makeWithin = _grassFull && waitingPages >= MaxGrassWaiting && _grassNearestWaiting.Count > 0 ? _grassNearestWaiting[^1].Distance : float.PositiveInfinity;
+        if (makeWithin < float.PositiveInfinity) _grassNear = 0;   // the store holds what it can: a loading screen does not wait for pages it has no room for
         foreach (var wanted in _grassWanted)
         {
+            if (wanted.Distance >= makeWithin) { _grassWaiting--; continue; }   // no room for it: nothing waits for it (the title's Pending)
             if (picked == free && (free == 0 || wanted.Distance >= _grassPicks[picked - 1].Distance)) continue;
             int at = picked < free ? picked++ : picked - 1;
             for (; at > 0 && _grassPicks[at - 1].Distance > wanted.Distance; at--) _grassPicks[at] = _grassPicks[at - 1];
