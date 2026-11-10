@@ -65,10 +65,7 @@ attachment (RGBA16F, location 2, `WithAlbedo`), before the haze. Bit 16 of the s
 blocker distance), the penumbra filter softens it, and a fullscreen pass adds term x mask x the haze's multiplier (`atmoApplyCoefficients`).
 
 **No cascades.** Traced, the shadow pass draws no cascade (`ShadowPass.RenderTraced`): it keeps the terrain and landmark maps and publishes the receiver blocks with no cascade.
-What draws no traced pixel reads the **visibility volume** instead (`Gi.TracedSunVolume`, after the traced scene's update, before the reflection): 192 x 108 froxels of the view
-x 64 slices exponential in depth from 2 to the shadows' range, one ray to the sun's centre from each froxel's centre (solids, characters, both terrain grids; no grass), RGBA8,
-the same every frame. It sits in the blocker binding (`uShadowBlocker`, unused without cascades), its camera in cascade 0's tile matrix and slices 0-1 (`msVolumeOn`,
-`msVolumeAt`; a surface reads it a froxel and a half towards the sun, `msVolumeSurface`). Readers: the light shafts (`shaftShadow`), the lit dust (`particleSun`), and through
+What draws no traced pixel reads the **sun map** instead (`Gi.TracedSunVolume`, after the traced scene's update, before the reflection): rays down the sun's direction from a plane, one per texel of three nested squares of 1024 x 1024 (half sides 256, 1536 and at least 4096 units), each snapped to its texels in world space, R32F, the distance to the first caster (solids, characters, both terrain grids; no grass). It sits in the blocker binding (`uShadowBlocker`, unused without cascades), its matrices in the first cascade tiles (`msVolumeOn`, `msVolumeAt`: four texels compared, bilinear; a surface reads it 2 units towards the sun, `msVolumeSurface`). **Observed** (the user, DLSS): a volume of one ray per view froxel, 64 slices exponential in depth, stamped one copy of a caster per slice in the shafts and swam with the camera. Readers: the light shafts (`shaftShadow`), the lit dust (`particleSun`), and through
 `kenshiShadowMeitou` the water's foam, the skin's light entry, impostors and the reflection (outside the view's volume: lit, but for the terrain and landmark maps).
 
 **Rays** go to the sun's centre, the same every frame (no noise for the upscaler to average, no history to trail). There is no receiver identity as in KenshiNative's

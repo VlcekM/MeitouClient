@@ -701,20 +701,18 @@ public sealed unsafe partial class ShadowPass
         ms[p + 15] = TracedCascades;   // uMsFlags.w
     }
 
-    /// <summary>Froxels of the traced sun's visibility volume: across, up, depth slices (exponential from <see cref="VolumeNear"/> to the shadows' range).</summary>
-    public const int VolumeWidth = 192, VolumeHeight = 108, VolumeSlices = 64;
-    const float VolumeNear = 2;
+    /// <summary>The traced sun's depth map: texels across a layer, its nested squares, how far towards the sun the rays start and how far they go.</summary>
+    public const int SunMapTexels = 1024, SunMapLayers = 3;
+    public const float SunMapHeight = 8000, SunMapRayLength = 14000;
     GpuTexture? _volume;
     SampledTexture _volumeSampled;
     bool _volumePublished;
 
-    /// <summary>The traced sun's visibility volume while the sun is traced (layer per depth slice, RGBA8, red the sun's visibility at each froxel's centre); null otherwise.</summary>
+    /// <summary>The traced sun's depth map while the sun is traced (a layer per square, R32F: the distance from the plane to the first caster); null otherwise.</summary>
     public GpuTexture? TracedVolume => TracedCascades > 0 ? _volume : null;
-    /// <summary>The volume's camera: position relative to the eye to its clip (row-vector), the eye, its basis and tangents, its slices' near and far.</summary>
-    public Matrix4x4 VolumeToClip { get; private set; }
     public Vector3 VolumeEye { get; private set; }
-    public (Vector3 Right, Vector3 Up, Vector3 Forward, float TanX, float TanY) VolumeBasis { get; private set; }
-    public (float Near, float Far) VolumeRange => (VolumeNear, TracedDepth);
+    /// <summary>The map's basis and, per layer, the square's centre from the eye along right and up and its half side.</summary>
+    public (Vector3 Right, Vector3 Up, Vector3 ToSun, Vector4[] Layers) SunMap { get; private set; }
 
     /// <summary>
     /// The traced sun (<see cref="TracedWhole"/>): no cascade is drawn. The terrain and landmark maps go on; the receivers that do not trace (shafts, lit dust, foam, the skin's light
@@ -731,13 +729,7 @@ public sealed unsafe partial class ShadowPass
         UpdateLandmarks(view, toSun, landmarks);
         _timer.End();
         EnsureVolume();
-        float far = Math.Max(EffectiveRange, VolumeNear * 4);
-        var forward = Vector3.Normalize(view.Forward);
-        var right = Vector3.Normalize(Vector3.Cross(forward, view.Up));
-        var up = Vector3.Cross(right, forward);
-        float tanY = MathF.Tan(view.FieldOfViewY * 0.5f);
-        VolumeBasis = (right, up, forward, tanY * view.Aspect, tanY);
-        VolumeToClip = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up) * Matrix4x4.CreatePerspectiveFieldOfView(view.FieldOfViewY, view.Aspect, VolumeNear, far);
+        float far = Math.Max(EffectiveRange, 1000);
         VolumeEye = view.Eye;
         Cascades = [];
         TracedCascades = 1;
@@ -750,26 +742,50 @@ public sealed unsafe partial class ShadowPass
     void EnsureVolume()
     {
         if (_volume is not null) return;
-        _volume = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, VolumeWidth, VolumeHeight, Layers: VolumeSlices, Kind: TextureKind.Texture2DArray,
-            Use: TextureUse.Sampled | TextureUse.Storage, Name: "traced sun volume"));
-        _volumeSampled = Sampled(_volume, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
+        _volume = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32F, SunMapTexels, SunMapTexels, Layers: SunMapLayers, Kind: TextureKind.Texture2DArray,
+            Use: TextureUse.Sampled | TextureUse.Storage, Name: "traced sun map"));
+        _volumeSampled = Sampled(_volume, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
     }
 
     /// <summary>
-    /// The receiver blocks with no cascade (count 0): cascade 0's tile is the volume's camera (eye-relative position to its clip), slice 0 (near, far, slices, 1: the volume is on), slice 1
-    /// (towards the sun, a froxel's height per unit of depth); the terrain and landmark maps as ever.
+    /// The receiver blocks with no cascade (count 0): the first tiles take a position relative to the eye to a layer's (u, v, distance from the plane), slice 0 is (layers, 0, 0, 1: the map
+    /// is on), slice 1 (towards the sun, 0), slice 2 each layer's texel in world units; the terrain and landmark maps as ever. Each square is snapped to its texels in world space, so what
+    /// a texel holds does not change as the camera moves.
     /// </summary>
     void PublishTraced(ShadowView view, Vector3 toSun, float far)
     {
         var data = new float[ReceiverBytes / 4];
         var ms = new float[MeitouShadowShaders.BlockBytes / 4];
-        Put(data, 0, VolumeToClip);
+        var toward = Vector3.Normalize(toSun);
+        var mapRight = Vector3.Normalize(Vector3.Cross(MathF.Abs(toward.Y) > 0.99f ? Vector3.UnitX : Vector3.UnitY, toward));
+        var mapUp = Vector3.Cross(toward, mapRight);
+        var forward = Vector3.Normalize(view.Forward);
+        var layers = new Vector4[SunMapLayers];
+        var texels = new Vector4(0);
+        for (int l = 0; l < SunMapLayers; l++)
+        {
+            float half = l == 0 ? 256 : l == 1 ? 1536 : Math.Max(far * 0.6f, 4096);
+            float texel = 2 * half / SunMapTexels;
+            var centre = view.Eye + forward * half * 0.5f;
+            float eyeRight = Vector3.Dot(view.Eye, mapRight), eyeUp = Vector3.Dot(view.Eye, mapUp);
+            float x = MathF.Round(Vector3.Dot(centre, mapRight) / texel) * texel - eyeRight, y = MathF.Round(Vector3.Dot(centre, mapUp) / texel) * texel - eyeUp;
+            layers[l] = new Vector4(x, y, half, texel);
+            texels[l] = texel;
+            var tile = new Matrix4x4(
+                mapRight.X / (2 * half), mapUp.X / (2 * half), -toward.X, 0,
+                mapRight.Y / (2 * half), mapUp.Y / (2 * half), -toward.Y, 0,
+                mapRight.Z / (2 * half), mapUp.Z / (2 * half), -toward.Z, 0,
+                0.5f - x / (2 * half), 0.5f - y / (2 * half), SunMapHeight, 1);
+            Put(data, 16 * l, tile);
+        }
+        SunMap = (mapRight, mapUp, toward, layers);
         Put(data, LightAt, Matrix4x4.Identity);
         Put(data, OriginAt, new Vector4(view.Eye, 1));
         Put(data, ForwardAt, new Vector4(Vector3.Normalize(view.Forward), 0));
         Put(data, AtlasAt, new Vector4(_atlasSize, _atlasSize, 0, 1));
-        Put(ms, 0, new Vector4(VolumeNear, far, VolumeSlices, 1));
-        Put(ms, 4, new Vector4(toSun, 2 * VolumeBasis.TanY / VolumeHeight));
+        Put(ms, 0, new Vector4(SunMapLayers, 0, 0, 1));
+        Put(ms, 4, new Vector4(toSun, 0));
+        Put(ms, 8, texels);
         PutMaps(ms, view.Eye, toSun, far, false);
         Upload(data);
         _meitouBlock.Set(ms);

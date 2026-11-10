@@ -63,26 +63,29 @@ static class MeitouShadowShaders
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
 
-        // The traced sun's visibility volume (ShadowPass.RenderTraced): no cascade (uShadowForward.w 0) and uMsSlice[0].w 1. Cascade 0's tile takes the position relative to the
-        // eye to the volume's clip, uMsSlice[0] holds (near, far, slices, 1), uMsSlice[1] (towards the sun, a froxel's height per unit of depth); the slices are uShadowBlocker's
-        // layers, one ray to the sun at each froxel's centre (Gi.TracedSunVolume). Outside it: lit (the terrain and landmark maps still shade).
+        // The traced sun's depth map (ShadowPass.RenderTraced): no cascade (uShadowForward.w 0) and uMsSlice[0].w 1. Tile l takes the position relative to the eye to layer l's (u, v, distance
+        // from its plane), uMsSlice[0].x the layers, uMsSlice[1].xyz towards the sun, uMsSlice[2] each layer's texel; the layers are uShadowBlocker's (Gi.TracedSunVolume). Outside: lit.
         bool msVolumeOn() { return int(uShadowForward.w) == 0 && uMsSlice[0].w > 0.5 && uShadowOrigin.w > 0.5; }
         float msVolumeAt(vec3 world)
         {
-            vec4 c = uShadowTile[0] * vec4(world - uShadowOrigin.xyz, 1.0);
-            if (c.w <= uMsSlice[0].x) return 1.0;
-            vec2 uv = c.xy / c.w * 0.5 + 0.5;
-            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 1.0;
-            float s = log(c.w / uMsSlice[0].x) / log(uMsSlice[0].y / uMsSlice[0].x) * uMsSlice[0].z - 0.5;
-            if (s > uMsSlice[0].z - 0.5) return 1.0;
-            s = max(s, 0.0);
-            float s0 = floor(s);
-            float a = textureLod(uShadowBlocker, vec3(uv, s0), 0.0).r;
-            float b = textureLod(uShadowBlocker, vec3(uv, min(s0 + 1.0, uMsSlice[0].z - 1.0)), 0.0).r;
-            return mix(a, b, s - s0);
+            vec3 rel = world - uShadowOrigin.xyz;
+            for (int l = 0; l < int(uMsSlice[0].x); l++)
+            {
+                vec3 c = (uShadowTile[l] * vec4(rel, 1.0)).xyz;
+                ivec2 size = textureSize(uShadowBlocker, 0).xy;
+                vec2 f = c.xy * vec2(size) - 0.5;
+                ivec2 i = ivec2(floor(f));
+                if (i.x < 0 || i.y < 0 || i.x >= size.x - 1 || i.y >= size.y - 1) continue;
+                vec2 a = f - vec2(i);
+                float reach = c.z - uMsSlice[2][l] * 1.5;
+                vec4 lit = vec4(texelFetch(uShadowBlocker, ivec3(i, l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 0), l), 0).r >= reach ? 1.0 : 0.0,
+                    texelFetch(uShadowBlocker, ivec3(i + ivec2(0, 1), l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 1), l), 0).r >= reach ? 1.0 : 0.0);
+                return mix(mix(lit.x, lit.y, a.x), mix(lit.z, lit.w, a.x), a.y);
+            }
+            return 1.0;
         }
-        // A surface's: looked up a froxel and a half towards the sun, so the froxels half inside the surface itself do not shade it.
-        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[1].xyz * max(depth, 1.0) * uMsSlice[1].w * 1.5); }
+        // A surface's: looked up a little towards the sun, so that it does not shade itself.
+        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[1].xyz * 2.0); }
 
         // The terrain's own shadow beyond the cascades: a world point is shadowed by the land towards the sun when it lies below the
         // top of that land's shadow (precomputed per sun direction, TerrainShadowMap), softened by the occluder's distance.
