@@ -36,6 +36,12 @@ public interface IAppearanceSource
     CharacterAppearance? Create(string recordId, Loadout loadout) => null;
 
     /// <summary>
+    /// As <see cref="Create(string, Loadout)"/> with the head shaven or not as <paramref name="shaved"/> says (the character's own state); null: the
+    /// CHARACTER's <c>shaved</c>.
+    /// </summary>
+    CharacterAppearance? Create(string recordId, Loadout loadout, bool? shaved) => Create(recordId, loadout);
+
+    /// <summary>
     /// A random name for a <c>named</c> CHARACTER of the sex (<see cref="NamePool"/>); null: none (no lists).
     /// </summary>
     string? RandomName(bool female, ulong roll) => null;
@@ -133,13 +139,19 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
     /// The look of a CHARACTER record dressed in <paramref name="loadout"/> (an animal's: its species' look); null, with a warning, when it cannot
     /// be built.
     /// </summary>
-    public CharacterAppearance? Create(string recordId, Loadout loadout)
+    public CharacterAppearance? Create(string recordId, Loadout loadout) => Create(recordId, loadout, null);
+
+    /// <summary>
+    /// The look of a CHARACTER record dressed in <paramref name="loadout"/>, its head shaven or not as <paramref name="shaved"/> says (null: the
+    /// record's own <c>shaved</c>); an animal's: its species' look. Null, with a warning, when it cannot be built.
+    /// </summary>
+    public CharacterAppearance? Create(string recordId, Loadout loadout, bool? shaved)
     {
         try
         {
             if (db.Find(recordId) is { Type: FcsRecordType.AnimalCharacter }) return Create(recordId, null, loadout.Seed);
 
-            return CharacterAppearance.Build(db, installRoot, recordId, new CharacterOptions { Loadout = loadout });
+            return CharacterAppearance.Build(db, installRoot, recordId, new CharacterOptions { Loadout = loadout, Shaved = shaved });
         }
         catch (Exception e) when (e is IOException or FcsFormatException or KeyNotFoundException or InvalidDataException or UnauthorizedAccessException)
         {

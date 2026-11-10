@@ -1081,6 +1081,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 // be (#356).
                 if (c.Fighter is not { IsAnimal: true }) c.Shaved = true;
                 _assembly.Chain(c);
+                _assembly.MatchShave(c);
                 if (cages.Count == 0) continue;
                 int pick = Rng.Int(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveCage + (ulong)picks++), cages.Count);
                 world.Fixtures.Imprison(world, id, cages[pick]);

@@ -217,14 +217,31 @@ sealed class CharacterAssembly(PopulationData data)
         if (cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != HandHold.OfCategory((int)WeaponCategory.Bow).Weapon)
             cold.DrawnWeapon = CombatSystem.MeleeDrawn(fighter);
         Dye(cold, inventory);
-        if (cold.Appearance is not { } look || look.Animal is not null) return;
+        RefreshLook(cold);
+    }
+
+    /// <summary>
+    /// Builds the character's look again when it does not show the character's shave (<see cref="CharacterCold.Shaved"/>: a head shaven by
+    /// processing, or grown back since the look was made).
+    /// </summary>
+    public void MatchShave(CharacterCold cold)
+    {
+        if (cold.Appearance is { Animal: null } look && look.Shaved != cold.Shaved) RefreshLook(cold);
+    }
+
+    /// <summary>
+    /// Builds the character's look again from its body, worn kit, limbs and shave; an animal's and one without an inventory stay as they are.
+    /// </summary>
+    void RefreshLook(CharacterCold cold)
+    {
+        if (cold.Inventory is not { } inventory || cold.Appearance is not { } look || look.Animal is not null) return;
         var body = look.Loadout?.Appearance.Record ?? look.Body?.Record;
         if (Saving.SavedKit.LoadoutOf(body, Saving.SavedKit.FromInventory(inventory), data.Db, look.Loadout?.Seed ?? 0, FactionRecord(cold))
-            is { } kit)
-        {
-            Saving.SavedKit.SetLimbs(kit, cold.Medical, data.Db);
-            if (data.Appearances?.Create(cold.RecordId, kit) is { } updated) cold.Appearance = updated;
-        }
+            is not { } kit)
+            return;
+
+        Saving.SavedKit.SetLimbs(kit, cold.Medical, data.Db);
+        if (data.Appearances?.Create(cold.RecordId, kit, cold.Shaved) is { } updated) cold.Appearance = updated;
     }
 
     /// <summary>

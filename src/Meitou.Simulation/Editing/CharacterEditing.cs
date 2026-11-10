@@ -230,7 +230,7 @@ public static class CharacterEditing
 
         // Stumps and prosthetics stay on the edited look.
         if (kit is not null) SavedKit.SetLimbs(kit, cold.Medical, data.Db);
-        if (kit is not null && data.Appearances?.Create(cold.RecordId, kit) is { } updated)
+        if (kit is not null && data.Appearances?.Create(cold.RecordId, kit, cold.Shaved) is { } updated)
         {
             cold.Appearance = updated;
             cold.LookEdited = true;

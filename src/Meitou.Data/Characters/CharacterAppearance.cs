@@ -251,6 +251,11 @@ public sealed record CharacterOptions
     /// <c>race</c> list when it has any.
     /// </summary>
     public IReadOnlyList<GameReference>? RaceOverride { get; init; }
+
+    /// <summary>
+    /// The head shaven or not, as the character is now (a processed slave's, or an ex-slave's grown back); null: the CHARACTER's <c>shaved</c>.
+    /// </summary>
+    public bool? Shaved { get; init; }
 }
 
 /// <summary>
@@ -421,6 +426,12 @@ public sealed class CharacterAppearance
     /// </summary>
     public int HiddenParts { get; private set; }
 
+    /// <summary>
+    /// The head is shaven: no hair, and a mesh with <c>bone_horns_top_short</c> has its horns cut (<see cref="CharacterOptions.Shaved"/>, else the
+    /// CHARACTER's <c>shaved</c>).
+    /// </summary>
+    public bool Shaved { get; private set; }
+
     #endregion
 
     #region Building a person
@@ -470,6 +481,7 @@ public sealed class CharacterAppearance
         AddEquipped(db, result, options, race, items);
         var worn = WornArmour(items);
         bool headless = ApplyDecapitation(result, loadout, worn);
+        result.Shaved = options.Shaved ?? character?.GetBool("shaved") == true;
         AddHairAndBeard(db, result, body, character, race, random, female, worn, headless);
         AddWornItems(db, result, race, female, items, worn, materials, colours, character, faction, loadout);
 
@@ -702,7 +714,7 @@ public sealed class CharacterAppearance
             : character is null || body is null ? PickHair(db, race, AttachSlot.Hair, random)
             : null;
         var beard = body?.BeardId is { } beardId ? db.Find(beardId) : null;
-        if (character?.GetBool("shaved") == true)
+        if (result.Shaved)
         {
             hair = null;
             result.Notes.Add("shaved: no hair");
@@ -1056,6 +1068,7 @@ public sealed class CharacterAppearance
         {
             Character = Character,
             Animal = Animal,
+            Shaved = Shaved,
             Race = Race,
             Female = Female,
             Body = Body,
@@ -1094,6 +1107,7 @@ public sealed class CharacterAppearance
         {
             Character = Character,
             Animal = Animal,
+            Shaved = Shaved,
             Race = Race,
             Female = Female,
             Body = Body,
