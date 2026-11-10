@@ -71,6 +71,10 @@ authored by its bot (`GithubAuth.cs`: JWT → installation token, cached for its
 issues then show its owner); with neither, sends are refused. `FEEDBACK_DIR` (default `/data/feedback`, a persistent volume: the image creates it
 owned by the app user), `PUBLIC_URL` (the links' base, default the Cloudovna address).
 
+Checking a report: unzip its `save.zip` and run `meitou-tools probe <save folder> <mode>` (headless load under the install's load order, which
+may not be the reporter's; modes in its usage: nearby characters, a character's AI over time, slaves, cages, dialogue, storage, building re-save,
+navmesh heights) or `meitou-tools objects <x> <z> <radius>` (towns, foliage and level buildings at the report's camera target).
+
 ## Ways in
 
 - **Site**: "Works for me" / "Broken" under each row and a form dialog; `site/src/data/reports.ts` holds the service URL and the
