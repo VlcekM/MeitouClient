@@ -860,6 +860,10 @@ Stats Affected and Ways To Train headings with bullet rows. The right starts wit
 a thin Next Level bar and percentage, followed by Description and wrapped prose.
 Help text is available from the installed [gettext catalog](../formats/gettext.md).
 
+**Levels and Next Level** (**Verified** decompile): a row's value is `floorf(stat × character vfunc 0x398)` (`FUN_1408aaa10`), the bar and its
+`{1,num}%` the fraction `stat - floorf(stat)` (`FUN_1408ab4d0`); both read the raw stat (`FUN_140884ac0` with flag 1, no injury factor). So
+the number only rises when the bar fills.
+
 **Stats Affected numbers** (**Verified** decompile of `FUN_1408b1250`, one branch per stat; constants from the loader `FUN_14086b2b0`, which writes them as floats from
 `0x142133dd0`): the left panel is a DataPanel of label/value rows, `Stats Affected:` and `Ways To Train:` in Main, each row label "-" + the text; most rows have no value.
 Values: Strength (1) `Max carry weight:` `{1,num} kg` = (int)(strength × its multiplier `FUN_140338090` + `encumbrance base`), `Strength XP rate (walking):` (int)(`FUN_1408c60c0`
