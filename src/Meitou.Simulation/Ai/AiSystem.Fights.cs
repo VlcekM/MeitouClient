@@ -104,6 +104,9 @@ public sealed partial class AiSystem
     /// </summary>
     (float Factor, CharacterId Target) FightPick(World world, int slot, TaskType type, AiMind mind, IReadOnlyDictionary<int, int>? pending = null)
     {
+        // An animal in a bed cannot plan any fight: the melee rows need it ready for action and standing, and no row of its repertoire gets it out of
+        // the bed (docs/game/ai-tasks.md "Animals in beds").
+        if (world.Characters.Cold(slot) is { } lying && Repertoire.StuckInBed(world, lying)) return (0, CharacterId.None);
         if (Protects(type)) return ProtectPick(world, slot, type, mind, pending: pending);
         var foe = type switch
         {

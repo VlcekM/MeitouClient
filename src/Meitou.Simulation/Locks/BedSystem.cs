@@ -323,7 +323,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed } sleeper)
+            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed } sleeper
+                    && !Ai.Repertoire.StuckInBed(world, sleeper))   // an animal has no row that gets it out (docs/game/ai-tasks.md "Animals in beds")
                 world.Fixtures.GetOutOfBed(world, table.IdOf(i));
     }
 

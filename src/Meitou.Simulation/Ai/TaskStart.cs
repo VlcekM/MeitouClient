@@ -36,6 +36,19 @@ public static class Repertoire
         if (confined == Chained) return Chained;
         return SquadRegistry.IsAnimal(cold) ? Animal : Human;
     }
+
+    /// <summary>
+    /// Whether the character can plan its way out of a bed (<b>Verified</b>, docs/game/ai-tasks.md "Animals in beds"): the only providers of the
+    /// state not-in-bed are the rows 116, 208 and 257 (Task_GetOutOfBed), registered for the human (1) and crippled (0x40) repertoires, not the
+    /// animal one; every row that moves or fights needs not-in-bed (the walks 1, 29, 67) or "ready for action" (the attacks 4 and 227).
+    /// </summary>
+    public static bool CanLeaveBed(World world, CharacterCold cold) => (Of(world, cold) & (Human | Crippled)) != 0;
+
+    /// <summary>
+    /// A character lying in a bed (awake or not) that cannot plan its way out of it: an animal. It starts no task but the rows that need no leaving
+    /// the bed (<see cref="TaskType.Idle"/> and <see cref="TaskType.Aoeu"/> Waking up), fights nobody and goes nowhere until someone lifts it out.
+    /// </summary>
+    public static bool StuckInBed(World world, CharacterCold cold) => cold.InSomething == Locks.HeldState.Bed && !CanLeaveBed(world, cold);
 }
 
 /// <summary>
@@ -237,7 +250,8 @@ public static class TaskStart
     /// the row the <see cref="TaskType"/> (a pick-up is 225 for the order, 148 for the rescue job).
     /// </summary>
     public static bool Eligible(World world, CharacterCold cold, TaskType row) =>
-        TaskDataTable.Of(row) is not { } data || (data.Category & Repertoire.Of(world, cold)) != 0;
+        (TaskDataTable.Of(row) is not { } data || (data.Category & Repertoire.Of(world, cold)) != 0)
+        && (row is TaskType.Idle or TaskType.Aoeu || !Repertoire.StuckInBed(world, cold));
 
     /// <summary>
     /// Starts a task (serial phases only): the row must be <see cref="Eligible"/>; then a fight ends (a new task drops the fight task,

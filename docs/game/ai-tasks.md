@@ -433,14 +433,14 @@ from the decompile and agree with this table, except that the decompile shows no
 | 32 | `hasDestinationTown` |
 | 33 | (empty name string) |
 | 36 | `atDestinationTown` |
-| 37 | `isReadyForAction` |
+| 37 | `isReadyForAction` (`FUN_140998550`, **Verified** decompile): a living character that can use an arm (medical `+0x165` or `+0x166`) with a melee weapon in hand (state 5), and either upright (prone state vfunc `0x368` 0 and state 26 false) or crippled (vfunc `0x360`). State 26 is true in a bed, so a character lying in one is not ready; the planner reaches 37 through row 59 Get ready (`!26`) <- 28 Standing (`!83`) <- 116 / 208 / 257 (`45`) |
 | 38 | `hasOneWorkingArm` |
 | 39 | `isAggressionTowardsMe`: the state-16 evaluator `FUN_14059de10` asked of the character itself, i.e. its byte `+0x2b0` (the immediate-threat flag of 158, [combat](combat.md)); the thunk was followed in the exe, an override branch on a global lookup is **Unknown** (**Observed**) |
 | 40 | `isWithin10Meters`: as 41 with 100 (thunk `FUN_1405a32b0`, `DAT_141683250`; **Verified**, exe bytes). Meitou `AiSystem.Within10Meters` |
 | 41 | `isWithin50Meters` (thunk `FUN_1405a3290` -> `FUN_1405a3080`, **Verified**, exe bytes): the ground-plane distance to the target strictly under 500 (`DAT_14168dcf4`; world units are decimetres, so the names are in metres); a position target (type 0xb) also needs a height difference under 50 (`DAT_141683170`); a type 0xd target uses 3000 instead (`DAT_1416ce4b0`, the type is **Unknown**). Meitou `AiSystem.Within50Meters` |
 | 42 | `targetStandingStill` |
 | 43 | `iAmDown` |
-| 45 | `canGetUp` |
+| 45 | `canGetUp` (`FUN_140598c20`, **Verified** decompile): the medical unconscious (`+0x161`) and dead (`+0x164`) bytes clear, the starvation knock-out test `FUN_140644320` false (hunger under 0.1, or under a toughness-dependent level once per refractory period) and not carried (`+0x3d4`). Meitou holds it true (`PlanContext.Holds`) |
 | 46 | `isAtLocation` |
 | 47 | `IS_CARRYING_SOMETHING` |
 | 48 | `IS_CARRYING_TARGET` |
@@ -819,6 +819,10 @@ Meitou: `PlanContext.Find` gives rows 113 / 114 / 242 a `Targets.Store` target (
 of `ProductionSystem.Ditchable`; the finder's own owner and town test is **Unknown**, engine choice), state 67 is true for it while the character carries such an item, and a plan whose first step is 93 or the walk to a
 Store target sets `AiMind.DitchRequest`; `TownDutySystem` runs a `Ditch` errand (walk, put in, `Replan`). So a worker of goal 189 whose inventory is full ditches before it empties the machine (92's B 82), and a
 town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (the nearest machine whose output holds an item the target machine's inputs take, scored by `FUN_14059d000`) is modelled for machines (`ProductionSystem.InputSource`), see [NPC town machines](buildings-production.md#npc-town-machines).
+
+## Animals in beds
+
+**Verified** (rows from the registry transcription above, repertoire choice `FUN_14060e840`; decompile of `FUN_140598c20`, `FUN_140998550`, `FUN_140599e90`): a character lying in a bed (Character `+0x2f8` 1) has state 83 `isInBed` and state 26 true. The only providers of `!83` are the three Task_GetOutOfBed rows (116, 208, 257), all registered 0x41 (human and crippled repertoires); the animal repertoire (0x20) has none. Every row an animal acts on needs `!83` or `isReadyForAction` (37): the walks 1, 29 and 67 list `!83`, 28 Standing lists it, and the attack 227 needs 37, whose provider 59 Get ready needs `!26`, whose provider 28 needs `!83`. So an animal in a bed (put there knocked out by the player's Put in Bed, then woken) can plan nothing that moves or fights: it lies on with no goal, does not fight back and is hit freely. The exploit of hitting a hostile animal in a bed is this planner dead end, kept as is (**Verified** by the tables, **Observed** by the user's play reports; not checked in the running original). A human or crippled character plans 116 first and gets up to fight. Meitou: `Repertoire.StuckInBed` (animal repertoire, in a bed) makes `TaskStart.Eligible` refuse every row but Idle and 52, `AiSystem.FightPick` score 0 and `AiSystem.Act` do nothing, and `BedSystem.GetUp` leave the animal in.
 
 ## Precedence
 
