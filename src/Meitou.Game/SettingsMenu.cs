@@ -354,12 +354,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// Whether a Graphics switch has a row: not the ones a technique choice stands for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>, when the
-    /// choices exist: the Metal panel has none), nor the screen-space contact shadows where rays shadow the sun (the traced shadows have the contact
-    /// detail).
+    /// choices exist: the Metal panel has none), nor the screen-space contact shadows while the sun's shadows are traced (the rays have the contact
+    /// detail; with the cascades the row shows, on a device with ray queries too).
     /// </summary>
     bool ShownSwitch(string label) =>
         !(WorldFrame.ChoiceDrivenSwitches.Contains(label) && Values.Sliders.Any(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
-        && !(label == "Contact shadows" && WorldFrame.RayTracingAvailable);
+        && !(label == "Contact shadows" && Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.SunShadowsChoice) is { } sun && sun.Get() >= 3);
 
     internal List<Entry> Entries()
     {
