@@ -234,7 +234,12 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
-  the merged data). Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
+  the merged data). Skeletons are not a faction rule either: the Holy Nation's kill on sight is the event 3 root `Holy Nation spots skeleton`
+  (`19066-Dialogue.mod`: target not in combat, not an ally, within talking range; children need DC 79 HAS_ROBOT_LIMBS, true for an `is robot`
+  race, and run DA 6), in the packages `Holy Nation Paladin` (Paladin, High Paladin, Holy Sentinel), `Holy Nation Gate Guard`, `holy nation guard` and `Holy Priest`;
+  `Holy Chosen` has no dialogue package and the `Holy Army force` templates no `dialog leader` / `dialog squad`, so the Chosen join only
+  through the squad's TEMP_ENEMY tag (**Verified** by probe of the merged base data). Meitou headless on the #412 save: a Paladin says the line
+  and its 113-member squad attacks within 3 ticks. Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
   bandit faction a town keeps fighting can drop to hostile. A Dust Bandit squad (the player at -10, not hostile) starts its fight through its
   event 3 / 66 lines ([dialogue](dialogue.md)); `Bandit mugging one liner`, `bandit fight picking new target in wilds` and `Bandit Revenge` need
   the speaker outside a non-player town (DC 31 false), `Give us your stuff!` the target, so inside a town's radius (the Hub: 2500) only
