@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
@@ -25,10 +26,10 @@ sealed class AreaArrivalDialogue(DialogueSystem system, PopulationData data, Dia
 
     /// <summary>
     /// <c>PlayerInterface::triggerAreaArrivalDialogue</c> (<c>FUN_1407ffe40</c>, docs/game/dialogue.md "Arrival banter"): with the active squad of at
-    /// least 2, its members awake, not carried, not in a bed or cage, not animals, not fighting and not in a town are the candidates; nothing when a
-    /// member senses an enemy; with 2 or more, a line of the group's <c>arrival dialog</c> is said between two of them. Engine: the original scores
-    /// every candidate with every dialogue (<c>scoreCustomDialog</c>) and runs the best; here the first dialogue, speaker and partner (squad order)
-    /// that have a line win, "on screen" is not tested, and an enemy sensed is one hostile awake within sight range.
+    /// least 2, its members awake, not carried, not in a bed or cage, not animals, not fighting, not in a town and on screen are the candidates;
+    /// nothing when a member senses an enemy; with 2 or more, a line of the group's <c>arrival dialog</c> is said between two of them. Engine: the
+    /// original scores every candidate with every dialogue (<c>scoreCustomDialog</c>) and runs the best; here the first dialogue, speaker and partner
+    /// (squad order) that have a line win, and an enemy sensed is one hostile awake within sight range.
     /// </summary>
     public void Arrive(World world, AreaArrival a)
     {
@@ -73,7 +74,7 @@ sealed class AreaArrivalDialogue(DialogueSystem system, PopulationData data, Dia
             if (!DialogueSystem.Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None
                 || SquadRegistry.IsAnimal(c) || c.InCombat) continue;
             if (SensesEnemy(world, s, c)) return false;
-            if (data.TownAt(table.Next[s].Position) >= 0) continue;
+            if (data.TownAt(table.Next[s].Position) >= 0 || !OnScreen(world, table.Next[s].Position)) continue;
             candidates.Add(id);
         }
 
@@ -108,4 +109,16 @@ sealed class AreaArrivalDialogue(DialogueSystem system, PopulationData data, Dia
     /// The original's <c>numEnemies</c> &gt; 0: the character's senses count an enemy (<see cref="CharacterFacts.Senses"/>).
     /// </summary>
     static bool SensesEnemy(World world, int slot, CharacterCold c) => CharacterFacts.Senses(world, slot) is { Enemies: > 0 };
+
+    /// <summary>
+    /// The candidate's "on screen" test: inside the camera's view (<see cref="MedicalClock.OnScreen"/>), else within
+    /// <see cref="MedicalTimeBudget.NpcRange"/> of <see cref="World.ViewPosition"/>; a world with no camera at all (headless) passes everyone. Without
+    /// it a member travelling alone far from its squad banters with a mate out of sight and seems to talk to itself (#430).
+    /// </summary>
+    static bool OnScreen(World world, Vector3 at)
+    {
+        if (world.View is { } view) return MedicalClock.OnScreen(view, at);
+        if (world.ViewPosition is not { } eye) return true;
+        return Vector3.DistanceSquared(at, eye) <= MedicalTimeBudget.NpcRange * MedicalTimeBudget.NpcRange;
+    }
 }
