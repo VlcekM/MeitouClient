@@ -87,7 +87,7 @@ sealed class TitleScreen(GameHost host)
     /// <summary>
     /// The Meitou title shows the live world.
     /// </summary>
-    internal bool TitleVisible => host.Player.TitleOpen && host.Player.UiMode == UiMode.Meitou;
+    internal bool TitleVisible => host.Player.TitleOpen && host.Player.MeitouMainMenu;
 
     /// <summary>
     /// The title's hour: 0.75 h after sunrise.

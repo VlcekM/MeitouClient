@@ -83,6 +83,8 @@ sealed partial class PlayerInterface
     /// The interface is drawn and takes input (F7 and the cinema's clean picture hide it).
     /// </summary>
     public bool UiVisible { get; set; } = true;
+    /// <summary>The title screen is Meitou's (its menu over the staged world) rather than the original's picture; a switch of its own, not <see cref="UiMode"/>.</summary>
+    public bool MeitouMainMenu { get; set; } = true;
 
     /// <summary>
     /// The share of the screen under fully opaque controls in the last drawn UI frame (<see cref="UiPainter.OpaqueCoverage"/>); 0 without a painter.
@@ -528,9 +530,9 @@ sealed partial class PlayerInterface
         {
             if (FeedbackPanel.ShotWithoutMenus && FeedbackPanel.FeedbackShotHides.Contains(screen.Id)) continue;
             if (screen.Id == "editor") controls.AddRange(CharacterEditor.EditorBackdrop());
-            controls.AddRange(screen.Controls.Where(c => UiMode == UiMode.Faithful ||
+            controls.AddRange(screen.Controls.Where(c => !MeitouMainMenu ||
                 !c.Properties.TryGetValue("ImageResource", out var resource) || resource != "Kenshi_TitleScreen"));
-            if (screen.Id == "title" && UiMode == UiMode.Meitou && !Frontend.ShowCredits) AddTitleMark(controls);
+            if (screen.Id == "title" && MeitouMainMenu && !Frontend.ShowCredits) AddTitleMark(controls);
         }
     }
 

@@ -49,6 +49,7 @@ its run of smooth frames measures play. **Observed** (siwa-test, Ultra settings,
 to about 6.5 s with this, the grass picking, the coarsening rule and the character LOD cache.
 Population builds are queued/applied at frame boundaries without advancing game time, AI or movement;
 navmesh-gated spawns are retried while loading. Warm-up and the flight hold the simulation paused.
+Which title shows is the Interface setting Main menu style (`MeitouMainMenu` in `meitou.user.json`, default Meitou), independent of the UI mode; the main-menu sky flight needs the Meitou title.
 The Faithful title does not wait: its picture is opaque, so the start ends with the splash ([ui-screens](game/ui-screens.md#splash)) and the boot.
 The Meitou title waits for terrain, scenery, character assets and used textures (including deferred loads), then
 one full second of <40ms frames (max5s of ready content for frame pacing, so slow GPUs reach the menu). Its menu artwork/fonts/pipelines warm under the opaque cover too;

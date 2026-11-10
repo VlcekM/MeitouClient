@@ -250,7 +250,7 @@ sealed class ScreenRouter(PlayerInterface player)
     {
         if (id == "title")
         {
-            if (player.UiMode == UiMode.Meitou) player.TitleMenu.MeitouTitleMenu(controls);
+            if (player.MeitouMainMenu) player.TitleMenu.MeitouTitleMenu(controls);
             player.TitleMenu.AddDataProblems(controls);
             return true;
         }

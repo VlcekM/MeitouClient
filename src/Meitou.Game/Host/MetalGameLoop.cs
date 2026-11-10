@@ -899,6 +899,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         };
         host.Player = _hud;
         _hud.LoadUi(host.GameOptions.UiMode ?? host.Config.UiMode, host.Assets.Find);
+        _hud.MeitouMainMenu = host.GameOptions.MeitouMainMenu ?? host.Config.MeitouMainMenu;
         _hud.CreateUiPainter(overlay, host.Assets.Find);
         host.ConfigurePlayerInterface(_hud);
         if (host.Sandbox.IsSandbox)

@@ -275,6 +275,8 @@ sealed class GamePages(SettingsMenu menu)
     {
         result.Add(new("UI style", "Choose original Kenshi skins or Meitou materials.",
             Choice: new(() => ["Faithful", "Meitou"], () => (int)menu.Player.UiMode, i => menu.Player.SetUiMode((UiMode)i))));
+        result.Add(new("Main menu style", "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style.",
+            Choice: new(() => ["Faithful", "Meitou"], () => menu.Player.MeitouMainMenu ? 1 : 0, i => menu.Player.MeitouMainMenu = menu.Config.MeitouMainMenu = i == 1)));
         result.Add(new("Speed units", "The unit of the run speed in the character's information panel (the game: mph).",
             Choice: new(() => ["mph", "km/h"], () => (int)menu.Config.SpeedUnit, i => menu.Player.SpeedUnit = menu.Config.SpeedUnit = (SpeedUnit)i)));
         result.Add(new("Damage floaters", "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. "
@@ -601,7 +603,7 @@ sealed class GamePages(SettingsMenu menu)
             "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has "
             + "loaded.",
             Toggle: new("Splash screens", () => !menu.Config.SplashScreens, v => menu.Config.SplashScreens = !v, Remaster: true)));
-        result.Add(new("Main menu scene transitions", "Sky flight to/from the main menu (Meitou UI).",
+        result.Add(new("Main menu scene transitions", "Sky flight to/from the main menu (Meitou main menu).",
             Toggle: new("Main menu scene transitions", () => menu.Config.MainMenuTransitions, v => menu.Config.MainMenuTransitions = v)));
         result.Add(new(_mainMenuTransitionSpeed.Label, "Higher values make the camera ascend and descend faster.",
             Slider: _mainMenuTransitionSpeed));

@@ -1197,6 +1197,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
         TimeSpeedsChanged?.Invoke();
         Player.SetUiMode(UiMode.Meitou);
+        Player.MeitouMainMenu = Config.MeitouMainMenu = true;
         Player.SpeedUnit = Config.SpeedUnit = SpeedUnit.Mph;
         Player.Floaters = Config.Floaters = FloaterMode.Simple;
         Player.ShowNames = Config.ShowNames = true;

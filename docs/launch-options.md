@@ -40,7 +40,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--ui <faithful\|meitou>` | | `meitou.user.json` (meitou) | UI mode, independent of graphics. |
 | `--ui-showcase` | | off | With `--screenshot`: HUD, inventory, stats, map, menus, a trade and a conversation, in either UI mode. |
 | `--ui-panel <name>` | panel name | none | With `--screenshot`: open one panel (hud, hud-expanded, inventory, stats, overview, menu, title, ...). |
-| `--title-preview` | | off | With `--screenshot`: the staged Meitou title scene. Sets UI mode to Meitou. |
+| `--title-preview` | | off | With `--screenshot`: the staged Meitou title scene. Sets UI mode and main menu style to Meitou. |
 
 ### Sandbox, scenes, duel and battle
 
@@ -168,7 +168,7 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` (`Parse`, `Usag
 | `--distant-range <zones>` | zones | 10 | How far distant towns are drawn; 0 for none. |
 | `--impostor-budget <MB>` | MB | 8% of video memory (5% integrated), 48 to 1024 | Video memory for resident impostor atlases. |
 | `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD, world colour map and terrain colour tile caches). |
-| `--low-end` | | off | Potato-PC preset: short draw distances, no shadows, reflections, AO, relief, light shafts or AA, 0.83 render scale, sparse grass and particles, Faithful UI (over `--ui` and the saved mode, which it leaves as saved). Options after it override the graphics. |
+| `--low-end` | | off | Potato-PC preset: short draw distances, no shadows, reflections, AO, relief, light shafts or AA, 0.83 render scale, sparse grass and particles, Faithful UI and Faithful main menu (over `--ui` and the saved modes, which it leaves as saved). Options after it override the graphics. |
 | `--benchmark-baseline` | | off | The settings of benchmarks for the [benchmarks page](../bench/README.md): a 1920x1080 window (implies `--windowed` and `--size 1920x1080`; a later `--size` overrides), the Medium tier, then no GI (indirect light and indoor GI; the device is made without ray queries), ground parallax or tessellation (displacement, rock smoothing, outline refinement), no upscaler, SMAA at render scale 1. Like `--low-end`, the saved graphics are neither applied nor overwritten. Fixed for the run in the game: later graphics options it covers do not take effect (the viewer, which has no tier, honours them). Vulkan only: the Metal renderer applies the saved graphics over it. |
 
 ### Post-processing and upscaling (`PostProcessOptions.cs`)

@@ -120,7 +120,9 @@ sealed partial class GameHost
     {
         if (ActiveSceneLoad is not null) return;
         ActiveSceneLoad = new();
-        if (Player.UiMode == Data.Ui.UiMode.Meitou && (mainMenuTransition ? Config.MainMenuTransitions : Config.InGameTransitions))
+        bool flies = mainMenuTransition ? Player.MeitouMainMenu && Config.MainMenuTransitions
+            : Player.UiMode == Data.Ui.UiMode.Meitou && Config.InGameTransitions;
+        if (flies)
             SkyArrival = new(Camera, PresentationHour ?? (TitleScreen.TitleVisible ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay),
                 mainMenuTransition ? Config.MainMenuTransitionSpeed : Config.InGameTransitionSpeed, immediate: !TitleScreen.TitleVisible);
         if (destinationHour is { } hour) SkyArrival?.SetDestination(hour);
@@ -207,7 +209,7 @@ sealed partial class GameHost
         _warmSeconds += seconds;
         // The Faithful title is the original's opaque picture: nothing of the world shows behind it, so its view is not warmed (the original loads
         // the world only for a game). The start's splash plays out first.
-        if (Player.TitleOpen && Player.UiMode == Data.Ui.UiMode.Faithful && CharacterEditor.PendingCreation is null)
+        if (Player.TitleOpen && !Player.MeitouMainMenu && CharacterEditor.PendingCreation is null)
         {
             if (Loading is { SplashPlaying: true }) return;
             Warming = false;

@@ -641,10 +641,10 @@ sealed class FrontendScreens(PlayerInterface player)
         }
 
         Enable(b, "ExitButton", "CreditsButton", "ImportGameButton");
-        if (player.UiMode == UiMode.Faithful)
+        if (!player.MeitouMainMenu)
             foreach (var (widget, caption) in TitleMenu.TitleCaptions) b.Text[widget] = UpperCaption(caption);
 
-        if (player.UiMode == UiMode.Meitou)
+        if (player.MeitouMainMenu)
         {
             foreach (var (widget, at) in player.TitleMenu.MenuLayout(card: Slots.Count > 0 && _slotReadable)) b.Positions[widget] = at;
         }
@@ -865,7 +865,7 @@ sealed class FrontendScreens(PlayerInterface player)
         var root = player.FaithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
         float w = Math.Min(size.Width, player.Width), h = Math.Min(size.Height, player.Height);
-        float x = player.TitleOpen && player.UiMode == UiMode.Faithful ? Math.Min(player.Width / 2f, player.Width - w) : (player.Width - w) / 2;
+        float x = player.TitleOpen && !player.MeitouMainMenu ? Math.Min(player.Width / 2f, player.Width - w) : (player.Width - w) / 2;
         b.Positions[root.Name] = new(x, (player.Height - h) / 2, w, h);
 
         // Meitou: the save list ends above the buttons' row, where the Kenshi saves tick goes (WithSaveFilter).

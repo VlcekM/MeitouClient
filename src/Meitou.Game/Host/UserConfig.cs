@@ -207,9 +207,13 @@ sealed class UserConfig
     /// </summary>
     public bool SplashScreens { get; set; }
     /// <summary>
-    /// The sky arrival's flight over a load from the title (Meitou UI only; <see cref="Title.SkyArrival"/>), on by default.
+    /// The sky arrival's flight over a load from the title (Meitou main menu only; <see cref="Title.SkyArrival"/>), on by default.
     /// </summary>
     public bool MainMenuTransitions { get; set; } = true;
+    /// <summary>
+    /// The title screen (Interface settings), independent of <see cref="UiMode"/>: on, Meitou's menu over the staged world scene; off, the original's picture.
+    /// </summary>
+    public bool MeitouMainMenu { get; set; } = true;
     /// <summary>
     /// The sky arrival's flight over a load during play (Meitou UI only), on by default.
     /// </summary>

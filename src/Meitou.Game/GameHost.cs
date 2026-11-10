@@ -790,6 +790,7 @@ sealed partial class GameHost(
         // Picks against the drawn terrain (the streamed fine window): the boot window's heights fall back to a 144-unit grid away from the start.
         Player = new PlayerInterface(Session, Gpu.Terrain.HeightAt, DrawnPosition);
         Player.LoadUi(GameOptions.UiMode ?? Config.UiMode, Assets.Find);
+        Player.MeitouMainMenu = GameOptions.MeitouMainMenu ?? Config.MeitouMainMenu;
         Player.SpeedUnit = Config.SpeedUnit;
         Player.ShowNames = Config.ShowNames;
         Player.Floaters = Config.Floaters;

@@ -36,6 +36,10 @@ sealed class GameOptions
     /// </summary>
     public Meitou.Data.Ui.UiMode? UiMode;
     /// <summary>
+    /// The title screen for this run, over <see cref="UserConfig.MeitouMainMenu"/>: <c>--title-preview</c> on, <c>--low-end</c> off.
+    /// </summary>
+    public bool? MeitouMainMenu;
+    /// <summary>
     /// <c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.
     /// </summary>
     public bool LowEnd;
@@ -319,7 +323,11 @@ sealed class GameOptions
                     break;
             }
         }
-        if (g.LowEnd) g.UiMode = Data.Ui.UiMode.Faithful;
+        if (g.LowEnd)
+        {
+            g.UiMode = Data.Ui.UiMode.Faithful;
+            g.MeitouMainMenu = false;
+        }
         return (g, rest.ToArray());
     }
 
@@ -357,6 +365,7 @@ sealed class GameOptions
             case "--title-preview":
                 g.TitlePreview = true;
                 g.UiMode = Data.Ui.UiMode.Meitou;
+                g.MeitouMainMenu = true;
                 break;
             default:
                 return false;
