@@ -37,7 +37,9 @@ public struct GeometryRecord
     /// <summary>For the traced sun alone (the probes see these parts whole, as ever): the map that cuts a part of an object, and its threshold.</summary>
     public uint SunMap;
     public float SunCut;
-    public const int Size = 48;
+    /// <summary>For a character: its part's diffuse map and head map in the bindless table (0: none), and its tint (RGBA8; alpha 0: a hair, whose map is a brightness).</summary>
+    public uint CharacterDiffuse, CharacterHead, CharacterTint, Pad;
+    public const int Size = 64;
     /// <summary><see cref="Kind"/>: what the geometry is (the debug views colour by it; a terrain hit takes the ground colour map). Grass: the traced sun's cards (<see cref="TracedGrass"/>); Character: <see cref="TracedCharacters"/>.</summary>
     public const uint Terrain = 0, Object = 1, Foliage = 2, Grass = 3, Character = 4;
 }

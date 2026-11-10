@@ -255,6 +255,7 @@ sealed unsafe class TracedCharacters : IDisposable
             _jobTriangles += (int)g.TriangleCount;
             // The cut-out as the shadow draws make it; the channel rides in the record's diffuse index, which no probe ray reads for a character.
             (entry.Records[i].AlphaTexture, entry.Records[i].AlphaThreshold, entry.Records[i].Texture) = (part.AlphaMap, part.AlphaCut, part.Channel);
+            (entry.Records[i].CharacterDiffuse, entry.Records[i].CharacterHead, entry.Records[i].CharacterTint) = (part.Diffuse, part.Head, part.Tint);
         }
     }
 

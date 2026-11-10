@@ -11,7 +11,7 @@ internal sealed partial class CharacterRenderer
     /// One mesh group of a character's part as the traced scene skins it: the group and its drawn level, the part's model relative to the character's anchor, the instance flags of what the
     /// look hides (<see cref="HiddenFlags"/>), its morph base, and the cut-out the shadow draws use (map, threshold, channel: 0 none).
     /// </summary>
-    internal readonly record struct RayPart(GpuObjectPart Group, int Level, Matrix4x4 Model, uint Flags, uint MorphBase, uint AlphaMap, float AlphaCut, uint Channel);
+    internal readonly record struct RayPart(GpuObjectPart Group, int Level, Matrix4x4 Model, uint Flags, uint MorphBase, uint AlphaMap, float AlphaCut, uint Channel, uint Diffuse, uint Head, uint Tint);
 
     /// <summary>A character in the traced scene: its key, where its parts are relative to (its world position), its palette's first bone, how far from the eye, and its parts.</summary>
     internal sealed class RayCharacter
@@ -82,6 +82,12 @@ internal sealed partial class CharacterRenderer
         ref readonly var record = ref part.Material.Record;
         if ((record.Flags & CharacterShaders.AlphaPending) != 0) return;   // not drawn until its cut-out streams in
         var (map, cut, channel) = RayCutout(in record);
+        // What a reflection shows: the part's own maps, as dark as the colour pass writes them (character.hlsl and skin.hlsl DARKEN).
+        bool hair = record.Shading == CharacterShaders.ShadeHair;
+        uint diffuse = (record.Flags & CharacterShaders.HasDiffuse) != 0 ? record.Tex[CharacterShaders.SlotDiffuse] : 0;
+        uint head = (record.Flags & CharacterShaders.HasHead) != 0 ? record.Tex[CharacterShaders.SlotHeadDiffuse] : 0;
+        var shade = hair ? new Vector3(record.HairColour.X, record.HairColour.Y, record.HairColour.Z) * 0.7f : new Vector3(record.Shading != 0 ? 0.7f : (record.Flags & CharacterShaders.Worn) != 0 ? 0.8f : 1f);
+        uint tint = (uint)(Math.Clamp(shade.X, 0, 1) * 255) | (uint)(Math.Clamp(shade.Y, 0, 1) * 255) << 8 | (uint)(Math.Clamp(shade.Z, 0, 1) * 255) << 16 | (hair ? 0u : 255u << 24);
         var model = f.Model;
         model.Translation += shift;
         // The drawn level (the colour pass's rule): a surface's ray leaves the same triangles it drew, so its own body shadows it only where it really does.
@@ -90,7 +96,7 @@ internal sealed partial class CharacterRenderer
         var groups = part.Mesh.Parts;
         for (int g = 0; g < groups.Count; g++)
             if (GroupLevel(groups[g], level) is int lv && groups[g].Count[lv] >= 3)
-                c.Parts.Add(new RayPart(groups[g], lv, model, flags, morphs, map, cut, channel));
+                c.Parts.Add(new RayPart(groups[g], lv, model, flags, morphs, map, cut, channel, diffuse, head, tint));
     }
 
     /// <summary>The cut-out a part's shadow draw makes (<c>CharacterShaders.DepthFragment</c>): hair by its diffuse map's alpha channel, an item clipped on its normal map's alpha at 0.6.</summary>

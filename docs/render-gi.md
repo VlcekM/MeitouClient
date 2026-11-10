@@ -152,13 +152,14 @@ With the switch on, `uGiParams.z` gains bit 2 (bits: 1 resolve, 2 reflections, 4
 without probes, and on interiors with **Indoor GI** off, reflections run with no resolve). Off, the words written are those of before.
 
 - **March** (resolve size, 1/2 without it): gloss above 0.25, reflected from the stored normal, 40 screen steps with inverse depth linear, 5 halvings, up to 3000 units.
-  A rejected hit: from behind (stored normal), or within 4-12 units (a normal-mapped ray under its own surface). Fades at screen edges (6%) and the last quarter.
+  A hit counts up to 6 units behind the depth or 1.5 march steps. A rejected hit: from behind (stored normal), or within 4-12 units (a normal-mapped ray under its own surface). Fades at screen edges (6%) and the last quarter.
 - **Rays** (needs a probe trace this frame and storage on RGBA16F): the same ray for every glossy texel, against the traced scene and its characters, up to 4000 units,
-  lit as a probe ray (no specular, no haze). A hit replaces the march (world space first); a miss keeps what the march found (grass, water, particles are not traced) and
+  lit as a probe ray (no specular, no haze). A character hit takes its part's diffuse and head maps (mip 1 here, 4 for the probes), the darkening the colour pass applies and the hair's tint; skin tone, dyes and vests are left out. A hit replaces the march (world space first); a miss keeps what the march found (grass, water, particles are not traced) and
   proves the sky open past it. No rays: the march, then the sky, occluded.
 - **Shade** (same size): `seen - sky`, hazed as the fragment was, per unit of BRDF. `sky` is `kenshiLight`'s read of the cube, recomputed, so nothing is counted twice;
   `seen` mixes occluded sky to the hit by gloss 0.25-0.45. Every surface passes here: **specular occlusion** is recovered from the resolve's texel
   (`1 + lum((probes - sky) * share) / lum(sky)`, clamped: `kenshiLight`'s ratio) and needs no extra read of the probes.
+- **Cone** (in Shade): the hits within the disc a rough surface's cone covers at their distance (radius = distance x half the roughness squared, at most 16 texels; 16 samples find the distance, 32 average) are averaged on a fixed spiral, over texels of this surface only.
 - **Apply** (full size): depth-weighted upsample as the resolve's, times this pixel's Lazarov BRDF, specular colour 0.04 (only characters have metalness).
 
 A wet surface goes to gloss about 0.45 (`makeWet`). The ray is the lobe's dominant direction (`kenshiLight`'s sky lookup: towards the normal as the surface roughens), the

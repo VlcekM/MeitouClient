@@ -23,7 +23,7 @@ static class GiShaders
 
     /// <summary>A hit record in GLSL (<see cref="GeometryRecord"/>).</summary>
     internal const string GeometryStruct = """
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; uint charDiffuse; uint charHead; uint charTint; uint pad; };
         """;
 
     /// <summary>The vertex and index data of a hit, by device address.</summary>
@@ -256,7 +256,10 @@ static class GiShaders
     /// The light at a committed hit on the front (or on foliage), inside a shader's <c>main</c>: from <c>rq</c>, <c>dir</c>, <c>t</c>, <c>world</c> and the record <c>g</c>, the
     /// hit's <c>colour</c>, <c>sun</c>, <c>ambient</c> and <c>lamps</c>; its radiance towards the ray is <c>colour * (sun + ambient + lamps)</c>.
     /// </summary>
-    internal static readonly string HitShade = $$"""
+    internal static readonly string HitShade = HitShadeAt("4.0");
+
+    /// <summary>What a ray finds at its hit, its textures read at mip <paramref name="lod"/>: the probes want a coarse one, a reflection a fine one.</summary>
+    static string HitShadeAt(string lod) => $$"""
             uvec3 tri = Triangle(offsetBy(g.indices, uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true)) * 12u)).v;
             vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
             vec3 b = Position(offsetBy(g.vertices, tri.y * g.stride)).v;
@@ -266,9 +269,18 @@ static class GiShaders
             vec3 hit = world + dir * t;
             vec3 colour = albedo.rgb;
             if (g.kind == 0u && albedo.w > 0.5) colour = textureLod(uGround, (hit.xz + maps.w) / (2.0 * maps.w), 0.0).rgb;
+            else if (g.kind == {{GeometryRecord.Character}}u)
+            {
+                vec2 hitTex = hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true));
+                vec4 tint = unpackUnorm4x8(g.charTint);
+                vec3 own = g.charDiffuse != 0u ? textureLod(textures2D[nonuniformEXT(g.charDiffuse)], hitTex, {{lod}}).rgb : vec3(g.charTint != 0u ? 1.0 : 0.0);
+                if (g.charHead != 0u) own += textureLod(textures2D[nonuniformEXT(g.charHead)], hitTex, {{lod}}).rgb;
+                if (tint.a < 0.5) own = vec3(max(own.r, max(own.g, own.b)));
+                if (g.charTint != 0u) colour = own * tint.rgb;
+            }
             else if (g.kind != 0u && g.diffuse != 0u)
                 // The object's or plant's own diffuse map at the hit, a coarse mip: the bounce takes its colour.
-                colour = textureLod(textures2D[nonuniformEXT(g.diffuse)], hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true)), 4.0).rgb;
+                colour = textureLod(textures2D[nonuniformEXT(g.diffuse)], hitUv(g, tri, rayQueryGetIntersectionBarycentricsEXT(rq, true)), {{lod}}).rgb;
             vec4 amHit = ambientMap(hit);
             vec3 l = lightDir.xyz;
             float nl = max(dot(n, l), 0.0);
@@ -874,16 +886,16 @@ static class GiShaders
             TRACE(rq)
             if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
             {
-                imageStore(uHit, cell, vec4(marched.rgb, -1.0 - marched.a));
+                imageStore(uHit, cell, vec4(marched.rgb, ssrPackHit(ssrHitShare(marched.a), ssrHitDistance(marched.a), true)));
                 return;
             }
             float t = rayQueryGetIntersectionTEXT(rq, true);
             int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
             Geometry g = geometries[record];
             float env = lightDir.w;
-        {{HitShade}}
+        {{HitShadeAt("1.0")}}
             float reach = 1.0 - smoothstep(0.75, 1.0, t / {{F(ReflectionRange)}});
-            imageStore(uHit, cell, vec4(colour * (sun + ambient + lamps), -1.0 - reach));
+            imageStore(uHit, cell, vec4(colour * (sun + ambient + lamps), ssrPackHit(reach, t, true)));
         }
         """;
 
@@ -906,7 +918,7 @@ static class GiShaders
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D uOut;
         layout(set = 0, binding = 2) uniform accelerationStructureEXT uScene;
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint pad0; uint pad1; uint pad2; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint pad0; uint pad1; uint pad2; uint pad3; uint pad4; uint pad5; uint pad6; };
         layout(set = 0, binding = 3, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 4, std140) uniform Params
         {
