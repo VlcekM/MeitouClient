@@ -15,6 +15,13 @@ const bar = (features: Feature[]) => order.map((k) => ({ k, width: features.leng
 const label = (v: Version) => (v.name ? `${v.version} · ${v.name}` : v.version);
 // The areas a version's tables are drawn as: its own features first, as an area without a heading.
 const areasOf = (v: Version): Area[] => [...(v.features?.length ? [{ id: 'features', name: '', features: v.features }] : []), ...(v.areas ?? [])];
+// A note's text and its [text](url) links, in order.
+const noteParts = (note: string) => note.split(/\[([^\]]+)\]\((https?:[^)\s]+)\)/).reduce<{ text: string; href?: string }[]>((parts, s, i) => {
+  if (i % 3 === 0) parts.push({ text: s });
+  else if (i % 3 === 1) parts.push({ text: s, href: '' });
+  else parts[parts.length - 1].href = s;
+  return parts;
+}, []);
 const summary = (features: Feature[]) => {
   const c = countBy(features);
   return order.filter((k) => c[k]).map((k) => `${c[k]} ${statuses[k].label.toLowerCase()}`).join(' · ');
@@ -95,7 +102,7 @@ const summary = (features: Feature[]) => {
                     <tr id={f.id} data-s={f.status}>
                       <td class="sys">{f.name}</td>
                       <td class="st"><span class={`pill st-${f.status}`}>{statuses[f.status].label}</span></td>
-                      <td class="note">{f.note}</td>
+                      <td class="note">{noteParts(f.note).map((p) => (p.href ? <a href={p.href}>{p.text}</a> : p.text))}</td>
                     </tr>
                   ))}
                 </tbody>
