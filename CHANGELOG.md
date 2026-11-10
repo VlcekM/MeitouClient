@@ -3,6 +3,25 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.17.2
+
+- Interface scale setting (50-200%) for fonts, skins, panels and windows; 4K radio buttons and save list columns scale up
+- Main menu style is its own setting: Meitou or Faithful title, whatever the UI style
+- Character draw distance slider (the game's NPC View Range) on Graphics > Characters (#413)
+- Slavery: an unshackled caged slave is shackled before processing, then bandaged by its owners (#508, #509); the slave buy list offers only the slaver's own slaves (#425)
+- Building: ramps snap to walls so turrets mount on them (#459, #431); furniture no longer cuts into walls (#399) or founds an outpost in a bought house
+- Steal, pick-lock and loot follow the Highlight binding, not Alt (#453); controls.cfg bindings are read as defaults (#385)
+- Storage in trading range from its position too (#505); general storage takes armour and weapons by hand again (#503, #493)
+- Saves: buildings listed outside their zone no longer saved twice (#493); empty inventories stay empty; Staying close targets kept (#447)
+- Sleep: a healed sleeper gets up (#500); a broken-legged sleeper lies in the bed (#391)
+- Animals: death items, weight and capacity, stats, inventory rows and pack sleeping as the original (#471, #445)
+- Medics: only reachable kits count (#437), carried characters treat no one (#417), skeletons need Robotics to repair themselves (#407), repair beds heal damage (#395)
+- Dumb NPCs such as Agnu can be talked to again (#446); arrival banter only between squad members on screen (#430)
+- Put in cage and lock picking walk to the cage's floor (#432); Set Free on a prisoner in another faction's open cage (#435)
+- Craft and research queues show with older layouts such as Dark UI (#463); HLP opens the Tutorials (#443); windows may be dragged off screen (#444)
+- Miners haul full output and reach their rock (#388); workmasters keep up with running slaves (#402); trestle bridges walkable underneath (#403)
+- Camera no longer enters a ruin's base at close zoom (#483); long names widen their name tag; AMD device-loss fix (#319)
+
 ## v0.17.1
 
 - Version tag fixed: the build reports v0.17.1, so the feedback button and code mods' game version ranges see the right release (#379)
