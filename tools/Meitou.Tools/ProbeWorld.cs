@@ -47,9 +47,10 @@ sealed class ProbeWorld : IDisposable
     public CharacterTable Characters => World.Characters;
 
     /// <summary>
-    /// Where the player's squad leader stands now.
+    /// Where the player's squad leader stands now; where the save put the player's first character when the load made no leader (its data
+    /// files are missing).
     /// </summary>
-    public Vector3 LeaderPosition => Characters.Next[LeaderSlot(World)].Position;
+    public Vector3 LeaderPosition => LeaderSlot(World) is { } slot ? Characters.Next[slot].Position : SavedStart(Save);
 
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
@@ -95,8 +96,7 @@ sealed class ProbeWorld : IDisposable
         ResidentRuins.Apply(db, levels, layouts);
         var nav = new NavSystem(install, db, levels, height);
         nav.Walkability.Roads = data.Roads;
-        var start = save.Characters.First(c => c.Platoon.FactionId == save.PlayerFaction!.Id).Position;
-        foreach (var zone in ZoneActivation.ZonesAround(start, 1)) nav.LoadZone(zone).Wait();
+        foreach (var zone in ZoneActivation.ZonesAround(SavedStart(save), 1)) nav.LoadZone(zone).Wait();
 
         data.Layouts = layouts;
         data.Sight = new Meitou.Simulation.Perception.BuildingSight(install, db, levels, layouts);
@@ -117,21 +117,31 @@ sealed class ProbeWorld : IDisposable
         var world = new World(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
         if (walk is Meitou.Simulation.Locks.IDoorGate doors) world.Fixtures.Doors = doors;
 
-        SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });
-        world.Commands.Enqueue(new FocusCommand(world.Characters.Previous[LeaderSlot(world)].Position)
-        {
-            Tick = world.Tick,
-        });
+        var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });
+        if (LeaderSlot(world) is null) WarnNoLeader(loaded);
+
+        var focus = LeaderSlot(world) is { } slot ? world.Characters.Previous[slot].Position : SavedStart(save);
+        world.Commands.Enqueue(new FocusCommand(focus) { Tick = world.Tick });
         return world;
     }
 
     /// <summary>
-    /// The player's squad leader, or its first member while a loaded save has no leader set yet (as the game selects after a load).
+    /// The slot of the player's squad leader, or null when the load made none (every member left out, e.g. made from a missing mod).
     /// </summary>
-    static int LeaderSlot(World world)
+    static int? LeaderSlot(World world) => world.Squads.Find(world.Player.Squad) is { Leader.IsNone: false } squad ? squad.Leader.Slot : null;
+
+    /// <summary>
+    /// Where the save put the player's first character.
+    /// </summary>
+    static Vector3 SavedStart(SaveGame save) => save.Characters.First(c => c.Platoon.FactionId == save.PlayerFaction!.Id).Position;
+
+    /// <summary>
+    /// Says the player's squad has no characters and why: the load's notes name the ones it left out.
+    /// </summary>
+    static void WarnNoLeader(LoadedSave loaded)
     {
-        var squad = world.Squads.Find(world.Player.Squad)!;
-        return squad.Leader.IsNone ? squad.Members[0].Slot : squad.Leader.Slot;
+        Console.Error.WriteLine("probe     the player's squad has no characters; centring on where the save put the first one");
+        foreach (var note in loaded.Notes) Console.Error.WriteLine("  " + note);
     }
 
     /// <summary>
