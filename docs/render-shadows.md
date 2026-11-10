@@ -13,10 +13,16 @@ Depth-array views, samplers, receiver blocks and frame-global publication must a
 Shadow maps keep conventional depth (cleared to 1, compared Less), unlike the scene's reversed one; casters write the
 cascade matrix's 0..1 depth as `gl_FragCoord.z` on both backends (no depth scale; `uShadowBias.w` is written 1, unused).
 
-Meitou bias and stability (`MeitouShadowFit`, `ShadowPass.Meitou`): caster bias in the cascade's
-texels, 1 fixed plus 2 x the slope capped at 4 (the game's 0.75 world units and up to 2 % of the
-box depth detached post and wall shadows under a low sun); the receiver's 0.5-2 texel normal offset
-keeps acne off (**Observed**, Hub at 17:30, no acne at 1080p). Texel grids are anchored at the
+Meitou bias and stability (`MeitouShadowFit`, `ShadowPass.Meitou`, `msCascade`): the casters are drawn
+with no bias and the receiver carries it all: a normal offset of 0.25-0.5 texel, its plane's depth
+change over one texel each way and a quarter texel. Building parts cast with both sides
+(`WorldObjectRenderer.CastersBothSides`; the faithful CSM keeps the colour pass's culling).
+**Observed** (a Shek town at 15:10, cascades against the traced sun, pixels lit by more than 25/255
+where the traced sun is dark): 0.182 % with the caster bias of before (in fact 2 texels fixed plus
+2 x the slope capped at 8, with a normal offset of 0.5-2 texels: lit bands under stair treads and cart
+sides), 0.058 % with both sides cast (the bands at wall feet and beside stairs, which no bias changed:
+**Unknown** which open meshes let the sun through), 0.013 % with both. No acne seen on a face close-up,
+dunes, a town from afar under a low sun. Texel grids are anchored at the
 camera's focus point, moved only while the sun turns and the point is 200+ units away (anchored at
 the eye, the first cascade's grid slid boom x sun turn under the squad). Least filter radius 1.5
 texels: a 0.06° sun turn changed 0.36 % of a Hub view by more than 8 levels, 0.56 % at 1 texel.

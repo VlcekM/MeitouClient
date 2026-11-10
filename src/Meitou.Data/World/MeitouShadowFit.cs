@@ -37,12 +37,6 @@ public static class MeitouShadowFit
     /// </summary>
     public static float Margin(int i, int count) => i == 0 ? 0.02f : (count - 1 - i) switch { 0 or 1 => 0.08f, 2 => 0.06f, _ => 0.04f };
     /// <summary>
-    /// The casters' depth bias in texels of their cascade: <c>z += min(MaxTexels, Slope · |∇z|) + FixedTexels</c>, each texel the cascade's world texel
-    /// (the game's 0.75 world units fixed and up to 2 % of the box's depth by slope pushed the shadows of posts and walls several units off their
-    /// feet under a low sun, 10 to 100 texels of the first cascade). The receiver's normal offset (a texel or two) keeps the acne off.
-    /// </summary>
-    public const float FixedTexels = 1, Slope = 2, MaxTexels = 4;
-    /// <summary>
     /// The box's depth reaches this many sphere radii towards the sun beyond the sphere (casters there keep their depth).
     /// </summary>
     public const float SunwardReach = 2;
@@ -181,8 +175,8 @@ public static class MeitouShadowFit
             Translation = translation,
             Extent = (size, size, depth),
             Texel = texel,
-            FixedBias = (float)Math.Max(FixedTexels * 2 * texel / depth, KenshiShadows.MinFixedBias * 0.25),   // clip z is -1..1: world units x 2 / depth
-            MaxSlopeBias = (float)(MaxTexels * 2 * texel / depth),
+            // No caster bias (FixedBias 0): the bias is the receiver's own, by its plane (MeitouShadowShaders, msCascade). A caster's pushes every shadow
+            // off its caster's foot by the caster's slope, whatever receives it.
             FilterRadius = (float)(1.5 / tile),
             Tile = new Vector4(0, 0, 1, 1),   // the whole of its layer (i) of the cascade array
         };

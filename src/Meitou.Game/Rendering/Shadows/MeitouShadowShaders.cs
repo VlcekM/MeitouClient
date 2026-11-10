@@ -112,7 +112,7 @@ static class MeitouShadowShaders
         // Interleaved gradient noise (Jimenez 2014): a per-pixel angle whose neighbours differ, so a few taps look like many.
         float msNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 
-        // One cascade: the point moved off its surface by a texel-sized normal offset, a blocker search in the half-resolution map
+        // One cascade: the point moved off its surface by a normal offset of a quarter to half a texel, a blocker search in the half-resolution map
         // (when there is one) for the penumbra's width, then a rotated Vogel disk of bilinear comparisons whose depths follow the
         // receiver's plane. -1 when the point (with the filter) is not in the cascade's box, e.g. one drawn some frames ago. (No out
         // parameters: the interface scan of the Vulkan layer would take a global-scope "out" for a stage output.)
@@ -121,7 +121,7 @@ static class MeitouShadowShaders
             int layer = c;
             float texel = uMsSlice[c].w;
             float cosL = clamp(-nl.z, 0.0, 1.0);
-            vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.5 + 1.5 * sqrt(1.0 - cosL * cosL)));
+            vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.25 + 0.25 * sqrt(1.0 - cosL * cosL)));
             vec3 t = (uShadowTile[c] * vec4(p, 1.0)).xyz;
             float radius = uMsSlice[c].z;
             float reach = uMsBox[c].z + uShadowExtent[c].y * 2.0;
@@ -129,6 +129,10 @@ static class MeitouShadowShaders
             // The receiver's plane in tile units: depth change per unit of tile UV (steep planes clamped).
             float nz = max(cosL, 0.25);
             vec2 slope = vec2(nl.x, nl.y) * (uMsBox[c].x / (nz * uMsBox[c].y));
+            // The bias, all of it the receiver's (the casters are drawn with none): its plane's depth change over one texel each way (a bilinear
+            // compare reads the four texels round its point, each up to a texel off it) and a quarter texel. A caster's bias by its own slope left
+            // every shadow short of its caster's foot by up to ten texels along the light: lit bands under stair treads and cart sides.
+            t.z -= (abs(slope.x) + abs(slope.y)) * (texel / uMsBox[c].x) + 0.25 * texel / uMsBox[c].y;
             float angle = noise * 6.2831853;
             vec2 rot = vec2(cos(angle), sin(angle));
             // The filter tier: the nearest cascades in full, the others half the taps at the least radius (no blocker search).

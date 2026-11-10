@@ -501,7 +501,7 @@ public sealed unsafe partial class ShadowPass
             int i = c.Index;
             var host = BeginHost("shadow cascade", clear: true, layer: i);
             SetTile(0, 0, _atlasSize);
-            SetCasterBias(new Vector4(c.FixedBias, MeitouShadowFit.Slope, c.MaxSlopeBias, 1f));
+            SetCasterBias(new Vector4(c.FixedBias, 0, 0, 1f));   // none: the receiver's own (msCascade)
             draw(c, worldToClip, planes, lodEye);
             EndHost(host);
             _stored[i] = c;

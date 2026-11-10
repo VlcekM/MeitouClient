@@ -1290,6 +1290,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public bool HiddenFloorsCast { get; set; } = true;
 
     /// <summary>
+    /// Meitou's shadows: a building part casts with both its sides. Drawn like the colour pass, its faces turned from the sun culled, the parts that are
+    /// not closed meshes let the sun through at their feet (docs/render-shadows.md "Meitou bias").
+    /// </summary>
+    public bool CastersBothSides { get; set; } = true;
+
+    /// <summary>
     /// What the traced scene leaves out: the rays stand for the shadows and the light in the room, so the roof a floor view hides still blocks the sun and the sky.
     /// </summary>
     bool LeftOutOfRays(PlacedMesh p) => InteriorDebug.ShadowsLeaveOutHidden ? InteriorHidden(p) : OutsideHidden(p);
@@ -1885,7 +1891,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
                     d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
-                    d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true };
+                    d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true } && !(_depthPass && CastersBothSides);
                 }
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
