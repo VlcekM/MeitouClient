@@ -112,6 +112,10 @@ public sealed record HealthPartView(string Id, string Name, float Flesh, float S
     /// The part's type (see <see cref="Vital"/>).
     /// </summary>
     public Meitou.Data.Gameplay.Bodies.BodyPartType Type { get; init; }
+    /// <summary>
+    /// The part's wear damage (a skeleton's, taken off <see cref="Maximum"/>): the tooltip's wear line.
+    /// </summary>
+    public float Wear { get; init; }
 }
 
 /// <summary>

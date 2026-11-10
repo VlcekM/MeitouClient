@@ -763,7 +763,7 @@ public sealed partial class World
     static IReadOnlyList<HealthPartView> HealthPartsOf(MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts
             .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp,
-                p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb })
+                p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb, Wear = p.Wear })
             .ToArray());
 
     /// <summary>

@@ -1398,8 +1398,8 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// destroyed (h + d - s at or below -m) says so; below 0 a robotic limb "does not degenerate", a vital part above the KO point is "dangerous"
     /// (death at -m; unconscious: regain consciousness before the KO point) and at it "critical", any other part "getting worse"; from 0 a part more
     /// than 20 short of m needs bandaging (robotic: plainly), less than 5 % short (healing and stun within 5) is okay or healing, else bandaging is
-    /// not urgent. Under 60 left a line on what the damage affects follows. The original's wear lines (skeletons), the kick line and the lost-limb
-    /// line are not modelled.
+    /// not urgent; okay or healing, wear above 5 adds a wear line. Under 60 left a line on what the damage affects follows. The original's kick line
+    /// and lost-limb line are not modelled.
     /// </summary>
     internal static string PartTip(HealthPartView part, float? koPoint, bool unconscious)
     {
@@ -1436,7 +1436,7 @@ sealed class TooltipRuntime(PlayerInterface player)
                 part.Name);
         }
         else if (m * 0.95f - s <= d + h)
-            text = Loc.Tr(d + s <= 5 ? "Your {1} is okay." : "Your {1} is in the process of healing.", part.Name);
+            text = Loc.Tr(d + s <= 5 ? "Your {1} is okay." : "Your {1} is in the process of healing.", part.Name) + WearLine(part.Wear);
         else text = Loc.Tr("Your {1} needs bandaging, but it's not urgent.", part.Name);
 
         float left = h + d - s;
@@ -1451,6 +1451,20 @@ sealed class TooltipRuntime(PlayerInterface player)
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// The okay or healing row's wear line (docs/game/ui-screens.md "Tooltips"), in the Bad colour: none up to 5 points, then up to 40 the Skeleton
+    /// Bed hint, above it the manual's.
+    /// </summary>
+    static string WearLine(float wear)
+    {
+        if (wear <= 5) return "";
+
+        string line = wear <= 40
+            ? "You have {1} points of wear damage, this detracts from your max health and can be fixed at a Skeleton Bed."
+            : "You have {1} points of wear damage. The manual recommends you find a Skeleton Bed for maintenance.";
+        return "\n" + PlayerInterface.BadColour + Loc.Tr(line, (int)wear);
     }
 
     /// <summary>
