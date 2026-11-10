@@ -1,11 +1,23 @@
 # RE_Kenshi mod compatibility
 
-**Decision (owner, 2026-10-18): Meitou is not compatible with RE_Kenshi.** It does not load RE_Kenshi
-plugins (`RE_Kenshi.json`, `startPlugin`), offers no KenshiLib facade and plans no plugin source ports. A
-mod's ordinary data and assets still load through the normal readers; its DLLs are ignored.
+**Decision (owner, 2026-11-10, replacing 2026-10-18's "not compatible"): compatibility is per mod, by
+behaviour.** Meitou never loads RE_Kenshi plugin DLLs (`RE_Kenshi.json`, `startPlugin`) and offers no
+KenshiLib facade. The public wishlist of RE_Kenshi mods decides which plugins get one of:
 
-The research behind it (2026-10-11) follows. External findings are **Observed** in upstream source or
-documentation, not Verified by running plugins. Links track upstream branches and may change.
+- **Built in:** a feature that fits the engine (item rotation) becomes a Meitou option or tweak. Enabling
+  the RE_Kenshi mod switches the option on, with a note saying so.
+- **Ported:** the plugin is rewritten against the [code-mod API](../modding.md). Ports live in this repo
+  and ship with the game; when an enabled mod carries a plugin that has a port, the game runs the port (a
+  DLL and `meitou.json` of its own) in the plugin's place.
+
+A mod's ordinary data and assets load through the normal readers either way.
+
+**Status: not implemented.** Every plugin's DLLs are ignored and the launcher says so
+([launcher](../launcher.md)).
+
+The research behind not loading the DLLs (2026-10-11) follows. External findings are **Observed** in
+upstream source or documentation, not Verified by running plugins. Links track upstream branches and may
+change.
 
 ## What the existing interface requires
 

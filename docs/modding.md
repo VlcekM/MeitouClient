@@ -3,8 +3,8 @@
 **Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
-The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Game/Mods` (contract and
-loader), `GameMods` (host wiring), `SimulationExtensions` (engine hooks).
+RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in or ported to this API ([rekenshi](formats/rekenshi.md)). Code:
+`src/Meitou.Game/Mods` (contract and loader), `GameMods` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
 
