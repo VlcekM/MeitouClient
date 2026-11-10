@@ -169,26 +169,7 @@ sealed class InventoryWindows(PlayerInterface player)
         if (player.FaithfulScreens is null || player.TradeWindows.CharacterInventoryLayout is null) return;
 
         var lead = InventoryOwner();
-
-        if (player.FaithfulScreens.IsPinned("inventory") && lead is not null)
-        {
-            string slot = PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key ?? FreePinnedSlot();
-            PinnedInventories[slot] = lead.Id;
-            string bag = PinnedBagOf(slot);
-            bool bagOpen = player.FaithfulScreens.IsOpen("bag") && player.FaithfulScreens.IsRegistered(bag);
-            player.FaithfulScreens.SetOffset(slot, player.FaithfulScreens.GetOffset("inventory"));
-            if (bagOpen) player.FaithfulScreens.SetOffset(bag, player.FaithfulScreens.GetOffset("bag"));
-            player.FaithfulScreens.Close("inventory");
-            player.FaithfulScreens.Open(slot);
-            player.FaithfulScreens.SetPinned(slot, true);
-            if (bagOpen) player.FaithfulScreens.Open(bag);
-
-            // The same windows, not new ones: no closing and opening sounds.
-            player.InterfaceSounds.SoundScreens.Remove("inventory");
-            player.InterfaceSounds.SoundScreens.Add(slot);
-            if (bagOpen && player.InterfaceSounds.SoundScreens.Remove("bag")) player.InterfaceSounds.SoundScreens.Add(bag);
-            _pinnedFrom = lead.Id;
-        }
+        if (player.FaithfulScreens.IsPinned("inventory") && lead is not null) PinInventory(lead);
 
         foreach (var (slot, character) in PinnedInventories.ToArray())
         {
@@ -196,37 +177,92 @@ sealed class InventoryWindows(PlayerInterface player)
             {
                 player.FaithfulScreens.Close(slot);
                 PinnedInventories.Remove(slot);
-                continue;
             }
-
-            if (player.FaithfulScreens.IsPinned(slot)) continue;
-
-            PinnedInventories.Remove(slot);
-
-            if (!player.FaithfulScreens.IsOpen("inventory"))
+            else if (!player.FaithfulScreens.IsPinned(slot))
             {
-                player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset(slot));
-                player.FaithfulScreens.Open("inventory");
-                player.InterfaceSounds.SoundScreens.Add("inventory");
+                Unpin(slot);
             }
-
-            player.InterfaceSounds.SoundScreens.Remove(slot);
-            player.FaithfulScreens.Close(slot);
         }
 
         if (PinnedInventories.Count == 0) _pinnedFrom = CharacterId.None;
         else if (lead is not null && lead.Id != _pinnedFrom && !PinnedInventories.ContainsValue(lead.Id) && !player.FaithfulScreens.IsOpen("inventory"))
-        {
-            player.FaithfulScreens.Open("inventory");
-            if (PinnedInventories.FirstOrDefault(p => p.Value == _pinnedFrom).Key is { } anchor)
-                player.InventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
-
-            _pinnedFrom = CharacterId.None;
-        }
+            OpenBesidePinned();
 
         var shown = PinnedInventories.Values.ToArray();
         if (!shown.SequenceEqual(_pinnedSent))
             player.Say(new ShowInventoryCommand(_pinnedSent = shown) { Tick = player.Session.World.Tick });
+    }
+
+    /// <summary>
+    /// The inventory's pin: the window and its open bag become <paramref name="lead"/>'s pinned window and its bag, where they are.
+    /// </summary>
+    void PinInventory(CharacterSnapshot lead)
+    {
+        string slot = PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key ?? FreePinnedSlot();
+        PinnedInventories[slot] = lead.Id;
+        string bag = PinnedBagOf(slot);
+        bool bagOpen = player.FaithfulScreens.IsOpen("bag") && player.FaithfulScreens.IsRegistered(bag);
+        player.FaithfulScreens.SetOffset(slot, player.FaithfulScreens.GetOffset("inventory"));
+        if (bagOpen) player.FaithfulScreens.SetOffset(bag, player.FaithfulScreens.GetOffset("bag"));
+        player.FaithfulScreens.Close("inventory");
+        player.FaithfulScreens.Open(slot);
+        player.FaithfulScreens.SetPinned(slot, true);
+        if (bagOpen) player.FaithfulScreens.Open(bag);
+
+        // The same windows, not new ones: no closing and opening sounds.
+        player.InterfaceSounds.SoundScreens.Remove("inventory");
+        player.InterfaceSounds.SoundScreens.Add(slot);
+        if (bagOpen) MoveSound("bag", bag);
+        _pinnedFrom = lead.Id;
+    }
+
+    /// <summary>
+    /// Unpinning: the window (and its open bag) goes back to the inventory where it is when the inventory is closed, else it closes.
+    /// </summary>
+    void Unpin(string slot)
+    {
+        PinnedInventories.Remove(slot);
+        string bag = PinnedBagOf(slot);
+
+        if (!player.FaithfulScreens.IsOpen("inventory"))
+        {
+            player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset(slot));
+            player.FaithfulScreens.Open("inventory");
+            player.InterfaceSounds.SoundScreens.Add("inventory");
+            if (player.FaithfulScreens.IsOpen(bag) && WantsBag(InventoryOwner()))
+            {
+                player.FaithfulScreens.SetOffset("bag", player.FaithfulScreens.GetOffset(bag));
+                player.FaithfulScreens.Open("bag");
+                MoveSound(bag, "bag");
+            }
+        }
+
+        player.InterfaceSounds.SoundScreens.Remove(slot);
+        player.FaithfulScreens.Close(slot);
+    }
+
+    /// <summary>
+    /// Opens the inventory for the character selected after pinning, left of the pinned window or of its bag when that is open.
+    /// </summary>
+    void OpenBesidePinned()
+    {
+        player.FaithfulScreens.Open("inventory");
+        if (PinnedInventories.FirstOrDefault(p => p.Value == _pinnedFrom).Key is { } slot)
+        {
+            string bag = PinnedBagOf(slot);
+            string anchor = player.FaithfulScreens.IsRegistered(bag) && player.FaithfulScreens.IsOpen(bag) ? bag : slot;
+            player.InventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
+        }
+
+        _pinnedFrom = CharacterId.None;
+    }
+
+    /// <summary>
+    /// A window that goes on as another screen keeps its open sound's state: no closing and opening sounds for it.
+    /// </summary>
+    void MoveSound(string from, string to)
+    {
+        if (player.InterfaceSounds.SoundScreens.Remove(from)) player.InterfaceSounds.SoundScreens.Add(to);
     }
 
     /// <summary>
