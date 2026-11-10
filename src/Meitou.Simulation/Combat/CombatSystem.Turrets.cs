@@ -25,7 +25,7 @@ public readonly record struct TurretView(string BuildingId, string GunId, Vector
 /// factor h from the building to its last aim point (gun <c>+0x118</c>, 1 before any), the last gunner's Turrets level x 0.01 (gun <c>+0x2c</c>, 0
 /// for a turret never manned) and that gunner's perception level while it exists (null: none). For the Height rows (<c>FUN_14030c2a0</c> section 3)
 /// the height above the last aim point in metres (null before any aim); for the Loaded bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4)
-/// the loaded and full shots, the share of the running reload still to go (1 while none runs), the GUN_DATA reload times and the gunner's Crossbows
+/// the loaded and full shots, the share of the running reload still to go (0 while none runs), the GUN_DATA reload times and the gunner's Crossbows
 /// level (null: none).
 /// </summary>
 public readonly record struct TurretPanelView(string Instance, float Range, float AimSpeed, float Deviation, float Mount, float Height,
@@ -47,9 +47,9 @@ public readonly record struct TurretPanelView(string Instance, float Range, floa
     public int Shots { get; init; } = 1;
 
     /// <summary>
-    /// The share of the running reload still to go (1 while none runs).
+    /// The share of the running reload still to go, 1 - gun <c>+0xe0</c> (0 while none runs: a finished reload leaves <c>+0xe0</c> at 1).
     /// </summary>
-    public float ReloadLeft { get; init; } = 1;
+    public float ReloadLeft { get; init; }
 
     /// <summary>
     /// The GUN_DATA shortest reload time.

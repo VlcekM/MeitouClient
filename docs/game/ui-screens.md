@@ -763,8 +763,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     between the Title and ink tags; the "penalty ... below" text only when h < 0, which h never is). Section 4 (base `GunClass` `FUN_14030ce20`, **Observed**): `Loaded` bar
     `{1,num}/{2,num}` (gun `+0x20` loaded, `+0x1c` num shots), filled (loaded + 1 - `+0xe0`) / shots; rows `Base Reload Speed:` `{min}-{max} seconds` (`+0x24`, `+0x28`, 2 decimals),
     `User Skill:`, and with a user `User Reload Speed:` from its stat 0x23 (Crossbows) through `FUN_140436010`. Meitou: `AddHeightLines` (Height once the turret has aimed),
-    `LoadedRow` (`+0xe0` read as the share of the running reload still to go, 1 while none runs; User Skill as the Crossbows level). `+0xe0` is in fact the done
-    share (State line above), so the original's bar drains from (loaded + 1) / shots while a reload runs and Meitou's fills; not yet matched.
+    `LoadedRow` (1 - `+0xe0` as the share of the running reload still to go, 0 while none runs; User Skill as the Crossbows level). `+0xe0` is the done share
+    (State line above), so the bar drains from (loaded + 1) / shots to loaded / shots while a reload runs, then shows the new loaded / shots.
   - Slot 114 (`FUN_140300090`), first match, all but Working in Bad with a tooltip: Broken, Under construction, Switched off (off with demand), No power, Production
     queue empty (status 3), Out of resource (status 0 and slot 149), Output full (status 1), No power (demand > 0, granted <= 0), No workers (raw max > 0,
     nobody), Working with the tooltip of slot 168 (`FUN_1403094b0`, every class; **Verified**): P = `power output` + research increase (`FUN_1402976a0`);

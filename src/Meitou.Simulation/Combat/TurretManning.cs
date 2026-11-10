@@ -94,7 +94,7 @@ sealed class TurretManning
             HeightMetres = t.Aim is { } at ? (int)((site.Position.Y - at.Y) * 0.1f) : null,
             Loaded = t.Loaded,
             Shots = g.NumShots,
-            ReloadLeft = t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 1,
+            ReloadLeft = t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 0,
             ReloadMin = g.ReloadTimeMin,
             ReloadMax = g.ReloadTimeMax,
             Crossbows = crossbows,

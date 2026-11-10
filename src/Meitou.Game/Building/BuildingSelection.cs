@@ -506,13 +506,13 @@ sealed class BuildingSelection(PlayerInterface player)
 
     /// <summary>
     /// The gun's <c>Loaded</c> bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4, <b>Observed</b>): "{loaded}/{shots}", filled (loaded + 1
-    /// - the reload still to go) / shots; its rows Base Reload Speed (the reload times, 2 decimals), User Skill and, with a gunner, User Reload Speed
-    /// from the gunner's Crossbows level (stat 0x23, as the base class reads it).
+    /// - gun +0xe0) / shots, so it drains from (loaded + 1) / shots while a reload runs; its rows Base Reload Speed (the reload times, 2 decimals),
+    /// User Skill and, with a gunner, User Reload Speed from the gunner's Crossbows level (stat 0x23, as the base class reads it).
     /// </summary>
     static PlayerInterface.MedicalRow LoadedRow(Simulation.Combat.TurretPanelView g)
     {
         static string F2(float v) => v.ToString("F2", CultureInfo.InvariantCulture);
-        float fill = g.Shots > 0 ? Math.Clamp((g.Loaded + 1 - g.ReloadLeft) / g.Shots, 0, 1) : 0;
+        float fill = g.Shots > 0 ? Math.Clamp((g.Loaded + g.ReloadLeft) / g.Shots, 0, 1) : 0;
         var tip = new List<string> { Loc.Tr("Base Reload Speed:") + " " + Loc.Tr("{1}-{2} seconds", F2(g.ReloadMin), F2(g.ReloadMax)),
             Loc.Tr("User Skill:") + " " + ((int)(g.Crossbows ?? 0)).ToString(CultureInfo.InvariantCulture) };
         if (g.Crossbows is { } level)
