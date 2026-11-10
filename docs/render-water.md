@@ -7,7 +7,7 @@ gameplay water stays Y100. Evolution follows the game clock and stops paused.
 ## Surface and waves
 
 Faithful: flat surface and game shading/reflection rules. Meitou: camera-centred polar grid,
-default256 segments; `--water-grid 128` reduces geometry with visible quality differences. The grid's triangles are drawn from
+default 1024 segments (a vertex every 0.6 % of its distance from the eye, about 8 pixels at 1080p; 256 was 30); `--water-grid 256` reduces geometry with visible quality differences. The waves a vertex carries are those its spacing can hold, so their shape at a world point depends on the eye's distance: **Observed** (an open beach, paused, the same moment with 256 and 1024 segments): at 256 the swell 150 to 300 units out was long smooth crests where 1024 draws the choppy waves, and breakers' crests changed shape as the camera moved (the user). The grid's triangles are drawn from
 the outer rings in (the eye's fan last): the water writes no depth, so a displaced crest in front of water further out must be drawn after it,
 else the water behind a wave showed through it.
 Three256² FFT cascades cover250/47/9m tiles with separate wave-number bands. JONSWAP wind spectrum,
@@ -65,8 +65,8 @@ tile, and dims at night, not emissive white. Metal uses the same native bindless
 Vulkan; there is no Metal-only water fragment. The reflected scene remains mirrored around Y100
 despite waves. Reflect level/range, frustum,
 clip plane, water coverage and reuse age determine work; use original rules in Faithful.
-Meitou reflection skips unnecessary casters/shadows and shortens object/foliage reaches. The half-resolution
-target uses 4x MSAA by default on both backends (`--reflection-samples 1` disables it); level 2 reflects
+Meitou reflection skips unnecessary casters/shadows and shortens object/foliage reaches. The full-size
+target (half size magnified the mirror image at grazing angles: silhouettes in blocks in the thin water of a beach, **Observed** before and after) uses 4x MSAA by default on both backends (`--reflection-samples 1` disables it); level 2 reflects
 characters, level 3 placed objects and level 4 foliage. Fog in reflection must evaluate reflected world geometry
 against the appropriate air/water bounds; ordinary camera fog cannot be applied indiscriminately.
 

@@ -494,7 +494,7 @@ sealed class WorldOptions
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --time-speed <h/min>     the viewer's clock runs on, game hours per real minute (default 0: stopped; Tab slider)
           --no-water               leave out the water
-          --water-grid <n>         the Meitou water grid's segments round the eye (default 256; 128 lower detail, 512 finer)
+          --water-grid <n>         the Meitou water grid's segments round the eye (default 1024; 256 lower detail)
           --water-ocean <n>        the Meitou water's FFT size per cascade: 64, 128 or 256 (default 256; 128 for integrated GPUs, a quarter of the work)
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour; R toggles), 1 sky and terrain, 2 + characters, 3 + buildings and features, 4 + trees, bushes and rocks (default 4; the game's own default is 2; Tab slider)
           --reflection-samples <n> samples per texel of the half-resolution reflection target (default 4; 1 disables MSAA; the device may cap it)

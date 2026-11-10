@@ -1300,9 +1300,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         : _meitouContact ??= new WaterProgram(Gpu, _frame, MeitouContactVertex(), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, _gridInputs, _constantsLayout);
 
     /// <summary>
-    /// The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.
+    /// The Meitou polar grid: segments round the eye (256 low, 1024 default), rings follow from it. A vertex's spacing is its distance from the eye times 2 pi over this,
+    /// and the waves it carries are those that spacing can hold: at 256 (30 pixels a cell at 1080p) the crests a few hundred units out changed shape as the camera moved.
     /// </summary>
-    public const int DefaultGridSegments = 256;
+    public const int DefaultGridSegments = 1024;
 
     /// <summary>
     /// One native water program: the vertex layout and buffers its one draw needs.
