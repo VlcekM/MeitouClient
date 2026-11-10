@@ -871,7 +871,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
 /// <summary>
 /// The ranged controller's State line numbers (<see cref="CombatSystem.RangedLineOf"/>): reloading (else aiming), the gun's loaded and full shots
-/// (gun <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (gun <c>+0xe0</c>) and a powered gun without power.
+/// (gun <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (1 - gun <c>+0xe0</c>, the done share) and a powered gun
+/// without power.
 /// </summary>
 public readonly record struct RangedLineView(bool Reloading, int Loaded, int Shots, float ReloadLeft, bool NoPower);
 

@@ -89,12 +89,13 @@ sealed class HudPanels(PlayerInterface player)
     /// The state lines (State, Goal, Encumbrance and, alive, the Current Skill line) of the selected character. The State line is the original's
     /// first match (<c>FUN_1405d4260</c>, docs/game/ui-screens.md section 4): Dead; caged, the cage lock's "Locked (lvl: N)" or "(Unlocked...)" (no
     /// State line in a cage without a lock); Unconscious / Rebooting; Sleeping in a bed; Defensive; Normal; each with its tooltip; the ranged
-    /// controller's line comes between Sleeping and Defensive. The weather notice replaces it while it lasts.
+    /// controller's line, a progress line, comes between Sleeping and Defensive. The weather notice replaces it while it lasts.
     /// </summary>
     static PlayerInterface.HudLine[] StateLines(CharacterSnapshot lead, SpeedUnit unit)
     {
         var body = lead.Body;
         string? state, colour = null, tooltip = null;
+        float? fill = null;
 
         if (body is { Dead: true })
             (state, colour, tooltip) = (Loc.Tr("Dead"), PlayerInterface.BadColour, Loc.Tr("This guy is dead and gone."));
@@ -118,6 +119,9 @@ sealed class HudPanels(PlayerInterface player)
             string loaded = ranged.Loaded.ToString(CultureInfo.InvariantCulture), shots = ranged.Shots.ToString(CultureInfo.InvariantCulture);
             (state, colour) = (Loc.Tr(ranged.NoPower ? "No Power!" : ranged.Reloading ? "Reloading..." : "Aiming...") + $" [{loaded}/{shots}]",
                 ranged.NoPower ? PlayerInterface.BadColour : null);
+
+            // A progress line filled by gun +0xe0, the reload's done share (0 while aiming).
+            fill = ranged.Reloading ? 1 - ranged.ReloadLeft : 0;
         }
         else if ((lead.Orders & CharacterOrders.Block) != 0)
         {
@@ -129,6 +133,7 @@ sealed class HudPanels(PlayerInterface player)
         if (body is not { Dead: true } && lead.Prison is null && lead.WeatherNotice != WeatherNotice.None)
         {
             (state, tooltip) = WeatherText(lead.WeatherNotice, lead.WeatherNoticeProtection);
+            fill = null;
             colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet)
                 ? PlayerInterface.GoodColour
                 : PlayerInterface.BadColour;
@@ -136,7 +141,8 @@ sealed class HudPanels(PlayerInterface player)
 
         PlayerInterface.HudLine[] rest =
             [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task), Tooltip: Loc.Tr("Current goal of this character.")), EncumbranceLine(lead)];
-        PlayerInterface.HudLine[] lines = state is null ? rest : [new(Loc.Tr("State:"), state, ValueColour: colour, Tooltip: tooltip), .. rest];
+        var stateLine = new PlayerInterface.HudLine(Loc.Tr("State:"), state ?? "", ValueColour: colour, Tooltip: tooltip) { Fill = fill };
+        PlayerInterface.HudLine[] lines = state is null ? rest : [stateLine, .. rest];
         return body is { Dead: true } || lead.Hud?.Skill is not { } skill ? lines : [.. lines, SkillLine(skill, unit)];
     }
 

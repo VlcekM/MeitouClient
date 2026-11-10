@@ -304,9 +304,12 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
     see "Combat mode"): `FUN_140438640` takes the gun (`FUN_1404345c0`: the character's crossbow's, else the
     turret building's `+0x440` through the controller's building handle) and writes `Aiming...` (reloading flag `+0x80` clear; set only while a reload runs, `FUN_140437ce0`)
     or `Reloading...`, then ` [{loaded}/{shots}]` (gun `+0x20`, `+0x1c`); when the gun's power object (slot `0xc8`) reports none (its slot `0xe8`), `No Power!` in Bad with the
-    same suffix replaces it. The row is a progress line (DataPanel type 0xb, `FUN_1406fe170`) filled 0 while aiming and by gun `+0xe0` (the share of the reload still to go)
-    while reloading; no tooltip. Meitou: the text without the fill, from a manned turret's gun (No Power!: a power consumer whose machine has no power) else the crossbow
-    (`CombatSystem.RangedLineOf`); defensive `Defensive`, "In defensive combat mode the character will not even try to attack, focusing entirely on defense for a +20 skill bonus."; else
+    same suffix replaces it. The row is a progress line (DataPanel type 0xb, `FUN_1406fe170` → `DataPanelLine_Progress` `FUN_1406f8990`, no label: the `State:` key is
+    not drawn) filled 0 while aiming and by gun `+0xe0` × 100 of 100 while reloading; no tooltip. Gun `+0xe0` is the reload's done share: every gun class's slot 15
+    (`FUN_140446f90`) stores clamp(1 − x, 0, 1) and the reload step passes the time left / the reload time (**Verified**, decompile), so the bar grows. Layout without a
+    label (`FUN_1406fb1b0`, **Verified** constants): a `Kenshi_ProgressBarFill` bar from 0.02 of the panel width, 0.96 wide, one row high, and the text over it centred
+    at the top (align 8), same box. Meitou (`ProgressLine`): the bar over the line's row with the text centred, from a manned turret's gun (No Power!: a power consumer
+    whose machine has no power) else the crossbow (`CombatSystem.RangedLineOf`); whether the weather notice also replaces this line is **Unknown** (Meitou: it does); defensive `Defensive`, "In defensive combat mode the character will not even try to attack, focusing entirely on defense for a +20 skill bonus."; else
     `Normal` (no tooltip). The weather notice also shows here ([weather](../formats/weather.md), **Observed**). Meitou: all of them;
     `Goal:` the AI goal package's name, else Aimless (Meitou: a fleeing NPC, whatever started the run, shows "Running away", 35's name; else when the AI is not running the character, its movement task's name, e.g. Moving, Attacking, else Aimless), tooltip "Current goal of this character."; `Encumbrance:` (int)((1 - f) × 100) "%" with f the encumbrance factor in 0..1, Bad from 50 %.
     Its row tooltip (**Verified**, decompile): Title `Encumbrance:` | Title the percent (Bad from 50 %) and ` (word)`, the burden word as the inventory's (Weightless, Lightweight, then Moderate, Heavy, Overloaded with their own Title tag; dead: Dead);
@@ -760,7 +763,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     between the Title and ink tags; the "penalty ... below" text only when h < 0, which h never is). Section 4 (base `GunClass` `FUN_14030ce20`, **Observed**): `Loaded` bar
     `{1,num}/{2,num}` (gun `+0x20` loaded, `+0x1c` num shots), filled (loaded + 1 - `+0xe0`) / shots; rows `Base Reload Speed:` `{min}-{max} seconds` (`+0x24`, `+0x28`, 2 decimals),
     `User Skill:`, and with a user `User Reload Speed:` from its stat 0x23 (Crossbows) through `FUN_140436010`. Meitou: `AddHeightLines` (Height once the turret has aimed),
-    `LoadedRow` (`+0xe0` read as the share of the running reload still to go, 1 while none runs; User Skill as the Crossbows level).
+    `LoadedRow` (`+0xe0` read as the share of the running reload still to go, 1 while none runs; User Skill as the Crossbows level). `+0xe0` is in fact the done
+    share (State line above), so the original's bar drains from (loaded + 1) / shots while a reload runs and Meitou's fills; not yet matched.
   - Slot 114 (`FUN_140300090`), first match, all but Working in Bad with a tooltip: Broken, Under construction, Switched off (off with demand), No power, Production
     queue empty (status 3), Out of resource (status 0 and slot 149), Output full (status 1), No power (demand > 0, granted <= 0), No workers (raw max > 0,
     nobody), Working with the tooltip of slot 168 (`FUN_1403094b0`, every class; **Verified**): P = `power output` + research increase (`FUN_1402976a0`);

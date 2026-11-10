@@ -537,6 +537,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         string? Tooltip = null, string? Action = null, float ButtonWidth = 0.5f, IReadOnlyList<(string Key, string Value)>? TooltipRows = null)
     {
         /// <summary>
+        /// With a value, the line is a progress line (<see cref="ProgressLine"/>) filled by it: the value centred over the bar, no label.
+        /// </summary>
+        public float? Fill { get; init; }
+
+
+        /// <summary>
         /// The line's tooltip user strings (the HUD's Fixed tooltip), null for none; a text tooltip wins over rows.
         /// </summary>
         public Dictionary<string, string>? TipProperties => Tooltip is { Length: > 0 } tip ? UiTooltips.TextProperties(Loc.Tr(tip), "fixed")
@@ -580,6 +586,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         {
             var tipProperties = lines[i].TipProperties;
             var row = new UiRect(area.X + area.Width * 0.03f, area.Y + top + i * rowHeight, area.Width * 0.93f, rowHeight);
+            if (lines[i].Fill is { } fill)
+            {
+                AddProgressLine(controls, $"{panel}-progress-{i}", row, lines[i], fill, valueProperties, host.Clip);
+                continue;
+            }
+
             if (lines[i].Action is { } action)
             {
                 // The button holds the value; the row's label (if any) stays text on its left.
@@ -625,6 +637,19 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 properties["FontPixels"] = Math.Max(8, (int)MathF.Round(p)).ToString(CultureInfo.InvariantCulture);
             return properties;
         }
+    }
+
+    /// <summary>
+    /// A progress line over <paramref name="row"/>: the bar filled by <paramref name="fill"/>, then the line's value centred over it.
+    /// </summary>
+    void AddProgressLine(List<UiControl> controls, string name, UiRect row, HudLine line, float fill, Dictionary<string, string> face, UiRect? clip)
+    {
+        ProgressLine.Add(controls, UiResources, Width, Height, row, fill, name + "-", clip);
+
+        var textProperties = new Dictionary<string, string>(face) { ["TextAlign"] = "HCenter Top",
+            ["TextColour"] = line.ValueColour ?? MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
+        controls.Add(new(name + "-value", "TextBox", row, Loc.Tr(line.Value), "", "Kenshi_TextboxStandardText", true, textProperties, Vector4.Zero,
+            Pickable: false, Clip: clip));
     }
 
     #endregion
