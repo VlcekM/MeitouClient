@@ -260,13 +260,17 @@ public sealed partial class ProductionSystem
         }
 
         /// <summary>
-        /// The step passed over it: a character on an implicit job that no longer holds ends it.
+        /// The step passed over it: a character on an implicit job that no longer holds ends it, and a healed one asleep in a bed for no job
+        /// (one loaded so) gets up (<see cref="GetsUpHealed"/>).
         /// </summary>
         public void Passed(World world, int slot, in DecisionCheck check)
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
-            if (Able(cold) && PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task) is { Implicit: true }) End(world, slot);
+            if (!Able(cold)) return;
+
+            var job = PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task);
+            if (job is { Implicit: true } || job is null && owner.GetsUpHealed(world, slot, cold)) End(world, slot);
         }
     }
 
@@ -372,9 +376,27 @@ public sealed partial class ProductionSystem
         OperatorsOf(world, site.Id) - (cold.OperateSite == site.Id ? 1 : 0) < m.Data.MaxOperators;
 
     /// <summary>
-    /// A body part below full health (<b>engine choice</b>: the original's injury test is Unknown; its 257 is "get out of bed once healed").
+    /// A body part at least <see cref="HealedSlack"/> below its maximum (<b>engine choice</b>: the original's injury test is Unknown; its 257 is "get
+    /// out of bed once healed").
     /// </summary>
-    static bool Injured(CharacterCold cold) => cold.Medical is { Dead: false } medical && medical.Parts.Any(p => p.Fraction is >= 0 and < 1);
+    static bool Injured(CharacterCold cold) =>
+        cold.Medical is { Dead: false } medical && medical.Parts.Any(p => p.MaxHp > 0 && p.Flesh - p.Stun + p.Rig <= p.MaxHp - HealedSlack);
+
+    /// <summary>
+    /// The original's 257 "Getting out of bed once healed", above 153 in the implicit list (docs/game/ai-tasks.md "Perma-jobs"): a player character
+    /// asleep in a bed with no order, under the <see cref="SquadAi.Sleep"/> option and the jobs switch, not sneaking, not a slave, not holding
+    /// position, with no part injured. Engine reading: it applies to any such sleeper, not only one the 153 job put there.
+    /// </summary>
+    bool GetsUpHealed(World world, int slot, CharacterCold cold) =>
+        cold.IsPlayer && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
+        && (world.Player.SquadAi & SquadAi.Sleep) != 0 && (cold.Orders & CharacterOrders.Jobs) != 0 && (cold.Orders & CharacterOrders.Sneak) == 0
+        && cold.SlaveState == 0 && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Injured(cold);
+
+    /// <summary>
+    /// How far below its maximum a part may stay and count as healed: the HUD shows it full, and healing from the treated pool can stop a hundredth
+    /// short, which nothing heals (#500: a healed sleeper kept going back to bed).
+    /// </summary>
+    const float HealedSlack = 0.5f;
 
     /// <summary>
     /// The player's complete building nearest <paramref name="at"/> within <paramref name="range"/> whose machine passes <paramref name="ok"/> (ties:
