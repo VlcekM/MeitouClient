@@ -179,7 +179,10 @@ public sealed unsafe class VulkanDisplay : IDisposable
     {
         // The validation mode in log.txt: a report then shows whether MEITOU_VK_VALIDATION=sync took effect.
         string validationMode = !Device.ValidationEnabled ? "" : Device.SyncValidationEnabled ? ", validation on (sync)" : ", validation on";
-        Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
+
+        // The driver in log.txt: a report of a driver-specific fault then shows which driver it was.
+        string driver = Device.DriverName.Length > 0 ? $", driver {Device.DriverName}" : "";
+        Console.WriteLine($"vulkan    {Device.DeviceName}{driver}{validationMode}");
         if (GpuContext.DiagSubmit || GpuContext.DiagIdle)
         {
             string submit = GpuContext.DiagSubmit ? " MEITOU_DIAG_SUBMIT" : "";

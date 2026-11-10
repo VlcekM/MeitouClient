@@ -123,6 +123,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public string DeviceName { get; private set; } = "";
     /// <summary>
+    /// The driver's name and version as the driver reports them ("NVIDIA 581.80"); empty when it reports neither.
+    /// </summary>
+    public string DriverName { get; private set; } = "";
+    /// <summary>
     /// The physical device's Vulkan API version.
     /// </summary>
     public uint ApiVersion => Properties.ApiVersion;
@@ -1229,7 +1233,20 @@ public sealed unsafe class VulkanDevice : IDisposable
         Vk.GetPhysicalDeviceProperties(best, out var props);
         Properties = props;
         DeviceName = Name(props.DeviceName);
+        DriverName = ReadDriverName(best);
         CreateLogicalDevice();
+    }
+
+    /// <summary>
+    /// The driver's name and version from Vulkan 1.2's driver properties (<see cref="DriverName"/>).
+    /// </summary>
+    string ReadDriverName(PhysicalDevice d)
+    {
+        var driver = new PhysicalDeviceDriverProperties { SType = StructureType.PhysicalDeviceDriverProperties };
+        var properties = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &driver };
+        Vk.GetPhysicalDeviceProperties2(d, &properties);
+
+        return $"{Name(driver.DriverName)} {Name(driver.DriverInfo)}".Trim();
     }
 
     /// <summary>
