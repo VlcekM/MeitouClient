@@ -213,7 +213,7 @@ static class SaveProbe
         foreach (var site in probe.World.Buildings.All.Where(b => Vector3.Distance(b.Position, probe.LeaderPosition) < radius))
         {
             Console.WriteLine($"site {site.Id} '{site.Name}' at {site.Position:F1} floor={site.Floor} parent={site.Parent} complete={site.Complete} "
-                + $"level={site.LevelPlacement is not null}");
+                + $"level={site.LevelPlacement is not null} town={site.Town}");
         }
     }
 
