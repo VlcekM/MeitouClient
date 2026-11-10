@@ -1987,6 +1987,7 @@ public sealed partial class FixtureRegistry
         {
             (c.SlaveState, c.SlaveOwner, c.SlaveMaster) = (0, -1, -1);
             c.Shaved = false;   // CharacterHuman::shaveHead(false)
+            world.SystemOf<Kidnap.CaptiveSystem>()?.MatchShave(c);
         }
         else if (c.SlaveState == 2 && elapsed > 12) (c.SlaveState, c.SlaveSince) = (3, world.GameHours);
     }

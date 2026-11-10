@@ -383,10 +383,13 @@ internal static class SavedCharacters
         CharacterAppearance? look = null;
         int serial = handle.S & 0x7FFFFFFF;
 
+        // The shave the character will have (SlaveSave.Read): the saved one, else the record's when it has no state record.
+        bool? shaved = sc.GameState is { } state ? state.Bools.GetValueOrDefault(SlaveSave.ShavedKey) : null;
+
         if (sc.Inventory is not null && appearances is { } source && SavedKit.LoadoutOf(sc.Appearance, savedItems, data.Db, serial) is { } kit)
         {
             SavedKit.SetLimbs(kit, medical, data.Db);
-            look = source.Create(sc.RecordId, kit);
+            look = source.Create(sc.RecordId, kit, shaved);
         }
 
         look ??= appearances?.Create(sc.RecordId, ownerId.Length > 0 ? ownerId : null, serial);
@@ -401,7 +404,7 @@ internal static class SavedCharacters
             if (worn is not null)
             {
                 SavedKit.SetLimbs(worn, medical, data.Db);
-                look = again.Create(sc.RecordId, worn) ?? look;
+                look = again.Create(sc.RecordId, worn, shaved) ?? look;
             }
         }
 
@@ -465,6 +468,9 @@ internal static class SavedCharacters
         else if (race is not null)
             notes?.Add($"{platoonName}: {cold.Name} has no stats or medical state that could be read; it has no body in the world.");
 
+        // A look kept from before (a platoon back in the world) or rolled without a saved appearance shows the shave the character has.
+        assembly.MatchShave(cold);
+
         // What it holds that was stolen (the save's `ownedby`).
         if (cold.Inventory is { } carried) context.NoteOwners(carried, faction, data);
 
@@ -518,6 +524,11 @@ internal static class SavedCharacters
         cold.Bounties = bounties ?? BountySave.Read(sc.GameState, data.Relations, context.Clock, 0, world.TickSeconds);
         CrimeSave.Read(sc.GameState, cold);
         SlaveSave.Read(sc.GameState, cold, data);
+
+        // Without a state record the shave is the CHARACTER's own, as a new character's (CharacterAssembly.Attach).
+        if (sc.GameState is null && data.Db.Find(sc.RecordId) is { Type: FcsRecordType.Character } made)
+            cold.Shaved = made.GetBool("shaved");
+
         DialogueSave.Read(sc.GameState, cold);
         if (cold.IsPlayer && sc.GameState is { } orders) Orders.Read(orders, cold);
 

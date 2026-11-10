@@ -1296,13 +1296,13 @@ internal sealed class CharacterContent : IDisposable
     void AddMorph(CharacterAsset asset, CharacterAppearance c, LoadedMesh body, string bodyPath)
     {
         if (body.Morphs is not { } bodyMorphs) return;
-        asset.Morph = new MorphSource(bodyMorphs, c.PoseWeights, c.Character?.GetBool("shaved") == true && bodyMorphs.HasCuttableHorns);
+        asset.Morph = new MorphSource(bodyMorphs, c.PoseWeights, c.Shaved && bodyMorphs.HasCuttableHorns);
         if (bodyMorphs.Deltas(c.PoseWeights, asset.Morph.CutHorns) is not { } deltas) return;
 
         var weights = c.PoseWeights
             .OrderBy(p => p.Key, StringComparer.Ordinal)
             .Select(p => FormattableString.Invariant($"{p.Key}={p.Value}"));
-        var key = string.Join(';', weights) + "@" + bodyPath + (c.Character?.GetBool("shaved") == true);
+        var key = string.Join(';', weights) + "@" + bodyPath + c.Shaved;
         asset.MorphBase = Morphs.Add(key, deltas);
     }
 

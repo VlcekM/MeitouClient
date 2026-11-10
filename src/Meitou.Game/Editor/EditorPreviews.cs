@@ -36,9 +36,9 @@ sealed class EditorPreviews(CharacterEditorPanel panel)
     const double BlendSeconds = 0.12;
 
     /// <summary>
-    /// Builds a preview look from a record id and a loadout (the world's appearance source; the host sets it).
+    /// Builds a preview look from a record id, a loadout and the character's shave (the world's appearance source; the host sets it).
     /// </summary>
-    public Func<string, Loadout, CharacterAppearance?>? PreviewSource { get; set; }
+    public Func<string, Loadout, bool, CharacterAppearance?>? PreviewSource { get; set; }
 
     /// <summary>
     /// Has the renderer prepare the look being prepared at once, ahead of its ordinary queue (the host sets it).
@@ -107,7 +107,7 @@ sealed class EditorPreviews(CharacterEditorPanel panel)
                     worn.Clothing.Clear();
                     worn.Backpack = null;
                 }
-                if (PreviewSource(own.Character?.StringId ?? "", worn) is { } look) entry = entry with { Pending = look };
+                if (PreviewSource(own.Character?.StringId ?? "", worn, own.Shaved) is { } look) entry = entry with { Pending = look };
             }
             entry = entry with { Version = draft.Version, Clothes = clothes };
         }
@@ -140,7 +140,7 @@ sealed class EditorPreviews(CharacterEditorPanel panel)
                         worn.Clothing.Clear();
                         worn.Backpack = null;
                     }
-                    if (PreviewSource(own.Character?.StringId ?? "", worn) is { } look) PreviewWarm(look, urgent);
+                    if (PreviewSource(own.Character?.StringId ?? "", worn, own.Shaved) is { } look) PreviewWarm(look, urgent);
                 }
         }
         if (_anticipated != (id, s.Seed, draft.Race.StringId, draft.Female, s.Clothes))
