@@ -234,7 +234,7 @@ sealed class FeedbackPanel(PlayerInterface player)
         if (ButtonLayout is null || ShotWithoutMenus || player.FaithfulScreens.IsOpen(FeedbackScreen)) return;
         if (!player.FeedbackButtonInPlay && !player.TitleOpen && !player.FaithfulScreens.IsOpen("menu")) return;
 
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         float w = 150 * scale;
         float h = 36 * scale;
         var b = new UiBindings();

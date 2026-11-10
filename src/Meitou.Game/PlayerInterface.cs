@@ -290,16 +290,18 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal float StandardPixels => UiMode == UiMode.Faithful && UiPainter is { } painter
         ? painter.StandardTextPixels(Height)
-        : StandardTextPixels * Height / 1080f;
+        : StandardTextPixels * UiScale;
 
     /// <summary>
-    /// The inventory's scale: the window's height over 1080 lines.
+    /// The interface's scale: the window's height over the 1080 lines the layouts' pixel sizes and fonts are made for, times
+    /// <see cref="InterfaceScale"/>.
     /// </summary>
-    internal float InventoryScale => Height / 1080f;
+    internal float UiScale => Height / 1080f * InterfaceScale;
+
     /// <summary>
     /// An inventory cell's size, pixels: 25 at 1080 lines.
     /// </summary>
-    internal float InventoryCell => 25 * InventoryScale;
+    internal float InventoryCell => 25 * UiScale;
 
     #endregion
 
@@ -309,6 +311,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The value behind <see cref="FontSize"/>.
     /// </summary>
     float _fontSize = KenshiFontSize.DefaultSetting;
+
+    /// <summary>
+    /// The value behind <see cref="InterfaceScale"/>.
+    /// </summary>
+    float _interfaceScale = 1;
 
     /// <summary>
     /// The "Show damage floaters" option. Off hides the damage numbers only: the original's texts (a pick roll, a stealth knock-out, "Ate", a machine
@@ -337,6 +344,19 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         {
             _fontSize = value;
             if (UiPainter is not null) UiPainter.FontSizeSetting = value;
+        }
+    }
+
+    /// <summary>
+    /// The Interface scale setting: the UI's size over the window height's own (1 = 100%; applied to the painter once it exists).
+    /// </summary>
+    public float InterfaceScale
+    {
+        get => _interfaceScale;
+        set
+        {
+            _interfaceScale = value;
+            if (UiPainter is not null) UiPainter.InterfaceScale = value;
         }
     }
 

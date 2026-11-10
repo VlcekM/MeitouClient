@@ -672,7 +672,7 @@ sealed class FrontendScreens(PlayerInterface player)
         b.Positions["CreditsPanelContent"] = view with
         {
             Y = view.Y + scroll,
-            Height = Math.Max(view.Height, _credits.Count(c => c == '\n') * 40 * player.Height / 1080f + 100),
+            Height = Math.Max(view.Height, _credits.Count(c => c == '\n') * 40 * player.UiScale + 100),
         };
         b.Text["CreditsPanelContent"] = _credits;
     }
@@ -707,7 +707,7 @@ sealed class FrontendScreens(PlayerInterface player)
 
         // The original scales its templates' pixel sizes with the screen (Observed: the list's 21-pixel HeightLine is 28 pixels apart at 1440
         // lines).
-        b.TemplateScale = player.Height / 1080f;
+        b.TemplateScale = player.UiScale;
         PlaceSlotWindow(id, b);
         BindSlotCaptions(id, b);
         BindSlotTicks(id, b);
@@ -796,9 +796,8 @@ sealed class FrontendScreens(PlayerInterface player)
         // fixed at 180; the captions are localised strings (the pot has "Name" and "Date", Unknown which the window uses). Initially sorted by
         // the second, newest first. Meitou adds the save's origin to the name. addColumn takes screen pixels, not the template's (the date is cut
         // off at 1440 lines in the base game).
-        // Meitou: above 1080 lines both columns are half as wide again, so the date fits on a 4K screen (#495).
-        float columnScale = player.Height > 1080 ? 1.5f : 1f;
-        b.Columns["GamesList"] = [new("Name", 170 * columnScale / b.TemplateScale, Fill: true), new("Date", 180 * columnScale / b.TemplateScale)];
+        // Meitou: the columns are 170 and 180 pixels at 1080 lines and grow with the UI scale, so the date fits on a 4K screen (#495).
+        b.Columns["GamesList"] = [new("Name", 170, Fill: true), new("Date", 180)];
         b.Sorts["GamesList"] = (1, false);
 
         // Faithful: the folder name as the original shows it; Meitou adds where the save comes from.
@@ -864,7 +863,7 @@ sealed class FrontendScreens(PlayerInterface player)
 
         var root = player.FaithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
-        float w = Math.Min(size.Width, player.Width), h = Math.Min(size.Height, player.Height);
+        float w = Math.Min(size.Width * player.InterfaceScale, player.Width), h = Math.Min(size.Height * player.InterfaceScale, player.Height);
         float x = player.TitleOpen && !player.MeitouMainMenu ? Math.Min(player.Width / 2f, player.Width - w) : (player.Width - w) / 2;
         b.Positions[root.Name] = new(x, (player.Height - h) / 2, w, h);
 

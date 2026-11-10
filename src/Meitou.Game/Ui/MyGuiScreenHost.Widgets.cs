@@ -622,6 +622,12 @@ public sealed partial class MyGuiScreenHost
     // ---- windows
 
     /// <summary>
+    /// The Interface scale setting (1 = 100%): a window as large as its layout says is this much larger (Meitou; the original sizes it by the
+    /// screen alone).
+    /// </summary>
+    public float WindowScale { get; set; } = 1;
+
+    /// <summary>
     /// Places the screen's window roots: centred plus the screen's offset, as large as the layout (or a resize grip) says within <c>MinSize</c> /
     /// <c>MaxSize</c> and the viewport, fully on screen (a dragged one partly, <see cref="OnScreen"/>). A viewport change moves a moved window by its alignment (Verified against MyGUI 3.2.2
     /// Window.cpp for the properties; Meitou's approximation for the move: the window keeps its distance from the edges its Right / Bottom / centre
@@ -649,7 +655,7 @@ public sealed partial class MyGuiScreenHost
         {
             bool bound = b.Positions.ContainsKey(root.Name);
             var initial = b.Positions.GetValueOrDefault(root.Name, root.Position.RelativeTo(new(0, 0, width, height), root.RealPosition));
-            float w = initial.Width, h = initial.Height;
+            float w = initial.Width * (bound ? 1 : WindowScale), h = initial.Height * (bound ? 1 : WindowScale);
 
             if (!bound && s.Size is { } size) (w, h) = (size.X, size.Y);
             else if (!bound && !root.RealPosition)

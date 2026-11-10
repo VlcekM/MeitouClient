@@ -116,6 +116,8 @@ i.e. everything).
 | `language` | string, locale code | see text | none in options | The locale folder `locale/<code>/` used for translations; empty falls back to `steam_language`, unknown is `en_GB` ([localisation](localisation.md)). Meitou reads it; the launcher's Language setting writes this line, nothing else of the file ([launcher](../launcher.md)) |
 | `steam_language` | string, Steam language name | see text | none | The Steam language the `language` was last chosen from; decides when `language` is empty (**Verified**, FUN_140175a90) |
 
+Meitou adds an **Interface scale** slider (Interface page, 50 … 200 %, default 100 %; `UserConfig.InterfaceScale` in `meitou.user.json`, no `settings.cfg` key; the game has none). The UI scale is height / 1080 × it: fonts, template pixel sizes, every skin piece (their offsets and tile sizes are fixed pixels in the files; Meitou scales them in both modes) and Meitou's own panels follow it, and a window as large as its layout says (the window host's roots, the save/load window) grows by the setting. Panels placed by screen fractions inside a full-screen layout do not grow, so above 100 % their text can outgrow them.
+
 ### Audio
 
 Floats 0..1, missing → 0.5, applied when the options close (FUN_1403e7290). Each becomes a Wwise game parameter × 100 (`User_Volume_Music`,

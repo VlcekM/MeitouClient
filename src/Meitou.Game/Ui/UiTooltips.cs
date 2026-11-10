@@ -250,12 +250,13 @@ public static class UiTooltips
     /// width in from the left, as wide as its key text plus its value text plus two such offsets, as high as its tallest text; the first row is
     /// round(0.1 x widget height) from the top, the next ones round(0.01 x widget height) under the one before, and the panel ends round(0.1 x widget
     /// height) under the last row.
-    /// <paramref name="measure"/> gives a text's size wrapped to a width (0: unwrapped).
+    /// <paramref name="measure"/> gives a text's size wrapped to a width (0: unwrapped); <paramref name="interfaceScale"/> is the Interface scale
+    /// setting.
     /// </summary>
     public static TooltipLayout Arrange(IReadOnlyList<TooltipLine> lines, TooltipKind kind, int screenWidth, int screenHeight, Vector2 pointer,
-        UiRect? anchor, Func<string, float, Vector2> measure)
+        UiRect? anchor, Func<string, float, Vector2> measure, float interfaceScale = 1)
     {
-        float scale = screenHeight / 1080f;
+        float scale = screenHeight / 1080f * interfaceScale;
         var (widgetWidth, widgetHeight) = WidgetSize(kind, screenWidth, screenHeight, anchor);
         float offset = MathF.Round((kind == TooltipKind.Inventory ? 0.04f : 0.025f) * scale * widgetWidth);
         float margin = MathF.Round(0.1f * widgetHeight);

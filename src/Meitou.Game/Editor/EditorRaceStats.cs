@@ -52,7 +52,7 @@ sealed class EditorRaceStats(PlayerInterface player, CharacterEditorPanel panel)
                 ? first.Maximum : RaceHitPoints(race);
         if (hitPoints is { } hp) lines.Add((Loc.Tr("Hit Points:"), ((int)(hp + 0.01f)).ToString(CultureInfo.InvariantCulture), null));
         lines.AddRange(RaceStatLines(race).Select(l => (l.Label, l.Value, (bool?)l.Good)));
-        float scale = player.Height / 1080f, row = 19.2f * scale;
+        float scale = player.UiScale, row = 19.2f * scale;
         // A new race's list starts at its top (the original fills the panel anew).
         if (_editorStatsRace != race.StringId)
         {

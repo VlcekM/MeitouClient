@@ -216,7 +216,7 @@ sealed partial class PlayerInterface
     /// </summary>
     public void CreateUiPainter(DebugOverlay overlay, Func<string, string?> resolve)
     {
-        UiPainter = new(overlay, UiResources, resolve) { Mode = UiMode, FontSizeSetting = _fontSize };
+        UiPainter = new(overlay, UiResources, resolve) { Mode = UiMode, FontSizeSetting = _fontSize, InterfaceScale = _interfaceScale };
         CharacterEditor.FindAsset = resolve;
 
         // The screens' pictures are read ahead (the overview's map is 43 MB), so that opening a screen only uploads them.
@@ -262,7 +262,7 @@ sealed partial class PlayerInterface
     {
         // The original sizes the HUD's template parts by height / 1080 (Observed: the squad tabs' 37 px HeaderPlace at 1440 lines,
         // docs/game/ui-screens.md).
-        var b = new UiBindings { TemplateScale = Height / 1080f };
+        var b = new UiBindings { TemplateScale = UiScale };
         var lead = Lead();
         BindStatusTexts(b, lead);
         BindShortcutButtons(b);
@@ -526,6 +526,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void AddScreens(List<UiControl> controls)
     {
+        FaithfulScreens.WindowScale = InterfaceScale;
         foreach (var screen in FaithfulScreens.Arrange(Width, Height, ScreenRouter.BindFaithfulScreen, ScreenRouter.AddFaithfulContent))
         {
             if (FeedbackPanel.ShotWithoutMenus && FeedbackPanel.FeedbackShotHides.Contains(screen.Id)) continue;

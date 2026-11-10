@@ -249,7 +249,7 @@ sealed class TradeWindows(PlayerInterface player)
     {
         if (player.Session.CurrentSnapshot.Trade is not { } trade || GridIn(controls) is not { } gridName) return;
 
-        player.AddLines(controls, "datapanel", [new("Money:", "c." + Money(trade.ShopMoney))], 20 * player.InventoryScale);
+        player.AddLines(controls, "datapanel", [new("Money:", "c." + Money(trade.ShopMoney))], 20 * player.UiScale);
         var slot = controls.First(c => c.Name == gridName);
         int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
         var area = slot.Bounds;
@@ -307,7 +307,7 @@ sealed class TradeWindows(PlayerInterface player)
             : trade.BuysStolen ? ("Stolen goods?", "No problem!", PlayerInterface.GoodColour) : null;
         if (prompt is not { } p) return;
 
-        float scale = player.InventoryScale, width = 240 * scale, height = 34 * scale;
+        float scale = player.UiScale, width = 240 * scale, height = 34 * scale;
         var box = new UiRect(Math.Clamp(player.Mouse.X + 18 * scale, 0, player.Width - width),
             Math.Clamp(player.Mouse.Y - height - 8 * scale, 0, player.Height - height), width, height);
         controls.Add(new("fence-prompt", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), Vector4.Zero,
@@ -517,7 +517,7 @@ sealed class TradeWindows(PlayerInterface player)
 
             bool ticked = _characterTradeTicked.Contains(row.Character);
             string prefix = "character-row-" + i.ToString(CultureInfo.InvariantCulture) + "-";
-            var b = new UiBindings { TemplateScale = player.InventoryScale };
+            var b = new UiBindings { TemplateScale = player.UiScale };
             b.Text["NameTextBox"] = row.Name;
             b.Text["PriceTextBox"] = "c." + Money(row.Price);
             b.Actions["CheckBox"] = "character-tick:" + i.ToString(CultureInfo.InvariantCulture);
@@ -554,7 +554,7 @@ sealed class TradeWindows(PlayerInterface player)
                     continue;
 
                 player.AddLines(controls, prefix + panel, [.. lines.Select(l => new PlayerInterface.HudLine(l.Label, l.Value))],
-                    host.Bounds.Height / 5, PlayerInterface.StandardTextPixels * player.InventoryScale);
+                    host.Bounds.Height / 5, PlayerInterface.StandardTextPixels * player.UiScale);
             }
         }
     }

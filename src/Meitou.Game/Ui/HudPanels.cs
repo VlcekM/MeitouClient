@@ -578,7 +578,7 @@ sealed class HudPanels(PlayerInterface player)
     /// </summary>
     internal void AddHudText(List<UiControl> controls)
     {
-        float row = 20 * player.Height / 1080f, sidePixels = player.StandardPixels;
+        float row = 20 * player.UiScale, sidePixels = player.StandardPixels;
 
         if (player.BuildingSelection.BuildingFocus() is { } focus)
         {
@@ -651,7 +651,7 @@ sealed class HudPanels(PlayerInterface player)
             if (valueIndex >= 0)
             {
                 var value = controls[valueIndex];
-                float height = Math.Max(value.Bounds.Height, 20 * player.Height / 1080f);
+                float height = Math.Max(value.Bounds.Height, 20 * player.UiScale);
                 controls[valueIndex] = value with
                 {
                     Bounds = value.Bounds with { Y = value.Bounds.Y + (value.Bounds.Height - height) / 2, Height = height },

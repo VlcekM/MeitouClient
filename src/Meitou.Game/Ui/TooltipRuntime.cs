@@ -282,9 +282,9 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (Loc.Translating)
             lines = [.. lines.Select(l => l with { Key = l.Key.StartsWith('-') ? "-" + TipTr(l.Key[1..]) : TipTr(l.Key), Value = TipTr(l.Value) })];
 
-        var layout = UiTooltips.Arrange(lines, kind, player.Width, player.Height, point ?? player.Mouse, anchor, Measure);
+        var layout = UiTooltips.Arrange(lines, kind, player.Width, player.Height, point ?? player.Mouse, anchor, Measure, player.InterfaceScale);
         var panel = layout.Panel;
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         bool meitou = kind != TooltipKind.Static && player.UiMode == UiMode.Meitou && TooltipPlateReady(painter);
 
         AddTooltipPanel(controls, kind, meitou, panel, prefix, scale);

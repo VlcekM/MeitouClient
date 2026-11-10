@@ -115,7 +115,7 @@ sealed class OrdersPanel(PlayerInterface player)
         b.Properties["JobsPanel"] = new Dictionary<string, string>
         {
             ["LineSkin"] = "Kenshi_ConnectBarSkin",
-            ["LineHeight"] = ((int)(24 * player.Height / 1080f)).ToString(CultureInfo.InvariantCulture),
+            ["LineHeight"] = ((int)(24 * player.UiScale)).ToString(CultureInfo.InvariantCulture),
         };
         b.ScrollOffsets["JobsPanel"] = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
 
@@ -138,7 +138,7 @@ sealed class OrdersPanel(PlayerInterface player)
     {
         if (!player.ScrollBars.InventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
 
-        float line = 24 * player.Height / 1080f;
+        float line = 24 * player.UiScale;
         float scroll = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
         player.ScrollBars.InventoryScroll["JobsPanel"] = Math.Clamp(scroll - steps * line, 0, view.Maximum);
         return true;
@@ -153,7 +153,7 @@ sealed class OrdersPanel(PlayerInterface player)
         if (panelIndex < 0) return;
 
         var panel = controls[panelIndex];
-        float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * player.Height / 1080f);
+        float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * player.UiScale);
         float maximum = MyGuiPresentation.Num(panel.Properties, "ScrollMax");
         if (maximum <= 0)
         {
@@ -164,8 +164,8 @@ sealed class OrdersPanel(PlayerInterface player)
 
         float scroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
         player.ScrollBars.InventoryScroll["JobsPanel"] = scroll;
-        float barWidth = 17 * player.InventoryScale;
-        float gap = 3 * player.InventoryScale;
+        float barWidth = 17 * player.UiScale;
+        float gap = 3 * player.UiScale;
         var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth - gap) };
         player.ScrollBars.InventoryViews["JobsPanel"] = (view, maximum);
         NarrowJobRows(controls, view, barWidth, gap);

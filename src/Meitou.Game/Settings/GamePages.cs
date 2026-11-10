@@ -269,7 +269,7 @@ sealed class GamePages(SettingsMenu menu)
         Meitou: Simulation.Items.GroundItems.DefaultLimit);
 
     /// <summary>
-    /// The Interface page: UI style, units, floaters, font size, names, markers and the mouse.
+    /// The Interface page: UI style, units, floaters, font size, interface scale, names, markers and the mouse.
     /// </summary>
     internal void InterfaceRows(List<SettingsMenu.Entry> result)
     {
@@ -286,6 +286,9 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Font size", "Points added to every interface font's default height (the game: 3).",
             Slider: new("Font size", UserConfig.MinFontSize, UserConfig.MaxFontSize, () => menu.Config.FontSize ?? KenshiFontSize.DefaultSetting,
                 v => SetFontSize(v), "0", Faithful: KenshiFontSize.DefaultSetting)));
+        result.Add(new("Interface scale", "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it).",
+            Slider: new("Interface scale", UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale, () => menu.Config.InterfaceScale,
+                SetInterfaceScale, "0.00", Text: v => $"{v * 100:0}%", Faithful: 1, Scale: 100, Step: 0.05f)));
         result.Add(new("Show names",
             "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
             Toggle: new("Show names", () => menu.Config.ShowNames, v => menu.Player.ShowNames = menu.Config.ShowNames = v, OnOff: true)));
@@ -322,6 +325,16 @@ sealed class GamePages(SettingsMenu menu)
         float size = Math.Clamp(MathF.Round(v), UserConfig.MinFontSize, UserConfig.MaxFontSize);
         menu.Config.FontSize = size;
         menu.Player.FontSize = size;
+    }
+
+    /// <summary>
+    /// The Interface scale, rounded to 5% and clamped, into the config and the player interface.
+    /// </summary>
+    void SetInterfaceScale(float v)
+    {
+        float scale = Math.Clamp(MathF.Round(v * 20) / 20, UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale);
+        menu.Config.InterfaceScale = scale;
+        menu.Player.InterfaceScale = scale;
     }
 
     /// <summary>

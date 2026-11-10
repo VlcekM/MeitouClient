@@ -194,7 +194,7 @@ sealed class PickInspector(PlayerInterface player)
         lines.Add(new("Selected characters", player.SelectedIds().Count.ToString(CultureInfo.InvariantCulture)));
         if (InspectorPanel)
         {
-            float scale = player.InventoryScale, row = 20 * scale, width = Math.Min(player.Width * 0.5f, 430 * scale),
+            float scale = player.UiScale, row = 20 * scale, width = Math.Min(player.Width * 0.5f, 430 * scale),
                 height = 16 * scale + row * (lines.Count + 1);
             var box = new UiRect(player.Width - width - 8 * scale, 40 * scale, width, height);
             controls.Add(new("inspector", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(),

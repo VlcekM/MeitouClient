@@ -207,7 +207,7 @@ sealed class PortraitBar(PlayerInterface player)
         // The tab's page (the layout's TabItem rectangle inside SquadPanel).
         var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f,
             panel.Height * 0.737069f);
-        float scale = player.InventoryScale;
+        float scale = player.UiScale;
         var grid = SquadGrid(page, members.Count, scale);
         if (grid.Maximum > 0)
         {

@@ -141,7 +141,7 @@ sealed class StealthView(PlayerInterface player)
     /// </summary>
     internal void AddNameTags(List<UiControl> controls)
     {
-        float layoutWidth = player.Width * NameTagWidth, height = player.Height * 0.0296296f, scale = player.Height / 1080f;
+        float layoutWidth = player.Width * NameTagWidth, height = player.Height * 0.0296296f, scale = player.UiScale;
         float icons = layoutWidth * (StealthIconShare + LightIconShare);
         int n = 0;
         foreach (var c in player.Session.CurrentSnapshot.Characters)
@@ -273,7 +273,7 @@ sealed class StealthView(PlayerInterface player)
         if (TaskBarLayout is not { Roots: [var root, ..] } || player.CharacterEditor.EditorOpen) return;
 
         float tag = player.Height * 0.0296296f;
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         int n = 0;
         var all = player.Session.CurrentSnapshot.Characters;
         for (int i = 0; i < all.Count; i++)

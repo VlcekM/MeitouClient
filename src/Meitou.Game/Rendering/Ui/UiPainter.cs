@@ -89,6 +89,11 @@ public sealed partial class UiPainter : IDisposable
     float _fontSizeSetting = KenshiFontSize.DefaultSetting;
 
     /// <summary>
+    /// The Interface scale setting (1 = 100%): every size taken from the window's height is times this.
+    /// </summary>
+    public float InterfaceScale { get; set; } = 1;
+
+    /// <summary>
     /// The game files the fonts were found at, by name (null: not found).
     /// </summary>
     readonly Dictionary<string, string?> _fontPaths = new(StringComparer.Ordinal);
@@ -206,8 +211,8 @@ public sealed partial class UiPainter : IDisposable
     public float StandardTextPixels(int viewportHeight)
     {
         if (FontSpec("Kenshi_StandardFont_Medium") is { } spec && FontPath(spec.Source) is { } path)
-            return ScaledFontSize(path, spec, viewportHeight / 1080f) * (spec.Resolution > 0 ? spec.Resolution : 50) / 72;
-        return 20 * 50 / 72f * viewportHeight / 1080f;
+            return ScaledFontSize(path, spec, Scale(viewportHeight)) * (spec.Resolution > 0 ? spec.Resolution : 50) / 72;
+        return 20 * 50 / 72f * Scale(viewportHeight);
     }
 
     /// <summary>
@@ -796,10 +801,15 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// How much a skin's pieces grow: the screen height over 1080 for the tick button (radio buttons), whose pieces are fixed pixels and too small
-    /// at 4K (#495), else 1.
+    /// The UI scale on a viewport <paramref name="height"/> lines high: the height over the 1080 lines the layouts' pixel sizes are made for, times
+    /// <see cref="InterfaceScale"/>.
     /// </summary>
-    static float SkinScale(string skin, int height) => skin == "Kenshi_TickButton1Skin" ? height / 1080f : 1f;
+    float Scale(int height) => height / 1080f * InterfaceScale;
+
+    /// <summary>
+    /// <see cref="Scale"/> with the height's part kept within half and one and a half (the standard font's caption scale).
+    /// </summary>
+    float ClampedScale(int height) => Math.Clamp(height / 1080f, 0.5f, 1.5f) * InterfaceScale;
 
     /// <summary>
     /// A skin piece's rectangle times <paramref name="scale"/>.
@@ -819,7 +829,9 @@ public sealed partial class UiPainter : IDisposable
             // A toggled button (Checked) uses MyGUI's *_checked states, else looks pushed.
             bool on = c.Properties.GetValueOrDefault("Checked") == "true";
             string state = on ? widgetState + "_checked" : widgetState;
-            float scale = SkinScale(skin.Name, height);
+            // Meitou: a skin's pieces are fixed pixels in the files; they grow with the UI scale, so that borders and radio buttons keep their
+            // size against the layout on a 4K screen (#495).
+            float scale = Scale(height);
             foreach (var part in skin.Parts)
             {
                 if (part.Type is not ("SubSkin" or "MainSkin" or "TileRect")) continue;
@@ -830,7 +842,7 @@ public sealed partial class UiPainter : IDisposable
                 var dest = Scaled(part.Offset, scale).AlignTo(b, skin.Width * scale, skin.Height * scale, part.Align);
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
                 if (part.Type == "TileRect")
-                    PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint);
+                    PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint, scale);
                 else
                     PaintSkinPart(atlas, atlasMask, source, dest, clip, width, height, tint);
             }
@@ -840,16 +852,19 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// A TileRect part: the source repeated at its tile size (the control's <c>TileSize</c>, else the state's) over <paramref name="dest"/>.
+    /// A TileRect part: the source repeated at its tile size (the control's <c>TileSize</c>, else the state's) times <paramref name="scale"/> over
+    /// <paramref name="dest"/>.
     /// </summary>
     void PaintTileRect(UiControl c, MyGuiSkinPart part, string state, (GpuTexture Texture, SampledTexture Sampled) atlas, OpacityMask? atlasMask,
-        UiRect source, UiRect dest, UiRect clip, Vector4 tint)
+        UiRect source, UiRect dest, UiRect clip, Vector4 tint, float scale)
     {
         var properties = part.StateProperties?.GetValueOrDefault(state) ?? part.StateProperties?.GetValueOrDefault("normal");
         string? tileSize = c.Properties.GetValueOrDefault("TileSize") ?? properties?.GetValueOrDefault("TileSize");
         var size = tileSize?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         float tileW = size?.Length == 2 ? float.Parse(size[0], CultureInfo.InvariantCulture) : source.Width;
         float tileH = size?.Length == 2 ? float.Parse(size[1], CultureInfo.InvariantCulture) : source.Height;
+        tileW *= scale;
+        tileH *= scale;
         if (properties?.GetValueOrDefault("TileH") != "true") tileW = dest.Width;
         if (properties?.GetValueOrDefault("TileV") != "true") tileH = dest.Height;
         if (tileW > 0 && tileH > 0 && tint.W >= 1 && atlasMask?.Covers(source) == true) _opaqueRects.Add(dest.Intersect(clip));
@@ -909,7 +924,7 @@ public sealed partial class UiPainter : IDisposable
         var textColour = MyGuiColours.Text(_resources, c, textState, c.Enabled ? DebugOverlay.TextColour : new(0.45f, 0.43f, 0.38f, 1));
         textColour.W *= Alpha(c.Properties);
         font.Target = _overlay.Target;
-        float scale = c.TextScale ?? (c.Skin.Length > 0 ? Math.Clamp(height / 1080f, 0.5f, 1.5f) : 1);
+        float scale = c.TextScale ?? (c.Skin.Length > 0 ? ClampedScale(height) : 1);
         bool original = SizeCaptionFont(c, fontName, height, minimumTextPixels, ref font, ref scale);
         if (minimumTextPixels > 0 || original)
         {
@@ -980,7 +995,7 @@ public sealed partial class UiPainter : IDisposable
             font.Target = _overlay.Target;
             scale = 1;
         }
-        else if (ResourceFont(fontName, c.TextScale ?? height / 1080f, minimumTextPixels) is { } resourceFont)
+        else if (ResourceFont(fontName, c.TextScale ?? Scale(height), minimumTextPixels) is { } resourceFont)
         {
             font = resourceFont;
             font.Target = _overlay.Target;

@@ -774,6 +774,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Config.ApplyCamera(host.Session.Camera.Settings);
         KeyMap.SwapButtons = host.Config.SwapMouseButtons == true;
         _hud?.FontSize = host.Config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
+        _hud?.InterfaceScale = Math.Clamp(host.Config.InterfaceScale, UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale);
         host.Config.MovementMarker ??= Meitou.Game.Audio.AudioSystem.Setting(host.Install, "Movement marker", 1) != 0;
         host.Config.RotationMarker ??= Meitou.Game.Audio.AudioSystem.Setting(host.Install, "Rotation marker", 1) != 0;
         if (_hud is not null) (_hud.MovementMarker, _hud.RotationMarker) = (host.Config.MovementMarker == true, host.Config.RotationMarker == true);

@@ -70,7 +70,7 @@ sealed class SquadAiTab(PlayerInterface player)
         var on = player.Session.CurrentSnapshot.SquadAi;
 
         // The original's panel is sized for its nine lines and the formation; lines shrink when the Meitou-only ones do not fit.
-        float line = MathF.Min(MathF.Max(22, 30 * player.InventoryScale), panel.Bounds.Height / (AiOptionRows.Length + 1));
+        float line = MathF.Min(MathF.Max(22, 30 * player.UiScale), panel.Bounds.Height / (AiOptionRows.Length + 1));
 
         for (int i = 0; i < AiOptionRows.Length; i++)
         {

@@ -537,6 +537,7 @@ sealed class GameLoop(GameHost host)
         host.Config.ApplyCamera(host.Session.Camera.Settings);
         KeyMap.SwapButtons = host.Config.SwapMouseButtons == true;
         host.Player.FontSize = host.Config.FontSize ?? Data.Ui.KenshiFontSize.DefaultSetting;
+        host.Player.InterfaceScale = Math.Clamp(host.Config.InterfaceScale, UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale);
         host.Config.MovementMarker ??= Audio.AudioSystem.Setting(host.Install, "Movement marker", 1) != 0;
         host.Config.RotationMarker ??= Audio.AudioSystem.Setting(host.Install, "Rotation marker", 1) != 0;
         (host.Player.MovementMarker, host.Player.RotationMarker) = (host.Config.MovementMarker == true, host.Config.RotationMarker == true);

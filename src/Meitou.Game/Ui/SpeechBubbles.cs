@@ -39,7 +39,7 @@ sealed class SpeechBubbles(PlayerInterface player)
         var speech = player.Session.CurrentSnapshot.Speech;
         if (speech.Count == 0 || player.UiPainter is not { } painter) return;
 
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         var shown = new List<(SpeechBubble Bubble, FittedSpeech Text, float Alpha, UiRect Panel)>();
         foreach (var bubble in speech)
         {

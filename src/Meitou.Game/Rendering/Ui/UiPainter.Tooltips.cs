@@ -70,8 +70,8 @@ public sealed partial class UiPainter
     /// </summary>
     public TextSize MeasureText(string fontName, string text, int viewportHeight, float wrapWidth, float minimumTextPixels)
     {
-        var font = ResourceFont(fontName, viewportHeight / 1080f, minimumTextPixels) ?? _standardFont ?? _overlay;
-        float scale = font == _standardFont || font == _overlay ? Math.Clamp(viewportHeight / 1080f, 0.5f, 1.5f) : 1;
+        var font = ResourceFont(fontName, Scale(viewportHeight), minimumTextPixels) ?? _standardFont ?? _overlay;
+        float scale = font == _standardFont || font == _overlay ? ClampedScale(viewportHeight) : 1;
         return Measure(font, text, wrapWidth, scale);
     }
 

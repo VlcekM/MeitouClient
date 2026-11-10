@@ -146,7 +146,7 @@ sealed class ProductionWindows(PlayerInterface player)
         }
 
         BindCraftingRow(m, b);
-        b.TemplateScale = player.InventoryScale;
+        b.TemplateScale = player.UiScale;
 
         // The layout's OutputText is an editable EditBox; it is a status line, so read-only here: a click or Tab gave it the keys and typing went
         // into it (#383).
@@ -184,11 +184,11 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (m?.Storage is { } sg)
         {
-            b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.InventoryScale,
-                Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
+            b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.UiScale,
+                Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.UiScale));
         }
 
-        b.TemplateScale = player.InventoryScale;
+        b.TemplateScale = player.UiScale;
     }
 
     /// <summary>
@@ -205,11 +205,11 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (m?.Storage is { } grid)
         {
-            b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.InventoryScale,
-                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
+            b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.UiScale,
+                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.UiScale));
         }
 
-        b.TemplateScale = player.InventoryScale;
+        b.TemplateScale = player.UiScale;
     }
 
     /// <summary>
@@ -284,8 +284,8 @@ sealed class ProductionWindows(PlayerInterface player)
             && last.FirstOrDefault(c => c.Name == "in1") is { } in1)
         {
             b.Positions["Root"] = new(0, 0, Math.Max(win.Bounds.Width,
-                in1.Bounds.X - win.Bounds.X + fg.Width * player.InventoryCell + 20 * player.InventoryScale),
-                Math.Max(win.Bounds.Height, in1.Bounds.Y - win.Bounds.Y + fg.Height * player.InventoryCell + 60 * player.InventoryScale));
+                in1.Bounds.X - win.Bounds.X + fg.Width * player.InventoryCell + 20 * player.UiScale),
+                Math.Max(win.Bounds.Height, in1.Bounds.Y - win.Bounds.Y + fg.Height * player.InventoryCell + 60 * player.UiScale));
         }
     }
 
@@ -336,7 +336,8 @@ sealed class ProductionWindows(PlayerInterface player)
         var layout = player.FaithfulScreens.Layout("building");
         b.Hidden.Add("CraftingPanel");
         b.Hidden.Add("InputColumn");
-        b.Positions["Root"] = new(0, 0, 0.208854f * player.Width * widthPart, 0.398148f * player.Height * heightPart);
+        float scale = player.InterfaceScale;
+        b.Positions["Root"] = new(0, 0, 0.208854f * player.Width * widthPart * scale, 0.398148f * player.Height * heightPart * scale);
         float x = 0.0126582f / widthPart, w = 1 - 2 * x, titles = 0.0909091f / heightPart;
         if (layout.Find("TitlesPanel") is { } t) b.RelativePositions[t] = new(x, 0, w, titles);
         if (layout.Find("OutputTitleText") is { } ot) b.RelativePositions[ot] = new(0, 0, 1, 1);
@@ -435,7 +436,7 @@ sealed class ProductionWindows(PlayerInterface player)
         var root = controls.FirstOrDefault(c => c.Type == "Window");
         if (index < 0 || root is null) return;
 
-        float scale = player.InventoryScale;
+        float scale = player.UiScale;
         var bounds = root.Bounds;
         controls[index] = controls[index] with
         {
@@ -476,7 +477,7 @@ sealed class ProductionWindows(PlayerInterface player)
         };
 
         // Engine choice: a grid taller than the room above the progress bar pushes the bar down under it.
-        if (barRoot is { } root && b.Y + b.Height + 4 * player.InventoryScale - root.Bounds.Y is var dy and > 0)
+        if (barRoot is { } root && b.Y + b.Height + 4 * player.UiScale - root.Bounds.Y is var dy and > 0)
         {
             for (int i = 0; i < controls.Count; i++)
             {
@@ -1090,13 +1091,13 @@ sealed class ProductionWindows(PlayerInterface player)
 
         var research = player.Session.CurrentSnapshot.Research;
         var face = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Left VCenter" };
-        float line = MathF.Max(18, 24 * player.InventoryScale);
+        float line = MathF.Max(18, 24 * player.UiScale);
         var ink = new Vector4(0.86f, 0.82f, 0.71f, 1);
 
         if (controls.FirstOrDefault(c => c.Name == "BlueprintsAvailablePanel") is { } blueprints)
         {
             // The row unit U as the base game draws it at 1080 lines (Observed): a 29 px frame 0.15 U down a 35 px pitch.
-            float unit = 30.5f * player.Height / 1080f, pitch = 1.15f * unit, w = blueprints.Bounds.Width;
+            float unit = 30.5f * player.UiScale, pitch = 1.15f * unit, w = blueprints.Bounds.Width;
             var area = blueprints.Bounds;
             var clip = area.Intersect(blueprints.Clip ?? area);
             var rows = research.Available.Where(r => r.Category == ResearchCategory).OrderBy(r => r.Name, StringComparer.Ordinal).ToList();
@@ -1212,7 +1213,7 @@ sealed class ProductionWindows(PlayerInterface player)
     void IndentLabel(UiBindings b, string name) => b.Properties[name] = new Dictionary<string, string>
     {
         ["TextAlign"] = "Left VCenter",
-        ["TextPadding"] = $"{(8 * player.Height / 1080f).ToString(CultureInfo.InvariantCulture)} 0 0 0",
+        ["TextPadding"] = $"{(8 * player.UiScale).ToString(CultureInfo.InvariantCulture)} 0 0 0",
     };
 
     /// <summary>
@@ -1343,7 +1344,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
         var options = player.Session.CurrentSnapshot.Crafts.GetValueOrDefault(_craftStation) ?? [];
         var face = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Left VCenter" };
-        float line = MathF.Max(18, 24 * player.InventoryScale);
+        float line = MathF.Max(18, 24 * player.UiScale);
         var ink = new Vector4(0.86f, 0.82f, 0.71f, 1);
 
         if (controls.FirstOrDefault(c => c.Name == "QueueItemsPanel") is { } panel)

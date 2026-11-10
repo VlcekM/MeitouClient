@@ -86,7 +86,7 @@ sealed class FactionWindow(PlayerInterface player)
     {
         if (!FactionShown) return;
 
-        var scale = player.Height / 1080f;
+        var scale = player.UiScale;
         if (controls.FirstOrDefault(c => c.Name == "FactionInfoPanel") is { } info) AddFactionInfo(controls, info, scale);
         if (RelationsLineLayout is not { } layout || controls.FirstOrDefault(c => c.Name == "RelationsPanel") is not { } panel) return;
 
@@ -179,7 +179,7 @@ sealed class FactionWindow(PlayerInterface player)
         if (player.FaithfulScreens.HitTest(p) is not { Screen: "overview" } hit) return false;
         if (hit.Control.Name != "RelationsPanel" && !hit.Control.Properties.ContainsKey("FactionLine")) return false;
 
-        _relationsScroll -= steps * 44 * (player.Height / 1080f);   // clamped when the list is laid out
+        _relationsScroll -= steps * 44 * player.UiScale;   // clamped when the list is laid out
         return true;
     }
 

@@ -149,7 +149,7 @@ sealed class EditorBodyFiles(PlayerInterface player, CharacterEditorPanel panel)
     /// </summary>
     internal void BindFileDialog(UiBindings b)
     {
-        b.TemplateScale = player.Height / 1080f;
+        b.TemplateScale = player.UiScale;
         b.Text["Root"] = "Import character";
         b.Text["ButtonOpenSave"] = Loc.Tr("Import").ToUpperInvariant();
         b.Text["ButtonCancel"] = Loc.Tr("Cancel").ToUpperInvariant();

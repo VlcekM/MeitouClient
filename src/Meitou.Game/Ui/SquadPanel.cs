@@ -143,7 +143,7 @@ sealed class SquadPanel(PlayerInterface player)
         var byId = snapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
         var area = panel.Bounds;
         var clip = panel.Clip is { } outer ? area.Intersect(outer) : area;
-        float boxHeight = area.Height * SquadBoxShare, boxWidth = area.Width - SquadScrollBar * player.InventoryScale;
+        float boxHeight = area.Height * SquadBoxShare, boxWidth = area.Width - SquadScrollBar * player.UiScale;
         _squadsScroll = Math.Clamp(_squadsScroll, 0, Math.Max(0, squads.Count * boxHeight - area.Height));
         var focus = player.FaithfulScreens.Focus is { Screen: "overview" } f ? f : default((string, string, int, int, int)?);
         bool dragging = _portraitDrag is { } pressed && Vector2.Distance(pressed.From, player.Mouse) >= PlayerInterface.DragThreshold;
@@ -180,7 +180,7 @@ sealed class SquadPanel(PlayerInterface player)
         // The box shows the squad's name, or what is being typed; a box not being typed in starts from the name when it is next pressed.
         if (!typing) player.FaithfulScreens.SetText("overview", nameBox, squad.Name);
 
-        var b = new UiBindings { TemplateScale = player.InventoryScale };
+        var b = new UiBindings { TemplateScale = player.UiScale };
         b.Text["SquadNameText"] = typing ? player.FaithfulScreens.GetText("overview", nameBox) : squad.Name;
         int count = squad.Members.Count;
         b.Text["SquadSizeText"] = $"{count}/{maxSize}";
@@ -443,7 +443,7 @@ sealed class SquadPanel(PlayerInterface player)
             return false;
         }
 
-        _squadsScroll -= steps * 44 * player.InventoryScale;   // clamped when the list is laid out
+        _squadsScroll -= steps * 44 * player.UiScale;   // clamped when the list is laid out
         return true;
     }
 

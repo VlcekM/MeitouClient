@@ -124,9 +124,9 @@ sealed class WorldMap(PlayerInterface player)
     static Vector3 MapWorld(Vector2 normalized) => new(normalized.X * 2 * MapExtent - MapExtent, 0, normalized.Y * 2 * MapExtent - MapExtent);
 
     /// <summary>
-    /// The UI's scale: 1 at 1080 pixels high.
+    /// The UI scale (<see cref="PlayerInterface.UiScale"/>).
     /// </summary>
-    float UiScale => player.Height / 1080f;
+    float UiScale => player.UiScale;
 
     /// <summary>
     /// Whether the overview shows its Map tab now (the F10 map-teleport hint reads it).

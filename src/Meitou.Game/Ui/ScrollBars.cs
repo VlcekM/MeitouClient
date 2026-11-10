@@ -37,7 +37,7 @@ sealed class ScrollBars(PlayerInterface player)
     internal void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum,
         UiRect? clip, string prefix = "inventory-scroll")
     {
-        float scale = player.InventoryScale;
+        float scale = player.UiScale;
         void Part(string name, UiRect bounds, string skin, string action = "", bool pickable = false)
         {
             bool clickable = action.Length > 0 || pickable;
@@ -135,7 +135,7 @@ sealed class ScrollBars(PlayerInterface player)
             return;
         if (!InventoryViews.TryGetValue(key, out var view)) return;
 
-        float delta = action[..colon].EndsWith("-page", StringComparison.Ordinal) ? view.View.Height : 24 * player.Height / 1080f;
+        float delta = action[..colon].EndsWith("-page", StringComparison.Ordinal) ? view.View.Height : 24 * player.UiScale;
         InventoryScroll[key] = Math.Clamp(InventoryScroll.GetValueOrDefault(key) - direction * delta, 0, view.Maximum);
         if (key == "SquadPanel") player.PortraitBar.SquadBarScroll = InventoryScroll[key];
     }

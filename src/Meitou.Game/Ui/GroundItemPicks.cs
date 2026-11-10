@@ -191,7 +191,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         _itemLabels.Clear();
         if (HighlightFocus is not { } focus || player.UiPainter is not { } painter || player.CharacterEditor.EditorOpen) return;
 
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         float height = player.Height * 0.0259259f;
         float em = 20 * 50f / 72f * scale;
         var near = NearLabelItems(focus);

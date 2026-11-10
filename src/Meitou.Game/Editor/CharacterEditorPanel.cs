@@ -748,7 +748,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     void BindEditorRows(UiBindings b, CharacterDraft draft, EditorTab tab)
     {
         EnsureEditorRows(draft, tab);
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         b.TemplateScale = scale;
         var layout = player.FaithfulScreens.Layout("editor");
         var controls = draft.Controls(tab);

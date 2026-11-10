@@ -108,7 +108,7 @@ sealed class DamageFloaters(PlayerInterface player)
         if (Floaters.Count == 0) return;
 
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         int n = 0;
         foreach (var l in Floaters)
         {

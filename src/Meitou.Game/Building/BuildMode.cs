@@ -1368,7 +1368,7 @@ sealed class BuildMode(PlayerInterface player)
         float minimum = player.TitleOpen ? 0 : player.StandardPixels;
         var width = UiTooltips.Arrange(lines, TooltipKind.Floating, player.Width, player.Height, top, null,
             (text, wrap) => painter.MeasureText(TooltipRuntime.TooltipFont, text, player.Height, wrap, minimum) is var s
-                ? new(s.Width, s.Height) : default).Panel.Width;
+                ? new(s.Width, s.Height) : default, player.InterfaceScale).Panel.Width;
         var anchor = top with { X = top.X + width / 2 };
         player.TooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "build-readout", anchor, colours);
     }

@@ -65,7 +65,7 @@ sealed class AdvancedOptions(PlayerInterface player)
     {
         var root = player.FaithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         float width = Math.Min(size.Width, player.Width - 24);
         float mainHeight = Math.Min(size.Height, player.Height - 24);
         float extra = AdvancedOpen ? Math.Max(0, Math.Min(player.Height * .43f, player.Height - 24 - mainHeight)) : 0;
@@ -133,7 +133,7 @@ sealed class AdvancedOptions(PlayerInterface player)
     {
         if (!AdvancedOpen || controls.FirstOrDefault(c => c.Name == "advanced-Datapanel") is not { } panel) return;
 
-        float s = player.Height / 1080f;
+        float s = player.UiScale;
         var area = panel.Bounds;
 
         // The labels sit on Kenshi_GenericTextBoxFlatSkin, the help panel on Kenshi_GenericTextBoxSkin; the value boxes' skin names no text colour,
@@ -237,7 +237,7 @@ sealed class AdvancedOptions(PlayerInterface player)
     {
         if (controls.FirstOrDefault(c => c.Name == "advanced-TooltipPanel") is not { } footer) return;
 
-        float s = player.Height / 1080f;
+        float s = player.UiScale;
         int sliders = NewGameSettings.Options.Length;
         int helpLine = AdvancedHelp >= 0 && AdvancedHelp < sliders
             ? NewGameSettings.Options[AdvancedHelp].HelpLine

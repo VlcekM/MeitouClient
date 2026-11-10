@@ -312,7 +312,7 @@ sealed class TutorialPanel(PlayerInterface player)
             || !player.Session.World.Player.Exists || player.CharacterEditor.EditorOpen)
             return;
 
-        float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale);
+        float scale = player.UiScale, lineHeight = MathF.Round(TutorialLineHeight * scale);
         float width = MathF.Round(player.Width * TutorialListWidth);
         float y = player.Height * TutorialListHeight;
         var active = manager.Active;
