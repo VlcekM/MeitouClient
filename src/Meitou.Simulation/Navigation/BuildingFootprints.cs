@@ -85,9 +85,9 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 }
 
 /// <summary>
-/// A placed building's footprint in the world.
+/// A placed building's footprint in the world, and its BUILDING record.
 /// </summary>
-public readonly record struct PlacedFootprint(string Id, Vector2[] Hull);
+public readonly record struct PlacedFootprint(string Id, Vector2[] Hull, string Record = "");
 
 /// <summary>
 /// A level-data building with the footprint of its record (in its own space), for picking; <paramref name="Plot"/> when it is the
@@ -463,7 +463,15 @@ public sealed class BuildingFootprints
     /// <paramref name="terrainHeight"/> sets a placement that has no height of its own.
     /// </summary>
     public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> LinkedAround(Vector2 centre, float radius, Func<double,
-            double, float> terrainHeight)
+            double, float> terrainHeight) =>
+        PlacedAround(centre, radius, record => _db.Find(record)?.GetBool("links together") == true, terrainHeight);
+
+    /// <summary>
+    /// The level data's buildings whose record passes <paramref name="record"/>, placed within <paramref name="radius"/> of <paramref name="centre"/>
+    /// (X, Z), with their absolute position and turn. <paramref name="terrainHeight"/> sets a placement that has no height of its own.
+    /// </summary>
+    public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> PlacedAround(Vector2 centre, float radius,
+        Func<string, bool> record, Func<double, double, float> terrainHeight)
     {
         if (_levels is null) yield break;
         var map = Index();
@@ -478,8 +486,7 @@ public sealed class BuildingFootprints
                     if (b.TargetsZoneRecord || b.Position == Vector3.Zero
                             || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > radius * radius)
                         continue;
-                    if (_db.Find(b.BuildingId)?.GetBool("links together") == true
-                            && BuildingPlacements.Resolve(b, _db, _levels, terrainHeight) is { } r)
+                    if (record(b.BuildingId) && BuildingPlacements.Resolve(b, _db, _levels, terrainHeight) is { } r)
                         yield return (b.Key, b.BuildingId, r.Position, b.Rotation);
                 }
             }
@@ -525,7 +532,7 @@ public sealed class BuildingFootprints
                             || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach))
                         continue;
                     if (Of(b.BuildingId) is { } footprint)
-                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation));
+                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation), b.BuildingId);
                 }
             }
     }

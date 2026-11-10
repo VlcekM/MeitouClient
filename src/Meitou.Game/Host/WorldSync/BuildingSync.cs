@@ -369,6 +369,8 @@ sealed class BuildingSync(GameHost host)
             Plot = footprints.Plot,
             PartBounds = footprints.PartBounds,
             LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
+            PlacedAround = (centre, radius, record) =>
+                footprints.PlacedAround(centre, radius, record, (x, z) => host.ActiveGround((float)x, (float)z)),
             StaticAround = footprints.StaticAround,
             StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
             StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),

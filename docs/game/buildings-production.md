@@ -214,7 +214,7 @@ shows the first failing message in this order (**Verified** unless marked):
 | "No resources at this location, mining would be pointless." / "This crop will not grow in this environment." | resource value or crop yield < 0.01 (below) |
 | "Cannot build inside incomplete buildings." | the building under the ghost is incomplete |
 | "Must be placed outside or on a roof." / "Must be placed inside a building." | indoor/outdoor rule; the first for `BF_RAIN_COLLECTOR` (26) |
-| "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node |
+| "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node ([snapping](#snapping-to-a-building); Meitou never fails it) |
 | "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid. Meitou (`PlacementCheck.HullBlock`) overlaps footprints in 2D instead, leaving out the sites and ghosts on another floor of the building the ghost stands in (the boxes are 3D) |
 | "There are characters in the way." | an object in a node box is rejected by `FUN_1407d1440` (**Observed**) |
 | "The building blocks another building use nodes." | the footprint covers another building's usage node |
@@ -338,6 +338,25 @@ shows the first failing message in this order (**Verified** unless marked):
   at the speed the player had: Confirm (`FUN_1404db180`), the Esc handler (`FUN_14082b010` -> `FUN_1404d4320`, when
   `FUN_1404d1860` says the mode is on) and the end of the commit (`FUN_1404e4120`) all end in `FUN_1404d1870` ->
   `FUN_140787d40(world, 0)`. Meitou pauses by speed and resumes only a game that build mode paused.
+
+### Snapping to a building
+
+- **Data** (**Verified**, fcs.def and a dump of the merged base-game data): `snaps to` (BUILDING list) "makes this building aggressively
+  snap to others. Used for ramps and stairs." Its users: Wall Ramp and Wall Ramp (old) -> Concrete Wall, Defensive Wall Ramp II-V -> their
+  Defensive Wall, Outpost Prison Ramp, Ancient Lab Ramp (Gate), HIVE Door A-C -> Hive Commune Hut, Spotlight and Searchlight -> Node Light
+  Mount, GunPlank -> Node Turret, Ore Drill I-III -> Iron Resource (a foliage resource). Which ghosts are `PreviewBuilding_Snapping` and how
+  they snap is **Unknown** (not decompiled yet).
+- **A ramp's mesh sits in its wall's own space** (**Verified**, mesh bounds): `basic_wall_ramp2.mesh` spans x -102..-20, z 0..24, just
+  outside Concrete Wall's `wall_basic02.mesh` (x -19.5..3.9, z -2.7..118.7); Defensive Wall Ramp IV's staircase spans x -268..-49, z
+  187..222 against Wall IV (x -59..27, z 0..305; both scale 0.85). At its wall's position and turn a ramp stands against the wall's -X side.
+- **Turrets** have no `snaps to`, and none refers to the `Node Turret` instances (node type 3, as `Node Defensive Position`) that wall parts
+  such as `Wall Level 02` carry: they stand on a wall's walkway like on any surface (**Observed**, data only).
+- **Meitou** (engine choice, `GhostSnap`, `BuildMode.SnapToTarget`): a `snaps to` ghost takes the position and turn of the nearest building
+  of a target record (queued ghost, site or level building) that puts its footprint centre within 150 of the cursor; it is judged by its own
+  pitch like a wall piece, and neither its target nor, on a wall, any other wall blocks it. With no target in reach it places as usual (the
+  "blue nodes" refusal is not decided). Nodes inside other buildings (light mounts) and resources are not searched. A ghost over a raised
+  walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
+  walls do not block it.
 
 ### Upgrades
 

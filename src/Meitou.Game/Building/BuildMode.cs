@@ -368,67 +368,145 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The ghost of the chosen building under the cursor: on a building's floor when one is under the ray, else on the terrain, tilted to the
-    /// ground, settled and judged; a wall ghost snaps to its link points first.
+    /// The ghost of the chosen building under the cursor: on a building's floor when one is under the ray, else on a raised walkway (a wall top),
+    /// else on the terrain, tilted to the ground, settled and judged; a wall ghost snaps to its link points first, a <c>snaps to</c> ghost to its
+    /// target.
     /// </summary>
     void PlaceGhost(BuildServices host, BuildingBuildData building, (Vector3 Origin, Vector3 Direction) ray, Vector3 terrainHit)
     {
-        // A building's floor before the terrain: the ghost stands on it, level.
-        var floorHit = building.LinksTogether ? null
-            : host.Placement.FloorAlong(ray.Origin, ray.Direction, Vector3.Distance(ray.Origin, terrainHit));
-        var on = floorHit?.Floor;
-        var hit = floorHit?.Position ?? terrainHit;
-        var parts = host.Parts(building.Id);
+        var (hit, on, surface) = GhostStand(host, building, ray, terrainHit);
         var footprint = host.Placement.Footprint(building.Id);
-        var at = new Vector2(hit.X, hit.Z);
         var box = footprint?.Bounds ?? (new Vector2(-4), new Vector2(4));
-
-        // The ghost tilts to the ground: all the way for a building that matches the slope, else by the player's tilt factor, never more than its
-        // slope limit.
-        var normal = on is not null ? Vector3.UnitY : PlacementCheck.GroundNormal(host.Placement.Ground, at, _ghostYaw, box);
-        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (building.MatchSlope ? 1 : _ghostTilt);
-        if (building.MaxSlope > 0) angle = MathF.Min(angle, building.MaxSlope * MathF.PI / 180);
-        var axis = Vector3.Cross(Vector3.UnitY, normal);
-        var tilt = axis.LengthSquared() < 1e-10f ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
-        var rotation = tilt * Quaternion.CreateFromAxisAngle(Vector3.UnitY, _ghostYaw);
+        var rotation = GhostTilt(host, building, on is not null || surface is not null, new Vector2(hit.X, hit.Z), box);
 
         // A ceiling light hangs CeilingHang below the ceiling over the floor point (its mesh hangs below its origin, so on the floor it was buried
         // under it).
         float y = building.CeilingPlacement && on?.Ceiling is { } ceiling ? ceiling - CeilingHang : hit.Y;
         var position = new Vector3(hit.X, y + _ghostLift, hit.Z);
-        float yaw = _ghostYaw;
-        Func<string, Vector3, Quaternion, bool>? ignore = null;
 
-        // A wall ghost before its first click snaps to the nearest link point: it starts there, or ends there on a free start (Verified,
-        // FUN_140427950).
-        if (building is { LinksTogether: true, LinkType: 0 or 3 } && Building.WallLine.Find(WallLinks(position), position) is { } snap)
-        {
-            _ghostSnap = snap;
-            rotation = Building.WallLine.LookRotation(snap.Direction);
-            position = snap.Code == 2 ? snap.Point - Vector3.Transform(new Vector3(0, 0, building.LinkLength), rotation) : snap.Point;
-            yaw = PlacementCheck.YawOf(rotation);
-            ignore = WallIgnore(new WallPiece(building, position, rotation), [snap.Point]);
-        }
-
+        // On a raised walkway the walls under the ghost carry it (engine choice).
         var snapshot = player.Session.CurrentSnapshot;
-        var query = new PlacementQuery(building, position, rotation, yaw, on?.Floor ?? 0, parts,
+        var query = new PlacementQuery(building, position, rotation, _ghostYaw, on?.Floor ?? 0, host.Parts(building.Id),
             BuildQueue, snapshot.Characters, snapshot.Buildings, host.Towns(), host.PlayerFactionId(), host.Placement)
-        { Ignore = ignore, On = on, Lift = _ghostLift };
-
-        // The ghost settles on the ground by itself (the original nudges it every frame, FUN_1404d1680): the height it keeps is what the placement
-        // is judged at and what a click queues.
-        if (PlacementCheck.Settle(query) is { } settled)
-        {
-            _ghostLift += settled.Step;
-            position.Y += settled.Step;
-            _ghostMargins = settled.After;
-            query = query with { Position = position, Lift = _ghostLift };
-        }
+        { On = on, Surface = surface, Lift = _ghostLift, PassThrough = surface is null ? null : IsWall };
+        query = SnapToWall(query) ?? SnapToTarget(host, query, footprint) ?? Settled(query);
 
         var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
             : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable
             : PlacementCheck.Evaluate(query);
-        Ghost = (position, rotation, failure, building, footprint?.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)), on);
+        var hull = footprint?.Place(query.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, query.Yaw));
+        Ghost = (query.Position, query.Rotation, failure, building, hull, query.On);
+    }
+
+    /// <summary>
+    /// Where the ghost stands under the cursor: a building's floor along the ray, else a raised walkable surface outside the rooms (a wall top, as
+    /// a move order picks it), else the terrain. A wall stands on the terrain.
+    /// </summary>
+    (Vector3 Hit, GhostFloor? On, float? Surface) GhostStand(BuildServices host, BuildingBuildData building,
+        (Vector3 Origin, Vector3 Direction) ray, Vector3 terrainHit)
+    {
+        if (building.LinksTogether) return (terrainHit, null, null);
+
+        float length = Vector3.Distance(ray.Origin, terrainHit);
+        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, length) is { } floor) return (floor.Position, floor.Floor, null);
+
+        // Engine stand-in for the original's ghost meeting the physics shapes: walls have no rooms, so a turret over a wall top went to the terrain
+        // inside the wall (#431).
+        var top = player.Picking.SurfaceMoveHit?.Invoke(ray.Origin, ray.Direction, length);
+        return top is { } walkway ? (walkway, null, walkway.Y) : (terrainHit, null, null);
+    }
+
+    /// <summary>
+    /// The ghost's turn: <see cref="_ghostYaw"/>, tilted to the ground under its footprint box at <paramref name="at"/> (none when it stands
+    /// <paramref name="level"/>, on a floor or walkway), all the way for a building that matches the slope, else by the player's tilt factor, never
+    /// more than its slope limit.
+    /// </summary>
+    Quaternion GhostTilt(BuildServices host, BuildingBuildData building, bool level, Vector2 at, (Vector2 Min, Vector2 Max) box)
+    {
+        var normal = level ? Vector3.UnitY : PlacementCheck.GroundNormal(host.Placement.Ground, at, _ghostYaw, box);
+        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (building.MatchSlope ? 1 : _ghostTilt);
+        if (building.MaxSlope > 0) angle = MathF.Min(angle, building.MaxSlope * MathF.PI / 180);
+
+        var axis = Vector3.Cross(Vector3.UnitY, normal);
+        var tilt = axis.LengthSquared() < 1e-10f ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
+        return tilt * Quaternion.CreateFromAxisAngle(Vector3.UnitY, _ghostYaw);
+    }
+
+    /// <summary>
+    /// A wall ghost before its first click snaps to the nearest link point: it starts there, or ends there on a free start (<b>Verified</b>,
+    /// <c>FUN_140427950</c>). Null when it is no wall or finds none.
+    /// </summary>
+    PlacementQuery? SnapToWall(PlacementQuery q)
+    {
+        var building = q.Building;
+        if (building is not { LinksTogether: true, LinkType: 0 or 3 } || Building.WallLine.Find(WallLinks(q.Position), q.Position) is not { } snap)
+            return null;
+
+        _ghostSnap = snap;
+        var rotation = Building.WallLine.LookRotation(snap.Direction);
+        var position = snap.Code == 2 ? snap.Point - Vector3.Transform(new Vector3(0, 0, building.LinkLength), rotation) : snap.Point;
+        var ignore = WallIgnore(new WallPiece(building, position, rotation), [snap.Point]);
+        return q with { Position = position, Rotation = rotation, Yaw = PlacementCheck.YawOf(rotation), Ignore = ignore };
+    }
+
+    /// <summary>
+    /// A <c>snaps to</c> ghost takes the place and turn of its nearest target (<see cref="GhostSnap"/>); its target never blocks it, nor, on a
+    /// wall, the other walls. Null when it snaps to nothing or finds no target in reach: it then stands where the cursor is (engine choice, the
+    /// original's "marked by blue nodes" refusal is not decided).
+    /// </summary>
+    PlacementQuery? SnapToTarget(BuildServices host, PlacementQuery q, Simulation.Navigation.BuildingFootprint? footprint)
+    {
+        var building = q.Building;
+        if (building.SnapsTo.Count == 0) return null;
+
+        var (min, max) = footprint?.Bounds ?? (Vector2.Zero, Vector2.Zero);
+        if (GhostSnap.Find(building, (min + max) / 2, q.Position, SnapTargets(host, building, q.Position)) is not { } target) return null;
+
+        bool onWall = IsWall(target.Record);
+        return q with
+        {
+            Position = target.Position,
+            Rotation = target.Rotation,
+            Yaw = PlacementCheck.YawOf(target.Rotation),
+            Floor = 0,
+            On = null,
+            Surface = null,
+            Snapped = true,
+            PassThrough = record => building.SnapsTo.Contains(record) || onWall && IsWall(record),
+        };
+    }
+
+    /// <summary>
+    /// What <paramref name="building"/> may snap to round <paramref name="near"/>: the queued ghosts, the player's sites and the level's buildings
+    /// (a level building that is a site already is the site's).
+    /// </summary>
+    IEnumerable<SnapTarget> SnapTargets(BuildServices host, BuildingBuildData building, Vector3 near)
+    {
+        var sites = player.Session.CurrentSnapshot.Buildings;
+        var known = sites.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        var level = host.Placement.PlacedAround(new Vector2(near.X, near.Z), GhostSnap.Reach + LevelWallReach, building.SnapsTo.Contains)
+            .Where(b => !known.Contains(b.Key));
+        return BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
+            .Concat(sites.Select(s => new SnapTarget(s.Record, s.Position, s.Rotation)))
+            .Concat(level.Select(b => new SnapTarget(b.Record, b.Position, b.Rotation)));
+    }
+
+    /// <summary>
+    /// Whether a BUILDING record is a wall (<c>links together</c>).
+    /// </summary>
+    bool IsWall(string record) => BuildData(record) is { LinksTogether: true };
+
+    /// <summary>
+    /// The ghost settled on the ground by itself (the original nudges it every frame, FUN_1404d1680): the height it keeps is what the placement is
+    /// judged at and what a click queues.
+    /// </summary>
+    PlacementQuery Settled(PlacementQuery q)
+    {
+        if (PlacementCheck.Settle(q) is not { } settled) return q;
+
+        _ghostLift += settled.Step;
+        _ghostMargins = settled.After;
+        return q with { Position = q.Position + new Vector3(0, settled.Step, 0), Lift = _ghostLift };
     }
 
     #endregion

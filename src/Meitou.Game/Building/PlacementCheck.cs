@@ -108,6 +108,16 @@ public sealed class PlacementServices
     /// </summary>
     public Func<Vector2, float, IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)>> LinkedAround { get; init; } =
         (_, _) => [];
+
+    /// <summary>
+    /// The level data's buildings whose record passes the filter within a radius of a point (X, Z): key, record, absolute position and turn (what a
+    /// <c>snaps to</c> ghost snaps to); empty without level data.
+    /// </summary>
+    public Func<Vector2, float, Func<string, bool>, IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)>> PlacedAround
+    {
+        get;
+        init;
+    } = (_, _, _) => [];
 }
 
 /// <summary>
@@ -129,22 +139,49 @@ public sealed record PlacementQuery(
     /// </summary>
     public Func<string, Vector3, Quaternion, bool>? Ignore { get; init; }
     /// <summary>
+    /// The BUILDING records whose sites, queued ghosts and level buildings never block this ghost: the walls it stands on or snaps to, and its
+    /// <c>snaps to</c> target (engine choice, docs/game/buildings-production.md "Snapping to a building").
+    /// </summary>
+    public Func<string, bool>? PassThrough { get; init; }
+    /// <summary>
     /// The building floor the ghost stands on; null on the terrain.
     /// </summary>
     public GhostFloor? On { get; init; }
+    /// <summary>
+    /// The height of the raised walkable surface outside the rooms that the ghost stands on (a wall top): its ground, level, instead of the terrain;
+    /// null on the terrain or a floor.
+    /// </summary>
+    public float? Surface { get; init; }
+    /// <summary>
+    /// The ghost took its <c>snaps to</c> target's place and turn: like a wall piece, it is judged by its own pitch, not by the ground's margins.
+    /// </summary>
+    public bool Snapped { get; init; }
     /// <summary>
     /// The ghost's vertical offset from the ground under the cursor (the original's build-mode height offset); only the margins of interior furniture
     /// and nodes read it.
     /// </summary>
     public float Lift { get; init; }
+
+    /// <summary>
+    /// The ground height at (x, z) the ghost is measured against: the raised surface it stands on, else the terrain.
+    /// </summary>
+    public float GroundAt(float x, float z) => Surface ?? Services.Ground(x, z);
+
+    /// <summary>
+    /// Whether a building of <paramref name="record"/> at <paramref name="position"/> / <paramref name="rotation"/> (a site or queued ghost) never
+    /// blocks this ghost.
+    /// </summary>
+    public bool Passes(string record, Vector3 position, Quaternion rotation) =>
+        PassThrough?.Invoke(record) == true || Ignore?.Invoke(record, position, rotation) == true;
 }
 
 /// <summary>
 /// The host's half of the placement checks (docs/simulation.md "Buildings", "Placement validation"; the messages and their order are
 /// docs/game/buildings-production.md "Placement"): the ground, the footprints and the characters. It runs <see cref="PlacementRules.TownBlock"/> and
 /// the resource row first and returns the first failure in the original's order. Not decided (so never failed): snap nodes, usage nodes and the floor
-/// number above floor 0; a ceiling ghost fails only without a ceiling. The ghost stands on the terrain or on a building's floor
-/// (<see cref="PlacementQuery.On"/>), a ceiling ghost hangs under the ceiling over that floor.
+/// number above floor 0; a ceiling ghost fails only without a ceiling. The ghost stands on the terrain, on a building's floor
+/// (<see cref="PlacementQuery.On"/>) or on a raised surface outside the rooms (<see cref="PlacementQuery.Surface"/>, a wall top); a ceiling ghost
+/// hangs under the ceiling over that floor.
 /// </summary>
 public static class PlacementCheck
 {
@@ -209,15 +246,20 @@ public static class PlacementCheck
         {
             if (site.Id != parent
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
-                && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
+                && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } siteFootprint
                 && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
                 return site.Complete ? PlacementFailure.TooCloseToBuilding : PlacementFailure.InsideIncomplete;
         }
         foreach (var other in q.Services.StaticAround(at, 20))
-            if (other.Id != parent && Contains(other.Hull, at)) return PlacementFailure.NotOwnedBuilding;
+            if (Blocks(q, other, parent) && Contains(other.Hull, at)) return PlacementFailure.NotOwnedBuilding;
         return PlacementFailure.None;
     }
+
+    /// <summary>
+    /// Whether a level building may block the ghost: not the one it stands in (<paramref name="parent"/>), nor one of a record it passes through.
+    /// </summary>
+    static bool Blocks(PlacementQuery q, PlacedFootprint other, string? parent) => other.Id != parent && q.PassThrough?.Invoke(other.Record) != true;
 
     /// <summary>
     /// What the ghost's footprint <paramref name="hull"/> overlaps: the floor's edge, a building, a site, a queued ghost or a character;
@@ -230,12 +272,12 @@ public static class PlacementCheck
         if (q.On is { } on && hull.Any(p => Distance(on.Footprint, p) > 0)) return PlacementFailure.TooCloseToBuilding;
         float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
         foreach (var other in q.Services.StaticAround(at, reach))
-            if (other.Id != parent && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
+            if (Blocks(q, other, parent) && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
         foreach (var site in q.Sites)
         {
             if (site.Id != parent
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
-                && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
+                && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } f
                 && Overlap(hull, f.Place(site.Position, site.Rotation)))
                 return PlacementFailure.TooCloseToBuilding;
@@ -244,7 +286,7 @@ public static class PlacementCheck
         {
             if (queued.Hull is not null
                 && !OtherFloor(q, parent, queued.Parent, queued.Floor)
-                && q.Ignore?.Invoke(queued.Building.Id, queued.Position, queued.Rotation) != true
+                && !q.Passes(queued.Building.Id, queued.Position, queued.Rotation)
                 && Overlap(hull, queued.Hull))
                 return PlacementFailure.TooCloseToBuilding;
         }
@@ -287,8 +329,9 @@ public static class PlacementCheck
     /// </summary>
     static PlacementFailure SlopeBlock(PlacementQuery q, BuildingBuildData b, Vector2 at, string? parent)
     {
-        // A wall piece pitches with the ground: its own up axis must be within `max slope` of the vertical (Verified, FUN_140429510).
-        if (q.WallPiece)
+        // A wall piece pitches with the ground: its own up axis must be within `max slope` of the vertical (Verified, FUN_140429510). A snapped ghost
+        // takes its target's pitch and is judged the same way (engine choice).
+        if (q.WallPiece || q.Snapped)
         {
             float cosLimit = MathF.Cos(b.MaxSlope * MathF.PI / 180);
             bool tilted = b.MaxSlope > 0 && Vector3.Transform(Vector3.UnitY, Normalised(q.Rotation)).Y < cosLimit;
@@ -305,7 +348,7 @@ public static class PlacementCheck
         // The vertical margins, after the nudge the original gives the ghost each frame (Settle); a margin left below 0 fails.
         if (Settle(q) is { After: { Down: < -MarginEpsilon } or { Up: < -MarginEpsilon } }) return PlacementFailure.NotLevel;
         var bounds = q.Services.Footprint(b.Id)?.Bounds ?? (new Vector2(-4), new Vector2(4));
-        float slope = SlopeDegrees(q.Services.Ground, at, q.Yaw, bounds, out float normalY);
+        float slope = SlopeDegrees(q.GroundAt, at, q.Yaw, bounds, out float normalY);
         // max slope fails a ghost only when it matches the slope (FUN_1404daa20, Verified); any other is only refused by the steepness test.
         if (normalY < SteepestNormalY || b.MatchSlope && b.MaxSlope > 0 && slope > b.MaxSlope) return PlacementFailure.NotLevel;
         return PlacementFailure.None;
@@ -414,15 +457,17 @@ public static class PlacementCheck
     /// The vertical margins of a ghost on the terrain (docs/game/buildings-production.md "Placement", Vertical margins; <c>FUN_1404d9c00</c>,
     /// <c>FUN_1404d21e0</c>, <c>FUN_1404d23c0</c>). A group is a BUILDING_PART with <c>affects footprint</c>: its nodes are the four corners of its
     /// mesh's bounds box (X, Z) at <c>footprint vertical</c> (all times the building's <c>scale</c>), moved by the part's node position and the
-    /// ghost's turn and position; the ground under a node is the terrain, never below 100. When no group is above ground, the first group is measured
-    /// again moved up by <c>vertical position tolerance</c> (times scale) the other way round and joins <see cref="VerticalMargins.Down"/>; when
-    /// every group is, moved down and joined to <see cref="VerticalMargins.Up"/>. Null for what the original does not measure: a ghost on a
-    /// building's floor (Meitou takes a floor as level), a wall (its own pitch test), and interior-only furniture and nodes.
+    /// ghost's turn and position; the ground under a node is the terrain (the height of the raised surface a ghost stands on), never below 100.
+    /// When no group is above ground, the first group is measured again moved up by <c>vertical position tolerance</c> (times scale) the other way
+    /// round and joins <see cref="VerticalMargins.Down"/>; when every group is, moved down and joined to <see cref="VerticalMargins.Up"/>. Null for
+    /// what the original does not measure: a ghost on a building's floor (Meitou takes a floor as level), a wall and a snapped ghost (their own
+    /// pitch test), and interior-only furniture and nodes.
     /// </summary>
     public static VerticalMargins? Margins(PlacementQuery q)
     {
         var b = q.Building;
-        if (q.On is not null || q.WallPiece || b.LinksTogether || b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode) return null;
+        bool unmeasured = q.On is not null || q.WallPiece || q.Snapped || b.LinksTogether;
+        if (unmeasured || b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode) return null;
         var rotation = Normalised(q.Rotation);
         var groups = new List<(bool Above, Vector3 Node, Vector3[] Corners)>();
         foreach (var part in q.Parts)
@@ -443,7 +488,7 @@ public static class PlacementCheck
             foreach (var corner in group.Corners)
             {
                 var world = Vector3.Transform(corner + group.Node, rotation) + q.Position + lift;
-                float ground = MathF.Max(q.Services.Ground(world.X, world.Z), LowestGround);
+                float ground = MathF.Max(q.GroundAt(world.X, world.Z), LowestGround);
                 least = MathF.Min(least, above ? world.Y - ground : ground - world.Y);
             }
             return least;

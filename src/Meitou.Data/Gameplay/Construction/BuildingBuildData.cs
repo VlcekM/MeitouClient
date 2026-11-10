@@ -153,6 +153,12 @@ public sealed record BuildingBuildData
     public IReadOnlyList<string> WallSubsections { get; init; } = [];
 
     /// <summary>
+    /// The <c>snaps to</c> list (BUILDING ids): what the ghost snaps to, taking that building's place and turn (fcs.def: "aggressively snap to
+    /// others. Used for ramps and stairs"; docs/game/buildings-production.md "Snapping to a building").
+    /// </summary>
+    public IReadOnlyList<string> SnapsTo { get; init; } = [];
+
+    /// <summary>
     /// The site's target: the sum of the required amounts (0 completes at once).
     /// </summary>
     public float Target
@@ -221,6 +227,7 @@ public sealed record BuildingBuildData
             IsWallGate = RecordReading.Bool(r, "is wall gate", false),
             HasInterior = r.GetReferences("interior").Count > 0,
             WallSubsections = [.. r.GetReferences("wall subsections").Select(s => s.TargetStringId)],
+            SnapsTo = [.. r.GetReferences("snaps to").Select(s => s.TargetStringId)],
         };
     }
 
