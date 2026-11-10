@@ -155,17 +155,6 @@ public static class GroundRelief
     public const float FieldTile = 200;
 
     /// <summary>
-    /// The share of its depth a layer keeps by how much of its normal map is a surface in the frame it is lit in (<see cref="NormalHeight.FromNormals"/>'s
-    /// <c>surface</c>): none under 0.05, all from 0.25. <b>Observed</b> over the 87 ground textures: rock, gravel, mud and dune sand keep 0.28 to 0.9;
-    /// <c>Ashland_Ash</c> 0.01, <c>Whitestone_Floor</c>, <c>Lichen_Rock</c>, <c>Flat_Land</c> and <c>Grass-Space_Z</c> 0.06 to 0.08, all maps whose own frame is mirrored.
-    /// </summary>
-    public static float SurfaceDepth(float surface)
-    {
-        float t = Math.Clamp((surface - 0.05f) / 0.2f, 0, 1);
-        return t * t * (3 - 2 * t);
-    }
-
-    /// <summary>
     /// A layer's full relief depth in cm at the current settings (the terrain shaders' <c>reliefDepth</c> times <see cref="Depth"/>), from its
     /// steepness factor (1 / (side × its height's steepness), <see cref="NormalHeight.FromNormals"/>; 0 flat) and its tile's side in world units; for
     /// labels.

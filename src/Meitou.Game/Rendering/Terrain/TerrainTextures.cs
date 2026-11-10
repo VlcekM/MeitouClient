@@ -124,11 +124,13 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// Side of the height array's layers (<see cref="GroundRelief"/>): the layer size, at most 512.
     /// </summary>
     int HeightSize => Math.Min(_layerSize, 512);
+    readonly GroundSoftness _softness;
 
     TerrainTextures(IGpuContext gpu, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
     {
         Gpu = gpu;
         this._install = install;
+        _softness = new GroundSoftness(install, Meitou.Data.LoadOrder.FromInstall(install).Entries.Select(e => e.Name));
         this._assets = assets;
         this._info = info;
         this._layerSize = layerSize;
@@ -569,7 +571,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                 var d = LoadLayer(_assets, pair.Diffuse, size, true, [128, 128, 128, 60], local);
                 var n = near ? LoadNearNormal(_assets, pair.Normal, size, local) : LoadLayer(_assets, pair.Normal, size, false, [128, 128, 255, 255], local);
                 float steep = 0;
-                var h = !near && GroundRelief.Enabled ? LoadHeight(_assets, pair.Normal, HeightSize, out steep) : null;
+                var h = !near && GroundRelief.Enabled ? LoadHeight(_assets, pair.Normal, HeightSize, _softness.Relief(pair.Diffuse), out steep) : null;
                 foreach (var m in local) _problems.Enqueue(m);
                 result = new Decoded(pair, near, d, n, h, steep);
             }
@@ -1028,17 +1030,15 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// The height levels of a layer for <see cref="GroundRelief"/>, R8 with mips: its normal map decoded at <paramref name="size"/>² and integrated
     /// (<see cref="NormalHeight.FromNormals"/>, in the frame the game lights it in), and <paramref name="steep"/> 1 / (side × the height's
     /// steepness): the depth, as a fraction of the tile, that gives a root-mean-square slope of 1. Null for a normal map that is missing or cannot be
-    /// read (the layer stays flat).
+    /// read (the layer stays flat). <paramref name="relief"/>: the share of its depth the layer keeps (<see cref="GroundSoftness.Relief"/>).
     /// </summary>
-    static byte[][]? LoadHeight(AssetLocator assets, string? normalName, int size, out float steep)
+    static byte[][]? LoadHeight(AssetLocator assets, string? normalName, int size, float relief, out float steep)
     {
         steep = 0;
         if (ReadImage(assets, normalName, size) is not { } normals) return null;
-        var height = NormalHeight.FromNormals(Resize(normals, size), size, out float steepness, out float surface, GroundRelief.Tilt);
-        // A map that is no surface in the frame it is lit in leaves a height of its leftovers, which the range and the depth rule would stretch into
-        // spikes the lighting does not show (the Ashlands' ash): its depth falls with the share kept, to none (GroundRelief.SurfaceDepth).
-        float kept = GroundRelief.SurfaceDepth(surface);
-        steep = steepness > 0 && kept > 0 ? MathF.Pow(kept, 1 / MathF.Max(GroundRelief.ScaleFollow, 0.05f)) / (size * steepness) : 0;
+        var height = NormalHeight.FromNormals(Resize(normals, size), size, out float steepness, GroundRelief.Tilt);
+        // The table's share of the depth (GroundSoftness.Relief: 1 unless a line gives the texture another), through the depth rule's power.
+        steep = steepness > 0 && relief > 0 ? MathF.Pow(relief, 1 / MathF.Max(GroundRelief.ScaleFollow, 0.05f)) / (size * steepness) : 0;
         var levels = new byte[(int)Math.Log2(size) + 1][];
         levels[0] = height;
         for (int l = 1; l < levels.Length; l++)

@@ -19,15 +19,19 @@ public sealed class GroundSoftness
     const float DirtMark = 0.45f;
 
     readonly Dictionary<string, float> _byTexture = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, float> _relief = new(StringComparer.OrdinalIgnoreCase);
 
-    public GroundSoftness(GameInstall install, GameDatabase db)
+    public GroundSoftness(GameInstall install, GameDatabase db) : this(install, db.Files) { }
+
+    /// <summary>The tables for the data files <paramref name="files"/> (their names, in load order).</summary>
+    public GroundSoftness(GameInstall install, IEnumerable<string> files)
     {
         using (var stream = typeof(GroundSoftness).Assembly.GetManifestResourceStream(FileName))
             if (stream is not null)
                 using (var reader = new StreamReader(stream)) Read(reader.ReadToEnd());
         var mods = LoadOrder.FindMods(install);
-        foreach (string file in db.Files)
-            if (mods.TryGetValue(file, out var path) && Path.GetDirectoryName(path) is { } folder) ReadFile(Path.Combine(folder, FileName));
+        foreach (string file in files)
+            if (mods.TryGetValue(Path.GetFileNameWithoutExtension(file), out var path) && Path.GetDirectoryName(path) is { } folder) ReadFile(Path.Combine(folder, FileName));
         ReadFile(Path.Combine(AppContext.BaseDirectory, FileName));
     }
 
@@ -45,6 +49,12 @@ public sealed class GroundSoftness
         if (groundType >= 0 && groundType < TypeNames.Length && _byTexture.TryGetValue(key + ":" + TypeNames[groundType], out float typed)) return typed;
         return _byTexture.TryGetValue(key, out float soft) ? soft : OfType(groundType);
     }
+
+    /// <summary>
+    /// The share of its relief depth (<see cref="GroundRelief"/>, parallax and displacement) a layer keeps: 1 unless a line gives the texture a second value.
+    /// For the textures the depth rule turns into spikes: a normal map of fine noise is raised to the slope of rock.
+    /// </summary>
+    public float Relief(string? texture) => texture is not null && _relief.TryGetValue(Key(texture), out float share) ? share : 1;
 
     /// <summary>Sand, mud and snow take a mark in full, dirt a shallow one, the rest none.</summary>
     public static float OfType(int groundType) => groundType switch
@@ -66,7 +76,10 @@ public sealed class GroundSoftness
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    /// <summary>Lines of <c>texture = softness</c> or <c>texture:Type = softness</c> (0 to 1); <c>#</c> starts a comment; what does not parse is skipped.</summary>
+    /// <summary>
+    /// Lines of <c>texture = softness</c> or <c>texture:Type = softness</c> (0 to 1), with an optional second value after a comma, the texture's share of
+    /// its relief depth (<c>texture = softness, relief</c>; <see cref="Relief"/>); <c>#</c> starts a comment; what does not parse is skipped.
+    /// </summary>
     void Read(string text)
     {
         foreach (string raw in text.Split((char)10))
@@ -77,13 +90,17 @@ public sealed class GroundSoftness
             int equals = line.LastIndexOf('=');
             if (equals <= 0) continue;
             string name = line[..equals].Trim();
-            if (name.Length > 0 && float.TryParse(line[(equals + 1)..].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float soft))
-            {
-                int colon = name.LastIndexOf(':');
-                string type = colon > 0 ? name[(colon + 1)..].Trim() : "";
-                bool typed = TypeNames.Contains(type, StringComparer.OrdinalIgnoreCase);
-                _byTexture[typed ? Key(name[..colon].Trim()) + ":" + TypeNames.First(t => t.Equals(type, StringComparison.OrdinalIgnoreCase)) : Key(name)] = Math.Clamp(soft, 0, 1);
-            }
+            var values = line[(equals + 1)..].Split(',');
+            if (name.Length == 0 || !Number(values[0], out float soft)) continue;
+            int colon = name.LastIndexOf(':');
+            string type = colon > 0 ? name[(colon + 1)..].Trim() : "";
+            bool typed = TypeNames.Contains(type, StringComparer.OrdinalIgnoreCase);
+            string key = Key(typed ? name[..colon].Trim() : name);
+            _byTexture[typed ? key + ":" + TypeNames.First(t => t.Equals(type, StringComparison.OrdinalIgnoreCase)) : key] = Math.Clamp(soft, 0, 1);
+            if (values.Length > 1 && Number(values[1], out float relief)) _relief[key] = Math.Clamp(relief, 0, 1);
         }
     }
+
+    static bool Number(string text, out float value) =>
+        float.TryParse(text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
 }

@@ -17,21 +17,14 @@ public static class NormalHeight
     /// root-mean-square slope per texel, the height range counted as 1 (<see cref="Steepness"/>). <paramref name="tilt"/>: each frequency also times
     /// (cycles a tile / 2)^tilt (0: none).
     /// </summary>
-    public static byte[] FromNormals(byte[] rgba, int size, out float steepness, float tilt = 0) => FromNormals(rgba, size, out steepness, out _, tilt);
-
-    /// <summary>
-    /// As above, with <paramref name="surface"/>: the share (0..1) of the normal map's root-mean-square slope that the height keeps, the slopes a surface makes
-    /// in the frame the game lights the map in. Near 0 the map is no surface there (authored in a mirrored or turned frame, or noise) and the height is what is
-    /// left of it stretched to the full range: shapes the lighting does not show.
-    /// </summary>
-    public static byte[] FromNormals(byte[] rgba, int size, out float steepness, out float surface, float tilt = 0)
+    public static byte[] FromNormals(byte[] rgba, int size, out float steepness, float tilt = 0)
     {
         int count = size * size;
         float[] pRe = new float[count], pIm = new float[count], qRe = new float[count], qIm = new float[count];
         SlopeSpectra(rgba, count, pRe, qRe);
         Fft2(pRe, pIm, size, false);
         Fft2(qRe, qIm, size, false);
-        var gains = BandGains(pRe, pIm, qRe, qIm, size, out surface);
+        var gains = BandGains(pRe, pIm, qRe, qIm, size);
         ApplyGains(pRe, pIm, qRe, qIm, size, gains, tilt);
         Fft2(pRe, pIm, size, true);
         var height = Scaled(pRe);
@@ -46,11 +39,8 @@ public static class NormalHeight
     {
         for (int i = 0; i < count; i++)
         {
-            // The normal as the game takes it: normalize(rgb * 2 - 1), the blue as stored (most maps hold 1 there over any x and y).
-            float x = rgba[i * 4] / 127.5f - 1, y = rgba[i * 4 + 1] / 127.5f - 1, z = rgba[i * 4 + 2] / 127.5f - 1;
-            float length = MathF.Sqrt(x * x + y * y + z * z);
-            if (length > 1e-4f) (x, y, z) = (x / length, y / length, z / length);
-            z = MathF.Max(z, 0.2f);
+            float x = rgba[i * 4] / 127.5f - 1, y = rgba[i * 4 + 1] / 127.5f - 1;
+            float z = MathF.Sqrt(MathF.Max(1 - x * x - y * y, 0.04f));
             pRe[i] = Math.Clamp(x / z, -5f, 5f);
             qRe[i] = Math.Clamp(-y / z, -5f, 5f);
         }
@@ -59,7 +49,7 @@ public static class NormalHeight
     /// <summary>
     /// Each half-octave band's surface share, from the gradient and curl energies of the spectra.
     /// </summary>
-    static float[] BandGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size, out float surface)
+    static float[] BandGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size)
     {
         int bands = (int)Math.Ceiling(2 * Math.Log2(size)) + 1;
         double[] bandG = new double[bands], bandC = new double[bands];
@@ -81,9 +71,6 @@ public static class NormalHeight
         var gains = new float[bands];
         for (int j = 0; j < bands; j++)
             gains[j] = bandG[j] + bandC[j] > 0 ? (float)Math.Max(0, (bandG[j] - bandC[j]) / (bandG[j] + bandC[j])) : 0;
-        double kept = 0, all = 0;
-        for (int j = 0; j < bands; j++) { kept += gains[j] * gains[j] * bandG[j]; all += bandG[j] + bandC[j]; }
-        surface = all > 0 ? (float)Math.Sqrt(kept / all) : 0;
         return gains;
     }
 
