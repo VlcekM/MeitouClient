@@ -39,6 +39,10 @@ public sealed unsafe partial class GpuContext
     /// Per slot: the pre-frame buffer's end timestamp (only while <see cref="PreFrameStamps"/>).
     /// </summary>
     QuerySlot[]? _preFrameEnd;
+    /// <summary>
+    /// The pass marker of the upload buffer being recorded (<see cref="PassMarkers"/>; 0 when not tracking).
+    /// </summary>
+    uint _uploadMarker;
 
     /// <summary>
     /// The last completed frame's GPU time: from the start of its uploads to the end of its last command (a frame ring late).
@@ -129,6 +133,7 @@ public sealed unsafe partial class GpuContext
         VulkanException.Check(Device.Vk.ResetCommandPool(Device.Device, _uploadPools![slot], 0), "vkResetCommandPool");
         _uploadExtrasUsed![slot] = 0;
         var upload = _uploadBuffers![slot];
+        Device.Faults.Markers?.BeginFrame();
         BeginUploads(upload);
         Frame.Begin(cmd, upload);
         ReadPreviousFrameTimes(slot);
@@ -182,8 +187,7 @@ public sealed unsafe partial class GpuContext
         WriteEndStamps(slot);
         Frame.End();
         var upload = Frame.UploadCommands;
-        FullBarrier(upload);
-        VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
+        EndUploads(upload);
         long t0 = Stopwatch.GetTimestamp();
         Device.Frames.EndFrame(wait, waitStages, signal, before: upload);
         SubmitTicks += Stopwatch.GetTimestamp() - t0;
@@ -223,6 +227,17 @@ public sealed unsafe partial class GpuContext
 
         // Uploads may overwrite what earlier frames still read (in-place texture strips): wait for everything before.
         FullBarrier(upload);
+        _uploadMarker = Device.Faults.Markers?.Begin(upload, "pre-frame") ?? 0;
+    }
+
+    /// <summary>
+    /// Ends an upload command buffer, with a full barrier last.
+    /// </summary>
+    void EndUploads(CommandBuffer upload)
+    {
+        Device.Faults.Markers?.End(upload, _uploadMarker);
+        FullBarrier(upload);
+        VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
     }
 
     /// <summary>
@@ -236,8 +251,7 @@ public sealed unsafe partial class GpuContext
 
         int slot = Device.Frames.Slot;
         var upload = Frame.UploadCommands;
-        FullBarrier(upload);
-        VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
+        EndUploads(upload);
         Bindless?.EndFrame();   // what the frame registered so far, into its set before the submit
         var commands = Device.Frames.SubmitAndWait(before: upload);
         var extras = _uploadExtras![slot];

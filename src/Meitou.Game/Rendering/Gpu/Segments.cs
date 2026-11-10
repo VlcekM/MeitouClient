@@ -13,6 +13,11 @@ public sealed unsafe partial class GpuContext
     CommandList? _segment;
 
     /// <summary>
+    /// The pass marker of the open native segment (<see cref="Core.PassMarkers"/>; 0 when not tracking).
+    /// </summary>
+    uint _segmentMarker;
+
+    /// <summary>
     /// The guest segment open now: the host's list or an inline secondary.
     /// </summary>
     CommandList? _guest;
@@ -57,6 +62,7 @@ public sealed unsafe partial class GpuContext
         Frame.States.AssumeFullBarrier();
         Frame.Stats.NativeSegments++;
         list.BeginLabel(label);
+        _segmentMarker = Device.Faults.Markers?.Begin(list.Handle, label) ?? 0;
         _segment = list;
         return list;
     }
@@ -72,6 +78,7 @@ public sealed unsafe partial class GpuContext
         if (PassOpen) throw new InvalidOperationException("EndNative with a host pass open");
 
         cmd.EndLabel();
+        Device.Faults.Markers?.End(_segment.Handle, _segmentMarker);
         FullBarrier(_segment.Handle);
         _segment = null;
     }

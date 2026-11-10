@@ -197,7 +197,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
             return true;   // draw anyway; nothing is shown
         }
 
-        if (r is not (Result.Success or Result.SuboptimalKhr)) VulkanException.Check(r, "vkAcquireNextImageKHR");
+        if (r is not (Result.Success or Result.SuboptimalKhr)) _device.Check(r, "vkAcquireNextImageKHR");
         if (r == Result.SuboptimalKhr) _stale = true;
         _acquiredImage = true;
         return true;
@@ -298,7 +298,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
         PresentTicks += Stopwatch.GetTimestamp() - presentStart;
         StageClock.Lap(StageClock.DriverWait, gpuTimestamp: false);
         if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) _stale = true;
-        else VulkanException.Check(r, "vkQueuePresentKHR");
+        else _device.Check(r, "vkQueuePresentKHR");
         _acquiredImage = false;
     }
 

@@ -1258,6 +1258,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             _dev.SetName(ObjectType.Buffer, buffer.Handle, name);
         }
 
+        _dev.AddressLog?.Placed(ObjectType.Buffer, buffer.Handle, gb.Name, alloc.Memory.Handle, alloc.Offset, alloc.Size);
         return gb;
     }
 
@@ -1331,6 +1332,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             _dev.SetName(ObjectType.Image, image.Handle, name);
         }
 
+        _dev.AddressLog?.Placed(ObjectType.Image, image.Handle, gi.Name, alloc.Memory.Handle, alloc.Offset, alloc.Size);
         return gi;
     }
 
@@ -1357,6 +1359,7 @@ public sealed unsafe class GpuAllocator : IDisposable
 
         long profileStart = UploadProfile.Begin();
         _vk.DestroyBuffer(_dev.Device, b.Buffer, null);
+        _dev.AddressLog?.Forget(ObjectType.Buffer, b.Buffer.Handle);
         _dev.RemoveBuffer(b.Index);
         Free(b.Allocation);
         UploadProfile.End(UploadProfile.Part.FreeBuffer, profileStart);
@@ -1385,6 +1388,7 @@ public sealed unsafe class GpuAllocator : IDisposable
 
         long profileStart = UploadProfile.Begin();
         _vk.DestroyImage(_dev.Device, i.Image, null);
+        _dev.AddressLog?.Forget(ObjectType.Image, i.Image.Handle);
         Free(i.Allocation);
         UploadProfile.End(UploadProfile.Part.FreeImage, profileStart);
     }

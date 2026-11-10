@@ -174,7 +174,7 @@ public sealed unsafe class FrameRing : IDisposable
         if (s.InFlight)
         {
             var fence = s.Fence;
-            VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+            _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             Retire(s);
         }
         else
@@ -235,7 +235,7 @@ public sealed unsafe class FrameRing : IDisposable
             };
             lock (_dev.QueueLock)
             {
-                VulkanException.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
+                _dev.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
             }
         }
         lock (_gate)
@@ -276,10 +276,10 @@ public sealed unsafe class FrameRing : IDisposable
         var si = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 2, PCommandBuffers = cmds };
         lock (_dev.QueueLock)
         {
-            VulkanException.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, _splitFence), "vkQueueSubmit");
+            _dev.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, _splitFence), "vkQueueSubmit");
         }
         var fence = _splitFence;
-        VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+        _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
         VulkanException.Check(_vk.ResetFences(_dev.Device, 1, in fence), "vkResetFences");
     }
 
@@ -351,7 +351,7 @@ public sealed unsafe class FrameRing : IDisposable
             var s = _slots[i];
             if (_inFrame && i == Slot || !s.InFlight) continue;
             var fence = s.Fence;
-            VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+            _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             Retire(s);
             any = true;
         }
@@ -368,7 +368,7 @@ public sealed unsafe class FrameRing : IDisposable
             if (s.InFlight)
             {
                 var fence = s.Fence;
-                VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+                _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
                 Retire(s);
             }
             else

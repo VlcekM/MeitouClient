@@ -194,6 +194,22 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The frame ring: frames in flight, their fences and deferred deletes.
     /// </summary>
     public FrameRing Frames { get; private set; } = null!;
+    /// <summary>
+    /// The report a lost device writes (<see cref="Check"/>), with the pass markers when tracking.
+    /// </summary>
+    public DeviceFault Faults { get; private set; } = null!;
+    /// <summary>
+    /// What is and was at each GPU address (<c>MEITOU_DIAG_FAULT=1</c>, <see cref="DeviceFault.Tracking"/>); null when not tracked.
+    /// </summary>
+    public GpuAddressLog? AddressLog { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_device_fault is enabled (a lost device then tells its fault).
+    /// </summary>
+    public bool HasDeviceFault { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_device_address_binding_report is enabled (only when tracking: the driver then reports each range it binds).
+    /// </summary>
+    public bool HasAddressBindingReport { get; private set; }
 
     /// <summary>
     /// Guards the handle tables below. They are added to from any thread (the allocator's callers, the recording jobs' views) under this lock and
@@ -866,9 +882,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
 
         PickAndCreateDevice();
+
+        // Before the allocator: the log hears of every range from the first.
+        if (HasAddressBindingReport) AddressLog = GpuAddressLog.Create(this, _debugUtils!);
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
         Frames = new FrameRing(this, _options.FramesInFlight);
+        Faults = new DeviceFault(this, AddressLog);
         int renderThread = Environment.CurrentManagedThreadId;
         Allocator.Reclaim = () =>
         {
@@ -1366,6 +1386,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         var rayQuery = new PhysicalDeviceRayQueryFeaturesKHR { SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr };
         var vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr };
         var presentId = new PhysicalDevicePresentIdFeaturesKHR { SType = StructureType.PhysicalDevicePresentIDFeaturesKhr };
+        var fault = new PhysicalDeviceFaultFeaturesEXT { SType = StructureType.PhysicalDeviceFaultFeaturesExt };
+        var binding = new PhysicalDeviceAddressBindingReportFeaturesEXT { SType = StructureType.PhysicalDeviceAddressBindingReportFeaturesExt };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
@@ -1380,6 +1402,10 @@ public sealed unsafe class VulkanDevice : IDisposable
         // 2026-11-08).
         bool extPresentId = _options.CreateSurface != null && _options.DeviceExtensions?.Contains("VK_NV_low_latency2") == true
             && have.Contains("VK_KHR_present_id");
+
+        // A lost device's own account of its fault (issue #319); the address reports go to a debug messenger and only when tracking.
+        bool extFault = have.Contains("VK_EXT_device_fault");
+        bool extBinding = DeviceFault.Tracking && _debugUtils is not null && have.Contains("VK_EXT_device_address_binding_report");
 
         void* chain = null;
 
@@ -1407,6 +1433,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref rayQuery, extRay);
         Link(ref vrs, extVrs);
         Link(ref presentId, extPresentId);
+        Link(ref fault, extFault);
+        Link(ref binding, extBinding);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
@@ -1419,8 +1447,11 @@ public sealed unsafe class VulkanDevice : IDisposable
         // Turn off everything we did not ask for (the queried structs become the create structs).
         EnableVersionFeatures(ref v13, ref v12, ref v11);
         EnableExtensionFeatures(ref eds2, ref eds3, ref vid, ref bary, ref accel, ref rayQuery, ref vrs, extVrs);
+        EnableFaultFeatures(ref fault, ref binding, extFault, extBinding);
         f2.Features = EnabledCoreFeatures(in core);
         var names = DeviceExtensionNames(have, extEds2, extEds3, extVid, extPush, extBary, extVrs, extPresentId);
+        if (HasDeviceFault) names.Add("VK_EXT_device_fault");
+        if (HasAddressBindingReport) names.Add("VK_EXT_device_address_binding_report");
         var fams = PickQueueFamilies(pd);
         f2.PNext = chain;
         uint graphicsQueues = CreateDevice(pd, &f2, names, fams);
@@ -1629,6 +1660,29 @@ public sealed unsafe class VulkanDevice : IDisposable
             SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr,
             PNext = vrs.PNext,
             AttachmentFragmentShadingRate = extVrs,
+        };
+    }
+
+    /// <summary>
+    /// The fault feature structs as create structs: the fault information without the vendor's binary dump, and the address binding reports, each
+    /// where the device has it (<see cref="HasDeviceFault"/>, <see cref="HasAddressBindingReport"/>).
+    /// </summary>
+    void EnableFaultFeatures(ref PhysicalDeviceFaultFeaturesEXT fault, ref PhysicalDeviceAddressBindingReportFeaturesEXT binding, bool extFault,
+        bool extBinding)
+    {
+        HasDeviceFault = extFault && fault.DeviceFault;
+        HasAddressBindingReport = extBinding && binding.ReportAddressBinding;
+        fault = new PhysicalDeviceFaultFeaturesEXT
+        {
+            SType = StructureType.PhysicalDeviceFaultFeaturesExt,
+            PNext = fault.PNext,
+            DeviceFault = HasDeviceFault,
+        };
+        binding = new PhysicalDeviceAddressBindingReportFeaturesEXT
+        {
+            SType = StructureType.PhysicalDeviceAddressBindingReportFeaturesExt,
+            PNext = binding.PNext,
+            ReportAddressBinding = HasAddressBindingReport,
         };
     }
 
@@ -2004,6 +2058,16 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     /// <summary>
+    /// <see cref="VulkanException.Check"/> for the calls that tell of a lost device (submissions, waits, the swapchain's): a lost device writes its
+    /// report first (<see cref="DeviceFault.Report"/>).
+    /// </summary>
+    public void Check(Result r, string what)
+    {
+        if (r == Result.ErrorDeviceLost) Faults?.Report(what);
+        VulkanException.Check(r, what);
+    }
+
+    /// <summary>
     /// Frees the buffer once every frame that could use it has finished.
     /// </summary>
     public void DeferFree(BufferAllocation b) => Frames.DeferDelete(() => Allocator.Free(b));
@@ -2079,10 +2143,10 @@ public sealed unsafe class VulkanDevice : IDisposable
 
                 lock (QueueLock)
                 {
-                    VulkanException.Check(Vk.QueueSubmit(GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
+                    Check(Vk.QueueSubmit(GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
                 }
 
-                VulkanException.Check(Vk.WaitForFences(Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+                Check(Vk.WaitForFences(Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             }
             finally
             {
@@ -2147,6 +2211,8 @@ public sealed unsafe class VulkanDevice : IDisposable
             _debugUtils!.DestroyDebugUtilsMessenger(Instance, _messenger, null);
             _messenger = default;
         }
+
+        AddressLog?.Dispose();
 
         if (Instance.Handle != 0)
         {

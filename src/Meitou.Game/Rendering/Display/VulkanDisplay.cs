@@ -193,6 +193,8 @@ public sealed unsafe class VulkanDisplay : IDisposable
             string grow = GpuContext.DiagNoGrow ? " MEITOU_DIAG_NO_GROW" : "";
             Console.WriteLine($"diagnostic{cache}{grow} on (issue #319)");
         }
+
+        if (DeviceFault.Tracking) Console.WriteLine($"diagnostic MEITOU_DIAG_FAULT on (issue #319): {Device.Faults.Describe()}");
     }
 
     /// <summary>

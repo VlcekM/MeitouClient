@@ -25,6 +25,13 @@ of play): with variable-size carving in shared 64 MB blocks, 1286 MB was free bu
 PipelineLibrary caches explicit descriptions and records late creation (LatePipelines). `Prepare` has no caller: the loading warm-up draws what makes them, with the reflection and cloud passes forced on ([bench](bench.md) "Play benchmark").
 CommandList records bindings/draw/dispatch/transfer/dynamic rendering, preserving host pass order.
 
+Lost device: submissions, fence waits, acquire and present go through `VulkanDevice.Check`, which writes `DeviceFault`'s report to the log once
+before the call throws (`vulkan    device lost at ...`: frames, video memory, then VK_EXT_device_fault's description, fault addresses and vendor
+codes where the device has the extension). `MEITOU_DIAG_FAULT=1` adds what the addresses need to be read: `GpuAddressLog` (the ranges the driver
+reports bound and unbound, VK_EXT_device_address_binding_report, plus the allocator's placement of each image and buffer in its block; the last
+16384 unbound of each are kept) and `PassMarkers` (a host-visible word filled when the pre-frame buffer and each native segment begins, another
+when it ends: per frame slot, the pass the GPU began and finished last).
+
 ## Synchronization and shaders
 
 The engine's words for the synchronization: `Access` says how a pass uses a resource, `PassUse` says
