@@ -86,6 +86,18 @@ public sealed class SquadGoals
     }
 
     /// <summary>
+    /// How many workers of any squad work on <paramref name="target"/>: not the asker, nor the target itself. Engine only (the original's list is
+    /// per squad, <see cref="Working"/>).
+    /// </summary>
+    public int WorkingAny(CharacterId asker, GoalTarget target)
+    {
+        int n = 0;
+        foreach (var (_, worker, t) in _entries)
+            if (worker != asker && worker != target.Body && t == target) n++;
+        return n;
+    }
+
+    /// <summary>
     /// Whether <paramref name="worker"/> itself works on <paramref name="target"/> (<c>FUN_140269190</c>).
     /// </summary>
     public bool IsMine(CharacterId worker, GoalTarget target)

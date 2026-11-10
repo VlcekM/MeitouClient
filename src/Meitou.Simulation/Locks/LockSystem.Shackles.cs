@@ -70,6 +70,13 @@ public sealed partial class LockSystem
     public static Items.ItemInstance? WornShackles(CharacterCold? c) => c?.Inventory?.Items.FirstOrDefault(i => i.LockedOn);
 
     /// <summary>
+    /// The chained flag (<c>Character+0x320</c>, <c>setChainedMode</c>): wears a piece with a lock, locked or not. The original's equip and unequip
+    /// handlers set and clear it as such a piece goes on or comes off; a picked, cut or broken lock leaves it set (<b>Verified</b>, docs/game/locks.md).
+    /// </summary>
+    public static bool Chained(CharacterCold? c) =>
+        c?.Inventory?.Items.Exists(i => i.Lock is not null && Items.InventoryCommands.IsEquipmentSection(i.Section)) == true;
+
+    /// <summary>
     /// The shackle order: the first named player character able to works on the wearer's shackles (from a cage only its own; cutting needs a tool).
     /// </summary>
     void ShackleInput(World world, ShackleOrder order)

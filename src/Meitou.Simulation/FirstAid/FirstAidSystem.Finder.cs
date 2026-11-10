@@ -221,24 +221,30 @@ public sealed partial class FirstAidSystem
     /// A chained slave of the medic's faction (<c>FUN_14032e2a0</c>: chained, owner faction the medic's).
     /// </summary>
     internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1
-            && LockSystem.WornShackles(patient) is not null && patient.SlaveOwner == medic.Faction;
+            && LockSystem.Chained(patient) && patient.SlaveOwner == medic.Faction;
 
     /// <summary>
     /// A patient chained to this very medic (<c>FUN_14032e1e0</c>: the chain flag and the chain's owner is the medic; Meitou's owner is
     /// <see cref="Kidnap.ObedientSlave.OwnerOf"/>).
     /// </summary>
     static bool ChainedTo(World world, CharacterId medic, CharacterCold patient) =>
-        LockSystem.WornShackles(patient) is not null && Kidnap.ObedientSlave.OwnerOf(world, patient) == medic;
+        LockSystem.Chained(patient) && Kidnap.ObedientSlave.OwnerOf(world, patient) == medic;
 
     /// <summary>
     /// A chained slave on the medic squad's slave list (pass 3's candidates, <c>FUN_14099f690</c>: the platoon's ownerships): a slave member of the
     /// squad or one that obeys it (<see cref="CharacterCold.SlaveMaster"/>). Stand-in: <c>SlaveMaster</c> is runtime only, so a slave with no known
-    /// master (after a load) counts for every squad of its owner faction.
+    /// master (after a load, <see cref="MasterUnknown"/>) counts for every squad of its owner faction.
     /// </summary>
     static bool SquadSlave(CharacterCold medic, CharacterCold slave) =>
-        slave.SlaveState == 1 && LockSystem.WornShackles(slave) is not null
-        && (medic.SquadId >= 0 && (slave.SlaveMaster == medic.SquadId || slave.SquadId == medic.SquadId) || slave.SlaveMaster < 0
+        slave.SlaveState == 1 && LockSystem.Chained(slave)
+        && (medic.SquadId >= 0 && (slave.SlaveMaster == medic.SquadId || slave.SquadId == medic.SquadId) || MasterUnknown(medic, slave)
                 && slave.SlaveOwner == medic.Faction);
+
+    /// <summary>
+    /// A slave of no known master squad that is not the medic's squad mate: <see cref="SquadSlave"/>'s stand-in, which offers it to every squad of
+    /// its owner faction.
+    /// </summary>
+    static bool MasterUnknown(CharacterCold medic, CharacterCold slave) => slave.SlaveMaster < 0 && slave.SquadId != medic.SquadId;
 
     /// <summary>
     /// The patient's need score for a kit type (<see cref="MedicalState.FirstAidNeed"/>); 0 for a body without a medical state.
@@ -413,7 +419,7 @@ public sealed partial class FirstAidSystem
         if (best >= 0) return (best, bestScore);
 
         // Pass 3: the squad's own chained slaves in sight.
-        SquadSlaves(look, ref best, ref bestScore);
+        SquadSlaves(look, taken, ref best, ref bestScore);
 
         // Pass 4: someone of its faction carries a patient, outdoors only.
         if (best < 0 && world.Sight.PlaceOf(i) < 0) CarriedPatients(look, ref best, ref bestScore);
@@ -679,7 +685,7 @@ public sealed partial class FirstAidSystem
     /// <summary>
     /// Pass 3, the squad's own chained slaves in sight.
     /// </summary>
-    void SquadSlaves(in MedicLook look, ref int best, ref float bestScore)
+    void SquadSlaves(in MedicLook look, SquadGoals taken, ref int best, ref float bestScore)
     {
         var world = look.World;
         var table = world.Characters;
@@ -699,6 +705,10 @@ public sealed partial class FirstAidSystem
 
             if (KitNeed(cold, s, other, organic, robotic) <= 0) continue;
             if (other.Race!.IsRobot && !robotics || other.InCombat) continue;
+
+            // Engine choice: the stand-in offers a slave of unknown master to every squad of its faction, so one that a medic of any squad treats
+            // already is left to it (else a town's whole guard treats one prisoner, #356).
+            if (MasterUnknown(cold, other) && taken.WorkingAny(table.IdOf(i), GoalTarget.Of(table.IdOf(s))) > 0) continue;
             float need = Need(world, i, s, organic, robotic);
             if (need <= 0) continue;
             float score = need * Nearness(world, i, cold, s);
