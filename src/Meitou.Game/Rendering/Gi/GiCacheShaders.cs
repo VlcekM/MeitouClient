@@ -413,6 +413,9 @@ static class GiCacheShaders
             vec3 point = kept > 0.0 ? mix(cell.point.xyz, framePoint, w) : framePoint;
             vec3 normalSum = kept > 0.0 ? mix(cell.normal.xyz, frameNormal, w) : frameNormal;
             vec3 n = dot(normalSum, normalSum) > 1e-8 ? normalize(normalSum) : axisDirection(axis);
+            // Along the normal the point is this frame's, not the average: a surface that moves (a door, a rotor's blade) leaves the average behind it, inside
+            // what moved, where every ray ends at once and the cell is black for as long as the surface moves.
+            point += n * dot(n, framePoint - point);
             // Off the surface by what the depth's precision and the traced geometry's difference from the drawn one call for.
             vec3 world = point + n * (0.05 + distance(point, vEye.xyz) * 0.002);
             uint seed = cacheMix(uint(cell.coord.x) * 73856093u ^ uint(cell.coord.y) * 19349663u ^ uint(cell.coord.z) * 83492791u ^ uint(cell.coord.w));
