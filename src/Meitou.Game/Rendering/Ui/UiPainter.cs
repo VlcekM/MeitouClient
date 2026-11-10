@@ -852,19 +852,21 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// A TileRect part: the source repeated at its tile size (the control's <c>TileSize</c>, else the state's) times <paramref name="scale"/> over
-    /// <paramref name="dest"/>.
+    /// A TileRect part: the source repeated at its tile size over <paramref name="dest"/>. A control's <c>TileSize</c> is already in screen
+    /// pixels (inventory cells); the state's, or the source's, is in skin pixels and is multiplied by <paramref name="scale"/>.
     /// </summary>
     void PaintTileRect(UiControl c, MyGuiSkinPart part, string state, (GpuTexture Texture, SampledTexture Sampled) atlas, OpacityMask? atlasMask,
         UiRect source, UiRect dest, UiRect clip, Vector4 tint, float scale)
     {
         var properties = part.StateProperties?.GetValueOrDefault(state) ?? part.StateProperties?.GetValueOrDefault("normal");
-        string? tileSize = c.Properties.GetValueOrDefault("TileSize") ?? properties?.GetValueOrDefault("TileSize");
+        string? controlTileSize = c.Properties.GetValueOrDefault("TileSize");
+        string? tileSize = controlTileSize ?? properties?.GetValueOrDefault("TileSize");
         var size = tileSize?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         float tileW = size?.Length == 2 ? float.Parse(size[0], CultureInfo.InvariantCulture) : source.Width;
         float tileH = size?.Length == 2 ? float.Parse(size[1], CultureInfo.InvariantCulture) : source.Height;
-        tileW *= scale;
-        tileH *= scale;
+        float tileScale = controlTileSize is null ? scale : 1;
+        tileW *= tileScale;
+        tileH *= tileScale;
         if (properties?.GetValueOrDefault("TileH") != "true") tileW = dest.Width;
         if (properties?.GetValueOrDefault("TileV") != "true") tileH = dest.Height;
         if (tileW > 0 && tileH > 0 && tint.W >= 1 && atlasMask?.Covers(source) == true) _opaqueRects.Add(dest.Intersect(clip));
