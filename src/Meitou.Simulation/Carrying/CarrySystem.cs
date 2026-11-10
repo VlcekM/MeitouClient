@@ -219,13 +219,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     public static bool CanBeOpened(CharacterCold cold) => CanBeLooted(cold) || cold is { IsPlayer: true, Inventory: not null };
 
     /// <summary>
-    /// Another faction's character that is not down but whose inventory Loot (26) opens as a pickpocket: asleep (the original's state 1) or
+    /// Another faction's character that is not down but whose inventory Loot (26) opens as a pickpocket: in a bed (the original's state 1) or
     /// imprisoned (state 2), not carried (docs/game/ui-input.md "Context menu verbs"); what is taken from it rolls the steal check
-    /// (<see cref="Crime.CrimeSystem.Pickpocket"/>).
+    /// (<see cref="Crime.CrimeSystem.Pickpocket"/>). A sleeper on the ground, such as a sleeping animal, has state 0 and is not one.
     /// </summary>
     public static bool CanBePickpocketed(CharacterTable table, int slot) =>
         table.Cold(slot) is { IsPlayer: false, Inventory: not null, Medical.Incapacitated: false } c && c.CarriedBy.IsNone
-            && (c.IsImprisoned || Asleep(table, slot));
+            && (c.IsImprisoned || c.InSomething == Locks.HeldState.Bed);
 
     /// <summary>
     /// Whether an <see cref="OpenLootOrder"/> may open the inventory of slot <paramref name="slot"/>: lootable (down, playing dead, carried), the
