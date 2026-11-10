@@ -1007,7 +1007,9 @@ Overview tab 2 (`ResearchTab`), part of `ManagementScreen` (constructor `FUN_140
 
 ### Craft tab
 
-Overview tab 3 (`CraftingQueue`, constructor `FUN_1402bf0f0`; Meitou: `ProductionWindows`; the rules are in [buildings-production](buildings-production.md#crafting)). `CraftQueue` is an
+Overview tab 3 (`CraftingQueue`, constructor `FUN_1402bf0f0`; Meitou: `ProductionWindows`; the rules are in [buildings-production](buildings-production.md#crafting)). A layout with a
+`QueuePanel` (older ones, e.g. the Dark UI mod's, which have no `CraftQueue`) gets a `CraftQueue` ItemBox created inside it, skin `Kenshi_ItemBoxEmpty`, align
+stretch; the research tab does the same with `ResearchQueueList` in `ResearchQueuePanel` (`FUN_14049f5b0`) (**Verified**, decompile; Meitou: `QueueBox`, #463). `CraftQueue` is an
 ItemBox of the bench's queue (building `+0x498` deque, filled by `FUN_1402b5ca0`, the ITEMS click `FUN_1402b9770` and the save loader); its tooltip callback `FUN_1402be650` sets the hovered index
 and calls `FUN_1402bcf60`, which writes into `QueueDescriptionPanel2` (the ingredients and the item's own tooltip rows come from `FUN_1402b6b40`, Panel 1 and 2). A hovered ITEMS row
 has a different description, `FUN_1402b79b0` ("Estimated Craft Time:", "-Materials Cost:", "-Fabrics Cost:"; **Verified** strings; Meitou's option description is not that, **Unknown**).

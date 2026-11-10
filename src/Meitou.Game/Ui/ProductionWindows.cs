@@ -1129,7 +1129,7 @@ sealed class ProductionWindows(PlayerInterface player)
             }
         }
 
-        if (controls.FirstOrDefault(c => c.Name == "ResearchQueueList") is { } queue)
+        if (QueueBox(controls, "ResearchQueueList", "ResearchQueuePanel") is { } queue)
         {
             for (int i = 0; i < research.Queue.Count; i++)
             {
@@ -1360,7 +1360,7 @@ sealed class ProductionWindows(PlayerInterface player)
             }
         }
 
-        if (controls.FirstOrDefault(c => c.Name == "CraftQueue") is { } queue)
+        if (QueueBox(controls, "CraftQueue", "QueuePanel") is { } queue)
         {
             for (int i = 0; i < craft.Queue.Count; i++)
             {
@@ -1397,6 +1397,14 @@ sealed class ProductionWindows(PlayerInterface player)
 
         DatapanelLines(controls, "QueueDescriptionPanel1", lines);
     }
+
+    /// <summary>
+    /// A queue box of the overview's Craft or Research tab: the layout's own <paramref name="name"/>, else the panel an older layout has in its place
+    /// (Dark UI, #463), which the original fills with an item box of that name stretched over it (<c>FUN_1402bf0f0</c> for <c>QueuePanel</c>,
+    /// <c>FUN_14049f5b0</c> for <c>ResearchQueuePanel</c>, <b>Verified</b>).
+    /// </summary>
+    static UiControl? QueueBox(List<UiControl> controls, string name, string panel) =>
+        controls.FirstOrDefault(c => c.Name == name) ?? controls.FirstOrDefault(c => c.Name == panel);
 
     /// <summary>
     /// A queued craft's row under the pointer.
