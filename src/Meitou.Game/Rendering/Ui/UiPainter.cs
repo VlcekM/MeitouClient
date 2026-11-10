@@ -842,7 +842,7 @@ public sealed partial class UiPainter : IDisposable
                 var dest = Scaled(part.Offset, scale).AlignTo(b, skin.Width * scale, skin.Height * scale, part.Align);
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
                 if (part.Type == "TileRect")
-                    PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint, scale);
+                    PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint, 1);
                 else
                     PaintSkinPart(atlas, atlasMask, source, dest, clip, width, height, tint);
             }
