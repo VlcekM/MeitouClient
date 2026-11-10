@@ -5,6 +5,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
 
@@ -270,7 +271,7 @@ public static class BuildingSave
             if (town is null)
             {
                 town = world.Buildings.Towns.FirstOrDefault(candidate => candidate.SaveHandle is { } handle &&
-                    handle.C == state.Handle.C && handle.CS == state.Handle.CS);
+                    handle.C == state.Handle.C && handle.Cs == state.Handle.Cs);
                 town ??= world.Buildings.AddTown(instance?.Position ?? site!.Position, playerIndex);
                 byInstance[state.Instance] = town;
             }
@@ -320,7 +321,7 @@ public static class BuildingSave
     {
         var map = new Dictionary<(int, int), int>();
         foreach (var town in world.Buildings.Towns)
-            if (town.SaveHandle is { } hand) map.TryAdd((hand.C, hand.CS), town.Number);
+            if (town.SaveHandle is { } hand) map.TryAdd((hand.C, hand.Cs), town.Number);
 
         return map;
     }
