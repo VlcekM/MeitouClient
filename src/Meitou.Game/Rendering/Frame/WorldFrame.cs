@@ -1839,6 +1839,7 @@ static partial class WorldFrame
         GroundReliefDepthSlider = "Ground relief depth (cm, typical ground)",
         GroundDisplaceDistanceSlider = "Ground displacement distance (m)",
         GroundParallaxDistanceSlider = "Ground parallax distance (m)",
+        GroundParallaxDepthSlider = "Ground parallax depth (% of relief depth)",
         ShadowFilterSlider = "Shadow filter 0-2 (Meitou; 0 low-end)",
         HazeStrengthSlider = "Haze strength (1 = game)",
         PlanetshineStrengthSlider = "Planetshine strength (x physical)",
@@ -2158,6 +2159,7 @@ static partial class WorldFrame
         if (g.Sky.Gpu.HasTessellation)
             sliders.Add(new Slider(GroundDisplaceDistanceSlider, 10, 200, () => GroundRelief.DisplaceDistance / 10,
                 v => GroundRelief.DisplaceDistance = MathF.Round(v) * 10, "0"));
+        sliders.Add(new Slider(GroundParallaxDepthSlider, 10, 200, () => GroundRelief.ParallaxScale * 100, v => GroundRelief.ParallaxScale = MathF.Round(v / 5) / 20, "0"));
         sliders.Add(new Slider(GroundParallaxDistanceSlider, 10, 150, () => GroundRelief.ParallaxDistance / 10,
             v => GroundRelief.ParallaxDistance = MathF.Round(v) * 10, "0"));
     }

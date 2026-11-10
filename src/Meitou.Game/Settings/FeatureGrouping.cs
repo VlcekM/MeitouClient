@@ -49,7 +49,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // World
         new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",
             "Object LOD distance x", "Terrain detail: error px (less = finer)"]),
-        new("Terrain relief", null, ["Ground parallax", "Ground parallax distance (m)", "Ground displacement (tessellation)",
+        new("Terrain relief", null, ["Ground parallax", WorldFrame.GroundParallaxDepthSlider, "Ground parallax distance (m)", "Ground displacement (tessellation)",
             "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider,
             "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)", "Ground trails"],
             "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),

@@ -292,7 +292,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return label switch
         {
             WorldFrame.GroundReliefQualitySlider or WorldFrame.GroundReliefDepthSlider => GroundRelief.ParallaxActive || displace,
-            WorldFrame.GroundParallaxDistanceSlider => GroundRelief.ParallaxActive,
+            WorldFrame.GroundParallaxDistanceSlider or WorldFrame.GroundParallaxDepthSlider => GroundRelief.ParallaxActive,
             WorldFrame.GroundDisplaceDistanceSlider => displace,
             _ => true,
         };

@@ -58,6 +58,13 @@ public static class GroundRelief
     public static float ParallaxDistance { get; set; } = 600;
 
     /// <summary>
+    /// The parallax's depth as a share of <see cref="Depth"/> (the "Ground parallax depth" slider, 10 to 200 %; 1: the displacement's depth). The march
+    /// shows a height field's walls as stretched texels, which a shallower relief hides; the displaced mesh keeps <see cref="Depth"/>, so where both
+    /// run the fine detail the march adds is scaled by this against the mesh.
+    /// </summary>
+    public static float ParallaxScale { get; set; } = 1;
+
+    /// <summary>
     /// The terrain's outline refinement (docs/render-terrain.md, "Refinement"): every main-view patch is tessellated, an edge split where the terrain
     /// leaves it by more than this many pixels and the new points put on the terrain, so crests stay smooth over a coarse mesh; 0 off (the Tab
     /// panel's toggle). Needs tessellation. Off by default (on from the Ultra preset): about 0.5 ms of GPU time for crests a pixel or two apart.

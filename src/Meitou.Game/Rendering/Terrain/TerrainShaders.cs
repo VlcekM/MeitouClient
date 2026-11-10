@@ -957,12 +957,13 @@ static partial class TerrainShaders
             bool moving = dot(viewSpan, viewSpan) > 0.0;
             if (moving && r.n > 0)
             {
-                // As many steps as the ray crosses texels of the level it reads (the heaviest layer's), between half and three times the quality's count:
-                // a fixed count stepped over whole bumps at a grazing angle (the relief in slices) and was wasted looking straight down.
+                // Two steps for each texel of the level it reads (the heaviest layer's) the ray crosses, between half and four times the quality's count:
+                // a fixed count stepped over whole bumps at a grazing angle (the relief in slices) and was wasted looking straight down; one a texel still
+                // passed over the top of a bump one texel wide, which showed as teeth along its edge from close up.
                 vec2 tiling = r.layer[0].xy;
                 vec2 fx = r.base.dx * tiling, fy = r.base.dy * tiling;
                 float texel = max(sqrt(min(dot(fx, fx), dot(fy, fy))), 1.0 / float(textureSize(uHeight, 0).x));
-                Steps = clamp(int(ceil(length(viewSpan * tiling) / texel)), max(Steps / 2, 2), Steps * 3);
+                Steps = clamp(int(ceil(2.0 * length(viewSpan * tiling) / texel)), max(Steps / 2, 2), Steps * 4);
             }
             vec2 rayStep = viewSpan / float(Steps);
             // Centred, as the displacement is: the flat surface is the relief's middle (half the depth above it, half below), so what stands on the ground
@@ -1338,7 +1339,7 @@ static partial class TerrainShaders
                         // reliefMarch's rules: as many steps as the ray crosses texels of the level read, and the crossing halved before the point between
                         // its two ends is taken.
                         vec2 viewSpan = -v.xz / max(v.y, 0.25) * depth;
-                        steps = clamp(int(ceil(length(viewSpan) / uBakeOrigin[k].z)), max(steps / 2, 2), steps * 3);
+                        steps = clamp(int(ceil(2.0 * length(viewSpan) / uBakeOrigin[k].z)), max(steps / 2, 2), steps * 4);
                         vec2 rayStep = viewSpan / float(steps);
                         vec2 o = -0.5 * viewSpan;
                         float rayH = 1.0, prevRay = 1.0;

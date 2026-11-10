@@ -779,6 +779,7 @@ sealed partial class GameHost
                     Text: v => GroundRelief.QualityName((int)MathF.Round(v))));
                 sliders.Add(new Slider("Ground relief depth (cm, typical ground)", 0, 40, () => GroundRelief.Depth * 10,
                     v => GroundRelief.Depth = MathF.Round(v * 2) / 20, "0.0"));
+                sliders.Add(new Slider(WorldFrame.GroundParallaxDepthSlider, 10, 200, () => GroundRelief.ParallaxScale * 100, v => GroundRelief.ParallaxScale = MathF.Round(v / 5) / 20, "0"));
                 sliders.Add(new Slider("Ground parallax distance (m)", 10, 150, () => GroundRelief.ParallaxDistance / 10,
                     v => GroundRelief.ParallaxDistance = MathF.Round(v) * 10, "0"));
                 toggles.Add(new Toggle("Ground parallax", () => GroundRelief.ParallaxActive, v => GroundRelief.ParallaxActive = v, OnOff: true));
