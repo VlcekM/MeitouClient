@@ -327,14 +327,17 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Every non-persistent platoon not homed to a nest counts in the area sector of its place (<c>FUN_1407ebd00</c> -> <c>FUN_1408f6c80</c> /
-    /// <c>FUN_1408f68a0</c>, <b>Verified</b>), town roamers and stand-ins too: 1 when intact, 0.5 when not (<c>FUN_1408f6d20</c>). The homeless
-    /// squads of the wild sites are added by the callers; the platoons made for a wild site are not counted twice.
+    /// <c>FUN_1408f68a0</c>, <b>Verified</b>), town roamers, stand-ins and a save's homeless platoons too: 1 when intact, 0.5 when not
+    /// (<c>FUN_1408f6d20</c>). The homeless squads the wild sites made are added by the callers; the platoons made for a wild site are not
+    /// counted twice.
     /// </summary>
     void AddPlatoonLoad(World world, Dictionary<ZoneCoordinate, float> load, Dictionary<ZoneCoordinate, int>? intactIn)
     {
         foreach (var p in world.Platoons.All)
         {
-            if (p.Wild || p.Campaign is not null || PersistentPlatoon(p)) continue;
+            // A save's homeless platoon counts like any other; a nest's is homed to its nest.
+            if (p.Saved?.Wild == WildKind.Nest || p.Campaign is not null || PersistentPlatoon(p)) continue;
+
             var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
             bool intact = Intact(world, p);
             load[zone] = load.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);
