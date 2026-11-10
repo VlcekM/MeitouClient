@@ -93,6 +93,10 @@ static class MeshSurface
     /// </summary>
     public const uint Foliage = 2;
     /// <summary>
+    /// The diffuse is one of the named metal textures (<see cref="MetalTextures"/>): what has no colour of its own is bare metal.
+    /// </summary>
+    public const uint MetalByTexture = 32;
+    /// <summary>
     /// An impostor bake: neither dust nor wetness is baked in.
     /// </summary>
     public const uint NoWeather = 4;

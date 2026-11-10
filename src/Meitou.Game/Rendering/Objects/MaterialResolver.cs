@@ -26,6 +26,10 @@ public sealed record SurfaceMaterial
     /// </summary>
     public string? Diffuse2 { get; init; }
     public string? Normal2 { get; init; }
+    /// <summary>
+    /// The game's metalness map (<c>metalness map</c>; red channel, objects.hlsl), where the record names one: few do.
+    /// </summary>
+    public string? Metal { get; init; }
     public AlphaSource Alpha { get; init; }
     /// <summary>
     /// Alpha test threshold 0–1 (0 = no test).
@@ -232,6 +236,7 @@ public sealed class MaterialResolver
             Normal = Tex(record, "normal map"),
             Diffuse2 = dual ? Tex(record, "texture map 2") : null,
             Normal2 = dual ? Tex(record, "normal map 2") : null,
+            Metal = Tex(record, "metalness map"),
             Triplanar = mode is 1 or 5,
             Dust = mode is 1 or 5,
             Foliage = mode == 4,
@@ -304,6 +309,7 @@ public sealed class MaterialResolver
                         Normal = Tex(spec, "normal map"),
                         Diffuse2 = type == 3 ? Tex(spec, "texture map 2") : null,
                         Normal2 = type == 3 ? Tex(spec, "normal map 2") : null,
+                        Metal = Tex(spec, "metalness map"),
                         Alpha = type is 1 or 2 ? AlphaSource.NormalAlpha : AlphaSource.None,
                         AlphaThreshold = type is 1 or 2 ? 0.5f : 0,
                         DoubleSided = type == 2,
@@ -364,6 +370,7 @@ public sealed class MaterialResolver
             Description = $"script material '{material.Name}' ({material.File})",
             Diffuse = diffuse.Texture,
             Normal = normal?.Texture,
+            Metal = units.FirstOrDefault(u => u.Alias.Contains("metal", StringComparison.OrdinalIgnoreCase))?.Texture,
             Alpha = pass.AlphaRejection.Function != OgreCompareFunction.AlwaysPass || !blend.IsOpaque ? AlphaSource.DiffuseAlpha : AlphaSource.None,
             AlphaThreshold = pass.AlphaRejection.Function != OgreCompareFunction.AlwaysPass ? Math.Max(pass.AlphaRejection.Value,
                     (byte)1) / 255f : !blend.IsOpaque ? 0.5f : 0,

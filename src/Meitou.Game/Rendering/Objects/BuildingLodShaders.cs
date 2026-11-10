@@ -124,6 +124,7 @@ static class BuildingLodShaders
                 if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;
             """ + ScaffoldTest);
         // The viewer's plain lighting is overwritten by the game sky's lighting: compute it only where it is used (the same values).
+        f = Literal(f, "uniform sampler2D uNormal;\n", "uniform sampler2D uNormal;\nuniform sampler2D uMetal;\nuniform uint uMetalMap;\n");
         f = Literal(f, "if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);\n", "");
         f = Literal(f, """
             vec3 l = normalize(uLightDir);
@@ -139,6 +140,16 @@ static class BuildingLodShaders
             vec3 v = normalize(uEye - vWorld);
             vec3 colour;
             giInterior = mod(vInterior, 2.0) > 0.5;
+            // The game's metalness map (objects.hlsl), then the named metal textures (MetalTextures): what has no colour of its own; rust and paint are saturated.
+            atmoMetalness = uMetalMap != 0u ? texture(uMetal, uv).r : 0.0;
+            if ((uSurface & 32u) != 0u)
+            {
+                float top = max(albedo.r, max(albedo.g, albedo.b));
+                float bare = smoothstep(0.04, 0.16, top) * (1.0 - smoothstep(0.3, 0.6, 1.0 - min(albedo.r, min(albedo.g, albedo.b)) / max(top, 1e-3))) * 0.3;
+                atmoMetalness = max(atmoMetalness, bare);
+                atmoMetalDiffuse = 0.85;
+                glossLit = mix(glossLit, mix(0.3, 0.75, glossLit), bare);
+            }
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);
             else
             {
@@ -282,7 +293,7 @@ static class BuildingLodShaders
             bool triplanar;
             bool emissive;
             bool useVertexColour;
-            bool wireframe;
+            uint metalMap;
             uint spare;
             vec4 fadeRange;
         """;
@@ -302,6 +313,10 @@ static class BuildingLodShaders
         ["uCutPlanes"] = "view.cutPlanes",
         ["uSkinned"] = "false",
         ["uHasHead"] = "false",
+        // The wireframe is bit 64 of the push spare; its member holds the game's metalness map (its bindless index + 1, 0: none).
+        ["uWireframe"] = "((pc.spare & 64u) != 0u)",
+        ["uMetalMap"] = "pc.metalMap",
+        ["uMetal"] = "textures2D[max(pc.metalMap, 1u) - 1u]",
         // The scaffold grid (construction.dds): the push spare's upper bits hold its bindless index + 1 (WorldObjectRenderer.RecordDraws); read only
         // when not 0.
         ["uScaffold"] = "textures2D[max(pc.spare >> 8u, 1u) - 1u]",
@@ -379,7 +394,7 @@ struct ObjectPush
     [System.Runtime.InteropServices.FieldOffset(92)] public uint Triplanar;
     [System.Runtime.InteropServices.FieldOffset(96)] public uint Emissive;
     [System.Runtime.InteropServices.FieldOffset(100)] public uint UseVertexColour;
-    [System.Runtime.InteropServices.FieldOffset(104)] public uint Wireframe;
+    [System.Runtime.InteropServices.FieldOffset(104)] public uint MetalMap;
     [System.Runtime.InteropServices.FieldOffset(108)] public uint Spare;
     [System.Runtime.InteropServices.FieldOffset(112)] public System.Numerics.Vector4 FadeRange;
 }

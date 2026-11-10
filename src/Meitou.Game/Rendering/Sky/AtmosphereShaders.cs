@@ -249,6 +249,7 @@ static class AtmosphereShaders
         }
         {{EnvBrdfFunction}}
         float atmoMetalness = 0.0;   // the surface's metalness (a worn item's colour map blue, CharacterShaders), set before kenshiLight / stageLight; 0 dielectric
+        float atmoMetalDiffuse = 0.0;   // how much of a metal's diffuse is kept (Meitou's estimated metal, kenshiLight)
         float atmoTranslucency = 0.0;   // how much sun a cut-out surface lets through from behind (objects.hlsl TRANSPARENCY)
         // The character editor's stage (a fog distance of -2): the game's rtt.hlsl (docs/characters.md "Character editor"): one punctual light of colour 0.6 (CalcPunctualLight: diffuse
         // pi * N.L * (1 - 0.04), GGX specular for roughness 1 - 0.99 * gloss, specular colour 0.04) plus the environment light of the irradiance and specular cubes
@@ -305,9 +306,10 @@ static class AtmosphereShaders
         vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world, vec3 diffuseNl)
         {
             // Metalness (deferred.hlsl): the specular colour runs from 0.04 to the albedo, the diffuse albedo to black; diffuse light x (1 - the specular colour's mean).
-            vec3 specColour = mix(vec3(0.04), albedo, atmoMetalness);
-            albedo *= 1.0 - atmoMetalness;
-            float fresnelDiffuse = clamp(1.0 - dot(specColour, vec3(1.0 / 3.0)), 0.0, 1.0);
+            // atmoMetalDiffuse (Meitou's estimated metal on buildings; 0 is the game): the reflections come on top of the texture's own light instead of replacing it, and are not as dark as it.
+            vec3 specColour = mix(vec3(0.04), mix(albedo, pow(max(albedo, vec3(0.0)), vec3(0.85)), atmoMetalDiffuse), atmoMetalness);
+            albedo *= 1.0 - atmoMetalness * (1.0 - atmoMetalDiffuse);
+            float fresnelDiffuse = clamp(1.0 - dot(mix(specColour, vec3(0.04), atmoMetalDiffuse), vec3(1.0 / 3.0)), 0.0, 1.0);
             vec4 am = atmoAmbientMapAt(world);
             vec3 l = uAtmoLight.xyz;
             vec3 sunBase = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world);

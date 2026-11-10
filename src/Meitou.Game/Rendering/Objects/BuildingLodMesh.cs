@@ -818,6 +818,11 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     /// The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.
     /// </summary>
     public bool Dust { get; init; }
+    /// <summary>
+    /// The game's metalness map, where the material names one.
+    /// </summary>
+    public WorldTexture? MetalMap { get; init; }
+    public uint Metal => MetalMap?.Key ?? 0;
     public uint Diffuse => diffuse?.Key ?? 0;
     public uint Normal => normal?.Key ?? 0;
     public uint Diffuse2 => diffuse2?.Key ?? 0;

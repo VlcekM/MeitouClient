@@ -905,7 +905,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null,
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
-            { Dust = placed.Kind == PlacedKind.BuildingPart };
+            { Dust = placed.Kind == PlacedKind.BuildingPart, MetalMap = m?.Metal is null ? null : _textureCache.Get(m.Metal, border, deferred: true) };
         }
         return new ObjectMaterialSet(result);
     }
@@ -1698,7 +1698,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public GpuObjectPart Part;
         public int Level;
         public uint FirstInstance, Instances;
-        public uint Diffuse, Normal, Diffuse2, Normal2;
+        public uint Diffuse, Normal, Diffuse2, Normal2, Metal;
         public ObjectPush Push;
         /// <summary>
         /// Drawn with the program without a discard (<see cref="EarlyDepth"/>): a batch of fully visible instances, a material without a cut-out.
@@ -1869,7 +1869,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 d.Push.FadeMode = fade | (b.Cut ? 2 : 0);
                 if (wire || _debugLevels == 1)
                 {
-                    d.Push.Wireframe = 1;
+                    d.Push.Spare |= 64u;
                     d.Push.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, _distantMaterial));
                 }
                 else
@@ -1928,6 +1928,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         d.Normal = normalId;
         d.Diffuse2 = dual ? diffuse2 : 0;
         d.Normal2 = dual ? pm.Normal2 : 0;
+        d.Metal = textured ? pm.Metal : 0;
         var alpha = m?.Alpha ?? AlphaSource.None;
         if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
         var tile = m?.Tile ?? Vector2.One;
@@ -1946,7 +1947,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;
-        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u) | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u);
+        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u) | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u)
+            | (textured && MetalTextures.Enabled && MetalTextures.Holds(m?.Diffuse) ? MeshSurface.MetalByTexture : 0u);
     }
 
     /// <summary>
@@ -1990,6 +1992,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             pc.Normal = Texture(d.Normal);
             pc.Diffuse2 = Texture(d.Diffuse2);
             pc.Normal2 = Texture(d.Normal2);
+            pc.MetalMap = d.Metal == 0 ? 0 : Texture(d.Metal) + 1;
             pc.Spare = (pc.Spare & 0xFFu) | (_scaffoldGrid is { Key: not 0 } grid ? (Texture(grid.Key) + 1) << 8 : 0);
             var part = d.Part;
             bool solid = d.Solid && solidSegment != 0;
