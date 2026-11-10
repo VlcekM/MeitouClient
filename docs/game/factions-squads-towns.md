@@ -557,6 +557,15 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   **Observed**) and never spawns again. New nests come only from the area tick, up to `num nests` per biome group; whether a dead nest
   frees its count is **Unknown**. A group with `nests at fixed markers only` picks among its NEST_MARKER towns, leaving out every marker whose
   nearest town (by XZ, markers skipped) is within 2500 (3D) (**Verified**, `FUN_1408f6350`, 6,250,000 squared).
+- **Spot finder** (**Verified** by decompile; nests and homeless squads): a new nest (`FUN_1408f6350`) draws up to 10 random sectors of its group,
+  skipping the one in view and town-flagged ones, and takes the first where `FUN_1408f50d0` places a spot; failing that, a random sector and whatever
+  the finder left (its centre when nothing passed), unchecked. `FUN_1408f50d0`: 4 rounds of a uniform point in the sector, each pushed up to 10 times
+  out of a town's radius × 1.4 (another faction's × 3; the nest call's arguments) and from within 1382.4 of the camera focus; a point passes when
+  `FUN_1408f4d70` does: terrain height (`Terrain::getHeight`) not under 95 (`DAT_141685034`; -99, no terrain, passes) and a non-zero pixel of a
+  world image (+0xb8 of the area map that resolves sectors; its meaning **Unknown**). Then dropped inside a non-Ruins town or when `FUN_1403a30f0`
+  counts an overlap. So no spot is deeper than 5 in the water (surface 100). Meitou (`PopulationWild.cs`): a nest's candidate spots and the homeless
+  spot are refused under 95; a nest roll whose cell has no dry spot passes to the next roll key (up to 10 a nest). Not modelled: the image test,
+  the overlap test, the unchecked fallback (#496: navmesh water counts as walkable, so camps stood in lakes before).
 - **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`; "area load" **Observed**), each of its nests runs `Nest` slot 64
   (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
   (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
