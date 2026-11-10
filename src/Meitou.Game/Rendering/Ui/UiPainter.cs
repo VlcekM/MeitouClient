@@ -796,6 +796,18 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
+    /// How much a skin's pieces grow: the screen height over 1080 for the tick button (radio buttons), whose pieces are fixed pixels and too small
+    /// at 4K (#495), else 1.
+    /// </summary>
+    static float SkinScale(string skin, int height) => skin == "Kenshi_TickButton1Skin" ? height / 1080f : 1f;
+
+    /// <summary>
+    /// A skin piece's rectangle times <paramref name="scale"/>.
+    /// </summary>
+    static UiRect Scaled(UiRect r, float scale) =>
+        scale == 1f ? r : new UiRect(r.X * scale, r.Y * scale, r.Width * scale, r.Height * scale);
+
+    /// <summary>
     /// The skin's image parts in the widget's state (MyGUI's SubSkin, MainSkin and TileRect).
     /// </summary>
     void PaintSkin(UiControl c, UiRect b, UiRect clip, string widgetState, int width, int height, DebugOverlay.OverlayPass pass)
@@ -807,6 +819,7 @@ public sealed partial class UiPainter : IDisposable
             // A toggled button (Checked) uses MyGUI's *_checked states, else looks pushed.
             bool on = c.Properties.GetValueOrDefault("Checked") == "true";
             string state = on ? widgetState + "_checked" : widgetState;
+            float scale = SkinScale(skin.Name, height);
             foreach (var part in skin.Parts)
             {
                 if (part.Type is not ("SubSkin" or "MainSkin" or "TileRect")) continue;
@@ -814,7 +827,7 @@ public sealed partial class UiPainter : IDisposable
                     && !part.States.TryGetValue("normal", out source))
                     continue;
 
-                var dest = part.Offset.AlignTo(b, skin.Width, skin.Height, part.Align);
+                var dest = Scaled(part.Offset, scale).AlignTo(b, skin.Width * scale, skin.Height * scale, part.Align);
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
                 if (part.Type == "TileRect")
                     PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint);

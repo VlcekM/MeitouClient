@@ -796,7 +796,9 @@ sealed class FrontendScreens(PlayerInterface player)
         // fixed at 180; the captions are localised strings (the pot has "Name" and "Date", Unknown which the window uses). Initially sorted by
         // the second, newest first. Meitou adds the save's origin to the name. addColumn takes screen pixels, not the template's (the date is cut
         // off at 1440 lines in the base game).
-        b.Columns["GamesList"] = [new("Name", 170 / b.TemplateScale, Fill: true), new("Date", 180 / b.TemplateScale)];
+        // Meitou: above 1080 lines both columns are half as wide again, so the date fits on a 4K screen (#495).
+        float columnScale = player.Height > 1080 ? 1.5f : 1f;
+        b.Columns["GamesList"] = [new("Name", 170 * columnScale / b.TemplateScale, Fill: true), new("Date", 180 * columnScale / b.TemplateScale)];
         b.Sorts["GamesList"] = (1, false);
 
         // Faithful: the folder name as the original shows it; Meitou adds where the save comes from.
