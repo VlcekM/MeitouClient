@@ -208,6 +208,7 @@ public static class PlacementCheck
         foreach (var site in q.Sites)
         {
             if (site.Id != parent
+                && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
                 && q.Services.Footprint(site.Record) is { } siteFootprint
                 && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
@@ -233,6 +234,7 @@ public static class PlacementCheck
         foreach (var site in q.Sites)
         {
             if (site.Id != parent
+                && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
                 && q.Services.Footprint(site.Record) is { } f
                 && Overlap(hull, f.Place(site.Position, site.Rotation)))
@@ -241,6 +243,7 @@ public static class PlacementCheck
         foreach (var queued in q.Queued)
         {
             if (queued.Hull is not null
+                && !OtherFloor(q, parent, queued.Parent, queued.Floor)
                 && q.Ignore?.Invoke(queued.Building.Id, queued.Position, queued.Rotation) != true
                 && Overlap(hull, queued.Hull))
                 return PlacementFailure.TooCloseToBuilding;
@@ -252,6 +255,13 @@ public static class PlacementCheck
         }
         return PlacementFailure.None;
     }
+
+    /// <summary>
+    /// Whether a site or queued ghost stands on another floor of the building <paramref name="parent"/> the ghost is in: the original tests node
+    /// boxes in 3D, so what stands upstairs does not block the floor below (#499).
+    /// </summary>
+    static bool OtherFloor(PlacementQuery q, string? parent, string? otherParent, int otherFloor) =>
+        parent is not null && otherParent == parent && otherFloor != q.Floor;
 
     /// <summary>
     /// The ground and floor the ghost needs: land under its land parts, a ceiling over a ceiling ghost; None when it has them.

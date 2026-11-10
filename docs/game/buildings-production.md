@@ -215,7 +215,7 @@ shows the first failing message in this order (**Verified** unless marked):
 | "Cannot build inside incomplete buildings." | the building under the ghost is incomplete |
 | "Must be placed outside or on a roof." / "Must be placed inside a building." | indoor/outdoor rule; the first for `BF_RAIN_COLLECTOR` (26) |
 | "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node |
-| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid |
+| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid. Meitou (`PlacementCheck.HullBlock`) overlaps footprints in 2D instead, leaving out the sites and ghosts on another floor of the building the ghost stands in (the boxes are 3D) |
 | "There are characters in the way." | an object in a node box is rejected by `FUN_1407d1440` (**Observed**) |
 | "The building blocks another building use nodes." | the footprint covers another building's usage node |
 | "The building has one or more parts on invalid ground." | a BUILDING_PART with `ground type` LAND has its node centre below y = 98 (water level, **Observed**) |
