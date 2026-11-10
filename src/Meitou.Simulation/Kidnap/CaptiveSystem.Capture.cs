@@ -522,6 +522,12 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
+    /// Chains a recaught slave (<see cref="CharacterAssembly.Chain"/>, the original's <c>setChainedMode</c> at the end of its cuffing): an arrest's
+    /// slave catching cages it without the cuffing step, and one caged unshackled never looks like a slave, so the slavers process it forever (#508).
+    /// </summary>
+    public void Chain(CharacterCold cc) => _assembly.Chain(cc);
+
+    /// <summary>
     /// <c>Task_StripWeapons</c> once its 0.8 s are up: the items of the target's <c>hip</c> and <c>back</c> sections go to the stripper's inventory
     /// (the ground when it is full; engine choice). After each item moved the original sets the stripper's squad's short-term tag 6 on the target
     /// (<c>FUN_14034e7b0</c> calling <c>FUN_1406744a0</c>, <b>Verified</b>): <see cref="Dialogue.MemoryTag.Looted"/>, which the NPC looting finder

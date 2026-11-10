@@ -48,6 +48,7 @@ static class SaveProbe
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
+            case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
             case ("talk", >= 1): Talk(probe, a[0]); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
@@ -123,6 +124,21 @@ static class SaveProbe
             var squad = probe.World.Squads.Find(c.SquadId);
             Console.WriteLine($"{probe.Who(i)} slave={c.SlaveState} owner={probe.Faction(c.SlaveOwner)} master={c.SlaveMaster} in={c.InSomething} "
                 + $"town={squad?.Town} platoon={squad?.PlatoonId} home={squad?.HomeBuilding?.Position} template={squad?.TemplateId}");
+        }
+    }
+
+    /// <summary>
+    /// The characters named like <paramref name="name"/> with their slave state, owner, shaven head and every item they carry (section, locked).
+    /// </summary>
+    static void Kit(ProbeWorld probe, string name)
+    {
+        foreach (int i in probe.Named(name))
+        {
+            var c = probe.Characters.Cold(i)!;
+            Console.WriteLine($"{probe.Who(i)} slave={c.SlaveState} owner={probe.Faction(c.SlaveOwner)} master={c.SlaveMaster} shaved={c.Shaved} "
+                + $"in={c.InSomething} bandage=[{string.Join(" ", c.Medical?.PartSpan.ToArray().Select(p => $"{p.Bandage:F0}/{p.Flesh:F0}") ?? [])}]");
+            foreach (var item in c.Inventory?.All() ?? [])
+                Console.WriteLine($"  {item.Record} {item.Type} section={item.Section} locked={item.LockedOn} lock={item.Lock is not null}");
         }
     }
 

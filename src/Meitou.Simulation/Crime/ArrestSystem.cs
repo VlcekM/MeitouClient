@@ -1034,9 +1034,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
         Deeds?.Caged(world, g, t);
         tc.Recognition = 0;
-        if (a.Enslave) FixtureRegistry.Enslave(world, tc, a.Faction, table.Cold(g)?.SquadId ?? -1);
+        if (a.Enslave) Enslave(world, a, g, tc);
         else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
         return End(world, a, ArrestEventKind.Jailed);
+    }
+
+    /// <summary>
+    /// A caged captive of an enslaving arrest becomes the guard faction's slave; a recaught escaped slave is also chained (engine: the original's
+    /// slave catching cuffs it before the carry, <see cref="Kidnap.CaptiveSystem.Chain"/>). A take-over's body is not: whether the original's
+    /// <c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c> chains it is <b>Unknown</b>.
+    /// </summary>
+    void Enslave(World world, Arrest a, int g, CharacterCold tc)
+    {
+        FixtureRegistry.Enslave(world, tc, a.Faction, world.Characters.Cold(g)?.SquadId ?? -1);
+        if (!a.Takeover) Captives?.Chain(tc);
     }
 
     /// <summary>

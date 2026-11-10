@@ -1880,11 +1880,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): it is stripped (<see cref="Strip"/>) and,
     /// only when its legs slot is empty then, dressed in each of the worker's faction's <c>slave clothing</c> it does not wear already. Event 35, or
     /// 37 for one whose head is shaven already, from the worker to it, and its head is shaven; it becomes the worker's faction's slave unless it has
-    /// an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared.
+    /// an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared. A captive without locked shackles is cuffed first
+    /// (<see cref="Restrain"/>).
     /// </summary>
     void Process(World world, int w, CharacterCold wc, int c, CharacterCold cc)
     {
         var table = world.Characters;
+        Restrain(world, wc, cc);
         if (cc.Inventory is { } inv)
         {
             string[] clothing = SlaveClothing(wc.Faction);
@@ -1913,6 +1915,21 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Then its head is shaven (CharacterHuman::shaveHead(true) in FUN_14035aa20, Verified); an animal has no head to shave.
         if (cc.Fighter is not { IsAnimal: true }) cc.Shaved = true;
         world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
+    }
+
+    /// <summary>
+    /// The plan's cuff before <see cref="Process"/>: 182 needs 134 <c>isChained</c>, which only 166 Restraining (<c>Task_CuffTarget</c>) gives, and
+    /// its <c>setChainedMode</c> makes the cuffer the owner. So a human captive without locked shackles is chained
+    /// (<see cref="CharacterAssembly.Chain"/>) and becomes a slave of the worker's faction and squad, whose medics then treat it in its cage
+    /// (<c>FirstAidSystem.ChainedTo</c>). 166 also needs 7 <c>isTargetDown</c>, which Meitou does not ask of a caged or loose slave (<b>engine
+    /// choice</b>: unchained, it never looks like a slave and was processed again forever, #508, #509).
+    /// </summary>
+    void Restrain(World world, CharacterCold wc, CharacterCold cc)
+    {
+        if (cc.Fighter is { IsAnimal: true } || LockSystem.WornShackles(cc) is not null) return;
+
+        _assembly.Chain(cc);
+        FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
     }
 
     /// <summary>
