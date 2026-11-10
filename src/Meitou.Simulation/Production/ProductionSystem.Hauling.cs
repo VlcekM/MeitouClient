@@ -50,15 +50,19 @@ public sealed partial class ProductionSystem
         }
 
         // A full output is taken only when some storage takes it; without one the machine stays full.
+        bool took = false;
         if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made &&
             NearestStorage(world, site, s => s.Data.Accepts(made.Record, made.Type) && Fits(s.Storage!, made)) is not null)
         {
             int moved = Placed(inv, made);
-            if (moved > 0) { output.Count -= moved; changed = true; }
+            if (moved > 0) { output.Count -= moved; changed = took = true; }
         }
 
         if (changed) world.Machines.Touch();
-        if (m.Output is { } o && Carried(inv, o.Recipe.Item).FirstOrDefault() is { } carried &&
+
+        // The carried output goes to the storage once a full output was taken, or while the output stays full (no room to take it): not for a
+        // stray unit, which sent a miner on a trip for every piece of ore it carried (#388).
+        if (m.Output is { } o && (took || o.Full) && Carried(inv, o.Recipe.Item).FirstOrDefault() is { } carried &&
             NearestStorage(world, site, s => s.Data.Accepts(carried.Record, carried.Type) && Fits(s.Storage!, carried)) is { } into)
             return Go(cold, into, null);
 

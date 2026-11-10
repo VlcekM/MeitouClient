@@ -621,9 +621,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         // The machine's use range (UseableStuff::getReachRange).
-        return SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)
-            && SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any());
+        if (!SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)) return false;
+        return SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any()) || OffFloor(world, n, site);
     }
+
+    /// <summary>
+    /// A character stopped within reach of a site whose height has no floor (furniture placed on an upper storey the navmesh lacks, #388: a Hub
+    /// house's storages): its walk gets no nearer, so it counts as there (engine choice; the original's floor test passes on the same floor only).
+    /// </summary>
+    static bool OffFloor(World world, in CharacterHot n, BuildSite site) =>
+        (n.Flags & (ushort)MoveFlags.AnyPath) == 0
+        && world.Walkability.FloorNear(site.Position.X, site.Position.Z, site.Position.Y, MovementSystem.FloorSlack) is null;
 
     /// <summary>
     /// The X/Z gap from <paramref name="from"/> to a site (<see cref="SiteReach.Gap"/>). A rock's BUILDING footprint is not scaled like the rock, so

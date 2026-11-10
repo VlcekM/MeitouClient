@@ -1549,7 +1549,10 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   storage accepts an item when `itemtype limit` matches and `limit inventory` is empty or lists it; `stackable bonus
   mult` scales its stacks. The player's drops into a storage follow the same rule ("does not take").
   Excess fetched inputs stay with the operator. Engine choices: storage within `HaulRange` 3000 of the machine, ties
-  by site id, a fetch takes what the inputs have room for; the trip is not saved. Crafted items are not hauled.
+  by site id, a fetch takes what the inputs have room for; the trip is not saved. Crafted items are not hauled. Carried output
+  goes only with a full output just taken, or while the output stays full: a stray unit sends no one on a trip (#388). A walker
+  stopped within reach of a site whose height has no floor (furniture on an upper storey the navmesh lacks, the Hub's Storm House)
+  counts as there (`ProductionSystem.OffFloor`).
 - **Automatic machines** (`MachineData.IsAutomatic`, raw `max operators` 0; [facts](game/buildings-production.md#production)) produce
   every tick with nobody at them at s = 1 (producers only: refineries, mines, auto-looms, campfires), and their power demand is full. A character
   operating one (job 152, or the quick order) does not work it: it only hauls as above, every round whatever `AutoHaul` says.
