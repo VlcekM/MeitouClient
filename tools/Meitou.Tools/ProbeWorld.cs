@@ -10,7 +10,7 @@ using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
 /// <summary>
-/// A save loaded headless for <c>meitou-tools probe</c>: the install's load order, the population data, the world with the standard systems on one
+/// A save loaded headless for <c>meitou-tools probe</c>: the load order (<see cref="ProbeLoadOrder"/>), the population data, the world with the standard systems on one
 /// thread, and optionally the real navmesh of the zones round the player's squad (else the terrain alone). Characters exist only once their zones
 /// have activated, so the caller settles it for a few hundred ticks first.
 /// </summary>
@@ -52,12 +52,12 @@ sealed class ProbeWorld : IDisposable
     public Vector3 LeaderPosition => Characters.Next[World.Squads.Find(World.Player.Squad)!.Leader.Slot].Position;
 
     /// <summary>
-    /// Loads <paramref name="saveFolder"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
+    /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
     /// </summary>
-    public static ProbeWorld Load(GameInstall install, string saveFolder, bool navmesh)
+    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh)
     {
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-        var levels = WorldLevelData.Load(install, includeInteriors: true);
+        var db = GameDatabase.Load(order);
+        var levels = WorldLevelData.Load(install, order, includeInteriors: true);
         var map = TerrainHeightmap.Open(install);
         var gate = new Lock();
         Func<float, float, float> height = (x, z) =>

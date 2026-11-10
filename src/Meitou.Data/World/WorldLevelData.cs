@@ -133,10 +133,16 @@ public sealed class WorldLevelData
     /// <summary>
     /// Loads the install's world with its outdoor buildings stood on the ground (<see cref="PlaceOnGround"/>).
     /// </summary>
-    public static WorldLevelData Load(GameInstall install, bool includeInteriors = false)
+    public static WorldLevelData Load(GameInstall install, bool includeInteriors = false) =>
+        Load(install, LoadOrder.FromInstall(install), includeInteriors);
+
+    /// <summary>
+    /// <see cref="Load(GameInstall, bool)"/> under another load order (a feedback report's, for the probe tools).
+    /// </summary>
+    public static WorldLevelData Load(GameInstall install, LoadOrder order, bool includeInteriors = false)
     {
         string directory = Path.Combine(install.DataDirectory, RelativeDirectory);
-        var world = Load(directory, LoadOrder.FromInstall(install).Entries, includeInteriors);
+        var world = Load(directory, order.Entries, includeInteriors);
         return OnGround(world, install);
     }
 

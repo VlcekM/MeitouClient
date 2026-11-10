@@ -10,7 +10,7 @@ using Meitou.Simulation.Saving;
 /// <summary>
 /// <c>meitou-tools probe</c>: loads a save headless (a feedback report's, say), settles it and prints what one question about it needs: who is near,
 /// what a character does over time, slaves and their owners, cages, dialogue, storage contents, a building re-save's duplicates or the navmesh
-/// heights at a point. It runs the install's load order, which may not be the reporter's.
+/// heights at a point. It runs the install's load order unless <c>--load-order</c> gives the reporter's (<see cref="ProbeLoadOrder"/>).
 /// </summary>
 static class SaveProbe
 {
@@ -20,32 +20,20 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav]</c>. Returns 0, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--load-order file] [--mod-dir folder]...</c>. Returns 0, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         var rest = new List<string>(args);
         bool nav = rest.Remove("--nav");
-        int ticks = TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
+        int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
+        var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
-        using var probe = ProbeWorld.Load(install, rest[0], nav);
+        using var probe = ProbeWorld.Load(install, order, rest[0], nav);
         probe.Tick(ticks);
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
-    }
-
-    /// <summary>
-    /// Removes <paramref name="name"/> and its value from <paramref name="args"/>; null when it is not there.
-    /// </summary>
-    static string? TakeOption(List<string> args, string name)
-    {
-        int at = args.IndexOf(name);
-        if (at < 0 || at + 1 >= args.Count) return null;
-
-        string value = args[at + 1];
-        args.RemoveRange(at, 2);
-        return value;
     }
 
     /// <summary>
@@ -258,7 +246,7 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav]
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
               watch <name> [rounds]    a character's task and AI every 40 ticks (default 10 rounds)
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
