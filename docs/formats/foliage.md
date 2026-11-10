@@ -35,6 +35,10 @@ Algorithm verification does not establish screenshot parity for complete generat
   distance alone. The town list is the live one, so it includes towns the player founded or took, and the test runs when the zone is paged. Not modelled: Meitou places a zone
   from the level's towns only and caches the layout by content, so ownership (and the player's own towns) never changes a layout; a town the player owns in a loaded save keeps
   its rocks away. Wiring it needs the layout cache key to carry which towns the player owns.
+  A town with range 0 keeps nothing away (**Observed**: Newwworld's The Hub `18919-Newwworld.mod`, so its trees grow among the buildings, issue #522).
+- **No building test** (**Verified (decompiled)**, `FUN_1406d2410`): the mesh placer rejects by slope, zone, town range, altitude and the overlay's road
+  channel only (the grid test there is the overlay A byte, `FUN_1406d82d0`); nothing checks buildings, so a tree can stand in a building's yard or room.
+  Whether anything removes foliage under buildings after placement is **Unknown** (no such caller found).
 
 ## Randomness, noise and ground
 
