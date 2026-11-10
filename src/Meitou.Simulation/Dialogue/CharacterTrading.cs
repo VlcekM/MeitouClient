@@ -195,19 +195,40 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
             foreach (var (id, ac) in AnimalsForSale(world, s, sc))
                 rows.Add(new(id, ac.Name, AnimalPrice(ac, t.Price), AnimalPanel(ac), [(ac.Name, ""), (Loc.Tr("Age:"), AgeLine(ac))]));
         }
-        else if (sc.Faction >= 0)
+        else
         {
-            for (int i = 0; i < table.HighWater; i++)
-            {
-                if (!table.Next[i].Alive || table.Cold(i) is not { SlaveState: 1, Medical.Dead: false } c || c.SlaveOwner != sc.Faction) continue;
-                rows.Add(new(table.IdOf(i), c.Name, PurchasePrice(world, c, t.Price),
+            foreach (var (id, c) in SlavesForSale(world, s, sc))
+                rows.Add(new(id, c.Name, PurchasePrice(world, c, t.Price),
                     StatLines(c, StatsEnumerated.Strength, StatsEnumerated.Dexterity, StatsEnumerated.Toughness, StatsEnumerated.MeleeAttack,
                         StatsEnumerated.MeleeDefence),
                     StatLines(c, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking, StatsEnumerated.Engineering,
                         StatsEnumerated.Medic)));
-            }
         }
         _characterTrade = new(++_characterTradeId, t.Kind, t.Slaver, t.Player, rows);
+    }
+
+    /// <summary>
+    /// The slaves DA 42 offers: every living character in slave state 1 that is the slaver's (engine reading of the original's per-owner slave set,
+    /// whose owner is a character): it obeys the slaver's squad, or is caged in a cage of that squad's home building (a slave shop's stock, whatever
+    /// faction owns it), or is owned by the slaver's faction within <see cref="SlaveSaleRange"/> of the slaver. A slave of the faction held elsewhere
+    /// (another town, a caravan) or an uncaged one out in the town is not offered (#425).
+    /// </summary>
+    static List<(CharacterId Id, CharacterCold Cold)> SlavesForSale(World world, int slaver, CharacterCold sc)
+    {
+        var table = world.Characters;
+        var found = new List<(CharacterId Id, CharacterCold Cold)>();
+        string? home = world.Squads.Find(sc.SquadId)?.HomeBuilding?.Key;
+        var at = table.Next[slaver].Position;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { SlaveState: 1, Medical.Dead: false } c) continue;
+
+            bool obeys = c.SlaveMaster >= 0 && c.SlaveMaster == sc.SquadId;
+            bool stocked = home is not null && c.IsImprisoned && c.InWhat is { } cage && world.Fixtures.Find(cage)?.Building == home;
+            bool owned = sc.Faction >= 0 && c.SlaveOwner == sc.Faction && Vector3.Distance(table.Next[i].Position, at) <= SlaveSaleRange;
+            if (obeys || stocked || owned) found.Add((table.IdOf(i), c));
+        }
+        return found;
     }
 
     /// <summary>
