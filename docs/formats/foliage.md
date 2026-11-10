@@ -70,6 +70,12 @@ add if accepted. Original scale/yaw quantized8-bit; Meitou keeps floats. Spawn c
 for rejected parents, recursively, then stamp grass-spot disc into G (<=96). Slope-align rotates
 up after yaw; otherwise keep-upright yaw only, or CRT random axis seeded by positional noise.
 Resource rocks create/find their building after ordinary placement.
+Re-checked against `FUN_1406d3740` (the layer loop) and `FUN_1406d2410` (one member) for issue #406: every test and draw above is in the same
+order in `FoliageLayout.PlaceMesh`/`Place` (**Verified**, decompile read). Tower of Abuse (37.35): our placer puts a
+`Foliage_Rock_Bouldercluster_MonoTex` (3438) at 23862,963,18520, scale 2.13, 150 from the tower and 690 from the town's level position (range 200),
+whose rocks cover the ramp foot (23340-23450, 18140-18260); the shipped tile there has ground and the lower ramp (y 1159-1208) (**Observed**,
+`navmesh --probe`). Whether the original draws that rock is **Unknown**: its zone hash covers buildings only (docs/game/pathfinding.md), so the
+shipped tile stays in use whatever foliage the zone now has.
 
 ## Materials, sizes and grass
 
