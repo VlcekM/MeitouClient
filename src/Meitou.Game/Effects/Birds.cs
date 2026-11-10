@@ -110,7 +110,7 @@ sealed class Birds(GameHost host)
     {
         var gpu = host.Gpu;
         gpu.BirdPieces.Clear();
-        flocks.AddPieces(gpu.BirdPieces, mesh => gpu.Debris is { } birdMeshes && birdMeshes.Extent(mesh, null) is not null);
+        flocks.AddPieces(gpu.BirdPieces, mesh => gpu.Debris?.Centre(mesh));
     }
 
     /// <summary>
