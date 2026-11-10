@@ -73,9 +73,9 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   took, a missing DLL, an entry type that is absent, not an `IMod` or without a public parameterless constructor, a throwing
   `Initialize`.
 - Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified**
-  (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable, and `meitou-tools`
-  with it. **Observed** (2026-11-04, win-x64 publish of the three programs into one folder): `0Harmony.dll` and `Meitou.Modding.dll` are
-  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs. Since the four-project layout
+  (`tools/scripts/package-release.ps1`): the game publishes self-contained with `MeitouClient.dll` (holding `Meitou.Modding`) and the
+  other `Meitou.*.dll` beside the executable, and `meitou-tools` with it. **Observed** (2026-11-04, win-x64 publish of the three programs
+  into one folder, before `Meitou.Modding.dll` was merged into the game): `0Harmony.dll` and `Meitou.Modding.dll` were there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs. Since the four-project layout
   (2026-11-08) the viewer and `meitou-tools` reference the game and bring copies of its runtimeconfig and deps, so the game publishes last;
   **Observed** (win-x64, tools then game into one folder): `MeitouClient.runtimeconfig.json` is the game's own.
 
