@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Simulation;
 using Meitou.Simulation.Crime;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Locks;
@@ -56,6 +57,7 @@ static class SaveProbe
         {
             case ("near", >= 1): Near(probe, float.Parse(a[0])); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
@@ -88,6 +90,8 @@ static class SaveProbe
             var squad = probe.World.Squads.Find(c.SquadId);
             Console.WriteLine($"squad {squad?.Id} '{squad?.Name}' template={squad?.TemplateId} members={squad?.Members.Count} town={squad?.Town} "
                 + $"imprisoned={c.IsImprisoned} slave={c.SlaveState}");
+            foreach (var p in c.Medical?.PartSpan.ToArray() ?? [])
+                Console.WriteLine($"  part flesh={p.Flesh:F2} stun={p.Stun:F2} rig={p.Rig:F2} max={p.MaxHp:F2} wear={p.Wear:F2} fraction={p.Fraction:F3}");
         }
 
         for (int round = 0; round < rounds; round++)
@@ -95,13 +99,27 @@ static class SaveProbe
             foreach (int i in slots)
             {
                 var c = probe.Characters.Cold(i)!;
-                Console.WriteLine($"tick {probe.World.Tick} {probe.Who(i)} carrying={c.Carrying} behaviour={c.Ai?.Behaviour} "
-                    + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal}");
+                Console.WriteLine($"tick {probe.World.Tick} {probe.Who(i)} in={c.InSomething} carrying={c.Carrying} behaviour={c.Ai?.Behaviour} "
+                    + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal} "
+                    + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count}");
             }
 
             probe.PrintMessages();
             probe.Tick(40);
         }
+    }
+
+    /// <summary>
+    /// Orders the characters named like <paramref name="name"/> to walk to (<paramref name="x"/>, <paramref name="z"/>) at the terrain height, then
+    /// watches them as <see cref="Watch"/> does.
+    /// </summary>
+    static void Move(ProbeWorld probe, string name, float x, float z, int rounds)
+    {
+        var t = probe.Characters;
+        var ids = probe.Named(name).Select(t.IdOf).ToList();
+        var target = new Vector3(x, probe.World.Walkability.TerrainHeight(x, z), z);
+        probe.World.Commands.Enqueue(new MoveOrder(ids, target) { Tick = probe.World.Tick });
+        Watch(probe, name, rounds);
     }
 
     /// <summary>
@@ -229,6 +247,7 @@ static class SaveProbe
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav]
               near <radius>            characters near the player's squad leader
               watch <name> [rounds]    a character's task and AI every 40 ticks (default 10 rounds)
+              move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               cages <name>             fixtures within 300 of a character, with occupants
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
