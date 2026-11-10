@@ -870,7 +870,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>Bumped when <see cref="Deblock"/> or the BC5 encoding changes; part of the cache's file name.</summary>
-    const string NormalCacheVersion = "n1";
+    const string NormalCacheVersion = "n2";
 
     /// <summary>
     /// The disk cache of a deblocked near normal layer (<c>%LOCALAPPDATA%\Meitou\terrain\normals\&lt;hash&gt;.bc5</c>): the hash covers the version tag, the layer size and the
@@ -941,11 +941,30 @@ public sealed unsafe class TerrainTextures : IDisposable
             level0 = new byte[size * size * 4];
             for (int i = 0; i < level0.Length; i += 4) (level0[i], level0[i + 1], level0[i + 2], level0[i + 3]) = (128, 128, 255, 255);
         }
+        Normalise(level0);
         Deblock(level0, size);
         var mips = Mips(level0, size, size);
         var encoded = new byte[mips.Length][];
         for (int l = 0; l < mips.Length; l++) encoded[l] = EncodeBc5(mips[l], Math.Max(size >> l, 1));
         return encoded;
+    }
+
+    /// <summary>
+    /// Makes every texel of an RGBA8 normal map a unit vector. The game lights with <c>normalize(rgb * 2 - 1)</c> (terrainfp4.hlsl, deferred.hlsl), and most of its
+    /// terrain maps store a blue of 1 over any x and y (lengths up to 1.34): x and y kept as stored, with z rebuilt from them, tilt such a normal far more than the game does.
+    /// </summary>
+    internal static void Normalise(byte[] rgba)
+    {
+        for (int i = 0; i < rgba.Length; i += 4)
+        {
+            float x = rgba[i] / 255f * 2 - 1, y = rgba[i + 1] / 255f * 2 - 1, z = rgba[i + 2] / 255f * 2 - 1;
+            float length = MathF.Sqrt(x * x + y * y + z * z);
+            if (length < 1e-4f) (x, y, z) = (0, 0, 1);
+            else (x, y, z) = (x / length, y / length, z / length);
+            rgba[i] = (byte)Math.Clamp((int)((x * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
+            rgba[i + 1] = (byte)Math.Clamp((int)((y * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
+            rgba[i + 2] = (byte)Math.Clamp((int)((z * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
+        }
     }
 
     /// <summary>

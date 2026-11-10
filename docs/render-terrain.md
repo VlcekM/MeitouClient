@@ -32,7 +32,9 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   a faint seam is possible there (**Unknown** until seen in game).
 - **BC1 normal blocks** (`TerrainTextures.LoadNearNormal`, `Deblock`): a 4 x 4 block of the game's BC1 normal maps holds four colours, so magnified it lights as a flat facet with hard edges.
   **Verified** on the siwa-test6 sand (displaced ground, DLSS and TAA): the shading normal set to the smooth terrain normal removes the facets, a constant albedo keeps them, and the facet size
-  matches a block on screen. Reading a coarser mip with a spline (an earlier try) only makes bigger world-aligned squares, as that mip is BC1 too. So the near normal layers are decoded at load,
+  matches a block on screen. Reading a coarser mip with a spline (an earlier try) only makes bigger world-aligned squares, as that mip is BC1 too. So the near normal layers are decoded at load, made unit vectors (`Normalise`: the game lights with `normalize(rgb * 2 - 1)`, **Verified** in `terrainfp4.hlsl`,
+  `gbuffer.hlsl` and `deferred.hlsl`, and 132 of the 165 normal maps of `newland/land/textures` store a blue of 1 over any x and y, mean lengths up to 1.34, **Verified** by decoding them at 512²:
+  x and y kept as stored with z rebuilt gave a mean tilt of 61 degrees where the game has 38 on `CinderSurface01_NML`, 90 where it has about 47 at the 90th percentile of 18 maps; the material cache's bake normalises its blended normal for the same reason),
   smoothed by a separable Gaussian (sigma 1.5 texels, wrapping), their mips made from that and stored as BC5 (x and y; the shader rebuilds z): no block grid is left (**Verified**, same
   views before and after). Near arrays are 32 bytes a block pair (BC3 + BC5) instead of 24: +33 % (1024 MB at 96 slots became about 1365 MB, **Observed** from the formula). The far arrays stay
   BC1 as stored (their texels are minified there). Detail finer than a block is not in the file; it is smoothed away, not recovered.

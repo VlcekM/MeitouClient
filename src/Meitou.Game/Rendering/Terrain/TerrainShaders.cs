@@ -1453,7 +1453,7 @@ static partial class TerrainShaders
                         Surface s = biome(int(fallback), n, slope, map, colour, distance, ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0));
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
-                    if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); bakeTangent = sumN.rgb * 2.0 - 1.0; }
+                    if (total > 0.0) { albedo = sumA / total; sumN /= total; absorbance = sumAbsorb / total; reliefShade = mix(1.0, sumShade / total, nearWeight); bakeTangent = sumN.rgb * 2.0 - 1.0; bakeTangent = dot(bakeTangent, bakeTangent) > 1e-8 ? normalize(bakeTangent) : vec3(0.0, 0.0, 1.0); }
                     else { albedo = vec4(0.6, 0.55, 0.45, 0.2); sumN = vec4(0.5, 0.5, 1.0, 1.0); }
                     // Biomes still loading show the ground colour in their share.
                     if (total > 0.0) nearWeight *= total / (total + pending);
