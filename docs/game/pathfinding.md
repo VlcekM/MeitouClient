@@ -117,7 +117,7 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   step, yields a push-out direction and strength from characters overlapping the agent (nothing when none do); it does not cut the move short, and the original has no separate "end point must have a surface" test:
   the sweep alone keeps the agent on the mesh.
 - Meitou root motion (`AnimationSystem.Relocate`): after the slide, an end point with no stand-on surface (`IsWalkable(x, z, y)`: off the mesh, a drop or step beyond `StandRise`/`StandDrop`) keeps the
-  farthest walkable part of the step (bisection) instead of dropping all of it, and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
+  farthest walkable part of the step (bisection) instead of dropping all of it; when no part has one but the ground is within `StandRise`, the step is made (the sweep saw no wall, and the original has no such test), and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
   overlapping characters apart, which `MovementSystem` separation does.
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead

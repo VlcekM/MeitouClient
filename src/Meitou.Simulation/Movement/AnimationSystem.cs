@@ -610,6 +610,11 @@ public sealed class AnimationSystem(
     /// original's body test only pushes overlapping characters apart (<c>FUN_1401476f0</c>), which <see cref="MovementSystem"/>'s separation does
     /// (docs/game/pathfinding.md "Bodies in the way").
     /// </summary>
+    /// <summary>
+    /// Whether the ground at (x, z) is within a step of <paramref name="y"/>, so that a root-motion step ending off the mesh is not over a drop or against a rise.
+    /// </summary>
+    static bool GroundNear(IWalkability walk, float x, float z, float y) => MathF.Abs(walk.GroundHeight(x, z, y) - y) <= Navigation.NavmeshWalkability.StandRise;
+
     internal static void Relocate(World world, int self, ref CharacterHot c, Vector2 root)
     {
         float sin = MathF.Sin(c.Yaw), cos = MathF.Cos(c.Yaw);
@@ -637,6 +642,13 @@ public sealed class AnimationSystem(
             made = moved * lo;
             (x, z) = (c.Position.X + made.X, c.Position.Z + made.Y);
             unwalkable = lo <= 0;
+            // Nothing of the step has a surface, yet the sweep saw no wall and the ground is at hand: the original has no end-point test, so the step is made.
+            if (unwalkable && GroundNear(walk, c.Position.X + moved.X, c.Position.Z + moved.Y, c.Position.Y))
+            {
+                made = moved;
+                (x, z) = (c.Position.X + moved.X, c.Position.Z + moved.Y);
+                unwalkable = false;
+            }
         }
         // Standing where no surface is (pushed onto a mesh edge, in a hole), the end point cannot be worse: the move is made (the height follows the ground).
         else unwalkable = false;
@@ -672,7 +684,7 @@ public sealed class AnimationSystem(
             var step = new Vector2(MathF.Cos(a), MathF.Sin(a)) * length;
             var moved = walk.Slide(pos, step, radius);
             float x = pos.X + moved.X, z = pos.Z + moved.Y;
-            bool unwalkable = !walk.IsWalkable(x, z, pos.Y);
+            bool unwalkable = !walk.IsWalkable(x, z, pos.Y) && !GroundNear(walk, x, z, pos.Y);
             string why = unwalkable ? "UNWALKABLE-END" : moved != step ? "wall" : "free";
             bool stand = walk.TryStand(x, z, pos.Y, out float ey);
             lines.Add($"{a * 180 / MathF.PI,6:0} deg: slide {moved.Length():0.00}/{length:0.0}{(unwalkable ? " -> 0 (end point refused)" : "")} {why}; end any-surface {walk.IsWalkable(x, z)} stand {stand} dy {(stand ? ey - pos.Y : 0):0.0}");
@@ -716,7 +728,7 @@ public sealed class AnimationSystem(
                     float a = k * MathF.Tau / 8;
                     var step = new Vector2(MathF.Cos(a), MathF.Sin(a)) * length;
                     var moved = walk.Slide(pos, step, footprint);
-                    bool bad = !walk.IsWalkable(x + moved.X, z + moved.Y, y);
+                    bool bad = !walk.IsWalkable(x + moved.X, z + moved.Y, y) && !GroundNear(walk, x + moved.X, z + moved.Y, y);
                     if (bad)
                     {
                         refused++;
