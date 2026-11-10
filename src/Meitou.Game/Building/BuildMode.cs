@@ -1054,10 +1054,17 @@ sealed class BuildMode(PlayerInterface player)
         // A building placed inside the one hit first (its roof or walls, hidden in the interior view) is what the click means, when the view
         // shows that building's inside there.
         while (best is not null
-            && hits.Where(h => h.Site.Parent == best.Id && !player.Hidden(ray, h.T)).OrderBy(h => h.T).FirstOrDefault() is { Site: not null } inside)
+            && hits.Where(h => StandsIn(h.Site, best) && !player.Hidden(ray, h.T)).OrderBy(h => h.T).FirstOrDefault() is { Site: not null } inside)
             (best, bestT) = inside;
         return best is null ? null : (WallOf(best), bestT);
     }
+
+    /// <summary>
+    /// Whether <paramref name="child"/> was placed in <paramref name="building"/>: its parent is the site's id, or for a repaired level building (a
+    /// bought town house) the level instance id, which is what furniture built in it names.
+    /// </summary>
+    static bool StandsIn(BuildingSnapshot child, BuildingSnapshot building) =>
+        child.Parent is { } parent && (parent == building.Id || parent == building.LevelPlacement?.InstanceId);
 
     /// <summary>
     /// The wall an attached short piece, connector or wedge belongs to (its orders, name and materials are the wall's), else the site itself.
