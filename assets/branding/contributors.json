@@ -20,12 +20,12 @@
     "areas": "Audio, Saves"
   },
   "gosuboy": {
-    "commits": 7,
-    "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
+    "commits": 9,
+    "areas": "Metal, Shaders, Seats"
   },
   "crockmr": {
-    "commits": 38,
-    "areas": "Slaver AI, Slave escape, Town guards, Navmesh, Medical treatment, Save loading, Sleep goals, Squads, Prisoner cages, Workplaces"
+    "commits": 51,
+    "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
     "commits": 5,
@@ -48,7 +48,7 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 2,
-    "areas": "Repair beds, Bodyguard jobs"
+    "commits": 19,
+    "areas": "Inventory, Medics, UI"
   }
 }
