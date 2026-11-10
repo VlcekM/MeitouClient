@@ -13,7 +13,7 @@ Cloudovna (stack `meitou-reports`, database `meitou-reports db`; redeployed by t
 Native AOT on the chiseled `runtime-deps` image: Npgsql (slim builder) is the only package; JSON goes through the `ReportsJson`
 source-generated context (add new wire types there). It serves the game's feedback button (below) and `GET /latest`: `{release, any}`,
 the newest full game release's version and the newest of any kind (nightlies included), no `v`; GitHub's releases are read at most
-every 10 minutes. The old `reports` table (Works / Broken play reports, retired) is left in the database, unused.
+every 10 minutes.
 
 Environment: `DATABASE_URL` (postgresql URL) or `ConnectionStrings__Reports` (ADO.NET), `REPORTS_SALT` (required; reporters are
 stored as HMAC-SHA256 of it and the IP, 24 hex), `REPORTS_ADMIN_TOKEN` (`Authorization: Bearer` for admin `DELETE /feedback/{token}`),
