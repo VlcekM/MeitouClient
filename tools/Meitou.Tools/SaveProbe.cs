@@ -64,6 +64,7 @@ static class SaveProbe
             case ("talk", >= 1): Talk(probe, a[0]); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
+            case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
             default: return false;
         }
@@ -216,6 +217,19 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The player's buildings within <paramref name="radius"/> of the leader: id, record, position, floor, the building they stand in and whether
+    /// they are complete.
+    /// </summary>
+    static void Sites(ProbeWorld probe, float radius)
+    {
+        foreach (var site in probe.World.Buildings.All.Where(b => Vector3.Distance(b.Position, probe.LeaderPosition) < radius))
+        {
+            Console.WriteLine($"site {site.Id} '{site.Name}' at {site.Position:F1} floor={site.Floor} parent={site.Parent} complete={site.Complete} "
+                + $"level={site.LevelPlacement is not null}");
+        }
+    }
+
+    /// <summary>
     /// Writes the world's buildings back into the save (in memory) and lists the instance ids that more than one zone's building list holds.
     /// </summary>
     static void Resave(ProbeWorld probe)
@@ -253,6 +267,7 @@ static class SaveProbe
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               talk <name>              whether a character can be talked to, and its talk roots
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
+              sites <radius>           the player's buildings near the leader with floor and parent
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
             """);
