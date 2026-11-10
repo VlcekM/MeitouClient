@@ -93,7 +93,8 @@ binary in `package-release.ps1` is the real fix (not set up).
 `release.yml` and `nightly.yml` run `tools/scripts/package-release.ps1 -Rid <rid>` on one runner per RID (win-x64 on Windows, linux-x64 on Ubuntu,
 both osx RIDs on macOS) and attaches all four zips to the one `v<version>` release. Each zip has a single top folder
 `Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime. Unix zips are made with
-`zip(1)` (execute bits kept), macOS binaries and dylibs are ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
+`zip(1)` (execute bits kept), macOS binaries (and Apple Silicon dylibs; Intel ones stay as shipped, as re-signing corrupts the unpadded shaderc and spirv-cross) are
+ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
 
 Native dependencies off Windows:
 - Bundled from NuGet runtimes (**Verified** in the linux-x64 publish output): `libopenal.so`/`.dylib` (OpenAL Soft 1.23.1),

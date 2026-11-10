@@ -235,7 +235,10 @@ if ($windows) {
     if ($LASTEXITCODE -ne 0) { throw "chmod failed" }
     if ($mac) {
         # Ad-hoc signatures (no Apple identity): enough for Apple Silicon to run the code; Gatekeeper still flags browser downloads.
-        $code = @($programs) + @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName)
+        # Intel dylibs stay as shipped (Intel Macs run unsigned code): Silk.NET's x64 shaderc and spirv-cross have no header padding, so the
+        # signature's load command overwrote the start of __text and the game crashed on launch (#461).
+        $dylibs = if ($Rid -eq "osx-arm64") { @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName) } else { @() }
+        $code = @($programs) + $dylibs
         foreach ($file in $code) {
             codesign --force --sign - $file
             if ($LASTEXITCODE -ne 0) { throw "codesign $file failed" }
