@@ -90,7 +90,7 @@ static class AtmosphereShaders
         uniform vec4 uAtmoSun;        // xyz: direction to the sun (its real height)
         uniform vec4 uAtmoLight;      // xyz: the lighting direction (the sun's with y clamped to 0), w: the environment light's factor
         uniform vec3 uAtmoSunLight;   // sunColour.rgb · sunColour.w (docs/formats/lighting.md); the shader adds the ambient map's alpha · 2
-        uniform vec4 uAtmoParams;     // x 1 game sky / 0 simple, y: distance where the physical haze is complete, z: scale height in world units (physical haze)
+        uniform vec4 uAtmoParams;     // x 1 game sky / 0 simple, y: distance where the physical haze is complete, z: scale height in world units (physical haze), w: 1 the soft grazing sun (GrazingSun)
         uniform vec4 uAtmoTau;        // physical haze: rgb Rayleigh optical depth straight up, a Mie's
         uniform vec3 uAtmoTint;       // the weather's sky colour multiplier (a viewer stand-in, see sky.md)
         uniform vec4 uAtmoFog;        // the weather's fog: x start, y end, z enabled
@@ -250,6 +250,14 @@ static class AtmosphereShaders
         {{EnvBrdfFunction}}
         float atmoMetalness = 0.0;   // the surface's metalness (a worn item's colour map blue, CharacterShaders), set before kenshiLight / stageLight; 0 dielectric
         float atmoMetalDiffuse = 0.0;   // how much of a metal's diffuse is kept (Meitou's estimated metal, kenshiLight)
+        vec3 atmoSurfaceNormal = vec3(0.0);   // the surface's own normal under its normal map (terrain, objects), set before kenshiLight; zero: none
+        // The normal the sun's terms take. Meitou's soft grazing sun (uAtmoParams.w, optional): where the sun grazes the surface itself its bumps shadow each other,
+        // which a normal map cannot show, so the map fades out of the sun's light below 24 degrees and is gone at 6 and on a surface facing away.
+        vec3 atmoSunNormal(vec3 n)
+        {
+            if (uAtmoParams.w < 0.5 || dot(atmoSurfaceNormal, atmoSurfaceNormal) < 0.5) return n;
+            return normalize(mix(atmoSurfaceNormal, n, smoothstep(0.1, 0.4, dot(atmoSurfaceNormal, uAtmoLight.xyz))));
+        }
         float atmoTranslucency = 0.0;   // how much sun a cut-out surface lets through from behind (objects.hlsl TRANSPARENCY)
         // The character editor's stage (a fog distance of -2): the game's rtt.hlsl (docs/characters.md "Character editor"): one punctual light of colour 0.6 (CalcPunctualLight: diffuse
         // pi * N.L * (1 - 0.04), GGX specular for roughness 1 - 0.99 * gloss, specular colour 0.04) plus the environment light of the irradiance and specular cubes
@@ -326,10 +334,11 @@ static class AtmosphereShaders
             }
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;
-            float nl = clamp(dot(n, l), 0.0, 1.0);
+            vec3 ns = atmoSunNormal(n);
+            float nl = clamp(dot(ns, l), 0.0, 1.0);
             vec3 diffuse = ATMO_PI * diffuseNl * sun * fresnelDiffuse;
             vec3 h = normalize(v + l);
-            float nh = clamp(dot(n, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
+            float nh = clamp(dot(ns, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
             float denom = max(nh * nh * (a2 - 1.0) + 1.0, 1e-6);
             float D = a2 / (ATMO_PI * denom * denom);
             float fresnel = exp2((-5.55473 * lh - 6.98316) * lh);
@@ -391,7 +400,7 @@ static class AtmosphereShaders
             return lit;
         }
         // A surface facing away from the sun takes -N.L times its translucency (lightingFunctions.hlsl CalcPunctualLight, the sun only).
-        vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world) { float sunNl = clamp(dot(n, uAtmoLight.xyz), -1.0, 1.0); return kenshiLight(albedo, n, v, gloss, world, vec3(sunNl >= 0.0 ? sunNl : -sunNl * atmoTranslucency)); }
+        vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world) { float sunNl = clamp(dot(atmoSunNormal(n), uAtmoLight.xyz), -1.0, 1.0); return kenshiLight(albedo, n, v, gloss, world, vec3(sunNl >= 0.0 ? sunNl : -sunNl * atmoTranslucency)); }
 
         // The distant water fades out before its far clip, revealing the sky already behind it.
         // The shafts use the same weight for their water correction, so it cannot leave a horizon band.

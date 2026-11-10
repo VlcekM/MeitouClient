@@ -120,6 +120,16 @@ surface keeps its hard edge there. **Unknown**: the saw-toothed terrain shadows 
 2.47 / 2.08 / 1.71 ms, the siwa-test6 close-up 2.34 / 2.37 / 1.94, dunes at 06:24 2.04 / 1.62 / 1.34. Traced passes (an earlier run): rays and penumbra 0.07-0.10 ms,
 the volume 0.09-0.11 ms, a close-up character 0.06 ms. With a still camera the frame-to-frame change is DLSS's own (0.09-0.16/255 mean), traced or cascades alike.
 
+## Soft grazing sun
+
+`grazesun` (Meitou, optional, off; `GrazingSun`, `atmoSunNormal` in `AtmosphereShaders`, `uAtmoParams.w`). The game lights a normal map's bumps with N·L times the cast shadow and nothing else
+(**Verified**, `deferred.hlsl`, `lightingFunctions.hlsl` `CalcPunctualLight`), so a surface the sun grazes breaks into lit and black patches, and bumps stay lit on a surface facing away.
+With the switch the sun's diffuse and specular terms take `mix(surface normal, mapped normal, smoothstep(0.1, 0.4, N·L of the surface))`: the map fades out of the sun's light below
+24 degrees and is gone at 6; the sky's light, the lamps and the probes keep the mapped normal. Terrain (its height-field normal) and objects (the vertex normal) set the surface normal
+(`atmoSurfaceNormal`); characters, foliage cards and impostors do not, so they are unchanged. **Observed** (save of a cracked plain, the sun 19.6 degrees up and 11.6 over the ground, whose
+horizon towards the sun is 8.6 degrees: no cast shadow): the bright and black plates become evenly lit ground with the cast shadows left; at 13 h the same view changes by 4.0/255 mean
+(the sun never passes 36 degrees at latitude 54). Not a model of the bumps' shadows: no bump shadows another, the map only weighs less.
+
 ## Validation and limits
 
 Check low sun, cutout trees, interiors, cascade boundaries, camera/clock cuts, reflection and

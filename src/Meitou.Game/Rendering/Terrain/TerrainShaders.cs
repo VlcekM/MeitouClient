@@ -1519,6 +1519,7 @@ static partial class TerrainShaders
             makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - vWorld.y, 2.0);
 
             atmoSelfShadow = reliefShade;
+            atmoSurfaceNormal = n;
             // A trough displaced below the ground looks up the sun shadow from the ground, where the flat shadow casters are, not from under them.
             atmoShadowLift = uDisplace > 0.0 && distance < uDisplaceEnd ? max(terrainHeight(vWorld.xz) - vWorld.y, 0.0) : 0.0;
             vec3 l = normalize(uLightDir);

@@ -135,6 +135,7 @@ static class Shaders
             if (uUseVertexColour) albedo *= vColour.rgb;
 
             vec3 geometricNormal = n;
+            atmoSurfaceNormal = geometricNormal;
             if (uHasNormal && !uTriplanar && dot(vTangent.xyz, vTangent.xyz) > 1e-8)
             {
                 vec3 t = normalize(vTangent.xyz - n * dot(n, vTangent.xyz));

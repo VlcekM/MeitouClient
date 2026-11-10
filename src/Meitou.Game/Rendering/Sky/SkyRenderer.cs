@@ -1190,7 +1190,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         var (cloud, pull) = HorizonClouds(s);
         return new AtmosphereUniforms(
             new Vector4(tau.X, tau.Y, tau.Z, SkyAtmosphere.MieZenithDepth),
-            new Vector4(Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, 0),
+            new Vector4(Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, GrazingSun.Enabled ? 1f : 0f),
             new Vector4(s.Sun.X, s.Sun.Y, s.Sun.Z, 0),
             new Vector4(s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment),
             new Vector3(s.SunLight.X, s.SunLight.Y, s.SunLight.Z),
