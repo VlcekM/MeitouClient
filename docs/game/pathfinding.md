@@ -226,10 +226,15 @@ asks again every 5 s, [walls](#blocked-walkers)); a block while a request is in 
 "Gigachad", scratch sim). **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
 Y392 beside the Old Storm House's (`6-rebirth-INGAME`) door stair snapped to the stair's corner (Recast corner vertices take the highest neighbouring cell, 408 over
 ground at 395); that polygon's only exits were narrower than the radius, the next start's path was cut up the stair's side, and the walker stood still. With the three rules it enters in 3 s.
-<a id="shoved-into-furniture"></a>A walker off every surface at its height and its next step (shoved into something that cuts a hole in the mesh) may step only nearer its path's current
-point, and only when it can stand there (engine choice, `MovementSystem.EscapesToward`); back on the mesh the normal rule holds. **Observed** (Hub market stall
+<a id="shoved-into-furniture"></a>A walker whose next step finds no surface at its height, itself on none (shoved into something that cuts a hole in the mesh; a floor below the
+hole is not a surface at its height) or only within `EdgeTolerance` of one once a step there was refused and its path asked again (at the hole's edge; one pushed to the side
+of a table first gets a path round it), may step only nearer its path's current point, and only when it can stand there (engine choice, `MovementSystem.EscapesToward`,
+`IWalkability.IsOnSurface`); back on the mesh the normal rule holds. **Observed** (#460, the issue's save, a
+chest on the upper floor of a Storm House at Stack, -55386,1220,-12848, scratch probe): the walker stood within 2 of a floor polygon, the first 1.25 units of its path
+crossed the chest's hole (the ground floor 66 below), every step was refused and it stood for good; with the rule it walks out and arrives. **Observed** (Hub market stall
 -51119,2797, scratch sim, PR #230): its path was found, every step was refused, the GoTo dropped after 3 asks and it stood for good; with the rule it walks out and arrives.
-Inside the Storm House's shop counter and tables the mesh is not cut, so a walker there just walks out. **Unknown** whether the original lets such a walker out (PR #230's author says so).
+Inside the Storm House's shop counter and tables the mesh is not cut, so a walker there just walks out. The original lets such a walker out (**Observed**, Kenshi 1.0.68, #460's save: the walker inside the chest walked out to its saved goal, -55397,-12831,
+read from a quicksave about ten game minutes after the load).
 **No path at all** (the start sits on a pocket of the mesh with no way out: inside a cage whose walls are not a navmesh cut, or a walker shoved into solid geometry): a player's move order
 is kept instead of being dropped when its goal is within 64 units (`StraightOrderReach`) and walkable at the walker's height: the walker heads straight at
 the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`); a goal further off or off the mesh still drops the
@@ -577,7 +582,8 @@ of it (engine choice; **Observed**, zone 33.28, scratch probe: by the foot of a 
 at ~550, walkers at 7245, -13968 stopped and dropped their order). A polygon under the terrain, more than `StandRise` off a character standing on the terrain with no
 collision surface near it, takes the terrain however far it sags (engine choice; **Observed**, zone 19.34, `--probe -56752,9502`: a planar polygon spanning a
 hillside lies 31 under the ground, its height samples empty there, and the original's polygon 28 under it; the Hub-to-Squin walker stalled); with no layer in range, a
-polygon within `EdgeTolerance` counts. A character already off every layer near its height still steps down.
+polygon within `EdgeTolerance` counts. A character already off every layer near its height still steps down, unless it walks out of a hole along its
+path ([shoved into furniture](#shoved-into-furniture)).
 A path walker whose step finds no layer in reach of its height, more than 4 off its path's height there (the leg to its next point), looks for one at the path's height (engine choice, `MovementSystem.CorridorHeight`; **Observed** before the seam check below, Ancient Lab `28.60:2-`: walkers stood at the edge of its stairwell both ways).
 A path point takes the height of the corridor polygon under it; of stacked ones the corridor crosses, the one nearest the point's own height (`NavQuery.OnSurface`;
 **Observed** with `meitou-tools navmesh --town Squin --path`: a route into a Bughouse and up onto its roof beds ended on the floor below, y 372 for 482).
