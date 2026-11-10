@@ -5,7 +5,9 @@ using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
 using Meitou.Simulation.Dialogue;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
 using Meitou.Simulation.Saving;
 
 /// <summary>
@@ -21,7 +23,7 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--load-order file] [--mod-dir folder]...</c>. Returns 0, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--at x,z] [--load-order file] [--mod-dir folder]...</c>. Returns 0, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
@@ -29,12 +31,22 @@ static class SaveProbe
         var rest = new List<string>(args);
         bool nav = rest.Remove("--nav");
         int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
+        Vector2? at = ProbeLoadOrder.TakeOption(rest, "--at") is { } spot ? Spot(spot) : null;
         var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
-        using var probe = ProbeWorld.Load(install, order, rest[0], nav);
+        using var probe = ProbeWorld.Load(install, order, rest[0], nav, at);
         probe.Tick(ticks);
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
+    }
+
+    /// <summary>
+    /// An <c>x,z</c> spot.
+    /// </summary>
+    static Vector2 Spot(string text)
+    {
+        var parts = text.Split(',');
+        return new Vector2(float.Parse(parts[0]), float.Parse(parts[1]));
     }
 
     /// <summary>
@@ -45,6 +57,8 @@ static class SaveProbe
         switch (mode, a.Count)
         {
             case ("near", >= 1): Near(probe, float.Parse(a[0])); return true;
+            case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
@@ -99,6 +113,81 @@ static class SaveProbe
             probe.Tick(40);
         }
     }
+
+    /// <summary>
+    /// The other squads whose leader stands within <paramref name="radius"/> of the player's leader, every 40 ticks <paramref name="rounds"/> times:
+    /// the leader's task, AI behaviour, goal and package, whether its mind is the engine's, and how far its members stand from it.
+    /// </summary>
+    static void Squads(ProbeWorld probe, float radius, int rounds, Action<ProbeWorld, float>? eachRound = null)
+    {
+        var t = probe.Characters;
+        for (int round = 0; round < rounds; round++)
+        {
+            eachRound?.Invoke(probe, radius);
+            Console.WriteLine($"tick {probe.World.Tick}");
+            foreach (var squad in probe.World.Squads.All)
+            {
+                if (squad.Id == probe.World.Player.Squad || !t.TryResolveNext(squad.Leader, out int lead)) continue;
+                var at = t.Next[lead].Position;
+                if (Vector3.Distance(at, probe.LeaderPosition) > radius) continue;
+                Console.WriteLine($"  {SquadLine(probe, squad, lead)}");
+            }
+
+            foreach (var m in probe.World.Squads.Find(probe.World.Player.Squad)?.Members ?? [])
+                if (t.TryResolveNext(m, out int s)) Console.WriteLine($"  player {probe.Who(s)} down={t.Cold(s)!.Medical?.Incapacitated}");
+
+            probe.PrintMessages();
+            probe.Tick(40);
+        }
+    }
+
+    /// <summary>
+    /// Sends the player's squad after the nearest other squad's leader within <paramref name="radius"/> each round, to start a fight, and lists the
+    /// squads as <see cref="Squads"/> does.
+    /// </summary>
+    static void Bait(ProbeWorld probe, float radius, int rounds) => Squads(probe, radius, rounds, Chase);
+
+    /// <summary>
+    /// Orders the player's squad to the nearest other squad leader within <paramref name="radius"/>.
+    /// </summary>
+    static void Chase(ProbeWorld probe, float radius)
+    {
+        var t = probe.Characters;
+        var mine = probe.World.Squads.Find(probe.World.Player.Squad)!;
+        var leaders = probe.World.Squads.All
+            .Where(s => s.Id != mine.Id && t.TryResolveNext(s.Leader, out _))
+            .Select(s => t.Next[s.Leader.Slot].Position)
+            .Where(p => Vector3.Distance(p, probe.LeaderPosition) < radius)
+            .OrderBy(p => Vector3.Distance(p, probe.LeaderPosition))
+            .ToList();
+        if (leaders.Count > 0) probe.World.Commands.Enqueue(new MoveOrder([.. mine.Members], leaders[0]) { Tick = probe.World.Tick });
+    }
+
+    /// <summary>
+    /// One squad of <see cref="Squads"/>: the leader's state and each member's task and distance from it.
+    /// </summary>
+    static string SquadLine(ProbeWorld probe, Squad squad, int lead)
+    {
+        var t = probe.Characters;
+        var c = t.Cold(lead)!;
+        var at = t.Next[lead].Position;
+        var members = squad.Members
+            .Where(m => t.TryResolveNext(m, out _))
+            .Select(m => $"{(CharacterTask)t.Next[m.Slot].Task}{Down(t.Cold(m.Slot)!)}:{t.Cold(m.Slot)!.Ai?.Goal?.Task.Type}"
+                + $"@{Vector3.Distance(t.Next[m.Slot].Position, at):F0}");
+        return $"sq {squad.Id} '{squad.Name}' {probe.Faction(squad.Faction)} platoon={squad.PlatoonId} leader={(CharacterTask)t.Next[lead].Task} "
+            + $"engine={c.Ai?.Engine} behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
+            + $"target={Target(probe, lead)} package={squad.Ai?.Current?.Name} "
+            + $"home={squad.HomeCentre:F0}/{squad.HomeRadius:F0} pos={at:F0} [{string.Join(" ", members)}]";
+    }
+
+    /// <summary>
+    /// "/dead" or "/ko" for a character down, else empty.
+    /// </summary>
+    static string Down(CharacterCold c) =>
+        c.Medical is { Dead: true } ? "/dead"
+        : c.Medical is { Unconscious: true } ? "/ko"
+        : "";
 
     /// <summary>
     /// The name and faction of the character <paramref name="i"/> fights, or "-".
@@ -275,8 +364,10 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--load-order <file>] [--mod-dir <folder>]...
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
+              bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
+              squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader

@@ -54,8 +54,9 @@ sealed class ProbeWorld : IDisposable
 
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
+    /// <paramref name="at"/> moves the player's characters there (X, Z) before the load, to look at another place with the same save.
     /// </summary>
-    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh)
+    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null)
     {
         var db = GameDatabase.Load(order);
         var levels = WorldLevelData.Load(install, order, includeInteriors: true);
@@ -68,11 +69,26 @@ sealed class ProbeWorld : IDisposable
         var layouts = new BuildingLayouts(db, levels.Interiors);
         var data = PopulationData(install, db, levels, layouts, height);
         var save = SaveGame.Load(SaveFolder.Open(saveFolder));
+        if (at is { } spot) MovePlayer(save, spot, height);
 
         NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, save, height) : null;
         IWalkability walk = nav is null ? new OpenGroundWalkability(height) : new NavAdapter(nav.Walkability);
         var world = MakeWorld(data, walk, save);
         return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav };
+    }
+
+    /// <summary>
+    /// Puts the save's player characters at <paramref name="spot"/> on the terrain, a step apart.
+    /// </summary>
+    static void MovePlayer(SaveGame save, Vector2 spot, Func<float, float, float> height)
+    {
+        int k = 0;
+        foreach (var c in save.Characters.Where(c => c.Platoon.FactionId == save.PlayerFaction!.Id))
+        {
+            float x = spot.X + 3 * (k % 4), z = spot.Y + 3 * (k / 4);
+            c.Position = new Vector3(x, height(x, z), z);
+            k++;
+        }
     }
 
     /// <summary>

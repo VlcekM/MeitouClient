@@ -44,8 +44,9 @@ state 3+) and not `inSomething` (`+0x2f8`, bed or cage), else the backup under t
 stands in a loaded or requested zone, cached as the backup; else the leader itself, usable or not. That member scan tests the *leader's* `+0x2f8`, not the member's (so a leader in a
 bed or cage is kept). The stored leader is never replaced there. Who becomes `squadleader` after the leader dies is **Unknown**. Meitou (`PopulationSystem.EffectiveLeader`, `Squad.Backup`):
 the same rule for a loaded platoon's place and the unload anchor; down = out (unconscious or dead) or carried, a limb hold and playing dead are not modelled. A campaign's announcement is task 129 in the leader's AI package, and animals get only
-`dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (death, leaving, a save or stand-in without a leader) takes its
-first member that is not an animal, else its first (`SquadRegistry.Successor`, engine choice). A player squad edited on the squads screen still makes its index 0 the leader.
+`dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (leaving, a save or stand-in without a leader), and an NPC squad whose leader died while a member
+lives, takes its first living member that is not an animal, else its first living one (`SquadRegistry.Successor`, engine choice), who then acts
+the leader's goals (a patrol), so the squad does not stand by the corpse. A player squad edited on the squads screen still makes its index 0 the leader.
 
 ## Unique characters
 

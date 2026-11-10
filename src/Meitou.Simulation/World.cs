@@ -628,7 +628,7 @@ public sealed partial class World : IDisposable
         RunSlowWorld(prof);
 
         // 8. Publish.
-        Squads.Refresh(table);
+        Squads.Refresh(table, Player.Faction);
         Player.Prune(table);
         table.Phase = TablePhase.Outside;
         table.EndTick();
@@ -723,7 +723,7 @@ public sealed partial class World : IDisposable
             prof?.Lap(TickProfile.Commit, e.System);
         }
 
-        Squads.Refresh(table);
+        Squads.Refresh(table, Player.Faction);
         prof?.Lap(TickProfile.Commit);
         table.Phase = TablePhase.SlowWorld;
     }

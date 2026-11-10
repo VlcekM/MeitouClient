@@ -46,8 +46,9 @@ issues then show its owner); with neither, sends are refused. `FEEDBACK_DIR` (de
 owned by the app user), `PUBLIC_URL` (the links' base, default the Cloudovna address).
 
 Checking a report: unzip its `save.zip` and run `meitou-tools probe <save folder> <mode>` (headless load under the install's load order, which
-may not be the reporter's; modes in its usage: nearby characters, a character's AI over time, slaves, cages, dialogue, storage, building re-save,
-navmesh heights) or `meitou-tools objects <x> <z> <radius>` (towns, foliage, level buildings and map features at the report's camera target).
+may not be the reporter's; modes in its usage: nearby characters, a character's AI over time, the squads nearby over time (`squads`; `bait` also
+sends the player's squad after the nearest one to start a fight), slaves, cages, dialogue, storage, building re-save, navmesh heights; `--at x,z`
+puts the player's squad elsewhere first, to look at a report without a save) or `meitou-tools objects <x> <z> <radius>` (towns, foliage, level buildings and map features at the report's camera target).
 Both take `--load-order <file>` (the report's load order list, one mod per line) and `--mod-dir <folder>` (more mods, e.g. a steamcmd download of
 the reporter's workshop items) to run under the reporter's mods instead of the install's.
 

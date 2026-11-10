@@ -248,28 +248,49 @@ public sealed class SquadRegistry
     public bool Remove(int id) => _byId.Remove(id) & _squads.Remove(id);
 
     /// <summary>
-    /// After deaths and removals: drops dead members, and picks a new leader (the first member alive) when the old one is gone. Serial phases only.
+    /// After deaths and removals: drops removed members, and picks a new leader (<see cref="Successor"/>) when the old one is gone, or, in a squad not
+    /// of <paramref name="playerFaction"/>, dead while a member lives (its corpse stays in the table, so its squad would follow it and patrol no more).
+    /// Serial phases only.
     /// </summary>
-    public void Refresh(CharacterTable table)
+    public void Refresh(CharacterTable table, int playerFaction)
     {
         foreach (var squad in _squads.Values)
         {
             squad.Members.RemoveAll(m => !table.TryResolveNext(m, out _));
-            if (squad.Leader.IsNone || !table.TryResolveNext(squad.Leader, out _))
+            if (squad.Leader.IsNone || !table.TryResolveNext(squad.Leader, out int slot)
+                || squad.Faction != playerFaction && IsDead(table, slot) && squad.Members.Exists(m => !IsDead(table, m.Slot)))
                 squad.Leader = Successor(squad.Members, table);
         }
     }
 
     /// <summary>
-    /// Who leads an NPC squad that has no leader: its first member that is not an animal, else its first (docs/game/factions-squads-towns.md "Squad
-    /// leader"; engine choice, so a goat never leads a caravan or says its leader's lines). None when it has no members.
+    /// Who leads an NPC squad that has no leader: its first living member that is not an animal, else its first living one, else its first that is
+    /// not an animal, else its first (docs/game/factions-squads-towns.md "Squad leader"; engine choice, so a goat never leads a caravan or says its
+    /// leader's lines). None when it has no members.
     /// </summary>
-    public static CharacterId Successor(List<CharacterId> members, CharacterTable table)
+    public static CharacterId Successor(List<CharacterId> members, CharacterTable table) =>
+        FirstOf(members, table, living: true, person: true) ?? FirstOf(members, table, living: true, person: false)
+        ?? FirstOf(members, table, living: false, person: true) ?? (members.Count > 0 ? members[0] : CharacterId.None);
+
+    /// <summary>
+    /// The first member that resolves and is alive (<paramref name="living"/>) and not an animal (<paramref name="person"/>) as asked; null: none.
+    /// </summary>
+    static CharacterId? FirstOf(List<CharacterId> members, CharacterTable table, bool living, bool person)
     {
         foreach (var id in members)
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c && !IsAnimal(c)) return id;
-        return members.Count > 0 ? members[0] : CharacterId.None;
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } c) continue;
+            if (living && IsDead(table, slot) || person && IsAnimal(c)) continue;
+            return id;
+        }
+
+        return null;
     }
+
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> is dead (a corpse still in the table).
+    /// </summary>
+    static bool IsDead(CharacterTable table, int slot) => table.Cold(slot)?.Medical?.Dead == true;
 
     /// <summary>
     /// Whether a character is an animal: its fighter or its look says so.
