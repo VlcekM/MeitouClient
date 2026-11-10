@@ -35,10 +35,8 @@ sealed partial class GameHost
     /// <summary>The furrow of a crawling or sliding body: one every this many units, its length and width.</summary>
     const float DragStep = 1.2f, DragLength = 3, DragWidth = 3;
 
-    /// <summary>How deep packed dirt takes a mark, against sand, mud and snow.</summary>
-    const float DirtMark = 0.45f;
-
     IGpuContext? _trailContext;
+    GroundSoftness? _groundSoftness;
     World? _trailsFor;
     int _trailFrame;
     long _trailLast;
@@ -124,12 +122,8 @@ sealed partial class GameHost
     {
         float height = Gpu.Terrain.HeightAt(stamp.Centre.X, stamp.Centre.Y);
         if (at.Y - height > MarkAboveGround || height < WorldWater.Height) return;
-        float soft = ground.At(stamp.Centre.X, stamp.Centre.Y) switch
-        {
-            GroundSurfaces.Sand or GroundSurfaces.Mud or GroundSurfaces.Snow => 1,
-            GroundSurfaces.Dirt => DirtMark,
-            _ => 0,
-        };
+        var (type, texture) = ground.LayerAt(stamp.Centre.X, stamp.Centre.Y);
+        float soft = type < 0 ? 0 : (_groundSoftness ??= new GroundSoftness(Install, Scene.Database!)).Of(type, texture);
         if (soft > 0) trails.Stamp(stamp with { Strength = stamp.Strength * soft });
     }
 
