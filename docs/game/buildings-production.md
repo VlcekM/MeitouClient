@@ -959,6 +959,12 @@ Water Tower takes only Water and `Storage: Ore` only Raw Iron, both with mult 10
 storage` (function 2); Large Barrels also hold Water. Other `itemtype limit`s (**Verified**, merged game data): ARMOUR
 (Armour Storage, Armour Stand), WEAPON (weapon stands, cabinets, display boards), CROSSBOW (Crossbow Locker); none takes
 CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (`IsStorage` is functions 2 and 13 only).
+Two acceptance rules (**Verified**, decompile): the AI's storage finder (`StorageBuilding` slot `0x4a0`, `FUN_1402988c0`) needs the item's record
+type to equal `itemtype limit` (and the item in `limit inventory` when listed); the player's hand (drag or put, refusal "Invalid container type.",
+code 6 of `FUN_140713d20`) asks the inventory section (`FUN_14074bc30`), which the building gives type 7 "any" unless `itemtype limit` is WEAPON
+(then 0, compared with an item field `+0x110` whose meaning is **Unknown**; Meitou reads it as the item being a weapon) (`FUN_140554530`), and a
+`limit inventory` list restricts it to the listed items. So a General Storage Chest (ITEM) takes armour and weapons by hand while haulers never fill
+it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
 
 
 ### NPC town machines

@@ -427,7 +427,7 @@ sealed class HeldItems(PopulationData? data)
             refusal = "Can't wear that item.";
         if (refusal is null && target.Section == "main"
                 && InventoryCommands.MainClosed(target.Owner)) refusal = "";   // a live animal's grid (the original leaves it out of the window)
-        if (refusal is null && target.Machine is { Data.IsStorage: true } storage && !storage.Data.Accepts(item.Record, item.Type))
+        if (refusal is null && target.Machine is { Data.IsStorage: true } storage && !storage.Data.TakesByHand(item.Record, item.Type))
             refusal = "Invalid container type.";
         if (refusal is null && InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var limbSlot
             && (data?.Items.Limb(item.Record)?.LimbSlot != limbSlot

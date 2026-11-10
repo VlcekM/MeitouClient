@@ -168,9 +168,19 @@ public sealed record MachineData
     public bool IsStorage => HasInventory && Function is ResourceStorageFunction or GeneralStorageFunction;
 
     /// <summary>
-    /// Whether the storage takes an item of this record and type.
+    /// Whether the storage takes an item of this record and type when the AI looks for a storage to fill or haul to (<c>FUN_1402988c0</c>,
+    /// <b>Verified</b>): the record type is <see cref="ItemTypeLimit"/>, and the item is listed when there is a <see cref="StorageLimit"/>.
     /// </summary>
     public bool Accepts(string item, FcsRecordType type) => type == ItemTypeLimit && (StorageLimit.Count == 0 || StorageLimit.Contains(item));
+
+    /// <summary>
+    /// Whether the player may put an item of this record and type into the storage by hand (docs/game/buildings-production.md "Storage"): a listed
+    /// item when there is a <see cref="StorageLimit"/>, else a weapon in a WEAPON-limited storage and anything in any other.
+    /// </summary>
+    public bool TakesByHand(string item, FcsRecordType type) =>
+        StorageLimit.Count > 0
+            ? StorageLimit.Contains(item)
+            : ItemTypeLimit != FcsRecordType.Weapon || type == FcsRecordType.Weapon;
 
     /// <summary>
     /// <c>power output</c>: a generator's output, a battery's discharge and charge rate, a consumer's draw when negative

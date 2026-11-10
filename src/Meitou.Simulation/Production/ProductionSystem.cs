@@ -1931,7 +1931,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         else
         {
             if (m.Storage is not { } storage || m.Closed || item.Contents is not null && item.Section == "backpack_attach") return;
-            if (m.Data.IsStorage && !m.Data.Accepts(item.Record, item.Type))
+            if (m.Data.IsStorage && !m.Data.TakesByHand(item.Record, item.Type))
             {
                 world.Post($"{m.Data.Name} does not take {item.Name}.");
                 return;
