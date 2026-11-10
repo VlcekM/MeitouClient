@@ -45,7 +45,7 @@ public sealed class ProductionSettings
     /// <summary>
     /// A character gives or takes items from within this far (X/Z) of a building's footprint, else "Out of trading range." (the original: the
     /// building's bounds radius + 40 from its position for an item out of it, 60 for one out of a character's inventory, docs/game/economy.md
-    /// "Trading range"; engine choice: 40 from the footprint both ways).
+    /// "Trading range"; engine choice: 40 from the footprint both ways, or 60 from the position, <see cref="ContainerAccess.TradingRange"/>).
     /// </summary>
     public float TransferReach { get; init; } = 40;
     /// <summary>
@@ -1811,7 +1811,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     #region Items in and out
 
     /// <summary>
-    /// Whether the player character is within reach of the site (else posts it is out of range).
+    /// Whether the player character is within reach of the site (else posts it is out of range): <see cref="ProductionSettings.TransferReach"/> of
+    /// its footprint, or <see cref="ContainerAccess.TradingRange"/> of its position, so a small storage is never stricter than the original (#505).
     /// </summary>
     bool Near(World world, CharacterId who, BuildSite site, out CharacterCold cold)
     {
@@ -1819,7 +1820,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var table = world.Characters;
         if (!table.TryResolveNext(who, out int slot) || table.Cold(slot) is not { IsPlayer: true } c || c.Inventory is null) return false;
         cold = c;
-        if (GapTo(site, table.Next[slot].Position) <= Settings.TransferReach) return true;
+
+        var at = table.Next[slot].Position;
+        float centre = Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(site.Position.X, site.Position.Z));
+        if (GapTo(site, at) <= Settings.TransferReach || centre <= ContainerAccess.TradingRange) return true;
+
         world.Post("Out of trading range.");
         return false;
     }
