@@ -144,9 +144,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The is-character list test of a speaker (<c>FUN_14067e060</c>, <c>FUN_140684d70</c>, <c>FUN_140679bc0</c>, Verified): a <c>dumb</c> record
-    /// (<c>FUN_1405e89c0</c> false) speaks a root or an interjection only when the list names it, so an empty list fails; any other record passes an
-    /// empty list or one that names it. The later lines of a conversation only test a non-empty list.
+    /// The is-character list test of an interjector or an arrival banter speaker (<c>FUN_14067e060</c>, <c>FUN_140684d70</c>, <c>FUN_140679bc0</c>,
+    /// Verified): a <c>dumb</c> record (<c>FUN_1405e89c0</c> false) speaks a root or an interjection only when the list names it, so an empty list
+    /// fails; any other record passes an empty list or one that names it. The line check has no dumb rule (<see cref="Listed"/>).
     /// </summary>
     internal bool ListsSpeaker(DialogueNode node, string record) =>
         node.IsCharacter.Contains(record)
@@ -210,8 +210,14 @@ public sealed partial class DialogueSystem
         if (node.MyFaction.Count > 0 && !node.MyFaction.Contains(FactionId(mc.Faction))) return false;
         if (node.TargetFaction.Count > 0 && (tc is null || !node.TargetFaction.Contains(FactionId(tc.Faction)))) return false;
         if (node.HasPackage.Count > 0 && !node.HasPackage.Overlaps(SetOf(world, ms).Packages)) return false;
-        return ListsSpeaker(node, mc.RecordId);
+        return Listed(node, mc.RecordId);
     }
+
+    /// <summary>
+    /// The line check's is-character test (<c>FUN_140678f30</c>): an empty list or one that names the speaker, so a dumb NPC answers its own
+    /// conversations, such as Agnu's recruitment (#446).
+    /// </summary>
+    static bool Listed(DialogueNode node, string record) => node.IsCharacter.Count == 0 || node.IsCharacter.Contains(record);
 
     /// <summary>
     /// <c>target carrying character</c>: each listed character in turn, the first member of the target's squad (perceived) carrying it becomes the
