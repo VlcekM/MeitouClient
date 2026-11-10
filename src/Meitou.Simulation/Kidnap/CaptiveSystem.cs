@@ -1300,8 +1300,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var faction = (uint)watcher.Faction < (uint)data.Factions.Count ? data.Factions[watcher.Faction] : null;
         if (faction is not { AllowSlavesWeapons: true } && !CharacterFacts.TargetUnarmed(c)) return false;
 
-        string[] clothing = faction is not null && data.Db.Find(faction.Id) is { } record
-                ? [.. record.GetReferences("slave clothing").Select(l => l.TargetStringId)] : [];
+        string[] clothing = SlaveClothing(watcher.Faction);
         var armour = c.Inventory?.Items.Find(i => i.Section == "armour");
         if (!SlaveWear(armour, clothing) || !SlaveWear(c.Inventory?.Items.Find(i => i.Section == "legs"), clothing))
             return false;
@@ -1878,47 +1877,19 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     const int SlaveStigma = 6;
 
     /// <summary>
-    /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): every item of the whole inventory of
-    /// record type WEAPON, then ARMOUR, ITEM and CONTAINER goes to the worker (its inventory, else the ground; engine choice for the original's
-    /// storage), except locked ones and ARMOUR whose <c>stigma</c> is 6 (slave garments); a backpack goes with its content. Only when the captive's
-    /// legs slot is empty is it dressed: each of its faction's <c>slave clothing</c> it does not wear already. Event 35, or 37 for one whose head is
-    /// shaven already, from the worker to it, and its head is shaven; it becomes the worker's faction's slave unless it has an owner already (it
-    /// keeps that one), and its one-shot orders and perma-jobs are cleared.
+    /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): it is stripped (<see cref="Strip"/>) and,
+    /// only when its legs slot is empty then, dressed in each of the worker's faction's <c>slave clothing</c> it does not wear already. Event 35, or
+    /// 37 for one whose head is shaven already, from the worker to it, and its head is shaven; it becomes the worker's faction's slave unless it has
+    /// an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared.
     /// </summary>
     void Process(World world, int w, CharacterCold wc, int c, CharacterCold cc)
     {
         var table = world.Characters;
-        bool before = cc.SlaveOwner >= 0 || cc.SlaveState != 0;
         if (cc.Inventory is { } inv)
         {
-            foreach (var type in Stripped)
-            {
-                foreach (var item in inv.Items.ToList())
-                {
-                    if (item.Type != type || item.LockedOn || type == FcsRecordType.Armour
-                            && data.Db.Find(item.Record)?.GetInt("stigma", 0) == SlaveStigma)
-                        continue;
-
-                    inv.Items.Remove(item);
-                    item.Section = "main";
-                    if (wc.Inventory is not { } into || !into.Add(item))
-                        world.GroundItems.Drop(item, table.Next[c].Position, 0);
-                }
-            }
-
-            if (!inv.Items.Any(i => i.Section == "legs") && data.Factions is { } factions && (uint)wc.Faction < (uint)factions.Count
-                    && data.Db.Find(factions[wc.Faction].Id) is { } faction)
-            {
-                foreach (var link in faction.GetReferences("slave clothing"))
-                {
-                    if (inv.Items.Any(i => i.Record == link.TargetStringId && InventoryCommands.IsEquipmentSection(i.Section)))
-                        continue;
-
-                    if (data.Items.Create(link.TargetStringId, 1) is { } clothing)
-                        InventoryCommands.TryEquip(inv, clothing, cc);
-                }
-            }
-
+            string[] clothing = SlaveClothing(wc.Faction);
+            Strip(world, table.Next[c].Position, inv, wc, clothing);
+            if (!inv.Items.Any(i => i.Section == "legs")) Dress(inv, cc, clothing);
             _assembly.RefreshEquipment(cc);
         }
 
@@ -1942,6 +1913,54 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Then its head is shaven (CharacterHuman::shaveHead(true) in FUN_14035aa20, Verified); an animal has no head to shave.
         if (cc.Fighter is not { IsAnimal: true }) cc.Shaved = true;
         world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
+    }
+
+    /// <summary>
+    /// The records of a faction's <c>slave clothing</c> (none for no faction).
+    /// </summary>
+    string[] SlaveClothing(int faction) =>
+        (uint)faction < (uint)data.Factions.Count && data.Db.Find(data.Factions[faction].Id) is { } record
+            ? [.. record.GetReferences("slave clothing").Select(l => l.TargetStringId)]
+            : [];
+
+    /// <summary>
+    /// The strip of <see cref="Process"/> (<c>FUN_14035aa20</c>, <b>Verified</b>): every item of the whole inventory of record type WEAPON, then
+    /// ARMOUR, ITEM and CONTAINER goes to the worker (its inventory, else the ground; engine choice for the original's storage), except locked ones
+    /// and ARMOUR whose <c>stigma</c> is 6 (slave garments); a backpack goes with its content. The ARMOUR pass also leaves on the worker's faction's
+    /// <c>slave clothing</c> (<c>FUN_140343480</c>'s list argument), so a slave processed again keeps its kit and is not dressed anew (#356).
+    /// </summary>
+    void Strip(World world, Vector3 at, Inventory inv, CharacterCold wc, string[] clothing)
+    {
+        foreach (var type in Stripped)
+        {
+            foreach (var item in inv.Items.ToList())
+            {
+                if (item.Type != type || item.LockedOn || type == FcsRecordType.Armour && Kept(item, clothing)) continue;
+
+                inv.Items.Remove(item);
+                item.Section = "main";
+                if (wc.Inventory is not { } into || !into.Add(item)) world.GroundItems.Drop(item, at, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// An ARMOUR piece the strip leaves on: a slave garment (<c>stigma</c> 6) or one of the worker's faction's <c>slave clothing</c>.
+    /// </summary>
+    bool Kept(ItemInstance item, string[] clothing) =>
+        data.Db.Find(item.Record)?.GetInt("stigma", 0) == SlaveStigma || clothing.Contains(item.Record);
+
+    /// <summary>
+    /// The dressing of <see cref="Process"/> (<c>FUN_1403560e0</c>): each piece of <paramref name="clothing"/> the captive does not wear already is
+    /// made and put on.
+    /// </summary>
+    void Dress(Inventory inv, CharacterCold cc, string[] clothing)
+    {
+        foreach (string record in clothing)
+        {
+            if (inv.Items.Any(i => i.Record == record && InventoryCommands.IsEquipmentSection(i.Section))) continue;
+            if (data.Items.Create(record, 1) is { } piece) InventoryCommands.TryEquip(inv, piece, cc);
+        }
     }
 
     #endregion
