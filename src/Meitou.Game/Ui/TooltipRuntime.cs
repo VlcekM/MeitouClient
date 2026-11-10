@@ -1464,7 +1464,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         string line = wear <= 40
             ? "You have {1} points of wear damage, this detracts from your max health and can be fixed at a Skeleton Bed."
             : "You have {1} points of wear damage. The manual recommends you find a Skeleton Bed for maintenance.";
-        return "\n" + PlayerInterface.BadColour + Loc.Tr(line, (int)wear);
+        return "\n#59231a" + Loc.Tr(line, (int)wear);
     }
 
     /// <summary>
