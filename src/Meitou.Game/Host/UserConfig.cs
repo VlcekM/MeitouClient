@@ -83,7 +83,8 @@ enum MetalUpscalerMode
 /// <summary>
 /// The player's settings, kept in <c>meitou.user.json</c> (git-ignored) in the working directory, else next to the executable:
 /// the frame limit, vsync, full screen, the simulation tick rate, the graphics sliders of the Tab panel (by label) and key bindings
-/// (action name to comma-separated keys, as <see cref="Input.InputBindings.Apply"/> reads them). Written back on exit.
+/// (those that differ from the defaults, action name to comma-separated keys, as <see cref="Input.InputBindings.Apply"/> reads them). Written
+/// back on exit.
 /// One file is shared by every installed version (the launcher's data folder) and edited by the launcher too: docs/launcher.md "Graphics".
 /// </summary>
 sealed class UserConfig
@@ -513,7 +514,8 @@ sealed class UserConfig
     /// </summary>
     public List<string> KeepAtLow { get; set; } = [];
     /// <summary>
-    /// The key bindings: action name to comma-separated keys, as <see cref="Input.InputBindings.Apply"/> reads them.
+    /// The key bindings that differ from the defaults (the engine's and the install's controls.cfg): action name to comma-separated keys, as
+    /// <see cref="Input.InputBindings.Apply"/> reads them; an empty value unbinds.
     /// </summary>
     public Dictionary<string, string> Bindings { get; set; } = [];
     /// <summary>

@@ -541,11 +541,13 @@ public sealed class InputBindings
     }
 
     /// <summary>
-    /// Applies a saved config's bindings (<see cref="Apply"/>), but those equal to the engine's defaults: configs written before
-    /// <see cref="ToDictionary"/> kept only changes hold every action, and those must not hide <c>controls.cfg</c>.
+    /// Applies a saved config's bindings (<see cref="Apply"/>). A config holding (nearly) every action was written before
+    /// <see cref="ToDictionary"/> kept only changes: its entries equal to the engine's defaults are skipped, so they do not hide <c>controls.cfg</c>.
     /// </summary>
     public IReadOnlyList<string> ApplySaved(IReadOnlyDictionary<string, string> saved)
     {
+        if (saved.Count < Enum.GetValues<InputAction>().Length * 3 / 4) return Apply(saved);
+
         var engine = new InputBindings().ToStrings();
         var changed = saved
             .Where(p => !engine.TryGetValue(p.Key.Trim(), out var value) || !string.Equals(value, p.Value.Trim(), StringComparison.OrdinalIgnoreCase))

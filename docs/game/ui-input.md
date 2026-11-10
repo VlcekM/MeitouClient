@@ -8,7 +8,7 @@ tick; host picking/UI issue commands, not direct simulation mutation. [Simulatio
 
 **Verified** code=scancode | Shift0x100 | Ctrl0x200 | Alt0x400. Low-byte OIS scancode; left/right
 modifiers share bits. Low-byte0 mouse=(buttonIndex+1)*4096 (Mouse1/2/3=0x1000/2000/3000).
-Name formatter prefixes Ctrl+Alt+Shift, unnamed Key_n, mouse Mouse_n. Key names are a256-entry
+Name formatter prefixes Ctrl+Alt+Shift, unnamed Key_n, mouse Mouse<n> (`Mouse1` in the install file). Key names are a256-entry
 exe table;111 null. Preserve scancode semantics rather than substituting ASCII key codes.
 Controls.cfg (install root) first line version1, repeated action=KeyName entries allow multiple bindings.
 Missing/empty file writes defaults; version<1 treats changed camera/floor/build bindings specially
@@ -21,7 +21,8 @@ letters, digits and punctuation are the character, `F1`..`F15`, `NUM0`..`NUM9` `
 Meitou (`GameControls`, `InputBindings.UseGameControls`) reads the file at boot, never writes it, as the defaults of the actions it
 names (the same rule; the version line, modifier names and the build/editor/developer actions are skipped; `camera_tilt+` is `PitchDown`,
 steeper). Medic, Rescue and Highlight get Meitou's H, J and Right Alt back while no other action has them. Its config keeps only the
-bindings that differ from those defaults; entries equal to the engine's own defaults (configs that saved every action) are ignored.
+bindings that differ from those defaults; in a config that saved every action (older builds) the entries equal to the engine's own
+defaults are ignored.
 Restore defaults returns to controls.cfg.
 
 ## Dispatch and selection
