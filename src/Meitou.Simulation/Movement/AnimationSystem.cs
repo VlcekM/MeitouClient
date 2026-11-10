@@ -941,7 +941,8 @@ public sealed class AnimationSystem(
         }
 
         // A character with a leg down crawls: the grounded clips (category 5), whose lower layer is the whole body as no upper clip plays over it.
-        else if (!pose.FullTechnique && pose.Crawling && Crawl(a, stance, speed, pose.Task, cold, dt, seed, key, tick, lower, out legs))
+        // In a bed it lies as any sleeper does (#391).
+        else if (!pose.FullTechnique && pose.Crawling && !pose.InBed && Crawl(a, stance, speed, pose.Task, cold, dt, seed, key, tick, lower, out legs))
         {
         }
         else if (!pose.FullTechnique)
