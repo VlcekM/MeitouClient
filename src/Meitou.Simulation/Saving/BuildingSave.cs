@@ -85,7 +85,8 @@ public static class BuildingSave
 
             foreach (var instance in list.Instances)
             {
-                if (instance.IsRemoved || !states.TryGetValue(BuildingKey.Of(zone.Coordinate, instance.Id), out var state)
+                if (instance.IsRemoved || IsStaleCopy(save, zone, instance)
+                    || !states.TryGetValue(BuildingKey.Of(zone.Coordinate, instance.Id), out var state)
                     || !IsPlayerBuilt(instance.Id, state, playerFactionId))
                     continue;
 
@@ -140,6 +141,19 @@ public static class BuildingSave
         // Engine choice: towns are reassessed on load (a save may hold a centre that was never moved, as Meitou's before it reassessed).
         ConstructionSystem.ReassessTowns(world);
         return made;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="instance"/> is listed outside the zone its position lies in while that zone lists it too. The original lists a
+    /// building in the zone it was built from, which may not be its position's (<b>Observed</b>, an imported vanilla save of #493); Meitou before
+    /// it removed that entry wrote a second one in the position's zone, and the newer copy wins.
+    /// </summary>
+    static bool IsStaleCopy(SaveGame save, SaveZone zone, FcsInstance instance)
+    {
+        var home = WorldLayout.ZoneOf(instance.Position.X, instance.Position.Z);
+        if (home == zone.Coordinate || !save.Zones.TryGetValue(home, out var own)) return false;
+
+        return own.BuildingList?.Instances.Any(i => i.Id == instance.Id && !i.IsRemoved) == true;
     }
 
     /// <summary>
@@ -239,7 +253,7 @@ public static class BuildingSave
     public static IReadOnlyDictionary<int, Hand> Write(SaveGame game, World world, string playerFactionId, ulong seed = 0)
     {
         var reg = world.Buildings;
-        var live = new HashSet<string>(reg.All.Select(s => s.Id), StringComparer.Ordinal);
+        var live = reg.All.ToDictionary(s => s.Id, s => s.LevelPlacement is null ? s.Zone : (ZoneCoordinate?)null, StringComparer.Ordinal);
         RemoveDismantled(game, playerFactionId, live);
         var townHands = WriteTowns(game, world, playerFactionId, seed);
         if (reg.Count == 0) return townHands;
@@ -252,9 +266,10 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Removes the player-built buildings of the save that the world no longer has, with their state records and their slots.
+    /// Removes the player-built buildings of the save that the world no longer has, with their state records and their slots, and a live site's
+    /// entry in a zone other than the one it is written in (<paramref name="live"/> maps each site to that zone, null for a level house's).
     /// </summary>
-    static void RemoveDismantled(SaveGame game, string playerFactionId, HashSet<string> live)
+    static void RemoveDismantled(SaveGame game, string playerFactionId, Dictionary<string, ZoneCoordinate?> live)
     {
         foreach (var zone in game.Zones.Values)
         {
@@ -264,7 +279,7 @@ public static class BuildingSave
             foreach (var r in zone.File.Records) byId[r.StringId] = r;
             foreach (var instance in list.Instances.ToList())
             {
-                if (live.Contains(instance.Id)) continue;
+                if (live.TryGetValue(instance.Id, out var home) && (home is null || home == zone.Coordinate)) continue;
 
                 var state = instance.States.Count > 0 ? byId.GetValueOrDefault(instance.States[0]) : null;
                 if (!IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;

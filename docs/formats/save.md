@@ -57,6 +57,9 @@ scratch harness; pinned by `SaveReadTests`); with `Blood` off the loaded record 
 **Player-built buildings** (Meitou `Saving/BuildingSave`): an instance in the zone's `0-buildinglist` with id `<n>-zone<X>.<Y>-INGAME` and a
 GAMESTATE_BUILDING `<id>-S23` carrying `name`, `owner faction ID`, `floornum`, `destroyed`, `flags`, `is complete`, `pause`, `construction progress`,
 `<i>construction mats`, `world Y pos`, `handle`, `isInsideBuilding` (key set from the original's writer `FUN_1405547f0`, **Verified** by code).
+The list is not always the position's zone: a vanilla save listed a building in the zone of its id (20.32) while it stood in 20.33 (**Observed**,
+#493). Meitou writes each site in its position's zone and drops its entry from any other; on load a copy outside the position's zone loses
+to one inside it.
 **Observed**, native 1.0.68 authored-fixture load/save: an outdoor player placement's raw instance Y is a terrain offset (0 places it on
 the ground), while `world Y pos` is absolute; supplying the terrain height in both fields doubles its loaded height.
 Indoors, `player furniture Y offset` is child world Y minus the parent's origin Y (**Verified**, native writer; **Observed**, 185 saved

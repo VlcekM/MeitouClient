@@ -363,7 +363,26 @@ public sealed partial class ArrestSystem : IOrderOwner
         var cage = world.Fixtures.Find(request.Site!)!;
         _cagings.RemoveAll(k => k.Carrier == carrier);
         _cagings.Add(new Caging { Carrier = carrier, Captive = request.Target, Cage = cage.Id });
-        MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), table.Cold(slot)!.RunSpeed);
+        WalkToCage(world, slot, cage, table.Cold(slot)!.RunSpeed);
+    }
+
+    /// <summary>
+    /// Where a carrier walks for a cage: the floor beside it at the cage's height. A cage cuts its hole in a building's floor mesh, so its own X/Z
+    /// resolves to the storey below, where the carrier would stand under it (#432; <see cref="MovementSystem.GoToFloor"/>).
+    /// </summary>
+    static Vector3 CageGoal(World world, Fixture cage) =>
+        world.Walkability.FloorNear(cage.Position.X, cage.Position.Z, cage.Position.Y, MovementSystem.FloorSlack) ?? cage.Position;
+
+    /// <summary>
+    /// Walks the carrier to <see cref="CageGoal"/>, on the cage's floor.
+    /// </summary>
+    static void WalkToCage(World world, int slot, Fixture cage, byte mode)
+    {
+        var at = CageGoal(world, cage);
+        var flat = new Vector2(at.X, at.Z);
+        TaskStart.StepTo(world.Characters, slot, flat, mode);
+        var c = world.Characters.Cold(slot)!;
+        (c.GoalHeight, c.GoalHeightAt) = (at.Y, flat);
     }
 
     /// <summary>
@@ -407,11 +426,11 @@ public sealed partial class ArrestSystem : IOrderOwner
                 return false;
             }
             k.Cage = other.Id;
-            TaskStart.StepTo(table, s, new Vector2(other.Position.X, other.Position.Z), c.RunSpeed);
+            WalkToCage(world, s, other, c.RunSpeed);
             return true;
         }
-        var goal = new Vector2(cage.Position.X, cage.Position.Z);
-        float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal);
+        var at = CageGoal(world, cage);
+        var goal = new Vector2(at.X, at.Z);
         bool walking = n.Task == (byte)CharacterTask.GoTo;
         if (walking && Vector2.Distance(n.Goal, goal) > 1) return false;   // another order
         if (FixtureRegistry.AtCage(cage, n.Position, walking))
@@ -430,7 +449,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!walking)
         {
             if (n.Task != (byte)CharacterTask.Idle || ++k.Tries > Settings.CageWalks) return false;   // a new order, or the cage cannot be reached
-            TaskStart.StepTo(table, s, goal, c.RunSpeed);
+            WalkToCage(world, s, cage, c.RunSpeed);
         }
         return true;
     }

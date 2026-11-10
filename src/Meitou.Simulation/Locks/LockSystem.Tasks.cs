@@ -186,8 +186,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.PickingLock = cage.Id;
                 c.Shackles = null;
                 c.DoorJob = null;
-                if (!c.IsImprisoned)
-                    MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), c.RunSpeed);
+                if (!c.IsImprisoned) MovementSystem.GoToFloor(world, slot, cage.Position, c.RunSpeed);   // the cage's floor, not the one under it (#432)
 
                 break;
             case TaskType.PickLock:
