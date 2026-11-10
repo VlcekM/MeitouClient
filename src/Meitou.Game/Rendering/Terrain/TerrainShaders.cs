@@ -192,6 +192,30 @@ static partial class TerrainShaders
 
         vec4 reliefP(uint b, int k) { return texelFetch(uParams, ivec2(k, int(b)), 0); }
 
+        // The height at one level through a cubic B-spline (four bilinear taps): between texels the bilinear read is a tent, and a mesh finer than the level's
+        // texels drew every bump as a pyramid.
+        float heightCubicLevel(vec3 c, int level)
+        {
+            vec2 size = vec2(textureSize(uHeight, level).xy);
+            vec2 p = c.xy * size - 0.5, i = floor(p), f = p - i, f2 = f * f, f3 = f2 * f;
+            vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0, w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0, w3 = f3 / 6.0, w2 = 1.0 - w0 - w1 - w3;
+            vec2 s0 = w0 + w1, s1 = w2 + w3;
+            vec2 t0 = (i - 0.5 + w1 / s0) / size, t1 = (i + 1.5 + w3 / s1) / size;
+            float l = float(level);
+            return s0.y * (s0.x * textureLod(uHeight, vec3(t0.x, t0.y, c.z), l).r + s1.x * textureLod(uHeight, vec3(t1.x, t0.y, c.z), l).r)
+                + s1.y * (s0.x * textureLod(uHeight, vec3(t0.x, t1.y, c.z), l).r + s1.x * textureLod(uHeight, vec3(t1.x, t1.y, c.z), l).r);
+        }
+
+        // The height at a fractional level, smooth between texels (heightCubicLevel on the two levels round it).
+        float heightCubic(vec3 c, float lod)
+        {
+            int top = textureQueryLevels(uHeight) - 1;
+            int l0 = clamp(int(floor(lod)), 0, top), l1 = min(l0 + 1, top);
+            float t = clamp(lod - float(l0), 0.0, 1.0);
+            float h = heightCubicLevel(c, l0);
+            return t > 0.0 && l1 != l0 ? mix(h, heightCubicLevel(c, l1), t) : h;
+        }
+
         // One layer's term of reliefMove's ground: its share of the pixel times its depth factor, times its height about the middle (height) or not. The height is
         // read at the level whose texels are half a segment apart (segment: the mesh's spacing there, world units; 0 the finest), so what the mesh
         // cannot carry is left out rather than aliased into spikes.
@@ -207,7 +231,7 @@ static partial class TerrainShaders
             // The broad shapes left out (the height less its level whose texels are half the cut): what stands on the ground (the characters walk on the
             // undisplaced surface) is not swallowed by a swell; the bumps and grain stay.
             float broad = uBroadCut > 0.0 ? textureLod(uHeight, c, max(0.0, log2(0.5 * uBroadCut * texelsPerUnit))).r : 0.5;
-            return share * depth * (textureLod(uHeight, c, lod).r - broad);
+            return share * depth * (heightCubic(c, lod) - broad);
         }
 
         // The relief at p (one pass for both, one blend lookup and one normal): ground, how far the ground's layers lift it (upward; reliefLayer), and
@@ -751,6 +775,7 @@ static partial class TerrainShaders
         uniform float uDisplace;       // ground displacement (tessellated patches near the eye) in world units; 0 off. The parallax gives way to it there.
         uniform float uDisplaceEnd;    // GroundRelief.DisplaceDistance: displaced in full to 60% of it
         uniform float uParallaxEnd;    // GroundRelief.ParallaxDistance: the parallax in full to half of it, none from it
+        uniform float uBroadCut;       // GroundRelief.BroadCut: the relief leaves out shapes wider than this (world units; 0 keeps all), as the displacement does
         uniform float uTessDetail;     // GroundRelief.TessDetail (PatchControl's segments)
         uniform float uOverlayRelief;  // GroundRelief.OverlayRelief: the grass, slope, dirt and road layers' share of relief (0: the base layer alone)
         uniform float uSelfShadow;     // GroundRelief.SelfShadow: the self-shadow's darkening
@@ -906,6 +931,10 @@ static partial class TerrainShaders
         // displacement fades out). Set per pixel in pixelRelief().
         float reliefSegment = 0.0, reliefWhole = 1.0;
 
+        // How much of the relief's depth the view ray marches by how steeply it meets the ground (v.y, 1 straight down): all of it from 17 degrees, none
+        // at 2. A height field seen along itself is walls of stretched texels and bumps hidden behind bumps; no march finds them.
+        #define ReliefGraze(up) smoothstep(0.03, 0.3, up)
+
         // The march's steps (view ray, sun), fewer with distance (set in pixelRelief(): high 16 and 8 near, 6 and 3 at the parallax's end; medium 6 and 3
         // to 3 and 2; low 4 and 2 to 2 and 1).
         int reliefSteps = 16, reliefShadowSteps = 8;
@@ -921,12 +950,22 @@ static partial class TerrainShaders
             {
                 vec4 l = r.layer[i];
                 vec3 c = vec3((r.base.p + o) * l.xy, l.z);
-                float x = textureGrad(uHeight, c, r.base.dx * l.xy * blur, r.base.dy * l.xy * blur).r;
+                // The level of the footprint's short axis, the long one at most 8 times it (as an anisotropic read picks its level, with one tap): at a
+                // grazing angle the long axis alone chose a level whose heights were a blur, and the march runs along that axis anyway.
+                vec2 gx = r.base.dx * l.xy * blur, gy = r.base.dy * l.xy * blur;
+                float ax = dot(gx, gx), ay = dot(gy, gy);
+                float shrink = 1.0 / clamp(sqrt(max(ax, ay) / max(min(ax, ay), 1e-20)), 1.0, 8.0);
+                if (ax > ay) gx *= shrink; else gy *= shrink;
+                float x = textureGrad(uHeight, c, gx, gy).r;
+                // The broad shapes left out, as the displaced mesh leaves them out (reliefLayer): marched whole, a plate's tilt or a swell stood up as a wall
+                // of stretched texels at a grazing angle, far deeper than the same ground displaced.
+                float whole = x;
+                if (uBroadCut > 0.0) x = clamp(x - textureLod(uHeight, c, max(0.0, log2(0.5 * uBroadCut * 0.5 * (l.x + l.y) * texels / 5000.0))).r + 0.5, 0.0, 1.0);
                 if (finer && reliefSegment > 0.0 && reliefWhole < 1.0)
                 {
                     // ReliefFunctions' level for this spacing: texels half a segment apart.
                     float lod = max(0.0, log2(2.0 * reliefSegment * 0.5 * (l.x + l.y) * texels / 5000.0));
-                    x = mix(clamp(x - textureLod(uHeight, c, lod).r + 0.5, 0.0, 1.0), x, reliefWhole);
+                    x = mix(clamp(whole - textureLod(uHeight, c, lod).r + 0.5, 0.0, 1.0), x, reliefWhole);
                 }
                 h += l.w * x;
             }
@@ -948,8 +987,17 @@ static partial class TerrainShaders
             // The detail finer than a displaced mesh is shallow and fine: half the steps do (each also reads its level at the spacing).
             int ShadowSteps = reliefShadowSteps;
             int Steps = finer && reliefSegment > 0.0 && reliefWhole < 1.0 ? min(RELIEF_QUALITY >= 2 ? 8 : 4, reliefSteps) : reliefSteps;
-            vec2 rayStep = viewSpan / float(Steps);
             bool moving = dot(viewSpan, viewSpan) > 0.0;
+            if (moving && r.n > 0)
+            {
+                // As many steps as the ray crosses texels of the level it reads (the heaviest layer's), between half and three times the quality's count:
+                // a fixed count stepped over whole bumps at a grazing angle (the relief in slices) and was wasted looking straight down.
+                vec2 tiling = r.layer[0].xy;
+                vec2 fx = r.base.dx * tiling, fy = r.base.dy * tiling;
+                float texel = max(sqrt(min(dot(fx, fx), dot(fy, fy))), 1.0 / float(textureSize(uHeight, 0).x));
+                Steps = clamp(int(ceil(length(viewSpan * tiling) / texel)), max(Steps / 2, 2), Steps * 3);
+            }
+            vec2 rayStep = viewSpan / float(Steps);
             // Centred, as the displacement is: the flat surface is the relief's middle (half the depth above it, half below), so what stands on the ground
             // stands in it. The ray enters the top half a span before the pixel's point, where it is at the middle.
             vec2 o = moving ? -0.5 * viewSpan : vec2(0.0);
@@ -963,9 +1011,20 @@ static partial class TerrainShaders
             }
             if (h >= rayH && rayH < 1.0)
             {
-                // Between the last two steps, where the ray crossed the height.
+                // The crossing lies in the last step: halve it a few times (the height between two steps is not a straight line), then take the point
+                // between the two ends left, where the ray crossed the height.
+                vec2 back = rayStep;
+                float drop = 1.0 / float(Steps);
+                for (int k = 0; k < (RELIEF_QUALITY >= 2 ? 4 : 2); k++)
+                {
+                    back *= 0.5; drop *= 0.5;
+                    vec2 mid = o - back;
+                    float midRay = rayH + drop, midH = reliefHeight(r, mid, finer, 1.0);
+                    if (midH >= midRay) { o = mid; rayH = midRay; h = midH; }
+                    else { prevH = midH; prevRay = midRay; }
+                }
                 float above = prevRay - prevH, below = h - rayH;
-                o -= rayStep * (below / max(above + below, 1e-5));
+                o -= back * (below / max(above + below, 1e-5));
             }
             moved = o;
             if (!lit || uSelfShadow <= 0.0) return 1.0;
@@ -1086,7 +1145,7 @@ static partial class TerrainShaders
                 #ifdef TERRAIN_TRAILS
                 trailSpan = uParallax * g.ground.total / g.share;
                 #endif
-                shade = reliefMarch(g.ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
+                shade = reliefMarch(g.ground, o, -v.xz / max(v.y, 0.25) * depth * ReliefGraze(v.y), sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
                 #ifdef TERRAIN_TRAILS
                 trailSpan = 0.0;
                 #endif
@@ -1309,7 +1368,11 @@ static partial class TerrainShaders
                         float depth = BakeSpan * strength;   // world units
                         vec3 v = normalize(uEye - vWorld);
                         vec3 sun = normalize(uLightDir);   // not "l": RockBakeFragment patches the lighting at that line
-                        vec2 viewSpan = -v.xz / max(v.y, 0.25) * depth, rayStep = viewSpan / float(steps);
+                        // reliefMarch's rules: the view's depth fades as the ray grazes the ground (ReliefGraze), as many steps as the ray crosses texels of
+                        // the level read, and the crossing halved before the point between its two ends is taken.
+                        vec2 viewSpan = -v.xz / max(v.y, 0.25) * depth * ReliefGraze(v.y);
+                        steps = clamp(int(ceil(length(viewSpan) / uBakeOrigin[k].z)), max(steps / 2, 2), steps * 3);
+                        vec2 rayStep = viewSpan / float(steps);
                         vec2 o = -0.5 * viewSpan;
                         float rayH = 1.0, prevRay = 1.0;
                         float h = bakedHeight(k, kc, whole, at + o), prevH = h;
@@ -1321,8 +1384,17 @@ static partial class TerrainShaders
                         }
                         if (h >= rayH && rayH < 1.0)
                         {
+                            vec2 back = rayStep;
+                            float drop = 1.0 / float(steps);
+                            for (int halving = 0; halving < (RELIEF_QUALITY >= 2 ? 4 : 2); halving++)
+                            {
+                                back *= 0.5; drop *= 0.5;
+                                float midRay = rayH + drop, midH = bakedHeight(k, kc, whole, at + o - back);
+                                if (midH >= midRay) { o -= back; rayH = midRay; h = midH; }
+                                else { prevH = midH; prevRay = midRay; }
+                            }
                             float above = prevRay - prevH, below = h - rayH;
-                            o -= rayStep * (below / max(above + below, 1e-5));
+                            o -= back * (below / max(above + below, 1e-5));
                         }
                         at += o;
                         if (sun.y > 0.0 && uSelfShadow > 0.0)

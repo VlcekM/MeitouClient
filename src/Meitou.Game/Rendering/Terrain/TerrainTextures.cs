@@ -1034,8 +1034,11 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         steep = 0;
         if (ReadImage(assets, normalName, size) is not { } normals) return null;
-        var height = NormalHeight.FromNormals(Resize(normals, size), size, out float steepness, GroundRelief.Tilt);
-        steep = steepness > 0 ? 1 / (size * steepness) : 0;
+        var height = NormalHeight.FromNormals(Resize(normals, size), size, out float steepness, out float surface, GroundRelief.Tilt);
+        // A map that is no surface in the frame it is lit in leaves a height of its leftovers, which the range and the depth rule would stretch into
+        // spikes the lighting does not show (the Ashlands' ash): its depth falls with the share kept, to none (GroundRelief.SurfaceDepth).
+        float kept = GroundRelief.SurfaceDepth(surface);
+        steep = steepness > 0 && kept > 0 ? MathF.Pow(kept, 1 / MathF.Max(GroundRelief.ScaleFollow, 0.05f)) / (size * steepness) : 0;
         var levels = new byte[(int)Math.Log2(size) + 1][];
         levels[0] = height;
         for (int l = 1; l < levels.Length; l++)
