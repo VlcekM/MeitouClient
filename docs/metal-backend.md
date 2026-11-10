@@ -744,8 +744,9 @@ default.
   fixed its Metal depth convention and sun-motion term, but it is still labelled experimental. The **F10 settings
   panel** exposes the MetalFX scale presets Native 1.00, Super Quality 0.77, Quality 0.67, Balanced 0.59,
   Performance 0.50, Performance 0.40, Spatial 0.50/0.40 alternatives and TAA 0.50, plus VSync, frame limit,
-  full screen and the live Metal graphics controls. The preset owns the render scale, so there is no
-  separate custom-scale slider for MetalFX. The lowest supported MetalFX scale is 0.40: 0.33 (3x) crashed before the
+  full screen and the live Metal graphics controls. The preset sets the render scale; the "Metal render scale" slider
+  below it changes it in 0.01 steps under the preset's upscaler (the row then reads Custom) and shows the scene's size
+  in backing pixels (`MetalContext.SceneSize`, Retina included); Native stays at 1.00. The lowest supported MetalFX scale is 0.40: 0.33 (3x) crashed before the
   first frame on this device, and a hand-edited lower value is clamped.
   `MEITOU_METAL_NO_TAA=1` is the clean native comparison (no jitter, no temporal resolve);
   `MEITOU_METALFX_SPATIAL=1` starts in the performance tier; `MEITOU_METAL_SETTINGS=1` opens the settings panel for
