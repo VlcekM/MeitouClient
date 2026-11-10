@@ -6,12 +6,15 @@
 import '@fontsource/exo-2/700.css';
 import Base from '../layouts/Base.astro';
 import { allFeatures, countBy, featuresOf, order, statuses, versionId, versions } from '../data/roadmap';
-import type { Feature } from '../data/roadmap';
+import type { Area, Feature, Version } from '../data/roadmap';
 
 const counts = countBy(allFeatures);
 const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
 // A status bar: each status's share of the features.
 const bar = (features: Feature[]) => order.map((k) => ({ k, width: features.length ? (100 * countBy(features)[k]) / features.length : 0 }));
+const label = (v: Version) => (v.name ? `${v.version} · ${v.name}` : v.version);
+// The areas a version's tables are drawn as: its own features first, as an area without a heading.
+const areasOf = (v: Version): Area[] => [...(v.features?.length ? [{ id: 'features', name: '', features: v.features }] : []), ...(v.areas ?? [])];
 const summary = (features: Feature[]) => {
   const c = countBy(features);
   return order.filter((k) => c[k]).map((k) => `${c[k]} ${statuses[k].label.toLowerCase()}`).join(' · ');
@@ -50,10 +53,10 @@ const summary = (features: Feature[]) => {
         {versions.map((v) => (
           <>
             <a class="ver" href={`#${versionId(v)}`}>
-              <span class="nm">{v.version} · {v.name}</span>
+              <span class="nm">{label(v)}</span>
               <span class="mini">{bar(featuresOf(v)).map((b) => <span class={`st-${b.k}`} style={`width: ${b.width}%`}></span>)}</span>
             </a>
-            {v.areas.map((a) => (
+            {(v.areas ?? []).map((a) => (
               <a href={`#${versionId(v)}-${a.id}`}>
                 <span class="nm">{a.name}</span>
                 <span class="mini">{bar(a.features).map((b) => <span class={`st-${b.k}`} style={`width: ${b.width}%`}></span>)}</span>
@@ -70,18 +73,20 @@ const summary = (features: Feature[]) => {
     {versions.map((v) => (
       <section class="version" id={versionId(v)}>
         <div class="stage-head">
-          <span class="eyebrow">Version {v.version}</span>
-          <h2>{v.name}</h2>
+          {v.name && <span class="eyebrow">Version {v.version}</span>}
+          <h2>{v.name ?? `Version ${v.version}`}</h2>
           <span class="meta">{summary(featuresOf(v))}</span>
-          <p>{v.blurb}</p>
+          {v.blurb && <p>{v.blurb}</p>}
         </div>
-        {v.areas.map((a) => (
-          <section class="stage" id={`${versionId(v)}-${a.id}`}>
-            <div class="stage-head">
-              <h3>{a.name}</h3>
-              <span class="meta" data-sum>{summary(a.features)}</span>
-              <p>{a.blurb}</p>
-            </div>
+        {areasOf(v).map((a) => (
+          <section class="stage" id={`${versionId(v)}-${a.id}`} data-name={a.name || label(v)}>
+            {a.name && (
+              <div class="stage-head">
+                <h3>{a.name}</h3>
+                <span class="meta">{summary(a.features)}</span>
+                {a.blurb && <p>{a.blurb}</p>}
+              </div>
+            )}
             <div class="tbl">
               <table>
                 <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
@@ -171,7 +176,7 @@ const summary = (features: Feature[]) => {
         let any = false;
         rows.filter((r) => sec.contains(r.tr)).forEach((r) => { r.tr.hidden = !shows(r); any ||= shows(r); });
         sec.hidden = !any;
-        if (!any) left.push(sec.querySelector('h3').textContent);
+        if (!any) left.push(sec.dataset.name);
       });
       document.querySelectorAll('.version').forEach((v) => { v.hidden = !v.querySelector('.stage:not([hidden])'); });
 
