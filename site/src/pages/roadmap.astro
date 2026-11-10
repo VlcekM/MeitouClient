@@ -66,6 +66,7 @@ const summary = (features: Feature[]) => {
     </aside>
 
     <div class="body">
+    {versions.length === 0 && <p class="empty-cats none">Nothing on the roadmap yet.</p>}
     {versions.map((v) => (
       <section class="version" id={versionId(v)}>
         <div class="stage-head">
@@ -175,7 +176,7 @@ const summary = (features: Feature[]) => {
       document.querySelectorAll('.version').forEach((v) => { v.hidden = !v.querySelector('.stage:not([hidden])'); });
 
       // Areas with nothing to show are left out, and named in one line after the rest.
-      const empty = document.querySelector('.empty-cats');
+      const empty = document.querySelector('.empty-cats:not(.none)');
       empty.textContent = left.length === document.querySelectorAll('.stage[id]').length
         ? 'No features match the filters.' : `No features match the filters in: ${left.join(', ')}.`;
       empty.hidden = !left.length;

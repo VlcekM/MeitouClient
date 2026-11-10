@@ -5,13 +5,13 @@
   { "name": "area:startup", "color": "ededed", "description": "Startup and saves: new games, the main menu, loading and saving" },
   { "name": "area:characters", "color": "ededed", "description": "Characters: health, needs, stats, equipment and the character editor" },
   { "name": "area:movement", "color": "ededed", "description": "Movement and control: selection, pathfinding, right-click orders, stairs and roofs" },
-  { "name": "area:combat", "color": "ededed", "description": "Combat: melee, ranged weapons, stealth and turrets" },
+  { "name": "area:combat", "color": "ededed", "description": "Combat: fights and who joins or ignores them, melee, ranged weapons, stealth and turrets" },
   { "name": "area:economy", "color": "ededed", "description": "Economy: mining, trade, looting, theft, locks and bounties" },
   { "name": "area:squads", "color": "ededed", "description": "Squads and jobs: recruiting, squads, orders and jobs" },
   { "name": "area:buildings", "color": "ededed", "description": "Buildings: entering, building, research, production, storage and power" },
-  { "name": "area:world", "color": "ededed", "description": "World: towns, crime, dialogue, animals, raids, roads and the map" },
-  { "name": "area:factions", "color": "ededed", "description": "Factions and events: unique characters, faction relations and changes to towns" },
+  { "name": "area:world", "color": "ededed", "description": "World: towns, crime, guards, prisons and jail, dialogue, animals, raids, roads and the map" },
+  { "name": "area:factions", "color": "ededed", "description": "Factions and events: unique characters, faction relations, towns changing after events" },
   { "name": "area:audio", "color": "ededed", "description": "Audio: sound and music" },
   { "name": "area:interface", "color": "ededed", "description": "Interface: windows, tooltips, pause, text and input" },
-  { "name": "area:platform", "color": "ededed", "description": "Platform and performance: platforms, graphics, install detection, crashes and speed" }
+  { "name": "area:platform", "color": "ededed", "description": "Platform and performance: rendering and graphics glitches, crashes, platforms, install, speed" }
 ]
