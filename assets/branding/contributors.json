@@ -28,8 +28,8 @@
     "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 5,
-    "areas": "Benchmarks, Projectiles"
+    "commits": 6,
+    "areas": "Benchmarks, Crossbow bolt tracers"
   },
   "lucasskrewer": {
     "commits": 12,
@@ -48,7 +48,11 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 19,
-    "areas": "Inventory, Medics, UI"
+    "commits": 20,
+    "areas": "Vulkan logging, Name tags, Death items, Animal inventory, Animal stats, Saved kit, Power beds, Medic finders, Repair beds, Bolts, Research bench UI, Help button, Caged prisoners, Bodyguard job"
+  },
+  "robgreen490": {
+    "commits": 2,
+    "areas": "4k UI scaling, Branch merges"
   }
 }
