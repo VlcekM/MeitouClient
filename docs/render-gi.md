@@ -84,6 +84,7 @@ saturated yellow on unlit walls; a linear GI-share mix nearly matches GI off.
 geometry or blindly shortening rays. Visible indirect light may depend on hidden surfaces.
 Resolve divisor2: scene writes flagged normal/albedo into an extra RGBA16UI target; low-res
 resolve reconstructs position from the scene depth; full-res apply depth-weights four neighbours.
+The resolve runs once a frame: after the scene, or, when the water copies the scene (`WaterRenderer.NeedsCapture`), over the opaque scene before that copy (`RunGiResolve(early)`): the water writes no surface, so the floor seen through it kept the sky's ambient while the ground beside it took the probes' (**Verified**, a pond at night, GI off, probes, hybrid, before and after: a pale band in the shallows with the resolve's texels as its edge with the resolve after the water, none before it).
 Unflagged/background surfaces must remain unchanged. Every program drawing into the scene pass
 must write that target (`WithAlbedo`, `none` for unlit ones), including the GPU-indirect variants:
 an unwritten output is undefined (in practice the surface behind, whose GI then lands on the

@@ -991,6 +991,9 @@ static partial class WorldFrame
         if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near))
         {
             host.Close();
+            // The GI resolve first: the water shows the scene it copies here, which must hold the light the ground beside the water will have (PostProcess.RunGiResolve).
+            post.RunGiResolve(early: true);
+            StageClock.Lap(14, "gi resolve");
             capturing.CaptureScene(post.SceneColour, post.SceneDepth, near, far);
             host.Open(9, post.WithShadingRate(post.SceneTargets));
         }

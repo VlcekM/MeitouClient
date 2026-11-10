@@ -680,7 +680,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Drawn = l.Late = false;
         _softDepthReady = false;
         CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
-        _sceneMarked = _aoApplied = _contactSunRan = false;
+        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = false;
         Stamp("start");
         _frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(_frameIndex, JitterPhases) : Vector2.Zero;
@@ -1065,7 +1065,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     // ---- fog volumes ----
 
-    bool _sceneMarked;
+    bool _sceneMarked, _giResolved;
 
     /// <summary>
     /// Stamps the end of the scene's own passes (the opaque geometry, the water): once a frame, by the caller before <see cref="RunFogVolumes"/>
@@ -1294,12 +1294,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     /// <summary>
     /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their albedo: the resolve at 1/<see cref="GiResolve"/> of the render
-    /// size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too).
+    /// size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too); once a frame.
+    /// <paramref name="early"/>: over the opaque scene before the water copies it (the scene's pass closed): the water writes no surface, so what lies
+    /// under it kept the sky's ambient while the ground beside it took the probes', and the shore was a band of another brightness with the resolve's
+    /// texels for an edge.
     /// </summary>
-    public void RunGiResolve()
+    public void RunGiResolve(bool early = false)
     {
-        if (GiResolve <= 0 || _giAlbedo is null || _giLow is null || _sceneColour is null || !_haveScene) return;
-        MarkScene();
+        if (_giResolved || GiResolve <= 0 || _giAlbedo is null || _giLow is null || _sceneColour is null || !_haveScene) return;
+        _giResolved = true;
+        if (!early) MarkScene();
         var cache = RunGiCache();
         if (cache is not null) Stamp("gi cache");
         bool relocate = Options.GiRelocating;

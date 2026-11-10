@@ -158,7 +158,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
 
     public OcclusionView OcclusionFor(Vector3 eye) => default;
 
-    public void RunGiResolve() { }
+    public void RunGiResolve(bool early = false) { }
 
     public void RunLightShafts(float darkening, float far, float groundY, float airByTime = 1)
     {

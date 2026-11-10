@@ -138,7 +138,7 @@ interface IWorldPostChain
     /// <summary>
     /// Resolves the GI probes into the scene (no-op without GI).
     /// </summary>
-    void RunGiResolve();
+    void RunGiResolve(bool early = false);
 
     /// <summary>
     /// Darkens the haze where the sun is shadowed along the view, before the fog volumes.
