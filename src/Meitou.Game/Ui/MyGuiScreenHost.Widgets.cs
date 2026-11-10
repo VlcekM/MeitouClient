@@ -89,6 +89,11 @@ public sealed partial class MyGuiScreenHost
         /// The size a resize grip gave the window (null: the layout's).
         /// </summary>
         public Vector2? Size;
+
+        /// <summary>
+        /// Whether the player dragged the window (it may then leave the screen, <see cref="KeepVisible"/>); a placement by the host clears it.
+        /// </summary>
+        public bool Dragged;
     }
 
     /// <summary>
@@ -153,6 +158,12 @@ public sealed partial class MyGuiScreenHost
     /// The repeat delay and step, seconds, and the snap distance, pixels.
     /// </summary>
     const double RepeatDelay = 0.5, RepeatStep = 0.1, SnapDistance = 10;
+
+    /// <summary>
+    /// How much of a dragged window stays on screen: MyGUI lets a window go anywhere, Meitou keeps its top edge and this many pixels of it in view
+    /// so it can be dragged back (#444).
+    /// </summary>
+    const float KeepVisible = 48;
 
     /// <summary>
     /// A scroll bar part, slider or resize grip is held.
@@ -612,7 +623,7 @@ public sealed partial class MyGuiScreenHost
 
     /// <summary>
     /// Places the screen's window roots: centred plus the screen's offset, as large as the layout (or a resize grip) says within <c>MinSize</c> /
-    /// <c>MaxSize</c> and the viewport, fully on screen. A viewport change moves a moved window by its alignment (Verified against MyGUI 3.2.2
+    /// <c>MaxSize</c> and the viewport, fully on screen (a dragged one partly, <see cref="OnScreen"/>). A viewport change moves a moved window by its alignment (Verified against MyGUI 3.2.2
     /// Window.cpp for the properties; Meitou's approximation for the move: the window keeps its distance from the edges its Right / Bottom / centre
     /// flags name, the left / top ones by default, a Stretch edge keeps both); Stretch roots with pixel positions grow by the viewport's change.
     /// </summary>
@@ -652,8 +663,7 @@ public sealed partial class MyGuiScreenHost
             h = Math.Max(min.Y, Math.Min(h, max.Y));
             w = Math.Clamp(w, 0, Math.Max(0, width - 24));
             h = Math.Clamp(h, 0, Math.Max(0, height - 24));
-            float x = Math.Clamp((width - w) / 2 + s.Offset.X, 0, Math.Max(0, width - w)), y = Math.Clamp((height - h) / 2 + s.Offset.Y, 0,
-                Math.Max(0, height - h));
+            var (x, y) = OnScreen(s, viewport, new(w, h), (width - w) / 2 + s.Offset.X, (height - h) / 2 + s.Offset.Y);
             b.Positions[root.Name] = new(x, y, w, h);
             if (!first) continue;
 
@@ -687,19 +697,36 @@ public sealed partial class MyGuiScreenHost
 
     /// <summary>
     /// A window drag to the pointer <paramref name="p"/>: with <c>Snap</c> a left / top edge within 10 px of the viewport's snaps to it and a right /
-    /// bottom edge within 10 px (strictly) likewise (Verified against MyGUI 3.2.2 Window.cpp getSnappedCoord), then the window is kept fully on
-    /// screen (Meitou; MyGUI does not clamp).
+    /// bottom edge within 10 px (strictly) likewise (Verified against MyGUI 3.2.2 Window.cpp getSnappedCoord), then the window may leave the
+    /// screen but for <see cref="KeepVisible"/> (Meitou; MyGUI does not clamp).
     /// </summary>
     void DragWindow((string Screen, Vector2 At, Vector2 Offset) d, Vector2 p)
     {
         var was = _screens[d.Screen].Offset;
         MoveWindow(d, p);
         var moved = _screens[d.Screen].Offset - was;
-        foreach (var (follower, leader) in _leaders) if (leader == d.Screen) _screens[follower].Offset += moved;
+        foreach (var (follower, leader) in _leaders)
+        {
+            if (leader != d.Screen) continue;
+
+            _screens[follower].Offset += moved;
+            _screens[follower].Dragged = true;
+        }
     }
 
     /// <summary>
-    /// Moves the window by the pointer's travel from the drag's start: edges snapped with Snap, then kept on screen.
+    /// A window's top-left kept on screen: fully, or for a dragged window with its top edge and <see cref="KeepVisible"/> pixels in view.
+    /// </summary>
+    static (float X, float Y) OnScreen(Screen s, Vector2 vp, Vector2 size, float x, float y)
+    {
+        if (!s.Dragged) return (Math.Clamp(x, 0, Math.Max(0, vp.X - size.X)), Math.Clamp(y, 0, Math.Max(0, vp.Y - size.Y)));
+
+        float keepX = MathF.Min(KeepVisible, size.X), keepY = MathF.Min(KeepVisible, size.Y);
+        return (Math.Clamp(x, keepX - size.X, Math.Max(0, vp.X - keepX)), Math.Clamp(y, 0, Math.Max(0, vp.Y - keepY)));
+    }
+
+    /// <summary>
+    /// Moves the window by the pointer's travel from the drag's start: edges snapped with Snap, then kept partly on screen.
     /// </summary>
     void MoveWindow((string Screen, Vector2 At, Vector2 Offset) d, Vector2 p)
     {
@@ -724,8 +751,8 @@ public sealed partial class MyGuiScreenHost
             if (Math.Abs(y + size.Y - vp.Y) < SnapDistance) y = vp.Y - size.Y;
         }
 
-        x = Math.Clamp(x, 0, Math.Max(0, vp.X - size.X));
-        y = Math.Clamp(y, 0, Math.Max(0, vp.Y - size.Y));
+        s.Dragged = true;
+        (x, y) = OnScreen(s, vp, size, x, y);
         s.Offset = new(x - (vp.X - size.X) / 2, y - (vp.Y - size.Y) / 2);
     }
 

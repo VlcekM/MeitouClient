@@ -306,7 +306,11 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// <summary>
     /// Moves screen <paramref name="id"/> by <paramref name="offset"/> from its layout position.
     /// </summary>
-    public void SetOffset(string id, Vector2 offset) => _screens[id].Offset = offset;
+    public void SetOffset(string id, Vector2 offset)
+    {
+        _screens[id].Offset = offset;
+        _screens[id].Dragged = false;
+    }
 
     /// <summary>
     /// Sets a widget's text (the focused edit box's too).
