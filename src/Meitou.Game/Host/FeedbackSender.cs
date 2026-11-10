@@ -21,13 +21,13 @@ sealed record FeedbackPackage(FeedbackForm Form, string Version, string Commit, 
 readonly record struct FeedbackResult(int Number, string? Url, string? Error);
 
 /// <summary>
-/// Sends a feedback report to the reports service (services/Meitou.Reports, docs/play-reports.md "Feedback"): the form first, then each
+/// Sends a feedback report to the reports service (services/Meitou.Reports, docs/feedback.md): the form first, then each
 /// attachment as its own upload (Cloudflare takes at most 100 MB a request), then the send that opens the issue.
 /// </summary>
 static class FeedbackSender
 {
     /// <summary>
-    /// The reports service, as the launcher's <c>ReportsUrl</c>.
+    /// The reports service (services/Meitou.Reports).
     /// </summary>
     internal const string ServiceUrl = "https://gear-pastry-chorus.cloudovna.app";
     /// <summary>

@@ -24,15 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0   # the roadmap history and the benchmark commit order are read from git
+          fetch-depth: 0   # the benchmark commit order is read from git
 
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-
-      # site/src/data/history.json: the roadmap's status counts and changes over time, for /roadmap and its feeds.
-      - name: Roadmap history
-        run: node site/scripts/history.mjs
 
       # site/public/bench/bench.json: the benchmark page's data, built from bench/data and the commit order on master; fails on invalid data.
       - name: Benchmark data

@@ -1826,9 +1826,6 @@ msgstr "模组"
 msgid "Mods"
 msgstr "模组"
 
-msgid "Report to the roadmap"
-msgstr "报告给路线图"
-
 msgid "Set up Meitou"
 msgstr "设置 Meitou"
 
@@ -1958,44 +1955,14 @@ msgstr "恢复为外观设定的值"
 msgid "Graphics settings saved; the game reads them when it starts."
 msgstr "画面设置已保存；游戏启动时会读取。"
 
-msgid "Roadmap system"
-msgstr "路线图系统"
-
 msgid "Search"
 msgstr "搜索"
-
-msgid "No match"
-msgstr "没有匹配项"
-
-msgid "Works for me"
-msgstr "我用着正常"
 
 msgid "Broken"
 msgstr "有问题"
 
-msgid "Attach the end of this version's log.txt (it can show folder names, such as your user name)"
-msgstr "附上这个版本 log.txt 的末尾（其中可能露出文件夹名，例如你的用户名）"
-
-msgid "Send report"
-msgstr "发送报告"
-
-msgid "Tell the roadmap how one of Kenshi's systems plays in Meitou. Bugs with steps are best as a GitHub issue."
-msgstr "告诉路线图 Kenshi 的某个系统在 Meitou 里表现如何。能讲清步骤的 bug 最好提到 GitHub issue。"
-
 msgid "System"
 msgstr "系统"
-
-msgid "Meitou version"
-msgstr "Meitou 版本"
-
-msgid "Pick a system."
-msgstr "请选择一个系统。"
-
-msgid "Say what happened."
-msgstr "请说明发生了什么。"
-
-msgid "Sending…"
-msgstr "发送中…"
 
 msgid "Not sent"
 msgstr "未发送"
@@ -2188,12 +2155,6 @@ msgstr "无法写入预设：{1}"
 msgid "Could not write {1}: {2}"
 msgstr "无法写入 {1}：{2}"
 
-msgid "Could not read the roadmap: {1}"
-msgstr "无法读取路线图：{1}"
-
-msgid "Not sent: {1}"
-msgstr "未发送：{1}"
-
 msgid "Could not use {1}: {2}"
 msgstr "无法使用 {1}：{2}"
 
@@ -2217,9 +2178,6 @@ msgstr "这能支持我开发 Meitou。ko-fi.com/martinvlcek"
 
 msgid "Open the installed version's folder"
 msgstr "打开已安装版本的文件夹"
-
-msgid "Tell the roadmap a system works or is broken"
-msgstr "告诉路线图某个功能是否正常"
 
 msgid "Write data/mods.cfg (Play does this too)"
 msgstr "写入 data/mods.cfg（开始游戏时也会写入）"
@@ -2955,12 +2913,6 @@ msgstr "启动参数中包含 --benchmark-baseline：只要它生效，游戏就
 
 msgid "The Vulkan loader is already installed. Select Vulkan to use it."
 msgstr "Vulkan 加载器已安装。选择 Vulkan 即可使用。"
-
-msgid "The roadmap lists no systems."
-msgstr "路线图里没有列出任何系统。"
-
-msgid "Thanks: your report is on its way to the roadmap."
-msgstr "谢谢：你的报告正在发往路线图。"
 
 # ---- messages the code builds at run time (saves, crime, arrests, locks, trade): {1} holes, the game's terms and spacing ----
 

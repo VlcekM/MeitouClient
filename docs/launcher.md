@@ -240,10 +240,6 @@ interpolated string, which no translation could match.
 - A value of the wrong type is dropped by its JSON path and takes its default; the rest stay. Unparsable JSON gives all defaults.
   Either way the file is first copied to `meitou.user.<yyyyMMdd-HHmmss>.bak.json`.
 
-## Play reports
-
-"Report to the roadmap" sends a play report to the reports service: [play-reports](play-reports.md).
-
 ## Mod list
 
 `ModList` (Meitou.Core) holds the discovery and `mods.cfg` rules shared with `LoadOrder`
