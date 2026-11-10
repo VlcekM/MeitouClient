@@ -89,7 +89,7 @@ sealed class HudPanels(PlayerInterface player)
     /// The state lines (State, Goal, Encumbrance and, alive, the Current Skill line) of the selected character. The State line is the original's
     /// first match (<c>FUN_1405d4260</c>, docs/game/ui-screens.md section 4): Dead; caged, the cage lock's "Locked (lvl: N)" or "(Unlocked...)" (no
     /// State line in a cage without a lock); Unconscious / Rebooting; Sleeping in a bed; Defensive; Normal; each with its tooltip; the ranged
-    /// controller's line, a progress line, comes between Sleeping and Defensive. The weather notice replaces it while it lasts.
+    /// controller's line, a progress line, comes between Sleeping and Defensive. The weather notice replaces all but the ranged line while it lasts.
     /// </summary>
     static PlayerInterface.HudLine[] StateLines(CharacterSnapshot lead, SpeedUnit unit)
     {
@@ -130,10 +130,10 @@ sealed class HudPanels(PlayerInterface player)
         }
         else state = Loc.Tr("Normal");
 
-        if (body is not { Dead: true } && lead.Prison is null && lead.WeatherNotice != WeatherNotice.None)
+        // The ranged line keeps its row over the weather notice (owner's call, #525: the original's precedence is Unknown).
+        if (body is not { Dead: true } && lead.Prison is null && fill is null && lead.WeatherNotice != WeatherNotice.None)
         {
             (state, tooltip) = WeatherText(lead.WeatherNotice, lead.WeatherNoticeProtection);
-            fill = null;
             colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet)
                 ? PlayerInterface.GoodColour
                 : PlayerInterface.BadColour;
