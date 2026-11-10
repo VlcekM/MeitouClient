@@ -1152,11 +1152,13 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Whether a medic's ask to stand still holds the character (<see cref="CharacterCold.StandStillUntil"/>): the original's patient takes 62
-    /// Standing still as an urgent goal, which its orders outrank and whose row needs no attack on it (<c>!isAggressionTowardsMe</c>). Engine
-    /// reading: an NPC (the player's characters move by orders), not fighting or fleeing.
+    /// Standing still as an urgent goal (a tier 3 request, docs/game/ai-tasks.md "Stand still"), which the front of its order queue outranks (the
+    /// chooser's source 1) and which beats its jobs and routine (sources 5 and 6); its row needs no attack on it (<c>!isAggressionTowardsMe</c>).
+    /// So an NPC or a player's character with no order in hand is held; not one fighting or fleeing.
     /// </summary>
     static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
-        cold.StandStillUntil > tick && !cold.IsPlayer && !cold.InCombat && !cold.Fleeing && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
+        cold.StandStillUntil > tick && (!cold.IsPlayer || cold.OrderQueue.Count == 0) && !cold.InCombat && !cold.Fleeing && cold.CarriedBy.IsNone
+            && n.Task != (byte)CharacterTask.Attack;
 
     /// <summary>
     /// The original's update time of a character out of view (<b>Verified</b>, docs/game/game-loop.md "Update time off screen"): the time the mover
