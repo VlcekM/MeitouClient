@@ -441,16 +441,15 @@ public class AggroTests
     }
 
     /// <summary>
-    /// A villager whose raider goes down ends that fight with its task target (docs/game/combat.md "Leaving a fight") and at once joins its squad
-    /// mate's defence against the other raider by its goal 143 (the fight's end asks it to think); once that one is down too and nobody is left, its
-    /// fight ends.
+    /// A villager whose raider goes down keeps its fight (not a picked attack: docs/game/combat.md "Leaving a fight") and takes the other raider, an
+    /// enemy of its faction attacking its squad mate; once that one is down too and nobody is left, its fight ends.
     /// </summary>
     [Fact]
     public void A_fighter_whose_target_drops_turns_on_a_mates_attacker_and_stops_when_none_is_left()
     {
         var table = FactionRelations.Build([
-            new FactionData { Id = "raiders", Name = "raiders", Relations = new Dictionary<string, int>() },
-            new FactionData { Id = "villagers", Name = "villagers", Relations = new Dictionary<string, int>() },
+            new FactionData { Id = "raiders", Name = "raiders", Relations = new Dictionary<string, int> { ["villagers"] = -80 } },
+            new FactionData { Id = "villagers", Name = "villagers", Relations = new Dictionary<string, int> { ["raiders"] = -80 } },
         ]);
         using var a = Make(6, 1, table, ai: true);
         var o = new Vector2(2000, 2000);
@@ -471,7 +470,8 @@ public class AggroTests
         Assert.Equal(second.Slot, a.Combat.StateOf(fighter).TargetSlot);
 
         a.World.Characters.Cold(second.Slot)!.Medical!.KnockOut(600);
-        a.World.RunTicks(5);
+        // The fight ends on the nothing-left test, about a second after the last target drops (a picked attack alone ends with its target).
+        a.World.RunTicks((int)(2 / a.World.TickSeconds));
 
         Assert.False(a.Fighting(fighter), "nobody left: the fight ends");
         Assert.True(a.Combat.StateOf(fighter).TargetSlot < 0);
