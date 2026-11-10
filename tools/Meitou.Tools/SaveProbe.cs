@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Simulation;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Locks;
@@ -68,8 +69,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The characters named like <paramref name="name"/>, with their squad once and then their task and AI every 40 ticks, <paramref name="rounds"/>
-    /// times.
+    /// The characters named like <paramref name="name"/>, with their squad once and then their task, AI and fight target every 40 ticks,
+    /// <paramref name="rounds"/> times.
     /// </summary>
     static void Watch(ProbeWorld probe, string name, int rounds)
     {
@@ -91,12 +92,24 @@ static class SaveProbe
                 var c = probe.Characters.Cold(i)!;
                 Console.WriteLine($"tick {probe.World.Tick} {probe.Who(i)} in={c.InSomething} carrying={c.Carrying} behaviour={c.Ai?.Behaviour} "
                     + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal} "
-                    + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count}");
+                    + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count} target={Target(probe, i)}");
             }
 
             probe.PrintMessages();
             probe.Tick(40);
         }
+    }
+
+    /// <summary>
+    /// The name and faction of the character <paramref name="i"/> fights, or "-".
+    /// </summary>
+    static string Target(ProbeWorld probe, int i)
+    {
+        var combat = probe.World.Systems.OfType<CombatSystem>().First();
+        var state = combat.StateOf(probe.Characters.IdOf(i));
+        if (!state.Fighting || probe.Characters.Cold(state.TargetSlot) is not { } c) return "-";
+
+        return $"{state.TargetSlot} '{c.Name}' {probe.Faction(c.Faction)}";
     }
 
     /// <summary>
@@ -264,7 +277,7 @@ static class SaveProbe
         Console.Error.WriteLine("""
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
-              watch <name> [rounds]    a character's task and AI every 40 ticks (default 10 rounds)
+              watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               cages <name>             fixtures within 300 of a character, with occupants
