@@ -92,9 +92,10 @@ from the start.
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
   set (**Observed**, decompile). An emptied inventory loads empty (**Observed**, original: a player's Bonedog saved with an empty INVENTORY_STATE was
   loaded and saved again with nothing; Meitou `SavedCharacters`, an empty state is the whole kit). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
-  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is, and whether it is
-  why the player's own animals have none (#341), is **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the
-  character is made from (**Inferred**).
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is is
+  **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the character is made from (**Inferred**).
+  The player's own animals have them too (**Observed**: a new game's start squad, Bonedog, Pack Beast and Iron Spider, saved by the original holds them,
+  flagged; out of sight in the window, below).
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
@@ -112,7 +113,7 @@ from the start.
   shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. A dead owner's are **Unknown**.
   Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
-Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
+Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to every new character, stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
 
 ## Ageing
