@@ -273,21 +273,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 + "the 16 GB M1 Pro. Use 5120 unless profiling.");
         }
         _window = _display.Window;
-        // The shared window setting: borderless full screen as the Vulkan path starts; --windowed keeps the window for one run.
-        bool fullScreen = host.Config.FullScreen && !host.WorldOptions.Windowed;
-        if (fullScreen) ToggleFullScreen();
-        else _display.SetFullScreenPresentation(false);
+        // The shared window setting: native macOS full screen (a Space of its own); --windowed keeps the window for one run.
+        if (host.Config.FullScreen && !host.WorldOptions.Windowed) ToggleFullScreen();
         _ctx.Samplers.MaxAnisotropy = host.WorldOptions.Anisotropy;
     }
 
     /// <summary>
-    /// Switches borderless full screen and the matching presentation.
+    /// Switches native macOS full screen.
     /// </summary>
-    void ToggleFullScreen()
-    {
-        BorderlessFullScreen.Toggle(_window);
-        _display.SetFullScreenPresentation(BorderlessFullScreen.IsOn(_window));
-    }
+    void ToggleFullScreen() => _display.SetFullScreen(!_display.FullScreen);
 
     /// <summary>
     /// The upscaler requests and the diagnostic opt-outs of the environment.
@@ -403,7 +397,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _overlay = DebugOverlay.TryCreate(_ctx);
         _showFrameStats = host.WorldOptions.Screenshot is null || Environment.GetEnvironmentVariable("MEITOU_METAL_OVERLAY") == "1";
         _display.Activate();
-        if (BorderlessFullScreen.IsOn(_window)) _display.SetFullScreenPresentation(true);
         host.Splash?.Dispose();
     }
 
@@ -415,7 +408,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // Let the queue finish before the renderers release views, buffers and bindless entries; a quit during a
         // streaming upload otherwise freed resources the GPU was still reading and could fault on the way out.
         SaveSettings();
-        _display.SetFullScreenPresentation(false);
         host.Loading?.Dispose();
         host.Loading = null;
         _ctx.Finish();
@@ -1129,7 +1121,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // config fields, and a command-line upscaler/scale stays explicit for this run.
         var metalDisplayKeys = new HashSet<string>(StringComparer.Ordinal)
         {
-            "VSync", "Full screen", SettingsMenu.MetalPresetSlider, WorldFrame.UpscalerSliders[1],
+            "VSync", "Full screen", SettingsMenu.MetalPresetSlider, SettingsMenu.MetalRenderScaleSlider, WorldFrame.UpscalerSliders[1],
         };
         foreach (var slider in settingsValues.Sliders)
             if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
@@ -1184,24 +1176,36 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void AddDisplaySettings(List<Slider> sliders)
     {
-        // Display: VSync, full screen, the MetalFX scale preset and filtering. MetalFX presets own the render scale,
-        // so there is no separate scale slider. The frame limit is added by SettingsMenu itself.
+        // Display: VSync, full screen, the MetalFX scale preset, the free render scale under it and filtering. The frame limit is added by
+        // SettingsMenu itself.
         sliders.Add(new Slider("VSync", 0, 1, () => _display.VSync ? 1 : 0, v => _display.VSync = v >= 0.5f,
             Text: v => v >= 0.5f ? "on" : "off (uncapped)"));
-        sliders.Add(new Slider("Full screen", 0, 1, () => BorderlessFullScreen.IsOn(_window) ? 1 : 0,
-            v => { if (v >= 0.5f != BorderlessFullScreen.IsOn(_window)) ToggleFullScreen(); },
-            Text: v => v >= 0.5f ? "borderless" : "window"));
+        sliders.Add(new Slider("Full screen", 0, 1, () => _display.FullScreen ? 1 : 0, v => _display.SetFullScreen(v >= 0.5f),
+            Text: v => v >= 0.5f ? "on" : "window"));
         sliders.Add(new Slider(SettingsMenu.MetalPresetSlider, 0, 9, () => _upscaling.CurrentPresetIndex(), v =>
         {
             int index = (int)MathF.Round(v);
             if (index is >= 0 and <= 8) _upscaling.SetPreset(index);
         }, "0"));
+        sliders.Add(new Slider(SettingsMenu.MetalRenderScaleSlider, 0.33f, 1, () => _ctx.RenderScale, _upscaling.SetRenderScale, "0.00",
+            Text: RenderScaleText, Step: 0.01f));
         sliders.Add(new Slider(WorldFrame.FilteringSlider, 0, 4, () => MathF.Log2(_ctx.Samplers.MaxAnisotropy),
             v => _ctx.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
             Text: v => (1 << (int)MathF.Round(v)) + "x"));
         sliders.Add(new Slider(WorldFrame.TextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.Level,
             v => TextureQuality.Level = (int)MathF.Round(v), "0",
                 Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
+    }
+
+    /// <summary>
+    /// The render scale slider's value with the scene's size it gives, from the window's pixels as they are now (full screen, a resize).
+    /// </summary>
+    string RenderScaleText(float scale)
+    {
+        var pixels = _display.Window.FramebufferSize;
+        var (width, height) = MetalContext.SceneSize(pixels.X, pixels.Y, scale);
+        string ratio = scale.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        return $"{ratio} ({width} x {height} px)";
     }
 
     /// <summary>
@@ -1409,7 +1413,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         host.Config.VSync = _display.VSync;
         host.Config.FpsLimit = _fpsLimit;
-        host.Config.FullScreen = BorderlessFullScreen.IsOn(_window);
+        host.Config.FullScreen = _display.FullScreen;
         host.Config.MetalUpscaler = _upscaling.Mode;
         host.Config.MetalRenderScale = _ctx.RenderScale;
         if (_hud is not null && (!host.GameOptions.LowEnd || _hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
@@ -1421,7 +1425,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             {
                 // These have their own config fields; the rest use the same graphics keys as the Vulkan settings.
                 if (GameHost.RunOnlyKeys().Contains(slider.Label) || slider.Label is SettingsMenu.MetalPresetSlider ||
-                    slider.Label == WorldFrame.UpscalerSliders[1]) continue;
+                    slider.Label is SettingsMenu.MetalRenderScaleSlider || slider.Label == WorldFrame.UpscalerSliders[1]) continue;
                 host.Config.Graphics[slider.Label] = slider.Get();
             }
             foreach (var toggle in _settingsValues.Toggles)
@@ -2152,7 +2156,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // Loading can take long enough for the terminal that started the game to take focus back: bring the game forward again
         // before the interactive loop (its title and FPS are watched there).
         _display.Activate();
-        if (BorderlessFullScreen.IsOn(_window)) _display.SetFullScreenPresentation(true);
         while (!_window.IsClosing && !_quit)
         {
             _window.DoEvents();

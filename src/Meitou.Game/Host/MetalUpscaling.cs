@@ -92,6 +92,13 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     }
 
     /// <summary>
+    /// The free render-scale slider: the scale in steps of 0.01 under the current mode (Native stays at full size; the clamp keeps MetalFX at
+    /// 0.40 at least).
+    /// </summary>
+    internal void SetRenderScale(float scale) =>
+        SetRenderScaleForPreset(Mode, Mode == MetalUpscalerMode.Native ? 1f : MathF.Round(scale * 100) / 100);
+
+    /// <summary>
     /// Sets the mode and render scale, falling back when the device lacks MetalFX temporal or spatial; the scale is kept in the config.
     /// </summary>
     void SetRenderScaleForPreset(MetalUpscalerMode next, float nextScale)

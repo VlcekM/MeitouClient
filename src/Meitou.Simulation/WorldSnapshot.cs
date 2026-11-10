@@ -907,6 +907,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public CharacterId LootOpener { get; init; } = CharacterId.None;
     /// <summary>
+    /// Who opened the open container's window (<see cref="PlayerState.ContainerOpener"/>); none while no container is open.
+    /// </summary>
+    public CharacterId ContainerOpener { get; init; } = CharacterId.None;
+    /// <summary>
     /// The item on the mouse (<see cref="PlayerState.Held"/>), null for none, and the serial of the last held-item command applied
     /// (<see cref="PlayerState.HeldSerial"/>).
     /// </summary>

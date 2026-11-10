@@ -27,6 +27,8 @@ static class SettingHints
         "Metal upscaling" => "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the "
             + "fallback when MetalFX is unavailable.",
         "Render scale" => "Internal rendering resolution relative to the window.",
+        "Metal render scale" => "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at "
+            + "least; Native always renders at full size).",
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
         "DLSS preset" => "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost.",
         "Object draw distance" => "Maximum distance at which objects remain visible.",

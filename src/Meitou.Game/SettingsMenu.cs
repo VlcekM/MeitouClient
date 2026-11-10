@@ -56,6 +56,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal const string MetalPresetSlider = "Metal upscaling";
     /// <summary>
+    /// The Metal-only free render scale under the preset's upscaler, shown with the scene's size in pixels.
+    /// </summary>
+    internal const string MetalRenderScaleSlider = "Metal render scale";
+    /// <summary>
     /// The sliders' values when the menu was made: what Restore defaults puts back.
     /// </summary>
     internal readonly float[] Defaults = values.Sliders.Select(s => s.Get()).ToArray();
@@ -494,7 +498,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static string Section(string label)
     {
         if (label is "Time of day" or "Time speed") return "Advanced";
-        if (label is "VSync" or "Full screen" or MetalPresetSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
+        if (label is "VSync" or "Full screen" or MetalPresetSlider or MetalRenderScaleSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
             || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
 
         return GraphicsSection(label, false);
@@ -600,7 +604,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
             ? "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, "
-                + "so the separate scale slider is disabled."
+                + "and the render scale slider fine-tunes it (Custom)."
             : key == WorldFrame.UpscalerSliders[0]
                 ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", Loc.Tr(UpscalerStatus?.Invoke() ?? "unavailable"))
             : SettingHints.SliderHint(slider);

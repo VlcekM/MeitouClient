@@ -489,9 +489,11 @@ particles (the low-resolution targets are shared; the near-plane close pass is s
 the hover outline, move marker and navmesh debug overlay (Shift+F11).
 `MetalGameLoop` (`Host/MetalGameLoop.cs`) is now a playable loop: WASD/arrows, Q/E, wheel and middle-drag
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
-F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter is borderless.
+F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter toggles full screen. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
+has `FullScreenPrimary`): a Space of its own, so Cmd+Tab and Ctrl+Left/Right switch away, and AppKit hides the menu bar and Dock
+(**Unknown** on hardware yet: written for issue #390, built but not run).
 The shared settings menu is now wired on Metal too (F10; Display, Graphics, Interface, Controls, Advanced and Audio),
-including the MetalFX preset (which owns the render scale), VSync, frame limit and borderless full screen, persisted in
+including the MetalFX preset (which owns the render scale), VSync, frame limit and full screen, persisted in
 `meitou.user.json`. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
 start chooser, save/load slots and confirmations, the in-game Esc menu, the loading screen and sky transitions, and the
 audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
@@ -742,7 +744,7 @@ default.
   fixed its Metal depth convention and sun-motion term, but it is still labelled experimental. The **F10 settings
   panel** exposes the MetalFX scale presets Native 1.00, Super Quality 0.77, Quality 0.67, Balanced 0.59,
   Performance 0.50, Performance 0.40, Spatial 0.50/0.40 alternatives and TAA 0.50, plus VSync, frame limit,
-  borderless full screen and the live Metal graphics controls. The preset owns the render scale, so there is no
+  full screen and the live Metal graphics controls. The preset owns the render scale, so there is no
   separate custom-scale slider for MetalFX. The lowest supported MetalFX scale is 0.40: 0.33 (3x) crashed before the
   first frame on this device, and a hand-edited lower value is clamped.
   `MEITOU_METAL_NO_TAA=1` is the clean native comparison (no jitter, no temporal resolve);

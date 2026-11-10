@@ -1104,6 +1104,16 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
+    /// The size the scene renders at in a <paramref name="width"/> x <paramref name="height"/> pixel backbuffer (the window's backing pixels,
+    /// Retina included) at <paramref name="renderScale"/>.
+    /// </summary>
+    public static (int Width, int Height) SceneSize(int width, int height, float renderScale)
+    {
+        float scale = Math.Clamp(renderScale, 0.25f, 1f);
+        return (Math.Max((int)MathF.Round(width * scale), 1), Math.Max((int)MathF.Round(height * scale), 1));
+    }
+
+    /// <summary>
     /// The backbuffer at the window's size, and the scene's depth and GI albedo at the render size (re-made when either changed).
     /// </summary>
     void EnsureTargets(int width, int height, CAMetalDrawable drawable)
@@ -1117,8 +1127,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         float scale = Math.Clamp(RenderScale, 0.25f, 1f);
-        SceneWidth = Math.Max((int)MathF.Round(width * scale), 1);
-        SceneHeight = Math.Max((int)MathF.Round(height * scale), 1);
+        (SceneWidth, SceneHeight) = SceneSize(width, height, scale);
 
         if (_depth is not { } currentDepth || currentDepth.Desc.Width != SceneWidth || currentDepth.Desc.Height != SceneHeight)
         {

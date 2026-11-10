@@ -84,11 +84,26 @@ sealed class InventoryWindows(PlayerInterface player)
     static readonly string[] ItemScreens = ["inventory", "bag", "limbs", "loot", "loot-bag", "trader", "building", "bench", "storage"];
 
     /// <summary>
-    /// The character the inventory window (and its bag and limbs) shows: the lead selected character, also while trading, as the original's (a trade
-    /// passes to the window's character, <see cref="Meitou.Simulation.Trading.TradeSystem.TradeWith"/>; a pinned window is its own screen,
-    /// <see cref="SyncPinnedInventories"/>).
+    /// The character the inventory window (and its bag and limbs) shows: the looter of the open loot or container window while selected, else the
+    /// lead selected character, also while trading (a trade passes to the window's character,
+    /// <see cref="Meitou.Simulation.Trading.TradeSystem.TradeWith"/>; a pinned window is its own screen, <see cref="SyncPinnedInventories"/>).
+    /// The original always shows the lead selected character, even when another selected one looted (engine choice, issue #389).
     /// </summary>
-    internal CharacterSnapshot? InventoryOwner() => player.Selected().FirstOrDefault();
+    internal CharacterSnapshot? InventoryOwner()
+    {
+        var selected = player.Selected();
+        var opener = LootingCharacter();
+        return selected.FirstOrDefault(c => c.Id == opener) ?? selected.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The character whose loot or container window is open, none while neither is.
+    /// </summary>
+    CharacterId LootingCharacter()
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        return snapshot.OpenLoot.IsNone ? snapshot.ContainerOpener : snapshot.LootOpener;
+    }
 
     /// <summary>
     /// The character a character window shows: a pinned window's, the loot's body, else the inventory owner.

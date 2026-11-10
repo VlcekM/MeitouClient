@@ -244,6 +244,7 @@ public sealed partial class World
             ActiveSquad = Player.Squad,
             OpenLoot = Player.OpenLoot,
             LootOpener = Player.LootOpener,
+            ContainerOpener = Player.OpenContainer is null ? CharacterId.None : Player.ContainerOpener,
             Held = Player.Held is { } held ? Items.HeldItemView.Of(held) : null,
             HeldSerial = Player.HeldSerial,
             Buildings = Buildings.Published(),
