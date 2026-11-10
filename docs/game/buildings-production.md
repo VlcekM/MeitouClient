@@ -241,7 +241,8 @@ shows the first failing message in this order (**Verified** unless marked):
   town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a
   building takes that building's town when it is within 5000 (X/Z) of the ghost, so furniture in a bought town house
-  joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; a level building
+  joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; the parent instance id is unique only per
+  zone ([zones](../formats/zones.md)), so the level building of that id nearest the ghost is meant; a level building
   of no town, such as a wilderness ruin, goes on to the rules below); else the nearest town of the player faction within 5000 (X/Z); else the town of
   the nearest player building within 2500 (the decompile adds an X/Z > 10000 test there that looks unreachable,
   **Observed**); else a `creates player town` building that is not a wall makes an outpost at its position

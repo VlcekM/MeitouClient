@@ -12,6 +12,7 @@ using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using SimWorld = Meitou.Simulation.World;
@@ -118,7 +119,8 @@ public class ConstructionTests
         public ItemFactory Items { get; }
         public List<CharacterId> Ids { get; } = [];
 
-        public Rig(int threads = 1, bool snapshots = false, ulong seed = 6, bool production = false)
+        public Rig(int threads = 1, bool snapshots = false, ulong seed = 6, bool production = false,
+            PopulationData? population = null)
         {
             var db = Db = Database();
             Items = new ItemFactory(db, Constants);
@@ -130,6 +132,7 @@ public class ConstructionTests
             };
             if (production)
                 systems.Add(new Meitou.Simulation.Production.ProductionSystem(db, Constants, BodyOptions.Default, Items, null));
+            if (population is not null) systems.Add(new PopulationSystem(population));
             World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = snapshots, MinPartitionSize = 1 }, walk,
                     systems);
             World.Player.Faction = PlayerFaction;
@@ -254,6 +257,32 @@ public class ConstructionTests
     }
 
     // ------------------------------------------------------------------ outposts
+
+    /// <summary>
+    /// A camp hut built in a town house joins that town and makes no outpost, though a far town lists a building of the same instance id first:
+    /// instance ids are unique only within a zone (feedback #399, where a mod's <c>19-rebirth-INGAME</c> is in dozens of zones).
+    /// </summary>
+    [Fact]
+    public void A_building_in_a_town_house_makes_no_outpost_when_a_far_zone_reuses_its_instance_id()
+    {
+        const string instance = "19-rebirth-INGAME";
+        var farAt = HutAt + new Vector3(20000, 0, 0);
+        TownSite Town(int index, Vector3 at, int zone) =>
+            new(index, new TownData { Id = "town" + index, Name = "Town " + index }, at, new ZoneCoordinate(zone, 0))
+            {
+                Buildings = [new TownBuilding(instance, Hut, "House", at, 0, false, false, []) { Zone = new ZoneCoordinate(zone, 0) }],
+            };
+        var data = new PopulationData
+        {
+            Db = Database(), Sites = [Town(0, farAt, 9), Town(1, HutAt, 5)], Factions = [],
+        };
+        using var rig = new Rig(population: data);
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Outpost, HutAt + new Vector3(10, 0, 10), Quaternion.Identity, Parent: instance)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+
+        Assert.Empty(rig.World.Buildings.Towns);
+        Assert.Equal(0, Assert.Single(rig.World.Buildings.All).Town);
+    }
 
     /// <summary>
     /// A shed out in the open has no town; a camp hut 3000 away makes "Your Outpost" at its position and takes the shed in (nearest town within
