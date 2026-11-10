@@ -16,15 +16,17 @@ public sealed unsafe partial class PostProcess
     Target2D? _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered;
     TracedAddPass? _tracedAddPass;
 
-    GpuTexture? TracedTermTarget => TracedSun && GiResolve > 0 ? _tracedTerm?.Texture : null;
+    GpuTexture? TracedTermTarget => (TracedSun || ContactSun) && GiResolve > 0 ? _tracedTerm?.Texture : null;
 
-    /// <summary>The term, the rays' mask and the filtered one, at the render size, made on the first frame that traces (<see cref="Free"/> drops them with the other targets).</summary>
+    /// <summary>The term (also the contact shadows', <see cref="ContactSun"/>), the rays' mask and the filtered one, at the render size, made on the first frame that wants them
+    /// (<see cref="Free"/> drops them with the other targets).</summary>
     void EnsureTracedSun()
     {
-        if (!TracedSun || GiResolve <= 0 || _tracedTerm is not null || !SupportsStorage(InternalFormat.Rgba16F)) return;
+        if ((!TracedSun && !ContactSun) || GiResolve <= 0 || (_tracedTerm is not null && (!TracedSun || _tracedMask is not null)) || !SupportsStorage(InternalFormat.Rgba16F)) return;
         using var batch = Gpu.Uploads.Begin();
-        _tracedTerm = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16F, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post traced sun term")),
+        _tracedTerm ??= new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16F, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post traced sun term")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
+        if (!TracedSun) return;
         _tracedMask = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun mask");
         _tracedScratch = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun penumbra");
         _tracedFiltered = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun filtered");

@@ -165,7 +165,11 @@ static partial class WorldFrame
         // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
         if (gpu.Objects is { } casters) casters.HiddenFloorsCast = casters.CastersBothSides = gpu.Shadow is { Meitou: true };   // Faithful shadows: the floor view's hidden parts cast nothing, as in the game
         gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
-        if (gpu.Post is { } tracedPost) (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, gpu.Shadow is { Enabled: true });
+        if (gpu.Post is { } tracedPost)
+        {
+            (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, gpu.Shadow is { Enabled: true });
+            tracedPost.ContactSun = tracedPost.Options.ContactShadows && !gpu.Traced && gpu.Shadow is { Enabled: true } && gpu.Probes is not null;
+        }
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
@@ -722,6 +726,9 @@ static partial class WorldFrame
         bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
         if (traced) gpu.Probes!.Traced = true;
         if (gpu.DebugShadows == 4 && s_tracedLogs++ % 120 == 0) LogTraced(ref f, traced);
+        // The contact shadows' sun (PostProcess.ContactSun) leaves the colours the same way, with its cascades, until ContactSun puts it back.
+        bool apart = !traced && gpu.Post is { ContactSunReady: true } && gpu.Probes is not null;
+        if (apart) gpu.Probes!.SunApart = true;
 
         DrawSceneTerrain(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
@@ -732,6 +739,14 @@ static partial class WorldFrame
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
         if (traced) TraceSun(ref f, s);
+        if (apart)
+        {
+            gpu.Probes!.SunApart = false;
+            f.Host.Close();
+            gpu.Post!.RunContactSun();
+            f.Host.Open(9, gpu.Post.WithShadingRate(gpu.Post.SceneTargets));
+            StageClock.Lap(14, "contact sun");
+        }
         DrawWater(ref f, s.Near, s.Far, s.ViewProjection, f.RelativeRotation * s.Jittered);
         KeepParticleViews(ref f, s);
         CloseScene(f.Host);

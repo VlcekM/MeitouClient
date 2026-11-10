@@ -301,11 +301,12 @@ static class AtmosphereShaders
         // 0 solid, 1 grass, 2 foliage cards, 3 characters; below 0: stays with the cascades (impostors, whose quad is not their surface).
         vec3 tracedSunOut = vec3(0.0);
         int atmoReceiver = 0;
-        // How much of the sun at a world point is left to the traced sun: all of it at every depth while this view traces (uGiParams.z bit 4, uMsFlags.w above 0; the traced sun is the
-        // main view's), on every receiver but the impostors.
+        // How much of the sun at a world point is written apart (tracedSunOut): all of it at every depth while this view traces (uGiParams.z bit 4, uMsFlags.w above 0; the traced
+        // sun is the main view's) or its contact shadows take the sun alone (bit 8: with its cascades, PostProcess.ContactSun), on every receiver but the impostors.
         float atmoTracedShare(vec3 world)
         {
-            return (int(uGiParams.z + 0.5) & 4) == 0 || uMsFlags.w < 0.5 || atmoReceiver < 0 ? 0.0 : 1.0;
+            int bits = int(uGiParams.z + 0.5);
+            return atmoReceiver >= 0 && ((bits & 8) != 0 || ((bits & 4) != 0 && uMsFlags.w >= 0.5)) ? 1.0 : 0.0;
         }
         float atmoSelfShadow = 1.0;   // a surface's own shadow on the sun (the terrain's relief, GroundRelief), set before kenshiLight; 1 none
         float atmoShadowLift = 0.0;   // world units above the point the sun shadow is looked up from (a ground trough under its flat casters, GroundRelief)
@@ -328,7 +329,7 @@ static class AtmosphereShaders
             vec3 tracedSun = vec3(0.0);
             if (tracedShare > 0.0)
             {
-                msTraced = true;
+                msTraced = (int(uGiParams.z + 0.5) & 8) == 0;   // the rays hold the cascades' casters; the contact shadows' sun keeps its cascades
                 tracedSun = sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * tracedShare;
                 msTraced = false;
             }

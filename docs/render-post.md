@@ -151,15 +151,23 @@ must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shaft
 
 ## Contact shadows
 
-The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: a screen-space guess, kept for GPUs without ray queries; never with the sun shadows Off or traced, `PostProcess.SunShadowed`): its own full-screen pass at the render size (`PostProcessShaders.Contact`, `ApplyContactShadows`,
-after the occlusion in `ApplySsao`) marches the depth 10 steps, 8 units towards the light, and multiplies what the surface keeps into the scene colour. A hit takes `0.85` x the sun's share of the surface's light (`sun / (sun + ambient)`, with the shadow cascades and cloud shadow in the
-sun term), so it stops at the ambient level, and there is none in cascade shadow, under clouds or at night. Fades out from 1500 to 2500 units.
-Independent of the occlusion (SSAO, GTAO or none). Takes the occlusion's air and water visibility, not its half size, blur or reduced strength on characters' own
-pixels: armour layers and hair over a face keep their contact shadow. A sample counts as hidden within 0.6 units (+1 % of the view depth) behind the depth, so a thin
-part held over the ground (a raised leg) does not cast a slab of shadow (3 units did). The march's noise moves on per frame (golden-ratio offset of the pixel's
-noise), so the temporal upscaler averages it; without one it shows as dither. Pixels the traced sun lights (surface target bit 16) take none: its rays already
-hold the contact shadow.
-**Unknown**: look and cost; not yet run on a GPU.
+The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: what the screen does not show casts nothing; never with the sun shadows Off or
+traced, whose rays hold them): short sun shadows from the scene depth at the render size, for what the cascades' texels are too coarse for (armour plates,
+straps, a boot on the ground, the ground's own relief). One full-screen pass (`PostProcessShaders.Contact`):
+
+- The march (`contactHit`): the ray to the sun is walked on the screen a pixel at a time, at most 48 steps (two pixels a step past 48 pixels; cut short past
+  96), over at most 8 units, its depth exact at each pixel (1 / depth is linear on the screen). No noise: the same picture every frame. What hides the ray
+  stands above the point's own plane by two pixels' size (the normal rebuilt from the depth), so a surface never shadows itself at any view angle, and has the
+  ray within 0.6 units (+1 % of the view depth) behind it, so a near object does not shadow all that lies far behind it on the screen. The shadow fades over
+  the last 40 % of the reach, and from 1500 to 2500 units from the eye. Only where the rebuilt normal faces the sun.
+- With the GI resolve (`PostProcess.ContactSun`): the lit fragments write their sun term, cascades included, apart (location 2, the traced sun's circuit;
+  `uGiParams.z` bit 8, `GiProbes.SunApart`), and the pass, run over the opaque scene before the water (`RunContactSun`), adds it back times what the march
+  leaves, through the haze. The contact shadows then take the sun alone: nothing of the ambient, the lamps or the bounced light, and nothing in cascade shadow.
+- Without it: the pass multiplies the scene colour (`ApplyContactShadows`, after the occlusion) by `1 - hit x the sun's share of the surface's light`
+  (`sun / (sun + ambient)`, with the cascades and cloud shadow in the sun term), with the occlusion's air and water visibility.
+
+**Observed** (a character on dunes at noon and a Shek town at 15:10, off and on): armour plates and the boot gain their shadows, the dunes' ridges theirs; no
+halo round the character against the far ground; the rest of the picture is the same to the eye. **Unknown**: cost.
 
 ## HDR output
 

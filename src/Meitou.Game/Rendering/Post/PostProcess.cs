@@ -297,11 +297,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).</summary>
     sealed class ContactPass : FullscreenProgram
     {
-        public readonly SamplerSlot Depth, Surface;
-        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact, SurfaceOn, NoiseFrame;
+        public readonly SamplerSlot Depth, Surface, Term;
+        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact, SurfaceOn, TermOn;
         public ContactPass(GpuContext gpu) : base(gpu, PostProcessShaders.Contact, "post contact")
         {
-            (Surface, SurfaceOn, NoiseFrame) = (P.Sampler("uSurface"), P.Uniform("uSurfaceOn"), P.Uniform("uNoiseFrame"));
+            (Surface, SurfaceOn, Term, TermOn) = (P.Sampler("uSurface"), P.Uniform("uSurfaceOn"), P.Sampler("uTerm"), P.Uniform("uTermOn"));
             (Depth, WaterY, Contact) = (P.Sampler("uDepth"), P.Uniform("uWaterY"), P.Uniform("uContact"));
             (Tan, NearFar, Size) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
@@ -680,7 +680,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Drawn = l.Late = false;
         _softDepthReady = false;
         CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
-        _sceneMarked = _aoApplied = false;
+        _sceneMarked = _aoApplied = _contactSunRan = false;
         Stamp("start");
         _frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(_frameIndex, JitterPhases) : Vector2.Zero;
@@ -1173,30 +1173,57 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     void ApplyContactShadows()
     {
-        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess).
-        if (!Options.ContactShadows || !SunShadowed || TracedSun || !_haveScene || _sceneColour is null || _sceneDepth is null) return;
+        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess), nor when
+        // they went into the sun written apart (RunContactSun).
+        if (!Options.ContactShadows || !SunShadowed || TracedSun || _contactSunRan || !_haveScene || _sceneColour is null || _sceneDepth is null) return;
+        DrawContact(MathF.Tan(_fovY * 0.5f), _aspect, _nearPlane, _farPlane, null);
+        Stamp("contact");
+        CloseSegment();
+    }
+
+    /// <summary>
+    /// This frame's sun is written apart for the contact shadows (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the lit fragments leave it out
+    /// of the colour (location 2, as for the traced sun) and <see cref="RunContactSun"/> adds it back times what the contact shadows leave of it, so they take
+    /// the sun alone, exactly, and nothing of the ambient, the lamps or the bounced light.
+    /// </summary>
+    public bool ContactSun { get; set; }
+    /// <summary>The scene targets carry the sun's term for the contact shadows this frame.</summary>
+    internal bool ContactSunReady => ContactSun && !TracedSun && TracedTermTarget is not null && _giAlbedo is not null;
+    bool _contactSunRan;
+
+    /// <summary>Over the opaque scene, its pass closed (as <see cref="RunTracedSun"/>): the sun's term times what the contact shadows leave, added to the scene.</summary>
+    internal void RunContactSun()
+    {
+        if (_tracedTerm is null || _giAlbedo is null || _sceneColour is null || _sceneDepth is null) return;
+        DrawContact(MathF.Tan(_fovNow * 0.5f), _aspectNow, _planes.X, _planes.Y, _tracedTerm);
+        _contactSunRan = true;
+        Stamp("contact sun");
+        CloseSegment();
+    }
+
+    /// <summary>The contact pass: over <paramref name="term"/> added to the scene, or without one multiplied into it.</summary>
+    void DrawContact(float tanY, float aspect, float near, float far, Target2D? term)
+    {
         var c = _contactPass ??= new ContactPass(Gpu);
-        float tanY = MathF.Tan(_fovY * 0.5f);
         Bind(c.P, c.Depth, _sceneDepth);
-        c.P.Set(c.Tan, ViewWindow.Tan(tanY * _aspect, tanY));
-        c.P.Set(c.NearFar, _nearPlane, _farPlane);
+        c.P.Set(c.Tan, ViewWindow.Tan(tanY * aspect, tanY));
+        c.P.Set(c.NearFar, near, far);
         c.P.Set(c.Size, (float)_width, (float)_height);
         var r = _viewRotation;
         c.P.Set(c.Right, r.M11, r.M21, r.M31);
         c.P.Set(c.Up, r.M12, r.M22, r.M32);
-        c.P.Set(c.Back, ViewWindow.BackFor(r, _fovY, _aspect));
+        c.P.Set(c.Back, ViewWindow.BackFor(r, 2 * MathF.Atan(tanY), aspect));
         c.P.Set(c.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
         c.P.Set(c.WaterY, WaterHeight ?? float.MinValue);
         c.P.Set(c.Contact, Options.ContactParams);
         // Pixels the traced sun lights (the surface target's bit 16) keep its shadow alone: it already holds the contact, and both darkened thin gaps twice.
-        bool surface = SurfaceReady;
+        bool surface = term is not null || SurfaceReady;
         Bind(c.P, c.Surface, surface ? _giAlbedo : null);
         c.P.Set(c.SurfaceOn, surface ? 1f : 0f);
-        c.P.Set(c.NoiseFrame, (float)(_frameIndex % 1024));
+        Bind(c.P, c.Term, term);
+        c.P.Set(c.TermOn, term is not null ? 1f : 0f);
         c.P.ApplyGlobals();
-        Draw(c.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, AoMultiplyState);
-        Stamp("contact");
-        CloseSegment();
+        Draw(c.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, term is not null ? GiAddState : AoMultiplyState);
     }
 
     /// <summary>The occlusion (SSAO or GTAO) into the scene colour (<see cref="ApplySsao"/>).</summary>

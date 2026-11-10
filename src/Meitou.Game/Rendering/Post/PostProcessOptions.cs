@@ -344,12 +344,12 @@ public sealed class PostOptions
     /// dark halo as wide as itself (radius 6, strength 4) with a light seam where the half-size mask met it.
     /// </summary>
     public const float SsaoCharacterOccluder = 0.3f;
-    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short screen-space sun shadows, run with the SSAO and multiplied into its factor. Off by default
-    /// (a screen-space guess: what the screen does not show casts nothing); the traced sun does the same exactly where the device has ray queries.</summary>
+    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short sun shadows marched in the scene depth, taken from the sun's light alone where the GI resolve runs. Off by default
+    /// (what the screen does not show casts nothing); the traced sun does the same exactly where the device has ray queries.</summary>
     public bool ContactShadows;
-    /// <summary>How much of the sun's share of a surface's light a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
-    public const float ContactStrength = 0.85f, ContactReach = 8, ContactThickness = 0.6f, ContactEnd = 2500;
-    /// <summary>The contact shadows' parameters for the SSAO pass; a strength of 0 turns them off.</summary>
+    /// <summary>How much of a surface's sun a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
+    public const float ContactStrength = 1, ContactReach = 8, ContactThickness = 0.6f, ContactEnd = 2500;
+    /// <summary>The contact shadows' parameters for their pass; a strength of 0 turns them off.</summary>
     public System.Numerics.Vector4 ContactParams =>
         new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);
     /// <summary>The <c>gtao</c> switch (docs/render-post.md "GTAO"): with <see cref="Ssao"/> on, the occlusion is the horizon search instead; off by default in every preset.</summary>

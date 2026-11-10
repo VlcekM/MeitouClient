@@ -86,45 +86,59 @@ static class PostProcessShaders
         }
         vec3 viewPos(vec2 uv) { return viewPosAt(ivec2(floor(uv * uSize))); }
 
-        // Contact shadows (docs/render-post.md "Contact shadows"): how far along the ray towards the sun the depth first hides it, 0 none and 1 at the surface.
-        // A sample counts only within the thickness behind the depth, so a near object does not shadow all that lies far behind it on the screen.
-        float contactHit(vec3 p, vec3 l, vec3 n, float z, float noise)
+        // Contact shadows (docs/render-post.md "Contact shadows"): how much of the sun the depth hides from a point, 0 none to 1. The ray to the sun is walked on
+        // the screen a pixel at a time (two when it is longer than the steps; past twice the steps it is cut short), its depth exact at each pixel (1 / depth is
+        // linear on the screen), with no noise: one picture, the same every frame. What hides it stands above the point's own plane (the surface a point lies on
+        // never shadows it, at whatever angle it is seen) and has the ray within the thickness behind it, so a near object does not shadow all that lies far
+        // behind it on the screen. The shadow fades out over the last part of the reach.
+        float contactHit(vec3 p, vec3 l, vec3 n, float z)
         {
-            const int N = 10;
-            vec3 start = p + n * (0.1 + 0.002 * z);
-            float thickness = uContact.z + 0.01 * z;
-            for (int i = 0; i < N; i++)
+            const int N = 48;
+            float pixel = 2.0 * uTan.y * z / uSize.y;
+            vec3 a = p + n * pixel;
+            float reach = uContact.y;
+            if (l.z > 0.0) reach = min(reach, 0.9 * (-a.z - uNearFar.x) / l.z);   // the end stays in front of the eye
+            if (reach <= 0.0) return 0.0;
+            vec2 sa = (a.xy / (-a.z * uTan) * 0.5 + 0.5) * uSize;
+            vec3 b = a + l * reach;
+            vec2 span = (b.xy / (-b.z * uTan) * 0.5 + 0.5) * uSize - sa;
+            float len = max(abs(span.x), abs(span.y));
+            if (len > float(2 * N))
             {
-                float t = (float(i) + noise) / float(N);
-                vec3 q = start + l * uContact.y * t;
-                if (q.z >= 0.0) return 0.0;
-                vec2 uv = q.xy / (-q.z * uTan) * 0.5 + 0.5;
-                if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
-                float behind = -q.z - depthViewZ(texelFetch(uDepth, ivec2(uv * uSize), 0).r, uNearFar);
-                if (behind > 0.0 && behind < thickness) return 1.0 - t * t;
+                b = a + l * (reach * float(2 * N) / len);
+                span = (b.xy / (-b.z * uTan) * 0.5 + 0.5) * uSize - sa;
+                len = max(abs(span.x), abs(span.y));
+            }
+            if (len < 1.0) return 0.0;
+            int steps = min(int(ceil(len)), N);
+            float ka = -1.0 / a.z, kb = -1.0 / b.z;
+            float thickness = uContact.z + 0.01 * z, rise = 2.0 * pixel;
+            for (int i = 1; i <= steps; i++)
+            {
+                float s = float(i) / float(steps);
+                vec2 at = sa + span * s;
+                if (any(lessThan(at, vec2(0.0))) || any(greaterThanEqual(at, uSize))) return 0.0;
+                vec3 q = viewPosAt(ivec2(at));
+                float behind = 1.0 / mix(ka, kb, s) + q.z;
+                if (behind > 0.0 && behind < thickness && dot(q - p, n) > rise) return 1.0 - smoothstep(0.6, 1.0, s);
             }
             return 0.0;
         }
 
-        // What a surface keeps of its light under a contact shadow: 1 - (the sun's share of its light) * strength * the hit. The sun's share keeps a contact
+        // What a surface keeps of its light under a contact shadow that takes hit of its sun, where the sun is not written apart: 1 - (the sun's share of its
+        // light) * the hit. The sun's share keeps a contact
         // shadow from going darker than the ambient light, and ends it under clouds and at night. Cascade shadows already took the sun away: nothing then.
-        float contactLight(vec3 p, vec3 n, float z, float noise)
+        float contactLight(vec3 p, vec3 n, float z, float hit, float noise)
         {
-            if (uContact.x <= 0.0 || z >= uContact.w) return 1.0;
-            vec3 l = vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack));
-            l = normalize(l);
+            vec3 l = normalize(vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack)));
             float nl = dot(n, l);
-            if (nl <= 0.0) return 1.0;
-            float hit = contactHit(p, l, n, z, noise);
-            if (hit <= 0.0) return 1.0;
             vec3 world = uSsaoEye + p.x * uRight + p.y * uUp + p.z * uBack;
             vec3 worldNormal = n.x * uRight + n.y * uUp + n.z * uBack;
             vec3 weights = vec3(0.2126, 0.7152, 0.0722);
             float sun = 3.14159265 * nl * dot(uAtmoSunLight, weights) * shaftShadow(world, noise) * atmoCloudShadow(world);
             float ambient = dot(atmoIrradiance(worldNormal), weights) * uAtmoLight.w;
             float share = sun / max(sun + ambient, 1e-4);
-            float fade = 1.0 - smoothstep(0.6 * uContact.w, uContact.w, z);
-            return 1.0 - uContact.x * hit * share * fade;
+            return 1.0 - hit * share;
         }
 
         void main()
@@ -180,34 +194,48 @@ static class PostProcessShaders
     /// <summary>
     /// Contact shadows (docs/render-post.md "Contact shadows") at the render size, on their own: the <see cref="Ssao"/> source's functions with a main of their
     /// own, so they run with SSAO, GTAO or no occlusion, keep the detail a half-size pass blurs (armour layers, hair over a face) and take none of the occlusion's
-    /// reduction on characters. Writes the light kept (1: none taken), multiplied into the scene colour.
+    /// reduction on characters. With the sun written apart (<c>uTermOn</c>, <see cref="PostProcess.ContactSun"/>): writes the sun term times what the contact
+    /// shadows leave of it, through the haze, added to the scene. Without: the light kept (1: none taken), multiplied into the scene colour.
     /// </summary>
     public static readonly string Contact = Ssao[..(Ssao.IndexOf("\nvoid main()", StringComparison.Ordinal) + 1)] + """
-        uniform usampler2D uSurface;   // the GI surface target: a pixel whose bit 16 is set takes the traced sun, which already has its contact
+        uniform usampler2D uSurface;   // the GI surface target: bit 16 of w is set where the sun was written apart (the traced sun's pixels, or these shadows')
         uniform float uSurfaceOn;      // 1: uSurface is bound
-        uniform float uNoiseFrame;     // the frame number: the march's offset moves on per frame, so the temporal upscaler averages it
+        uniform sampler2D uTerm;       // the sun term written apart
+        uniform float uTermOn;         // 1: add the term (the sun is not in the scene colour); 0: multiply the scene colour
 
         void main()
         {
             ivec2 c = ivec2(floor(gl_FragCoord.xy));
             float d = texelFetch(uDepth, c, 0).r;
-            if (depthIsSky(d)) { fragColour = vec4(1.0); return; }
-            if (uSurfaceOn > 0.5 && (texelFetch(uSurface, c, 0).w & 65536u) != 0u) { fragColour = vec4(1.0); return; }
+            bool apart = uTermOn > 0.5;
+            bool marked = uSurfaceOn > 0.5 && (texelFetch(uSurface, c, 0).w & 65536u) != 0u;
+            // Added: only where a term was written. Multiplied: not where the traced sun lights, whose rays hold the contact.
+            if (apart ? !marked || depthIsSky(d) : marked || depthIsSky(d)) { if (apart) discard; fragColour = vec4(1.0); return; }
             vec3 p = viewPosAt(c);
             float z = -p.z;
-            if (z >= uContact.w) { fragColour = vec4(1.0); return; }
-            vec3 l = viewPosAt(c - ivec2(1, 0)), r = viewPosAt(c + ivec2(1, 0));
-            vec3 u = viewPosAt(c + ivec2(0, 1)), b = viewPosAt(c - ivec2(0, 1));
-            vec3 dx = abs(r.z - p.z) < abs(p.z - l.z) ? r - p : p - l;
-            vec3 dy = abs(u.z - p.z) < abs(p.z - b.z) ? u - p : p - b;
-            vec3 n = normalize(cross(dx, dy));
-            if (n.z < 0.0) n = -n;
-            float kept = contactLight(p, n, z, fract(ign(gl_FragCoord.xy) + uNoiseFrame * 0.6180339887));
-            if (kept < 0.999)
+            float hit = 0.0;
+            vec3 n = vec3(0.0, 0.0, 1.0);
+            if (z < uContact.w && uContact.x > 0.0)
             {
-                vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
-                kept = mix(1.0, kept, airVisibility(offset) * waterVisibility(offset));
+                vec3 l = viewPosAt(c - ivec2(1, 0)), r = viewPosAt(c + ivec2(1, 0));
+                vec3 u = viewPosAt(c + ivec2(0, 1)), b = viewPosAt(c - ivec2(0, 1));
+                vec3 dx = abs(r.z - p.z) < abs(p.z - l.z) ? r - p : p - l;
+                vec3 dy = abs(u.z - p.z) < abs(p.z - b.z) ? u - p : p - b;
+                n = normalize(cross(dx, dy));
+                if (n.z < 0.0) n = -n;
+                vec3 sun = normalize(vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack)));
+                if (dot(n, sun) > 0.0) hit = uContact.x * contactHit(p, sun, n, z) * (1.0 - smoothstep(0.6 * uContact.w, uContact.w, z));
             }
+            vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
+            if (apart)
+            {
+                vec3 hazeMul, hazeAdd;
+                atmoApplyCoefficients(uSsaoEye, uSsaoEye + offset, hazeMul, hazeAdd);
+                fragColour = vec4(texelFetch(uTerm, c, 0).rgb * (1.0 - hit) * hazeMul, 0.0);
+                return;
+            }
+            float kept = hit > 0.0 ? contactLight(p, n, z, hit, ign(gl_FragCoord.xy)) : 1.0;
+            if (kept < 0.999) kept = mix(1.0, kept, airVisibility(offset) * waterVisibility(offset));
             fragColour = vec4(vec3(kept), 1.0);
         }
         """;
