@@ -1731,7 +1731,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             if (_hud is { UiVisible: true } && select && host.Sandbox.SandboxToggleClick(at)) return;
             // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
-            if (_hud is not null && _hud.MouseDown(host.PlayerButton(mapped), at, _shiftDown, Ctrl(), Alt())) return;
+            if (_hud is not null && _hud.MouseDown(host.PlayerButton(mapped), at, _shiftDown, Ctrl(), host.HighlightHeld())) return;
             host.Session.Input.SetMouseButton(mapped, true);
         };
         mouse.MouseUp += (_, button) =>
@@ -2303,7 +2303,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover
         // outlines agree.
         bool ctrlHeld = Ctrl();
-        bool altHeld = Alt();
+        bool altHeld = host.HighlightHeld();
         bool highlighting = altHeld && !host.Covered && !host.TitleScreen.TitleVisible && _hud is { UiVisible: true } &&
             _settings?.Visible != true && !host.Session.Camera.IsFree;
         if (_hud is not null)

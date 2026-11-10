@@ -312,7 +312,7 @@ ground-item picks: the ray stops where it meets the building's `interior mask` c
 **Observed** (owner's original-game report): holding Alt highlights building signs in yellow.
 **Observed** (merged installed game data, reader survey): BUILDING `is sign` is true on `993-gamedata.base`
 (Sign Medic) and `3436-otto.mod` (sign3_bar); category `sign` alone is insufficient (`972-gamedata.base`, Weapon Sign, has the flag false).
-Meitou's rebindable `Highlight` action defaults to either Alt key. While held in the focused gameplay view,
+Meitou's rebindable `Highlight` action defaults to either Alt key; it is also the steal and pick-lock modifier, as in the original, and Meitou's loot one. While held in the focused gameplay view,
 real parts whose owning BUILDING has `is sign` receive a yellow tint, including layout objects and both LODs
 during a transition. Release restores their materials. Loading, menus, hidden UI, free camera and cinema suppress it.
 Rendering details: [objects](../render-objects.md#building-sign-highlight).
@@ -392,7 +392,7 @@ round the foundations, piers and slab under it. A house's placement height is it
 The original's mouse code, kenshi_x64.exe 1.0.68. The panels a selected building fills: [ui-screens](ui-screens.md#selected-building).
 
 **Buttons** (**Verified**: Controls `DAT_142133370`, actions registered in `FUN_1403636c0`): held flags `mouse_select` +0xf3,
-`mouse_command` +0xf4, `highlight` (Left Alt) +0xf2. Each frame `FUN_140801630` stores edges on PlayerInterface (**Observed**): +0x2f1 select
+`mouse_command` +0xf4, `highlight` (Left Alt) +0xf2 (`DAT_142133462`, the flag the steal and pick-lock tests read, so they follow the highlight binding, not Alt). Each frame `FUN_140801630` stores edges on PlayerInterface (**Observed**): +0x2f1 select
 released, +0x2f2 select pressed, +0x2f3 command released, +0x2f4 command pressed; the two command edges are cleared while the context menu
 is visible or was last frame. Then `FUN_140800f10` (drag box) and, unless a box is being dragged, the pick `FUN_140800250` run every frame, so
 hover and clicks share one pick.

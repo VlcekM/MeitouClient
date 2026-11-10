@@ -1141,10 +1141,9 @@ sealed class GameLoop(GameHost host)
         if (_cinema.Contains(at)) return;
         if (physical is { } button)
         {
-            // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
-            if (host.Player.MouseDown(host.PlayerButton(button), at, _shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight),
-                    Held(SilkKey.AltLeft, SilkKey.AltRight)))
-                return;
+            // Ctrl and Highlight (Alt) with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
+            bool ctrl = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
+            if (host.Player.MouseDown(host.PlayerButton(button), at, _shiftDown, ctrl, host.HighlightHeld())) return;
             host.Session.Input.SetMouseButton(button, true);
         }
     }
@@ -1443,7 +1442,7 @@ sealed class GameLoop(GameHost host)
             : Pixels(_orbitAnchor ?? pointerMouse.Position);
         host.DevConsoleHost.ConsolePointer = pointerAt;
         host.Player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
-        host.Player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
+        host.Player.AltHeld = host.HighlightHeld();
         host.ScreenshotRequested = host.Player.GateScreenshot(host.ScreenshotRequested);
         bool highlighting = Highlight(takeFile);
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered

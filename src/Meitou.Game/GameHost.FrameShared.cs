@@ -53,6 +53,12 @@ sealed partial class GameHost
     internal bool OrbitHeld() => Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>
+    /// A key or button bound to Highlight (either Alt by default) is down: the original's steal, pick-lock and loot modifier is that action's held
+    /// flag (docs/game/ui-input.md "Building picking and selection").
+    /// </summary>
+    internal bool HighlightHeld() => Session.Bindings.Get(InputAction.Highlight).Any(Session.Input.IsHeld);
+
+    /// <summary>
     /// The button the interface sees for a physical one: the Select button is its left, the Command button its right (each falls back to its own
     /// default while unbound, so the interface stays reachable). Any other of the three, such as the Orbit button, is its middle (which the map pans
     /// with and which stops no click reaching the world under the interface); the extra buttons stay as they are.

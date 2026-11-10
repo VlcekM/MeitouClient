@@ -692,7 +692,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal const double DoubleTapSeconds = 0.5;
     /// <summary>
-    /// Ctrl and Alt as the host last saw them: they turn the pointer over a downed character into the carry and loot pointers.
+    /// Ctrl and the Highlight key (Alt by default) as the host last saw them: they turn the pointer over a downed character into the carry and loot
+    /// pointers, and Highlight lets an order steal or pick a lock.
     /// </summary>
     public bool CtrlHeld, AltHeld;
     /// <summary>
