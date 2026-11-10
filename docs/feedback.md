@@ -58,6 +58,7 @@ the reporter's workshop items) to run under the reporter's mods instead of the i
 - New issues: `issue-labels.yml` runs `.github/scripts/label-issue.mjs`, where Claude Haiku 5.5 (`claude-haiku-5-5`, effort low,
   structured output) reads the title and text and picks one `area:` label from `labels.json`, or none. An issue that already has an
   area is skipped; a refusal (Haiku has no server-side fallback) leaves it unlabelled. Feedback issues, opened by the GitHub App,
-  are labelled too. Needs the `ANTHROPIC_API_KEY` secret (skipped without it).
+  are labelled too. Needs the `ANTHROPIC_API_KEY` secret (skipped without it). Run by hand with `issues` (space-separated
+  numbers) to label older issues.
 - `.github/ISSUE_TEMPLATE/bug.yml`: the bug form (version, platform, copy, mods, what happened, the original, steps, log.txt).
 - `site-check.yml`: builds `site/` on pull requests.
