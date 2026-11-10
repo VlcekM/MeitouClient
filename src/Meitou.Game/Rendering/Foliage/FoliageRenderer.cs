@@ -1069,6 +1069,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// made from: while those stay within <see cref="GrassWalkSlack"/> the walk would decide the same, so it is skipped.
     /// </summary>
     bool _grassSettled;
+    /// <summary>
+    /// The last walk changed nothing and had nothing in progress, though pages still wait (a full store whose farthest held page is nearer than the
+    /// nearest waiting one): until the eye, a kept point, the range or the pages change (<see cref="GrassWalkCurrent"/>) a walk would do the same again.
+    /// Without it a full store walked every page of every zone each frame (3.4 ms at grass distance x16, docs/render-foliage.md).
+    /// </summary>
+    bool _grassStalled;
     (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) _grassWalk;
     Vector3[] _grassWalkKept = [];
     /// <summary>
@@ -1115,7 +1121,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         // Nothing moving and nothing in progress since the last walk: it would decide the same (its results, NearestMissingGrass and the counts,
         // stand).
-        if (!settling && _grassSettled && GrassWalkCurrent(eye, kept)) return;
+        if (!settling && (_grassSettled || _grassStalled) && GrassWalkCurrent(eye, kept)) return;
+        var versionBefore = _grassVersion;
+        bool completed = false;
         bool unsettled = false;
         _grassWanted.Clear();
         _grassNear = 0;
@@ -1185,6 +1193,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     {
                         state.GrassRunning--;
                         inFlight--;   // its slot is free for this frame's picks
+                        completed = true;
                         page.Job = null;
                         var result = job.Result;
 
@@ -1199,12 +1208,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         }
         _grassEyeWaited = eyeWaiting;
         _grassSettled = !unsettled && !eyeWaiting && _grassWanted.Count == 0 && inFlight == 0;
-        if (_grassSettled)
-        {
-            _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grassVersion);
-            if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
-            for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
-        }
+        if (_grassSettled) RememberGrassWalk(eye, kept);
         if (eyeWaiting && _grassFull && victim is not null)
         {
             FreePage(victim);
@@ -1268,6 +1272,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 return (blades, floats, prefixes);
             });
         }
+        // Nothing made, freed, queued or finished, and nothing in flight: the next walk would be this one again.
+        _grassStalled = !_grassSettled && !settling && !completed && picked == 0 && inFlight == 0 && _grassVersion == versionBefore;
+        if (_grassStalled) RememberGrassWalk(eye, kept);
+    }
+
+    /// <summary>What the walk just made saw, for <see cref="GrassWalkCurrent"/>.</summary>
+    void RememberGrassWalk(Vector3 eye, IReadOnlyList<Vector3> kept)
+    {
+        _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grassVersion);
+        if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
+        for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
     }
 
     const int SlabBytes = 512 << 10;
