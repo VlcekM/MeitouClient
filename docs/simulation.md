@@ -465,9 +465,10 @@ Implemented (`PopulationRoaming.cs`):
     `pop2` 1.008, `popd2` 20.
   - **Homeless squads** (`PopulationHomeless.cs`; [original rules](game/factions-squads-towns.md#off-screen-world)): every 2 s a squad whose
     leader patrols (a PATROL goal, outside a patrol-class package's town route; a homeless squad has no town, so its patrol package walks here too: the
-    Border Zone's starving bandits) walks to its patrol point (its home centre, homeless radius) and picks the
-    next within 500; a town drawn with `patrol approaches towns` is aimed 200 outside its first gate that is not a ruin with gate code 0 or unknown (unknown = outside, engine choice) or wall with `interior` references, milled round (50) and left
-    within 100, so bandits stop outside the Hub ([patrol task](game/factions-squads-towns.md#off-screen-world)).
+    Border Zone's starving bandits) walks to its patrol point: the leader to the point exactly (`AiSystem.ActPatrol`, kept as the home centre), the
+    others following it; within 100 of it the next is drawn (the 2 s step stands in for the original's "move ended"); a town drawn with `patrol
+    approaches towns` is aimed 200 outside its first gate that is not a ruin with gate code 0 or unknown (unknown = outside, engine choice) or wall
+    with `interior` references, so bandits stop outside the Hub ([patrol task](game/factions-squads-towns.md#off-screen-world)).
     A squad belongs to the sector it stands in: one that walks into an unloaded sector leaves the world (after the roaming
     10 s grace outside the active zones, ≥ 1382.4 from every player character), kept there with
     `KeepWild` up to that sector's count, else dropped. The area tick refills the loaded sectors, all taken as one island (engine choice): while below the sum of their shares one sector is drawn by weight and, if it makes no squad (no spot), the next in the same look, as the original. Sectors a town stands in (re-read each refill, not Ruins or points of interest) and the one under the camera focus are never refilled.

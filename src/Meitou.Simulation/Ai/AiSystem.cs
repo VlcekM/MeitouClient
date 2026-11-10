@@ -1514,19 +1514,23 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A patrol package's route: the leader walks (or runs) to the route's next point, the others follow it; without a route it wanders.
+    /// A patrol package's route: the leader walks (or runs) to the route's next point, the others follow it. Without a route the leader walks to
+    /// the patrol point exactly (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"), which the population's patrol step
+    /// keeps in <see cref="Squad.HomeCentre"/> and redraws once it is reached; the others follow.
     /// </summary>
     static void ActPatrol(World world, int slot, AiMind mind, Blackboard board)
     {
         var table = world.Characters;
         bool leader = mind.Squad.Leader == table.IdOf(slot);
+        if (!leader)
+        {
+            Become(world, slot, CharacterTask.Follow);
+            return;
+        }
 
         if (board.CurrentClass is PackageClass.Patrol or PackageClass.PatrolRunning && board.RouteIndex < board.Route.Length)
-        {
-            if (!leader) Become(world, slot, CharacterTask.Follow);
-            else WalkTo(world, slot, board.Route[board.RouteIndex], board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
-        }
-        else Become(world, slot, CharacterTask.Wander);
+            WalkTo(world, slot, board.Route[board.RouteIndex], board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
+        else WalkTo(world, slot, mind.Squad.HomeCentre, SpeedMode.Walk);
     }
 
     /// <summary>

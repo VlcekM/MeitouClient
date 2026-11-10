@@ -14,8 +14,8 @@ namespace Meitou.Simulation.Population;
 /// <item><b>Patrols</b> (<c>Task_Patrol</c>, <c>FUN_1408fc730</c>): a squad whose leader acts out a PATROL goal outside a patrol-class package walks
 /// from sector to sector of its biome group: a neighbouring sector (the four diagonal or the four straight ones, a coin flip), a random point in it,
 /// or with <c>patrol approaches towns</c> sometimes a town of it, aimed 200 outside its gate or wall (<see cref="OutsideTown"/>); near the point it
-/// picks the next. Neighbours are weighted by how crowded they are (<see cref="SectorWeight"/>); the walk is the squad's wander round the point
-/// (<see cref="Squad.HomeCentre"/>: <see cref="PointRadius"/> and <see cref="PointArrive"/>).</item>
+/// picks the next. Neighbours are weighted by how crowded they are (<see cref="SectorWeight"/>); the leader walks to the point
+/// (<see cref="Squad.HomeCentre"/>), its squad following, and the next is drawn once it is within <see cref="PointArrive"/>.</item>
 /// <item><b>Refill</b> (area tick <c>FUN_1408f9240</c>): while the loaded sectors hold fewer squads than the sum of P × <c>homeless spawn amount</c>,
 /// one sector below its own share and with no town in it makes one squad. Engine choice: the loaded sectors are one island.</item>
 /// <item><b>Sectors by place</b>: a squad belongs to the sector it stands in (<see cref="Refile"/>), so one that walks out of the loaded sectors
@@ -47,9 +47,10 @@ public sealed partial class PopulationSystem
     readonly Dictionary<int, (int X, int Z)?> _homelessHomes = [];
 
     /// <summary>
-    /// The wander radius and the arrive distance of a loaded patrol's point, a sector point or a town's (<see cref="OutsideTown"/>). The original
-    /// sends the character to that exact point and draws the next once the move has ended (<c>CharMovement::setPatrolInput</c> mode 3,
-    /// <c>FUN_1405c6b30</c> mode 1: Verified); the small mill and arrive are engine choices that keep the squad at the point. The 500 of
+    /// The home radius kept round a loaded patrol's point (a sector point or a town's, <see cref="OutsideTown"/>) and the distance from it at which
+    /// the next is drawn. The original sends the character to that exact point and draws the next once the move has ended
+    /// (<c>CharMovement::setPatrolInput</c> mode 3, <c>FUN_1405c6b30</c> mode 1: Verified); the leader walks there exactly (Ai.AiSystem's patrol
+    /// act-out), and the arrive distance with this step's 2 s cadence is the engine's reading of "the move has ended". The 500 of
     /// <c>FUN_1407ee790</c> is the off-screen rule only (<see cref="Ai.PlatoonJobs.PatrolArrive"/>).
     /// </summary>
     const float PointRadius = 50, PointArrive = 100;
@@ -201,7 +202,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal that is not on a patrol package's route nor under a mission town
     /// (a trader on its way, an assault or occupation roaming the town it took), it draws the next point once it has reached the last
-    /// (<see cref="PatrolPoint"/>) and wanders round it. Every squad does, homeless or not: the picker's only caller is the patrol task
+    /// (<see cref="PatrolPoint"/>) and walks to it. Every squad does, homeless or not: the picker's only caller is the patrol task
     /// (<c>FUN_1408fd6c0</c>, <c>FUN_1408fe0d0</c>, <b>Verified</b>).
     /// </summary>
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)

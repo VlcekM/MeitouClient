@@ -648,9 +648,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   idle, reached or failed), so the squad walks up to 200 outside the gate, stops, and turns to the next sector or town. Off screen a new
   point is picked within 500 of the last (`FUN_1407ee790`).
   Meitou (`PopulationHomeless.PatrolPoint`): the weights above with n the homeless squads standing in the zone and 10 for an empty active
-  one (engine choice), the tether, re-pick within 100 of the point for a loaded squad (the exact point, mill 50: engine choices; 500 only off screen); with no neighbour, a point of the home's sector, else of its own (engine choice).
+  one (engine choice), the tether, the leader walking to the exact point and the next drawn within 100 of it for a loaded squad (100 and the 2 s step: engine reading of the move's end; 500 only off screen); with no neighbour, a point of the home's sector, else of its own (engine choice).
   A drawn town's point is the outside point above (`OutsideTown`: the first non-ruined `is wall gate` building with gate code 0 or unknown (unknown = outside, engine choice) or `links together` building with `interior` references, its origin
-  moved 200 outward from the town position); the squad mills a 50 disc round it and re-picks within 100 (origin, outward and both radii: engine choices).
+  moved 200 outward from the town position); the leader walks to it and the next is drawn within 100 (origin, outward and the radius: engine choices).
   `patrol approaches towns` is set on 933 of 961 squad templates of the merged load order, the Starving Bandit and Dust Bandit roamers
   among them, so their patrols target NPC towns as above; no other town check was found (**Verified**, record dump).
 - **Traders**: restocked only while active, when the clock passes the platoon's `inventory refresh time`; an unloaded one catches up at
