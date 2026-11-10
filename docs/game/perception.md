@@ -76,6 +76,9 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   override). A second icon's frame is round((1 - x) x (frames - 1)), x = clamp(character +0xd8, 0, 1): the
   `LightLevel` image of `Kenshi_CharacterNameTags` (7 frames, frame 0 full light; **Verified**, kenshi_images.xml), on the
   panel's right in colour (0.942, 0.806, 0.341) (**Verified**, `Kenshi_CharacterNamePanel.layout`). The tag state is set alongside: 3 seen, 2 almost seen, 1 hidden.
+  A name longer than the layout's text box shows whole, "[Drifter-cannibal escapee]" for one (**Observed**). Whether the panel widens to fit
+  it or the text overflows its box, and whether a short name narrows the panel, is **Unknown**; Meitou widens it, the text box stretching and
+  the icons keeping its edges by the layout's aligns (`Stretch`, `Left`, `Right`).
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
