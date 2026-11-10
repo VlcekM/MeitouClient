@@ -249,6 +249,7 @@ static class AtmosphereShaders
         }
         {{EnvBrdfFunction}}
         float atmoMetalness = 0.0;   // the surface's metalness (a worn item's colour map blue, CharacterShaders), set before kenshiLight / stageLight; 0 dielectric
+        float atmoTranslucency = 0.0;   // how much sun a cut-out surface lets through from behind (objects.hlsl TRANSPARENCY)
         // The character editor's stage (a fog distance of -2): the game's rtt.hlsl (docs/characters.md "Character editor"): one punctual light of colour 0.6 (CalcPunctualLight: diffuse
         // pi * N.L * (1 - 0.04), GGX specular for roughness 1 - 0.99 * gloss, specular colour 0.04) plus the environment light of the irradiance and specular cubes
         // (CalcEnvironmentLight), times the exposure 0.5, stored as it is in an 8-bit target (UNORM, as the icons). l: towards the light, v: towards the eye.
@@ -387,7 +388,8 @@ static class AtmosphereShaders
             }
             return lit;
         }
-        vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world) { return kenshiLight(albedo, n, v, gloss, world, vec3(clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0))); }
+        // A surface facing away from the sun takes -N.L times its translucency (lightingFunctions.hlsl CalcPunctualLight, the sun only).
+        vec3 kenshiLight(vec3 albedo, vec3 n, vec3 v, float gloss, vec3 world) { float sunNl = clamp(dot(n, uAtmoLight.xyz), -1.0, 1.0); return kenshiLight(albedo, n, v, gloss, world, vec3(sunNl >= 0.0 ? sunNl : -sunNl * atmoTranslucency)); }
 
         // The distant water fades out before its far clip, revealing the sky already behind it.
         // The shafts use the same weight for their water correction, so it cannot leave a horizon band.
