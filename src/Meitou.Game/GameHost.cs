@@ -573,7 +573,8 @@ sealed partial class GameHost(
         Player.Frontend.ConfigureFrontend(Scene.Database,
             () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, Install.SaveDirectory, localSaves), credits);
 
-        Player.TitleMenu.DataProblems = (Scene.Database?.Issues.Count ?? 0) + (Scene.Objects?.Levels.Problems().Count ?? 0);
+        // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges (docs/formats/fcs-mod.md): logged, not a problem.
+        Player.TitleMenu.DataProblems = (Scene.Database?.Issues.Count(i => i.Kind is not (Data.GameDataIssueKind.RecordAlreadyDefined or Data.GameDataIssueKind.ModifiedRecordNotFound)) ?? 0) + (Scene.Objects?.Levels.Problems().Count ?? 0);
         if (Scene.Database is { } db)
         {
             Player.TitleMenu.Mods = ModReport.Build(Install, db, Modding.Mods?.Refused);
