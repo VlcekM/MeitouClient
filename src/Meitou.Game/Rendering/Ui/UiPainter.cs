@@ -803,25 +803,41 @@ public sealed partial class UiPainter : IDisposable
         if (_resources.Skins.TryGetValue(c.Skin, out var skin) && _textures.TryGetValue(skin.Texture, out var atlas))
         {
             var atlasMask = _masks.GetValueOrDefault(skin.Texture);
-
             // A toggled button (Checked) uses MyGUI's *_checked states, else looks pushed.
             bool on = c.Properties.GetValueOrDefault("Checked") == "true";
             string state = on ? widgetState + "_checked" : widgetState;
+
+            // looping through each skin piece.
             foreach (var part in skin.Parts)
             {
+                // skip elements that aren't drawable skin textures, such as SimpleText.
                 if (part.Type is not ("SubSkin" or "MainSkin" or "TileRect")) continue;
+                // determine which texture image to use for each individual skin piece based on that buttons current state.
                 if (!part.States.TryGetValue(state, out var source) && !(on && part.States.TryGetValue("pushed", out source))
                     && !part.States.TryGetValue("normal", out source))
                     continue;
 
-                var dest = part.Offset.AlignTo(b, skin.Width, skin.Height, part.Align);
+                // if Kenshi_TickButton1Skin use the screen height, else use no scaling.
+                float skinScale = skin.Name is "Kenshi_TickButton1Skin" ? height / 1080f : 1f;
+
+                // get the original position and dimensions of the skin piece from the game's UI (layout) skin definition.
+                var offset = part.Offset;
+
+                // Scale the individual skin pieces of each skin piece for the radio buttons.
+                if (skinScale != 1f)
+                    offset = new UiRect(offset.X * skinScale, offset.Y * skinScale, offset.Width * skinScale, offset.Height * skinScale);
+
+                // Calculate where the piece belongs on the screen
+                var dest = offset.AlignTo(b, skin.Width * skinScale, skin.Height * skinScale, part.Align);
+
+                // Calculate the button's tint and transparency
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
+                // draw the skin pieces
                 if (part.Type == "TileRect")
                     PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint);
                 else
                     PaintSkinPart(atlas, atlasMask, source, dest, clip, width, height, tint);
             }
-
             _overlay.Flush(width, height, clip, pass);
         }
     }
