@@ -77,6 +77,8 @@ also uses 0x8000 internally as "release all".
   opposite request for the same parts cancels both, a duplicate is dropped. Only when the character
   has a visual or is dead (slot 31) and, for "on", is not in furniture (Character `+0x2f8`, the
   bed/cage state of [carry-loot](carry-loot.md)).
+  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls. **Observed** (harness `cage-in --record` in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and `stealth-ko`): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced (**Unknown**).
+
 - The queue is drained at the sync point `FUN_1407d2380` → `FUN_1405d2c30` → setter `FUN_1405d0db0`,
   which keeps a request queued while the skeleton is not ready or a get-up blend runs.
 - The setter, for WHOLE or CARRY_MODE: unlinks a carried body (also when the carrying arm goes limp),
