@@ -4,7 +4,7 @@ using Meitou.Content;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// Whether a newer Meitou is out than the running one, for the feedback form (docs/play-reports.md "Feedback"): the reports service's <c>GET
+/// Whether a newer Meitou is out than the running one, for the feedback form (docs/feedback.md): the reports service's <c>GET
 /// /latest</c> (it reads GitHub's releases itself, so players never meet GitHub's rate limit), asked at most once per <see cref="Reuse"/>. A nightly
 /// compares with the newest game release of any kind, a release with the newest release. Any failure (offline, an untagged build) is no answer.
 /// </summary>

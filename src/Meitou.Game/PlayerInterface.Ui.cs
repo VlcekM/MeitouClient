@@ -179,6 +179,7 @@ sealed partial class PlayerInterface
             if (id == "load") layout = FrontendScreens.WithSaveFilter(layout);
             if (id == "editor") (CharacterEditor.EditorLayout, CharacterEditor.EditorRowsShape) = (layout, "");
             if (id == "inventory") TradeWindows.CharacterInventoryLayout = layout;
+            if (id == "bag") InventoryWindows.BagLayout = layout;
             if (id == "leveleditor") layout = LevelEditorPanel.LevelEditorBar(layout);
             FaithfulScreens.Register(id, layout, modal, centreRoot: id is "file");
         }

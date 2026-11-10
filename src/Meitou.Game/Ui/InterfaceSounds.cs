@@ -111,7 +111,7 @@ sealed class InterfaceSounds(PlayerInterface player)
             if (open.Contains(id)) continue;
 
             SoundScreens.Remove(id);
-            switch (InventoryWindows.IsPinnedInventory(id) ? "inventory" : id)
+            switch (InventoryWindows.ScreenKind(id))
             {
                 case "inventory" or "bag" or "limbs" or "trader" or "building" or "bench" or "storage": Sound("Inventory_Close"); break;
                 case "stats": Sound("Stats_Close"); break;
@@ -134,7 +134,7 @@ sealed class InterfaceSounds(PlayerInterface player)
         {
             if (!SoundScreens.Add(id)) continue;
 
-            switch (InventoryWindows.IsPinnedInventory(id) ? "inventory" : id)
+            switch (InventoryWindows.ScreenKind(id))
             {
                 case "inventory" or "bag" or "limbs" or "trader" or "building" or "bench" or "storage": Sound("Inventory_Open"); break;
                 case "stats": Sound("Stats_Open"); break;
@@ -297,7 +297,7 @@ sealed class InterfaceSounds(PlayerInterface player)
     {
         if (UiSound is null || e.Action.StartsWith("inventory-scroll", StringComparison.Ordinal)) return;
 
-        switch (e.Screen)
+        switch (InventoryWindows.ScreenKind(e.Screen))
         {
             case "title" or "menu" or "new-game" or "save" or "load" or "message" or "file": Sound("General_Click"); break;
             case "inventory" or "bag" or "trader": if (e.Widget == "ArrangeButton") Sound("General_Click"); break;

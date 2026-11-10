@@ -700,15 +700,14 @@ sealed class WorldMap(PlayerInterface player)
         {
             if (!InventoryCommands.IsMovableSection(item.Section)) return false;
 
-            bool otherBag = other == player.InventoryWindows.InventoryOwner()?.Id && player.FaithfulScreens.IsOpen("bag");
+            bool otherBag = player.InventoryWindows.BagShown(other);
             player.Say(new QuickMoveItem(lead.Id, token, shift, false) { Tick = player.Session.World.Tick, Into = other, IntoBag = otherBag });
             return true;
         }
 
         if (MapItemTowns?.Invoke(item.Record) is not null)
             player.Say(new ReadMapItem(lead.Id, token) { Tick = player.Session.World.Tick });
-        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.FaithfulScreens.IsOpen("bag")
-            && !InventoryWindows.IsPinnedInventory(picked.Screen)) { Tick = player.Session.World.Tick });
+        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.InventoryWindows.BagShown(lead.Id)) { Tick = player.Session.World.Tick });
 
         return true;
     }
@@ -719,7 +718,7 @@ sealed class WorldMap(PlayerInterface player)
     /// </summary>
     CharacterId? OtherCharacterWindow(string screen, CharacterId own)
     {
-        if (screen is not ("inventory" or "bag") && !InventoryWindows.IsPinnedInventory(screen)) return null;
+        if (InventoryWindows.ScreenKind(screen) is not ("inventory" or "bag")) return null;
 
         var open = player.FaithfulScreens.OpenScreens;
 

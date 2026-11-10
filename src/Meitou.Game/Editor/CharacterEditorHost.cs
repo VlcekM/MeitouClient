@@ -41,7 +41,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (host.PopData is not { } data) return;
         ui.CharacterEditor.EditorData = (data.Db, host.Install.Root);
-        ui.CharacterEditor.Previews.PreviewSource = (recordId, loadout) => data.Appearances?.Create(recordId, loadout);
+        ui.CharacterEditor.Previews.PreviewSource = (recordId, loadout, shaved) => data.Appearances?.Create(recordId, loadout, shaved);
         ui.CharacterEditor.Previews.PreviewReady = look => host.ActiveCharacters?.IsPrepared(look) ?? true;
         // The editor's looks are close-ups: their meshes without generated levels (CharacterContent.PrepareMesh), so a new hair or head shows at
         // once, as in the original.

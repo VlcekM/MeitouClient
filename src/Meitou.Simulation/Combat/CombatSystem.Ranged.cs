@@ -373,15 +373,21 @@ public sealed partial class CombatSystem : IProjectileSource
     /// Chooses crossbow or melee for a fighting character that carries a crossbow (the planner's desires, docs/game/combat.md "Fight lifecycle and
     /// orders", melee or shooting): in Ranged mode (on for every NPC, the player's toggle for its characters) the crossbow while it has shots or
     /// ammunition and no threat is within <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A
-    /// character without a crossbow is left alone. A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to
-    /// melee: the original's reload timer and flag (controller <c>+0x78</c>, <c>+0x80</c>) are written only by the reload step and the constructor,
-    /// so it resumes where it was the next time the crossbow is used (docs/game/combat.md "Turrets", fire gate). A fight without a target keeps the
-    /// crossbow and the controller (its reload counts on); the fight's end stops it.
+    /// character without a crossbow is left alone; one whose crossbow is taken off while shooting turns to melee. A reload in progress is paused,
+    /// not abandoned, when the controller stops or the fighter turns to melee: the original's reload timer and flag (controller <c>+0x78</c>,
+    /// <c>+0x80</c>) are written only by the reload step and the constructor, so it resumes where it was the next time the crossbow is used
+    /// (docs/game/combat.md "Turrets", fire gate). A fight without a target keeps the crossbow and the controller (its reload counts on); the
+    /// fight's end stops it.
     /// </summary>
     void ChooseMode(World world, int i, ref CombatSlot s, CharacterCold cold, bool fighting)
     {
         var fighter = cold.Fighter!;
-        if (fighter.Crossbow is not { } x) return;
+        if (fighter.Crossbow is not { } x)
+        {
+            // The crossbow taken off mid-fight: the fighter turns to melee (or martial arts), as in the original.
+            if (s.Ranged) StopShooting(ref s, cold, fighter);
+            return;
+        }
 
         if (!fighting)
         {
@@ -418,6 +424,19 @@ public sealed partial class CombatSystem : IProjectileSource
         s.Steady = want ? RangedFormulas.SteadyAim : 0;
         s.ClearTime = 0;
         cold.DrawnWeapon = want ? HandHold.OfCategory((int)WeaponCategory.Bow).Weapon : MeleeDrawn(fighter);
+    }
+
+    /// <summary>
+    /// Leaves the ranged controller for melee: its state cleared, the melee weapon (or none) drawn.
+    /// </summary>
+    static void StopShooting(ref CombatSlot s, CharacterCold cold, Fighter fighter)
+    {
+        s.Ranged = false;
+        cold.RangedCombatMode = false;
+        s.RangedState = 0;
+        s.ClearTime = 0;
+        s.Steady = 0;
+        cold.DrawnWeapon = MeleeDrawn(fighter);
     }
 
     /// <summary>
@@ -871,7 +890,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
 /// <summary>
 /// The ranged controller's State line numbers (<see cref="CombatSystem.RangedLineOf"/>): reloading (else aiming), the gun's loaded and full shots
-/// (gun <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (gun <c>+0xe0</c>) and a powered gun without power.
+/// (gun <c>+0x20</c>, <c>+0x1c</c>), the share of the running reload still to go (1 - gun <c>+0xe0</c>, the done share) and a powered gun
+/// without power.
 /// </summary>
 public readonly record struct RangedLineView(bool Reloading, int Loaded, int Shots, float ReloadLeft, bool NoPower);
 

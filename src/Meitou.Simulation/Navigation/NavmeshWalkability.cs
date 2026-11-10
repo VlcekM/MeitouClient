@@ -155,6 +155,17 @@ public sealed partial class NavmeshWalkability : IWalkability
         return TryStand(w, x, z, nearY, out _, out bool reachable) && reachable;
     }
 
+    /// <summary>
+    /// As <see cref="IsWalkable(float, float, float)"/>, without the polygon within <see cref="EdgeTolerance"/>: a walker that stands only by it is
+    /// at the edge of a hole in the mesh.
+    /// </summary>
+    public bool IsOnSurface(float x, float z, float nearY)
+    {
+        var w = _world;
+        if (!w.Contains(WorldLayout.ZoneOf(x, z))) return _fallback.IsWalkable(x, z);
+        return TryStand(w, x, z, nearY, out _, out bool reachable, edges: false) && reachable;
+    }
+
     /// <inheritdoc/>
     public bool TryStand(float x, float z, float nearY, out float y)
     {
@@ -223,14 +234,15 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// The real surface of the highest mesh layer at (x, z) within <see cref="StandRise"/> above <paramref name="nearY"/> and <see cref="StandDrop"/>
     /// below it (by the mesh's height or the real one: on steep stairs the mesh is up to 20 off, and judged by the real height alone the walker's own
     /// layer could fall out of reach and drop it to a floor far below, Observed at Fallen Tower); with none there, the one of a polygon within
-    /// <see cref="EdgeTolerance"/> (a walker grazing the edge of a hole in a floor); else the lowest. <paramref name="reachable"/>: a layer was
-    /// within reach. False off the mesh.
+    /// <see cref="EdgeTolerance"/> (a walker grazing the edge of a hole in a floor; not when <paramref name="edges"/> is false); else the lowest.
+    /// <paramref name="reachable"/>: a layer was within reach. False off the mesh.
     /// </summary>
-    bool TryStand(NavWorld w, float x, float z, float nearY, out float y, out bool reachable)
+    bool TryStand(NavWorld w, float x, float z, float nearY, out float y, out bool reachable, bool edges = true)
     {
         var heights = s_scratch ??= [];
         heights.Clear();
-        w.HeightsAt(x, z, heights, float.IsFinite(nearY) ? nearY : 0, float.IsFinite(nearY) ? EdgeTolerance : 0);
+        float edge = edges && float.IsFinite(nearY) ? EdgeTolerance : 0;
+        w.HeightsAt(x, z, heights, float.IsFinite(nearY) ? nearY : 0, edge);
         y = float.MinValue;
         reachable = false;
         if (heights.Count == 0) return false;
@@ -246,10 +258,10 @@ public sealed partial class NavmeshWalkability : IWalkability
             y = s;
             reachable = true;
         }
-        if (!reachable && near && w.TryEdgeHeight(x, z, nearY, EdgeTolerance, out float edge))
+        if (!reachable && near && edges && w.TryEdgeHeight(x, z, nearY, EdgeTolerance, out float beside))
         {
-            float s = Snap(w, x, z, edge, out _);
-            if (MathF.Min(edge, s) <= nearY + StandRise && MathF.Max(edge, s) >= nearY - StandDrop)
+            float s = Snap(w, x, z, beside, out _);
+            if (MathF.Min(beside, s) <= nearY + StandRise && MathF.Max(beside, s) >= nearY - StandDrop)
                 (y, reachable) = (s, true);
         }
         if (!reachable) y = lowest;

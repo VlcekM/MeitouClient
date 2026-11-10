@@ -3,20 +3,13 @@ using Npgsql;
 namespace Meitou.Reports;
 
 /// <summary>
-/// The service's settings, from environment variables (README.md lists them).
+/// The service's settings, from environment variables (docs/feedback.md lists them).
 /// </summary>
 sealed record Config(
     string ConnectionString,
     byte[] Salt,
     string? AdminToken,
-    Uri RoadmapUrl,
     string Repo,
-    string[] Origins,
-    string? TurnstileSecret,
-    string? DiscordPublicKey,
-    string? DiscordAppId,
-    string? DiscordBotToken,
-    string[] DiscordTrustedRoles,
     string? GithubToken,
     string? GithubAppId,
     string? GithubAppKey,
@@ -30,7 +23,6 @@ sealed record Config(
     public static Config Load(IConfiguration c)
     {
         string? Get(string key) => c[key] is { Length: > 0 } v ? v : null;
-        string[] List(string key) => (Get(key) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         string connection = Get("ConnectionStrings:Reports") ?? FromUrl(Get("DATABASE_URL"))
             ?? throw new InvalidOperationException("Set ConnectionStrings__Reports (ADO.NET) or DATABASE_URL (postgresql://...).");
@@ -40,14 +32,7 @@ sealed record Config(
             connection,
             System.Text.Encoding.UTF8.GetBytes(salt),
             Get("REPORTS_ADMIN_TOKEN"),
-            new Uri(Get("ROADMAP_URL") ?? "https://raw.githubusercontent.com/VlcekM/MeitouClient/master/site/src/data/roadmap.ts"),
             Get("GITHUB_REPO") ?? "VlcekM/MeitouClient",
-            List("ALLOWED_ORIGINS") is { Length: > 0 } o ? o : ["https://meitou.kenshi.wiki"],
-            Get("TURNSTILE_SECRET"),
-            Get("DISCORD_PUBLIC_KEY"),
-            Get("DISCORD_APP_ID"),
-            Get("DISCORD_BOT_TOKEN"),
-            List("DISCORD_TRUSTED_ROLES"),
             Get("GITHUB_TOKEN"),
             Get("GITHUB_APP_ID"),
             // The PEM may come on one line with its newlines written as \n, for hosts whose variables can't hold several lines.

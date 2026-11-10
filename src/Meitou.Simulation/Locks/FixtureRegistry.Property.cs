@@ -363,7 +363,10 @@ public sealed partial class FixtureRegistry
             _byId[door.Id] = door;
         }
 
+        // A stale door list keeps the new doors out of the snapshot: the renderer then draws them shut while walkers pass (#522).
         _doorPicks = null;
+        _doorsByBuilding = null;
+        _doorList = null;
         SyncDoors(site.Id);
     }
 

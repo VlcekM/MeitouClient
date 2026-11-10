@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "description": "Scripts the GitHub workflows run; roadmap-update.mjs and contributors.mjs need these packages.",
+  "description": "Scripts the GitHub workflows run; label-issue.mjs and contributors.mjs need these packages.",
   "dependencies": {
     "@anthropic-ai/sdk": "1.3.0",
     "@resvg/resvg-js": "2.6.2",

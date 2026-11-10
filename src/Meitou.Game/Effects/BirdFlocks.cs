@@ -608,15 +608,20 @@ public sealed class BirdFlocks
     static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
 
     /// <summary>
-    /// This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z); <paramref name="ready"/> says per
-    /// mesh whether it is loaded (null: all are).
+    /// This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z). <paramref name="centreOf"/> gives
+    /// a mesh's bounds middle in its own space (null: not loaded, its birds are skipped): a piece is placed by its middle, a bird by its mesh's
+    /// origin (the original's instanced entity on a scene node at the bird's position).
     /// </summary>
-    public void AddPieces(List<DebrisPiece> pieces, Func<string, bool>? ready = null)
+    public void AddPieces(List<DebrisPiece> pieces, Func<string, Vector3?> centreOf)
     {
         foreach (var g in _groups)
         {
-            if (g.Kind.Mesh.Length == 0 || g.Birds.Count == 0 || ready is not null && !ready(g.Mesh)) continue;
-            foreach (var b in g.Birds) pieces.Add(new DebrisPiece(g.Mesh, b.Scale, Orientation(b.Forward), b.Position));
+            if (g.Kind.Mesh.Length == 0 || g.Birds.Count == 0 || centreOf(g.Mesh) is not { } centre) continue;
+            foreach (var b in g.Birds)
+            {
+                var rotation = Orientation(b.Forward);
+                pieces.Add(new DebrisPiece(g.Mesh, b.Scale, rotation, b.Position + Vector3.Transform(centre * b.Scale, rotation)));
+            }
         }
     }
 

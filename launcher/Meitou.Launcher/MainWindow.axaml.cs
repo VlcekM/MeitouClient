@@ -155,7 +155,6 @@ public sealed partial class MainWindow : Window
         TrackPointer();
         WireModList();
         ConfigureOptions(config);
-        ShowReportButton();
         ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
         LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Rid}";

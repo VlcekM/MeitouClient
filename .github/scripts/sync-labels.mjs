@@ -1,4 +1,4 @@
-// Creates or updates the labels in .github/labels.json (made by site/scripts/issue-forms.mjs). Labels not in the file are left alone.
+// Creates or updates the labels in .github/labels.json (kept by hand; label-issue.mjs reads its area: labels). Labels not in the file are left alone.
 import { readFileSync } from 'node:fs';
 import { all, api } from './github.mjs';
 

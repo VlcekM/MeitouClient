@@ -1914,6 +1914,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         // Then its head is shaven (CharacterHuman::shaveHead(true) in FUN_14035aa20, Verified); an animal has no head to shave.
         if (cc.Fighter is not { IsAnimal: true }) cc.Shaved = true;
+        _assembly.MatchShave(cc);
         world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
     }
 

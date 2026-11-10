@@ -111,8 +111,9 @@ sealed class StatsWindow(PlayerInterface player)
                 string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
                 bool wrapLabel = stat is StatsEnumerated.FriendlyFire or StatsEnumerated.SmithingBow;
                 Text($"{name}-label-{i}", label, font, colour, "Left VCenter", action, wrap: wrapLabel);
-                Text($"{name}-value-{i}", (lead?.AllSkills.ElementAtOrDefault((int)stat) ?? 0).ToString("0", CultureInfo.InvariantCulture),
-                    font, colour, "Right VCenter", action);
+                // The whole level, truncated like the next-level bar's split (rounding showed 12.5 as 13 with the bar at 50 %, #514).
+                float level = MathF.Floor(lead?.AllSkills.ElementAtOrDefault((int)stat) ?? 0);
+                Text($"{name}-value-{i}", level.ToString("0", CultureInfo.InvariantCulture), font, colour, "Right VCenter", action);
                 y += column == 0 ? 20 * scale : rowHeight * (wrapLabel ? 2 : 1);
             }
 

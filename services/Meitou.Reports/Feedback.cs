@@ -10,7 +10,7 @@ namespace Meitou.Reports;
 /// <summary>
 /// The game's feedback button: a form (title, text, version, mods, camera location) is started, its attachments (screenshot, navmesh screenshot,
 /// zipped save, gzipped log) are uploaded one request each, and sending it opens a GitHub issue that links them. The files stay in
-/// <see cref="Config.FeedbackDir"/>, public under an unguessable token; one person starts at most 10 forms a day.
+/// <see cref="Config.FeedbackDir"/>, public under an unguessable token; one person starts at most 20 forms a day.
 /// </summary>
 sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClientFactory http, ILogger<Feedback> log)
 {
@@ -18,6 +18,11 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// The attachment kinds a form can ask for and upload, in their upload order.
     /// </summary>
     public static readonly string[] Kinds = ["screenshot", "navmesh", "save", "log"];
+
+    /// <summary>
+    /// The platform names a form may give; any other is stored as "other".
+    /// </summary>
+    static readonly string[] Platforms = ["win", "linux", "mac", "proton", "other"];
 
     /// <summary>
     /// The longest title, text, version, camera location and mods list kept (characters), and the forms one person may start a day.
@@ -50,7 +55,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         string? body = Clean(b.Body, BodyMax, lines: true);
         string version = Clean(b.Version, VersionMax, lines: false) ?? "unknown";
         string? commit = Clean(b.Commit, VersionMax, lines: false);
-        string platform = b.Platform is { } p && Intake.Platforms.Contains(p) ? p : "other";
+        string platform = b.Platform is { } p && Platforms.Contains(p) ? p : "other";
         string? discord = Clean(b.Discord, 64, lines: false);
         string[] mods = [.. (b.Mods ?? []).Select(m => Clean(m, 200, lines: false)).OfType<string>().Take(ModsMax)];
         string? location = Clean(b.Location, LocationMax, lines: false);

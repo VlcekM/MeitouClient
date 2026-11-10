@@ -155,7 +155,7 @@ Acid Rain, Dust Storm, Burning, Poison Gas, in the Bad colour tag and the Good o
 raining acid, and you aren't wearing anything to protect your skin.  Best to find shelter soon."; dust "...it affects your accuracy in combat."; "You are currently on fire."; "...breathing
 in poison gas."), below 0.99 "...your gear is providing you with {1} protection.", else the total-protection sentence. **Observed**: the short string is the information panel's State
 line and the long one its tooltip (their reader was not traced). The event is refused by `FUN_140684990` while the owner talks ([dialogue](../game/dialogue.md#firing-an-event)).
-Meitou (`WeatherSystem.Hurt`, `HudPanels.WeatherText`): the same texts and conditions; the State line shows the notice with the long text as tooltip; the event goes to every hurt
+Meitou (`WeatherSystem.Hurt`, `HudPanels.WeatherText`): the same texts and conditions; the State line shows the notice with the long text as tooltip, except while the ranged line (Aiming / Reloading) shows; the event goes to every hurt
 character at most every 8 s per event (`WeatherSystem.EventPause`, **engine choice**: the original fires every hurt tick and relies on the refusals and the lines' repetition limits).
 
 **Shelter** (`FUN_1405cf790`, **Verified (decompiled)**): a ray 1000 above the character straight down; a hit more than 10 over its feet on a building whose BUILDING record has

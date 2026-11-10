@@ -19,9 +19,9 @@ sealed class InventoryLayout(PlayerInterface player)
     internal void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = player.UiScale;
-        if (id is "bag" or "loot-bag")
+        if (InventoryWindows.ScreenKind(id) is "bag" or "loot-bag")
         {
-            var owner = id == "bag" ? player.InventoryWindows.InventoryOwner() : player.TradeWindows.LootBody();
+            var owner = player.InventoryWindows.WindowCharacter(id);
             if (owner?.ItemGrid is { } bag)
             {
                 b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.UiScale,

@@ -49,7 +49,7 @@ sealed class ProbeWorld : IDisposable
     /// <summary>
     /// Where the player's squad leader stands now.
     /// </summary>
-    public Vector3 LeaderPosition => Characters.Next[World.Squads.Find(World.Player.Squad)!.Leader.Slot].Position;
+    public Vector3 LeaderPosition => Characters.Next[LeaderSlot(World)].Position;
 
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
@@ -118,11 +118,20 @@ sealed class ProbeWorld : IDisposable
         if (walk is Meitou.Simulation.Locks.IDoorGate doors) world.Fixtures.Doors = doors;
 
         SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });
-        world.Commands.Enqueue(new FocusCommand(world.Characters.Previous[world.Squads.Find(world.Player.Squad)!.Leader.Slot].Position)
+        world.Commands.Enqueue(new FocusCommand(world.Characters.Previous[LeaderSlot(world)].Position)
         {
             Tick = world.Tick,
         });
         return world;
+    }
+
+    /// <summary>
+    /// The player's squad leader, or its first member while a loaded save has no leader set yet (as the game selects after a load).
+    /// </summary>
+    static int LeaderSlot(World world)
+    {
+        var squad = world.Squads.Find(world.Player.Squad)!;
+        return squad.Leader.IsNone ? squad.Members[0].Slot : squad.Leader.Slot;
     }
 
     /// <summary>

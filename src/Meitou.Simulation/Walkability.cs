@@ -56,6 +56,11 @@ public interface IWalkability
     /// count).
     /// </summary>
     bool IsWalkable(float x, float z, float nearY) => IsWalkable(x, z);
+    /// <summary>
+    /// As <see cref="IsWalkable(float, float, float)"/>, on a surface at X/Z itself: not one only grazed at the edge of a hole beside it (furniture
+    /// cuts holes in a floor), which <see cref="IsWalkable(float, float, float)"/> lets a walker stand on.
+    /// </summary>
+    bool IsOnSurface(float x, float z, float nearY) => IsWalkable(x, z, nearY);
 
     /// <summary>
     /// <see cref="IsWalkable(float, float, float)"/> and, in <paramref name="y"/>, <see cref="GroundHeight(float, float, float)"/> (also when not

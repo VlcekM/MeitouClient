@@ -1254,7 +1254,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Refresh(ref s, ref e, slot, c, seen, heard);
         Count(ref s, e, c);
         Insert(s.Block, at, e, (long)s.Tick);
-        if (s.NewEnemy < 0 && (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy) s.NewEnemy = slot;
+        if (s.NewEnemy < 0 && IsEnemy(e)) s.NewEnemy = slot;
     }
 
     /// <summary>
@@ -1266,16 +1266,18 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static void VisitKin(ref Scan s)
     {
         if (s.Squad >= 0 && s.World.Squads.Find(s.Squad) is { } squad)
-            foreach (var m in squad.Members) VisitKin(ref s, m.Slot, m.Generation);
+            foreach (var m in squad.Members) VisitKin(ref s, m.Slot, m.Generation, out _);
         if (s.Player && s.PlayerSlots is { } players)
-            foreach (int slot in players) VisitKin(ref s, slot, s.Table.Previous[slot].Generation);
+            foreach (int slot in players) VisitKin(ref s, slot, s.Table.Previous[slot].Generation, out _);
     }
 
     /// <summary>
-    /// Senses a kin or fighter; true when the block was full and had no room for it (<see cref="Insert"/>).
+    /// Senses a kin or fighter; true when the full block had no room for it (<see cref="Insert"/>), <paramref name="enemy"/> when it is tagged an
+    /// enemy.
     /// </summary>
-    static bool VisitKin(ref Scan s, int slot, int generation)
+    static bool VisitKin(ref Scan s, int slot, int generation, out bool enemy)
     {
+        enemy = false;
         var prev = s.Table.Previous;
         if (slot == s.Self || (uint)slot >= (uint)prev.Length || !prev[slot].Alive || prev[slot].Generation != generation)
             return false;
@@ -1289,16 +1291,18 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Refresh(ref s, ref e, slot, c, seen, heard);
         Count(ref s, e, c);
         bool kept = Insert(s.Block, at, e, (long)s.Tick, kin: true);
-        if (s.NewEnemy < 0 && (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy) s.NewEnemy = slot;
+        enemy = IsEnemy(e);
+        if (s.NewEnemy < 0 && enemy) s.NewEnemy = slot;
 
         return !kept;
     }
 
     /// <summary>
     /// The fights of a look: every character in a fight within the look's reach (the sight range, or the noise reach) is sensed at each look outside
-    /// the gather's quota and may take the place of a neutral stranger's entry in a full block (<see cref="Insert"/>). The original's sensed map has
-    /// no bound (<b>Verified</b>), and the goals that join other people's fights (34, 15, 288, 143's attacker test, the attack on sight of a fighter)
-    /// read the fighter and its victim in it; with Meitou's caps both could be missed among the first strangers of a crowd.
+    /// the gather's quota and may take the place of a stranger's entry in a full block, an enemy also an ally's (<see cref="Insert"/>). The original's
+    /// sensed map has no bound (<b>Verified</b>), and the goals that join other people's fights (34, 15, 288, 143's attacker test, the attack on sight
+    /// of a fighter) read the fighter and its victim in it; with Meitou's caps both could be missed among the first strangers of a crowd. The looker's
+    /// own squad mates were visited as kin already.
     /// </summary>
     static void VisitFighters(ref Scan s)
     {
@@ -1306,17 +1310,26 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
         var prev = s.Table.Previous;
         float reach = MathF.Max(s.Range, NoiseFar), r2 = reach * reach;
+        bool onlyEnemies = false;
 
         foreach (int slot in fighters)
         {
-            if (Vector3.DistanceSquared(prev[slot].Position, s.Eye) <= r2 && VisitKin(ref s, slot, prev[slot].Generation))
-                break;   // the block is full of fighters and allies: no room for the rest
+            if (Vector3.DistanceSquared(prev[slot].Position, s.Eye) > r2 || s.Table.Cold(slot) is not { } c) continue;
+            if (s.Squad >= 0 && c.SquadId == s.Squad || onlyEnemies && c.Faction == s.Faction) continue;
+            if (!VisitKin(ref s, slot, prev[slot].Generation, out bool enemy)) continue;
+
+            // Refused: an enemy finds the block full of enemies and knocked-out characters, so no one else has room; after anyone else only an
+            // enemy may still get in, and the looker's own faction never is one.
+            if (enemy) break;
+            onlyEnemies = true;
         }
     }
 
     /// <summary>
     /// Puts a new entry at <paramref name="at"/>; with the block full the entry sensed longest ago (before <paramref name="tick"/>) makes room, else
-    /// the new one is not kept.
+    /// the new one is not kept. With every entry sensed at this look, a kin or enemy entry takes the place of a neutral stranger and an enemy that
+    /// of an ally (the first one, in slot order; engine choice, docs/game/perception.md "Senses": a squad of more than <see cref="SenseBlock.Cap"/>
+    /// would otherwise fill its mates' blocks with one another and never sense the enemy it fights).
     /// </summary>
     static bool Insert(SenseBlock b, int at, in SenseEntry e, long tick, bool kin = false)
     {
@@ -1324,31 +1337,47 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
         if (list.Count >= SenseBlock.Cap)
         {
-            int oldest = -1;
-            for (int k = 0; k < list.Count; k++)
-                if (list[k].Tick < tick && (oldest < 0 || list[k].Tick < list[oldest].Tick)) oldest = k;
+            int room = Oldest(list, tick);
+            bool enemy = IsEnemy(e);
+            if (room < 0 && (kin || enemy)) room = FirstTagged(list, SenseTag.Ally | SenseTag.Enemy | SenseTag.Ko, SenseTag.None);
+            if (room < 0 && enemy) room = FirstTagged(list, SenseTag.Enemy, SenseTag.Ally);
+            if (room < 0) return false;
 
-            // A kin entry takes the place of a neutral stranger when every entry was sensed at this look (the first one, in slot order).
-            if (oldest < 0 && kin)
-            {
-                for (int k = 0; k < list.Count; k++)
-                {
-                    if ((list[k].Tags & (SenseTag.Ally | SenseTag.Enemy | SenseTag.Ko)) == 0)
-                    {
-                        oldest = k;
-                        break;
-                    }
-                }
-            }
-
-            if (oldest < 0) return false;
-
-            list.RemoveAt(oldest);
-            if (oldest < at) at--;
+            list.RemoveAt(room);
+            if (room < at) at--;
         }
 
         list.Insert(at, e);
         return true;
+    }
+
+    /// <summary>
+    /// Whether an entry is tagged ENEMY and not knocked out.
+    /// </summary>
+    static bool IsEnemy(in SenseEntry e) => (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy;
+
+    /// <summary>
+    /// The index of the entry sensed longest ago, before <paramref name="tick"/>; -1 when every entry was sensed at it.
+    /// </summary>
+    static int Oldest(List<SenseEntry> list, long tick)
+    {
+        int oldest = -1;
+        for (int k = 0; k < list.Count; k++)
+            if (list[k].Tick < tick && (oldest < 0 || list[k].Tick < list[oldest].Tick)) oldest = k;
+
+        return oldest;
+    }
+
+    /// <summary>
+    /// The index of the first entry with none of the tags <paramref name="none"/> and, unless <paramref name="any"/> is empty, one of
+    /// <paramref name="any"/>; -1 when there is none.
+    /// </summary>
+    static int FirstTagged(List<SenseEntry> list, SenseTag none, SenseTag any)
+    {
+        for (int k = 0; k < list.Count; k++)
+            if ((list[k].Tags & none) == 0 && (any == SenseTag.None || (list[k].Tags & any) != 0)) return k;
+
+        return -1;
     }
 
     #endregion

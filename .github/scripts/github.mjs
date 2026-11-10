@@ -4,7 +4,7 @@ const token = process.env.GITHUB_TOKEN;
 
 /** One request; a 422 (a label that already exists, say) is returned, not thrown. */
 export async function api(path, { method = 'GET', body } = {}) {
-  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'meitou-roadmap' };
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'meitou-workflows' };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
   const r = await fetch(`https://api.github.com${path.replace('{repo}', repo)}`, { method, headers, body: body ? JSON.stringify(body) : undefined });

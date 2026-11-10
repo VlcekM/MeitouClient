@@ -21,7 +21,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [impostors](impostors.md)
 - [launch-options](launch-options.md): every command-line option and environment variable
 - [launcher](launcher.md): game release installer, mod list and presets
-- [play-reports](play-reports.md): roadmap upkeep: play reports service, in-game feedback button, Discord, launcher button, issue forms, drift check
+- [feedback](feedback.md): the roadmap page, the in-game feedback button and its service, issue forms and the Haiku area labels
 - [macos-port](macos-port.md): running on MoltenVK, its constraints and fixes; the native Metal path next to it
 - [metal-backend](metal-backend.md): a native Metal path next to Vulkan - what the spike proved and what a second backend would need
 - [metal-content-testability-plan](metal-content-testability-plan.md): the content/testability gaps and the order to close them

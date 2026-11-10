@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <!-- Play reports for the roadmap (Works / Broken per row) from the site, Discord and the launcher. docs/play-reports.md.
+  <!-- The game's feedback button (forms become GitHub issues) and the newest game versions. docs/feedback.md.
        Published Native AOT (Dockerfile): JSON through the ReportsJson source-generated context, Npgsql through its slim builder,
-       Discord's Ed25519 signatures through Ed25519.cs, so Npgsql is the only package. -->
+       so Npgsql is the only package. -->
   <PropertyGroup>
     <AssemblyName>meitou-reports</AssemblyName>
     <RootNamespace>Meitou.Reports</RootNamespace>
