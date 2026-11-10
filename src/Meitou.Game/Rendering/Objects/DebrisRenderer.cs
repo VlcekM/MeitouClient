@@ -114,7 +114,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             float lambert = clamp(dot(n, l), 0.0, 1.0);
             vec3 nl = vec3(dot(normalize(mix(n, geometric, 0.6)), l), dot(normalize(mix(n, geometric, 0.3)), l), dot(n, l));
             vec3 u = (nl * 0.5 + 0.5) * 0.984375 + 0.0078125;
-            float v = sqrt(clamp(curvature * 0.3, 0.0, 1.0)) * 0.984375 + 0.0078125;
+            float v = sqrt(clamp(min(curvature, 2.0) * 0.3, 0.0, 1.0)) * 0.984375 + 0.0078125;
             vec3 s = vec3(textureLod(uSkinTable, vec2(u.r, v), 0.0).r, textureLod(uSkinTable, vec2(u.g, v), 0.0).g, textureLod(uSkinTable, vec2(u.b, v), 0.0).b);
             float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
             vec3 hue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 1e-3);

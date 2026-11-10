@@ -193,6 +193,22 @@ internal sealed class PartMaterial
     /// </summary>
     public bool Wound, Mechanical;
     /// <summary>
+    /// A weapon's scabbard (<see cref="IsScabbard"/>).
+    /// </summary>
+    public bool Scabbard;
+    /// <summary>
+    /// <see cref="CharacterShaders.SlotColourMap"/> holds the material's metalness map.
+    /// </summary>
+    public bool MetalMap;
+    /// <summary>
+    /// A worn item of chain or plate (<see cref="CharacterShaders.ArmourMetal"/>).
+    /// </summary>
+    public bool ArmourMetal;
+    /// <summary>
+    /// A prosthetic with its own material (<see cref="CharacterShaders.LimbMetal"/>).
+    /// </summary>
+    public bool LimbMetal;
+    /// <summary>
     /// The body's normal blend weight towards <see cref="CharacterShaders.SlotBlendNormal"/> (the original's <c>muscleBlend</c>).
     /// </summary>
     public float MuscleBlend;
@@ -893,6 +909,69 @@ internal sealed class CharacterContent : IDisposable
                 var s = byPosition[Key(v[i].Position)];
                 v[i].Colour.Z = s.Count > 0 ? s.Sum / s.Count : 0;
             }
+            MarkThickness(part);
+        }
+    }
+
+    /// <summary>The thickness a <see cref="MarkThickness"/> ray looks for: anything thicker lets no light through.</summary>
+    const float MaxThickness = 2;
+
+    /// <summary>
+    /// Writes each tightly curved vertex's thickness (world units) into its colour's W: how far a ray straight in from it goes before leaving the mesh by the back of a surface. An ear or a
+    /// finger is thin; a nose or an eyelid over the head behind it is not, whatever its curvature. <see cref="MaxThickness"/> for the rest.
+    /// </summary>
+    static void MarkThickness(ModelPart part)
+    {
+        var v = part.Vertices;
+        var idx = part.Indices;
+        const float cell = 1f;
+        static (int, int, int) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        for (int t = 0; t + 2 < idx.Length; t += 3)
+        {
+            var (a, b, c) = (v[idx[t]].Position, v[idx[t + 1]].Position, v[idx[t + 2]].Position);
+            var lo = CellOf(Vector3.Min(a, Vector3.Min(b, c)));
+            var hi = CellOf(Vector3.Max(a, Vector3.Max(b, c)));
+            for (int x = lo.Item1; x <= hi.Item1; x++)
+                for (int y = lo.Item2; y <= hi.Item2; y++)
+                    for (int z = lo.Item3; z <= hi.Item3; z++)
+                    {
+                        if (!grid.TryGetValue((x, y, z), out var list)) grid[(x, y, z)] = list = [];
+                        list.Add(t);
+                    }
+        }
+        var tested = new HashSet<int>();
+        for (int i = 0; i < v.Length; i++)
+        {
+            v[i].Colour.W = MaxThickness;
+            if (v[i].Colour.Z < 2 || v[i].Normal.LengthSquared() < 1e-8f) continue;
+            var dir = -Vector3.Normalize(v[i].Normal);
+            var from = v[i].Position + dir * 0.01f;
+            float best = MaxThickness;
+            tested.Clear();
+            for (float along = 0; along < best + cell; along += cell * 0.5f)
+            {
+                if (!grid.TryGetValue(CellOf(from + dir * MathF.Min(along, best)), out var list)) continue;
+                foreach (int t in list)
+                {
+                    if (!tested.Add(t)) continue;
+                    var (p0, p1, p2) = (v[idx[t]], v[idx[t + 1]], v[idx[t + 2]]);
+                    if (Vector3.Dot(p0.Normal + p1.Normal + p2.Normal, dir) <= 0) continue;   // the front of something inside (an eyeball, a mouth): the ray has not left
+                    var (e1, e2) = (p1.Position - p0.Position, p2.Position - p0.Position);
+                    var h = Vector3.Cross(dir, e2);
+                    float det = Vector3.Dot(e1, h);
+                    if (MathF.Abs(det) < 1e-9f) continue;
+                    var s = from - p0.Position;
+                    float u = Vector3.Dot(s, h) / det;
+                    if (u < 0 || u > 1) continue;
+                    var q = Vector3.Cross(s, e1);
+                    float w = Vector3.Dot(dir, q) / det;
+                    if (w < 0 || u + w > 1) continue;
+                    float hit = Vector3.Dot(e2, q) / det;
+                    if (hit > 0 && hit < best) best = hit;
+                }
+            }
+            v[i].Colour.W = best;
         }
     }
 
@@ -1072,7 +1151,7 @@ internal sealed class CharacterContent : IDisposable
                 Label = $"{part.Record.Type} '{part.Record.Name}' .{part.Field}",
                 Mesh = loaded.Gpu,
                 Shared = shared,
-                Material = ItemMaterial(c, part, path, loaded),
+                Material = MarkScabbard(ItemMaterial(c, part, path, loaded), part),
                 BoundsCentre = loaded.Centre,
                 BoundsRadius = loaded.Radius,
                 Shown = part.Shown,
@@ -1221,6 +1300,7 @@ internal sealed class CharacterContent : IDisposable
             HasShirtColour = colour is not null,
             // Animals: fur and hide; a robot race (RACE `is robot`, skeletons) is off by default (docs/character-renderer.md "Skin").
             Skin = c.Animal is null,
+            Mechanical = c.Race.GetBool("is robot"),
             SkinDefault = CharacterRenderer.SkinByDefault(c.Race),
             Race = c.Race.StringId,
         };
@@ -1257,6 +1337,17 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     static float ClothSheen(GameRecord item) => item.Type != FcsRecordType.Armour ? 0 : item.GetInt("material type") switch { 0 => 1, 1 => 0.35f, _ => 0 };
 
+    /// <summary>
+    /// A weapon's <c>sheath</c> mesh, or its sheathed <c>mesh</c> when the record has a <c>sheath</c> (that mesh is the weapon in its scabbard).
+    /// </summary>
+    static bool IsScabbard(CharacterPart part) => part.Slot == AttachSlot.Weapon && (part.Field == "sheath" || part.Field.StartsWith("mesh", StringComparison.Ordinal) && part.Record.GetPath("sheath").Length > 0);
+
+    static PartMaterial MarkScabbard(PartMaterial m, CharacterPart part)
+    {
+        m.Scabbard = IsScabbard(part);
+        return m;
+    }
+
     PartMaterial ItemMaterial(CharacterAppearance c, CharacterPart part, string path, LoadedMesh loaded)
     {
         var item = part.Record;
@@ -1284,6 +1375,8 @@ internal sealed class CharacterContent : IDisposable
         bool worn = part.Mode == AttachMode.SharedSkeleton;
         m.Worn = worn;
         if (worn) m.Sheen.X = ClothSheen(item);
+        m.ArmourMetal = worn && item.Type == FcsRecordType.Armour && item.GetInt("material type") >= 2;
+        m.LimbMetal = item.Type == FcsRecordType.LimbReplacement;
 
         // Clothing: MATERIAL_SPECS_CLOTHING from "material" (female: "material female" if set), likeliest first; dye the part's colour
         // (CharacterPart.Colour: the instance's, else the wearer's scheme, none for "dont colorise").
@@ -1334,6 +1427,7 @@ internal sealed class CharacterContent : IDisposable
             m.Description = $"MATERIAL_SPECS_WEAPON '{model.Name}' (loadout model)";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(modelTexture, false);
             m.Tex[CharacterShaders.SlotNormal] = Texture(Tex(model, "normal map"), false);
+            SetMetalMap(m, Tex(model, "metalness map"));
             return m;
         }
 
@@ -1343,8 +1437,16 @@ internal sealed class CharacterContent : IDisposable
         m.Description = candidate?.Description ?? "untextured";
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
         m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
+        SetMetalMap(m, candidate?.Metal);
         m.DoubleSided = candidate?.DoubleSided ?? false;
         return m;
+    }
+
+    void SetMetalMap(PartMaterial m, string? map)
+    {
+        if (map is null) return;
+        m.Tex[CharacterShaders.SlotColourMap] = Texture(map, false);
+        m.MetalMap = true;
     }
 
     // ---- item icons ----

@@ -49,7 +49,15 @@ static class CharacterShaders
         // A headless body's neck cap (NeckCap, Meitou decapitation): the wound; with Mechanical, a robot race's metal socket.
         Wound = 1 << 22, Mechanical = 1 << 23,
         // A person's hair or beard (not an animal's fur): strand highlights (the chars2 switch, CharacterSurface).
-        Strands = 1 << 24;
+        Strands = 1 << 24,
+        // A weapon's scabbard (CharacterContent.IsScabbard): its colour says nothing about metal.
+        Scabbard = 1 << 25,
+        // A held item whose material names a metalness map (objects.hlsl, red channel), in the colour map's slot: a held item is never dyed.
+        HasMetalMap = 1 << 26,
+        // A worn chain or plate item (ARMOUR material type, CharacterContent.ArmourMetal): what has no colour of its own is bare metal, as on a held item.
+        ArmourMetal = 1 << 27,
+        // A prosthetic (LIMB_REPLACEMENT with its own material): judged as a held item, by colour and its painted gloss, so a wooden or organic limb stays as it is.
+        LimbMetal = 1 << 28;
     // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
     // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
@@ -118,6 +126,7 @@ static class CharacterShaders
 
         out vec3 vWorld;
         out float vCurvature;   // the skin's curvature, baked per vertex (CharacterContent.MarkCurvature)
+        out float vThickness;   // how far the mesh goes on behind this skin (the same bake)
         out vec3 vNormal;
         out vec4 vTangent;
         out vec2 vUv;
@@ -145,6 +154,7 @@ static class CharacterShaders
             if (aInstanceData.w != 0u && slot != 0u && slot < 0x1000000u) local += morphs.deltas[aInstanceData.w + slot].xyz;
             vec4 p = world * vec4(local, 1.0);
             vCurvature = aColour.z;
+            vThickness = aColour.w;
             vWorld = p.xyz + view.eye;   // the instances are relative to the eye (CharacterRenderer.DrawView)
             mat3 n = mat3(world);
             vNormal = n * aNormal;
@@ -227,6 +237,7 @@ static class CharacterShaders
     public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + $$"""
         in vec3 vWorld;
         in float vCurvature;
+        in float vThickness;
         in vec3 vNormal;
         in vec4 vTangent;
         in vec2 vUv;
@@ -263,7 +274,7 @@ static class CharacterShaders
             if (share <= 0.0) return vec3(lambert);
             vec3 nl = vec3(dot(normalize(mix(n, geometric, 0.6)), l), dot(normalize(mix(n, geometric, 0.3)), l), dot(n, l));
             vec3 u = (nl * 0.5 + 0.5) * {{F((SkinScattering.Width - 1f) / SkinScattering.Width)}} + {{F(0.5f / SkinScattering.Width)}};
-            float v = sqrt(clamp(curvature * {{F(SkinCurvatureScale)}}, 0.0, 1.0)) * {{F((SkinScattering.Height - 1f) / SkinScattering.Height)}} + {{F(0.5f / SkinScattering.Height)}};
+            float v = sqrt(clamp(min(curvature, 2.0) * {{F(SkinCurvatureScale)}}, 0.0, 1.0)) * {{F((SkinScattering.Height - 1f) / SkinScattering.Height)}} + {{F(0.5f / SkinScattering.Height)}};
             uint t = pc.skinLut;
             vec3 s = vec3(textureLod(textures2D[t], vec2(u.r, v), 0.0).r, textureLod(textures2D[t], vec2(u.g, v), 0.0).g, textureLod(textures2D[t], vec2(u.b, v), 0.0).b);
             // Only what it adds over the plain term: the table also takes red from the lit side (energy it moves into the shadow), which turned sunlit skin cyan-grey;
@@ -275,7 +286,7 @@ static class CharacterShaders
 
         // The lamps' diffuse term (LampShaders, LAMP_SKIN): the same skin as the sun's, from what main sets before lighting (no skin: plain N.L).
         vec3 skinGeometric = vec3(0.0, 1.0, 0.0), skinAlbedo = vec3(1.0);
-        float skinCurvature = 0.0, skinShare = 0.0;
+        float skinCurvature = 0.0, skinShare = 0.0, skinThickness = 2.0;
         {{CharacterSurface.Functions}}
         {{StudioShaders.Functions}}
         vec3 lampSkinDiffuse(vec3 n, vec3 l)
@@ -308,6 +319,8 @@ static class CharacterShaders
             vec3 albedo = vec3(0.72);
             float gloss = 0.2;
             float metal = 0.0;                        // a worn item's metalness: its colour map's blue (skin.hlsl)
+            float heldGlossMap = -1.0;                // a held item's diffuse alpha: its gloss map
+            float wornGlossMap = -1.0;                // a worn item's diffuse alpha: the gloss the artists painted, which the game's glossMult 0 leaves unused
             vec4 nm = vec4(0.5, 0.5, 1.0, 0.5);
             bool swizzled = flag(f, 4u);
             bool cut = false;
@@ -382,7 +395,9 @@ static class CharacterShaders
                 // A worn item's material (the Skinned template, skin.hlsl) has glossMult 0: nothing sets it, so worn clothing is matte; an attached item with
                 // its own mesh (the StaticObject template) keeps 1.
                 gloss = flag(f, 16384u) ? 0.0 : d.a * m.shirtColour.w;
+                if (flag(f, 16384u) && !flag(f, {{LimbMetal}}u)) wornGlossMap = d.a; else heldGlossMap = flag(f, {{LimbMetal}}u) && d.a > 0.97 ? 0.0 : d.a;   // a limb's opaque alpha: no gloss painted (a carved bone arm), nothing says it is metal
                 if (flag(f, 16384u) && flag(f, 1024u)) metal = cm.b;
+                if (flag(f, {{HasMetalMap}}u)) metal = tex(m.tex[2], uv).r;
                 sheen = m.diffuseChannel.x * (1.0 - metal);
             }
             if (flag(f, 1048576u))
@@ -440,6 +455,7 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
+            if (surfaceOn) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
             if (surfaceOn)
             {
                 eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
@@ -452,7 +468,7 @@ static class CharacterShaders
             clothTint = sqrt(clamp(albedo, 0.0, 1.0));
             vec3 colour;
             giInterior = vInterior != 0u;
-            skinGeometric = smoothNormal; skinCurvature = curvature; skinShare = skin; skinAlbedo = albedo;
+            skinGeometric = smoothNormal; skinCurvature = curvature; skinThickness = vThickness; skinShare = skin; skinAlbedo = albedo;
             atmoMetalness = metal;
             atmoReceiver = 3;
             if (view.fogDistance > 0.0 && uAtmoParams.x > 0.5)
@@ -468,6 +484,7 @@ static class CharacterShaders
                 vec3 l = normalize(view.lightDir);
                 const vec3 studioSun = vec3(1.0, 0.92, 0.80) * 1.9;
                 float shade = studioShadow(vWorld, n, l);
+                if (surfaceOn) albedo *= 1.0 - metalShare;   // a metal's colour is in its reflections (surfaceAmbient, metalLight)
                 vec3 diffSkin = skinDiffuse(n, smoothNormal, l, curvature, skin, albedo);
                 // The sky above (cool) and the sunlit sand below (warm bounce), by the normal's height.
                 vec3 h = normalize(l + v);
@@ -476,7 +493,7 @@ static class CharacterShaders
                 // The sky's light where the character leaves it open (the large shapes: a hood over the face), the screen's occlusion for the folds.
                 float skyOpen = studioSky(vWorld, n) * mix(1.0, studioOcclusion(), 0.6);
                 colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
-                if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
+                if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade + surfaceAmbient(studioAmbient(n, skyOpen));
                 {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioSky(vWorld, n), studioOcclusion());" : "")}}
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and

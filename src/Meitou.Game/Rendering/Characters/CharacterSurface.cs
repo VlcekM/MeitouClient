@@ -12,12 +12,13 @@ static class CharacterSurface
         bool surfaceOn = false;
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
+        vec3 surfaceAmbient(vec3 sky);
 
         """;
 
     /// <summary>The atmosphere text with the two hooks only the character fragment has, so no other program's text changes.</summary>
     public static string Lighting() => Hook(Hook(NativeShaders.AtmosphereFunctions,
-        "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;", "if (surfaceOn) lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse);"),
+        "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;", "if (surfaceOn) lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse) + surfaceAmbient(envDiffuse);"),
         "specular += radiance * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / 3.14159265358979;", "if (surfaceOn) specular += radiance * surfaceSpecular(l);");
 
     static string Hook(string text, string anchor, string added)
@@ -29,12 +30,16 @@ static class CharacterSurface
     /// <summary>The fragment's functions: after the skin's inputs, ahead of <c>main</c>.</summary>
     public const string Functions = """
         vec3 surfaceNormal = vec3(0.0, 1.0, 0.0), surfaceView = vec3(0.0, 0.0, 1.0);
-        vec3 strand = vec3(0.0), strandHue = vec3(1.0);   // hair: the strand's direction and the hair's own hue
+        vec3 strand = vec3(0.0), strandHue = vec3(1.0), strandTint = vec3(0.0);   // hair: the strand's direction, the hair's own hue and its colour
+        bool strandFlipped = false;
         float strandGrain = 0.5, strandStrength = 0.0;    // hair: the texture's brightness (it shifts the lobes along the strand) and the highlight's height
         vec3 skinSunBand = vec3(0.0);                     // skin: what the table adds to the sun's N.L (skinDiffuse)
         float eyeShare = 0.0, eyeWiden = 0.0;             // eyes: how much of the fragment is eyeball; the pixel's normal variance on the lobe's alpha squared
         float clothSheen = 0.0;                           // cloth: the sheen's height (PartMaterial.Sheen, never over the metal the colour map marks)
         vec3 clothTint = vec3(1.0);
+        float metalShare = 0.0, metalGloss = 0.0;         // metal: how much of the fragment is bare metal, and its gloss
+        vec3 metalTint = vec3(0.0);
+        vec3 studioAmbient(vec3 n, float open);
 
         // sin(strand, half vector)^power, the strand tilted by shift along the normal (Kajiya-Kay; Scheuermann's shifted lobes).
         float strandLobe(vec3 h, float shift, float power)
@@ -42,20 +47,24 @@ static class CharacterSurface
             float th = dot(normalize(strand + surfaceNormal * shift), h);
             return pow(max(1.0 - th * th, 0.0), power * 0.5);
         }
-        // Hair: a sharp white lobe tilted towards the root, a wide lobe in the hair's own colour tilted towards the tip (Marschner's R and TRT).
+        // Hair: a sharp near-white lobe and a wide one in the hair's own colour (Marschner's R and TRT), shifted along the strand by the texture's brightness only: a tangent's sign
+        // changes between the mesh's islands, so a fixed shift would cut the highlight at their edges.
         vec3 hairLight(vec3 l)
         {
+            if (strandStrength <= 0.0) return vec3(0.0);
             float nl = dot(surfaceNormal, l);
-            if (strandStrength <= 0.0 || nl <= 0.0) return vec3(0.0);
             vec3 h = normalize(l + surfaceView);
-            float grain = (strandGrain - 0.5) * 0.3;
-            float primary = strandLobe(h, grain - 0.08, 48.0);
-            float secondary = strandLobe(h, grain + 0.08, 12.0);
-            return strandStrength * smoothstep(0.0, 0.25, nl) * (primary * mix(vec3(1.0), strandHue, 0.3) + 0.5 * secondary * strandHue);
+            float grain = (strandGrain - 0.5) * 0.15;
+            float front = smoothstep(-0.05, 0.3, nl);
+            float r = strandLobe(h, grain, mix(90.0, 40.0, max(strandTint.r, max(strandTint.g, strandTint.b))));
+            float trt = strandLobe(h, grain, 12.0);
+            vec3 spec = front * strandStrength * (r * mix(vec3(1.0), strandHue, 0.25) * 0.5 + trt * strandTint * 0.35);
+            if (strandFlipped) spec *= 0.35;   // lit on the face the camera does not see: the light has passed through the card
+            return spec;
         }
 
-        // Cloth: the Charlie sheen (Estevez and Kulla) with Neubelt's visibility (capped: it runs away where light and view both graze), at a fixed roughness of 0.6, in the units of the diffuse term: nothing head-on, a soft
-        // bright edge at grazing angles, tinted by the cloth's own colour.
+        // Cloth: the Charlie sheen (Estevez and Kulla) with Neubelt's visibility (capped: it runs away where light and view both graze), at a fixed roughness of 0.6, in the units of the diffuse:
+        // a bright edge at grazing angles, tinted by the cloth's own colour.
         vec3 sheenLight(vec3 l)
         {
             float nl = dot(surfaceNormal, l), nv = dot(surfaceNormal, surfaceView);
@@ -63,7 +72,44 @@ static class CharacterSurface
             float nh = clamp(dot(surfaceNormal, normalize(l + surfaceView)), 0.0, 1.0);
             float d = (2.0 + 1.0 / 0.6) * pow(1.0 - nh * nh, 0.5 / 0.6) / (2.0 * ATMO_PI);
             float vis = 1.0 / (4.0 * max(nl + nv - nl * nv, 0.25));
-            return clothSheen * clothTint * d * vis * nl * ATMO_PI;
+            return 2.0 * clothSheen * clothTint * d * vis * nl * ATMO_PI;
+        }
+
+        float lobeD(float nh, float a) { float a2 = a * a, d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (ATMO_PI * d * d); }
+
+        // How much of a fragment is bare metal. A worn item says so in its colour map (metal); nothing marks it on a robot's body or a held item, so there it is what shines
+        // and has no colour of its own: rust and paint are saturated, and rust is matte.
+        float surfaceMetal(float metal, vec3 albedo, inout float gloss, uint shading, bool mechanical, bool worn, bool mapped, float wornGlossMap, float heldGlossMap)
+        {
+            float top = max(albedo.r, max(albedo.g, albedo.b));
+            float saturation = 1.0 - min(albedo.r, min(albedo.g, albedo.b)) / max(top, 1e-3);
+            float bare = smoothstep(0.04, 0.16, top) * (1.0 - smoothstep(0.35, 0.7, saturation));
+            if (shading == 2u) metal = 0.0;
+            else if (mapped) metal = bare * 0.65 * smoothstep(0.02, 0.2, metal);   // the map says where the metal is, the estimate how much
+            else if (shading == 1u ? mechanical : !worn)
+            {
+                // A worn plate: the diffuse's alpha is the gloss the artists painted: cloth is black in it. Wholly opaque means none was painted.
+                float painted = wornGlossMap >= 0.0 ? smoothstep(0.08, 0.22, wornGlossMap) * (1.0 - smoothstep(0.97, 1.0, wornGlossMap))
+                    : heldGlossMap >= 0.0 ? smoothstep(0.04, 0.14, heldGlossMap) : 1.0;   // a held item's gloss map is painted lower: wood is near 0 in it
+                metal = max(metal, bare * 0.65 * painted);
+            }
+            // Worn plate has no gloss of its own in the game: the painted one says where it is polished and where it is dull.
+            float polish = wornGlossMap >= 0.0 && wornGlossMap < 0.97 ? mix(0.25, 0.8, smoothstep(0.1, 0.7, wornGlossMap)) : mix(0.45, 0.9, gloss);
+            if (metal > 0.0) gloss = mix(gloss, polish, metal);
+            metalShare = metal;
+            metalGloss = gloss;
+            metalTint = pow(clamp(albedo, 0.0, 1.0), vec3(0.75));
+            return metal;
+        }
+        // The sun on a metal where the game's lighting does not do it (the studio): GGX tinted by the metal's colour.
+        vec3 metalLight(vec3 l)
+        {
+            if (metalShare <= 0.0 || view.fogDistance >= 0.0) return vec3(0.0);
+            float nl = dot(surfaceNormal, l);
+            if (nl <= 0.0) return vec3(0.0);
+            vec3 h = normalize(l + surfaceView);
+            float a = max(1.0 - metalGloss, 0.12);
+            return metalShare * metalTint * min(nl * lobeD(clamp(dot(surfaceNormal, h), 0.0, 1.0), a * a) * 0.6, 12.0);
         }
 
         vec3 skinHue()
@@ -71,14 +117,25 @@ static class CharacterSurface
             vec3 hue = skinAlbedo / max(max(skinAlbedo.r, max(skinAlbedo.g, skinAlbedo.b)), 1e-3);
             return hue * hue;
         }
+        // Skin's oil: two lobes (a tight sheen over a broad one, d'Eon's fit of skin), F0 0.028, and the fine hairs' soft bright edge.
+        vec3 skinLight(vec3 l)
+        {
+            float nl = dot(surfaceNormal, l), nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0);
+            if (skinShare <= 0.0 || nl <= 0.0) return vec3(0.0);
+            vec3 h = normalize(l + surfaceView);
+            float nh = clamp(dot(surfaceNormal, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
+            float fresnel = 0.028 + 0.972 * pow(1.0 - lh, 5.0);
+            float oil = min(nl * (0.6 * lobeD(nh, 0.22) + 0.4 * lobeD(nh, 0.42)) * fresnel * 0.25 / max(lh * lh, 0.1), 1.5);
+            float fuzz = pow(1.0 - nv, 3.0) * nl * 0.35;
+            return skinShare * (vec3(oil) + skinAlbedo * (view.fogDistance > 0.0 ? ATMO_PI : 1.0) * fuzz);
+        }
         // Light through a thin part (ears, fingers), in the units of the diffuse N.L: its share of skin, facing away from the light. A thin part curves tightly and is about
         // two radii thick (the curvature bake), and passes exp(-thickness / 0.25 units); the colour is the skin's own, as skinDiffuse's.
         vec3 skinThrough(vec3 l)
         {
             float back = clamp(-dot(skinGeometric, l), 0.0, 1.0);
-            float thin = smoothstep(3.0, 9.0, skinCurvature);
-            if (skinShare <= 0.0 || back * thin <= 0.0) return vec3(0.0);
-            return skinHue() * skinShare * thin * back * exp(-8.0 / skinCurvature) * 0.8;
+            if (skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.8) return vec3(0.0);
+            return skinHue() * skinShare * back * exp(-skinThickness / 0.25) * 0.8;
         }
         // The sun on skin beyond what kenshiLight gave it, in the units of the diffuse N.L. visible: its shadow here. In a shadow's penumbra the light under the skin bleeds
         // into the dark side, warm. The band past the terminator and the light through a thin part entered elsewhere, so the fragment's own shadow (its own body) must not
@@ -88,9 +145,9 @@ static class CharacterSurface
             vec3 extra = skinHue() * skinShare * clamp(dot(surfaceNormal, l), 0.0, 1.0) * 0.5 * (sqrt(visible) - visible);
             vec3 through = skinThrough(l);
             if (max(skinSunBand.r, max(skinSunBand.g, skinSunBand.b)) + through.r + through.g + through.b < 1e-3) return extra;
-            float chord = 2.0 * max(-dot(skinGeometric, l), 0.0) / max(skinCurvature, 0.25);
+            float chord = min(skinThickness, 2.0 * max(-dot(skinGeometric, l), 0.0) / max(skinCurvature, 0.25));
             float entry = kenshiShadow(vWorld + l * (min(chord, 1.0) + 0.1), l);
-            return extra + skinSunBand * max(entry - visible, 0.0) + through * entry;
+            return extra + skinSunBand * max(entry - visible, 0.0) * (1.0 - smoothstep(-0.05, 0.2, dot(skinGeometric, l))) + through * entry;
         }
 
         // The tear film's catchlight (KenshiNative's eyes2): GGX at gloss 0.95 widened to the pixel (Tokuyoshi and Kaplanyan), F0 0.025, bounded: a lobe this sharp peaks at
@@ -111,7 +168,33 @@ static class CharacterSurface
         }
 
         // What a light adds besides the game's lobes, per unit of its light (the sun's after its shadow, a lamp's radiance).
-        vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l) + eyeLight(l); }
+        vec3 surfaceSpecular(vec3 l) { return hairLight(l) + sheenLight(l) + eyeLight(l) + skinLight(l) + metalLight(l); }
+
+        // What the sky adds besides the game's ambient: its sheen along the hair, the edge of skin and cloth, its reflection on the eye.
+        vec3 surfaceAmbient(vec3 sky)
+        {
+            float nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0), edge = 1.0 - nv;
+            vec3 added = vec3(0.0);
+            if (strandStrength > 0.0) added += strandTint * sky * strandStrength * 0.3 * strandLobe(normalize(vec3(0.0, 1.0, 0.0) + surfaceView), (strandGrain - 0.5) * 0.4, 8.0);
+            if (skinShare > 0.0) added += skinAlbedo * sky * skinShare * 0.5 * edge * edge * edge;
+            if (clothSheen > 0.0) added += clothSheen * clothTint * sky * 0.8 * edge * edge;
+            if (eyeShare > 0.0)
+            {
+                vec3 r = reflect(-surfaceView, surfaceNormal);
+                added += eyeShare * sky * (0.05 + 0.95 * pow(edge, 5.0)) * (1.0 + 3.0 * smoothstep(0.1, 0.8, r.y));
+            }
+            if (metalShare > 0.0 && view.fogDistance < 0.0)   // the studio has no reflection of its own: the sky in the mirror direction, blurred by the gloss
+            {
+                vec3 r = reflect(-surfaceView, surfaceNormal);
+                const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+                float open = dot(sky, lum) / max(dot(studioAmbient(surfaceNormal, 1.0), lum), 1e-3);   // the occlusion the sky was given
+                // The mirror sees a bright sky over a dark ground, with a horizon as sharp as the surface is polished: that contrast is what reads as metal.
+                float horizon = 0.5 + 0.5 * smoothstep(-mix(0.7, 0.06, metalGloss), mix(0.7, 0.06, metalGloss), r.y);
+                vec3 mirror = mix(vec3(0.16, 0.12, 0.09), vec3(1.15, 1.25, 1.4), horizon * horizon);
+                added += metalShare * metalTint * mix(sky, mirror * open, metalGloss) * 1.1;
+            }
+            return added;
+        }
 
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo)
         {
@@ -142,18 +225,26 @@ static class CharacterSurface
             gloss = mix(wet.a, 0.4, eyeShare);
         }
 
-        // A hair fragment's inputs. The strand is the mesh's up axis (the vertex stage's vColour here) laid on the surface: down the sides, out from the crown.
-        // Beards and fur use the same mode; animals (no Strands flag) keep the game's lobe, their fur does not fall down.
+        // A hair fragment's inputs. The strand is the mesh's bitangent (the cards' streaks run along v) averaged with its up axis: the tangents alone change from triangle to triangle
+        // on some styles, which showed as facets in the highlight. Beards and fur use the same mode; animals (no Strands flag) keep the game's lobe, their fur does not fall down.
         void hairSurface(inout vec3 n, vec3 v, vec3 albedo, float gloss, bool strands)
         {
-            if (dot(n, v) < 0.0) n = -n;   // a card seen from behind, or a mesh with inward normals: the side the camera sees
+            // A card seen from behind, or a mesh with inward normals: the side the camera sees, unless the sun is on the other face. The game lights that face, its shadow is asked
+            // from it, and turning it towards the camera would put the lock in its own shadow (black tips against the sun).
+            vec3 sun = view.fogDistance < 0.0 ? normalize(view.lightDir) : uAtmoLight.xyz;
+            strandFlipped = dot(n, v) < 0.0;
+            if (strandFlipped && dot(n, sun) <= 0.0) { n = -n; strandFlipped = false; }
             if (!strands) return;
-            vec3 up = normalize(vColour.xyz);
-            vec3 along = up - n * dot(up, n);
+            vec3 alongV = vTangent.xyz; alongV = cross(n, alongV) * vTangent.w;
+            vec3 along = alongV - n * dot(alongV, n);
+            vec3 down = vColour.xyz - n * dot(vColour.xyz, n);
+            if (dot(along, down) < 0.0) along = -along;
+            along = normalize(along) + normalize(down) * 0.8;
             float len = length(along);
-            strand = along / max(len, 1e-4);
+            strand = along / max(len, 1e-6);
             strandHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 1e-3);
-            strandStrength = 0.4 * clamp(gloss * 2.0, 0.0, 1.0) * smoothstep(0.02, 0.3, len);   // none where the strand has no direction (the crown)
+            strandTint = sqrt(clamp(albedo, 0.0, 1.0));
+            strandStrength = len > 1e-6 ? mix(0.2, 0.7, clamp(gloss * 2.0, 0.0, 1.0)) : 0.0;
         }
 
         """;

@@ -41,7 +41,7 @@ pass preserves alpha coverage. Face morphs and body shape precede skinning.
 
 Faithful lights skin as every surface (`kenshiLight`, the game's deferred pass: clamped N·L). Meitou: Penner's pre-integrated skin
 diffuse replaces the sun's N·L on bare skin (`SkinScattering`: a 64² RGBA16F table baked at start-up from the six-Gaussian skin
-profile of GPU Gems 3 ch. 14, each layer normalised along the ring; u = N·L, v = √(1/r ÷ 1 mm⁻¹)). Curvature 1/r is baked per vertex at load
+profile of GPU Gems 3 ch. 14, each layer normalised along the ring; u = N·L, v = √(1/r ÷ 1 mm⁻¹)). Curvature 1/r (read at most 2: **Observed**, the bake saturates on eyelids and creases, whose shadow the table turned red) is baked per vertex at load
 (`CharacterContent.MarkCurvature`, vertex colour Z, not on icon meshes, whose vertex colours tint them: mean |Δnormal| / |Δposition| over the vertex's edges, averaged over vertices sharing a position) and
 interpolated; a screen-space fwidth estimate was constant per triangle and drew the low-poly facets and outlines in red. At 1 unit = 100 mm (an **Observed** scale, [terrain](formats/terrain.md)), times 30 (`SkinScatterScale`, a look: at true size the
 profile barely reaches a face's 5-8 cm radius, terminator red 0.016 → 0.019; ×30 gives about 0.16 and a tail past N·L −0.2). Red, green and blue read the table with the
@@ -60,27 +60,26 @@ translucency (ears). The `chars2` switch lifts both (below).
 
 ### Hair, cloth, skin and eyes (Meitou `chars2` switch, off by default)
 
-Not run on a GPU: look and cost **Unknown**. `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
+Compared on and off in the studio on 6 race and sex pairs and in the world on `siwa-test6` (**Observed**; cost not measured). `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
 character fragment only, what each light gains (`surfaceSun`, `surfaceSpecular`): the sun's after its shadow, a lamp's as is, the same function for both. World, Meitou stage
-and portraits; never the game's stage or the icons. Metal has no switch.
+and portraits; never the game's stage or the icons.
 
-**Hair**: two Kajiya-Kay lobes (Scheuermann's shifted pair, standing in for Marschner's R and TRT) over the game's GGX: a sharp near-white one, a wide one in the hair's own
-hue, both scaled by the game's gloss (brightness times the attachment's `specular`, so a matte style stays matte) and broken up by shifting them with the texture's brightness.
-The strand direction is the mesh's up axis laid on the surface (`vColour` outside icons), the only direction known without the UV layout: down the sides, out from the
-crown, where the highlight fades. **Unknown**: how often a style's real strands disagree (buns, swept hair). Animals keep the game's lobe: fur does not fall down
-(`CharacterShaders.Strands`). Every hair-mode fragment takes its normal on the side the camera sees (port of KenshiNative's "Hair on the side the camera sees": cards and
-inward-facing meshes went dark under GI and AO).
+**Hair**: two Kajiya-Kay lobes over the game's GGX, a sharp near-white one, tighter on dark hair, and a wide one tinted by √albedo (standing in for Marschner's R and TRT; tinted by the normalised hue, black hair turned grey, **Observed**), shifted along the strand only by the texture's brightness: a fixed shift cut the highlight at the mesh's islands, where the tangent's sign changes (**Observed**). The strand is the mesh's bitangent averaged with its up axis (`vColour` outside icons): the screen derivatives of the UVs gave a woven pattern and the bitangent alone showed facets (**Observed**). A hair-mode fragment takes its normal on the side the camera sees (port of KenshiNative's "Hair on the side the camera sees": cards and inward-facing meshes went dark under GI and AO), unless the sun is on the face it would leave: that face is what the game lights, and turning it away put the lock in its own shadow, the black tips against the sun (**Observed**). Such a card keeps 0.35 of the highlight. Animals keep the game's lobe (`CharacterShaders.Strands`).
 
-**Cloth**: a Charlie sheen (roughness 0.6, Neubelt's visibility), in the diffuse's units, tinted √albedo, at 0.25 × the amount; its visibility is capped at 1, as uncapped and at 0.5 it reached 2 × a dark cloth's diffuse (computed over a sweep of angles); now at most 0.46, 0.27, 0.19 × the diffuse at albedo 0.1, 0.3, 0.6. Data holds no cloth mask, and worn items are matte (`glossMult` 0), so the texture's alpha says nothing. What separates them is the item: ARMOUR
+**Metal** (`surfaceMetal`): a worn item says it in its colour map's blue; nothing marks a robot's body (RACE `is robot`) or a held item without a `metalness map` (scabbards excepted: the `sheath` mesh and the sheathed `mesh` of a record with one), so there metal is what has no colour of its own (saturation 0.35 to 0.7 fades it out: rust and paint are saturated), at 0.65 at most; a held item with a `metalness map` takes the same amount only where the map marks metal, and a worn CHAIN or METAL_PLATE item (ARMOUR `material type`) only where its diffuse alpha, a painted gloss, is not near 0 (a wholly opaque alpha counts as none painted), a held item without a map or a prosthetic with its own material (LIMB_REPLACEMENT) only where its diffuse alpha is above about 0.04 to 0.14, an opaque prosthetic alpha counting as none painted; a worn plate's gloss follows the same painted alpha, with the game's own metalness (specular colour from the albedo, diffuse removed); only buildings keep their diffuse (`atmoMetalDiffuse`). Its gloss is raised to 0.45 to 0.9. In the world that goes through the game's own metalness and reflections (`atmoMetalness`); the studio, which has neither, gets a tinted GGX and a mirror of a bright sky over dark ground with a horizon as sharp as the gloss. **Observed** in the studio and at noon and dusk in the world; not under lamps or rain.
+
+**Cloth**: a Charlie sheen (roughness 0.6, Neubelt's visibility), in the diffuse's units, tinted √albedo, at 0.5 × the amount; its visibility is capped at 1, as uncapped and at 0.5 it reached 2 × a dark cloth's diffuse (computed over a sweep of angles); now at most 0.46, 0.27, 0.19 × the diffuse at albedo 0.1, 0.3, 0.6. Data holds no cloth mask, and worn items are matte (`glossMult` 0), so the texture's alpha says nothing. What separates them is the item: ARMOUR
 `material type` (CLOTH 1, LEATHER 0.35, CHAIN and METAL_PLATE 0, not ARMOUR 0), per worn mesh and per vest layer (`CharacterContent.ClothSheen`), mods included; `1 - metal`
 (the colour map's blue, dyed items) takes out the metal fittings of a cloth item. **Unknown**: fittings on an undyed cloth item take the sheen. Sun and lamps only, no sky term.
 
 **Skin** (where the skin switch and the race have it, so robots and races turned off take none of this; severed limbs keep the plain skin; colours are the skin's own saturated
 hue, as above): the table's band and the light through a part ask the sun's shadow a second time, where the light went in (`skinSunExtra`: the point moved towards the sun by
 the chord 2 r cos θ of a sphere of the curvature's radius, at most 1 unit, plus 0.1), so a body's own shadow no longer ends them and a real caster still does; one more shadow
-lookup, on skin near and past the terminator only. A cast shadow's penumbra warms by (√v − v) / 2. Thin parts: curvature 3 to 9 (a guess at the bake's values on ears and
+lookup, on skin near and past the terminator only. A cast shadow's penumbra warms by (√v − v) / 2. Thin parts: the bake's thickness (`MarkThickness`, vertex colour W: a ray straight in, to where it leaves by the back of a surface; **Observed**: curvature is as high on a nose and eyelids as on an ear, which glowed red with the sun behind) under 0.8 units, facing away from the light, passing exp(-thickness / 0.25). Before: curvature 3 to 9 (a guess at the bake's values on ears and
 fingers: it reads the mesh's edges, so **Unknown** until measured on the meshes), facing away from the light, thickness 2 / curvature, passing exp(-thickness / 0.25) (a look,
 the idea from KenshiNative's skin3; it measures thickness with a ray, which has no characters here), 0.8 at most. Lamps: the same term through `lampSkinDiffuse`; they have no shadow, so no second lookup and the penumbra does not apply.
+
+**Skin oil and edges**: two GGX lobes (roughness 0.22 and 0.42, F0 0.028, capped) and a soft edge from the fine hairs in the skin's own albedo, per light (in its normalised hue, dark skin glowed orange, **Observed**); the sky adds an edge to skin and cloth, a sheen along hair and its reflection on the eye (`surfaceAmbient`, **Observed** in the studio and the world).
 
 **Eyes** (needs the skin switch and the race's skin): the game's eyeball is head texture at gloss about 0.93, a mirror of the specular cube (**Observed** by KenshiNative on its
 game data, `docs/features/characters.md` "Eyes"). Port of the surface of its eyes2: the eyeball by data (`eyeOf`: head UV, bare, no skin tone, gloss 0.5 to 0.7 up, curvature 2.5
@@ -145,7 +144,7 @@ Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not
 Portraits use the same content/shading with a dedicated camera/render target; avoid mutating
 world draw state. Asset/appearance failure must not corrupt another instance or portrait.
 Portrait cells redraw only when their character, appearance, size, camera serial or streamed
-texture images/swizzle change, or the look below does; animation and frame counts do not.
+texture images/swizzle change, or the look below does; animation and frame counts do not. The original is event-driven too, with no periodic redraw (**Verified**, decompile): `FUN_140787550` sets a 1 s countdown on the character (a new request restarts it), `FUN_140788a00` counts it down by the frame time and draws at most one portrait a frame (`FUN_140414b40`). Requests come from registering a portrait (`FUN_1404139b0`), the whole world's list on a load (`FUN_1405f5d10` -> `FUN_140412870`), an appearance rebuild (`FUN_140539020`), and attaching or removing an item of some kinds only (`FUN_14052e0f0`, `FUN_14052e290`, filter `FUN_14052dff0`), plus `FUN_14052bba0`, `FUN_140538360`, `FUN_1405334d0` (their meaning: **Unknown**). Meitou has neither the delay nor the one-a-frame limit.
 
 ### Meitou stage and portraits
 
