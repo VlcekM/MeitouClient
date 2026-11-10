@@ -41,6 +41,12 @@ public sealed record GhostFloor(string Building, Vector2[] Footprint, int Floor,
     public Vector3? Normal { get; init; }
 
     /// <summary>
+    /// Whether the building's own collision (walls, floors, roofs) cuts into a prism by more than a tolerance
+    /// (<see cref="InteriorVolume.StructureCuts"/>); null when it is not known.
+    /// </summary>
+    public Func<FootprintPrism, float, bool>? Structure { get; init; }
+
+    /// <summary>
     /// The parent the placed building records: the site's id, or the level building's instance id.
     /// </summary>
     public string Parent => Level ?? Building;
@@ -192,6 +198,15 @@ public static class PlacementCheck
     /// </summary>
     public const float CharacterRadius = 2.5f;
     /// <summary>
+    /// How far above the floor and below its top the ghost's footprint is tested against the building's structure (engine choice): the floor it stands
+    /// on and a ceiling it hangs from touch it there.
+    /// </summary>
+    const float StructureClearance = 2;
+    /// <summary>
+    /// How far a wall may reach into the ghost's footprint before it blocks (engine choice): furniture set flush against a wall stays placeable.
+    /// </summary>
+    const float StructureTolerance = 1;
+    /// <summary>
     /// The slope the original refuses outright (the ground's normal Y below 0.2).
     /// </summary>
     const float SteepestNormalY = 0.2f;
@@ -270,6 +285,7 @@ public static class PlacementCheck
         // Engine stand-in for the original's node boxes against the building's walls: on a floor the footprint stays within the building's
         // indoor hull.
         if (q.On is { } on && hull.Any(p => Distance(on.Footprint, p) > 0)) return PlacementFailure.TooCloseToBuilding;
+        if (CutsStructure(q, hull)) return PlacementFailure.TooCloseToBuilding;
         float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
         foreach (var other in q.Services.StaticAround(at, reach))
             if (Blocks(q, other, parent) && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
@@ -296,6 +312,20 @@ public static class PlacementCheck
             if (Distance(hull, new Vector2(c.Position.X, c.Position.Z)) < CharacterRadius) return PlacementFailure.CharactersInTheWay;
         }
         return PlacementFailure.None;
+    }
+
+    /// <summary>
+    /// Whether the walls, floors or roofs of the building the ghost stands in cut into its footprint <paramref name="hull"/>, from
+    /// <see cref="StructureClearance"/> over its floor to as much under its top (engine stand-in for the original's node boxes against the
+    /// building's physics shapes: the indoor hull is convex and takes in the walls, so a footprint inside it still went into them, feedback #399).
+    /// </summary>
+    static bool CutsStructure(PlacementQuery q, Vector2[] hull)
+    {
+        if (q.On?.Structure is not { } structure || q.Services.Footprint(q.Building.Id) is not { } footprint) return false;
+
+        float bottom = q.Position.Y + MathF.Max(footprint.YMin, 0) + StructureClearance;
+        float top = q.Position.Y + footprint.YMax - StructureClearance;
+        return top > bottom && structure(new FootprintPrism(hull, bottom, top), StructureTolerance);
     }
 
     /// <summary>

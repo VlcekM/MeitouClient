@@ -390,6 +390,7 @@ sealed class BuildingSync(GameHost host)
         {
             Ceiling = hit.Room.CeilingAbove(hit.Position),
             Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart),
+            Structure = hit.Room.StructureCuts,
         };
         return (hit.Position, floor);
     }

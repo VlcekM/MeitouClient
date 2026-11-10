@@ -208,6 +208,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
+    /// Whether the building's own collision (its floors, stairs, walls, roofs and slab undersides, <see cref="FloorSurfaces.Cuts"/>) cuts into
+    /// <paramref name="prism"/> by more than <paramref name="tolerance"/>; false for a volume made by hand.
+    /// </summary>
+    public bool StructureCuts(FootprintPrism prism, float tolerance) => _floors?.Value.Cuts(prism, tolerance) == true;
+
+    /// <summary>
     /// The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/>
     /// (<see cref="FloorSurfaces.NormalBelow"/>); null for none.
     /// </summary>
@@ -413,6 +419,23 @@ public sealed partial class FloorSurfaces
             }
         }
         return floor;
+    }
+
+    /// <summary>
+    /// Whether a triangle of the parts (ordinary, stairs, unwalkable roof or a slab's underside: every part with its walls) cuts into
+    /// <paramref name="prism"/> by more than <paramref name="tolerance"/> (<see cref="FootprintPrism.Cuts"/>).
+    /// </summary>
+    public bool Cuts(FootprintPrism prism, float tolerance)
+    {
+        foreach (var s in _surfaces.Concat(_roofs).Concat(_undersides))
+        {
+            if (!prism.Reaches(s.Min, s.Max, s.YMin, s.YMax)) continue;
+
+            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+                if (prism.Cuts(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], tolerance)) return true;
+        }
+
+        return false;
     }
 
     /// <summary>
