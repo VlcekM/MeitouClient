@@ -6,6 +6,7 @@ using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Saving;
+using Meitou.Simulation.Population;
 using Meitou.Tests.Simulation;
 using Xunit;
 using SimWorld = Meitou.Simulation.World;
@@ -36,7 +37,7 @@ public class PlayerTownImportTests
     static (SaveGame Save, FcsRecord InstanceList) SaveWithInstances(params (string Id, Vector3 Position, SaveTown[] States)[] towns)
     {
         var builder = new SaveBuilder(7);
-        var list = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST, StringId = "towns" };
+        var list = new FcsRecord { Type = (int)FcsRecordType.GamestateTownInstanceList, StringId = "towns" };
         foreach (var (id, position, states) in towns)
         {
             var instance = new FcsInstance { Id = id, Target = PlayerTown.Template, Position = position };
@@ -60,16 +61,16 @@ public class PlayerTownImportTests
     {
         // Catches the original faction-key requirement that dropped ordinary player outposts.
         var builder = new SaveBuilder(7);
-        var state = Town(builder, "Town state Ridge Camp", "outpost", Player, new Hand((int)FcsRecordType.TOWN, 4, 55, 2, 9), false, 1800);
+        var state = Town(builder, "Town state Ridge Camp", "outpost", Player, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9), false, 1800);
         state.Record.Strings.Remove("faction");
-        var list = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST, StringId = "towns" };
+        var list = new FcsRecord { Type = (int)FcsRecordType.GamestateTownInstanceList, StringId = "towns" };
         list.Instances.Add(new FcsInstance { Id = "outpost", Target = PlayerTown.Template, Position = new Vector3(100, 300, 200), States = { state.Record.StringId } });
         builder.Game.TownInstanceList = list;
 
         using var world = World();
         BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
         var town = Assert.Single(world.Buildings.Towns);
-        Assert.Equal((1, "Ridge Camp", 7, false, 1800f, new Hand((int)FcsRecordType.TOWN, 4, 55, 2, 9)),
+        Assert.Equal((1, "Ridge Camp", 7, false, 1800f, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9)),
             (town.Number, town.Name, town.Owner, town.Public, town.Override, town.SaveHandle!.Value));
     }
 
@@ -78,7 +79,7 @@ public class PlayerTownImportTests
     {
         // Catches the unsafe target-only import that would turn a foreign town into a player outpost.
         var builder = new SaveBuilder(7);
-        var state = Town(builder, "Town state Foreign Camp", "foreign", Foreign, new Hand((int)FcsRecordType.TOWN, 5, 56, 2, 10));
+        var state = Town(builder, "Town state Foreign Camp", "foreign", Foreign, new Hand((int)FcsRecordType.Town, 5, 56, 2, 10));
         var (_, list) = SaveWithInstances(("foreign", new Vector3(100, 300, 200), [state]));
         builder.Game.TownInstanceList = list;
 
@@ -93,7 +94,7 @@ public class PlayerTownImportTests
         // Catches reading only States[0] and creating one PlayerTown per state instead of per instance.
         var builder = new SaveBuilder(7);
         var first = Town(builder, "Town state First Camp", "merged", Player, Hand.Null, false);
-        var second = Town(builder, "Town state ", "merged", Player, new Hand((int)FcsRecordType.TOWN, 6, 57, 3, 11), true, 2800);
+        var second = Town(builder, "Town state ", "merged", Player, new Hand((int)FcsRecordType.Town, 6, 57, 3, 11), true, 2800);
         var (_, list) = SaveWithInstances(("merged", new Vector3(100, 300, 200), [first, second]));
         builder.Game.TownInstanceList = list;
 
@@ -103,7 +104,7 @@ public class PlayerTownImportTests
         Assert.Equal("First Camp", town.Name);
         Assert.True(town.Public);
         Assert.Equal(2800, town.Override);
-        Assert.Equal(new Hand((int)FcsRecordType.TOWN, 6, 57, 3, 11), town.SaveHandle);
+        Assert.Equal(new Hand((int)FcsRecordType.Town, 6, 57, 3, 11), town.SaveHandle);
     }
 
     [Fact]
@@ -113,7 +114,7 @@ public class PlayerTownImportTests
         var db = SyntheticTown.Database();
         var data = PopulationData.Create(db, [new TownPlacement("level-outpost", "30-t", SyntheticTown.Centre, null)]);
         var builder = new SaveBuilder(7);
-        var state = Town(builder, "Town state Level Camp", "level-outpost", Player, new Hand((int)FcsRecordType.TOWN, 8, 58, 4, 12), false, 1900);
+        var state = Town(builder, "Town state Level Camp", "level-outpost", Player, new Hand((int)FcsRecordType.Town, 8, 58, 4, 12), false, 1900);
 
         using var world = World();
         BuildingSave.Read(builder.Game, world, db, Player, 7, data);
@@ -126,9 +127,9 @@ public class PlayerTownImportTests
     {
         // Catches non-strict edge removal and renumbering after overlap removal, including the next AddTown number.
         var builder = new SaveBuilder(7);
-        var outer = Town(builder, "Town state Outer", "outer", Player, new Hand((int)FcsRecordType.TOWN, 10, 60, 1, 13), true, 2500);
-        var inner = Town(builder, "Town state Inner", "inner", Player, new Hand((int)FcsRecordType.TOWN, 11, 61, 1, 14), true, 1100);
-        var edge = Town(builder, "Town state Edge", "edge", Player, new Hand((int)FcsRecordType.TOWN, 12, 62, 1, 15), true, 2500);
+        var outer = Town(builder, "Town state Outer", "outer", Player, new Hand((int)FcsRecordType.Town, 10, 60, 1, 13), true, 2500);
+        var inner = Town(builder, "Town state Inner", "inner", Player, new Hand((int)FcsRecordType.Town, 11, 61, 1, 14), true, 1100);
+        var edge = Town(builder, "Town state Edge", "edge", Player, new Hand((int)FcsRecordType.Town, 12, 62, 1, 15), true, 2500);
         var (_, list) = SaveWithInstances(
             ("outer", new Vector3(0, 300, 0), [outer]),
             ("inner", new Vector3(1200, 300, 0), [inner]),
@@ -181,7 +182,7 @@ public class PlayerTownImportTests
     public void Save_writes_the_current_outpost_radius()
     {
         var builder = new SaveBuilder(7);
-        var state = Town(builder, "Town state Camp", "camp", Player, new Hand((int)FcsRecordType.TOWN, 4, 55, 2, 9), false, 1800);
+        var state = Town(builder, "Town state Camp", "camp", Player, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9), false, 1800);
         var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
         builder.Game.TownInstanceList = list;
 
