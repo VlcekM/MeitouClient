@@ -417,8 +417,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             }
             // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once at the player's
             // characters; at an NPC culprit again on every sweep from a police-like witness not yet fighting, as the guards' lines want a culprit
-            // within talking range that does not run (engine choice: lines' repetition limits are not kept).
-            if (first || !c.IsPlayer && !wc.InCombat && IsPoliceLike(world, wc))
+            // within talking range that does not run (engine choice: lines' repetition limits are not kept). Not a Trespassing: its event-17 line
+            // ("intruder law", DA 6 chase forever) needs no range, and repeating it only restarts the chase (#519).
+            if (first || !c.IsPlayer && p.Code != CrimeCode.Trespassing && !wc.InCombat && IsPoliceLike(world, wc))
                 world.Defer(new Dialogue.DialogueEvent(witness, table.IdOf(culprit), WitnessEvent(world, wc, p)) { Tick = world.Tick + 1 });
             if (!p.Booked && IsPoliceLike(world, wc) && Factions.Books(wf)) Book(world, culprit, wf, witness);
             if (p.Booked) return;
