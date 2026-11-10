@@ -55,9 +55,9 @@ sealed class ScreenRouter(PlayerInterface player)
         else if (e.Screen == "loot" && e.Widget == "LimbsButton") player.InventoryWindows.ToggleLimbs(player.TradeWindows.LootBody());
         else if (e.Screen == "trader" && e.Widget == "ArrangeButton")
             player.Say(new Simulation.Trading.ArrangeStock { Tick = player.Session.World.Tick });
-        else if (e.Screen is "inventory" or "bag" || InventoryWindows.IsPinnedInventory(e.Screen))
+        else if (InventoryWindows.ScreenKind(e.Screen) is "inventory" or "bag")
         {
-            if (e.Widget == "OpenBagButton") player.InventoryWindows.ToggleBag();
+            if (e.Widget == "OpenBagButton") player.InventoryWindows.ToggleBag(player.InventoryWindows.WindowCharacter(e.Screen));
             else if (e.Widget == "LimbsButton") player.InventoryWindows.ToggleLimbs();
             else if (e.Widget == "ArrangeButton" && player.InventoryWindows.WindowCharacter(e.Screen) is { } lead)
                 player.Say(new Simulation.Items.ArrangeInventory(lead.Id) { Tick = player.Session.World.Tick });
@@ -73,8 +73,8 @@ sealed class ScreenRouter(PlayerInterface player)
         var b = new UiBindings { TextHeight = c => player.UiPainter?.TextHeight(c, player.Height, player.StandardPixels) ?? 0 };
         var layout = player.FaithfulScreens.Layout(id);
         string screen = id;
-        bool pinned = InventoryWindows.IsPinnedInventory(id);
-        if (pinned) id = "inventory";   // a pinned window binds as the inventory, for its own character
+        bool pinned = InventoryWindows.IsPinnedInventory(id) || InventoryWindows.IsPinnedBag(id);
+        id = InventoryWindows.ScreenKind(id);   // a pinned window and its bag bind as the inventory and the bag, for their own character
         var lead = pinned || id == "limbs" ? player.InventoryWindows.WindowCharacter(screen)
             : id is "inventory" or "bag" ? player.InventoryWindows.InventoryOwner()
             : player.Selected().FirstOrDefault();
@@ -102,7 +102,7 @@ sealed class ScreenRouter(PlayerInterface player)
 
         BindFeatureScreen(id, b, layout, lead, pinned);
 
-        if (id is "inventory" or "bag" or "limbs" or "trader" or "loot" or "loot-bag") player.InventoryLayout.BindInventoryGeometry(id, b);
+        if (id is "inventory" or "bag" or "limbs" or "trader" or "loot" or "loot-bag") player.InventoryLayout.BindInventoryGeometry(screen, b);
         return b;
     }
 
@@ -147,7 +147,7 @@ sealed class ScreenRouter(PlayerInterface player)
             if (id == "inventory")
             {
                 b.Properties["datapanel"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
-                if (!pinned && lead?.ItemGrid is { BagWidth: > 0, BagHeight: > 0 })
+                if (lead?.ItemGrid is { BagWidth: > 0, BagHeight: > 0 })
                 {
                     b.Disabled.Remove("OpenBagButton");
                     b.Actions["OpenBagButton"] = "OpenBagButton";
@@ -222,7 +222,7 @@ sealed class ScreenRouter(PlayerInterface player)
         if (AddFrontendContent(id, controls) || AddFeatureContent(id, controls)) return;
 
         // The bag window has no caption buttons (the vanilla screenshot): OPEN BAG closes it.
-        if (id is "bag" or "loot-bag") controls.RemoveAll(IsCaptionButton);
+        if (InventoryWindows.ScreenKind(id) is "bag" or "loot-bag") controls.RemoveAll(IsCaptionButton);
         player.WorldMap.AddMapContent(id, controls);
         if (id == "overview")
         {
@@ -341,13 +341,14 @@ sealed class ScreenRouter(PlayerInterface player)
     {
         // The loot windows show the open loot's body as the character windows show the lead; a pinned window its own character.
         var shown = player.InventoryWindows.WindowCharacter(id);
-        if (InventoryWindows.IsPinnedInventory(id)) id = "inventory";
+        string screen = id;
+        id = InventoryWindows.ScreenKind(id);
         if (id is not ("inventory" or "bag" or "limbs" or "loot" or "loot-bag") || shown is not { ItemGrid: { } grid } lead) return;
 
         bool bagWindow = id is "bag" or "loot-bag";
         string gridSection = bagWindow ? "backpack_content" : "main";
         int columns = bagWindow ? grid.BagWidth : grid.Width, rows = bagWindow ? grid.BagHeight : grid.Height;
-        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(id, controls, columns, rows);
+        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(screen, controls, columns, rows);
         else if (id == "limbs") player.InventoryLayout.ArrangeLimbSlots(controls, lead);
         else
         {

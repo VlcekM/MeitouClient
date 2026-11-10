@@ -64,14 +64,47 @@ sealed class InventoryWindows(PlayerInterface player)
     CharacterId _pinnedFrom = CharacterId.None;
 
     /// <summary>
+    /// The bag window's layout as read, registered again for each pinned window's bag.
+    /// </summary>
+    internal MyGuiLayout? BagLayout;
+
+    /// <summary>
     /// The screen id prefix of the pinned inventory windows.
     /// </summary>
     const string PinnedPrefix = "inventory-pin-";
 
     /// <summary>
+    /// The screen id prefix of the pinned windows' bag windows (the same number as their pinned window's).
+    /// </summary>
+    const string PinnedBagPrefix = "bag-pin-";
+
+    /// <summary>
     /// Whether <paramref name="screen"/> is a pinned inventory window.
     /// </summary>
     internal static bool IsPinnedInventory(string screen) => screen.StartsWith(PinnedPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether <paramref name="screen"/> is a pinned window's bag window.
+    /// </summary>
+    internal static bool IsPinnedBag(string screen) => screen.StartsWith(PinnedBagPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The bag window of pinned window <paramref name="slot"/>.
+    /// </summary>
+    static string PinnedBagOf(string slot) => PinnedBagPrefix + slot[PinnedPrefix.Length..];
+
+    /// <summary>
+    /// The pinned window a pinned bag window belongs to.
+    /// </summary>
+    static string PinnedSlotOf(string bag) => PinnedPrefix + bag[PinnedBagPrefix.Length..];
+
+    /// <summary>
+    /// The screen a window binds as: a pinned window as the inventory, its bag as the bag, any other as itself.
+    /// </summary>
+    internal static string ScreenKind(string screen) =>
+        IsPinnedInventory(screen) ? "inventory"
+        : IsPinnedBag(screen) ? "bag"
+        : screen;
 
     /// <summary>
     /// How long the interface waits for the world to apply a held command before it shows the world's held item again (engine choice).
@@ -106,19 +139,30 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The character a character window shows: a pinned window's, the loot's body, else the inventory owner.
+    /// The character a character window shows: a pinned window's (and its bag's), the loot's body, else the inventory owner.
     /// </summary>
-    internal CharacterSnapshot? WindowCharacter(string screen) =>
-        TradeWindows.IsLootScreen(screen) ? player.TradeWindows.LootBody()
-        : screen == "limbs" ? LimbsCharacter()
-        : PinnedInventories.TryGetValue(screen, out var pinned) ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pinned)
-        : InventoryOwner();
+    internal CharacterSnapshot? WindowCharacter(string screen)
+    {
+        if (IsPinnedBag(screen)) screen = PinnedSlotOf(screen);
+        return TradeWindows.IsLootScreen(screen) ? player.TradeWindows.LootBody()
+            : screen == "limbs" ? LimbsCharacter()
+            : PinnedInventories.TryGetValue(screen, out var pinned) ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pinned)
+            : IsPinnedInventory(screen) ? null
+            : InventoryOwner();
+    }
+
+    /// <summary>
+    /// Whether a bag window shows <paramref name="character"/>'s bag: the inventory's bag, or the bag of their pinned window.
+    /// </summary>
+    internal bool BagShown(CharacterId character) =>
+        player.FaithfulScreens.IsOpen("bag") && InventoryOwner()?.Id == character
+        || PinnedInventories.Any(p => p.Value == character && player.FaithfulScreens.IsOpen(PinnedBagOf(p.Key)));
 
     /// <summary>
     /// Once a frame: the inventory window's pin (its caption's "O") moves it to a pinned window of its own that stays on its character, and the
     /// inventory opens again beside it for the next character selected, so several inventories show at once (docs/game/ui-screens.md section 6).
     /// Unpinning a pinned window gives it back to the selection when the inventory is closed, else closes it. A pinned window whose character is gone
-    /// closes. Pinned windows have no bag or limbs window.
+    /// closes. A bag open when the window is pinned stays open as the pinned window's own bag; pinned windows have no limbs window.
     /// </summary>
     internal void SyncPinnedInventories()
     {
@@ -130,14 +174,19 @@ sealed class InventoryWindows(PlayerInterface player)
         {
             string slot = PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key ?? FreePinnedSlot();
             PinnedInventories[slot] = lead.Id;
+            string bag = PinnedBagOf(slot);
+            bool bagOpen = player.FaithfulScreens.IsOpen("bag") && player.FaithfulScreens.IsRegistered(bag);
             player.FaithfulScreens.SetOffset(slot, player.FaithfulScreens.GetOffset("inventory"));
+            if (bagOpen) player.FaithfulScreens.SetOffset(bag, player.FaithfulScreens.GetOffset("bag"));
             player.FaithfulScreens.Close("inventory");
             player.FaithfulScreens.Open(slot);
             player.FaithfulScreens.SetPinned(slot, true);
+            if (bagOpen) player.FaithfulScreens.Open(bag);
 
-            // The same window, not a new one: no closing and opening sounds.
+            // The same windows, not new ones: no closing and opening sounds.
             player.InterfaceSounds.SoundScreens.Remove("inventory");
             player.InterfaceSounds.SoundScreens.Add(slot);
+            if (bagOpen && player.InterfaceSounds.SoundScreens.Remove("bag")) player.InterfaceSounds.SoundScreens.Add(bag);
             _pinnedFrom = lead.Id;
         }
 
@@ -201,6 +250,13 @@ sealed class InventoryWindows(PlayerInterface player)
         if (!player.FaithfulScreens.IsRegistered(slot))
             player.FaithfulScreens.Register(slot, player.TradeWindows.CharacterInventoryLayout!);
 
+        string bag = PinnedBagOf(slot);
+        if (!player.FaithfulScreens.IsRegistered(bag) && BagLayout is not null)
+        {
+            player.FaithfulScreens.Register(bag, BagLayout);
+            player.FaithfulScreens.Follow(bag, slot);
+        }
+
         player.TradeWindows.AnimalWindow.Remove(slot);
         player.FaithfulScreens.Replace(slot, player.TradeWindows.CharacterInventoryLayout!);
         return slot;
@@ -211,7 +267,7 @@ sealed class InventoryWindows(PlayerInterface player)
     /// </summary>
     ItemOwner? WindowOf(string screen) => screen switch
     {
-        _ when IsPinnedInventory(screen) => WindowCharacter(screen) is { } pinned ? ItemOwner.Of(pinned.Id) : null,
+        _ when IsPinnedInventory(screen) || IsPinnedBag(screen) => WindowCharacter(screen) is { } pinned ? ItemOwner.Of(pinned.Id) : null,
         "inventory" or "bag" => InventoryOwner() is { } owner ? ItemOwner.Of(owner.Id) : null,
         "limbs" => LimbsCharacter() is { } limbed ? ItemOwner.Of(limbed.Id) : null,
         "loot" or "loot-bag" => player.TradeWindows.LootBody() is { } body ? ItemOwner.Of(body.Id) : null,
@@ -435,7 +491,7 @@ sealed class InventoryWindows(PlayerInterface player)
     /// <summary>
     /// The section widgets of an item screen and the sections they are (the trader, storage and bench grids are their window's <c>main</c>).
     /// </summary>
-    static (string Widget, string Section)[] SectionsOf(string screen) => (IsPinnedInventory(screen) ? "inventory" : screen) switch
+    static (string Widget, string Section)[] SectionsOf(string screen) => ScreenKind(screen) switch
     {
         "inventory" or "loot" =>
         [
@@ -661,11 +717,12 @@ sealed class InventoryWindows(PlayerInterface player)
     internal readonly HashSet<CharacterId> BagOpen = [];
 
     /// <summary>
-    /// OPEN BAG: opens or closes the lead character's bag and remembers it for that character.
+    /// OPEN BAG, on the inventory window or a pinned one (<paramref name="who"/>, its character): opens or closes the character's bag and
+    /// remembers it for them.
     /// </summary>
-    internal void ToggleBag()
+    internal void ToggleBag(CharacterSnapshot? who = null)
     {
-        if (InventoryOwner() is not { } lead) return;
+        if ((who ?? InventoryOwner()) is not { } lead) return;
         if (!BagOpen.Remove(lead.Id)) BagOpen.Add(lead.Id);
         if (player.TradeWindows.LootOpenedBag == lead.Id) player.TradeWindows.LootOpenedBag = CharacterId.None;
 
@@ -720,12 +777,46 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// Once a frame: the bag window is open while the inventory is, the lead character wears a bag and left it open (<see cref="BagOpen"/>).
+    /// Once a frame: the inventory's and the pinned windows' bag windows (<see cref="SyncInventoryBag"/>, <see cref="SyncPinnedBag"/>).
     /// </summary>
     void SyncBagScreen()
     {
-        var lead = InventoryOwner();
-        bool want = player.FaithfulScreens.IsOpen("inventory") && lead is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagOpen.Contains(lead.Id);
+        SyncInventoryBag();
+        foreach (string slot in PinnedInventories.Keys) SyncPinnedBag(slot);
+    }
+
+    /// <summary>
+    /// Whether a character window shows <paramref name="shown"/>'s bag: they wear one and left it open (<see cref="BagOpen"/>).
+    /// </summary>
+    bool WantsBag(CharacterSnapshot? shown) => shown is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagOpen.Contains(shown.Id);
+
+    /// <summary>
+    /// A pinned window's bag window is open while the window is and its character wants it (<see cref="WantsBag"/>), beside it on its left.
+    /// </summary>
+    void SyncPinnedBag(string slot)
+    {
+        string bag = PinnedBagOf(slot);
+        if (!player.FaithfulScreens.IsRegistered(bag)) return;
+
+        bool want = player.FaithfulScreens.IsOpen(slot) && WantsBag(WindowCharacter(slot));
+        if (want == player.FaithfulScreens.IsOpen(bag)) return;
+
+        if (!want)
+        {
+            player.FaithfulScreens.Close(bag);
+            return;
+        }
+
+        player.FaithfulScreens.Open(bag);
+        player.InventoryLayout.PlaceInventoryBeside(bag, left: true, anchor: slot);
+    }
+
+    /// <summary>
+    /// The bag window is open while the inventory is and the lead character wants it (<see cref="WantsBag"/>).
+    /// </summary>
+    void SyncInventoryBag()
+    {
+        bool want = player.FaithfulScreens.IsOpen("inventory") && WantsBag(InventoryOwner());
         if (want == player.FaithfulScreens.IsOpen("bag")) return;
 
         if (!want)
