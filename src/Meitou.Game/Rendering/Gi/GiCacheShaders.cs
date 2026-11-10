@@ -223,6 +223,10 @@ static class GiCacheShaders
             atomicAdd(sums[slot * 2u + 1u].x, m.x);
             atomicAdd(sums[slot * 2u + 1u].y, m.y);
             atomicAdd(sums[slot * 2u + 1u].z, m.z);
+            // The texel farthest out along the cell's axis (plus one: 0 is none), for the point the cell traces from (the trace's main).
+            int along = axis % 6;
+            uint out_ = q[along >> 1];
+            atomicMax(sums[slot * 2u + 1u].w, ((along & 1) == 0 ? out_ : 4095u - out_) + 1u);
             if (atomicExchange(stamps[slot], vFrame.x) != vFrame.x) listed[atomicAdd(control[0], 1u)] = slot;
         }
 
@@ -396,6 +400,14 @@ static class GiCacheShaders
             float s = cellSize(level), count = max(float(a.w), 1.0);
             // The surface point and normal: this frame's mean of the cell's texels, averaged over up to 64 frames.
             vec3 framePoint = (vec3(cell.coord.xyz) + vec3(a.xyz) / (4095.0 * count)) * s;
+            // Along the cell's axis, the texel farthest out, not the mean: a cell holds every surface facing its axis (two treads of a stair, a ledge over a
+            // floor), and their mean lies between them, under the upper one or inside what joins them, where every ray ends at once and the cell is black.
+            if (b.w > 0u)
+            {
+                int along = axis % 6;
+                float outer = float(b.w - 1u) / 4095.0;
+                framePoint[along >> 1] = (float(cell.coord[along >> 1]) + ((along & 1) == 0 ? outer : 1.0 - outer)) * s;
+            }
             vec3 frameNormal = vec3(b.xyz) / (4095.0 * count) * 2.0 - 1.0;
             float kept = cell.point.w, w = 1.0 / min(kept + 1.0, 64.0);
             vec3 point = kept > 0.0 ? mix(cell.point.xyz, framePoint, w) : framePoint;
