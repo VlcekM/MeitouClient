@@ -1916,7 +1916,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     {
         var walk = world.Walkability;
 
-        // One already off every surface near its height (a stale height) is not held there: it steps down onto what is below.
+        // One already off every surface near its height (a stale height) is not held there: it steps down onto what is below, unless it walks out
+        // of a hole along its path (below).
         if (!stands) stands = walk.TryStand(x, z, p.Position.Y, out y);
 
         // On its navmesh path, a drop or climb beyond the stand limits that the corridor itself takes (a stair top short of a floor's edge)
@@ -1927,8 +1928,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         bool offSurface = !stands && !walk.IsWalkable(p.Position.X, p.Position.Z, p.Position.Y);
 
         // Shoved into something that cuts a hole in the mesh (a market stall), it walks out along its path toward the surface the path starts
-        // on, at its own height.
-        bool escaping = offSurface && !s.Steering && !walk.IsWalkable(x, z) && EscapesToward(walk, n, cold, p.Position, x, z);
+        // on, at its own height, also over a floor below the hole (a chest on an upper floor, #460). From the hole's edge, where it still stands,
+        // only once a step there was refused and its path asked again: one merely pushed to the side of a table first gets a path round it.
+        bool inHole = !stands && !walk.IsOnSurface(p.Position.X, p.Position.Z, p.Position.Y);
+        bool held = offSurface || cold.BlockedRepaths > 0;
+        bool escaping = inHole && held && !s.Steering && EscapesToward(walk, n, cold, p.Position, x, z);
         if (escaping) y = p.Position.Y;
 
         if (stands || offSurface && walk.IsWalkable(x, z) || escaping)
@@ -1957,7 +1961,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// Whether a walker off every surface (shoved into something that cuts a hole in the mesh) may step to (<paramref name="x"/>,
+    /// Whether a walker in a hole in the mesh or at its edge (shoved into something that cuts the hole) may step to (<paramref name="x"/>,
     /// <paramref name="z"/>): only nearer its path's current point, and only when that point is a surface it can stand on, so it walks out and never
     /// further in (docs/game/pathfinding.md "Own builder", shoved into furniture).
     /// </summary>
