@@ -307,16 +307,21 @@ sealed class SandboxScenario(GameHost host)
 
     /// <summary>
     /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), the target at its hips (the game's position
-    /// + <see cref="KenshiCamera.TrackHeight"/>); a gone character is let go.
+    /// + <see cref="KenshiCamera.TrackHeight"/>); a gone character is let go. A carried character is tracked by its carrier until put down: the body
+    /// sways on the carrier's shoulder with every step, which shook the view.
     /// </summary>
     internal void FollowCamera()
     {
         if (host.Player.Follow is not { } id || host.Session.Camera.IsFree) return;
-        if (host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } followed)
+        var characters = host.Session.CurrentSnapshot.Characters;
+        if (characters.FirstOrDefault(c => c.Id == id) is not { } followed)
         {
             host.Player.Follow = null;
             return;
         }
+
+        if (!followed.CarriedBy.IsNone && characters.FirstOrDefault(c => c.Id == followed.CarriedBy) is { } carrier)
+            followed = carrier;
 
         host.Session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
         host.Camera.Target = host.DrawnPosition(followed) + new Vector3(0, KenshiCamera.TrackHeight, 0);
