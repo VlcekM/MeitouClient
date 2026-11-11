@@ -70,6 +70,7 @@ static class SaveProbe
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
+            case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
             default: return false;
@@ -338,6 +339,41 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The research state and each research bench with the factors of its rate: health, power, the research production mult and operators.
+    /// </summary>
+    static void Research(ProbeWorld probe)
+    {
+        var world = probe.World;
+        var research = world.Research;
+        var queue = string.Join(", ", research.Queue.Select(q => $"{q.Id} {q.Seconds:F0}s"));
+        Console.WriteLine($"tech level {research.TechLevel}, bench level {research.BenchLevel}, rate {research.Rate:F3}, queue: {queue}");
+        foreach (var m in world.Machines.All.Where(m => m.Data.IsResearch))
+        {
+            var owner = world.Buildings.Find(m.Site)?.Owner ?? -1;
+            var upgrade = research.Upgrade(world, m.Data.Id, owner);
+            Console.WriteLine($"bench {m.Site} '{m.Data.Id}' at {m.Position:F0} owner={owner} rate={m.Data.Rate} health={m.Health:F2} power={m.Power:F2} "
+                + $"powerOn={m.PowerOn} active={m.Active} mult={upgrade.ProductionMult} operators={m.LastOperators}");
+            if (world.Buildings.Find(m.Site) is { } site) Grid(world, site.Town);
+        }
+    }
+
+    /// <summary>
+    /// The powered machines of one town: generators, batteries and consumers with their demand, grant, charge and power share.
+    /// </summary>
+    static void Grid(World world, int town)
+    {
+        foreach (var m in world.Machines.All.Where(m => m.Data.IsGenerator || m.Data.IsBattery || m.Data.IsConsumer))
+        {
+            if (world.Buildings.Find(m.Site) is not { } site || site.Town != town) continue;
+
+            string kind = m.Data.IsGenerator ? "generator" : m.Data.IsBattery ? "battery" : "consumer";
+            var inputs = string.Join(" ", m.Inputs.Select(i => $"{i.Item}:{i.Count}/{i.Level:F2}"));
+            Console.WriteLine($"  {kind} {m.Site} '{m.Data.Id}' complete={site.Complete} on={m.PowerOn} demand={m.Demand:F1} granted={m.Granted:F1} "
+                + $"charge={m.Charge:F1} store={m.Store:F1} power={m.Power:F2} operators={m.LastOperators} inputs={inputs}");
+        }
+    }
+
+    /// <summary>
     /// Every nest of the wild layout with the terrain height at each candidate spot; flags a first spot or all spots the original's spot finder
     /// refuses: under its floor (95) or on a black pixel of the areas map (docs/game/factions-squads-towns.md "Spot finder").
     /// </summary>
@@ -407,6 +443,7 @@ static class SaveProbe
               talk <name>              whether a character can be talked to, and its talk roots
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
+              research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
             """);
