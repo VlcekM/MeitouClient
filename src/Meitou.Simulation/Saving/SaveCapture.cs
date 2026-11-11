@@ -110,6 +110,7 @@ public static partial class SaveCapture
         var game = builder.Game;
         s_memoryPass = new MemoryPass();
         SavedKit.OwnerNotes = s_memoryPass.Owners;
+        SavedKit.Factions = data.Factions;
 
         WriteCamera(game, world, data, clock, options);
         var factionsPopulation = world.Systems.OfType<PopulationSystem>().FirstOrDefault();
@@ -327,6 +328,7 @@ public static partial class SaveCapture
 
         // Stolen items name the robbed character (`ownedby`); one not saved leaves the null handle the item was written with.
         SavedKit.OwnerNotes = null;
+        SavedKit.Factions = null;
         foreach (var (item, owner) in pass.Owners)
         {
             if (item.Written is { } record && pass.Handles.TryGetValue(owner, out var hand)) hand.Write(record, "ownedby");
