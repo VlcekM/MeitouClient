@@ -48,11 +48,11 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 20,
-    "areas": "Vulkan logging, Name tags, Death items, Animal inventory, Animal stats, Saved kit, Power beds, Medic finders, Repair beds, Bolts, Research bench UI, Help button, Caged prisoners, Bodyguard job"
+    "commits": 23,
+    "areas": "Captive slavery, Chests, Appearance, Logging, Name tags, Animal inventory, Save loading, Beds, Research UI, Help button, Medic finders, Carried bodies, Bolts, Jobs"
   },
   "robgreen490": {
-    "commits": 2,
-    "areas": "4k UI scaling, Branch merges"
+    "commits": 4,
+    "areas": "UI scaling, Inventory UI, Branch merges"
   }
 }
