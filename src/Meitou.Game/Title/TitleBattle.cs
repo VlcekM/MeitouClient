@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -18,6 +19,12 @@ sealed class TitleBattle : IDisposable
     /// How much larger than life the fighters are drawn, and their spacing round each centre.
     /// </summary>
     const float DisplayScale = 2.5f;
+
+    /// <summary>
+    /// The fighters' draw-distance multiple: the shortest NPC View Range times this is the longest, so the staged fight shows (and the title's
+    /// loading, which waits for its looks, ends) whatever the range.
+    /// </summary>
+    const float DrawReach = CharacterRenderer.MaxDrawDistance / CharacterRenderer.MinDrawDistance;
 
     /// <summary>
     /// The fight's own world (combat and animation systems only).
@@ -132,6 +139,7 @@ sealed class TitleBattle : IDisposable
                 RangedDrawn = c.RangedDrawn,
                 Shots = c.CrossbowShots,
                 Scale = c.Scale * DisplayScale,
+                DrawDistanceScale = DrawReach,
                 FullRateAnimation = true,
             });
         }
