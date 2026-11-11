@@ -82,6 +82,12 @@ public interface IOrderOwner
     void Start(World world, int slot, OrderEntry order);
 
     /// <summary>
+    /// Whether a started order's start conditions still hold (the original plans the front again each update); false ends its task and the order
+    /// waits unstarted, its failure text said again.
+    /// </summary>
+    bool StillHolds(World world, int slot, OrderEntry order) => true;
+
+    /// <summary>
     /// The code of the order's <see cref="OrderEntry.Detail"/> in a save (<see cref="Saving.OrderSave"/>; 0: no detail), or -1 when the order cannot
     /// be saved (a detail that names a runtime object). An owner whose orders carry a detail overrides it together with <see cref="LoadDetail"/>.
     /// </summary>
@@ -394,7 +400,8 @@ public static class PlayerOrders
     /// <summary>
     /// The decision step's source 1 before it is asked (<c>checkOrders</c> pops the front when done, or when its desire x finder is 0; serial): a
     /// front whose task ended leaves, gone ones leave; a running front whose row needs no melee threat (<see cref="NeedsNoThreat"/>) ends when one
-    /// comes and waits unstarted (its plan fails, so the character falls through: S3, the turret gunner). A Loot order's threat test is its task's,
+    /// comes, or whose start conditions fail (<see cref="IOrderOwner.StillHolds"/>), and waits unstarted (its plan fails, so the character falls
+    /// through: S3, the turret gunner). A Loot order's threat test is its task's,
     /// once at the body (<c>CarrySystem.HoldWindow</c>), not the walk's.
     /// </summary>
     internal static void Prepare(World world, int slot)
@@ -414,9 +421,11 @@ public static class PlayerOrders
                     Settle(world, slot);
                     continue;
                 }
-                if (Threatened(world, slot, front.Row))
+                bool unmet = !front.Owner.StillHolds(world, slot, front);
+                if (unmet || Threatened(world, slot, front.Row))
                 {
                     front.Started = false;   // waits in the queue: its end below is not the order's
+                    if (unmet) front.Tried = false;
                     TaskStart.End(world, slot, TaskEnd.Stopped);
                 }
                 return;

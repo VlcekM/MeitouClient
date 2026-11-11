@@ -485,7 +485,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 90 | `DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS` |
 | 91 | `AT_LOCATION_FORTIFICATION_GATE` |
 | 92 | `isEnemy` |
-| 93 | `BUILDING_HAS_POWER` |
+| 93 | `BUILDING_HAS_POWER` (evaluator `FUN_140596ab0`, **Verified**): false unless the target is an object (kind 0) found as a building; true for a building class (+0x198, slot 0x358) below 2; else `FUN_140299370` ([power](buildings-production.md#power): the town's generators, or its batteries in battery mode; a machine drawing nothing passes), so not the granted share. Failure line "It needs electricity."; a player order's first unmet condition gives its line (`FUN_140610020` via `FUN_14051a0a0`, said by Character vfunc 0x2d8 from `FUN_140510920`). Rows 87, 221, 146 need it. Meitou: `ProductionSystem.Powered` (operate and turret orders refused with the line; jobs skipped) |
 | 94 | `atDestinationTown` |
 | 95 | `isAtHomeTown` |
 | 97 | `CAGES_ARE_ALL_FULL` |

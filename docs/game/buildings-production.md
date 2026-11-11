@@ -580,7 +580,7 @@ Status `+0x468` of a `ProductionBuilding` (production, furnace, generator, wind,
 - **Crafting** (`FUN_1402bcac0`, **Observed**): after a finished item is stored, status 1 when the output has become full (not when it could not be stored).
 
 Meitou: `Machine.Status` (hashed, not saved, a producer starts at 2), `HasEmptyInputs`, `OutputBlocked`, `Jammed`; `ProductionSystem.ClearBlocked` (its serial step) clears 1 / 0 for a producer that takes operators, an operator's or automatic machine's step sets them. The panel reads the word chain
-(`ProductionStatus`). Planner: `Holds` evaluates 62 / 63 / 64 for a `Targets.Machine` target, which no finder gives yet; 65, 105, 106, the farm and bench variants and the 87 to 92 plan are not modelled (the job system's `HasWork` / `Room` is the engine reading of the blocked start; its power test is 93's town supply, `Machine.HasPower`, since an unworked machine's demand is 0 and its granted share reads 1).
+(`ProductionStatus`). Planner: `Holds` evaluates 62 / 63 / 64 for a `Targets.Machine` target, which no finder gives yet; 65, 105, 106, the farm and bench variants and the 87 to 92 plan are not modelled (the job system's `HasWork` / `Room` is the engine reading of the blocked start; its power test is [state 93](ai-tasks.md), `ProductionSystem.Powered`, since an unworked machine's demand is 0 and its granted share reads 1).
 
 ### Item furnace
 

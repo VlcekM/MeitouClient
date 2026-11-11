@@ -473,8 +473,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150): a player character's
     /// (else the order leaves the queue) on a complete site that has its machine (or a turret's post); one already working that machine needs nothing
-    /// more; the character must be able to work (<see cref="Able"/>), the machine have a free operator place ("is already in use", posted), and a
-    /// prospector must not swim.
+    /// more; the character must be able to work (<see cref="Able"/>), the machine have a free operator place ("is already in use", posted) and, to
+    /// operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs electricity." said); a prospector must not swim.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -487,8 +487,21 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (!Able(cold)) return OrderCheck.Blocked();
         if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
-        return OperatorsOf(world, id) >= m.Data.MaxOperators ? OrderCheck.Blocked($"{site.Name} is already in use.", posted: true) : OrderCheck.Run;
+        if (OperatorsOf(world, id) >= m.Data.MaxOperators) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
+        return Unpowered(world, order, site, m) ? OrderCheck.Blocked(Loc.Tr("It needs electricity.")) : OrderCheck.Run;
     }
+
+    /// <summary>
+    /// A running operate or turret order stops when its machine loses power (state 93, <see cref="Unpowered"/>).
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.Site is not { } id || Site(world, id) is not { } site || world.Machines.Find(id) is not { } m || !Unpowered(world, order, site, m);
+
+    /// <summary>
+    /// Whether the order operates or mans a machine (rows 87 and 146, which need state 93) that has no power (<see cref="Powered"/>).
+    /// </summary>
+    bool Unpowered(World world, OrderEntry order, BuildSite site, Machine m) =>
+        order.Row is TaskType.OperateMachinery or TaskType.UseTurret && !Powered(world, site, m);
 
     /// <summary>
     /// Starts the order's task (prospecting, a storage haul, operating a machine).
