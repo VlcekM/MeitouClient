@@ -666,6 +666,7 @@ public sealed unsafe partial class ShadowPass
         Upload(data);
         _meitouBlock.Set(ms);
         _volumePublished = false;
+        Array.Clear(_sunMapTraced);   // the sun map is not kept up while the cascades draw
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
         if (_terrainMap?.Sampled is not null) _boundTerrain = _terrainMap.Sampled;
         if (blockers) _blockerPublished = true;
@@ -713,6 +714,15 @@ public sealed unsafe partial class ShadowPass
     public Vector3 VolumeEye { get; private set; }
     /// <summary>The map's basis and, per layer, the square's centre from the eye along right and up and its half side.</summary>
     public (Vector3 Right, Vector3 Up, Vector3 ToSun, Vector4[] Layers) SunMap { get; private set; }
+    /// <summary>The layers <see cref="Gi.TracedSunVolume"/> fills this frame (a bit each): the nearest every frame, the second every other frame, the widest every fourth
+    /// (<see cref="SunMapSpread"/>; all of them on the first frame and when the widest's side changes).</summary>
+    public uint SunMapMask { get; private set; }
+    /// <summary>Debug (<c>MEITOU_SUN_MAP_SPREAD=0</c>: every layer every frame, for comparing).</summary>
+    public static bool SunMapSpread { get; set; } = Environment.GetEnvironmentVariable("MEITOU_SUN_MAP_SPREAD") != "0";
+    /// <summary>A layer as it was last traced: its basis, its square's centre along right and up in world space, its half side and texel, and its plane's place along the sun's
+    /// direction. A layer not traced this frame is read through these, so the picture it holds stays where it was taken.</summary>
+    readonly (Vector3 Right, Vector3 Up, Vector3 Toward, float X, float Y, float Half, float Texel, float Plane, bool Valid)[] _sunMapTraced = new (Vector3, Vector3, Vector3, float, float, float, float, float, bool)[SunMapLayers];
+    long _sunMapFrame;
 
     /// <summary>
     /// The traced sun (<see cref="TracedWhole"/>): no cascade is drawn. The terrain and landmark maps go on; the receivers that do not trace (shafts, lit dust, foam, the skin's light
@@ -744,6 +754,7 @@ public sealed unsafe partial class ShadowPass
         if (_volume is not null) return;
         _volume = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32F, SunMapTexels, SunMapTexels, Layers: SunMapLayers, Kind: TextureKind.Texture2DArray,
             Use: TextureUse.Sampled | TextureUse.Storage, Name: "traced sun map"));
+        Array.Clear(_sunMapTraced);   // a new map holds nothing: every layer traced
         _volumeSampled = Sampled(_volume, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
     }
 
@@ -762,22 +773,34 @@ public sealed unsafe partial class ShadowPass
         var forward = Vector3.Normalize(view.Forward);
         var layers = new Vector4[SunMapLayers];
         var texels = new Vector4(0);
+        uint mask = 0;
+        long frame = _sunMapFrame++;
         for (int l = 0; l < SunMapLayers; l++)
         {
             float half = l == 0 ? 256 : l == 1 ? 1536 : Math.Max(far * 0.6f, 4096);
             float texel = 2 * half / SunMapTexels;
-            var centre = view.Eye + forward * half * 0.5f;
-            float eyeRight = Vector3.Dot(view.Eye, mapRight), eyeUp = Vector3.Dot(view.Eye, mapUp);
-            float x = MathF.Round(Vector3.Dot(centre, mapRight) / texel) * texel - eyeRight, y = MathF.Round(Vector3.Dot(centre, mapUp) / texel) * texel - eyeUp;
+            ref var kept = ref _sunMapTraced[l];
+            // The nearest layer every frame, the second on the odd frames, the widest on every fourth.
+            bool trace = !SunMapSpread || !kept.Valid || kept.Half != half || l == 0 || (l == 1 ? (frame & 1) == 1 : (frame & 3) == 0);
+            if (trace)
+            {
+                var centre = view.Eye + forward * half * 0.5f;
+                kept = (mapRight, mapUp, toward, MathF.Round(Vector3.Dot(centre, mapRight) / texel) * texel, MathF.Round(Vector3.Dot(centre, mapUp) / texel) * texel, half, texel,
+                    Vector3.Dot(view.Eye, toward) + SunMapHeight, true);
+                mask |= 1u << l;
+            }
+            // Relative to this frame's eye, in the basis the layer was traced with (this frame's when it is traced now).
+            float x = kept.X - Vector3.Dot(view.Eye, kept.Right), y = kept.Y - Vector3.Dot(view.Eye, kept.Up);
             layers[l] = new Vector4(x, y, half, texel);
             texels[l] = texel;
             var tile = new Matrix4x4(
-                mapRight.X / (2 * half), mapUp.X / (2 * half), -toward.X, 0,
-                mapRight.Y / (2 * half), mapUp.Y / (2 * half), -toward.Y, 0,
-                mapRight.Z / (2 * half), mapUp.Z / (2 * half), -toward.Z, 0,
-                0.5f - x / (2 * half), 0.5f - y / (2 * half), SunMapHeight, 1);
+                kept.Right.X / (2 * half), kept.Up.X / (2 * half), -kept.Toward.X, 0,
+                kept.Right.Y / (2 * half), kept.Up.Y / (2 * half), -kept.Toward.Y, 0,
+                kept.Right.Z / (2 * half), kept.Up.Z / (2 * half), -kept.Toward.Z, 0,
+                0.5f - x / (2 * half), 0.5f - y / (2 * half), kept.Plane - Vector3.Dot(view.Eye, kept.Toward), 1);
             Put(data, 16 * l, tile);
         }
+        SunMapMask = mask;
         SunMap = (mapRight, mapUp, toward, layers);
         Put(data, LightAt, Matrix4x4.Identity);
         Put(data, OriginAt, new Vector4(view.Eye, 1));

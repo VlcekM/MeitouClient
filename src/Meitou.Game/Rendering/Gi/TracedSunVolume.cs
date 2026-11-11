@@ -56,7 +56,7 @@ sealed unsafe class TracedSunVolume : IDisposable
         {
             ivec3 f = ivec3(gl_GlobalInvocationID);
             int texels = int(p.size.x);
-            if (f.x >= texels || f.y >= texels || f.z >= {{ShadowPass.SunMapLayers}}) return;
+            if (f.x >= texels || f.y >= texels || f.z >= {{ShadowPass.SunMapLayers}} || ((uint(p.size.y) >> uint(f.z)) & 1u) == 0u) return;
             vec2 at = (vec2(f.xy) + 0.5) / float(texels) * 2.0 - 1.0;
             vec4 layer = p.layers[f.z];
             vec3 o = p.eye.xyz + p.right.xyz * (layer.x + at.x * layer.z) + p.up.xyz * (layer.y + at.y * layer.z) + p.sun.xyz * p.right.w;
@@ -102,7 +102,7 @@ sealed unsafe class TracedSunVolume : IDisposable
             Layer0 = m.Layers[0],
             Layer1 = m.Layers[1],
             Layer2 = m.Layers[2],
-            Size = new Vector4(ShadowPass.SunMapTexels, 0, 0, 0),
+            Size = new Vector4(ShadowPass.SunMapTexels, shadow.SunMapMask, 0, 0),   // y: the layers traced this frame, a bit each
         };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         var cmd = (CommandList)_ctx.BeginNative("traced sun volume");
