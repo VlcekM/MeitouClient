@@ -33,6 +33,8 @@ public sealed unsafe partial class PostProcess
     LampShowPass? _lampShow;
 
     Gi.LampShadowPass? _lampShadowTrace;
+    /// <summary>The last frame's per-lamp shadow areas and the pixels of their rectangles summed (0 before the pass ran).</summary>
+    public (int Areas, long Pixels, long CellPixels) LampShadowAreas => _lampShadowTrace is { } t ? (t.AreasLast, t.AreaPixelsLast, t.CellPixelsLast) : default;
     LampShadowApplyPass? _lampShadowApply;
     LampShadowFloorPass? _lampShadowFloor;
     Target2D? _lampLost, _lampTotal, _lampTotal1, _lampScratch, _lampFiltered;

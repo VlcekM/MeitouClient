@@ -194,7 +194,15 @@ static class LampShadowShaders
     /// One lamp's rays over an area of the screen (<c>uRect</c>: first x, y, one past the last x, y): whether what moves blocks it (<c>uLost</c> r; a the penumbra's radius at the receiver in world units, -1 no receiver) and
     /// the light it gives per unit of albedo after the still world (<c>uTotal</c>). One lamp a pass: nothing limits how many a pixel takes, and the filter reads one lamp's flags.
     /// </summary>
-    public static readonly string TraceOne = $$"""
+    public static readonly string TraceOne = One(false);
+
+    /// <summary>
+    /// The light a lamp gives the pixels of an area that its filtered flag (<c>uFlag</c>) marks, per unit of albedo after the still world (the lamp's tile), times the flag, added to the
+    /// sum of the lamps (<c>uSum</c>). Only those pixels pay for the lamp's visibility: the rays' kernel asks no more than whether the lamp reaches the pixel at all.
+    /// </summary>
+    public static readonly string TraceLight = One(true);
+
+    static string One(bool light) => $$"""
         #version 460
         #extension GL_EXT_ray_query : require
         #extension GL_EXT_buffer_reference : require
@@ -233,8 +241,8 @@ static class LampShadowShaders
             int i = c.y * CELL_WIDTH + c.x;
             return ((CELLS[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u;
         }
-        layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
-        layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
+        {{(light ? "layout(set = 0, binding = 5, rgba16f) uniform readonly image2D uFlag;\n        layout(set = 0, binding = 9, rgba16f) uniform image2D uSum;"
+            : "layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;")}}
         layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
         layout(set = 0, binding = 6) uniform sampler2D uLightCells;
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
@@ -246,7 +254,7 @@ static class LampShadowShaders
         float lampOneNote(int lamp, vec3 light, vec3 toLamp, float d, uint emitter)
         {
             oneEmitter = emitter;
-            oneLight = light * lampTileVisibility(lamp, toLamp, d, rankPlane);
+            oneLight = light{{(light ? " * lampTileVisibility(lamp, toLamp, d, rankPlane)" : "")}};   // the rays: whether the lamp reaches the pixel, whatever stands still in between
             return 1.0;
         }
         #define LAMP_ONLY int(uRayMask.y)
@@ -260,6 +268,7 @@ static class LampShadowShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
             if (px.x >= int(uRect.z) || px.y >= int(uRect.w) || !cellOn(px)) return;
+            {{(light ? "float flag = imageLoad(uFlag, px).r;\n            if (flag <= 0.0) return;" : "")}}
             vec4 lost = vec4(0.0, 0.0, 0.0, -1.0);
             vec3 total = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
@@ -271,6 +280,7 @@ static class LampShadowShaders
                 vec3 diffuse = vec3(0.0), specular = vec3(0.0);
                 rankPlane = lampPlane(px, world, n);
                 lampLight(world, n, normalize(uGiEye - world), 1.0, 1.0, diffuse, specular);
+                {{(light ? "total = oneLight * 3.14159265358979 * LAMP_DIFFUSE;" : """
                 if (dot(oneLight, vec3(1.0)) > 0.0)
                 {
                     int lamp = int(uRayMask.y);
@@ -279,39 +289,10 @@ static class LampShadowShaders
                     vec3 target = p.xyz - uOrigin;
                     float t = lampBlocker(from, target, p.w, oneEmitter);
                     lost = t <= 0.0 ? vec4(0.0) : vec4(1.0, 0.0, 0.0, texelFetch(uLightData, ivec2(5, lamp), 0).x * t / max(length(target - from) - t, 1.0));
-                    total = oneLight * 3.14159265358979 * LAMP_DIFFUSE;
                 }
+                """)}}
             }
-            imageStore(uLost, px, lost);
-            imageStore(uTotal, px, vec4(total, 0.0));
-        }
-        """;
-
-    /// <summary>A lamp's filtered flag times its light, added to the sum of the lamps (<c>uSum</c>) over the area.</summary>
-    public const string TraceSum = """
-        #version 460
-        layout(local_size_x = 8, local_size_y = 8) in;
-        layout(set = 0, binding = 0) uniform sampler2D uFlag;
-        layout(set = 0, binding = 1) uniform sampler2D uLight;
-        layout(set = 0, binding = 2, rgba16f) uniform image2D uSum;
-        layout(set = 0, binding = 3, std140) uniform Params { vec4 uRect; vec4 uSize; uvec4 uCells[16]; };
-        #define CELLS uCells
-        #define CELL_WIDTH ((int(uSize.x) + 63) / 64)
-
-        // The cells of 64 pixels this lamp's pass works on (LampShadowPass.CellSize): the mover-free rest of its area costs a test.
-        bool cellOn(ivec2 q)
-        {
-            ivec2 c = q / 64;
-            int i = c.y * CELL_WIDTH + c.x;
-            return ((CELLS[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u;
-        }
-        void main()
-        {
-            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
-            if (px.x >= int(uRect.z) || px.y >= int(uRect.w) || !cellOn(px)) return;
-            float flag = texelFetch(uFlag, px, 0).r;
-            if (flag <= 0.0) return;
-            imageStore(uSum, px, imageLoad(uSum, px) + vec4(flag * texelFetch(uLight, px, 0).rgb, 0.0));
+            {{(light ? "if (dot(total, vec3(1.0)) > 0.0) imageStore(uSum, px, imageLoad(uSum, px) + vec4(flag * total, 0.0));" : "imageStore(uLost, px, lost);")}}
         }
         """;
 

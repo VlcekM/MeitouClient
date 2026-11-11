@@ -27,6 +27,11 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly GpuProgram _oneProgram, _sumProgram;
     readonly GpuComputePipeline _onePipeline, _sumPipeline;
     readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide)> _areas = [];
+    /// <summary>The last frame's per-lamp areas: how many, and the pixels of their rectangles summed.</summary>
+    public int AreasLast { get; private set; }
+    public long AreaPixelsLast { get; private set; }
+    /// <summary>The pixels of the cells the last frame's areas marked (the rays' wider set), summed.</summary>
+    public long CellPixelsLast { get; private set; }
     GpuProgram? _referenceProgram;
     GpuComputePipeline _referencePipeline;
     readonly List<uint[]> _cellPool = [];
@@ -55,11 +60,14 @@ sealed unsafe class LampShadowPass : IDisposable
             (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
         ], GpuSetLayout.Bindless);
         _onePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_oneProgram, "lamp shadow one"));
-        _sumProgram = ctx.Shaders.Compute(LampShadowShaders.TraceSum, "lamp shadow sum",
+        // The light of the flagged pixels: the rays' bindings (5 the filtered flag, 9 the sum).
+        _sumProgram = ctx.Shaders.Compute(LampShadowShaders.TraceLight, "lamp shadow light",
         [
-            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.StorageImage), (3, DescriptorType.UniformBuffer),
-        ]);
-        _sumPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumProgram, "lamp shadow sum"));
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
+            (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
+        ], GpuSetLayout.Bindless);
+        _sumPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumProgram, "lamp shadow light"));
         _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
     }
@@ -219,6 +227,13 @@ sealed unsafe class LampShadowPass : IDisposable
         in LampShadowView view, in Matrix4x4 inverse)
     {
         PlanAreas(scene, lamps, view, inverse);
+        (AreasLast, AreaPixelsLast) = (_areas.Count, 0);
+        CellPixelsLast = 0;
+        foreach (var planned in _areas)
+        {
+            AreaPixelsLast += (long)((planned.Area.Z - planned.Area.X) * (planned.Area.W - planned.Area.Y));
+            foreach (uint word in planned.Wide) CellPixelsLast += System.Numerics.BitOperations.PopCount(word) * (long)(CellSize * CellSize);
+        }
         if (_areas.Count == 0) return false;
         int w = (int)view.Size.X, h = (int)view.Size.Y;
         var cmd = (CommandList)_ctx.BeginNative("lamp shadows");
@@ -250,7 +265,14 @@ sealed unsafe class LampShadowPass : IDisposable
             cmd.Dispatch((uint)(((int)(outer.Z - outer.X) + 7) / 8), (uint)(((int)(outer.W - outer.Y) + 7) / 8));
             cmd.Barrier(BarrierBatch.Full);
             _penumbra.RunArea(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h), inverse, view.Footprint, area, wide, cells);
-            Sum(cmd, filtered, light, sum, area, cells, view.Size);
+            // The lamp's light where its filtered flag is: the same constants over the area and its own cells.
+            parameters.Rect = area;
+            for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
+            var lit = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+            Push(cmd, scene, lamps, depth, surface, filtered, sum, sum, lit, _sumProgram, true);
+            cmd.BindPipeline(_sumPipeline);
+            cmd.BindBindlessTable(_sumProgram, 1, GpuBindPoint.Compute);
+            cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
             cmd.Barrier(BarrierBatch.Full);
         }
         Clear(cmd, filtered, 1);
@@ -265,33 +287,6 @@ sealed unsafe class LampShadowPass : IDisposable
         var clear = new ClearColorValue(red, 0f, 0f, 0f);
         var range = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
         _ctx.Device.Vk.CmdClearColorImage(cmd.Handle, _ctx.Device.NativeImage(target), ImageLayout.General, &clear, 1, &range);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct SumParams
-    {
-        public Vector4 Rect, Size;
-        public fixed uint Cells[64];
-    }
-
-    void Sum(CommandList cmd, GpuTexture flag, GpuTexture light, GpuTexture sum, Vector4 area, uint[] cells, Vector2 size)
-    {
-        var parameters = new SumParams { Rect = area, Size = new Vector4(size, 0, 0) };
-        for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
-        var constants = _ctx.Frame.Constants.Write<SumParams>(new ReadOnlySpan<SumParams>(&parameters, 1), 256);
-        var images = stackalloc DescriptorImageInfo[3];
-        images[0] = Image(flag);
-        images[1] = Image(light);
-        images[2] = new DescriptorImageInfo(default, _ctx.Device.ViewAt(sum.View().Index), ImageLayout.General);
-        var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(SumParams));
-        var writes = stackalloc WriteDescriptorSet[4];
-        writes[0] = Sampled(0, &images[0]);
-        writes[1] = Sampled(1, &images[1]);
-        writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[2] };
-        writes[3] = Buffer(3, DescriptorType.UniformBuffer, &uniform);
-        cmd.BindPipeline(_sumPipeline);
-        cmd.PushDescriptors(_sumProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), GpuBindPoint.Compute);
-        cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
     }
 
     /// <summary>For each lamp something moving stands in, the part of the screen its shadow can fall on.</summary>
