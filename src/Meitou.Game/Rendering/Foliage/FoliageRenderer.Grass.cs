@@ -226,7 +226,22 @@ public sealed unsafe partial class FoliageRenderer
         if (state.GrassZone < 0) state.GrassZone = AllocGrassZone();
         uint zone = (uint)state.GrassZone, serial = ++_grassPageSerial;
         float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
-        float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : 0;
+        // The heights the blades span: the roots' (the second float of a blade), and the tallest quad of the patches above the highest.
+        float minY = float.PositiveInfinity, maxY = float.NegativeInfinity, tallest = 0;
+        for (int i = 0; i < blades.Length; i++)
+        {
+            if (floats[i] == 0) continue;
+            var data = blades[i];
+            for (int at = 1; at < floats[i]; at += FoliageGrassField.Stride)
+            {
+                float h = data[at];
+                if (h < minY) minY = h;
+                if (h > maxY) maxY = h;
+            }
+            if (i < state.Patches.Count) tallest = MathF.Max(tallest, state.Patches[i].Grass.QuadMaxHeight);
+        }
+        (page.MinY, page.MaxY) = (minY, maxY + tallest);
+        float pageMinY = page.MinY, pageMaxY = page.MaxY;
         for (int i = 0; i < buffers.Length; i++)
         {
             var b = buffers[i];
@@ -256,7 +271,7 @@ public sealed unsafe partial class FoliageRenderer
             {
                 var b = buffers[i];
                 if (b.Slot < 0) continue;
-                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone,
+                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, YMin = pageMinY, YMax = pageMaxY, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone,
                     Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
@@ -355,7 +370,8 @@ public sealed unsafe partial class FoliageRenderer
         NewTextureSegment();
         var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
-        var result = _grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
+        var result = _grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables,
+            occlusion: FoliageGrassGpu.OcclusionCull ? Occlusion : default);
         var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour,
             FogDistance = fogDistance, Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);

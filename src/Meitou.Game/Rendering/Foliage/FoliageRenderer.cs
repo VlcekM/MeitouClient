@@ -545,6 +545,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public GrassBuffer[]? Buffers;
         public bool Dropped;
         /// <summary>
+        /// The heights the page's blades span, the lowest root to the highest tip (<see cref="QueuePage"/>): the box the views test. The page's ground
+        /// height at its centre with 2000 units either way let every page under the view's line of sight draw, far past where it meets the ground.
+        /// </summary>
+        public float MinY, MaxY;
+        /// <summary>
         /// The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by
         /// <see cref="UpdateGrass"/>. Rented (<see cref="FoliageGrassField.RentBladesWithPrefixes"/>), the first <see cref="PendingFloats"/> of each
         /// in use; the page's last upload step returns them.
@@ -3188,9 +3193,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var (d, state, key, page) in _grassOrder)
         {
             float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
-            float y = eye.Y;
-            if (state.Ground is { } ground) y = ground.Height(x0 + PageSize / 2, z0 + PageSize / 2);
-            if (!WorldCamera.Intersects(frustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize)))
+            if (!WorldCamera.Intersects(frustum, new Vector3(x0, page.MinY, z0), new Vector3(x0 + PageSize, page.MaxY, z0 + PageSize)))
                 continue;
             if (page.Buffers is null) continue;
             for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
@@ -3431,8 +3434,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (page.Buffers is null) continue;
                 float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
                 float d = BoxDistance(x0, z0, PageSize, eye);
-                float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : eye.Y;
-                if (!WorldCamera.Intersects(_motionFrustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize)))
+                if (!WorldCamera.Intersects(_motionFrustum, new Vector3(x0, page.MinY, z0), new Vector3(x0 + PageSize, page.MaxY, z0 + PageSize)))
                     continue;
                 for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
                 {
