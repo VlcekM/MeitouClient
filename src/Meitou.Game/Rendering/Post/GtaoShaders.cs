@@ -22,7 +22,8 @@ static class GtaoShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uPacked;          // the view depth at the render size (Pack): 0 the sky, negative on a character's pixel
+        uniform sampler2D uPacked;          // the view depth at the render size (Pack): 0 the sky, negative on a character's pixel; its coarser levels by DepthLevel
+        uniform vec2 uLevels;               // x: the coarsest level a tap may read (0: the pixels alone), y: what a tap's reach in pixels gives up before the level rises
         uniform float uCharacterOccluder;   // how much a character counts as an occluder (1: as anything else)
         uniform vec2 uTan;      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec2 uNearFar;  // of the scene depth
@@ -90,10 +91,10 @@ static class GtaoShaders
 
         // One tap's update of a side's horizon cosine: past the radius it fades to the surface's own horizon (low), a character counts by its share,
         // and a horizon the march has passed decays (uMarch.z), so a thin occluder is not a wall running away from the eye for ever.
-        float horizon(ivec2 t, vec3 p, vec3 view, float radius, float low, float best)
+        float horizon(ivec2 t, vec3 p, vec3 view, float radius, float low, float best, int level)
         {
             if (any(lessThan(t, ivec2(0))) || any(greaterThanEqual(t, ivec2(uSize)))) return best;
-            float packed = texelFetch(uPacked, t, 0).r;
+            float packed = texelFetch(uPacked, min(t >> level, textureSize(uPacked, level) - 1), level).r;
             if (packed == 0.0) return best;
             vec3 v = offsetAt(t, abs(packed)) - p;
             float len = length(v);
@@ -127,9 +128,12 @@ static class GtaoShaders
             {
                 // Squared: the taps gather where the contact is; each at least one pixel further out, so none rereads the texel it started from.
                 float f = (float(j) + jitter) / float(steps);
-                ivec2 o = ivec2(round(screen * max(f * f * radiusPixels, float(j + 1))));
-                up = horizon(c + o, p, view, radius, lowUp, up);
-                down = horizon(c - o, p, view, radius, lowDown, down);
+                float reach = max(f * f * radiusPixels, float(j + 1));
+                ivec2 o = ivec2(round(screen * reach));
+                // A far tap reads a coarser level of the depth (XeGTAO): its texels lie far apart in the picture, in the pyramid they lie together.
+                int level = int(clamp(log2(reach) - uLevels.y, 0.0, uLevels.x) + 0.5);
+                up = horizon(c + o, p, view, radius, lowUp, up, level);
+                down = horizon(c - o, p, view, radius, lowDown, down, level);
             }
             float h1 = acos(clamp(up, -1.0, 1.0)), h0 = -acos(clamp(down, -1.0, 1.0));
             return vec2(projLen * (arc(h0, angle, cosN, sinN) + arc(h1, angle, cosN, sinN)), projLen * (cosN + angle * sinN));
@@ -155,6 +159,37 @@ static class GtaoShaders
             if (depthIsSky(d)) { fragColour = vec4(0.0); return; }
             float z = depthViewZ(d, uNearFar);
             fragColour = vec4(texelFetch(uScene, c, 0).a > 0.5 ? -z : z, 0.0, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// A coarser level of <see cref="Pack"/>'s depth, from the level before it (XeGTAO's depth filter): the four texels' depths averaged by how near each is to the farthest
+    /// of them, full weight within the part of the gather's radius that counts in full and none a radius nearer, so a level holds the surface behind and a thin near thing
+    /// does not smear over it. The sky when one of the four is the sky; a character's when two or more are.
+    /// </summary>
+    public const string DepthLevel = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uPacked;
+        uniform vec4 uReach;    // as the gather's: x the radius in world units; y, z the most and the least pixels it spans; w the share of it at full weight
+        uniform vec2 uFrom;     // x: the level read, y: a pixel's width per unit of depth
+        void main()
+        {
+            int level = int(uFrom.x);
+            ivec2 c = ivec2(gl_FragCoord.xy) * 2, last = textureSize(uPacked, level) - 1;
+            vec4 d = vec4(texelFetch(uPacked, min(c, last), level).r, texelFetch(uPacked, min(c + ivec2(1, 0), last), level).r,
+                texelFetch(uPacked, min(c + ivec2(0, 1), last), level).r, texelFetch(uPacked, min(c + ivec2(1, 1), last), level).r);
+            if (any(equal(d, vec4(0.0)))) { fragColour = vec4(0.0); return; }
+            vec4 z = abs(d);
+            float far = max(max(z.x, z.y), max(z.z, z.w));
+            float pixel = uFrom.y * far;
+            float radius = clamp(uReach.x / pixel, uReach.z, max(uReach.y, uReach.z)) * pixel;
+            float fade = max(radius * (1.0 - uReach.w), 1e-4);
+            vec4 w = clamp((radius - (far - z)) / fade, 0.0, 1.0);
+            float depth = dot(w, z) / max(dot(w, vec4(1.0)), 1e-6);
+            float characters = dot(vec4(lessThan(d, vec4(0.0))), vec4(1.0));
+            fragColour = vec4(characters >= 2.0 ? -depth : depth, 0.0, 0.0, 1.0);
         }
         """;
 
