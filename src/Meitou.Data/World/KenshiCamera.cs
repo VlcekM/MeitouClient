@@ -17,6 +17,10 @@ public static class KenshiCamera
     /// </summary>
     public const float MaxDistance = 2000;
     /// <summary>
+    /// How far above a tracked character's position the pivot sits (docs/formats/camera.md "Focus and tracking").
+    /// </summary>
+    public const float TrackHeight = 10;
+    /// <summary>
     /// The boom when the camera is created or reset.
     /// </summary>
     public const float InitialDistance = 150;

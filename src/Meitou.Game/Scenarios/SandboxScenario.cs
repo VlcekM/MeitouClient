@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Game.Editor;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Overlays;
@@ -305,8 +306,8 @@ sealed class SandboxScenario(GameHost host)
     }
 
     /// <summary>
-    /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), as the sandbox's follow does; a gone character
-    /// is let go.
+    /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), the target at its hips (the game's position
+    /// + <see cref="KenshiCamera.TrackHeight"/>); a gone character is let go.
     /// </summary>
     internal void FollowCamera()
     {
@@ -318,7 +319,7 @@ sealed class SandboxScenario(GameHost host)
         }
 
         host.Session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
-        host.Camera.Target = host.DrawnPosition(followed);
+        host.Camera.Target = host.DrawnPosition(followed) + new Vector3(0, KenshiCamera.TrackHeight, 0);
     }
 
     /// <summary>
