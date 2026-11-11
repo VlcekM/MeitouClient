@@ -342,9 +342,7 @@ pointer `pick`; `ItemNameText` (`Kenshi_TextboxStandardText`, Kenshi_StandardFon
 **Verified** (`FUN_1401649e0` registers three handlers on the label root; `FUN_1401638f0` is the one at Widget +0x130 = eventMouseButtonReleased, see the context menu section):
 focus gained / lost only recolour (`FUN_140162a20` / `FUN_140162a90`); a **left** release (button id 0; no other button is tested, the label has no press or right-click handler) on a
 label whose item is of a pickable kind (hand type 2, 3, 4, 0x2e, 0x56, 0x66, 0x6b or 0x6f) gives the pick-up order 3 through `FUN_1407fb3a0` -> `FUN_1407fae70`, the same call as the world
-right click on the item (`FUN_1407fc440`). The stolen flag (label +0xc0, set by the ctor `FUN_1401649e0`, **Observed**): the item's `ownedby` (vfunc 0x2a8) is not the null handle and names an owner (else the
-`insideBuilding` building, vfunc 0x1d8) whose faction is not the player's (+0x250) and not `not real`; no holder is asked, so a stolen item dropped by the thief is still
-stolen (Meitou: `GroundItems.Drop` gives it its mark's faction as `GroundItem.OwnedBy`). A stolen item without Alt held (`DAT_142133462`) shows "Hold down the ALT key to steal items" and gives no order (the world
+right click on the item (`FUN_1407fc440`). A stolen item (label flag +0xc0) without Alt held (`DAT_142133462`) shows "Hold down the ALT key to steal items" and gives no order (the world
 right click gives that hint and a move, order 29/0x1d). **Unknown**: what a right click over a label does (the label takes the mouse focus, so the world handler probably does not run); whether
 a left click on the item itself in the world does anything (its press is the select edge, `FUN_140800250`, not traced for items). Meitou: a left release over a label, pressed on it, picks the item up
 for the selection (`PlayerInterface.LabelPickUp`); the label exists only while Highlight is held, so the steal hint cannot arise; the right click on a label stays as on the item (an extra, its source **Unknown**).

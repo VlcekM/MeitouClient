@@ -266,25 +266,24 @@ public sealed class SavedPopulation
     readonly List<(ItemInstance Item, Hand Owner, StolenMark Interim)> _owners = [];
 
     /// <summary>
-    /// Marks the items of a character just made that were stolen from another faction than <paramref name="holderFaction"/>: the faction of the
-    /// character of the save their <c>ownedby</c> names, else Meitou's <see cref="SaveItem.StolenFromKey"/> (a mark naming no saved character).
+    /// Marks the items of a character just made whose saved <c>ownedby</c> names a character of the save of another faction than
+    /// <paramref name="holderFaction"/>.
     /// </summary>
     internal void NoteOwners(Inventory inventory, int holderFaction, PopulationData data)
     {
         foreach (var item in inventory.All())
         {
-            if (item.Saved is not { } r) continue;
+            if (item.Saved is not { } r || Hand.Read(r, "ownedby") is not { Type: (int)FcsRecordType.Character } h
+                || Handles.Character(h) is not { } owner)
+            {
+                continue;
+            }
 
-            var h = Hand.Read(r, "ownedby");
-            var owner = h.Type == (int)FcsRecordType.Character ? Handles.Character(h) : null;
-            int faction = owner is not null ? data.FactionIndex(owner.Platoon.FactionId) : SavedKit.StolenFrom(r, data);
+            int faction = data.FactionIndex(owner.Platoon.FactionId);
             if (faction < 0 || faction == holderFaction) continue;
 
             item.Mark = StolenMark.OfFaction(faction);
-            if (owner is not null)
-            {
-                lock (_owners) _owners.Add((item, h, item.Mark));
-            }
+            lock (_owners) _owners.Add((item, h, item.Mark));
         }
     }
 

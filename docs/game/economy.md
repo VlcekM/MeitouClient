@@ -668,9 +668,8 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   Meitou (`TradeSystem.FenceOdds`): the owner is `ItemInstance.Owner` with the squad it was in when robbed (`OwnerSquad`, standing for `C`/`CS`), set where taking from a character is a
   theft (`CarrySystem`, `HeldItems`). A mark from a container or the ground names only a faction: no owner early-out applies and the home-town test reads it as another town (what the
   original's handle is there is **Unknown**). The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed character's handle in `ownedby` (the
-  null handle when that character is not saved) and the robbed faction's id in Meitou's `meitou stolen from` (any mark; the only trace of a faction-only one).
-  Loading marks an item whose `ownedby` names a character of another faction than its holder's as stolen from that faction, and from the character once it is in
-  the world (`SavedPopulation.NoteOwners`); else one whose `meitou stolen from` names another faction, from that faction.
+  null handle when that character is not saved); loading marks an item whose `ownedby` names a character of another faction than its holder's as stolen from that faction, and from the
+  character once it is in the world (`SavedPopulation.NoteOwners`).
 - **Prompt and roll** (`FUN_140715290`, `FUN_140793770`, **Observed**): both skip an item whose owner is in the seller's platoon, that the trader's squad does not fence, or whose owner does
   not resolve to a character; so a shop that buys stolen goods asks and rolls only for goods stolen from its own squad. Meitou: `TradeSystem.Fences`; the prompt and the hover box
   ([ui-screens](ui-screens.md)) show the same p the roll uses.

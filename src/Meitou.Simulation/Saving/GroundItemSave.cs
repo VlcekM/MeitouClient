@@ -30,8 +30,6 @@ public static class GroundItemSave
                 if (SavedKit.ItemOf(g.Item, factory) is { } item)
                 {
                     int owner = handles is null || g.Item.Source is not { } r ? -1 : OwnerOf(r, handles, factionOf!);
-                    int stolen = MarkStolen(item, g.Item, factionOf);
-                    if (owner < 0) owner = stolen;
                     world.GroundItems.Load(item, g.Instance.Position, g.Instance.Rotation, owner);
                 }
                 else
@@ -42,18 +40,6 @@ public static class GroundItemSave
         }
 
         return missing;
-    }
-
-    /// <summary>
-    /// Marks a loose item stolen from the faction Meitou's <see cref="SaveItem.StolenFrom"/> names (a dropped stolen item) and returns that
-    /// faction, its owner when its <c>ownedby</c> names none; -1 when it names none.
-    /// </summary>
-    static int MarkStolen(ItemInstance item, SaveItem saved, Func<string, int>? factionOf)
-    {
-        int faction = saved.StolenFrom is { Length: > 0 } id && factionOf is not null ? factionOf(id) : -1;
-        if (faction >= 0) item.StolenFrom = faction;
-
-        return faction;
     }
 
     /// <summary>

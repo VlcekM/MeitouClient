@@ -207,11 +207,10 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                 continue;
             }
 
-            // Another faction's item is stolen from it (the "Steal" pick-up), unless it is marked already (a dropped stolen item keeps the robbed
-            // character); what stays on the ground keeps its old mark.
+            // Another faction's item is stolen from it (the "Steal" pick-up); what stays on the ground keeps its old mark.
             int before = item.Item.Quantity;
             var mark = item.Item.Mark;
-            if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction && mark == Items.StolenMark.None) item.Item.StolenFrom = item.OwnedBy;
+            if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.StolenFrom = item.OwnedBy;
 
             // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear or a bag that does not fit is worn when its slot
             // is free.
