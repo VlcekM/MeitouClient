@@ -74,8 +74,9 @@ Re-checked against `FUN_1406d3740` (the layer loop) and `FUN_1406d2410` (one mem
 order in `FoliageLayout.PlaceMesh`/`Place` (**Verified**, decompile read). Tower of Abuse (37.35): our placer puts a
 `Foliage_Rock_Bouldercluster_MonoTex` (3438) at 23862,963,18520, scale 2.13, 150 from the tower and 690 from the town's level position (range 200),
 whose rocks cover the ramp foot (23340-23450, 18140-18260); the shipped tile there has ground and the lower ramp (y 1159-1208) (**Observed**,
-`navmesh --probe`). Whether the original draws that rock is **Unknown**: its zone hash covers buildings only (docs/game/pathfinding.md), so the
-shipped tile stays in use whatever foliage the zone now has.
+`navmesh --probe`). The original has no rock there either (**Observed**, a vanilla screenshot of the ramp), so an input differs; not the
+town (one placement, 23826,17893), height and slope (zone grid then terrain, no building test, `FUN_1409b32f0`/`FUN_1409b1e30`) nor the
+random orientation (`FUN_1406cc2e0`: same hash, `srand(float(1 - h/2^30) * 1e6)`, axis (r3, r2, r1), angle × 360; same seed for this rock).
 
 ## Materials, sizes and grass
 
