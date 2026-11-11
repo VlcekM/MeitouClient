@@ -137,7 +137,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 
         float stand = CombatTuning.StandGap(st.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
         bool inReach = !st.Ranged && !behind && aimGap <= stand && CombatTuning.Gap(n.Position, aim, cold, tc) <= endReach
-            && !CombatSystem.OtherFloor(world, i, n.Position, t, next[t].Position); // a target on the floor below is walked to by the stairs (#292)
+            && !CombatSystem.OtherFloor(world, i, n.Position, t, next[t].Position) // a target on the floor below is walked to by the stairs (#292)
+            && !CombatSystem.PathChasing(cold, t); // one behind bars or a wall is walked round to (#439)
         if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding)
         {
             // In reach, mid-swing or staggered (the hit reaction carries it), or holding position: stand and fight.

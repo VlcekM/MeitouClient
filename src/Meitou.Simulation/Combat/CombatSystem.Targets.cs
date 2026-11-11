@@ -45,6 +45,12 @@ public sealed partial class CombatSystem
     const float SteerLineStep = 2;
 
     /// <summary>
+    /// The radius of the circle the steering's line test sweeps against the walkable surface's walls (engine choice: near a point, so the line
+    /// itself is tested; a bar line a step thin is crossed between two of the <see cref="SteerLineStep"/> points, #439).
+    /// </summary>
+    const float SteerLineRadius = 0.1f;
+
+    /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
     /// </summary>
     struct Choice
@@ -398,8 +404,9 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
-    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last (engine stand-in for the navmesh line query). Last
-    /// tick's places; any thread after Sight's update.
+    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
+    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). Last tick's places; any thread after
+    /// Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
@@ -415,8 +422,15 @@ public sealed partial class CombatSystem
         for (float d = SteerLineStep; d < length; d += SteerLineStep)
             if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
 
-        return true;
+        return world.Walkability.Slide(from, leg, SteerLineRadius) == leg;
     }
+
+    /// <summary>
+    /// Whether fighter <paramref name="cold"/> is on a path chase after <paramref name="t"/> (<see cref="SteerState.ChaseTarget"/>: its line to it was
+    /// blocked, or the chase's timer still runs). The original's fight is then in state 11, whose update never reaches the attack start
+    /// (<c>FUN_14060d6a0</c>): it neither stands in reach nor swings, so a target across bars or a wall is walked round to, or dropped (#439).
+    /// </summary>
+    public static bool PathChasing(CharacterCold cold, int t) => cold.Steer is { } steer && steer.ChaseTarget == t;
 
     /// <summary>
     /// Whether <paramref name="a"/> at <paramref name="from"/> and <paramref name="t"/> at <paramref name="to"/> stand on different floors (engine

@@ -683,6 +683,8 @@ public sealed partial class CombatSystem
         if (NearestFriend(world, i, in s, cold) < BodyRoom(cold) * (s.CircleState ? CircleRoomFactor : 1)) return;
         // no swing through a floor: it walks round by the stairs (PursuitSystem)
         if (OtherFloor(world, i, prev[i].Position, t, prev[t].Position)) return;
+        // nor through bars or a wall: it is on a path chase round them (PursuitSystem)
+        if (PathChasing(cold, t)) return;
 
         var tc = table.Cold(t)!;
         var medical = cold.Medical!;
