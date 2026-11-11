@@ -223,7 +223,7 @@ sealed partial class VideoAudio : IDisposable
     {
         try
         {
-            return _decoder.Read(samples, 0, samples.Length);
+            return _decoder.Read(samples);
         }
         catch (Exception e) when (e is InvalidDataException or IndexOutOfRangeException or ArgumentException)
         {

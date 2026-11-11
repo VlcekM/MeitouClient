@@ -16,6 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="StbImageSharp" Version="2.30.16" />
-    <PackageReference Include="NVorbis" Version="0.10.5" />
+    <PackageReference Include="NVorbis" Version="1.0.0-alpha.2" />
   </ItemGroup>
 </Project>

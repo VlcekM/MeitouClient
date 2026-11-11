@@ -15,6 +15,11 @@ about the banks are checked against the 24 banks of the Steam install.
   (`Time_in_Game` = `Day`); Wwise does the rest from the bank.
 - **Meitou** reads the banks, converts the recordings to Ogg Vorbis and decodes them as they play (NVorbis), interprets the instructions
   in its own player, mixes everything in software to one stereo stream and hands it to the sound card through OpenAL Soft.
+- **Decoder version (Observed, upstream [NVorbis #74](https://github.com/NVorbis/NVorbis/pull/74)).** NVorbis 0.10.5 can spin forever after
+  repeated near-end seeks and over-reads on one decoder. Game audio and launcher video use 1.0.0-alpha.2, which includes the fix.
+  **Observed** (`Every_ambience_WEM_decodes_to_exactly_its_sample_count`, Steam `SFX_Amb_Indoors_Bank`): 1.0.0-rc.2 truncates silence WEM
+  `34EC0D31` to 180672 of 441000 frames, so it is not compatible with the current converter. **Unknown:** the exact trigger of #538 and #542;
+  `Voice.Rewind` opens a fresh decoder for each seek, so the upstream repeated-seek reproduction does not directly match that path.
 
 ## What the game sends (Verified (decompiled) unless marked)
 
