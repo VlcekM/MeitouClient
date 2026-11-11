@@ -23,6 +23,8 @@ internal sealed partial class CharacterRenderer
         public float Radius;
         public uint BoneBase;
         public float Distance;
+        /// <summary>The update its palette's pose was made in: the same while the pose is held (frozen, or thinned by its size on screen).</summary>
+        public long Pose;
         public readonly List<RayPart> Parts = [];
     }
 
@@ -66,6 +68,7 @@ internal sealed partial class CharacterRenderer
     void RayCharacterOf(in Live l, float distance, RayCharacter c)
     {
         (c.Key, c.Anchor, c.BoneBase, c.Distance, c.Centre, c.Radius) = (l.Key, l.World.Translation, (uint)l.BoneBase, distance, l.Centre, l.Radius);
+        c.Pose = l.State.Posed;
         c.Parts.Clear();
         // The parts are placed relative to the update's eye; relative to the anchor here, so the character's structure keeps its precision and its shape while it walks.
         var shift = _partOrigin - c.Anchor;
