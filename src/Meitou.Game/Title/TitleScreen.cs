@@ -85,6 +85,12 @@ sealed class TitleScreen(GameHost host)
     Action<CharacterDrawList>? _gameplayCharacters;
 
     /// <summary>
+    /// The characters' draw distance (the NPC View Range) while the title shows; null when it is given back. The title draws at the longest one:
+    /// at a short range its road fight was never built and its screen waited for it for good.
+    /// </summary>
+    float? _gameplayDrawDistance;
+
+    /// <summary>
     /// The Meitou title shows the live world.
     /// </summary>
     internal bool TitleVisible => host.Player.TitleOpen && host.Player.MeitouMainMenu;
@@ -248,6 +254,8 @@ sealed class TitleScreen(GameHost host)
         {
             _gameplayCharacters = characters.Source;
             characters.Source = FillTitleCharacters;
+            _gameplayDrawDistance = characters.DrawDistance;
+            characters.DrawDistance = Rendering.Characters.CharacterRenderer.MaxDrawDistance;
 
             // The world's characters beyond reach are kept across frames and only the gameplay source empties them: left in, the title's view
             // waited forever for looks it never builds (out of its reach). The gameplay source fills them again when it returns.
@@ -276,6 +284,12 @@ sealed class TitleScreen(GameHost host)
         {
             restore.Source = source;
             _gameplayCharacters = null;
+        }
+
+        if (_gameplayDrawDistance is { } range && host.ActiveCharacters is { } reach)
+        {
+            reach.DrawDistance = range;
+            _gameplayDrawDistance = null;
         }
 
         if (host.ActiveFoliage is { } plants && _titleComposition is { } shown && plants.Shift == shown.Ruins) plants.Shift = null;

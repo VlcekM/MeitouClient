@@ -350,10 +350,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         !Deferred(c) && (LoadingFocus is not null || _portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
 
     /// <summary>
-    /// Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.
+    /// Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished. Only looks an update
+    /// builds (<see cref="BuildsLook"/>) count: one out of the eye's reach on the title, never built, held its screen up for good.
     /// </summary>
-    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
-        || Draws.Distant.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
+    public bool ContentPending => Draws.Items.Any(c => !_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
+        || Draws.Distant.Any(c => !_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
         || _content.Textures.AwaitedCount > 0 || _content.Textures.UnresidentUsedCount > 0;
 
     /// <summary>
