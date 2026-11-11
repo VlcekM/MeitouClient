@@ -181,6 +181,9 @@ a scheme. 31 of 103 base FACTIONs have one; 42 of 142 ARMOUR records have `dont 
 Meitou: `ItemColours`, `ItemInstance.ColourId` (factory: the record's; `CharacterAssembly.Dye`: the scheme, for any item outside the main grid), `LoadoutItem.Colour`,
 `CharacterPart.Colour`. Whether the scheme follows a faction change (a recruit) is **Unknown**. Meitou uses the current faction. A vest texture (body layer) takes
 its item's colour like the meshes (the shader has one shirt colour: the first dyed vest's); the original's vest colour source is **Unknown**.
+Vest slot (**Observed**, decompile `FUN_140533b50`): the body's `vestDiffuse` / `vestNormal` / `colorMap` come only from the attachment in the `shirt` slot; an
+ARMOUR in another slot draws its mesh alone, its vest fields unread. All 15 base ARMOURs with a vest texture are shirts (slot 8); the Re Final Fantasy - Viera mod
+sets one on body armour (slot 5) and a collar (slot 14), whose atlas would cover the whole body (#533). Meitou: `CharacterAppearance.AddWorn`, shirt slot only.
 
 ### Crossbows
 

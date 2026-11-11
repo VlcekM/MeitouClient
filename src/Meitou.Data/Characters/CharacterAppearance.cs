@@ -965,8 +965,10 @@ public sealed class CharacterAppearance
                 mesh = overlap;
                 field = overlapField;
             }
+
+            // Only the shirt slot's vest texture reaches the body (FUN_140533b50); mods put one on body armour and collars too (#533).
             string vest = female ? " female" : "";
-            if (item.GetPath("vest texture" + vest) is { Length: > 0 } diffuse)
+            if (slot == AttachSlot.Shirt && item.GetPath("vest texture" + vest) is { Length: > 0 } diffuse)
                 BodyLayers.Add(new BodyLayer(item, diffuse, FilePath(item, "vest normalmap" + vest), FilePath(item, "vest colormap" + vest), colour));
         }
         if (mesh.Length == 0)
