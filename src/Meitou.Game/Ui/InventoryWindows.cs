@@ -152,6 +152,12 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
+    /// Whether the window belongs to the open loot's body, including its separate limbs window.
+    /// </summary>
+    internal bool IsLootWindow(string screen) => TradeWindows.IsLootScreen(screen)
+        || screen == "limbs" && LimbsCharacter()?.Id == player.Session.CurrentSnapshot.OpenLoot;
+
+    /// <summary>
     /// Whether a bag window shows <paramref name="character"/>'s bag: the inventory's bag, or the bag of their pinned window.
     /// </summary>
     internal bool BagShown(CharacterId character) =>
@@ -476,7 +482,7 @@ sealed class InventoryWindows(PlayerInterface player)
     {
         var snapshot = player.Session.CurrentSnapshot;
         int code = int.Parse(index, CultureInfo.InvariantCulture);
-        bool loot = TradeWindows.IsLootScreen(screen);
+        bool loot = IsLootWindow(screen);
 
         if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
             || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))

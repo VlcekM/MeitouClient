@@ -679,7 +679,7 @@ sealed class WorldMap(PlayerInterface player)
 
         if (trade is null && WindowRightClick(picked.Screen, picked.Control, shift)) return true;
 
-        if (TradeWindows.IsLootScreen(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index)
+        if (player.InventoryWindows.IsLootWindow(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index)
             || player.InventoryWindows.WindowCharacter(picked.Screen) is not { ItemGrid: { } grid } lead)
         {
             return false;
@@ -766,7 +766,7 @@ sealed class WorldMap(PlayerInterface player)
 
         int at = int.Parse(index, CultureInfo.InvariantCulture);
 
-        if (TradeWindows.IsLootScreen(screen))
+        if (player.InventoryWindows.IsLootWindow(screen))
         {
             if (!loot || player.TradeWindows.LootBody()?.ItemGrid?.Items.FirstOrDefault(i => i.Index == at) is not { } looted)
                 return false;

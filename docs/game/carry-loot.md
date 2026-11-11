@@ -121,6 +121,9 @@ faction+0x40 books bounty. Kind7 is a squad-level suspect tag, not a faction rel
 Friendly/hostile/slave-owner/lawless/bandit faction gates matter. Carrying past witnesses has
 its own victim/captor ownership checks.
 
+Meitou: the open loot body's limbs window uses the looter for drag and right-click transfers. Taking a fitted prosthetic leaves a stump and
+keeps its damage, wear and stun on the item; a refused right-click move leaves it fitted.
+
 ## Stolen ownership
 
 **Observed** item+0x140=from-owner, +0x160=current holder. Backpack uses its owning character's

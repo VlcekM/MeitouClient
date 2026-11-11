@@ -1273,7 +1273,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var from = victim.Inventory!;
         var token = take.Item;
         if (from.All().ElementAtOrDefault(token.Index) is not { } item || item.Record != token.Record || item.Section != token.Section
-            || item.X != token.X || item.Y != token.Y || item.Quantity != token.Quantity || !InventoryCommands.IsMovableSection(item.Section))
+            || item.X != token.X || item.Y != token.Y || item.Quantity != token.Quantity
+            || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))
             return;
         if (item.LockedOn)
         {
@@ -1285,24 +1286,18 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
         // The right click's crime and the steal roll (the owner watching unless down); caught, the item stays.
         if (!victim.IsPlayer && Crimes?.Pickpocket(world, i, t, item, Crime.CrimeSystem.TakeKind.RightClick) == true) return;
-        bool worn = InventoryCommands.IsEquipmentSection(item.Section);
+        int fitted = InventoryCommands.LimbSlotOf(item.Section);
+        if (fitted >= 0 && (victim.Medical?.LimbPart(fitted) is not { Limb: LimbState.Replaced } limb || limb.ReplacementItem != item))
+            return;
+
+        bool worn = InventoryCommands.IsEquipmentSection(item.Section) || fitted >= 0;
         var mark = item.Mark;
         int death = DeathUnits(from);
         if (Crime.CrimeSystem.MarksTheft(world, cold, victim) && item.Mark == StolenMark.None) item.Mark = StolenMark.Of(victim, table.IdOf(t));
         var owner = from.Items.Contains(item) ? from : from.Backpack?.Contents ?? from;
 
-        // Money taken by the player's own becomes cats, as when it is dropped into their window (PlayerSystem.Place, FUN_140714a20).
-        if (item.ItemFunction == PlayerSystem.MoneyFunction && cold.Faction == world.Player.Faction && Data is not null)
-        {
-            int units = item.Quantity;   // money is never split (InventoryCommands.ClickCount)
-            PlayerSystem.Cash(world, Data, item, units);
-            if (units >= item.Quantity) owner.Remove(item);
-        else item.Quantity -= units;
-            item.Mark = mark;
-            Butcher(world, i, t, death);
-            Seen(world, i, t, owner.Items.Contains(item) ? 1 : 0);
-            return;
-        }
+        if (TakeLootMoney(world, i, t, owner, item, mark, death)) return;
+
         int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
             out bool wear, cold);
         if (owner.Items.Contains(item)) item.Mark = mark;   // what stays keeps its mark
@@ -1311,10 +1306,32 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (cold.IsPlayer) world.Post($"{cold.Name} has no room for {item.Name}.");
             return;
         }
+        if (fitted >= 0) victim.Medical!.RemoveReplacement(fitted);
+
         Butcher(world, i, t, death);
         if (worn) Assembly?.RefreshEquipment(victim);
         if (wear) Assembly?.RefreshEquipment(cold);
         Seen(world, i, t, owner.Items.Contains(item) ? 1 : 0);
+    }
+
+    /// <summary>
+    /// Converts money taken by the player's faction to cats; false for an ordinary inventory transfer.
+    /// </summary>
+    bool TakeLootMoney(World world, int looter, int body, Inventory owner, ItemInstance item, StolenMark mark, int death)
+    {
+        if (item.ItemFunction != PlayerSystem.MoneyFunction || world.Characters.Cold(looter)!.Faction != world.Player.Faction || Data is null)
+            return false;
+
+        int units = item.Quantity;   // money is never split (InventoryCommands.ClickCount)
+        PlayerSystem.Cash(world, Data, item, units);
+        if (units >= item.Quantity) owner.Remove(item);
+        else item.Quantity -= units;
+
+        item.Mark = mark;
+        Butcher(world, looter, body, death);
+        Seen(world, looter, body, owner.Items.Contains(item) ? 1 : 0);
+
+        return true;
     }
 
     /// <summary>
