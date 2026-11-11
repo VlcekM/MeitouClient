@@ -22,8 +22,7 @@ static class GtaoShaders
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uDepth;
-        uniform sampler2D uMask;            // the characters' mask at the occlusion's half size (unbound with uCharacterOccluder 1)
+        uniform sampler2D uPacked;          // the view depth at the render size (Pack): 0 the sky, negative on a character's pixel
         uniform float uCharacterOccluder;   // how much a character counts as an occluder (1: as anything else)
         uniform vec2 uTan;      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec2 uNearFar;  // of the scene depth
@@ -69,7 +68,7 @@ static class GtaoShaders
         float viewZAt(ivec2 t)
         {
             t = clamp(t, ivec2(0), ivec2(uSize) - 1);
-            return depthViewZ(texelFetch(uDepth, t, 0).r, uNearFar);
+            return abs(texelFetch(uPacked, t, 0).r);
         }
 
         vec3 offsetAt(ivec2 t, float z)
@@ -94,14 +93,14 @@ static class GtaoShaders
         float horizon(ivec2 t, vec3 p, vec3 view, float radius, float low, float best)
         {
             if (any(lessThan(t, ivec2(0))) || any(greaterThanEqual(t, ivec2(uSize)))) return best;
-            float d = texelFetch(uDepth, t, 0).r;
-            if (depthIsSky(d)) return best;
-            vec3 v = offsetAt(t, depthViewZ(d, uNearFar)) - p;
+            float packed = texelFetch(uPacked, t, 0).r;
+            if (packed == 0.0) return best;
+            vec3 v = offsetAt(t, abs(packed)) - p;
             float len = length(v);
             if (len < 1e-4) return best;
             float weight = clamp((radius - len) / max(radius * (1.0 - uReach.w), 1e-4), 0.0, 1.0);
             if (uCharacterOccluder < 1.0)
-                weight *= mix(1.0, uCharacterOccluder, textureLod(uMask, (vec2(t) + 0.5) / uSize, 0.0).r);
+                weight *= packed < 0.0 ? uCharacterOccluder : 1.0;
             float h = mix(low, dot(v, view) / len, weight);
             return h > best ? h : max(low, mix(h, best, uMarch.z));
         }
@@ -138,14 +137,34 @@ static class GtaoShaders
 
         """;
 
+    /// <summary>
+    /// The gather's depth: each pixel's view depth, 0 on the sky, negative where the scene's alpha marks a character. One lookup a tap gives the gather the depth and the mask (the mask
+    /// was a second, filtered lookup of a half-size copy: 36 a pixel at 3 x 6), and the depth needs no conversion there.
+    /// </summary>
+    public static readonly string Pack = "#version 330 core\n" + """
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uDepth;
+        uniform sampler2D uScene;   // its alpha: 1 on characters
+        uniform vec2 uNearFar;
+        """ + DepthConvention.Glsl + """
+        void main()
+        {
+            ivec2 c = ivec2(gl_FragCoord.xy);
+            float d = texelFetch(uDepth, c, 0).r;
+            if (depthIsSky(d)) { fragColour = vec4(0.0); return; }
+            float z = depthViewZ(d, uNearFar);
+            fragColour = vec4(texelFetch(uScene, c, 0).a > 0.5 ? -z : z, 0.0, 0.0, 1.0);
+        }
+        """;
+
     const string GatherMain = """
 
         void main()
         {
             ivec2 c = ivec2(floor(vUv * uSize));
-            float d = texelFetch(uDepth, c, 0).r;
-            if (depthIsSky(d)) { fragColour = vec4(1.0, 60000.0, 0.0, 1.0); return; }
-            float z = depthViewZ(d, uNearFar);
+            float z = abs(texelFetch(uPacked, c, 0).r);
+            if (z == 0.0) { fragColour = vec4(1.0, 60000.0, 0.0, 1.0); return; }
             vec3 p = offsetAt(c, z);
             vec3 view = normalize(-p);
             vec3 n = normalAt(c, p, z, view);

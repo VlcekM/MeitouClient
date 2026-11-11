@@ -14,17 +14,29 @@ public sealed unsafe partial class PostProcess
 {
     sealed class GtaoGatherPass : FullscreenProgram
     {
-        public readonly SamplerSlot Depth, Mask, Surface;
+        public readonly SamplerSlot Packed, Surface;
         public readonly UniformHandle CharacterOccluder, Tan, NearFar, Size, Reach, March, FadeStart, FadeEnd, Right, Up, Back, Eye, WaterY;
 
         public GtaoGatherPass(GpuContext gpu, bool surface) : base(gpu, GtaoShaders.Gather(surface), "post gtao")
         {
-            (Depth, Mask, Surface) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Sampler("uSurface"));
+            (Packed, Surface) = (P.Sampler("uPacked"), P.Sampler("uSurface"));
             (CharacterOccluder, Tan, NearFar, Size) = (P.Uniform("uCharacterOccluder"), P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"));
             (Reach, March, FadeStart, FadeEnd) = (P.Uniform("uReach"), P.Uniform("uMarch"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye, WaterY) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uGtaoEye"), P.Uniform("uWaterY"));
         }
     }
+
+    sealed class GtaoPackPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth, Scene;
+        public readonly UniformHandle NearFar;
+        public GtaoPackPass(GpuContext gpu) : base(gpu, GtaoShaders.Pack, "post gtao pack") =>
+            (Depth, Scene, NearFar) = (P.Sampler("uDepth"), P.Sampler("uScene"), P.Uniform("uNearFar"));
+    }
+
+    GtaoPackPass? _gtaoPack;
+    /// <summary>The gather's depth at the render size (<see cref="GtaoShaders.Pack"/>).</summary>
+    Target2D? _gtaoPacked;
 
     sealed class GtaoApplyPass : FullscreenProgram
     {
@@ -89,11 +101,18 @@ public sealed unsafe partial class PostProcess
     void RunGtao()
     {
         bool characters = _sceneColour is not null && (CharactersDrawn || !MaskSkip);
-        if (characters)
+        // The depth and the characters' mask in one target for the gather's taps.
+        if (_gtaoPacked is null || _gtaoPacked.Width != _width || _gtaoPacked.Height != _height)
         {
-            Bind(_ssaoMask.P, _ssaoMask.Scene, _sceneColour);
-            Draw(_ssaoMask.P, _aoMask!);
+            _gtaoPacked?.Texture.Dispose();   // released after the frames in flight
+            using var batch = Gpu.Uploads.Begin();
+            _gtaoPacked = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post gtao depth");
         }
+        var pack = _gtaoPack ??= new GtaoPackPass(Gpu);
+        Bind(pack.P, pack.Depth, _sceneDepth);
+        Bind(pack.P, pack.Scene, _sceneColour);
+        pack.P.Set(pack.NearFar, _nearPlane, _farPlane);
+        Draw(pack.P, _gtaoPacked);
         GtaoGather(characters);
         if (SsaoStamps) Stamp("gtao gen");
         GtaoBlur(characters);
@@ -103,8 +122,7 @@ public sealed unsafe partial class PostProcess
     {
         bool surface = SurfaceReady;
         var g = _gtaoGather[surface ? 1 : 0] ??= new GtaoGatherPass(Gpu, surface);
-        Bind(g.P, g.Depth, _sceneDepth);
-        Bind(g.P, g.Mask, characters ? _aoMask : null);
+        Bind(g.P, g.Packed, _gtaoPacked);
         if (surface) Bind(g.P, g.Surface, _giAlbedo);
         g.P.Set(g.CharacterOccluder, characters ? PostOptions.SsaoCharacterOccluder : 1f);
         SetGtaoView(g);
@@ -161,5 +179,6 @@ public sealed unsafe partial class PostProcess
     {
         foreach (var p in _gtaoGather) p?.P.Dispose();
         foreach (var p in _gtaoApply) p?.P.Dispose();
+        _gtaoPack?.P.Dispose();
     }
 }

@@ -187,6 +187,7 @@ Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward 
 - **Normals**: the lit fragment's shading normal from the surface target when the GI resolve is on, for the fragments that wrote it (terrain, objects, buildings);
   else from depth (foliage, grass, characters, impostors, or no GI resolve).
 - **Same rules as SSAO**: character occluder share and mask, `SsaoBlur`, distance fade, air and water visibility, 1 on the sky.
+- **Depth** (`Pack`): a pass at the render size writes each pixel's view depth, 0 on the sky, negative on a character's pixel (the scene's alpha), and the gather's taps read that alone: the character mask was a second, filtered lookup of the half-size mask at every tap (36 a pixel at 3 x 6). The occluder share is now by the tap's own pixel, not the mask's blur. **Observed** (desert close-up, 2560x1440, quality 2): the occlusion 0.945 -> 0.840 ms of GPU; the ground of a paused view unchanged.
 - **Apply** (`Apply`): full size, after the merged layers: the merged pass's factor is grey, so `layer-merge` runs with its occlusion off and this pass multiplies over it,
   which is the old order (shafts, fog, occlusion). Four nearest occlusion texels by depth, none near: open. Then KenshiNative's curve (power 1.6, strength 0.55) and the multi-bounce fit
   per channel of the surface target's albedo (`GtaoAlbedo` where none was written). A caller without `ApplySsao` gets the grey blurred occlusion in the composite.
