@@ -467,7 +467,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _aoA, _aoB, _aoMask, _gtaoPacked, _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth, _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _rateDistance, _rateImage, _neutralRate, _giAlbedo, _giLow, _lampLost, _ssrHit, _ssrLow, _shaftInjected, _shaftLight, _shaftScatter, _shaftRaw, _shaftHistory, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1 }.OfType<Target2D>();
+        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _aoA, _aoB, _aoMask, _gtaoPacked, _terrainResolve, _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth, _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _rateDistance, _rateImage, _neutralRate, _giAlbedo, _giLow, _lampLost, _ssrHit, _ssrLow, _shaftInjected, _shaftLight, _shaftScatter, _shaftRaw, _shaftHistory, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1 }.OfType<Target2D>();
 
     void Free()
     {
@@ -475,7 +475,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = _rateDistance = _rateImage = _neutralRate = null;
         _rateBuiltFrame = long.MinValue;
-        _gtaoPacked = null;
+        _gtaoPacked = _terrainResolve = null;
         _aoA = _aoB = _aoMask = _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
         _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = _giAlbedo = _giLow = _lampLost = _ssrHit = _ssrLow = _shaftInjected = _shaftLight = _shaftScatter = _shaftRaw = _shaftHistory = _softDepth = null;

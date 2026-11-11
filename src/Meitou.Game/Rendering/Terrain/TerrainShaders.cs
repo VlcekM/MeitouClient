@@ -1738,7 +1738,10 @@ static partial class TerrainShaders
             uint trailFine;
             float bakeBias;
             uint trailCells;
+            uint resolveG;
             vec4 trailFineWindow;
+            uint resolveDepth;
+            mat4 resolveInverse;
         } terrain;
 
         """;
@@ -1844,6 +1847,9 @@ static partial class TerrainShaders
         ["uTrailsFine"] = "textures2D[terrain.trailFine]",
         ["uTrailCells"] = "textures2D[terrain.trailCells]",
         ["uTrailFineWindow"] = "terrain.trailFineWindow",
+        ["uResolveG"] = "textures2D[terrain.resolveG]",
+        ["uResolveDepth"] = "textures2D[terrain.resolveDepth]",
+        ["uResolveInverse"] = "terrain.resolveInverse",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1949,6 +1955,110 @@ static partial class TerrainShaders
         FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true);
 
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
+
+    /// <summary>
+    /// The patches' depth pass for the resolved colour (<see cref="ResolveFragmentNative"/>): besides the depth it writes, per pixel, the undisplaced point less the drawn one (what
+    /// the material's coordinates need back) and the fragment's depth (0 stays where no patch drew).
+    /// </summary>
+    public static string PrepassResolveFragmentNative(bool interiorCut = false)
+    {
+        const string text = "#version 330 core\nin vec3 vWorld;\nin vec3 vNormal;\nout vec4 fragColour;\nvoid main()\n{\n    fragColour = vec4(vNormal - vWorld, gl_FragCoord.z);\n}\n";
+        return Native(interiorCut ? InteriorMaskRenderer.WithCut(text) : text);
+    }
+
+    /// <summary>The resolved colour's vertex stage: a triangle over the picture.</summary>
+    public static string ResolveVertexNative() => Native("""
+        #version 330 core
+        void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
+        """);
+
+    const string ResolveInputs = """
+        uniform sampler2D uResolveG;       // the prepass's: xyz the undisplaced point less the drawn one, w the fragment's depth (0: no patch)
+        uniform sampler2D uResolveDepth;   // the scene's depth now
+        uniform mat4 uResolveInverse;      // clip space to the point less the eye
+        vec3 resolveUnproject(ivec2 q, float depth)
+        {
+            vec4 h = uResolveInverse * vec4((vec2(q) + 0.5) / vec2(textureSize(uResolveDepth, 0)) * 2.0 - 1.0, depth, 1.0);
+            return h.xyz / h.w;
+        }
+        // The point the prepass drew at a pixel, less the eye; depth 0 when a patch is not what the pixel shows now.
+        vec3 resolvePoint(ivec2 q, out vec3 shift, out float depth)
+        {
+            ivec2 size = textureSize(uResolveDepth, 0);
+            shift = vec3(0.0); depth = 0.0;
+            if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) return vec3(0.0);
+            vec4 g = texelFetch(uResolveG, q, 0);
+            float d = texelFetch(uResolveDepth, q, 0).r;
+            if (g.w == 0.0 || d != g.w) return vec3(0.0);
+            shift = g.xyz; depth = d;
+            return resolveUnproject(q, d);
+        }
+        // The step to the next pixel along an axis: to the nearer of the two neighbours that still show a patch (the other may lie across an outline), else the pixel's own depth aside.
+        void resolveStep(ivec2 q, ivec2 axis, vec3 at, vec3 shift, float depth, out vec3 worldStep, out vec3 shiftStep)
+        {
+            vec3 sa, sb;
+            float da, db;
+            vec3 a = resolvePoint(q + axis, sa, da), b = resolvePoint(q - axis, sb, db);
+            vec3 ea = a - at, eb = at - b;
+            if (da > 0.0 && (db <= 0.0 || dot(ea, ea) <= dot(eb, eb))) { worldStep = ea; shiftStep = sa - shift; }
+            else if (db > 0.0) { worldStep = eb; shiftStep = shift - sb; }
+            else { worldStep = resolveUnproject(q + axis, depth) - at; shiftStep = vec3(0.0); }
+        }
+
+        """;
+
+    const string ResolvePrelude = """
+        ivec2 resolvePixel = ivec2(gl_FragCoord.xy);
+            float resolveDepth;
+            vec3 resolveShift;
+            vec3 resolveAt = resolvePoint(resolvePixel, resolveShift, resolveDepth);
+            if (resolveDepth <= 0.0) discard;   // something nearer was drawn over the patch, or none drew here
+            vWorld = uEye + resolveAt;
+            vNormal = vWorld + resolveShift;
+            texWorld = vNormal;
+            resolveStep(resolvePixel, ivec2(1, 0), resolveAt, resolveShift, resolveDepth, resolveWorldDx, resolveShiftDx);
+            resolveStep(resolvePixel, ivec2(0, 1), resolveAt, resolveShift, resolveDepth, resolveWorldDy, resolveShiftDy);
+        """;
+
+    /// <summary>
+    /// The patches' colour resolved over the picture (docs/render-terrain.md "Resolved colour"): <see cref="Fragment"/> run once per pixel that still shows a patch, its point
+    /// rebuilt from the scene's depth and the prepass's target instead of interpolated over the patch's triangles. Nothing here takes a derivative from the rasteriser (a
+    /// neighbour may be discarded): the steps to the next pixels come from the neighbours' points, and every lookup names its level or its gradients.
+    /// </summary>
+    public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false)
+    {
+        static string Patch(string text, string from, string to)
+        {
+            int at = text.IndexOf(from, StringComparison.Ordinal);
+            if (at < 0) throw new InvalidOperationException($"TerrainShaders.ResolveFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+            return text.Remove(at, from.Length).Insert(at, to);
+        }
+        string f = Fragment;
+        f = f.Insert(f.IndexOf('\n') + 1, "vec3 resolveWorldDx, resolveWorldDy, resolveShiftDx, resolveShiftDy;\n");
+        f = Patch(f, "in vec3 vWorld;", "vec3 vWorld;");
+        f = Patch(f, "in vec3 vNormal;", "vec3 vNormal;");
+        f = Patch(f, "in vec2 vCliffBlend;", "vec2 vCliffBlend = vec2(0.5);");
+        f = Patch(f, "uniform bool uWireframe;", "uniform bool uWireframe;\n" + ResolveInputs);
+        f = Patch(f, "texWorld = uHeightNormals ? vNormal : vWorld;", ResolvePrelude);
+        f = Patch(f, "texDx = dFdxCoarse(texWorld);", "texDx = resolveWorldDx + resolveShiftDx;");
+        f = Patch(f, "texDy = dFdyCoarse(texWorld);", "texDy = resolveWorldDy + resolveShiftDy;");
+        f = Patch(f, "cross(dFdx(world), dFdy(world))", "cross(resolveWorldDx, resolveWorldDy)");
+        f = Patch(f, "vec2 w = fwidth(vWorld.xz);", "vec2 w = abs(resolveWorldDx.xz) + abs(resolveWorldDy.xz);");
+        // The lookups that left their level to the rasteriser: the world's maps (magnified wherever they show: level 0), the dust's noise and the region's maps by the steps.
+        f = Patch(f, "return texture(s, (t * cells + 0.5) / (cells + 1.0)).r * 9800.0;", "return textureLod(s, (t * cells + 0.5) / (cells + 1.0), 0.0).r * 9800.0;");
+        f = Patch(f, "texture(uWeatherDustNoise, world.xz * 0.002)", "textureGrad(uWeatherDustNoise, world.xz * 0.002, resolveWorldDx.xz * 0.002, resolveWorldDy.xz * 0.002)");
+        f = Patch(f, "texture(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))", "textureLod(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
+        f = Patch(f, "texture(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))", "textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
+        f = Patch(f, "map = texture(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw));",
+            "map = textureGrad(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw);");
+        f = Patch(f, "colour = texture(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw)) * 1.2;",
+            "colour = textureGrad(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw) * 1.2;");
+        f = Patch(f, "vec4 weights = texture(uBlendMap, world01);", "vec4 weights = textureGrad(uBlendMap, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld));");
+        f = Patch(f, "texture(uGround, world01).rgb", "textureGrad(uGround, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
+        f = Patch(f, "texture(uWorldColour, world01).rgb", "textureGrad(uWorldColour, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
+        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(Marched(f, march)), trails)), normalMaps, reliefQuality));
+    }
+
 
     static string Trailed(string fragment, bool trails) => trails ? fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_TRAILS\n") : fragment;
 
@@ -2092,7 +2202,7 @@ static partial class TerrainShaders
 /// The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools are 32-bit (0 /
 /// 1).
 /// </summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1008)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1088)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -2178,7 +2288,11 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
     [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
     [System.Runtime.InteropServices.FieldOffset(984)] public uint TrailCells;
+    /// <summary>The resolved colour's inputs (TerrainRenderer.Resolve): the prepass's target and the scene's depth (bindless), and clip space to the point less the eye.</summary>
+    [System.Runtime.InteropServices.FieldOffset(988)] public uint ResolveG;
     [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
+    [System.Runtime.InteropServices.FieldOffset(1008)] public uint ResolveDepth;
+    [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Matrix4x4 ResolveInverse;
 }
 
 /// <summary>

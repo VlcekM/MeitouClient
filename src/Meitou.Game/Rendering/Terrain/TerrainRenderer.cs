@@ -133,6 +133,23 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     readonly GpuSetLayout _constantsLayout;
     readonly TerrainProgram _patchDepth, _patchPrepass, _patchPrepassCut, _meshDepth;
     readonly TerrainProgram? _patchPrepassTess, _patchPrepassCutTess, _meshDepthTess;   // null without tessellation shaders
+    // The prepass of the resolved colour (Resolve): the same stages, a fragment stage that writes the resolve's inputs.
+    readonly TerrainProgram _patchPrepassResolve, _patchPrepassResolveCut;
+    readonly TerrainProgram? _patchPrepassResolveTess, _patchPrepassResolveCutTess;
+    readonly Dictionary<(bool March, int Quality, bool Trails, bool Normal), TerrainProgram> _resolvePrograms = [];
+    readonly Dictionary<(GpuProgram Program, AttachmentFormats Formats), GpuPipeline> _resolvePipelines = [];
+    (bool March, int Quality, bool Trails) _colourKey;
+    bool _lateResolve;
+
+    /// <summary>
+    /// Set by the world frame around the main view's <see cref="Draw"/> with <c>defer</c> (null otherwise): the prepass then also writes the resolve's inputs into its colour target
+    /// (bindless <c>G</c>), and <see cref="Resolve"/> shades the patches over the picture from it and the scene's depth (bindless <c>Depth</c>), in place of
+    /// <see cref="DrawDeferred"/>'s second pass over the patches' triangles.
+    /// </summary>
+    internal (uint G, uint Depth)? ResolveInputs { get; set; }
+
+    /// <summary>The last deferred <see cref="Draw"/> waits for <see cref="Resolve"/>.</summary>
+    public bool ResolvePending => _latePending && _lateResolve;
     // The colour programs, from the set the parallax setting asks for (UseColour): meshSolid is meshColour without the cross-fade discard
     // (EarlyDepth).
     TerrainProgram _patchColour, _patchColourNoNormal, _patchColourCut, _patchColourCutNoNormal, _meshColour, _meshColourNoNormal, _meshSolid,
@@ -202,6 +219,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _patchPrepass = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), "terrain prepass");
         _patchPrepassCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
             TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain prepass interior cut");
+        _patchPrepassResolve = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassResolveFragmentNative(), "terrain resolve prepass");
+        _patchPrepassResolveCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
+            TerrainShaders.PrepassResolveFragmentNative(interiorCut: true), "terrain resolve prepass interior cut");
         // The ground displacement (GroundRelief): the colour and prepass programs tessellated, for the patches near the eye (the same stages in both,
         // so the late colour's depth test meets the prepass's depths).
         if (gpu.HasTessellation)
@@ -211,6 +231,11 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
             _patchPrepassCutTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
                 TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain relief prepass interior cut",
+                TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
+            _patchPrepassResolveTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(), TerrainShaders.PrepassResolveFragmentNative(),
+                "terrain relief resolve prepass", TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
+            _patchPrepassResolveCutTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
+                TerrainShaders.PrepassResolveFragmentNative(interiorCut: true), "terrain relief resolve prepass interior cut",
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
         }
         _meshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(),
@@ -483,15 +508,18 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 {
                     // Depth only now, the colour after the objects and foliage (DrawDeferred): the colour program then runs only where the terrain is
                     // what is seen.
-                    RecordPatches(_patchPrepass, "terrain prepass", PatchMode.Prepass, _plainCount);
+                    // With the resolve's inputs (ResolveInputs) the pass also writes them, into the colour target the frame opened for it.
+                    bool resolve = ResolveInputs is not null;
+                    var mode = resolve ? PatchMode.PrepassResolve : PatchMode.Prepass;
+                    RecordPatches(resolve ? _patchPrepassResolve : _patchPrepass, "terrain prepass", mode, _plainCount);
                     if (_reliefCount > 0)
-                        RecordPatches(_patchPrepassTess!, "terrain relief prepass", PatchMode.Prepass, _reliefCount, _reliefDraws);
+                        RecordPatches((resolve ? _patchPrepassResolveTess : _patchPrepassTess)!, "terrain relief prepass", mode, _reliefCount, _reliefDraws);
                     if (_cutCount > 0)
-                        RecordPatches(_patchPrepassCut, "terrain prepass interior cut", PatchMode.Prepass, _cutCount, _cutDraws);
+                        RecordPatches(resolve ? _patchPrepassResolveCut : _patchPrepassCut, "terrain prepass interior cut", mode, _cutCount, _cutDraws);
                     if (_cutReliefCount > 0)
-                        RecordPatches(_patchPrepassCutTess!, "terrain relief prepass interior cut", PatchMode.Prepass, _cutReliefCount,
+                        RecordPatches((resolve ? _patchPrepassResolveCutTess : _patchPrepassCutTess)!, "terrain relief prepass interior cut", mode, _cutReliefCount,
                                 _cutReliefDraws);
-                    (_latePending, _lateFrame) = (true, _frame);
+                    (_latePending, _lateFrame, _lateResolve) = (true, _frame, resolve);
                 }
                 else
                 {
@@ -528,6 +556,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     {
         if (!_latePending) return;
         _latePending = false;
+        _lateResolve = false;
         _frame = _lateFrame;
         PrepareConstants(material: true, patches: true);
         RecordPatches(PatchColour, "terrain", PatchMode.Late, _plainCount);
@@ -540,6 +569,42 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             RecordPatches(PatchColour, "terrain interior cut", PatchMode.LateEqual, _cutCount, _cutDraws);
         if (_cutReliefCount > 0)
             RecordPatches(_patchColourTess!, "terrain relief interior cut", PatchMode.LateEqual, _cutReliefCount, _cutReliefDraws);
+    }
+
+    /// <summary>
+    /// The terrain colour of a deferred <see cref="Draw"/> that wrote the resolve's inputs (<see cref="ResolveInputs"/>), over the picture: one triangle into
+    /// <paramref name="targets"/> (the scene's colour targets, no depth), outside any pass. Each pixel that still shows a patch (its depth is the prepass's) is shaded once: the
+    /// patches' triangles are not drawn again, and no pixel is shaded for a neighbour's derivatives (docs/render-terrain.md "Resolved colour").
+    /// </summary>
+    public void Resolve(PassTargets targets)
+    {
+        if (!ResolvePending) return;
+        (_latePending, _lateResolve) = (false, false);
+        _frame = _lateFrame;
+        PrepareConstants(material: true, patches: true);
+        var key = (_colourKey.March, _colourKey.Quality, _colourKey.Trails, NormalMapsOn);
+        if (!_resolvePrograms.TryGetValue(key, out var p))
+            _resolvePrograms[key] = p = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(),
+                TerrainShaders.ResolveFragmentNative(key.March, key.Item4 ? null : false, key.Quality, key.Trails), "terrain resolve");
+        var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
+        if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
+            _resolvePipelines[(p.P, targets.Formats)] = pipeline = _gpu.Pipelines.Get(state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, targets.Formats, "terrain resolve"));
+        var cmd = _gpu.BeginNative("terrain resolve");
+        cmd.Order();   // the scene's passes wrote the depth and the targets
+        cmd.BeginRendering(targets.Rendering);
+        state.Record(cmd, targets);
+        cmd.BindPipeline(pipeline);
+        var view = View();
+        var binding = _nativeFrame.Prepare(in view);
+        NativeFrame.Record(cmd, p.P, in binding);
+        var (set, offset) = PrepareConstantsBinding();
+        cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
+        cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
+        cmd.SetScissor(new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
+        cmd.Draw(3, 1);
+        cmd.EndRendering();
+        cmd.Order();
+        _gpu.EndNative(cmd);
     }
 
     /// <summary>
@@ -647,7 +712,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// <summary>
     /// How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.
     /// </summary>
-    enum PatchMode { Solid, Wireframe, Prepass, Late, LateEqual }
+    enum PatchMode { Solid, Wireframe, Prepass, PrepassResolve, Late, LateEqual }
 
     /// <summary>
     /// The state the patches draw with: the pass's (its targets' depth test, write and compare, blending, colour mask, depth clamp, bias, as GL has
@@ -673,6 +738,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         {
             PatchMode.Wireframe => _lastWireState!,
             PatchMode.Prepass => _lastPrepassState!,
+            PatchMode.PrepassResolve => _lastPatchState! with { ColourMask = DrawState.Rgba },   // the resolve's inputs: every channel
             PatchMode.Late => _lastLateState!,
             PatchMode.LateEqual => _lastLateEqualState!,
             _ => _lastPatchState!,
@@ -716,6 +782,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     void UseColour(bool march, int quality, bool trails = false)
     {
         quality = Math.Clamp(quality, 0, 2);
+        _colourKey = (march, quality, trails);
         var set = trails ? _colourSets[6 + (march ? 3 : 0) + quality] ??= MakeTrailed(march, quality) : Plain(march, quality);
         (_patchColour, _patchColourNoNormal, _patchColourCut,
             _patchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
@@ -977,6 +1044,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             }
             if (patches) Trails?.Apply(ref c);
         }
+        if (patches && ResolveInputs is { } inputs && Matrix4x4.Invert(RenderOrigin.ViewProjection(_frame.ViewProjection, _frame.Eye, _frame.Relative), out var fromClip))
+            (c.ResolveG, c.ResolveDepth, c.ResolveInverse) = (inputs.G, inputs.Depth, fromClip);
         _constants = c;
     }
 
@@ -1635,6 +1704,11 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         foreach (var set in _colourSets) set?.Dispose();
         _patchPrepassTess?.Dispose();
         _patchPrepassCutTess?.Dispose();
+        _patchPrepassResolve.Dispose();
+        _patchPrepassResolveCut.Dispose();
+        _patchPrepassResolveTess?.Dispose();
+        _patchPrepassResolveCutTess?.Dispose();
+        foreach (var p in _resolvePrograms.Values) p.Dispose();
         _meshDepthTess?.Dispose();
         _rockBake?.Dispose();
         _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn2D);

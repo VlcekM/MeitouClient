@@ -199,6 +199,23 @@ and layer (`fieldTile`/`fieldMask`) instead of the blend; the relief fades to 0 
 is named at the top left with its tile size and depth. In the game's sandbox Esc opens the settings. The viewer's `--field-tour
 <dir> [--tour-distance u] [--tour-pitch deg]` saves a picture of every tile and an index.html (105 tiles in about 30 s).
 
+## Resolved colour
+
+Meitou (`TerrainRenderer.Resolve`, `PostProcess.TerrainResolveTargets`, `WorldFrame.DrawSceneTerrain` / `DrawSceneLate`; `MEITOU_TERRAIN_RESOLVE=0` goes back to the
+patches' second pass, for comparing). In the main view the patches' colour is not drawn over their triangles: it is one triangle over the picture.
+- **Prepass**: the patches' depth pass runs in a pass of its own, into the scene's depth and an RGBA32F target that keeps, per pixel, the undisplaced point less the drawn
+  one (the material's coordinates are read at the undisplaced point) and the fragment's depth; 0 where no patch drew. The interior cut discards there as before.
+- **Resolve**: after the objects and the foliage, outside the scene's pass, `Fragment` runs for each pixel whose depth is still the prepass's (anything drawn nearer since
+  leaves it out): the drawn point from the depth, the material's point by the stored offset, the steps to the next pixels (the footprint of every layer lookup) from the
+  neighbouring pixels' points, to the nearer of the two neighbours that still show a patch. No lookup leaves its level to the rasteriser (a discarded neighbour gives no
+  derivative): the world's maps read level 0, the region's maps and the dust's noise take the steps.
+- **Why**: the displaced patches are tessellated to about 6 pixels a segment; drawn as triangles, the colour program ran for the helper pixels of every small triangle's
+  edges as well (they cannot leave early: a stub that returned for `gl_HelperInvocation` after the derivatives gained nothing), and the tessellation ran a second time.
+  **Observed** (2560x1440, one session, paused, alternated): desert close-up 2.97 -> 1.92 ms of GPU for the terrain, grass biome 3.28 -> 1.97, sand under spotlights at
+  night 4.77 -> 2.87; a town with little ground in view 0.24 -> 0.37 (the target's clear and the pass over the picture). The pictures differ by 0.34 / 255 on average
+  where two frames of the same setting differ by 0.21, at most 24 / 255 on about 150 pixels along ripple crests (the steps across an outline).
+- Not in the reflection, the viewer's other views or with the wireframe: those draw the patches' colour as before (`ResolveInputs` null).
+
 ## Material cache
 
 Meitou, not in the game (`TerrainRenderer.MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered

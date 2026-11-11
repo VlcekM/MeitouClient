@@ -1230,6 +1230,8 @@ static partial class WorldFrame
         public bool Traced;
         internal Gi.TracedSunPass? TracedSun;
         internal Gi.LampTiles? LampTiles;
+        /// <summary>The pass of the terrain patches' prepass when their colour is resolved over the picture (WorldFrame.DrawSceneTerrain).</summary>
+        internal SceneHost? TerrainPrepass;
         internal Gi.TracedSunVolume? TracedSunVolume;
         /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
         public PostProcess? Post;

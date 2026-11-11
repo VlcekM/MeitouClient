@@ -42,6 +42,8 @@ static partial class WorldFrame
         public SkyColours Colours;
         // DrawSky to DrawSkyBehind: the sky's projection, and whether the sky shows at all.
         public Matrix4x4 SkyProjection;
+        // DrawSceneTerrain to DrawSceneLate: the colour targets of the terrain's resolved colour (null: the patches draw it).
+        public PassTargets? TerrainColour;
         public bool SkyShown;
         public WorldLighting Light;
 
@@ -842,7 +844,21 @@ static partial class WorldFrame
         f.Host.Stage(6);
         terrain.FogCull = f.Gpu.FogVolumes;
         terrain.InteriorCut = f.Gpu.InteriorMask;
-        terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled, relative: f.RelativeRotation * s.Jittered);
+        // The resolved colour (PostProcess.TerrainResolveTargets): the patches' prepass in a pass of its own, into the scene's depth (cleared by the scene's pass, which closes for
+        // it) and the target that holds the resolve's inputs; DrawSceneLate then shades the patches over the picture.
+        f.TerrainColour = null;
+        if (TerrainLateColour.Enabled && f.Gpu.Post is Post.PostProcess resolving && resolving.TerrainResolveTargets(out var prepass, out var colour, out var inputs))
+        {
+            f.Host.Close();
+            var own = f.Gpu.TerrainPrepass ??= new SceneHost(f.Post.Context);
+            own.Open(6, prepass, new ClearColour(0, 0, 0, 0));
+            terrain.ResolveInputs = inputs;
+            terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: true, relative: f.RelativeRotation * s.Jittered);
+            own.Close();
+            f.Host.Open(6, f.Post.WithShadingRate(f.Post.SceneTargets));
+            f.TerrainColour = colour;
+        }
+        else terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled, relative: f.RelativeRotation * s.Jittered);
         terrain.InteriorCut = null;
         terrain.FogCull = null;
         StageClock.Lap(6);
@@ -899,7 +915,15 @@ static partial class WorldFrame
     {
         var gpu = f.Gpu;
         f.Host.Stage(6);
-        gpu.Terrain.DrawDeferred();
+        if (f.TerrainColour is { } terrainColour && gpu.Terrain.ResolvePending)
+        {
+            // Over the picture, outside the scene's pass: it reads the depth the pass wrote.
+            f.Host.Close();
+            gpu.Terrain.Resolve(terrainColour);
+            f.Host.Open(6, f.Post.WithShadingRate(f.Post.SceneTargets));
+        }
+        else gpu.Terrain.DrawDeferred();
+        gpu.Terrain.ResolveInputs = null;
         if (gpu.Debris is { } debris)
         {
             var relative = f.RelativeRotation * s.Jittered;
