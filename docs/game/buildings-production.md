@@ -301,6 +301,9 @@ shows the first failing message in this order (**Verified** unless marked):
   - **Not modelled:** ghosts on a building's floor (Meitou takes the floor as level, the original measures against the terrain
     under them, **Unknown**), the indoor lift reset, parts nested under another part (the node position is the whole chain's, the
     original's the part's own scene node), and a mesh whose bounds file is missing (the part is left out).
+  - **Observed** (base-game `data/buildings/windmill/windmill03.mesh`, fast versus full reader): the fast bounds walk fails for the
+    windmill base although the structural mesh reader returns its bounds. `BuildingFootprints.PartBounds` falls back to that reader;
+    omitting the base leaves only above-ground rotor groups and incorrectly sinks the ghost by roughly 300 units.
 - **Indoors** (`FUN_1404d69c0`, flags read in `FUN_1404debc0`): an `is interior furniture` or `is node` building
   is valid with all node points in one player-owned building; otherwise only if it is `is exterior furniture` or
   `is node` (**Verified** by code). So interior-only furniture must be inside, while interior+exterior items (Campfire,

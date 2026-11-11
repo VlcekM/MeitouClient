@@ -360,12 +360,33 @@ public sealed class BuildingFootprints
     readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> _partBounds = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The bounds box of a building part's mesh in its own space (the mesh file's bounds chunk, read once); null when the file is not found or has
-    /// none.
+    /// The bounds box of a building part's mesh in its own space, cached by path. Falls back to the structural reader when stored chunk lengths
+    /// prevent a fast bounds read; null when the file is missing, unreadable or has no bounds.
     /// </summary>
-    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => _partBounds.GetOrAdd(meshPath, path =>
-        Data.Physics.CollisionPaths.Resolve(_install, path) is { } file && Data.Ogre.OgreMeshReader.TryReadBounds(file,
-                out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : null);
+    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => _partBounds.GetOrAdd(meshPath, ReadPartBounds);
+
+    /// <summary>
+    /// Reads a part's stored bounds without trusting exporter chunk lengths when the fast walk fails.
+    /// </summary>
+    (Vector3 Min, Vector3 Max)? ReadPartBounds(string meshPath)
+    {
+        if (Data.Physics.CollisionPaths.Resolve(_install, meshPath) is not { } file) return null;
+
+        try
+        {
+            var bounds = Data.Ogre.OgreMeshReader.TryReadBounds(file, out var fast)
+                ? fast
+                : Data.Ogre.OgreMeshReader.ReadFile(file).Bounds;
+            if (bounds is not { } b) return null;
+            if (!float.IsFinite(b.Min.X + b.Min.Y + b.Min.Z + b.Max.X + b.Max.Y + b.Max.Z)) return null;
+
+            return b.Max.X >= b.Min.X && b.Max.Y >= b.Min.Y && b.Max.Z >= b.Min.Z ? (b.Min, b.Max) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Data.Ogre.OgreFormatException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Whether a BUILDING is a farm (it names a <c>farm data</c>): the level buildings without collision that a click still selects, by their
