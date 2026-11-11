@@ -128,6 +128,17 @@ public sealed class SaveItem
     public Hand? OwnedBy { get; init; }
 
     /// <summary>
+    /// Meitou's string <see cref="StolenFromKey"/>: the FACTION id the item was stolen from (null: not stolen). It keeps a mark that names no
+    /// character (a container's or the ground's), and one whose robbed character is not saved.
+    /// </summary>
+    public string? StolenFrom { get; init; }
+
+    /// <summary>
+    /// The Meitou key of <see cref="StolenFrom"/> (the original ignores it: keys are read by name).
+    /// </summary>
+    public const string StolenFromKey = "meitou stolen from";
+
+    /// <summary>
     /// The record the item was last written as, so a handle known only once every character has one can be put on it.
     /// </summary>
     public FcsRecord? Written { get; private set; }
@@ -208,6 +219,7 @@ public static class SaveInventory
             : null,
         Contents = contents,
         Source = r,
+        StolenFrom = r.Strings.GetValueOrDefault(SaveItem.StolenFromKey),
     };
 
     /// <summary>
@@ -277,6 +289,8 @@ public static class SaveInventory
             r.Floats["hardness"] = l.Hardness;
         }
         item.OwnedBy?.Write(r, "ownedby");
+        if (item.StolenFrom is { } stolenFrom) r.Strings[SaveItem.StolenFromKey] = stolenFrom;
+        else r.Strings.Remove(SaveItem.StolenFromKey);
         r.Bools["in inventory"] = true;
         item.WrittenAs(r);
         return r;
