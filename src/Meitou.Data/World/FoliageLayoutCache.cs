@@ -64,7 +64,7 @@ public sealed class FoliageLayoutCache
     /// The layout's version: bump it whenever a change to the layout code (FoliageLayout, its random numbers, the readers it uses) changes what it
     /// places; a stale cache otherwise keeps serving the old placement.
     /// </summary>
-    public const int LayoutVersion = 1;
+    public const int LayoutVersion = 2;
     /// <summary>
     /// The first four bytes of a file.
     /// </summary>

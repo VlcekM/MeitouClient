@@ -103,6 +103,12 @@ public static class FoliageLayout
     public const float MinScale = 0.01f, MaxScale = 10f;
 
     /// <summary>
+    /// The game's TreeLoader3D page size for the mesh layers: half a zone (the zone's width × 0.5 at the PagedGeometry made for them,
+    /// <c>FUN_1406d3e30</c> at 0x1406d4bae, verified by disassembly).
+    /// </summary>
+    const float LoaderPageSize = WorldLayout.ZoneSize * 0.5f;
+
+    /// <summary>
     /// Base distances per FoliageVisibilityRange before × 10 and the range setting.
     /// </summary>
     static readonly float[] Ranges = [50, 100, 800, 4000];
@@ -269,7 +275,7 @@ public static class FoliageLayout
         {
             float qScale = Quantise(scale, MinScale, MaxScale);
             float qYaw = (byte)(long)(yaw / 360 * 255) * (360f / 255);
-            var position = new Vector3(p.X, y, p.Y);
+            var position = new Vector3(LoaderSnap(p.X, c.X0), y, LoaderSnap(p.Y, c.Z0));
             c.Zone.Instances.Add(new FoliageInstance(mesh, c.Layer, position, qScale, qYaw, Orientation(mesh, input.Ground, position, qYaw)));
             if (mesh.BuildingType is not null) c.Zone.Resources++;
         }
@@ -286,6 +292,20 @@ public static class FoliageLayout
         }
         if (!rejected && mesh.GrassSpot > 0) GrassSpot(input.Overlay, p, mesh.GrassSpot * scale);
         return true;
+    }
+
+    /// <summary>
+    /// Where TreeLoader3D keeps a tree on one axis (<c>FUN_140a46970</c>, run on the copy of the point the instance is made from): 16 bits across
+    /// its page from the zone's edge <paramref name="left"/>, floored to a whole unit. The orientation's noise reads the snapped point, so a
+    /// fraction just above a whole unit can move a rock's seed (issue #406). Float arithmetic as the game's.
+    /// </summary>
+    static float LoaderSnap(float v, float left)
+    {
+        float d = v - left;
+        int page = (int)MathF.Floor(d / LoaderPageSize);
+        float local = d - page * LoaderPageSize;
+        float step = (ushort)(long)(65535f * local / LoaderPageSize);
+        return MathF.Floor(left + page * LoaderPageSize + step / 65535f * LoaderPageSize);
     }
 
     /// <summary>

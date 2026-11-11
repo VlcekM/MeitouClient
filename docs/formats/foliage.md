@@ -66,17 +66,14 @@ XZ, distance5..radius. Slope/altitude failures end cluster; out-of-zone skips.
 
 Per member: slope → zone → town rejection (still consume later draws) → altitude → floating
 Y=max(Y,100) → random scale → vertical-offset*scale → road perimeter rejection → yaw0..360 →
-add if accepted. Original scale/yaw quantized8-bit; Meitou keeps floats. Spawn children even
+add if accepted. Scale and yaw are kept in 8 bits (TreeLoader3D), as in Meitou. Spawn children even
 for rejected parents, recursively, then stamp grass-spot disc into G (<=96). Slope-align rotates
 up after yaw; otherwise keep-upright yaw only, or CRT random axis seeded by positional noise.
 Resource rocks create/find their building after ordinary placement.
-Re-checked against `FUN_1406d3740` (the layer loop) and `FUN_1406d2410` (one member) for issue #406: every test and draw above is in the same
-order in `FoliageLayout.PlaceMesh`/`Place` (**Verified**, decompile read). Tower of Abuse (37.35): our placer puts a
-`Foliage_Rock_Bouldercluster_MonoTex` (3438) at 23862,963,18520, scale 2.13, 150 from the tower and 690 from the town's level position (range 200),
-whose rocks cover the ramp foot (23340-23450, 18140-18260); the shipped tile there has ground and the lower ramp (y 1159-1208) (**Observed**,
-`navmesh --probe`). The original has no rock there either (**Observed**, a vanilla screenshot of the ramp), so an input differs; not the
-town (one placement, 23826,17893), height and slope (zone grid then terrain, no building test, `FUN_1409b32f0`/`FUN_1409b1e30`) nor the
-random orientation (`FUN_1406cc2e0`: same hash, `srand(float(1 - h/2^30) * 1e6)`, axis (r3, r2, r1), angle × 360; same seed for this rock).
+Position snap (**Verified**, decompile and disassembly): the instance's point goes through TreeLoader3D's add (`FUN_140a46970`) before
+its transform: per axis, 16 bits across a page of half a zone (2304, `FUN_1406d3e30` 0x1406d4bae) from the zone's edge, then floored. The
+orientation hash reads the snapped point, so a fraction just above a whole unit moves the seed: Tower of Abuse's boulder cluster at
+23862.03,18520.018 snaps to 23862,18519 and turns (issue #406; unsnapped, it blocked the ramp foot the shipped tile and the game keep open).
 
 ## Materials, sizes and grass
 
