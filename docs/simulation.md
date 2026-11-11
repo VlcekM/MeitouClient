@@ -944,7 +944,8 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   right click on a bed, or its held menu's "Sleep") sends every awake, non-carrying selected character (as the original; the first there takes it, the rest are refused); `PutInBedOrder` (99: "Put in Bed" on the bed's menu,
   or, engine stand-in, on a carried body's menu with the bed search; a quick click while carrying, engine) sends carriers, the cheaper rent paid, the body let go
   and laid in. In reach (`use range` + 15, on the bed's floor within 20, or a walk ended within 60) it pays the rent (`Cost`/`Pay`, player only; the 24 h memo
-  is engine state, not saved) and enters; 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
+  is engine state, not saved) and enters, its orders dropped; a bed order that finds it in the bed at once (in reach, or lying there) also drops the
+  replan it asked for, so it lies there as one that walked does; 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of
   a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. Lifting a sleeper takes it out. Engine difference: no power test. The rescue job (148) and the one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
