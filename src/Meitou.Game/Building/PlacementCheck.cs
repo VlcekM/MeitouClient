@@ -588,13 +588,7 @@ public static class PlacementCheck
     /// </summary>
     static float Distance(Vector2[] polygon, Vector2 point)
     {
-        float area = 0;
-        for (int i = 0; i < polygon.Length; i++)
-        {
-            var next = polygon[(i + 1) % polygon.Length];
-            area += polygon[i].X * next.Y - next.X * polygon[i].Y;
-        }
-        float sign = area >= 0 ? 1 : -1, outside = 0;
+        float sign = Winding(polygon), outside = 0;
         for (int i = 0; i < polygon.Length; i++)
         {
             var a = polygon[i];
@@ -604,6 +598,27 @@ public static class PlacementCheck
             outside = Math.Max(outside, -sign * (e.X * (point.Y - a.Y) - e.Y * (point.X - a.X)) / length);
         }
         return outside;
+    }
+
+    /// <summary>
+    /// The winding of a polygon: 1 when its signed area is positive or zero, else -1. Summed from its first vertex: at world coordinates (~1e5) the
+    /// float products round by hundreds of square units, more than a chest's whole footprint, so the winding came out at random and such a
+    /// polygon could never contain a point.
+    /// </summary>
+    internal static float Winding(Vector2[] polygon)
+    {
+        if (polygon.Length < 3) return 1;
+
+        float area = 0;
+        var origin = polygon[0];
+        for (int i = 1; i + 1 < polygon.Length; i++)
+        {
+            var a = polygon[i] - origin;
+            var b = polygon[i + 1] - origin;
+            area += a.X * b.Y - b.X * a.Y;
+        }
+
+        return area >= 0 ? 1 : -1;
     }
 
     /// <summary>

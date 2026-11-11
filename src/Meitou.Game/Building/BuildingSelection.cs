@@ -109,21 +109,8 @@ sealed class BuildingSelection(PlayerInterface player)
     internal (SelectedBuilding Building, float T)? PickBuildingAt(Vector2 pixel)
     {
         if (player.Ray(pixel) is not { } ray) return null;
-        // A visible bed takes the click over the house around it, as a plain building is no right-click candidate (PickAt); a nearer object site or
-        // rock still wins.
-        if (player.Furniture.PickBedAt(pixel) is { } bedHit
-            && !(player.Build.PickSiteAt(pixel) is { } before && before.Site.Id + "@bed0" != bedHit.Bed.Id && player.Build.SiteIsObject(before.Site)
-                && before.T < bedHit.T)
-            && !(player.Furniture.PickRockAt(pixel) is { } stone && stone.T < bedHit.T))
-        {
-            var bed = bedHit.Bed;
-            if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } bedSite)
-                return (SiteBuilding(bedSite), bedHit.T);
-            var spotName = player.Build.Services?.ItemName(bed.Record) ?? bed.Record;
-            var spotOwner = player.FactionName?.Invoke(bed.Owner);
-            var spot = new SelectedBuilding(spotName, null, spotOwner, null, null, bed.Id, bed.Position, null, Record: bed.Record);
-            return (spot, bedHit.T);
-        }
+        if (PickFurnitureAt(pixel) is { } furniture) return furniture;
+
         float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
@@ -170,6 +157,61 @@ sealed class BuildingSelection(PlayerInterface player)
 
         return best is { } found ? (found, bestT) : null;
     }
+
+    /// <summary>
+    /// The visible bed, container or cage nearest under the pixel, which takes the click over the house around it, as the original picks furniture
+    /// as a building by its own collision (docs/game/ui-input.md "Building picking and selection"); a plain building is no right-click candidate
+    /// (PickAt). A nearer object site or rock still wins. One that belongs to a site of the player's selects that site.
+    /// </summary>
+    (SelectedBuilding Building, float T)? PickFurnitureAt(Vector2 pixel)
+    {
+        if (NearestFurnitureAt(pixel) is not { } hit) return null;
+        if (player.Build.PickSiteAt(pixel) is { } front && !IsSiteOf(front.Site, hit.Id) && player.Build.SiteIsObject(front.Site) && front.T < hit.T)
+            return null;
+        if (player.Furniture.PickRockAt(pixel) is { } stone && stone.T < hit.T) return null;
+
+        if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => IsSiteOf(s, hit.Id)) is { } site)
+            return (SiteBuilding(site), hit.T);
+
+        var name = player.Build.Services?.ItemName(hit.Record) ?? hit.Record;
+        var owner = player.FactionName?.Invoke(hit.Owner);
+        return (new SelectedBuilding(name, null, owner, null, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
+    }
+
+    /// <summary>
+    /// The nearest of the bed, container and cage under the pixel: its fixture id, BUILDING record, place, owner faction and ray distance. A
+    /// container or cage that is a level building of its own (a town's standalone cage or safe, its fixture id the placement's key) is left to the
+    /// level buildings' pick, which gives its Type and Town.
+    /// </summary>
+    (string Id, string Record, Vector3 Position, int Owner, float T)? NearestFurnitureAt(Vector2 pixel)
+    {
+        (string Id, string Record, Vector3 Position, int Owner, float T)? best = null;
+        void Offer(string id, string record, Vector3 position, int owner, float t)
+        {
+            if (best is not { } b || t < b.T) best = (id, record, position, owner, t);
+        }
+
+        if (player.Furniture.PickBedAt(pixel) is ({ } bed, var bedT))
+            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, bedT);
+        if (player.Furniture.PickContainerAt(pixel) is ({ } box, var boxT) && !IsLevelBuilding(box.Id, box.Position))
+            Offer(box.Id, box.Record, box.Position, box.Owner, boxT);
+        if (player.Furniture.PickCageAt(pixel) is ({ } cage, var cageT) && !IsLevelBuilding(cage.Id, cage.Position))
+            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, cageT);
+        return best;
+    }
+
+    /// <summary>
+    /// Whether the fixture <paramref name="id"/> at <paramref name="at"/> is a level building's own lock: the placement standing there has its id
+    /// as key (an interior's fixture is <c>&lt;house key&gt;/&lt;index&gt;</c>).
+    /// </summary>
+    bool IsLevelBuilding(string id, Vector3 at) =>
+        player.Build.Services?.Placement.StaticPlacementsAround(new Vector2(at.X, at.Z), 1).Any(p => p.Key == id) == true;
+
+    /// <summary>
+    /// Whether the fixture <paramref name="fixture"/> belongs to the player's <paramref name="site"/>: its bed (<c>&lt;site&gt;@bed0</c>) or its own
+    /// lock (a cage or safe, the site's id).
+    /// </summary>
+    static bool IsSiteOf(Simulation.Construction.BuildingSnapshot site, string fixture) => fixture == site.Id + "@bed0" || fixture == site.Id;
 
     /// <summary>
     /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the

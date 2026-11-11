@@ -1096,14 +1096,7 @@ sealed class BuildMode(PlayerInterface player)
         }
 
         // The convex polygon in X/Z: clip the ray against each edge's half plane.
-        float area = 0;
-        for (int i = 0; i < polygon.Length; i++)
-        {
-            var next = polygon[(i + 1) % polygon.Length];
-            area += polygon[i].X * next.Y - next.X * polygon[i].Y;
-        }
-
-        float sign = area >= 0 ? 1 : -1;
+        float sign = PlacementCheck.Winding(polygon);
         for (int i = 0; i < polygon.Length; i++)
         {
             var p = polygon[i];
