@@ -278,6 +278,21 @@ public sealed partial class World : IDisposable
     int _decideAfter = -1;
 
     /// <summary>
+    /// The action log the host follows characters with (null: none): told of each tick boundary (<see cref="ActionLog.Observe"/>).
+    /// </summary>
+    public ActionLog? ActionLog { get; set; }
+
+    /// <summary>
+    /// The event lines for the game's log (fights, relations, crimes, deaths; <see cref="EventLog"/>): the host takes them between ticks.
+    /// </summary>
+    public EventLog Events { get; } = new();
+
+    /// <summary>
+    /// The dialogue log's lines (lines said, conversations, walk-ups; <see cref="Dialogue.DialogueLog"/>): the host takes them between ticks.
+    /// </summary>
+    public Dialogue.DialogueLog DialogueLines { get; } = new();
+
+    /// <summary>
     /// Whether the decisions run after <paramref name="system"/>: retaliation, aggro or flight.
     /// </summary>
     static bool DecidesAfter(ITickSystem system) => system is RetaliationSystem or AggroSystem or FleeSystem;
@@ -642,7 +657,9 @@ public sealed partial class World : IDisposable
         Player.Prune(table);
         table.Phase = TablePhase.Outside;
         table.EndTick();
-        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
+        Events.EndTick(this);
+        ActionLog?.Observe(this);
+        prof?.Part("end tick");   // F12: the squads, the prune, the table's end and the logs, apart from the snapshot
         Tick++;
         GameHours += TickSeconds / SecondsPerGameHour;
         if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);

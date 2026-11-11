@@ -122,7 +122,13 @@ public sealed partial class CarrySystem
                 victim.OrderQueue.Clear();   // order 116 Getting out of bed replaces the whole queue (FUN_1405d20d0, clear flag 1)
                 _engaged.Engage(world, Aggro, b, i);
             }
-            else world.Defer(new Combat.AttackOrder([victimId], kidnapperId) { Tick = world.Tick + 1, Source = TaskSource.Reaction });
+            else
+            {
+                world.Defer(new Combat.AttackOrder([victimId], kidnapperId)
+                {
+                    Tick = world.Tick + 1, Source = TaskSource.Reaction, Cause = "woke up being kidnapped",
+                });
+            }
         }
         return false;
     }

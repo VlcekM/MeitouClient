@@ -146,7 +146,8 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// Between ticks: the world's messages for the player go to the HUD and the log, the fights hostility started to the log.
+    /// Between ticks: the world's messages for the player go to the HUD and the log, its event lines (<see cref="Simulation.EventLog"/>) and the
+    /// fights hostility started to the log.
     /// </summary>
     internal void WorldNews()
     {
@@ -161,6 +162,8 @@ sealed partial class GameHost
                 DevConsoleHost.ExplodeAsker = null;
             }
         }
+        foreach (string line in world.Events.Take()) Console.WriteLine(line);
+        ActionLogs.WriteDialogue(world.DialogueLines.Take());
         foreach (var line in world.TakeSaid())
             Player.DialogueLog.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.

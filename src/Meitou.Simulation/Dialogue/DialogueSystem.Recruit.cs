@@ -141,6 +141,7 @@ public sealed partial class DialogueSystem
                 data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
         }
 
+        world.Events.Line(world, "recruit", $"{EventLog.Who(world, slot)} joins the player's squad");
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
         mc.RoadPreference = data.RoadPreferenceOf(mc.Faction);

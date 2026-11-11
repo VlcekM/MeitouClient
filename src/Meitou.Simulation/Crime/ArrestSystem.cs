@@ -916,7 +916,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 if (Vector3.DistanceSquared(table.Next[s].Position, at) <= r * r) fighters.Add(m);
             }
         }
-        world.Defer(new AttackOrder(fighters, table.IdOf(t)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+        world.Defer(new AttackOrder(fighters, table.IdOf(t))
+        {
+            Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "an arrest resisted or out of town",
+        });
     }
 
     /// <summary>
@@ -1372,7 +1375,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     void Note(World world, ArrestEventKind kind, CharacterId guard, CharacterId target, int faction, int amount)
     {
         if (Settings.RecordLog) _log.Add(new ArrestEvent(world.Tick, kind, guard, target, faction, amount));
+        string by = EventLog.Who(world, guard), whom = EventLog.Who(world, target), of = EventLog.FactionName(world, faction);
+        world.Events.Line(world, "arrest", $"{kind}: {by} ({of}) and {whom}{AmountText(kind, amount)}");
     }
+
+    /// <summary>
+    /// The event log's reading of an arrest event's amount: a fine or a bail is money, a spotting's is a dialogue event (left out), else the bounty.
+    /// </summary>
+    static string AmountText(ArrestEventKind kind, int amount) => kind switch
+    {
+        ArrestEventKind.Spotted => "",
+        ArrestEventKind.Fine or ArrestEventKind.Paid or ArrestEventKind.Bailed => $", c.{amount}",
+        _ => $", bounty {amount}",
+    };
 
     /// <summary>
     /// Adds the bounty, disguise, spotting and arrest state to the world hash; the spottings and arrests only while there are any.

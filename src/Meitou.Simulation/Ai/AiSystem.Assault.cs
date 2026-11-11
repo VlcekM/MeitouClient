@@ -129,7 +129,13 @@ public sealed partial class AiSystem
                 // A dialogue's Assault order: the squad's best member now, until none is left or the target is gone.
                 var pick = AssaultTargetFor(world, s, forced.Squad.Ai, forced.ForcedAssault);
                 if (pick.IsNone) forced.ForcedAssault = CharacterId.None;
-                else world.Defer(new AttackOrder([table.IdOf(s)], pick) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+                else
+                {
+                    world.Defer(new AttackOrder([table.IdOf(s)], pick)
+                    {
+                        Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "its squad's ordered assault (dialogue)",
+                    });
+                }
             }
 
             if (table.Cold(s)?.Ai is not { } mind || mind.AssaultTarget.IsNone) continue;
@@ -137,7 +143,7 @@ public sealed partial class AiSystem
             var foe = mind.AssaultTarget;
             mind.AssaultTarget = CharacterId.None;
             if (table.Next[s].Alive && table.TryResolveNext(foe, out _))
-                world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1 });
+                world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Cause = "its squad's ordered assault (dialogue)" });
         }
 
         Interlocked.Exchange(ref _forcedAssaults, left);

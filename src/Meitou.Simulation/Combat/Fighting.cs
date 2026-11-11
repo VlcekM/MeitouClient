@@ -658,7 +658,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             var table = world.Characters;
             if (owner.Plan(world, slot, out _) is var foe && foe < 0) return;
 
-            world.Defer(new AttackOrder([table.IdOf(slot)], table.IdOf(foe)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
+            world.Defer(new AttackOrder([table.IdOf(slot)], table.IdOf(foe))
+            {
+                Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal, Cause = "self-defence: it was attacked",
+            });
         }
     }
 
@@ -871,7 +874,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         {
             var table = world.Characters;
             int a = owner.SelfFoe(world, slot);
-            world.Defer(new AttackOrder([table.IdOf(slot)], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
+            world.Defer(new AttackOrder([table.IdOf(slot)], table.IdOf(a))
+            {
+                Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal, Cause = "protecting an ally under attack",
+            });
         }
     }
 
@@ -1035,7 +1041,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         }
 
         foreach (var (foe, joiners) in _byFoe)
-            world.Defer(new AttackOrder(joiners, new CharacterId(foe, next[foe].Generation)) { Tick = world.Tick + 1, Defensive = true });
+            world.Defer(new AttackOrder(joiners, new CharacterId(foe, next[foe].Generation))
+            {
+                Tick = world.Tick + 1, Defensive = true, Cause = "joining its squad's fight",
+            });
     }
 
     /// <summary>

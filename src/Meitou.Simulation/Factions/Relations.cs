@@ -26,19 +26,28 @@ public static class PlayerRelations
     /// player's faction the threshold message of the change is posted, as the game's slot does (<c>FUN_1406b2d20</c> tests the other faction's player
     /// flag).
     /// </summary>
-    public static void Event(World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x)
+    public static void Event(World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x, int doer = -1, int victim = -1)
     {
         var (before, after) = relations.Event(a, b, kind, x);
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+        Posted(world, relations, a, b, before, after);
+
+        // A blow or a bandage changes the relation a little each time: only a crossing is logged, its text made only then.
+        bool always = kind is not (RelationEventKind.Hit or RelationEventKind.FirstAid);
+        if (!always && Crossing(before, after).Length == 0) return;
+        string cause = doer >= 0 && victim >= 0 ? $"{kind} of {EventLog.Who(world, victim)} by {EventLog.Who(world, doer)}" : kind.ToString();
+        Logged(world, relations, a, b, before, after, cause);
     }
 
     /// <summary>
     /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side.
     /// </summary>
-    public static void Add(World world, FactionRelations relations, int a, int b, float delta)
+    public static void Add(World world, FactionRelations relations, int a, int b, float delta, string? cause = null)
     {
         var (before, after) = relations.Add(a, b, delta);
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+        Posted(world, relations, a, b, before, after);
+        Logged(world, relations, a, b, before, after, cause ?? "a change");
     }
 
     /// <summary>
@@ -50,7 +59,9 @@ public static class PlayerRelations
     {
         var (before, after, started) = relations.DeclareWar(a, b);
         if (started) world.Post(Loc.Tr("War breaks out between {1} and {2}", relations.Factions[a].Name, relations.Factions[b].Name));
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+        Posted(world, relations, a, b, before, after);
+        Logged(world, relations, a, b, before, after, "war declared (dialogue)");
     }
 
     /// <summary>
@@ -60,7 +71,34 @@ public static class PlayerRelations
     public static void EndWar(World world, FactionRelations relations, int a, int b)
     {
         var (before, after) = relations.EndWar(a, b);
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+        Posted(world, relations, a, b, before, after);
+        Logged(world, relations, a, b, before, after, "war ended (dialogue)");
+    }
+
+    /// <summary>
+    /// The event log's line of a relation change (<see cref="EventLog"/>): faction <paramref name="a"/>'s relation with <paramref name="b"/>, before
+    /// and after, with the cause (a blow's or a bandage's is logged only when it crosses the hostile or the ally line, <see cref="Event"/>).
+    /// </summary>
+    public static void Logged(World world, FactionRelations relations, int a, int b, float before, float after, string cause)
+    {
+        string crossing = Crossing(before, after);
+        string text = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{relations.Factions[a].Name} towards {relations.Factions[b].Name}: {before:0.##} -> {after:0.##}{crossing}; {cause}");
+        world.Events.Line(world, "relation", text);
+    }
+
+    /// <summary>
+    /// " (now hostile)" and the like when the change crosses the hostile or the ally line; empty otherwise.
+    /// </summary>
+    static string Crossing(float before, float after)
+    {
+        const float hostile = FactionRelations.HostileThreshold, ally = FactionRelations.AllyThreshold;
+        if (before > hostile && after <= hostile) return " (now hostile)";
+        if (before <= hostile && after > hostile) return " (no longer hostile)";
+        if (before <= ally && after > ally) return " (now allied)";
+        if (before > ally && after <= ally) return " (no longer allied)";
+        return "";
     }
 
     /// <summary>
@@ -135,7 +173,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     {
         var table = world.Characters;
         if (table.Cold(doer) is not { } d || table.Cold(victim) is not { } v || d.Faction == v.Faction || x == 0) return;
-        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x);
+        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x, doer, victim);
     }
 
     /// <summary>

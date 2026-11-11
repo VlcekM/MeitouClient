@@ -515,6 +515,7 @@ public static class TaskStart
         }
 
         cold.Running = null;
+        (cold.EndedTick, cold.Ended) = (table.Ticks, reason);   // the action log's
         DecisionSystem.Request(cold);   // the plan finished or was stopped: the character is decided again
         Stamp(table, slot);
     }

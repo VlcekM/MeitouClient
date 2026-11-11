@@ -59,6 +59,8 @@ public sealed partial class World
             Characters.EndTick();
         }
 
+        Events.EndTick(this);
+        ActionLog?.Observe(this);
         foreach (var trade in _systems.OfType<Trading.TradeSystem>()) trade.RefreshView(this);
         foreach (var talk in _systems.OfType<Dialogue.DialogueSystem>()) talk.RefreshView(this);
         if (Settings.PublishSnapshots)

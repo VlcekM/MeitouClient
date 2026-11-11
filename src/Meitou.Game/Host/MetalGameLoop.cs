@@ -792,6 +792,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
         host.Session.World.BagSearchFix = host.Config.FixBagSearch;
         host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
+        host.Session.World.ActionLog = host.ActionLogs.Log;
         host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed);
         host.Render.Grid = host.Sandbox.IsSandbox;
         host.Session.Camera.Place(new Vector2((float)(host.WorldOptions.X ?? host.Scene.Focus.X), (float)(host.WorldOptions.Z ?? host.Scene.Focus.Z)),

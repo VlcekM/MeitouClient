@@ -287,6 +287,10 @@ sealed partial class GameHost(
     /// </summary>
     internal WorldSession Session = null!;
     /// <summary>
+    /// The action log the session's worlds follow characters with (log_actions.txt; <c>--action-log</c>, F10 "Action log").
+    /// </summary>
+    internal readonly Host.ActionLogHost ActionLogs = new();
+    /// <summary>
     /// The world's population system; null without population.
     /// </summary>
     internal Simulation.Population.PopulationSystem? Population;
@@ -518,6 +522,7 @@ sealed partial class GameHost(
     public int Run()
     {
         CreateFeatures();
+        ActionLogs.Scope = WorldOptions.ActionLog;
         try
         {
 #if MEITOU_METAL
@@ -536,6 +541,7 @@ sealed partial class GameHost(
             Sound.DisposeAudio();
             TitleScreen.DisposeTitleScene();
             Session?.Dispose();
+            ActionLogs.Dispose();
             Nav?.Dispose();
             RagdollGeometry?.Dispose();
             OwnedScene?.Dispose();
@@ -634,6 +640,7 @@ sealed partial class GameHost(
         Session.World.BenchFacingFix = Config.FixBenchFacing;
         Session.World.BagSearchFix = Config.FixBagSearch;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
+        Session.World.ActionLog = ActionLogs.Log;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         if (Gpu.Characters is { } nearChars)
             Session.World.NearRadius = nearChars.NearReach;   // every drawn character steps every tick (docs/simulation.md "Far cadence")

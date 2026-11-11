@@ -395,6 +395,7 @@ sealed class DebugMenu(GameHost host)
         new("Tools", "Pick & collision inspector...", "", () => "", () => { DebugMenuOpen = false; InspectorMenuOpen = true; }),
         new("Tools", "Interior editor...", "", () => "", host.InteriorEditorHost.OpenInteriorEditor),
         new("Tools", "Level editor...", "Shift+F12", () => "", host.LevelEditorHost.OpenLevelEditor),
+        new("Tools", "Action log (log_actions.txt)", "", () => host.ActionLogs.Scope.ToString().ToLowerInvariant(), host.ActionLogs.Cycle),
         new("Tools", "Teleport on map...", "", () => OnOff(host.Player.WorldMap.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
         new("Overlays", "Navmesh view", "Shift+F11", () => host.DebugOverlays.NavViewMode.ToString().ToLowerInvariant(),
             host.DebugOverlays.ToggleNavOverlay),

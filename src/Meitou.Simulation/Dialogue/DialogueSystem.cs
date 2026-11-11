@@ -443,7 +443,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // "Campaigns", announcement), and so does a caged one (its menu's Talk To, #737).
         if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target) && !nc.IsImprisoned)
         {
-            world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1 });
+            world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1, Cause = "talking to a hostile character" });
             return;
         }
         _talker = order.Talker;
@@ -558,20 +558,32 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
-        if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
-        if (SleepsThrough(table, n, ev)) return;
+        string pair = $"{EventLog.Who(world, npc)} with {EventLog.Who(world, player)}, {DialogueLog.Event(ev)}";
+        if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player))
+        {
+            world.DialogueLines.Line(world, "talk", $"{pair}: not opened, the talker is too far from the camera");
+            return;
+        }
+        if (SleepsThrough(table, n, ev))
+        {
+            world.DialogueLines.Line(world, "talk", $"{pair}: not opened, asleep");
+            return;
+        }
 
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
         IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
             ? [interrupt] : SetOf(world, n).For(ev);
+        string from = pending is null ? $"{roots.Count} root(s) of the event" : $"pending interrupt {pending}";
         var picked = Pick(world, c, roots);
         if (picked is not { } p)
         {
+            world.DialogueLines.Line(world, "talk", $"{pair}: nothing to say (from {from})");
             if (!quiet) world.Post($"{nc.Name} has nothing to say.");
             return;
         }
 
         DropBubbles(npc);   // the conversation takes over the NPC's dialogue state: a chain it was saying does not go on after (#707)
+        world.DialogueLines.Line(world, "talk", $"{pair}: conversation opens with {DialogueLog.Node(p.Root ?? p.Line)} (from {from})");
         _open = c;
         Hold(world, n);
         if (TaskStart.OnAiWalk(table, n)) TaskStart.Stand(table, n);   // a walking NPC stops to talk (engine choice); the approach chased it
@@ -657,6 +669,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         c.Text = text;
         c.Log.Add($"{NameOf(world, speaker)}: {text}");
         world.Said(NameOf(world, speaker), text, false);
+        world.DialogueLines.Line(world, "say", $"{EventLog.Who(world, speaker)} to {EventLog.Who(world, c.Player)}: \"{text}\" "
+            + $"(line {DialogueLog.Node(line)}{DialogueLog.Effects(line)})");
         RunEffects(world, c, line, speaker);
         if (c.Ended) return;
         Offer(world, c, line);
@@ -704,6 +718,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         {
             c.Log.Add($"{NameOf(world, c.Player)}: {text}");
             world.Said(NameOf(world, c.Player) is { Length: > 0 } name ? name : "Player", text, true);
+            world.DialogueLines.Line(world, "reply", $"{EventLog.Who(world, c.Player)} to {EventLog.Who(world, c.Npc)}: \"{text}\" "
+                + $"(line {DialogueLog.Node(reply)}{DialogueLog.Effects(reply)})");
             MarkUsed(world, c, reply);
             RunEffects(world, c, reply, c.Npc);
             if (c.Ended) return;
@@ -738,6 +754,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     {
         if (_open is not { } c) return;
         _open = null;
+        world.DialogueLines.Line(world, "talk", $"{EventLog.Who(world, c.Npc)} with {EventLog.Who(world, c.Player)}: conversation ends");
         _view = null;
 
         // the bail list closing: the conversation was counted already

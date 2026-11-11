@@ -685,6 +685,8 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     void Note(World world, KidnapEventKind kind, Abduction a)
     {
         if (Settings.RecordLog) _log.Add(new KidnapEvent(world.Tick, kind, a.Carrier, a.Victim, a.Faction));
+        string by = EventLog.Who(world, a.Carrier), whom = EventLog.Who(world, a.Victim);
+        world.Events.Line(world, "kidnap", $"{kind}: {whom} by {by} ({EventLog.FactionName(world, a.Faction)})");
     }
 
     /// <summary>

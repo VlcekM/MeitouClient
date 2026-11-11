@@ -738,7 +738,10 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         if (foe.IsNone || !table.TryResolveNext(foe, out int f)) return;
 
         bool protects = type == TaskType.ProtectOwnSquad;
-        world.Defer(new AttackOrder([table.IdOf(slot)], foe) { Tick = world.Tick + 1, Source = TaskSource.Job, Job = k, Defensive = protects });
+        world.Defer(new AttackOrder([table.IdOf(slot)], foe)
+        {
+            Tick = world.Tick + 1, Source = TaskSource.Job, Job = k, Defensive = protects, Cause = "an obedient slave's job of its list",
+        });
         world.SystemOf<Aggro.AggroSystem>()?.GoalFight(world, slot, f, voice: !protects);
     }
 

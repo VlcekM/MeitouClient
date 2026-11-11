@@ -42,6 +42,11 @@ public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, Character
     /// The job of the attackers' lists the fight runs (<see cref="TaskRequest.Job"/>; -1: none).
     /// </summary>
     public int Job { get; init; } = -1;
+
+    /// <summary>
+    /// Why the fight starts, for the event log (<see cref="EventLog.Fight"/>: "a crime alarm"); null: told from the row and source.
+    /// </summary>
+    public string? Cause { get; init; }
 }
 
 /// <summary>

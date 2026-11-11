@@ -2025,6 +2025,32 @@ A counter at the top middle (with the interface, stills too) gives each side's f
 interpolated CharacterDrawList, HUD, loading/transitions and saves. It does not duplicate system
 order. Renderer state lives in Rendering; snapshots are the simulation-to-host boundary.
 
+### Event log
+
+**Engine** (a debugging aid; no original counterpart). `World.Events` (`EventLog`) collects lines in the serial phases; the host writes them to
+log.txt between ticks. Each line is a category, the game day, hour and tick, then the text. Nothing reads them back: not saved or hashed.
+
+- `fight`: a fight start (`CombatSystem.Engage`), with the attackers' faction, the target, the cause (`AttackOrder.Cause`, set where each order is
+  made: an AI goal's row, self-defence, protecting an ally, a crime alarm, an arrest, a dialogue line, the player's order) and how the two factions
+  stand. Fights started in one tick are one line per attacking faction, target and cause; a fight started again on the same target for the same
+  cause within 60 game seconds is left out, as is a fight re-ordered while it runs.
+- `relation`: a faction relation change (`PlayerRelations`, `DialogueSystem.ChangeRelation`), before and after, with its cause; a blow's or a
+  bandage's (one per hit) only when it crosses the hostile or the ally line.
+- `crime`, `arrest`, `kidnap`: the crime, arrest and abduction systems' events (pending, witnessed, booked, expired; the arrest steps; lifted,
+  caged, dropped, gave up).
+- `down`, `death`: a character knocked out, coming round or dying, found by comparing each tick boundary with the last (`DownLog`), with the
+  death's cause and the last character that landed a blow on it (not a recorded killer: a bleed-out has none).
+- `recruit`: a character joining the player (`DialogueSystem.JoinPlayer`) or dismissed.
+
+### Action log
+
+**Engine** (a debugging aid, on for everyone by default; `--action-log off|squad|everyone`, F10 "Action log"). `ActionLog` writes `log_actions.txt`
+beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`GameLog`, cut past 10 MiB). At each tick boundary (`World.RunTick`'s end and the orders given while paused), every
+followed awake character whose task or task provenance (`CharacterCold.Running`) changed gets a line: the task left, why (`TaskStart.End`'s reason,
+else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's
+characters and adds the decision step's trace of that tick (it turns `DecisionSystem.Tracing` on); everyone adds every NPC and animal (in a town,
+about 650 lines a minute). It only reads the world.
+
 ## Town house purchases
 
 `BuyBuilding` (the panel's `For sale:` price, then the original's confirmation; [original rules](game/ui-screens.md#selected-building))

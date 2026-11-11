@@ -445,9 +445,21 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
                 ? (TaskType.AttackAttackersOf, TaskSource.Reaction)
                 : (TaskType.AttackEnemies, TaskSource.Goal);
         var request = new TaskRequest(CharacterTask.Attack, row, order.Source ?? source) { Target = target, Job = order.Job };
+        bool again = table.Next[a].Task == (byte)CharacterTask.Attack && cold.Running?.Target == target;   // a fight re-ordered: not news
 
-        return TaskStart.Start(world, a, request) == StartResult.Started;
+        if (TaskStart.Start(world, a, request) != StartResult.Started) return false;
+        if (!again) world.Events.Fight(world, a, t, order.Cause ?? DefaultCause(order));
+        return true;
     }
+
+    /// <summary>
+    /// The event log's cause of a fight whose order gives none: the player's pick, else an attack order with no cause (the player's attack on all, a
+    /// battle or a tool's order).
+    /// </summary>
+    static string DefaultCause(AttackOrder order) =>
+        order.Picked
+            ? "the player's order"
+            : "an attack order (the player's on all, a battle's or a tool's)";
 
     /// <summary>
     /// Whether the victim is in melee combat mode, read before an order engages anyone (an attack on a fighting character is a lesser assault).
