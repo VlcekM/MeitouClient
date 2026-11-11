@@ -69,7 +69,7 @@ jobs:
         id: dotnet
         continue-on-error: true
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       - name: .NET SDK
         shell: bash

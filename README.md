@@ -4,7 +4,7 @@
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/martinvlcek)
 
-C#/.NET10 reimplementation of [Kenshi](https://lofigames.com/), aiming to run original content,
+C#/.NET 11 reimplementation of [Kenshi](https://lofigames.com/), aiming to run original content,
 mods and saves unchanged. **No game assets are shipped; an installed legal copy is required.**
 Architecture/research: [docs index](docs/README.md). Website: [meitou.kenshi.wiki](https://meitou.kenshi.wiki/).
 
@@ -40,7 +40,7 @@ set KENSHI_PATH, or create git-ignored meitou.local.json in the repo/working/exe
 
 ## Build and run
 
-Building requires the [.NET10 SDK](https://dotnet.microsoft.com/download).
+Building requires the [.NET 11 SDK](https://dotnet.microsoft.com/download).
 
 ```text
 dotnet build -c Release

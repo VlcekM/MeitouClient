@@ -1,7 +1,7 @@
 # Meitou play reports, published Native AOT: one static executable on the chiseled runtime-deps image (no .NET runtime, no shell).
 # Built from the repository root (it needs Directory.Build.props):
 #   docker build -f services/Meitou.Reports/Dockerfile .
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-resolute AS build
 RUN apt-get update && apt-get install -y --no-install-recommends clang zlib1g-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY Directory.Build.props Directory.Build.targets ./
@@ -12,7 +12,7 @@ RUN dotnet publish services/Meitou.Reports/Meitou.Reports.csproj -c Release -r l
 # The feedback attachments' folder, owned by the app user: a volume mounted on /data starts as a copy of it.
 RUN mkdir -p /data/feedback
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0-resolute-chiseled
 WORKDIR /app
 COPY --from=build /out/meitou-reports .
 COPY --from=build --chown=$APP_UID /data /data

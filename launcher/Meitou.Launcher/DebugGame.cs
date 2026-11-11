@@ -9,7 +9,7 @@ namespace Meitou.Launcher;
 static class DebugGame
 {
     /// <summary>
-    /// The checkout's Debug game (<c>src/Meitou.Game/bin/Debug/net10.0/MeitouClient.exe</c>) above the working directory or the
+    /// The checkout's Debug game (<c>src/Meitou.Game/bin/Debug/net11.0/MeitouClient.exe</c>) above the working directory or the
     /// launcher, or null.
     /// </summary>
     public static string? Find()
@@ -19,7 +19,7 @@ static class DebugGame
             var directory = new DirectoryInfo(Path.GetFullPath(start));
             for (; directory is not null; directory = directory.Parent)
             {
-                string candidate = Path.Combine(directory.FullName, "src", "Meitou.Game", "bin", "Debug", "net10.0", "MeitouClient.exe");
+                string candidate = Path.Combine(directory.FullName, "src", "Meitou.Game", "bin", "Debug", "net11.0", "MeitouClient.exe");
                 if (File.Exists(candidate)) return candidate;
             }
         }
