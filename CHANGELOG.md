@@ -3,6 +3,21 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.17.4
+
+- Stolen items stay stolen when dropped and picked up, and through a save, even from empty houses or towns that have unloaded (#544)
+- Town turrets can be manned with a right click (#545); town chests and cages are selected with a left click (#512)
+- Unpowered machines refuse operators with "It needs electricity." instead of starting and stopping over and over (#546, #548)
+- Sound no longer cuts out for good in big crowds (#538, #542)
+- No more blows landing through bars or thin walls (#439)
+- A character ordered into a bed they stand next to stays in it (#536)
+- Camera: following a carried character no longer shakes (#534); it follows at the hips and stays above raised floors
+- Walls on the camera's side hide when a floor is opened up; rugs no longer show their texture margins (#530)
+- Mod armour and collars with a vest texture no longer paint the whole body (#533)
+- The boulder at Tower of Abuse's ramp no longer blocks it (#406)
+- Title screen no longer hangs at a short NPC View Range, and the title fight no longer loses that setting
+- Runs on .NET 11; launcher v1.10.0
+
 ## v0.17.3
 
 - Bandit camps, nests and homeless squads no longer spawn in water or inside town walls, as the original's spawn spot rules (#496)
