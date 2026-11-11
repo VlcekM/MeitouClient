@@ -271,6 +271,104 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         _fine = new Level(this, FineTexel, InternalFormat.Rg16F, "terrain trails fine");
     }
 
+    // ---- where the marks are (docs/render-terrain.md "Ground trails") ----
+    // The colour programs read the images at every step of the ground's march, where nearly all of the ground holds no mark. A grid over the coarse
+    // window says which cells a stamp wrote to and has not worn away since, kept on the CPU from the stamps' bounds (no readback), with coarser
+    // levels holding the largest of their four cells: one read at the level whose cells are as wide as a pixel's march reaches tells whether any mark
+    // is within it. Conservative: a cell stays marked until its marks are under a hundred-thousandth of a unit deep.
+
+    /// <summary>The grid's cells a side (<see cref="CellSize"/> units each) and its levels (the last is one cell).</summary>
+    public const int CellsSide = 256, CellLevels = 9;
+    public const float CellSize = Side * Texel / CellsSide;
+    /// <summary>The wearing (as -ln of what is left) after which a full mark is under a hundred-thousandth of a unit deep: its cell counts as bare.</summary>
+    const float MarkLife = 12;
+    /// <summary>How far from a body's stadium its rim is written, in coarse texels (<see cref="StampFragment"/>: the blend's alpha falls to 0 at 6, on a distance its noise moves by up to 3.5).</summary>
+    const float BodyWritten = 10;
+
+    readonly double[] _markedAt = Filled(CellsSide * CellsSide);   // the total wearing when the cell last took a stamp; negative: none
+    readonly byte[][] _markLevels = MarkLevels();
+    (int X, int Z)? _markOrigin;   // the coarse window's first cell
+    bool _marksDirty = true;
+    double _wornTotal;
+    GpuTexture? _marksTexture;
+    uint _marksIndex = uint.MaxValue;
+
+    static double[] Filled(int n) { var a = new double[n]; Array.Fill(a, -1.0); return a; }
+    static byte[][] MarkLevels()
+    {
+        var levels = new byte[CellLevels][];
+        for (int l = 0; l < CellLevels; l++) levels[l] = new byte[(CellsSide >> l) * (CellsSide >> l)];
+        return levels;
+    }
+    static int WrapCell(int v) => ((v % CellsSide) + CellsSide) % CellsSide;
+
+    /// <summary>The grid for this frame's window, stamps and wearing; uploaded when it changed.</summary>
+    void UpdateMarks(bool wore)
+    {
+        if (_coarse.Origin is not { } o) return;
+        const int texels = Side / CellsSide;
+        var origin = (X: o.X / texels, Z: o.Z / texels);   // the window's origin is a multiple of Snap texels
+        // The window moved: the cells it gains held what it left behind, as the images' wiped strips.
+        if (_markOrigin is { } was && was != origin)
+            for (int z = 0; z < CellsSide; z++)
+                for (int x = 0; x < CellsSide; x++)
+                {
+                    int cx = origin.X + x, cz = origin.Z + z;
+                    if (cx >= was.X && cx < was.X + CellsSide && cz >= was.Z && cz < was.Z + CellsSide) continue;
+                    int i = WrapCell(cz) * CellsSide + WrapCell(cx);
+                    if (_markedAt[i] >= 0) (_markedAt[i], _marksDirty) = (-1, true);
+                }
+        _markOrigin = origin;
+        foreach (var s in _stamps)
+        {
+            // What the stamp writes, as the box round Level.AddStamp's quad in world units: a body's rim out to BodyWritten texels of its stadium, the
+            // other kinds over their whole quad; a texel for the coarse image's rasterising and three for what a bicubic read two texels off takes of it.
+            bool body = s.Kind >= TrailKind.Press, imprint = s.Kind == TrailKind.Imprint;
+            float along = imprint ? s.Half : body ? s.Length * 0.5f + BodyWritten * Texel : s.Length * 0.5f * QuadPerShape;
+            float across = imprint ? s.Half : body ? s.Width * 0.5f + BodyWritten * Texel : s.Width * 0.5f;
+            Vector2 a = s.Along * along, b = new Vector2(s.Along.Y, -s.Along.X) * across;
+            float rx = MathF.Abs(a.X) + MathF.Abs(b.X) + 4 * Texel, rz = MathF.Abs(a.Y) + MathF.Abs(b.Y) + 4 * Texel;
+            int x0 = Math.Max((int)MathF.Floor((s.Centre.X - rx) / CellSize), origin.X), x1 = Math.Min((int)MathF.Floor((s.Centre.X + rx) / CellSize), origin.X + CellsSide - 1);
+            int z0 = Math.Max((int)MathF.Floor((s.Centre.Y - rz) / CellSize), origin.Z), z1 = Math.Min((int)MathF.Floor((s.Centre.Y + rz) / CellSize), origin.Z + CellsSide - 1);
+            for (int cz = z0; cz <= z1; cz++)
+                for (int cx = x0; cx <= x1; cx++)
+                {
+                    int i = WrapCell(cz) * CellsSide + WrapCell(cx);
+                    if (_markedAt[i] < 0) _marksDirty = true;
+                    _markedAt[i] = _wornTotal;
+                }
+        }
+        // Worn away: only a wearing step can make a cell bare.
+        if (wore)
+            for (int i = 0; i < _markedAt.Length; i++)
+                if (_markedAt[i] >= 0 && _wornTotal - _markedAt[i] > MarkLife) (_markedAt[i], _marksDirty) = (-1, true);
+        if (!_marksDirty && _marksTexture is not null) return;
+        _marksDirty = false;
+        var finest = _markLevels[0];
+        for (int i = 0; i < finest.Length; i++) finest[i] = _markedAt[i] >= 0 ? (byte)255 : (byte)0;
+        for (int l = 1; l < CellLevels; l++)
+        {
+            int side = CellsSide >> l, above = side * 2;
+            byte[] from = _markLevels[l - 1], to = _markLevels[l];
+            for (int z = 0; z < side; z++)
+                for (int x = 0; x < side; x++)
+                {
+                    int i = z * 2 * above + x * 2;
+                    to[z * side + x] = (byte)(from[i] | from[i + 1] | from[i + above] | from[i + above + 1]);
+                }
+        }
+        using var batch = _gpu.Uploads.Begin();
+        if (_marksTexture is null)
+        {
+            _marksTexture = batch.Create(new TextureDesc(InternalFormat.R8, CellsSide, CellsSide, Levels: CellLevels, Name: "terrain trails cells"));
+            var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapNearest, TextureMagFilter.Linear, TextureWrapMode.Repeat,
+                TextureWrapMode.Repeat, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+            _marksIndex = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, _marksTexture.View()));
+        }
+        for (int l = 0; l < CellLevels; l++)
+            batch.Write(_marksTexture, l, 0, new PixelRect(0, 0, (uint)(CellsSide >> l), (uint)(CellsSide >> l)), _markLevels[l]);
+    }
+
     /// <summary>Renders the imprints' shapes (the characters); without it an imprint leaves nothing.</summary>
     internal ITrailImprints? Imprints { get; set; }
 
@@ -305,6 +403,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         _coarse.Forget();
         _fine.Forget();
         _stamps.Clear();
+        Array.Fill(_markedAt, -1.0);
+        (_markOrigin, _marksDirty) = (null, true);
     }
 
     /// <summary>
@@ -316,7 +416,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         _worn += gameSeconds * (1 / StillLife + wind / WindLifeScale + rain / RainLife);
         float share = 1 - MathF.Exp(-_worn);
         bool wear = share >= WearStep;
-        if (wear) _worn = 0;
+        if (wear) (_wornTotal, _worn) = (_wornTotal + _worn, 0);
         RenderImprints();
         foreach (var level in new[] { _coarse, _fine })
         {
@@ -324,6 +424,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             foreach (var s in _stamps) level.AddStamp(s);
             level.Finish();
         }
+        UpdateMarks(wear);
         _stamps.Clear();
     }
 
@@ -336,6 +437,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         c.TrailDepth = Depth;
         c.TrailMesh = c.Displace > 0 && c.Parallax <= 0 ? 1 : 0;
         c.TrailWindow = new Vector4(o.X * Texel + half, o.Z * Texel + half, half, 1 / (Side * Texel));
+        if (_marksIndex != uint.MaxValue) c.TrailCells = _marksIndex;
         if (_fine.Index != uint.MaxValue && _fine.Origin is { } f)
         {
             float fineHalf = Side * FineTexel / 2;
@@ -349,6 +451,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         _coarse.Dispose();
         _fine.Dispose();
         _frame.Dispose();
+        if (_marksIndex != uint.MaxValue) _gpu.Bindless.Free(new BindlessHandle(BindlessKind.Texture2D, _marksIndex));
+        _marksTexture?.Dispose();
     }
 
     /// <summary>One image of the trails: its texel, its window, its wipes and the stamps of the frame.</summary>

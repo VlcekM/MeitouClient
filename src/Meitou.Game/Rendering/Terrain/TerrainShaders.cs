@@ -422,6 +422,7 @@ static partial class TerrainShaders
         uniform float uTrailDepth;     // a full mark's depth in world units
         uniform sampler2D uTrailsFine; // the fine image: x the height, y 1 where a mark was recorded; its window below (half 0: none)
         uniform vec4 uTrailFineWindow;
+        uniform sampler2D uTrailCells; // TerrainTrailRenderer's grid: 1 in the cells (2 units) a stamp wrote to, each coarser level the largest of its four; addressed as uTrails
 
         // The fine image at uv (a cubic B-spline through four bilinear reads, so no texel shows in the normals the marks give).
         vec2 trailFineAt(vec2 uv)
@@ -471,6 +472,14 @@ static partial class TerrainShaders
         }
 
         // 1 inside the window, fading to 0 at its edge: the strips the window is about to clear are never shown.
+        // Whether a mark may lie within reach (world units) of xz: one filtered read at the grid's level whose cells are at least twice the reach
+        // wide, so the four cells read cover it (a cell that weighs nothing is half a cell away at least).
+        bool trailWithin(vec2 xz, float reach)
+        {
+            float level = clamp(ceil(log2(max(reach, 1.0))), 0.0, 8.0);
+            return textureLod(uTrailCells, xz * uTrailWindow.w, level).r > 0.0;
+        }
+
         float trailEdge(vec2 xz)
         {
             vec2 d = abs(xz - uTrailWindow.xy);
@@ -802,12 +811,13 @@ static partial class TerrainShaders
         float trailShown = 0.0;     // how much the marks show at this pixel (the window's edge, steep faces): set at the top of main
         float trailSpan = 0.0;      // the ground march's depth in world units before its distance fade; 0: the march running is not the ground's
         vec2 trailPoint;            // where the marks are read: the material's point, moved by the march
+        bool trailNear = true;      // the cache's march running may reach a mark (trailWithin)
 
         // The cache's height with the marks in it, for both marches over it (the macro below takes the calls that follow).
         float trailedBake(int k, int kc, float whole, vec2 xz)
         {
             float x = bakedHeight(k, kc, whole, xz);
-            return trailShown > 0.0 ? clamp(x + trailShown * trailHeightAt(xz) / BakeSpan, 0.0, 1.0) : x;
+            return trailShown > 0.0 && trailNear ? clamp(x + trailShown * trailHeightAt(xz) / BakeSpan, 0.0, 1.0) : x;
         }
         #define bakedHeight trailedBake
         #endif
@@ -1112,6 +1122,9 @@ static partial class TerrainShaders
                 vec2 o;
                 #ifdef TERRAIN_TRAILS
                 trailSpan = uParallax * g.ground.total / g.share;
+                // No mark within what the two marches reach (the view's, then the sun's from where it ends): none of their steps reads the images.
+                if (trailShown <= 0.0 || !trailWithin(trailPoint, trailSpan * (length(v.xz) / max(v.y, 0.25) + (sun.y > 0.0 ? length(sun.xz) / max(sun.y, 0.15) : 0.0)) + 3.0))
+                    trailSpan = 0.0;
                 #endif
                 shade = reliefMarch(g.ground, o, -v.xz / max(v.y, 0.25) * depth, sun.xz / max(sun.y, 0.15) * depth, sun.y > 0.0, strength, true);
                 #ifdef TERRAIN_TRAILS
@@ -1339,6 +1352,9 @@ static partial class TerrainShaders
                         // reliefMarch's rules: as many steps as the ray crosses texels of the level read, and the crossing halved before the point between
                         // its two ends is taken.
                         vec2 viewSpan = -v.xz / max(v.y, 0.25) * depth;
+                        #ifdef TERRAIN_TRAILS
+                        trailNear = trailShown > 0.0 && trailWithin(at, depth * (length(v.xz) / max(v.y, 0.25) + length(sun.xz) / max(sun.y, 0.15)) + 3.0);
+                        #endif
                         steps = clamp(int(ceil(2.0 * length(viewSpan) / uBakeOrigin[k].z)), max(steps / 2, 2), steps * 4);
                         vec2 rayStep = viewSpan / float(steps);
                         vec2 o = -0.5 * viewSpan;
@@ -1384,6 +1400,7 @@ static partial class TerrainShaders
                     }
                     #endif
                     #ifdef TERRAIN_TRAILS
+                    trailNear = true;
                     trailPoint = at;
                     #endif
                     float side = uBakeOrigin[k].z * uBakeOrigin[k].w;
@@ -1529,7 +1546,7 @@ static partial class TerrainShaders
             #ifdef TERRAIN_TRAILS
             // The ground trails (docs/render-terrain.md "Ground trails"): the marks' slopes on the shading normal, over the pixel's footprint (at least
             // a texel and a bit) so fine marks do not shimmer, and pressed ground a little darker, which is what shows of them from afar.
-            if (trailShown > 0.0)
+            if (trailShown > 0.0 && trailWithin(trailPoint, 3.0))
             {
                 float e = clamp(max(length(texDx.xz), length(texDy.xz)), 0.08, 2.0);
                 float hx = trailHeightAt(trailPoint + vec2(e, 0.0)) - trailHeightAt(trailPoint - vec2(e, 0.0));
@@ -1720,6 +1737,7 @@ static partial class TerrainShaders
             vec4 trailWindow;
             uint trailFine;
             float bakeBias;
+            uint trailCells;
             vec4 trailFineWindow;
         } terrain;
 
@@ -1824,6 +1842,7 @@ static partial class TerrainShaders
         ["uTrailMesh"] = "terrain.trailMesh",
         ["uTrailWindow"] = "terrain.trailWindow",
         ["uTrailsFine"] = "textures2D[terrain.trailFine]",
+        ["uTrailCells"] = "textures2D[terrain.trailCells]",
         ["uTrailFineWindow"] = "terrain.trailFineWindow",
     };
 
@@ -2158,6 +2177,7 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
     [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
     [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
+    [System.Runtime.InteropServices.FieldOffset(984)] public uint TrailCells;
     [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
 }
 

@@ -911,6 +911,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             FieldTiles = _standInUInt,
             Trails = _standIn2D,
             TrailFine = _standIn2D,
+            TrailCells = _standIn2D,
         };
         if (material)
         {
