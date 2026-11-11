@@ -3,6 +3,22 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.17.3
+
+- Bandit camps, nests and homeless squads no longer spawn in water or inside town walls, as the original's spawn spot rules (#496)
+- NPC squads whose leader died follow a living member instead of standing by the corpse (#529)
+- Patrol leaders walk to the patrol point and move on, instead of milling round it (#528)
+- Guards no longer restart an endless chase after an NPC trespasser (#519)
+- Squads over 40 no longer stand idle beside their fight (#412)
+- Fast walkers no longer stutter round corners (#429)
+- Crossbows: reload progress on the State line (#525); unequipping one mid-fight no longer crashes (#526); turret Loaded bar drains during reloads
+- Stats window shows whole skill levels, not rounded up at 50% (#514)
+- Inventory: ARRANGE sorts only its own grid (#524); pinned windows keep their bag and OPEN BAG works on them (#523); no oversized backgrounds
+- Rebuilt town ruins' doors open on screen (#522); characters walk out of a chest on an upper floor (#460)
+- Shaved heads show; birds no longer sink into the ground (#409)
+- Intel macOS: no longer crashes at launch (#461)
+- Contributors panel redrawn
+
 ## v0.17.2
 
 - Interface scale setting (50-200%) for fonts, skins, panels and windows; 4K radio buttons and save list columns scale up
