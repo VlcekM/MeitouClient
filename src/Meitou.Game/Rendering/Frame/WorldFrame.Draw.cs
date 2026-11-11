@@ -40,6 +40,9 @@ static partial class WorldFrame
         public float GroundUnderEye, Floor;
         public Vector3 Sun;
         public SkyColours Colours;
+        // DrawSky to DrawSkyBehind: the sky's projection, and whether the sky shows at all.
+        public Matrix4x4 SkyProjection;
+        public bool SkyShown;
         public WorldLighting Light;
 
         // DrawReflection and DrawSky: whether the water reflects, the scene's pass host and camera.
@@ -646,7 +649,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// The "sky-draw" stage: the scene's pass host opened on its targets, cleared to the fog colour and the scene depth's clear (the rendering's load
-    /// ops, <see cref="DepthConvention.Clear"/>), the interior masks, and the sky with its clouds.
+    /// ops, <see cref="DepthConvention.Clear"/>), the interior masks, and the clouds' images; the sky itself is drawn by <see cref="DrawSkyBehind"/>.
     /// </summary>
     static void DrawSky(ref FrameState f)
     {
@@ -678,7 +681,24 @@ static partial class WorldFrame
         // Alpha 0: no character (the SSAO mask).
         var fog = f.Light.FogColour;
         host.Open(5, post.WithShadingRate(post.SceneTargets), new ClearColour(fog.X, fog.Y, fog.Z, 0), clearDepth: true);
-        if (!skyHidden) gpu.Sky.Draw(skyProjection, f.Colours);
+        (f.SkyProjection, f.SkyShown) = (skyProjection, !skyHidden);
+        if (!skyHidden && !SkyBehindScene) gpu.Sky.Draw(skyProjection, f.Colours);
+    }
+
+    /// <summary>The scene's sky is drawn after its opaque surfaces, where none was drawn (<c>MEITOU_SKY_FIRST=1</c>: before them, over the whole view, for comparing).</summary>
+    public static bool SkyBehindScene { get; set; } = Environment.GetEnvironmentVariable("MEITOU_SKY_FIRST") != "1";
+
+    /// <summary>
+    /// The sky and its clouds behind the finished opaque scene, where no surface was drawn (the depth still the cleared one): drawn first it shaded
+    /// every pixel of the view, also under the ground and the buildings (docs/render-sky.md). Before anything reads the scene's colour: the traced
+    /// sun, the water, the reflections.
+    /// </summary>
+    static void DrawSkyBehind(ref FrameState f)
+    {
+        if (!f.SkyShown || !SkyBehindScene) return;
+        f.Host.Stage(5);
+        f.Gpu.Sky.Draw(f.SkyProjection, f.Colours, behind: true);
+        StageClock.Lap(5);
     }
 
     #endregion
@@ -738,6 +758,7 @@ static partial class WorldFrame
         DrawSceneLate(ref f, s);
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
+        DrawSkyBehind(ref f);
         if (traced) TraceSun(ref f, s);
         if (apart)
         {

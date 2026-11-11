@@ -155,14 +155,14 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         vec3 skyColour(vec3 dir, bool disc) { return uAtmoParams.x > 0.5 ? atmoSky(dir) : skySimple(dir, disc); }
         """;
 
-    const string Vertex = """
-        #version 330 core
+    // At the depth no surface has (the cleared value), so the scene's sky can be drawn after its surfaces, where none was drawn (Draw's behind).
+    const string Vertex = "#version 330 core\n" + DepthConvention.Glsl + """
         out vec2 vNdc;
         void main()
         {
             vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID & 2) * 2.0 - 1.0);
             vNdc = p;
-            gl_Position = vec4(p, 1.0, 1.0);
+            gl_Position = vec4(p, DEPTH_SKY, 1.0);
         }
         """;
 
@@ -1273,14 +1273,14 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// No GL state is changed (phase 8 stage 2): the GL code turned the depth test and write off around the draw and back on after it, and every
     /// caller turns the depth test on after the sky itself (docs/renderer-native.md 8.6).
     /// </summary>
-    public void Draw(Matrix4x4 viewProjection, SkyColours colours)
+    public void Draw(Matrix4x4 viewProjection, SkyColours colours, bool behind = false)
     {
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return;
         Poll();   // a timestamp pair is readable only for a few frames after its own (the arena's ring), so collect them as they come
         _skyTimer.Begin();
         var program = Physical && _state.Valid ? _sky : _simple;
         Prepare(program, inverse, colours);
-        Record(program);
+        Record(program, behind);
         _skyTimer.End();
     }
 
@@ -1293,12 +1293,13 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         p.ApplyGlobals();   // the atmosphere's uniforms and textures, through the frame globals
     }
 
-    void Record(SkyProg program)
+    void Record(SkyProg program, bool behind)
     {
         var cmd = Gpu.BeginGuest(program == _sky ? "sky" : "sky simple");
         var targets = Gpu.CurrentTargets();
-        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
-        var drawState = Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
+        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state; behind the scene: only where the depth is still the cleared one.
+        var drawState = behind ? Gpu.CurrentState() with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Equal }
+            : Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);
