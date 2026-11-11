@@ -9,6 +9,7 @@ using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Kidnap;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
@@ -1155,7 +1156,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 FootprintRadius = race?.GetFloat("pathfind footprint radius") ?? 0,
             };
             _assembly.Attach(table.PeekNextId(), cold, ref hot, record, race, world.Seed, plan.IsAnimal ? plan.Age : 1);
-            ApplyRecordSlave(cold, record, site);
+            ApplyRecordSlave(world, cold, record, site);
 
             // A new NPC's bounties (economy.md 11.2; engine: not the player's characters, nor the sandbox's idle spawns).
             if (!player && !idle) cold.Bounties = Crime.SpawnBounties.Roll(_data, record, world.Seed, table.PeekNextId(), world.Tick);
@@ -1233,15 +1234,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// CHARACTER <c>slave</c> (SlaveStateEnum 1 slave, 2 escaped, 3 ex-slave) on a freshly made character, whatever squad it is in and with or
     /// without an owner (<c>FUN_14062b210</c>, <b>Verified</b>; a saved character is not touched): 1, 2 and 3 are kept. The owner is the faction of
-    /// the town the squad belongs to, else none (-1). The setter's message and obedient-slave job (<c>FUN_1405a4940</c>) are not run, as for the
-    /// start squad before.
+    /// the town the squad belongs to, else none (-1). The state setter adds the obedient-slave job for a player slave.
     /// </summary>
-    void ApplyRecordSlave(CharacterCold cold, GameRecord? record, TownSite? site)
+    void ApplyRecordSlave(World world, CharacterCold cold, GameRecord? record, TownSite? site)
     {
         int state = record?.GetInt("slave") ?? 0;
         if (state is not (>= 1 and <= 3)) return;
         cold.SlaveState = (byte)state;
         cold.SlaveOwner = site is not null && site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
+        if (state == 1) ObedientSlave.StateChanged(world, cold, 1);
         if (state == 2) cold.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
     }
 
