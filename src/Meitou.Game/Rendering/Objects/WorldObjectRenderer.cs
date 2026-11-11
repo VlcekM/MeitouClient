@@ -1953,11 +1953,18 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
         if (_selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
         {
-            _selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre,
+            _selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, BackCulled(inst.Placed), site, inst.Centre,
                     inst.Radius));
         }
-        AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
+        AddLevels(gpu, inst.Materials!, blend, m, weight, value, BackCulled(inst.Placed), site, highlight, cut);
     }
+
+    /// <summary>
+    /// Whether a placement's back faces are culled: a building part's in the colour passes (the game's <c>objects.material</c> keeps Ogre's
+    /// default clockwise culling, so a single-sided wall between the camera and an opened floor is not seen, docs/render-objects.md), an interior
+    /// part's in the shadow passes too.
+    /// </summary>
+    bool BackCulled(PlacedMesh p) => p.Interior || !_depthPass && p.Kind == PlacedKind.BuildingPart;
 
     /// <summary>
     /// Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w,

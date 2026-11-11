@@ -99,7 +99,7 @@ zone and come back by one zone test against the current ranges. **Observed** (of
 ## Batching and depth
 
 Batch compatible mesh/material/state instances; sort colour batches near-first when enabled.
-Open building meshes are double-sided. Fade uses per-instance dither lo/hi windows; solid,
+Building parts cull back faces in colour (**Verified**: `objects.material` sets no `cull_hardware`, Ogre's default is clockwise; **Observed** by a mesh probe: Tower of Abuse's level-1 inner wall faces inward, so from outside its near side is not seen), double-sided materials excepted; in shadows only interior parts cull (the game's casters cull clockwise too; engine choice). Other open meshes are double-sided. Floor view: a part is drawn when its floor (clamped to 3) is at most the building's viewed floor, 4 (all) for a building not in the view (**Observed**, decompile `FUN_14092add0`, the clamp in `FUN_14055f6e0`; Meitou does not clamp, so a floor-4 roof hides at viewed floor 3). Fade uses per-instance dither lo/hi windows; solid,
 fading and distant-town batches have different coverage needs. `EarlyDepth.Enabled` selects
 opaque, discard-free colour only for no-cutout/non-fading parts. Draw solids first; retain
 cutout/dither shaders for other batches. Cache native state per program so solid/fading variants
