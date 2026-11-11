@@ -511,9 +511,12 @@ Meitou's rule, the Audio settings' Sound voices slider (`AudioSettings.Voices`, 
 (`SoundInstance.Prepare`: the node chain, buses, place and attenuation), then mixes the music and that many of the loudest
 other sounds at the listener (dry or sent); a sound mixed in the last block counts 1.5 times as loud, so one at the edge does not flip every block. The rest
 are silent: one heard last block first fades out over a block, then its voice keeps its clock without decoding (`Voice.Skip`); back among the loudest it
-moves its place within the decoded frames, or reopens and seeks (an error ends the voice, never the mix), and fades in over one block; a one-shot that ran out
-meanwhile ends. Trimmed music clips are never
-capped. The game's own Wwise limits (`STMG` max voices and volume threshold, each node's max instances, read but not modelled) are not this rule. The `--quit-after` log
+fades in over one block, from the place its clock says when that is still inside the decoded frames or the clip's samples are shared (`PcmCache`), else (a
+stream) from where it stopped; a one-shot that ran out meanwhile ends. Trimmed music clips are never
+capped. A stream is never sought: NVorbis 0.10.5's `SeekTo` does not work on the converted WEMs (**Verified** on the install's banks: a fresh reader, one
+seek, one read of 4096 frames against the straight decode, 12 places in each clip of 15 s or more; of the first 1601 seeks 60 never returned from the read,
+131 threw `GranulePos mismatch` and 138 gave other samples). A read that never returns stops the mixer: every sound gone until restart, nothing in the log
+(issues #538, #542; the quiet ambience beds are the first voices capped in a crowd, and sought when they came back). The game's own Wwise limits (`STMG` max voices and volume threshold, each node's max instances, read but not modelled) are not this rule. The `--quit-after` log
 shows how many sounds were capped. After the mix a peak limiter (both modes, `AudioOutput.Limit`: ceiling 0.89, instant attack, 0.15 s release) turns a
 loud sum down instead of hard-clipping it at the 16-bit conversion.
 

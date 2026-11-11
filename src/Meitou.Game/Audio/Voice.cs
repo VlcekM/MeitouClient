@@ -49,8 +49,8 @@ sealed class Voice : IDisposable
     /// </summary>
     readonly int _plays;
     /// <summary>
-    /// Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent, sought on the
-    /// next mix.
+    /// Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent, settled on the
+    /// next mix (<see cref="CatchUp"/>).
     /// </summary>
     double _cursor, _owed;
     /// <summary>
@@ -58,7 +58,7 @@ sealed class Voice : IDisposable
     /// </summary>
     long _toSkip, _limit;
     /// <summary>
-    /// The voice has finished (no more frames, or a seek failed); the clip's last play has been decoded.
+    /// The voice has finished (no more frames); the clip's last play has been decoded.
     /// </summary>
     bool _ended, _final;
     /// <summary>
@@ -137,22 +137,21 @@ sealed class Voice : IDisposable
     }
 
     /// <summary>
-    /// The source back at <paramref name="frame"/> of the clip (0: the start of the next play).
+    /// The source back at the clip's start, for the next play.
     /// </summary>
-    void Rewind(long frame = 0)
+    void Rewind()
     {
         if (_pcm is not null)
         {
-            _pcmRead = frame * _clip.Channels;
+            _pcmRead = 0;
             return;
         }
         _reader!.Dispose();
         _reader = Open();
-        if (frame > 0) _reader.SeekTo(frame);
     }
 
     /// <summary>
-    /// The voice has finished: no more frames, or a seek failed.
+    /// The voice has finished: no more frames.
     /// </summary>
     public bool Ended => _ended;
 
@@ -163,7 +162,8 @@ sealed class Voice : IDisposable
 
     /// <summary>
     /// The voice is silent for <paramref name="frames"/> output frames (the first <paramref name="first"/> not yet started): its clock runs on
-    /// without decoding, and the next <see cref="Mix"/> seeks to where it would be, fading in from silence; a voice that ran out meanwhile ends.
+    /// without decoding, and the next <see cref="Mix"/> takes it up again (<see cref="CatchUp"/>), fading in from silence; a voice that ran out
+    /// meanwhile ends.
     /// </summary>
     public void Skip(int frames, double rate, int first = 0)
     {
@@ -173,7 +173,8 @@ sealed class Voice : IDisposable
     }
 
     /// <summary>
-    /// Seeks past the frames skipped while silent: the play and the place in the clip from the voice's clock.
+    /// Takes the mix up again after the frames skipped while silent, fading in: shared samples at the play and the place the voice's clock says, a
+    /// stream where it stopped.
     /// </summary>
     void CatchUp()
     {
@@ -181,6 +182,7 @@ sealed class Voice : IDisposable
         _started = true;
         _lastLeft = _lastRight = 0;
         Array.Clear(_lastSend);
+
         // A short silence still inside the decoded frames (a sound at the cap's edge): only the place moves.
         if (_position + _owed + 1 < _decodedFrames)
         {
@@ -189,6 +191,15 @@ sealed class Voice : IDisposable
             _owed = 0;
             return;
         }
+
+        // A stream is never sought: NVorbis cannot seek in a converted WEM (docs/audio.md "Voice cap"). Its SeekTo left the reader in a read that
+        // never returns, which stopped the mixer and every sound until the game was restarted (issues #538, #542), or threw and ended the bed.
+        if (_pcm is null)
+        {
+            _owed = 0;
+            return;
+        }
+
         _cursor += _owed;
         _owed = 0;
         long done = (long)(_cursor / _framesPerPlay);
@@ -197,17 +208,9 @@ sealed class Voice : IDisposable
             _ended = true;
             return;
         }
+
         long within = Math.Clamp((long)(_cursor - (double)done * _framesPerPlay), 0, _framesPerPlay - 1);
-        try
-        {
-            Rewind(within);
-        }
-        catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IOException)
-        {
-            // A seek the stream does not allow ends the voice, never the mix.
-            _ended = true;
-            return;
-        }
+        _pcmRead = within * _clip.Channels;
         _playsLeft = _plays == 0 ? 0 : _plays - (int)done;
         _decodedFrames = 0;
         _position = _cursor - Math.Floor(_cursor);
