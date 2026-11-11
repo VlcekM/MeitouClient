@@ -41,13 +41,16 @@ public static partial class FoliageGrassShaders
         layout(std430, set = 0, binding = 3) readonly buffer Zones { Zone zones[]; };
         layout(std430, set = 0, binding = 4) readonly buffer Patches { Patch patches[]; };
         layout(std430, set = 0, binding = 5) buffer Keys { uvec4 keys[]; };
+        layout(std430, set = 0, binding = 8) buffer Firsts { uint firsts[]; };
         """;
 
     /// <summary>
     /// Kernel 1, one thread per slot (a page's blades of one patch): the decisions of <c>FoliageRenderer.PrepareGrass</c> in its operation order,
     /// <c>precise</c> (no FMA): the page box against the planes (<c>WorldCamera.Intersects</c>), the page's distance (<c>BoxDistance</c> with the
-    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). Writes <c>keys[s] =
-    /// (distance bits, tie, blades, patch row)</c>, or distance bits <c>0xFFFFFFFF</c> for no draw; counts the draws and blades.
+    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). A slot that draws takes the
+    /// next place of the view's list (the draws' count, in whatever order the threads come) and writes there <c>keys[place] = (distance bits, tie,
+    /// blades, patch row)</c> and its first blade; counts the draws and blades. The list holds the slots that draw and no others, so kernel 2 ranks
+    /// among those alone.
     /// </summary>
     public static readonly string CullCompute = Common + FoliageShaders.CrSqrt + """
         layout(std430, set = 0, binding = 2) readonly buffer Prefixes { uint prefixes[]; };
@@ -56,7 +59,6 @@ public static partial class FoliageGrassShaders
         {
             uint s = gl_GlobalInvocationID.x;
             if (s >= view.slotCount) return;
-            keys[s] = uvec4(0xFFFFFFFFu, 0u, 0u, 0u);
             Slot slot = slots[s];
             if (slot.count == 0u) return;
             Zone zone = zones[slot.zone];
@@ -89,32 +91,37 @@ public static partial class FoliageGrassShaders
             precise float part = float(int(prefixes[at + 1u]) - first) * view.fraction;
             int shown = first + int(part);
             if (shown == 0) return;
-            keys[s] = uvec4(floatBitsToUint(d), slot.tie, uint(shown), row);
-            atomicAdd(counters[0], 1u);
+            uint place = atomicAdd(counters[0], 1u);
+            keys[place] = uvec4(floatBitsToUint(d), slot.tie, uint(shown), row);
+            firsts[place] = slot.firstBlade;
             atomicAdd(counters[1], uint(shown));
         }
         """;
 
     /// <summary>
-    /// Kernel 2, one thread per slot: the draw's place in the view's list, the number of draws with a smaller (distance, tie): nearest page
-    /// first, equal distances in the order of the page's creation and the patch's index (a total order, so the result does not depend on the
-    /// scheduling). Writes the <c>VkDrawIndirectCommand</c>: the patch's vertex count, the blades, the patch row as the first vertex and
-    /// the slot's first blade as the first instance.
+    /// Kernel 2, one thread per draw of kernel 1's list (the groups past its count end at once): the draw's place in the view's order, the number of
+    /// draws with a smaller (distance, tie): nearest page first, equal distances in the order of the page's creation and the patch's index (a total
+    /// order, so the result depends neither on the scheduling nor on the list's order). Writes the <c>VkDrawIndirectCommand</c>: the patch's vertex
+    /// count, the blades, the patch row as the first vertex and the slot's first blade as the first instance. Ranking among the draws alone: every
+    /// slot used to be ranked against every slot, 0.65 ms a view whatever was in sight (docs/render-foliage.md).
     /// </summary>
     public static readonly string OrderCompute = Common + """
         layout(std430, set = 0, binding = 6) writeonly buffer Draws { Draw draws[]; };
+        layout(std430, set = 0, binding = 7) readonly buffer Counters { uint counters[]; };
         shared uvec2 tile[256];
         void main()
         {
+            uint count = counters[0];
+            if (gl_WorkGroupID.x * 256u >= count) return;
             uint s = gl_GlobalInvocationID.x;
             uint t = gl_LocalInvocationID.x;
-            uvec4 mine = s < view.slotCount ? keys[s] : uvec4(0xFFFFFFFFu);
-            bool valid = mine.x != 0xFFFFFFFFu;
+            bool valid = s < count;
+            uvec4 mine = valid ? keys[s] : uvec4(0xFFFFFFFFu);
             uint rank = 0u;
-            for (uint b = 0u; b < view.slotCount; b += 256u)
+            for (uint b = 0u; b < count; b += 256u)
             {
                 uint j = b + t;
-                tile[t] = j < view.slotCount ? keys[j].xy : uvec2(0xFFFFFFFFu);
+                tile[t] = j < count ? keys[j].xy : uvec2(0xFFFFFFFFu);
                 barrier();
                 if (valid)
                     for (uint i = 0u; i < 256u; i++)
@@ -125,7 +132,7 @@ public static partial class FoliageGrassShaders
                 barrier();
             }
             if (!valid) return;
-            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, slots[s].firstBlade);
+            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, firsts[s]);
         }
         """;
 

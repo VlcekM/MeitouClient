@@ -283,7 +283,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         var scratch = this._scratch!;
         if (!(scratch.TryAllocate((ulong)n * 16, out var keysBuffer, out var keysOffset) && scratch.TryAllocate((ulong)n * 16, out var drawsBuffer,
                 out var drawsOffset) &&
-              scratch.TryAllocate(16, out var countersBuffer, out var countersOffset)))
+              scratch.TryAllocate(16, out var countersBuffer, out var countersOffset) &&
+              scratch.TryAllocate((ulong)n * 4, out var firstsBuffer, out var firstsOffset)))
             return default;
         var keys = (Buffer: keysBuffer, Offset: keysOffset);
         var draws = (Buffer: drawsBuffer, Offset: drawsOffset);
@@ -300,7 +301,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         rest[6] = (uint)prefixIndex;
         ((float*)rest)[7] = motionScale;
 
-        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[8];
+        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[9];
         b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, 160);
         b[1] = new GpuBufferBinding(_slots.Handle, 0, _slots.Size);
         b[2] = new GpuBufferBinding(_prefixes.Handle, 0, _prefixes.Size);
@@ -309,6 +310,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         b[5] = new GpuBufferBinding(keys.Buffer, keys.Offset, (ulong)n * 16);
         b[6] = new GpuBufferBinding(draws.Buffer, draws.Offset, (ulong)n * 16);
         b[7] = new GpuBufferBinding(counters.Buffer, counters.Offset, 16);
+        b[8] = new GpuBufferBinding(firstsBuffer, firstsOffset, (ulong)n * 4);   // the draws' first blades, in kernel 1's list order
 
         var cmd = UploadCommands;
         var stamps = (_ctx.Frame.Timestamps.Allocate(), _ctx.Frame.Timestamps.Allocate());

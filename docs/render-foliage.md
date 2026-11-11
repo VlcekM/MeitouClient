@@ -21,7 +21,7 @@ cause fine/coarse levels to oscillate or evict a still-needed mesh.
 
 `FoliageCull` supplies ordered zone/group/chunk work; `FoliageGpuCull` selects/compacts instances
 and indirect draws separately for the scene, the reflection and each shadow cascade.
-GPU grass uses selection/thinning kernels and indirect arguments. Stable selection and complementary
+GPU grass uses selection/thinning kernels and indirect arguments. Two kernels a view (`FoliageGrassShaders`): the first decides each slot and appends the ones that draw to the view's list; the second ranks that list by (distance, tie) for the draw order. The ranking is all pairs, so it runs over the draws only: over every slot (22 000 to 69 000 at grass distance x16, a few hundred to a few thousand of them drawn) it cost 0.65 to 1.1 ms a view, two views a frame, whatever was in sight (**Observed**, per-kernel GPU timestamps, town at night and desert outpost: 1.56 -> 0.07 ms and 2.21 -> 0.21 ms a frame; **Verified**, `FoliageGrassGpuTests`: the draws and their order against the CPU's). Stable selection and complementary
 mesh/impostor splits are tested against CPU reference. Prepare resources/constants before parallel
 recording; workers record immutable draw jobs, never upload/allocate or mutate render globals.
 
