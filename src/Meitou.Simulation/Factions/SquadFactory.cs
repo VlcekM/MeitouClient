@@ -44,7 +44,13 @@ public interface IWorldStates
 /// <summary>
 /// One character a squad will have: which record, in which role, where relative to the squad position.
 /// </summary>
-public sealed record MemberPlan(string RecordId, SquadRole Role, int Index, Vector2 Offset, bool IsAnimal, float Age);
+public sealed record MemberPlan(string RecordId, SquadRole Role, int Index, Vector2 Offset, bool IsAnimal, float Age)
+{
+    /// <summary>
+    /// The source template's <c>malnourished</c> flag, kept per member when several templates make one player squad.
+    /// </summary>
+    public bool Malnourished { get; init; }
+}
 
 /// <summary>
 /// What a squad template makes, before any character exists: the members in creation order and the squads made recursively for <c>slaves</c>.
@@ -117,7 +123,7 @@ public static class SquadFactory
         {
             if (role == SquadRole.Leader) haveLeader = true;
             int i = members.Count;
-            members.Add(new MemberPlan(recordId, role, i, Offset(i, spacing), animal, age));
+            members.Add(new MemberPlan(recordId, role, i, Offset(i, spacing), animal, age) { Malnourished = template.Malnourished });
         }
 
         bool Gated(string recordId) =>

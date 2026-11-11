@@ -1614,6 +1614,20 @@ public sealed partial class FixtureRegistry
         }
 
         Hold(table, s, c, cage.Position, cage.Yaw);
+        SetSentence(world, c, cage, prisonTime);
+
+        // FUN_140330600 assigns the cage's owner handle as well as slave state 1. The resident squad stands in for that handle here.
+        if (c.SlaveOwner >= 0 && cage.Owner >= 0) Enslave(world, c, cage.Owner, CageMaster(world, cage));
+
+        NoteCaging(world, prisoner, cage, carrier);
+        return true;
+    }
+
+    /// <summary>
+    /// A caged character's sentence from the captor faction's booked bounty, or no sentence when it has none.
+    /// </summary>
+    static void SetSentence(World world, CharacterCold c, Fixture cage, float prisonTime)
+    {
         if (world.SystemOf<CrimeSystem>() is { } law && c.Bounties?.BookedFor(law.Factions.Relations, cage.Owner) is { Amount: > 0 } entry)
         {
             c.SentenceStart = world.GameHours;
@@ -1624,10 +1638,13 @@ public sealed partial class FixtureRegistry
             c.SentenceStart = 0;
             c.SentenceLength = 0;
         }
+    }
 
-        // An owned slave or escaped slave caged by an owner becomes that owner's slave again (FUN_140330600; the original also tests a type of the
-        // cage's owner, Unknown).
-        if (c.SlaveOwner >= 0 && cage.Owner >= 0) SetSlave(world, c, 1, cage.Owner);
+    /// <summary>
+    /// Records a caging for the rest of this tick and notifies the captive and crime systems.
+    /// </summary>
+    void NoteCaging(World world, CharacterId prisoner, Fixture cage, CharacterId? carrier)
+    {
         if (_cagingsTick != world.Tick)
         {
             _cagings.Clear();
@@ -1637,7 +1654,20 @@ public sealed partial class FixtureRegistry
         var caging = new Imprisonment(world.Tick, carrier ?? CharacterId.None, prisoner, cage);
         _cagings.Add(caging);
         Caged?.Invoke(world, caging);
-        return true;
+    }
+
+    /// <summary>
+    /// The resident squad that owns a cage's building; -1 when its owner has no loaded squad (the existing slave master is kept).
+    /// </summary>
+    static int CageMaster(World world, Fixture cage)
+    {
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Faction == cage.Owner && (squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == cage.Building)
+                return squad.Id;
+        }
+
+        return -1;
     }
 
     /// <summary>

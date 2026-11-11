@@ -214,6 +214,8 @@ public static class CharacterEditing
         {
             var prosthetics = Prosthetics(cold.Medical);
             var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
+            if (!raceData.IsRobot && cold.Medical is { } previous) medical.Hunger = previous.Hunger;
+
             foreach (var (limb, item) in prosthetics) medical.FitReplacement(limb, item);
             cold.Race = raceData;
             cold.Stats = stats;

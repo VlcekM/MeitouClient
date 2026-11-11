@@ -161,6 +161,10 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
   template keeping its own layout.
 - **Research**: the start's `research`, or `5359-gamedata.base` when it lists none.
 - **Clock**: day 1 (set by the reset), 10:00.
+- **The Slaves**: **Observed** (1.0.68 factory/status decompilation): its template's `malnourished` flag gives
+  [170 hunger](character-stats.md#hunger-blood-and-parts). CHARACTER `slave` initially sets state 1 and job 187; with no owner assigned, the
+  [status update](carry-loot.md#a-slave-far-from-its-owner-escapes) turns it into state 2 and removes the job. Entering a cage gives it the cage's
+  owner (`FUN_140330600`); a workmaster gathering it uses `setChainedMode`, which assigns the master and restores job 187.
 
 ### Loading screen
 

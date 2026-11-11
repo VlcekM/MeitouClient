@@ -108,6 +108,11 @@ public sealed record SquadTemplate
     public bool DontMultiply { get; init; }
 
     /// <summary>
+    /// <c>malnourished</c>: organic members start at hunger 1.7; the squad also has a reduced free-food floor.
+    /// </summary>
+    public bool Malnourished { get; init; }
+
+    /// <summary>
     /// <c>AI packages</c>: AI_PACKAGEs with their slot (v0) (<see cref="Ai.AiDatabase.Packages"/>).
     /// </summary>
     public IReadOnlyList<RecordLink> AiPackages { get; init; } = [];
@@ -289,6 +294,7 @@ public sealed record SquadTemplate
             WorldState = Links("world state"),
             RoamingMilitary = r.GetBool("roaming military"),
             DontMultiply = r.GetBool("dont multiply"),
+            Malnourished = r.GetBool("malnourished"),
             AiPackages = Links("AI packages"),
             BloodSmellMult = r.GetFloat("blood smell mult"),
             PatrolApproachesTowns = r.GetBool("patrol approaches towns"),

@@ -470,8 +470,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// A slave far from its owner outside every town escapes: the same status update <c>FUN_1405a4f50</c> sets slave state 2 through the setter for a
     /// slave (state 1) while the status object's current town (<c>+0x88</c>) is null and its squared distance to the owner is above
     /// <see cref="EscapeDistanceSquared"/> (<b>Verified</b>; the town is <see cref="CharacterCold.StatusTown"/>). The owner is the master squad's
-    /// leader (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle); a slave without one is left alone (the original's
-    /// path for an owner handle that resolves to nothing is <b>Unknown</b>).
+    /// leader (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle). With no owner handle the slave escapes in town
+    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept.
     /// </summary>
     void EscapeFarFromOwner(World world)
     {
@@ -479,8 +479,15 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c || !c.StatusTown.IsNone) continue;
-            if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner || owner.Slot == s) continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c) continue;
+            if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner)
+            {
+                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false }) FixtureRegistry.TagEscaped(world, c);
+
+                continue;
+            }
+
+            if (owner.Slot == s || !c.StatusTown.IsNone) continue;
 
             var at = table.Next[s].Position;
             if (Vector3.DistanceSquared(at, table.Next[owner.Slot].Position) > EscapeDistanceSquared) FixtureRegistry.TagEscaped(world, c);
