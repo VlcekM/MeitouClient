@@ -367,8 +367,11 @@ of which 84 name a character the save no longer holds (one of them inside a buil
 Meitou (`GroundItemPicks`): with the Highlight gating above, every item within 500 units of the camera's focus not hidden by a
 building, name only, coloured as above; a label picks like its item (pointer `pick_item`, right click picks it up at once: a plain item has no inventory, so `FUN_1407a6bc0` adds no verb and a held press shows no menu; **Verified**, decompile). A click on a label is the item's alone: Meitou's Alt / Ctrl loot and lift of a downed body (an extra; in the original Alt is only Highlight) does not take it, so an item lying beside a corpse can be picked up with Alt held (**Observed**: the label is a widget that takes the click, `FUN_140162950`; whether the original prefers the item over a body behind a label is **Unknown**, nothing was traced). Overlapping
 labels are stacked above the nearer one. No quantity. The owner (`GroundItem.OwnedBy`, `Saving/GroundItemSave`) is read once at load: the `ownedby` character's
-platoon faction, else the `insideBuilding` building's `owner faction ID` (also for the verb, engine choice), none for a `not real` faction; items dropped or
-placed in play have none. Picking up another faction's item marks it stolen from that faction (`StolenFrom`); standing inside a building it also sets a pending Theft against the building's faction ([economy](economy.md#fencing-stealing-and-smuggling)).
+platoon faction, else the `insideBuilding` building's `owner faction ID` (also for the verb, engine choice), none for a `not real` faction; a slot's item has
+its building's (`ItemSlots`); an item dropped in play has the faction it was stolen from, none for one not stolen: the original keeps
+the item's `ownedby` on the ground (**Observed**, plain game: a Dried Meat stolen in The Hub's bar and dropped there is saved with the barman as `ownedby`, its label red like
+the bar's goods). Picking up another faction's item marks it stolen from its owner (`PickUps.OwnerMark`: the mark it carries when that names the owner, a slot's item its
+building's, [economy](economy.md#fencing-stealing-and-smuggling), else the faction alone); standing inside a building it also sets a pending Theft against the building's faction.
 
 ### Hover outline
 

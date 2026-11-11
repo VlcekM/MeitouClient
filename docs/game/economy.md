@@ -666,10 +666,13 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   home town (vfunc 0x98, `Ownerships::_homeTown` +0x30) is not the town the trader is in (vfunc 0x78, `getCurrentTownLocation`). Otherwise p = lerp(thievery/100, 0.4, 1.25), x0.5 when the
   owner's faction is the trader's, x0.5 again when the owner is in the trader's platoon (`C` only).
   Meitou (`TradeSystem.FenceOdds`): the owner is `ItemInstance.Owner` with the squad it was in when robbed (`OwnerSquad`, standing for `C`/`CS`), set where taking from a character is a
-  theft (`CarrySystem`, `HeldItems`). A mark from a container or the ground names only a faction: no owner early-out applies and the home-town test reads it as another town (what the
-  original's handle is there is **Unknown**). The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed character's handle in `ownedby` (the
-  null handle when that character is not saved); loading marks an item whose `ownedby` names a character of another faction than its holder's as stolen from that faction, and from the
-  character once it is in the world (`SavedPopulation.NoteOwners`).
+  theft (`CarrySystem`, `HeldItems`). A theft of a building's goods (an item of its container, a loose item of its slot) names the building's owner too: the original's
+  `ownedby` is the bar's barman, the first member of the squad living there (**Observed**, plain game, The Hub's bar: the barrel's item had a null `ownedby` before the theft and the barman's
+  handle after it, "Stolen from: Barman"; the bar's loose items name him before any theft); whether that is the squad's leader or another member is **Unknown**. Meitou
+  (`CrimeSystem.OwnerMark`) names the leader of the building's resident squad of the owning faction; with none the mark names only the faction, which no owner early-out applies to, the
+  home-town test reads as another town, and a save does not keep. The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed
+  character's handle in `ownedby` (the null handle when that character is not saved); loading marks an item whose `ownedby` names a character of another faction than its
+  holder's as stolen from that faction, and from the character once it is in the world (`SavedPopulation.NoteOwners`).
 - **Prompt and roll** (`FUN_140715290`, `FUN_140793770`, **Observed**): both skip an item whose owner is in the seller's platoon, that the trader's squad does not fence, or whose owner does
   not resolve to a character; so a shop that buys stolen goods asks and rolls only for goods stolen from its own squad. Meitou: `TradeSystem.Fences`; the prompt and the hover box
   ([ui-screens](ui-screens.md)) show the same p the roll uses.

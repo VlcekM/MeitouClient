@@ -23,8 +23,8 @@ static class HeldItemTheft
 
     /// <summary>
     /// The stolen mark a held item gets when it goes to <paramref name="taker"/>'s faction: from a take that marks
-    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>) the body (its faction, itself and its squad), from another faction's container that faction
-    /// (engine choice, as the container's take), else unchanged; a drag marks only an unmarked item, a give (<paramref name="overwrite"/>) any
+    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>) the body (its faction, itself and its squad), from another faction's container its owner
+    /// (<see cref="Crime.CrimeSystem.OwnerMark"/>), else unchanged; a drag marks only an unmarked item, a give (<paramref name="overwrite"/>) any
     /// (<c>Item::notifyTheftFrom</c> call sites). Handed to its owner's faction it loses the mark (the engine clears the owner when the item goes to
     /// its owner or a member of the owner's faction).
     /// </summary>
@@ -40,7 +40,8 @@ static class HeldItemTheft
             && table.TryResolveNext(held.Actor, out int a) && Crime.CrimeSystem.MarksTheft(world, table.Cold(a)!,
                     victim) && open) return StolenMark.Of(victim, table.IdOf(v));
         if (held.From.Holder == ItemHolder.Site && world.Fixtures.Find(held.From.Site) is { Owner: >= 0 } box && box.Owner != taker.Faction
-            && Crime.CrimeSystem.IsStealing(world, box) && open) return StolenMark.OfFaction(box.Owner);
+            && Crime.CrimeSystem.IsStealing(world, box) && open)
+            return Crime.CrimeSystem.OwnerMark(world, box.Building, box.Owner);
         return item.Mark;
     }
 

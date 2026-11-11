@@ -207,10 +207,10 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                 continue;
             }
 
-            // Another faction's item is stolen from it (the "Steal" pick-up); what stays on the ground keeps its old mark.
+            // Another faction's item is stolen from its owner (the "Steal" pick-up); what stays on the ground keeps its old mark.
             int before = item.Item.Quantity;
             var mark = item.Item.Mark;
-            if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.StolenFrom = item.OwnedBy;
+            if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.Mark = OwnerMark(world, item);
 
             // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear or a bag that does not fit is worn when its slot
             // is free.
@@ -245,6 +245,20 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     static bool Stow(Items.Inventory inventory, Items.ItemInstance item, CharacterCold c) =>
         !Items.InventoryCommands.MainClosed(c) ? inventory.Add(item) : inventory.Backpack?.Contents is { } bag
                 && bag.AddTo("backpack_content", item);
+
+    /// <summary>
+    /// The stolen mark of a loose item of another faction (<see cref="GroundItem.OwnedBy"/>): the mark it carries when that names the owner (a
+    /// stolen item dropped again), a slot's item its building's owner (<see cref="Crime.CrimeSystem.OwnerMark"/>), else the owner faction alone.
+    /// </summary>
+    static StolenMark OwnerMark(World world, GroundItem item)
+    {
+        if (item.Item.Mark.Faction == item.OwnedBy) return item.Item.Mark;
+
+        if (ItemSlots.BuildingOf(item.Slot) is { } building)
+            return Crime.CrimeSystem.OwnerMark(world, building, item.OwnedBy);
+
+        return StolenMark.OfFaction(item.OwnedBy);
+    }
 
     /// <summary>
     /// An animal's pick-up of a limb: into its mouth when it has the point, else nothing (no sound or message, the limb stays where it lies).

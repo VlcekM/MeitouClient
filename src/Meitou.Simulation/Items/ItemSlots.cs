@@ -113,6 +113,11 @@ public sealed class ItemSlots
     public int Filled => _all.Count(s => s.Item >= 0);
 
     /// <summary>
+    /// The run-time name of the building whose slot <paramref name="slot"/> is (its id up to <c>/item</c>); null for none.
+    /// </summary>
+    public static string? BuildingOf(string? slot) => slot?.LastIndexOf("/item", StringComparison.Ordinal) is > 0 and var end ? slot[..end] : null;
+
+    /// <summary>
     /// How many item slots the building with run-time name <paramref name="buildingKey"/> has and how many hold an item.
     /// </summary>
     public (int Total, int Filled) OfBuilding(string buildingKey)
