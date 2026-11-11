@@ -138,6 +138,14 @@ sealed class InteriorView(GameHost host)
         && shown < 3 && inView.FloorAt(at) > shown;
 
     /// <summary>
+    /// Whether a layout object on <paramref name="floor"/> of <paramref name="building"/> (its placement id) is not drawn, as the object renderer
+    /// decides: above the floor the building shows in the interior view, or, while the building shows its outside, not an <paramref name="outside"/>
+    /// one.
+    /// </summary>
+    internal bool FloorHidden(string building, int floor, bool outside) =>
+        InteriorFloors.TryGetValue(building, out int shown) ? shown < 3 && floor > shown : !outside;
+
+    /// <summary>
     /// The viewed or held-open building <paramref name="at"/> is in (a loop: a lambda here made a closure and a delegate per character per frame).
     /// </summary>
     internal InteriorVolume? ViewedAt(System.Numerics.Vector3 at)

@@ -238,11 +238,14 @@ sealed class LevelEditorPanel(PlayerInterface player)
                 && player.Picking.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position,
                     y, b.Rotation) is { } t && t < bestT)
                 (bestT, best) = (t, b.Key);
-        if (best is null && player.BuildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
+        // Furniture selects itself; the editor clears the house it stands in.
+        if (best is null && player.BuildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level)
+            best = BuildingSelection.HouseKeyOf(level.Instance);
         if (best is null) DropPlacementChoice();
         else if (host.Clear(best))
         {
-            if (player.BuildingSelection.Selected?.Instance == best) player.BuildingSelection.SetBuilding(null);
+            if (player.BuildingSelection.Selected is { } selected && BuildingSelection.HouseKeyOf(selected.Instance) == best)
+                player.BuildingSelection.SetBuilding(null);
             player.InterfaceSounds.Sound("Building_Undo");
         }
         return true;

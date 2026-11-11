@@ -243,6 +243,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public IReadOnlyList<Vector3> Tables { get; init; } = [];
     /// <summary>
+    /// Its interior layout's other furniture, in layout order: what no bed, seat, cage or container pick takes, nodes left out. A left click selects
+    /// each by its own collision (docs/game/ui-screens.md "Selected building").
+    /// </summary>
+    public IReadOnlyList<TownPiece> Pieces { get; init; } = [];
+    /// <summary>
     /// Its own record's BUILDING_FUNCTIONALITY <c>function</c> (-1: none); a placed table is an outdoor table to sit at.
     /// </summary>
     public int Function { get; init; } = -1;
@@ -303,6 +308,15 @@ public sealed record TownFixture(string Id, string RecordId, bool IsCage, Vector
 /// <paramref name="Id"/> is the parent's <see cref="BuildingKey"/>, "/item", and the slot's index among the layout's groups (an <b>engine</b> name).
 /// </summary>
 public sealed record TownItemSlot(string Id, string GroupId, Vector3 Position, Quaternion Rotation, int Floor);
+
+/// <summary>
+/// A piece of a building's interior layout that only gets selected (<see cref="TownBuilding.Pieces"/>): a table, shelf, lamp, torch, dummy,
+/// workstation or lock.
+/// <paramref name="Id"/> is the parent's <see cref="BuildingKey"/>, "/", and the item's index in the layout, as a <see cref="TownFixture"/>'s;
+/// <paramref name="Floor"/> is the floor the layout puts it on (<see cref="LayoutItem.Floor"/>), <paramref name="Outside"/> whether it stays drawn
+/// while the building shows its outside (<see cref="LayoutItem.Outside"/>).
+/// </summary>
+public sealed record TownPiece(string Id, string RecordId, Vector3 Position, Quaternion Rotation, int Floor, bool Outside);
 
 /// <summary>
 /// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the
@@ -411,6 +425,7 @@ public static class TownBuildings
             Fixtures = c.Fixtures,
             ItemSlots = c.ItemSlots,
             Tables = c.Tables,
+            Pieces = c.Pieces,
             Furniture = c.Furniture,
             Furnished = c.Furnished,
             InteriorLayout = interior,

@@ -419,7 +419,9 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   furniture on a hidden floor cannot be picked, whoever owns it. The exception: past a hit on a whole-shown interior of the player's, the objects inside it are
   taken though not visible. The shown floor (`FUN_1407f7230`) is the current floor for a building a player character is in, back to 4
   for one left; the flag of an interior's furniture follows the current floor itself (`FUN_14054a8f0`, +0xa4 against the viewed floor, PlayerInterface +0x1e4). Meitou
-  (containers and beds): one above the viewed floor of a building in the interior view is skipped, its floor from its height (`InteriorVolume.FloorAt`); not modelled:
+  (containers, beds and seats): one above the viewed floor of a building in the interior view is skipped, its floor from its height
+  (`InteriorVolume.FloorAt`); other layout furniture (`TownBuilding.Pieces`) above it by its layout floor and, while the building shows its
+  outside, unless the layout marks it outside, as drawn; not modelled:
   the flag's own test against the current floor in a building left within 10 s (Meitou shows every floor then) and the player's whole-shown interior exception.
 - Characters and ground items on a hidden floor are not visible either (**Verified**, decompile): a character in a building above the floor it shows (`FUN_1405c9f60`); a ground
   item above floor 0 above the floor its building shows, or above the current floor outside one (`FUN_1409fb540`, after each floor change in `FUN_1407f7230`). Meitou: neither

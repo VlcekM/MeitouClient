@@ -155,6 +155,7 @@ public sealed class TownBuildingBuilder
                 : -1,
             HandleSerial = state?.GetInt("handleS") ?? 0,
             Tables = c.Tables,
+            Pieces = c.Pieces,
             Furniture = c.Furniture,
             Function = functionality?.GetInt("function") ?? -1,
             Generators = _contents && _layouts is not null ? GeneratorCount(_layouts, resolved, state) : 0,
