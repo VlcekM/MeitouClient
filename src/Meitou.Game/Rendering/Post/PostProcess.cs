@@ -418,7 +418,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     bool _haveScene;
 
     // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
-    const int MaxStamps = 16;
+    const int MaxStamps = 40;
     sealed class StampSet
     {
         public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
