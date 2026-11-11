@@ -188,8 +188,9 @@ sealed class PointerView(PlayerInterface player)
                 return (player.Furniture.ContainerPointer(container), null);
             case WorldPicking.Picked.Door when player.Furniture.PickDoor(player.Mouse) is { } door:
                 return (player.Furniture.DoorPointer(door), null);
-            // a bed's slot 130 pointer (UseableStuff, no inventory)
-            case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat:
+            // a bed's slot 130 pointer (UseableStuff, no inventory); a town turret's (TurretBuilding, as Storage)
+            case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat
+                or WorldPicking.Picked.TownTurret:
                 return ("use", null);
             // a resource rock a right click would mine (the original's `mine` pointer)
             case WorldPicking.Picked.Rock:

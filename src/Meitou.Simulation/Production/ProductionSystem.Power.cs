@@ -202,9 +202,10 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// State 93 <c>BUILDING_HAS_POWER</c> (<c>FUN_140596ab0</c>, <b>Verified</b>), a start condition of operating (87, 221) and manning a turret (146):
-    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share.
+    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share. An NPC town's machine
+    /// always has it (engine choice: NPC towns have no power grid here).
     /// </summary>
-    bool Powered(World world, BuildSite site, Machine m) => HasPower(world, m, site.Town);
+    bool Powered(World world, BuildSite site, Machine m) => IsTownWork(site.Id) || HasPower(world, m, site.Town);
 
     /// <summary>
     /// Whether a machine counts as powered for its sound emitter (<c>FUN_140299370</c>, <b>Observed</b>): a generator always (fuel and switch are not

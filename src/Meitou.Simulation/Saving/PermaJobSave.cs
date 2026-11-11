@@ -74,10 +74,11 @@ public static class PermaJobSave
         {
             var hand = Hand.Read(ai, Target + i);
 
-            // A rock's natural id and a town dummy's are kept as they are: the site is found from the id once its town has registered
-            // (ProductionSystem.Natural, TownDummy).
+            // A rock's natural id, a town dummy's and a town turret's are kept as they are: the site is found from the id once its town has
+            // registered (ProductionSystem.Natural, TownDummy) or its machine is read back (TownMachineSave).
             string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id)
-                && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id))
+                && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id)
+                    || ProductionSystem.IsTownWork(id))
                 ? id
                 : handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var key) && key.IndexOf(':') is var colon and >= 0
                     && sites.Find(key[(colon + 1)..]) is not null

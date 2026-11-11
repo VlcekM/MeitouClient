@@ -4,6 +4,7 @@ using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Production;
 
@@ -36,9 +37,37 @@ public sealed partial class ProductionSystem
     public static bool IsTownWork(string id) => id.StartsWith(TownWorkPrefix, StringComparison.Ordinal);
 
     /// <summary>
+    /// The towns' buildings, for the town turrets the player's orders name (null: no town turret can be ordered).
+    /// </summary>
+    readonly PopulationData? _towns;
+
+    /// <summary>
     /// The virtual site of a town building made by <see cref="TownWork"/>, else null.
     /// </summary>
     BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
+
+    /// <summary>
+    /// The site of the town turret a player's order names by its <see cref="TownWorkId"/> (docs/game/ui-input.md "Context menu verbs": a
+    /// TurretBuilding gives 146 USE_TURRET whoever owns it), made with its machine on the first order (serial: the commands' phase); null for an
+    /// id naming no town turret.
+    /// </summary>
+    BuildSite? TownTurret(World world, string id)
+    {
+        if (!IsTownWork(id) || _towns is not { } data) return null;
+        if (TownWorkSite(id) is { } known) return known;
+
+        string key = id[TownWorkPrefix.Length..];
+        for (int s = 0; s < data.Sites.Count; s++)
+        {
+            if (data.Turrets(s).FirstOrDefault(b => b.Key == key) is not { } turret) continue;
+
+            int owner = s < data.SiteFactions.Count ? data.SiteFactions[s] : -1;
+            TownWork(world, turret, owner);
+            return TownWorkSite(id);
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>), null for a building that

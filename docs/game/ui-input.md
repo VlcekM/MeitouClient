@@ -515,8 +515,10 @@ is drawn (as the original). Selecting or inspecting a character clears it, Shift
 included (the original keeps the slot); a site that disappears clears it. A left click on the ground (no character or building picked) clears it too
 (Advanced → Click away deselects, `DeselectBuildings`, default on; off keeps it, as the original). Selecting plays the building's select sound ([audio](../audio.md#interface)). A house is not focused as its first door, but its panels list the
 first door's lines before the house's, as the door's panel does ([ui-screens](ui-screens.md#selected-building)). World (town) buildings act through their
-fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`), beds, cages and doors are picked, pointed at and ordered like the player's. Not built: the
-machines of a town building (crafting and research benches, generators, a town turret for the player, the furniture of a bought house): machines exist only for the sites of `World.Buildings` (player-built ones and town ruins taken over),
+fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`), beds, cages and doors are picked, pointed at and ordered like the player's. A town turret
+(`TownBuilding.Turret`) is picked on its collision with the `use` pointer, as the table's TurretBuilding (146 whoever owns it): a quick right click mans it (`UseTurretOrder` on its
+`townwork:` site), with Shift the Turret guard job, held the menu's Man Turret (`FurnitureUse.TownTurretPress`). Not built: the
+machines of a town building (crafting and research benches, generators, the furniture of a bought house): machines exist only for the sites of `World.Buildings` (player-built ones and town ruins taken over),
 so they have no window, pointer or order. A door (picked by its collision with the leaf
 where it has slid to, `DoorSpot.Slide` × open amount, `FurnitureUse`) shows `door` / `lock` / `lockpick` as in the table and a quick right click gives `DoorOrder` (the nearest selected
 walks to the door's near side and opens or closes it, "It's locked." at a locked one; another faction's locked door: Alt picks the lock, else the hint

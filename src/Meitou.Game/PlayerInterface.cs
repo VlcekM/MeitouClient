@@ -885,6 +885,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (kind == WorldPicking.Picked.Seat && Furniture.SeatPress(p)) return;
         if (kind == WorldPicking.Picked.Cage && Furniture.CageClick(p)) return;
         if (kind == WorldPicking.Picked.Dummy && Furniture.DummyPress(p)) return;
+        if (kind == WorldPicking.Picked.TownTurret && Furniture.TownTurretPress(p)) return;
         if (kind == WorldPicking.Picked.Rock && Furniture.RockPress(p)) return;
         if (kind is WorldPicking.Picked.Site or WorldPicking.Picked.None && Build.SitePress(p)) return;
         if (Ray(p) is { } ray && Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)

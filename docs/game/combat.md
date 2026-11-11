@@ -734,7 +734,7 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 - **Manning** (`Task_UseTurret`, update `FUN_1403474f0`): the building of the order's target or the character's `+0x258`; it must be a turret (slot 107 = 8) with a free
   operator place (slot 159); the gunner faces it and holds clip `combatstance`; unless broken (`+0x3b6`) the controller gets the building and stat 11 Turrets
   (`FUN_140434570`, also sets it active), the controller ticks, and slot 150 `FUN_140434d20` registers the operator and sets the turning speed `+0x464` = e × `aim speed` × (1 + 0.01 D).
-  Broken, the update calls `AITaskSytem::taskImpossible` (`FUN_14050c890`) and the task ends (Meitou: `Machine.Broken` ends a player gunner's manning, a town turret's saved `broken` an NPC's; [what damages a building](buildings-production.md#power)).
+  Broken, the update calls `AITaskSytem::taskImpossible` (`FUN_14050c890`) and the task ends (Meitou: `Machine.Broken` ends a player gunner's manning of its own turret, a town turret's saved `broken` any gunner's; [what damages a building](buildings-production.md#power)).
   Start/end (slots 1/3) set the building's in-use flag; the end clears the controller (`FUN_140437470`). Crossbows use the same controller with stat 35 (`Task_RangedAttack` `FUN_14033bfb0`).
 - **Controller tick** (`FUN_140438c70`): sets the trigger flag `+0x34` every tick (so the fire gate `FUN_14043aee0`, run from the character update `FUN_1405cf130`, works every
   frame); chooses the target; none → state 3. Empty gun → state 2. In range (`FUN_140436860`: squared distance gunner→target < h × range², h the height factor from the gunner):

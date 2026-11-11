@@ -421,11 +421,13 @@ sealed class BuildingSync(GameHost host)
                 && at.Index < live.Sites[at.Site].Buildings.Count
                 ? live.Sites[at.Site].Buildings[at.Index] : null;
             var saved = host.Session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
-            var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
+            var own = building?.Key == placement.Key ? building : null;
+            var (name, type) = WorldBuildingName(db, placement, state, saved, own);
             var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
             return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
                 host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
-                    : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
+                    : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false,
+                own?.Turret is not null);
         };
     }
 

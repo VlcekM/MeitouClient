@@ -188,7 +188,7 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// The site an order names: Meitou's id when the world has it (a build site, a fixture, a rock), else the instance a building handle named, as a
+    /// The site an order names: Meitou's id when the world has it (a build site, a fixture, a rock, a town dummy or turret), else the instance a building handle named, as a
     /// build site or a fixture.
     /// </summary>
     static string? SiteOf(World world, SavedOrder o)
@@ -196,7 +196,7 @@ public static class OrderSave
         if (o.Site is { } id)
         {
             bool known = world.Buildings.Find(id) is not null || world.Fixtures.Find(id) is not null || ProductionSystem.IsNatural(id)
-                || Locks.FixtureRegistry.IsDummy(id);
+                || Locks.FixtureRegistry.IsDummy(id) || ProductionSystem.IsTownWork(id);
             return known ? id : null;
         }
 

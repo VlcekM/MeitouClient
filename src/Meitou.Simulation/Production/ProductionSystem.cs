@@ -143,6 +143,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public ProductionSystem(PopulationData data, ProductionSettings? settings = null)
         : this(data.Db, data.Bodies.Constants, data.BodyOptions, data.Items, data.Biomes, settings, data.ResourceNodes)
     {
+        _towns = data;
     }
 
     /// <summary>
@@ -450,12 +451,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// The nearest able one of the order's characters mans the turret (the original's <c>Task_UseTurret</c>): it operates it, walking to its gunner
-    /// spot (engine choice: one gunner, the original's pick among several is Unknown); someone else at it already: "is already in use".
+    /// The nearest able one of the order's characters mans the turret, the player's or a town's (<see cref="TownTurret"/>; the original's
+    /// <c>Task_UseTurret</c>): it operates it, walking to its gunner spot (engine choice: one gunner, the original's pick among several is Unknown);
+    /// someone else at it already: "is already in use".
     /// </summary>
     void UseTurret(World world, UseTurretOrder order)
     {
-        if (Site(world, order.Site) is not { Complete: true } site || TurretPostOf(site) is not { } post || Ensure(world, site) is not { } m) return;
+        var target = Site(world, order.Site) ?? TownTurret(world, order.Site);
+        if (target is not { Complete: true } site || TurretPostOf(site) is not { } post || Ensure(world, site) is not { } m) return;
         var spot = AiSystem.TurretSpot(world, post);
         var table = world.Characters;
         int best = -1;

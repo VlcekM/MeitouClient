@@ -559,6 +559,63 @@ sealed class FurnitureUse(PlayerInterface player)
 
     #endregion
 
+    #region Town turrets
+
+    // A town's turrets (docs/game/ui-input.md "Context menu verbs": a TurretBuilding gives 146 USE_TURRET whoever owns it): with characters selected
+    // the pointer over one is <c>use</c>; a quick right click mans it (UseTurretOrder), with Shift it becomes the Turret guard job; held, the menu
+    // offers "Man Turret". A player's own turret is a build site and goes through the site verbs instead.
+    /// <summary>
+    /// The nearest town turret under the pixel, before the ground: its placement key, BUILDING record and ray distance, picked on its collision as a
+    /// level building is (<see cref="BuildingSelection.PickBuildingAt"/>).
+    /// </summary>
+    internal (string Key, string Record, float T)? PickTownTurretAt(Vector2 pixel)
+    {
+        if (player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
+
+        float bestT = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } ground ? Vector3.Distance(ray.Origin, ground) : 6000;
+        (string, string, float)? best = null;
+        foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, bestT))
+        {
+            var b = candidate.Placement;
+            if (candidate.Plot || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
+
+            float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
+            var hull = candidate.Footprint.Place(b.Position, b.Rotation);
+            var hit = player.Picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y,
+                b.Rotation);
+            if (hit is not { } t || t >= bestT || player.Hidden(ray, t) || host.WorldInfo(b) is not { Turret: true, Destroyed: false }) continue;
+
+            (best, bestT) = ((b.Key, b.BuildingId, t), t);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// A right press on a town turret with characters selected: released before the hold time it mans it, held longer it opens the menu (true:
+    /// taken).
+    /// </summary>
+    internal bool TownTurretPress(Vector2 p)
+    {
+        if (player.SelectedIds().Count == 0 || PickTownTurretAt(p) is not { } turret) return false;
+
+        string site = ProductionSystem.TownWorkPrefix + turret.Key;
+        string title = player.Build.Services?.ItemName(turret.Record) ?? turret.Record;
+        ContextMenuWindow.ContextMenu? TurretMenu(Vector2 at) => player.ContextMenuWindow.Menu(title, at, [("Man Turret", () => ManTurret(site))]);
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, TurretMenu, () => ManTurret(site))) ManTurret(site);
+        return true;
+    }
+
+    /// <summary>
+    /// The selection mans the town turret <paramref name="site"/> (with Shift as the Turret guard job).
+    /// </summary>
+    void ManTurret(string site) => player.Say(player.SlowModifier
+        ? new AddJob(player.SelectedIds(), TaskType.UseTurret, site) { Tick = player.Session.World.Tick }
+        : new UseTurretOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick });
+
+    #endregion
+
     #region Seats
 
     /// <summary>
