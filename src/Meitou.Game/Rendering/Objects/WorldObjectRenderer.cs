@@ -1197,10 +1197,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 .FirstOrDefault();
             bool border = m?.BorderAddressing ?? false;
 
-            // A map nothing can read is not loaded (<see cref="Material"/> never reads it): the normal map only with tangents (or for the
-            // emissive flag, which looks at its key), the second set only with vertex colours (its blend weight).
+            // A map nothing can read is not loaded (<see cref="Material"/> never reads it): the normal map only with tangents, for an ALPHA
+            // material's cut-out (its alpha) or for the emissive flag, which looks at its key; the second set only with vertex colours.
             var part = gpu.Parts[i];
-            bool wantNormal = part.HasTangents || (m?.Emissive ?? false);
+            bool wantNormal = part.HasTangents || m?.Alpha == AlphaSource.NormalAlpha || (m?.Emissive ?? false);
             bool wantSecond = part.HasColours;
 
             // The textures are made without loading (<c>deferred</c>): <see cref="Resolve"/> tells them how near they are used, then reads their
@@ -2403,11 +2403,14 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         d.Normal2 = dual ? pm.Normal2 : 0;
         var alpha = m?.Alpha ?? AlphaSource.None;
         if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
+
+        // The cut-out mask is the normal map's alpha: sampled whenever the map exists (the lighting checks for tangents itself).
+        bool cut = alpha == AlphaSource.NormalAlpha;
         var tile = m?.Tile ?? Vector2.One;
         ref var pc = ref d.Push;
         pc.NormalSwizzled = pm.Swizzled ? 1u : 0u;
         pc.HasDiffuse = textured ? 1u : 0u;
-        pc.HasNormal = normal ? 1u : 0u;
+        pc.HasNormal = normal || cut ? 1u : 0u;
         pc.HasDual = dual ? 1u : 0u;
         pc.Triplanar = textured && (m?.Triplanar ?? false) ? 1u : 0u;
         pc.Tile = tile;
