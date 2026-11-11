@@ -24,14 +24,21 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly GpuComputePipeline _pipeline;
     readonly GpuSampler _sampler;
     readonly PenumbraFilter _penumbra;
-    readonly GpuProgram _oneProgram, _sumProgram;
-    readonly GpuComputePipeline _onePipeline, _sumPipeline;
+    readonly GpuProgram _oneProgram, _sumProgram, _classifyProgram;
+    readonly GpuComputePipeline _onePipeline, _sumPipeline, _classifyPipeline;
+    /// <summary>The lamps' lists of cells (<see cref="LampShadowShaders.Classify"/>): the indirect dispatches' arguments, 16 bytes a list, then <see cref="MaxCells"/> cells a list.</summary>
+    DeviceBuffer? _lists;
+    int _listCapacity;
+    /// <summary>The movers the classification tests one by one; with more of them the cells alone decide.</summary>
+    const int ClassifyMovers = 64;
     readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide)> _areas = [];
     /// <summary>The last frame's per-lamp areas: how many, and the pixels of their rectangles summed.</summary>
     public int AreasLast { get; private set; }
     public long AreaPixelsLast { get; private set; }
     /// <summary>The pixels of the cells the last frame's areas marked (the rays' wider set), summed.</summary>
     public long CellPixelsLast { get; private set; }
+    /// <summary>The movers (spheres) of the last frame.</summary>
+    public int MoversLast { get; private set; }
     GpuProgram? _referenceProgram;
     GpuComputePipeline _referencePipeline;
     readonly List<uint[]> _cellPool = [];
@@ -57,7 +64,7 @@ sealed unsafe class LampShadowPass : IDisposable
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
-            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.StorageBuffer),
         ], GpuSetLayout.Bindless);
         _onePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_oneProgram, "lamp shadow one"));
         // The light of the flagged pixels: the rays' bindings (5 the filtered flag, 9 the sum).
@@ -65,11 +72,26 @@ sealed unsafe class LampShadowPass : IDisposable
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
-            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.StorageBuffer),
         ], GpuSetLayout.Bindless);
         _sumPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumProgram, "lamp shadow light"));
+        _classifyProgram = ctx.Shaders.Compute(LampShadowShaders.Classify, "lamp shadow cells",
+            [(0, DescriptorType.UniformBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer)]);
+        _classifyPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_classifyProgram, "lamp shadow cells"));
         _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ClassifyParams
+    {
+        public Vector4 Lamp, Right, Up, Back, TanSize;
+        public fixed int CellRect[4];
+        public fixed int Info[4];
+        public fixed int Base[4];
+        public fixed uint Cells[64];
+        public fixed uint Wide[64];
+        public fixed float Movers[ClassifyMovers * 4];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -158,8 +180,10 @@ sealed unsafe class LampShadowPass : IDisposable
         };
         if (one)
         {
+            var listed = new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);
             writes[10] = Sampled(11, &images[5]);
-            cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings - 1), GpuBindPoint.Compute);
+            writes[11] = Buffer(12, DescriptorType.StorageBuffer, &listed);
+            cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
             return;
         }
         cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
@@ -224,10 +248,10 @@ sealed unsafe class LampShadowPass : IDisposable
     /// <paramref name="filtered"/> ends as 1 everywhere, the factor the drawing pass reads. False: nothing to do, <paramref name="sum"/> is untouched.
     /// </summary>
     public bool RunPerLamp(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture light, GpuTexture sum, GpuTexture scratch, GpuTexture filtered,
-        in LampShadowView view, in Matrix4x4 inverse)
+        in LampShadowView view, in Matrix4x4 inverse, in Meitou.Game.Rendering.Frame.OcclusionView pyramid = default)
     {
         PlanAreas(scene, lamps, view, inverse);
-        (AreasLast, AreaPixelsLast) = (_areas.Count, 0);
+        (AreasLast, AreaPixelsLast, MoversLast) = (_areas.Count, 0, _movers.Count);
         CellPixelsLast = 0;
         foreach (var planned in _areas)
         {
@@ -236,15 +260,29 @@ sealed unsafe class LampShadowPass : IDisposable
         }
         if (_areas.Count == 0) return false;
         int w = (int)view.Size.X, h = (int)view.Size.Y;
+        if (_lists is null || _listCapacity < _areas.Count)
+        {
+            _lists?.Dispose();   // released after the frames in flight
+            _listCapacity = Math.Max(_areas.Count * 2, 32);
+            _lists = DeviceBuffer.Create(_ctx, (ulong)_listCapacity * (16 + MaxCells * 4), BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferDst, "lamp shadow cell lists");
+        }
+        int listBase = _listCapacity * 4;   // in uints: the lists come after the arguments
+        ulong listsSize = _lists.Size;
         var cmd = (CommandList)_ctx.BeginNative("lamp shadows");
         cmd.BeginLabel("lamp shadows");
         cmd.Barrier(BarrierBatch.Full);
         Clear(cmd, sum, 0);
+        cmd.FillBuffer(_lists.Handle, 0, (ulong)_listCapacity * 16, 0);
         cmd.Barrier(BarrierBatch.Full);
-        int margin = PenumbraFilter.RowMargin + PenumbraFilter.ColumnMargin;
-        foreach (var (row, area, cells, wide) in _areas)
+
+        // Each lamp's cells: those its movers' shadow boxes cover, less what this frame's depth shows out of the lamp's reach or of every mover's shadow.
+        Classify(cmd, lamps, view, pyramid, listBase);
+        cmd.Barrier(BarrierBatch.Full);
+
+        var targets = new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h);
+        for (int slot = 0; slot < _areas.Count; slot++)
         {
-            var outer = new Vector4(MathF.Max(area.X - margin, 0), MathF.Max(area.Y - margin, 0), MathF.Min(area.Z + margin, w), MathF.Min(area.W + margin, h));
+            int row = _areas[slot].Row;
             var parameters = new Params
             {
                 LightGrid = lamps.Grid,
@@ -255,24 +293,21 @@ sealed unsafe class LampShadowPass : IDisposable
                 Origin = new Vector4(scene.Origin, 0),
                 PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
                 Size = new Vector4(view.Size, TracedSunShaders.LampMovers, row),
-                Rect = outer,
+                Rect = new Vector4(slot, listBase, 0, 0),
             };
-            for (int i = 0; i < 64; i++) parameters.Cells[i] = wide[i];
             var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+            ulong args = (ulong)slot * 16;
+            // The rays over the listed cells, the filter on this lamp's flags, then the lamp's light where its filtered flag is.
             Push(cmd, scene, lamps, depth, surface, lost, light, light, constants, _oneProgram, true);
             cmd.BindPipeline(_onePipeline);
             cmd.BindBindlessTable(_oneProgram, 1, GpuBindPoint.Compute);
-            cmd.Dispatch((uint)(((int)(outer.Z - outer.X) + 7) / 8), (uint)(((int)(outer.W - outer.Y) + 7) / 8));
+            cmd.DispatchIndirect(_lists.Handle, args);
             cmd.Barrier(BarrierBatch.Full);
-            _penumbra.RunArea(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h), inverse, view.Footprint, area, wide, cells);
-            // The lamp's light where its filtered flag is: the same constants over the area and its own cells.
-            parameters.Rect = area;
-            for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
-            var lit = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
-            Push(cmd, scene, lamps, depth, surface, filtered, sum, sum, lit, _sumProgram, true);
+            _penumbra.RunList(cmd, targets, inverse, view.Footprint, _lists.Handle, listsSize, args, slot, listBase);
+            Push(cmd, scene, lamps, depth, surface, filtered, sum, sum, constants, _sumProgram, true);
             cmd.BindPipeline(_sumPipeline);
             cmd.BindBindlessTable(_sumProgram, 1, GpuBindPoint.Compute);
-            cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
+            cmd.DispatchIndirect(_lists.Handle, args);
             cmd.Barrier(BarrierBatch.Full);
         }
         Clear(cmd, filtered, 1);
@@ -280,6 +315,60 @@ sealed unsafe class LampShadowPass : IDisposable
         cmd.EndLabel();
         _ctx.EndNative(cmd);
         return true;
+    }
+
+    /// <summary>The cells of every lamp's list (<see cref="LampShadowShaders.Classify"/>), a dispatch a lamp over its area's cells.</summary>
+    void Classify(CommandList cmd, WorldLamps lamps, in LampShadowView view, in Meitou.Game.Rendering.Frame.OcclusionView pyramid, int listBase)
+    {
+        // The pyramid's level of 64-pixel blocks (level 0 holds 4 x 4 pixels): its vectors as HizPyramid.Vectors lays them out.
+        bool has = !pyramid.IsEmpty && pyramid.Vectors[5].Y > 4.5f;
+        var eye = has ? new Vector3(pyramid.Vectors[0].X, pyramid.Vectors[0].Y, pyramid.Vectors[0].Z) : view.Eye;
+        var hiz = has ? new DescriptorBufferInfo(_ctx.Device.BufferAt(pyramid.Buffer.Buffer.Index), pyramid.Buffer.Offset, pyramid.Buffer.Size)
+            : new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);   // a stand-in, not read
+        var listed = new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);
+        int wide = ((int)view.Size.X + CellSize - 1) / CellSize, high = ((int)view.Size.Y + CellSize - 1) / CellSize;
+        cmd.BindPipeline(_classifyPipeline);
+        var writes = stackalloc WriteDescriptorSet[3];
+        for (int slot = 0; slot < _areas.Count; slot++)
+        {
+            var (row, area, cells, grown) = _areas[slot];
+            var l = lamps.RowLamp(row);
+            int margin = PenumbraFilter.RowMargin + PenumbraFilter.ColumnMargin;
+            int x0 = Math.Max((int)(area.X - margin) / CellSize, 0), y0 = Math.Max((int)(area.Y - margin) / CellSize, 0);
+            int x1 = Math.Min((int)(area.Z + margin) / CellSize + 1, wide), y1 = Math.Min((int)(area.W + margin) / CellSize + 1, high);
+            var parameters = new ClassifyParams
+            {
+                Lamp = new Vector4(l.Position - eye, l.Radius),
+                Right = has ? pyramid.Vectors[1] : default, Up = has ? pyramid.Vectors[2] : default, Back = has ? pyramid.Vectors[3] : default,
+                TanSize = has ? pyramid.Vectors[4] : new Vector4(0, 0, view.Size.X, view.Size.Y),
+            };
+            (parameters.CellRect[0], parameters.CellRect[1], parameters.CellRect[2], parameters.CellRect[3]) = (x0, y0, x1, y1);
+            parameters.Info[0] = slot;
+            // The movers within the lamp's reach, the only ones whose shadow it casts; too many: the cells alone decide.
+            int near = 0;
+            foreach (var (centre, radius) in _movers)
+            {
+                if (Vector3.Distance(centre, l.Position) > l.Radius + radius) continue;
+                if (near < ClassifyMovers)
+                {
+                    var at = centre - eye;
+                    (parameters.Movers[near * 4], parameters.Movers[near * 4 + 1], parameters.Movers[near * 4 + 2], parameters.Movers[near * 4 + 3]) = (at.X, at.Y, at.Z, radius);
+                }
+                near++;
+            }
+            parameters.Info[1] = near <= ClassifyMovers ? near : -1;
+            parameters.Info[2] = has ? (int)BitConverter.SingleToUInt32Bits(pyramid.Vectors[7].X) : 0;
+            parameters.Info[3] = has ? ((int)pyramid.Vectors[5].Z + 15) >> 4 : 0;
+            parameters.Base[0] = listBase;
+            for (int i = 0; i < 64; i++) (parameters.Cells[i], parameters.Wide[i]) = (cells[i], grown[i]);
+            var constants = _ctx.Frame.Constants.Write<ClassifyParams>(new ReadOnlySpan<ClassifyParams>(&parameters, 1), 256);
+            var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(ClassifyParams));
+            writes[0] = Buffer(0, DescriptorType.UniformBuffer, &uniform);
+            writes[1] = Buffer(1, DescriptorType.StorageBuffer, &hiz);
+            writes[2] = Buffer(2, DescriptorType.StorageBuffer, &listed);
+            cmd.PushDescriptors(_classifyProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
+            cmd.Dispatch((uint)((x1 - x0 + 7) / 8), (uint)((y1 - y0 + 7) / 8));
+        }
     }
 
     void Clear(CommandList cmd, GpuTexture target, float red)
@@ -406,6 +495,8 @@ sealed unsafe class LampShadowPass : IDisposable
         _ctx.Shaders.Dispose(_oneProgram);
         if (_referenceProgram is not null) _ctx.Shaders.Dispose(_referenceProgram.Value);
         _ctx.Shaders.Dispose(_sumProgram);
+        _ctx.Shaders.Dispose(_classifyProgram);
+        _lists?.Dispose();
         _penumbra.Dispose();
     }
 }

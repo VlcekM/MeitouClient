@@ -32,11 +32,12 @@ sealed unsafe class PenumbraFilter : IDisposable
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
         layout(set = 0, binding = 2) uniform sampler2D uIn;
         layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 6, std430) readonly buffer CellLists { uint lists[]; };   // LampShadowPass's lists of cells (options.z)
         layout(set = 0, binding = 5, std140) uniform Params
         {
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
             vec4 size;         // width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns)
-            vec4 options;      // x: the blue channel names what the channels hold; only taps with the pixel's own name are read
+            vec4 options;      // x: the blue channel names what the channels hold; only taps with the pixel's own name are read; z: the pixels are a list's cells (w: its slot, area.x: the lists' base)
             vec4 area;         // the pixels filtered: first x, y, one past the last x, y
             uvec4 cells[16];   // with options.y: the cells worked on, a bit each
         } p;
@@ -110,9 +111,20 @@ sealed unsafe class PenumbraFilter : IDisposable
 
         void main()
         {
-            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(p.area.xy);
-            if (!inside(px) || px.x >= int(p.area.z) || px.y >= int(p.area.w)) return;
-            if (p.options.y > 0.5 && !cellOn(px)) return;
+            ivec2 px;
+            if (p.options.z > 0.5)
+            {
+                // A workgroup per 8 x 8 pixels of a listed cell: y the cell's place in the list, x the block in the cell.
+                uint cell = lists[uint(p.area.x) + uint(p.options.w) * 2048u + gl_WorkGroupID.y];
+                px = ivec2(cell & 0xFFFFu, cell >> 16) * 64 + ivec2(int(gl_WorkGroupID.x) & 7, int(gl_WorkGroupID.x) >> 3) * 8 + ivec2(gl_LocalInvocationID.xy);
+                if (!inside(px)) return;
+            }
+            else
+            {
+                px = ivec2(gl_GlobalInvocationID.xy) + ivec2(p.area.xy);
+                if (!inside(px) || px.x >= int(p.area.z) || px.y >= int(p.area.w)) return;
+                if (p.options.y > 0.5 && !cellOn(px)) return;
+            }
             vec4 c = texelFetch(uIn, px, 0);
             ownName = c.b;
             bool rows = p.size.w < 0.5;
@@ -172,6 +184,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     readonly GpuProgram _program;
     readonly GpuComputePipeline _pipeline;
     readonly GpuSampler _sampler;
+    readonly DeviceBuffer _noLists;
 
     public PenumbraFilter(GpuContext ctx)
     {
@@ -179,8 +192,9 @@ sealed unsafe class PenumbraFilter : IDisposable
         _program = ctx.Shaders.Compute(Source, "penumbra filter",
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.CombinedImageSampler),
-            (4, DescriptorType.StorageImage), (5, DescriptorType.UniformBuffer),
+            (4, DescriptorType.StorageImage), (5, DescriptorType.UniformBuffer), (6, DescriptorType.StorageBuffer),
         ]);
+        _noLists = DeviceBuffer.Create(ctx, 16, BufferUse.Storage, "penumbra filter no lists");
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "penumbra filter"));
         _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
@@ -204,24 +218,26 @@ sealed unsafe class PenumbraFilter : IDisposable
     public const int RowMargin = (int)(Search + MaxRadius) + 2, ColumnMargin = (int)MaxRadius;
 
     /// <summary>
-    /// Both passes over <paramref name="area"/> alone (first x, y, one past the last x, y): the raw result must hold <see cref="RowMargin"/> + <see cref="ColumnMargin"/> pixels round it; the output holds only the area.
+    /// Both passes over the cells of a list (<see cref="LampShadowPass"/>: <paramref name="lists"/>, the list's <paramref name="slot"/>, the lists' <paramref name="listBase"/>, the
+    /// indirect dispatch's arguments at <paramref name="argsOffset"/>): the raw result must hold those cells; the output holds them, right where the cells round a pixel are listed too.
     /// </summary>
-    /// <param name="wide">The cells the rows' pass works on (64 words): the area's cells grown by one.</param>
-    /// <param name="cells">The cells the columns' pass works on.</param>
-    public void RunArea(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, Vector4 area, uint[] wide, uint[] cells)
+    public void RunList(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, GpuBuffer lists, ulong listsSize, ulong argsOffset, int slot, int listBase)
     {
-        var rows = new Vector4(MathF.Max(area.X - ColumnMargin, 0), MathF.Max(area.Y - ColumnMargin, 0), MathF.Min(area.Z + ColumnMargin, t.Width), MathF.Min(area.W + ColumnMargin, t.Height));
-        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, rows, wide);
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, default, lists, listsSize, argsOffset, slot, listBase);
         cmd.Barrier(BarrierBatch.Full);
-        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, false, area, cells);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, false, default, lists, listsSize, argsOffset, slot, listBase);
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area, uint[]? cells = null)
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area,
+        GpuBuffer lists = default, ulong listsSize = 0, ulong argsOffset = 0, int slot = -1, int listBase = 0)
     {
-        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, cells is null ? 0 : 1, 0, 0), Area = area };
-        if (cells is not null)
-            for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
+        bool listed = slot >= 0;
+        var parameters = new Params
+        {
+            Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, listed ? 1 : 0, Math.Max(slot, 0)),
+            Area = listed ? new Vector4(listBase, 0, 0, 0) : area,
+        };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         DescriptorImageInfo Sampled(GpuTexture texture) => new(_ctx.Device.SamplerAt(_sampler.Index), _ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
         var images = stackalloc DescriptorImageInfo[4];
@@ -230,17 +246,24 @@ sealed unsafe class PenumbraFilter : IDisposable
         images[2] = Sampled(input);
         images[3] = new DescriptorImageInfo(default, _ctx.Device.ViewAt(output.View().Index), ImageLayout.General);
         var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
-        var writes = stackalloc WriteDescriptorSet[5];
+        var cells = listed ? new DescriptorBufferInfo(_ctx.Device.BufferAt(lists.Index), 0, listsSize) : new DescriptorBufferInfo(_ctx.Device.BufferAt(_noLists.Handle.Index), 0, _noLists.Size);
+        var writes = stackalloc WriteDescriptorSet[6];
         for (int i = 0; i < 3; i++) writes[i] = Image((uint)i, DescriptorType.CombinedImageSampler, &images[i]);
         writes[3] = Image(4, DescriptorType.StorageImage, &images[3]);
         writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
+        writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 6, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &cells };
         cmd.BindPipeline(_pipeline);
-        cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 5), GpuBindPoint.Compute);
-        cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
+        cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
+        if (listed) cmd.DispatchIndirect(lists, argsOffset);
+        else cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
     }
 
     static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>
         new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PImageInfo = info };
 
-    public void Dispose() => _ctx.Shaders.Dispose(_program);
+    public void Dispose()
+    {
+        _ctx.Shaders.Dispose(_program);
+        _noLists.Dispose();
+    }
 }

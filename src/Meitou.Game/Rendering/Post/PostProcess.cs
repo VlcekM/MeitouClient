@@ -917,6 +917,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
+    /// The depth pyramid of this frame's scene (the next frame's foliage cull reads it; the lamps' shadows read it in this frame, so they build it once the opaque
+    /// scene is drawn: then the frame's end finds it built). False: no pyramid this frame (the occlusion cull off, a view window, no scene).
+    /// </summary>
+    bool BuildHiz()
+    {
+        if (!(OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)) return false;
+        Hiz ??= new HizPyramid(Gpu);
+        if (Hiz.BuiltThisFrame) return true;
+        var hizCmd = Gpu.BeginNative("hiz");
+        Hiz.Build(hizCmd, _sceneDepth.Texture, _planes, _width, _height, _eyeNow, _viewRotation, _fovNow, _aspectNow);
+        Gpu.EndNative(hizCmd);
+        Stamp("hiz");
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the scene and runs the chain into <see cref="Target"/>.
     /// </summary>
     public void End()
@@ -996,15 +1012,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         CloseSegment();
 
         // The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it).
-        if (OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)
-        {
-            Hiz ??= new HizPyramid(Gpu);
-            var hizCmd = Gpu.BeginNative("hiz");
-            Hiz.Build(hizCmd, _sceneDepth.Texture, _planes, _width, _height, _eyeNow, _viewRotation, _fovNow, _aspectNow);
-            Gpu.EndNative(hizCmd);
-            Stamp("hiz");
-        }
-        else Hiz?.Invalidate();
+        if (!BuildHiz()) Hiz?.Invalidate();
 
         if (_stamps is { } set)
         {

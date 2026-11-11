@@ -194,6 +194,86 @@ static class LampShadowShaders
     /// One lamp's rays over an area of the screen (<c>uRect</c>: first x, y, one past the last x, y): whether what moves blocks it (<c>uLost</c> r; a the penumbra's radius at the receiver in world units, -1 no receiver) and
     /// the light it gives per unit of albedo after the still world (<c>uTotal</c>). One lamp a pass: nothing limits how many a pixel takes, and the filter reads one lamp's flags.
     /// </summary>
+    /// <summary>
+    /// Which cells of 64 pixels a lamp's passes work on (<see cref="LampShadowPass"/>): a thread per cell of the area. A cell counts when the box of a mover's shadow covers it (the
+    /// CPU's cells) and, with this frame's depth pyramid, when what it shows between its nearest and farthest depth can lie within the lamp's reach and inside a mover's shadow (the cone
+    /// from the lamp round the mover's sphere, from the mover on): a sphere round that part of the cell's frustum against the lamp's sphere and the movers' cones, so never fewer cells
+    /// than hold a shadowed pixel. The cells that count and their neighbours (the filter reads round a pixel) are appended to the lamp's list; the count is the indirect dispatch's
+    /// second number (64 blocks of 8 x 8 pixels a cell along the first).
+    /// </summary>
+    public const string Classify = """
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0, std140) uniform Params
+        {
+            vec4 uLamp;         // xyz: the lamp from the pyramid's eye, w: its reach
+            vec4 uRight, uUp, uBack;   // the pyramid's view axes
+            vec4 uTanSize;      // tan x, tan y of the half view, the depth's width and height
+            ivec4 uCellRect;    // the area's cells: first x, y, one past the last x, y
+            ivec4 uInfo;        // x: the list's slot, y: the movers (-1: the cells alone decide), z: where the pyramid's level of 64-pixel blocks starts, w: that level's width (0: no pyramid)
+            ivec4 uBase;        // x: where the lists start in the buffer (after the dispatches' arguments)
+            uvec4 uCells[16];   // the cells a mover's shadow box covers
+            uvec4 uWide[16];    // those and their neighbours
+            vec4 uMovers[64];   // xyz from the pyramid's eye, w: the radius
+        };
+        layout(set = 0, binding = 1, std430) readonly buffer Hiz { vec2 hiz[]; };
+        layout(set = 0, binding = 2, std430) buffer CellLists { uint lists[]; };
+        #define CELL_WIDTH ((int(uTanSize.z) + 63) / 64)
+        #define CELL_HEIGHT ((int(uTanSize.w) + 63) / 64)
+        bool cellOn(ivec2 c) { int i = c.y * CELL_WIDTH + c.x; return ((uCells[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u; }
+        bool wideOn(ivec2 c) { int i = c.y * CELL_WIDTH + c.x; return ((uWide[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u; }
+
+        // Whether what the cell shows can be in a mover's shadow from the lamp.
+        bool reached(ivec2 c)
+        {
+            if (uInfo.w <= 0 || uInfo.y < 0) return true;
+            vec2 depths = hiz[uint(uInfo.z) + uint(c.y * uInfo.w + c.x)];   // the nearest and the farthest distance along the view axis (the sky: infinitely far)
+            float lampZ = -dot(uBack.xyz, uLamp.xyz);
+            float z0 = max(depths.x, lampZ - uLamp.w), z1 = min(depths.y, lampZ + uLamp.w);
+            if (!(z0 <= z1)) return false;
+            // A sphere round the cell's frustum between those depths.
+            vec2 size = uTanSize.zw;
+            vec2 a = (vec2(c) * 64.0 / size * 2.0 - 1.0) * uTanSize.xy, b = (min(vec2(c + 1) * 64.0, size) / size * 2.0 - 1.0) * uTanSize.xy;
+            vec2 m = 0.5 * (a + b);
+            vec3 axis = uRight.xyz * m.x + uUp.xyz * m.y - uBack.xyz;
+            vec3 centre = axis * (0.5 * (z0 + z1));
+            float rho = length(axis) * 0.5 * (z1 - z0) + z1 * 0.5 * length(b - a) + 1.0;
+            vec3 toCentre = centre - uLamp.xyz;
+            float dc = length(toCentre);
+            if (dc > uLamp.w + rho) return false;
+            for (int k = 0; k < uInfo.y; k++)
+            {
+                vec3 toMover = uMovers[k].xyz - uLamp.xyz;
+                float dm = length(toMover), r = uMovers[k].w;
+                if (dc + rho < dm - r) continue;            // wholly nearer the lamp than the mover
+                if (dc <= rho || dm <= r) return true;      // the lamp inside either sphere: every direction
+                float between = acos(clamp(dot(toCentre, toMover) / (dc * dm), -1.0, 1.0));
+                if (between <= asin(min(r / dm, 1.0)) + asin(min(rho / dc, 1.0))) return true;
+            }
+            return false;
+        }
+
+        void main()
+        {
+            uint slot = uint(uInfo.x);
+            // The dispatch's first and third numbers (the buffer's arguments were zeroed before the frame's first list).
+            if (gl_GlobalInvocationID.xy == uvec2(0u)) { lists[slot * 4u] = 64u; lists[slot * 4u + 2u] = 1u; }
+            ivec2 c = ivec2(gl_GlobalInvocationID.xy) + uCellRect.xy;
+            if (c.x >= uCellRect.z || c.y >= uCellRect.w || c.x >= CELL_WIDTH || c.y >= CELL_HEIGHT || !wideOn(c)) return;
+            bool keep = false;
+            for (int dy = -1; dy <= 1 && !keep; dy++)
+                for (int dx = -1; dx <= 1 && !keep; dx++)
+                {
+                    ivec2 n = c + ivec2(dx, dy);
+                    if (n.x < 0 || n.y < 0 || n.x >= CELL_WIDTH || n.y >= CELL_HEIGHT) continue;
+                    keep = cellOn(n) && reached(n);
+                }
+            if (!keep) return;
+            uint place = atomicAdd(lists[slot * 4u + 1u], 1u);
+            lists[uint(uBase.x) + slot * 2048u + place] = uint(c.x) | (uint(c.y) << 16);
+        }
+        """;
+
     public static readonly string TraceOne = One(false);
 
     /// <summary>
@@ -244,6 +324,7 @@ static class LampShadowShaders
         {{(light ? "layout(set = 0, binding = 5, rgba16f) uniform readonly image2D uFlag;\n        layout(set = 0, binding = 9, rgba16f) uniform image2D uSum;"
             : "layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;")}}
         layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
+        layout(set = 0, binding = 12, std430) readonly buffer CellLists { uint lists[]; };
         layout(set = 0, binding = 6) uniform sampler2D uLightCells;
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 8) uniform sampler2D uLightData;
@@ -266,8 +347,10 @@ static class LampShadowShaders
         {{BlockerRays}}
         void main()
         {
-            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
-            if (px.x >= int(uRect.z) || px.y >= int(uRect.w) || !cellOn(px)) return;
+            // A workgroup per 8 x 8 pixels of a cell of the lamp's list (Classify; uRect: x the list's slot, y the lists' base): y the cell's place in the list, x the block in the cell.
+            uint cell = lists[uint(uRect.y) + uint(uRect.x) * 2048u + gl_WorkGroupID.y];
+            ivec2 px = ivec2(cell & 0xFFFFu, cell >> 16) * 64 + ivec2(int(gl_WorkGroupID.x) & 7, int(gl_WorkGroupID.x) >> 3) * 8 + ivec2(gl_LocalInvocationID.xy);
+            if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
             {{(light ? "float flag = imageLoad(uFlag, px).r;\n            if (flag <= 0.0) return;" : "")}}
             vec4 lost = vec4(0.0, 0.0, 0.0, -1.0);
             vec3 total = vec3(0.0);

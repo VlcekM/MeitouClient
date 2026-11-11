@@ -34,7 +34,7 @@ public sealed unsafe partial class PostProcess
 
     Gi.LampShadowPass? _lampShadowTrace;
     /// <summary>The last frame's per-lamp shadow areas and the pixels of their rectangles summed (0 before the pass ran).</summary>
-    public (int Areas, long Pixels, long CellPixels) LampShadowAreas => _lampShadowTrace is { } t ? (t.AreasLast, t.AreaPixelsLast, t.CellPixelsLast) : default;
+    public (int Areas, long Pixels, long CellPixels, int Movers) LampShadowAreas => _lampShadowTrace is { } t ? (t.AreasLast, t.AreaPixelsLast, t.CellPixelsLast, t.MoversLast) : default;
     LampShadowApplyPass? _lampShadowApply;
     LampShadowFloorPass? _lampShadowFloor;
     Target2D? _lampLost, _lampTotal, _lampTotal1, _lampScratch, _lampFiltered;
@@ -71,7 +71,9 @@ public sealed unsafe partial class PostProcess
         bool perLamp = lamps.Tiles is not null;
         if (perLamp)
         {
-            if (!trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye)) return;
+            // This frame's depth pyramid tells each lamp's pass which cells of the screen can hold a mover's shadow.
+            var pyramid = BuildHiz() ? Hiz!.ThisFrame() : default;
+            if (!trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye, pyramid)) return;
         }
         else trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
 
