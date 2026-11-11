@@ -54,7 +54,8 @@ if (stale.length && process.env.ANTHROPIC_API_KEY) {
     max_tokens: 4000,
     system: 'MeitouClient is a C# reimplementation of the game Kenshi\'s engine. For each contributor below, name the areas of the project '
       + 'their commits worked on in at most 5 words in total, comma-separated where it lists several, e.g. "Navmesh, Metal" '
-      + 'or "Linux packaging"; name only the main areas, never a list of every feature. Merge overlapping areas into one ("Navmesh, Navmesh tool" is "Navmesh"). Plain and factual: no praise, no verbs, no "fixes".',
+      + 'or "Linux packaging"; name only the main areas, never a list of every feature. Merge overlapping areas into one ("Navmesh, Navmesh tool" is "Navmesh"). '
+      + 'Scattered bug fixes across unrelated features are one area, "General bugfixing". Plain and factual: no praise, no verbs, no other "fixes".',
     messages: [{ role: 'user', content: work.join('\n\n') }],
     output_config: { format: betaZodOutputFormat(Areas) },
   }).finalMessage();
