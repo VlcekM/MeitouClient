@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Crime;
@@ -82,6 +83,26 @@ public sealed partial class CrimeSystem
             }
         }
         return same >= 0 ? same : other;
+    }
+
+    /// <summary>
+    /// The stolen mark of goods of <paramref name="building"/> owned by <paramref name="faction"/> (an item of one of its containers, a loose item
+    /// of one of its slots): its resident squad's leader of that faction, else the faction alone. The original names a character (<b>Observed</b>,
+    /// docs/game/economy.md "Fencing, stealing and smuggling": the item's <c>ownedby</c> is the bar's barman); that it is the leader rather than
+    /// another resident is <b>Unknown</b>.
+    /// </summary>
+    public static StolenMark OwnerMark(World world, string building, int faction)
+    {
+        var table = world.Characters;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.HomeBuilding?.Key != building || squad.Faction != faction || !table.TryResolveNext(squad.Leader, out int s))
+                continue;
+
+            if (table.Cold(s) is { } leader && leader.Faction == faction) return StolenMark.Of(leader, squad.Leader);
+        }
+
+        return StolenMark.OfFaction(faction);
     }
 
     /// <summary>

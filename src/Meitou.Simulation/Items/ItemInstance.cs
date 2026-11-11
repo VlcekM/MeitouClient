@@ -229,7 +229,7 @@ public sealed class ItemInstance
     /// <summary>
     /// The faction the item was stolen from (-1: none), the faction of the item's "taken from" owner (docs/game/carry-loot.md 4.4): set when the
     /// player's looting is a theft (<see cref="Carrying.CarrySystem"/>). The item counts as stolen while its holder is of another faction
-    /// (<see cref="IsStolenFor"/>). Setting it alone leaves no owner character (a container's or the ground's mark); <see cref="Mark"/> sets both.
+    /// (<see cref="IsStolenFor"/>). Setting it alone leaves no owner character (a faction with no known owner); <see cref="Mark"/> sets both.
     /// </summary>
     public int StolenFrom { get => Mark.Faction; set => Mark = StolenMark.OfFaction(value); }
     /// <summary>
