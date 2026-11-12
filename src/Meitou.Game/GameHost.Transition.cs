@@ -330,12 +330,15 @@ sealed partial class GameHost
 
     /// <summary>
     /// The host's side of a new world: the camera focus sent again, the first tick (it publishes the snapshot), the draw list and the mouse state
-    /// dropped, the menus closed.
+    /// dropped, the menus closed. The caller has set the game clock: the first tick runs at its hours, not at the world's default, or what that
+    /// tick stamps (an escaped slave's time) lies in the future once the session's ticks set the clock's (#515).
     /// </summary>
     internal void SettleNewWorld()
     {
         _sentFocus = false;
         SendFocus();
+        Session.World.GameHours = Session.Clock.TotalHours;
+        Session.World.Daytime = Session.Clock.IsDaytime;
         Session.World.RunTick();
         IndexedFor = null;
         PreviousById.Clear();
