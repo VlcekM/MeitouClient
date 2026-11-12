@@ -135,10 +135,15 @@ static class FoliageShaders
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
-        // The wet world (Meitou): the film and the drops' glints on the leaves, after the game's wetness.
+        // The wet world (Meitou): the leaves keep their dry gloss (the game's wet gloss turned them white) and wear the drops' glints.
         f = Replace(f, @"glossLit\s*=\s*wetSurface\.a\s*;", """
+            float foliageDry = glossLit;
             glossLit = wetSurface.a;
-            if (uWetWorld > 0.5 && uFogDistance > 0.0) wetFoliage(uv, max(length(dFdx(uv)), length(dFdy(uv))) * 40.0, uWeatherWet.x, uWeatherWet.y, 0.5, n, glossLit);
+            if (uWetWorld > 0.5 && uFogDistance > 0.0)
+            {
+                glossLit = foliageDry;
+                wetFoliage(uv, max(length(dFdx(uv)), length(dFdy(uv))) * 40.0, uWeatherWet.x, uWeatherWet.y, n, glossLit);
+            }
             """, required: true);
         // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
         // no cut-out.)
@@ -263,9 +268,13 @@ static class FoliageShaders
                 albedo = wetSurface.rgb;
                 grassGloss = wetSurface.a * 0.6;
             }
-            // The wet world (Meitou, the "Rain drops and puddles" row): the film and the drops' glints on the blades.
+            // The wet world (Meitou, the "Rain drops and puddles" row): the blades keep their dry gloss (none: the game's wet gloss turned the field
+            // white) and wear the drops' glints.
             if (uWetWorld > 0.5 && uFogDistance > 0.0)
-                wetFoliage(vUv, max(length(dFdx(vUv)), length(dFdy(vUv))) * 40.0, uWeatherWet.x, uWeatherWet.y, 0.36, grassNormal, grassGloss);
+            {
+                grassGloss = 0.0;
+                wetFoliage(vUv, max(length(dFdx(vUv)), length(dFdy(vUv))) * 40.0, uWeatherWet.x, uWeatherWet.y, grassNormal, grassGloss);
+            }
             // Lit as the shared mesh shader lights a surface facing straight up (foliage.hlsl writes the normal (0, 1, 0)).
             vec3 l = normalize(uLightDir);
             float diff = max(l.y, 0.0);

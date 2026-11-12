@@ -275,15 +275,15 @@ static class AtmosphereShaders
             gloss = mix(gloss, 0.9, cover);
             albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
         }
-        // Wet foliage (leaves, blades): the water lies on it as a film (gloss up to film: 0.36 on grass, whose normal looks straight up at the sky and went white with more, 0.5 on leaves) and as drops, seen as glints: in cells of the leaf's own texture
-        // coordinates (40 across the texture, so they stay on the leaf as it sways) about a fifth hold a drop when all is wet, a small disc where the gloss
-        // is 0.95 and the normal leans a way of its own, so each catches the light from a different side. cells: how many of those cells a pixel covers
-        // (the fragment stage's derivatives); the drops go where it is over one.
-        void wetFoliage(vec2 uv, float cells, float wet, float rain, float film, inout vec3 n, inout float gloss)
+        // Wet foliage (leaves, blades) keeps its colour and shows the water only as drops, seen as glints. (The game's wetness raises the gloss of every
+        // blade, to 0.3 on grass and 0.5 on leaves, which under this lighting reflects the sky and turns a wet field milky white: with the wet world on
+        // the caller leaves the gloss as it was dry.) In cells of the leaf's own texture coordinates (40 across the texture, so they stay on the leaf as it
+        // sways) about a fifth hold a drop when all is wet: a small disc where the gloss is 0.95 and the normal leans a way of its own, so each catches the
+        // light from a different side. cells: how many of those cells a pixel covers (the fragment stage's derivatives); the drops go where it is over one.
+        void wetFoliage(vec2 uv, float cells, float wet, float rain, inout vec3 n, inout float gloss)
         {
             float amount = max(wet, rain);
             if (amount <= 0.05) return;
-            gloss = mix(gloss, max(gloss, film), amount);
             float shown = 1.0 - smoothstep(0.5, 1.2, cells);
             if (shown <= 0.0) return;
             vec2 g = uv * 40.0, c = floor(g);
