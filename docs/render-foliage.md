@@ -52,6 +52,8 @@ The traced sun builds pages near the eye into structures from the arena: [Traced
 
 **Traced grass memory** (`TracedGrass`, 512 MB): at the limit a patch nearer the eye takes the place of the farthest structure not asked for this frame (`MakeRoom`); refused instead, dense grass (Gut: 140 structures, 461 MB) left the patches walked up to without shadows until the ones left behind aged out (600 frames), **Observed** in play as flat chunks near the camera.
 
+**Far grass thinning** (the grass cull and `GrassVertex`; engine choice): a page farther than 1500 units draws 1500 / d of its blades (the first of its density order, one in eight at least) and each blade is drawn d / 1500 times as wide (by its own distance, eight times at most), so the cover stays. A blade is under a pixel wide there; with the user's settings (density x2, distance x16) Gut drew 3.97 M blades (**Verified**, paused pair on a free GPU at 2560x1440: 0.99 M after, grass 10.8 to 7.2 ms, frame GPU 23.6 to 18.5 ms, the far view unchanged to the eye). The traced grass structures keep every blade (they reach 2400 units at most).
+
 ## Visibility, depth and memory
 
 Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are distinct filters.

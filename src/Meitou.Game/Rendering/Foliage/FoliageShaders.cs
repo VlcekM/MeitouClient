@@ -171,6 +171,7 @@ static class FoliageShaders
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
             float s = aBlade.w;
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
+            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
@@ -283,6 +284,7 @@ static class FoliageShaders
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
             float s = aBlade.w;
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
+            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);

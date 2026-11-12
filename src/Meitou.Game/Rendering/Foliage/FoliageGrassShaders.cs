@@ -144,6 +144,9 @@ public static partial class FoliageGrassShaders
             precise float part = float(int(prefixes[at + 1u]) - first) * view.fraction;
             int shown = first + int(part);
             if (shown == 0) return;
+            // Far pages draw fewer blades, each as much wider (GrassVertex, the same rule by the blade's own distance), so the grass covers the ground as before: past
+            // 1500 units a blade is under a pixel wide, and millions of them cost their vertices, shimmered and smeared under the temporal upscalers. One in eight at least.
+            shown = max(int(float(shown) * clamp(1500.0 / max(d, 1.0), 0.125, 1.0)), 1);
             // A blade stands on the page; half its widest quad and its sway reach past it.
             float past = 0.5 * pt.size.y + abs(pt.sway) + 1.0;
             if (PageOccluded(vec3(slot.x0 - past, minY, slot.z0 - past), vec3(maxX + past, maxY, maxZ + past))) return;
