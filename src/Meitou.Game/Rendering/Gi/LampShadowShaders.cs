@@ -95,8 +95,7 @@ static class LampShadowShaders
         #define LAMP_RECEIVER 524544u
         // How far along the ray its blocker is (0: nothing between the surface and the lamp). Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
         float lampSkip = LAMP_NEAR_SKIP;   // what a ray leaves out before the lamp
-        // The receiver is a character (bit 19): the cut-out cards of characters (hair, frayed cloth) cast nothing on it. A ray per pixel draws each strand's shadow as a hard
-        // dark line on the skin, where the eye expects the soft shade of a mass of hair.
+        // The receiver is a character (bit 19): its rays leave as the traced sun's do on a body.
         bool lampBody = false;
         // The receiver's point (relative to the scene's origin), the plane it drew and a pixel's width there, for a character's rays.
         vec3 lampAt = vec3(0.0), lampSide = vec3(0.0, 1.0, 0.0);
@@ -137,9 +136,7 @@ static class LampShadowShaders
             while (rayQueryProceedEXT(shadow))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false);
-                Geometry hit = geometries[record];
-                if (lampBody && hit.kind == {{GeometryRecord.Character}}u && (hit.sunMap != 0u ? hit.sunCut : hit.alphaThreshold) > 0.0 && (hit.sunMap | hit.alphaMap) != 0u) continue;
-                if ((emitter == 0u || hit.emitter != emitter) && casterKept(record,
+                if ((emitter == 0u || geometries[record].emitter != emitter) && casterKept(record,
                     rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false), 2.0))
                     rayQueryConfirmIntersectionEXT(shadow);
             }
