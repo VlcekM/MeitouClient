@@ -72,6 +72,7 @@ public class PlayerTownImportTests
     {
         var town = builder.AddTown(name, instance, faction, isNest: false, zone: null, hand: handle);
         town.Record.Bools["public"] = publicTown;
+        town.Record.Bools["discovered"] = true;
         if (overrideRadius is { } radius) town.Record.Floats["override"] = radius;
         return town;
     }
@@ -121,12 +122,11 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
-    /// A normal template outpost may omit faction while retaining its saved properties.
+    /// The template id alone does not supply player ownership when both state and template lack a faction.
     /// </summary>
     [Fact]
-    public void A_template_town_without_a_faction_is_imported_with_its_saved_properties()
+    public void A_template_town_without_any_resolved_faction_is_not_imported()
     {
-        // Catches the original faction-key requirement that dropped ordinary player outposts.
         var builder = new SaveBuilder(7);
         var state = Town(builder, "Town state Ridge Camp", "outpost", Player, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9), false, 1800);
         state.Record.Strings.Remove("faction");
@@ -136,9 +136,7 @@ public class PlayerTownImportTests
 
         using var world = World();
         BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
-        var town = Assert.Single(world.Buildings.Towns);
-        Assert.Equal((1, "Ridge Camp", 7, false, 1800f, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9)),
-            (town.Number, town.Name, town.Owner, town.Public, town.Override, town.SaveHandle!.Value));
+        Assert.Empty(world.Buildings.Towns);
     }
 
     /// <summary>
@@ -159,14 +157,14 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
-    /// A foreign runtime owner wins over missing or player ownership in another state, in both import passes and when pruning saves.
+    /// A final discovered foreign runtime state replaces earlier missing or player ownership, including when pruning saves.
     /// </summary>
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void Mixed_town_ownership_never_imports_or_rewrites_a_foreign_town(bool includePopulation, bool explicitPlayer)
+    public void A_final_discovered_foreign_owner_is_not_imported_or_rewritten(bool includePopulation, bool explicitPlayer)
     {
         var builder = new SaveBuilder(7);
         var first = Town(builder, "Town state Ambiguous", "mixed", Player, new Hand(13, 4, 55, 2, 9));
@@ -186,6 +184,108 @@ public class PlayerTownImportTests
         Assert.Contains(first.Record, builder.Game.Quick.Records);
         Assert.Contains(foreign.Record, builder.Game.Quick.Records);
         Assert.Equal(explicitPlayer ? Player : null, first.Record.Strings.GetValueOrDefault("faction"));
+    }
+
+    /// <summary>
+    /// Each state's unresolved owner falls back to the actual TOWN faction reference, including during obsolete-outpost pruning.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("missing-faction")]
+    public void Missing_or_invalid_faction_uses_the_template_reference(string faction)
+    {
+        var template = SyntheticTown.Rec(PlayerTown.Template, FcsRecordType.Town, "Template");
+        template.References["faction"] = [SyntheticTown.Ref(Player)];
+        var db = SyntheticTown.Database(extra: [template]);
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Fallback", "camp", faction, new Hand(13, 4, 55, 2, 9));
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, db, Player, 7);
+
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal(7, town.Owner);
+        world.Buildings.RemoveTown(town);
+        BuildingSave.Write(builder.Game, world, Player, db: db);
+        Assert.Empty(list.Instances);
+        Assert.DoesNotContain(state.Record, builder.Game.Quick.Records);
+    }
+
+    /// <summary>
+    /// Runtime ownership follows traversal order, skipping nests and undiscovered states once ownership is already player-side.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, false, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, true, true, true)]
+    public void Runtime_owner_order_and_skip_rules(bool lastPlayer, bool discovered, bool nest, bool expectedPlayer)
+    {
+        var builder = new SaveBuilder(7);
+        var first = Town(builder, "Town state First", "camp", lastPlayer ? Foreign : Player, new Hand(13, 4, 55, 2, 9), false, 1800);
+        var last = Town(builder, "Town state Last", "camp", lastPlayer ? Player : Foreign, new Hand(13, 4, 55, 2, 9), true, 2800);
+        first.Record.Strings["name"] = "First";
+        last.Record.Strings["name"] = "Last";
+        last.Record.Bools["discovered"] = discovered;
+        last.Record.Bools["is nest"] = nest;
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [first]));
+        builder.Game.TownInstanceList = list;
+        var db = SyntheticTown.Database();
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, db, Player, 7);
+
+        if (!expectedPlayer)
+        {
+            Assert.Empty(world.Buildings.Towns);
+            BuildingSave.Write(builder.Game, world, Player, db: db);
+            Assert.Contains(last.Record, builder.Game.Quick.Records);
+            Assert.Single(list.Instances);
+            return;
+        }
+
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal(lastPlayer ? "Last" : "First", town.Name);
+        Assert.Equal(lastPlayer ? 2800 : 1800, town.Override);
+        Assert.Equal(lastPlayer, town.Public);
+        world.Buildings.RemoveTown(town);
+        BuildingSave.Write(builder.Game, world, Player, db: db);
+        Assert.Empty(list.Instances);
+        Assert.DoesNotContain(first.Record, builder.Game.Quick.Records);
+        if (nest) Assert.Contains(last.Record, builder.Game.Quick.Records);
+        else Assert.DoesNotContain(last.Record, builder.Game.Quick.Records);
+    }
+
+    /// <summary>
+    /// The sample's sparse attached state and separate full runtime state restore both outposts and fractional radii.
+    /// </summary>
+    [Fact]
+    public void Sparse_linked_and_full_runtime_states_restore_the_sample_outposts()
+    {
+        var builder = new SaveBuilder(7);
+        var entries = new List<(string Id, Vector3 Position, SaveTown[] States)>();
+        foreach (var (name, radius, number) in new[] { ("Drycoom", 2652.530029296875f, 1), ("Goonrock", 2186.80908203125f, 2) })
+        {
+            var hand = new Hand(13, number, 55 + number, 2, 9);
+            var sparse = Town(builder, "0", name, "", hand);
+            sparse.Record.Strings.Remove("faction");
+            sparse.Record.Bools.Remove("public");
+            sparse.Record.Ints.Remove("plevel");
+            var full = Town(builder, "Town state " + name, name, Player, hand, true, radius);
+            full.Record.Strings["name"] = name;
+            entries.Add((name, new Vector3(number * 10000, 300, 0), [sparse]));
+        }
+        var (_, list) = SaveWithInstances(entries.ToArray());
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, SyntheticTown.Database(), Player, 7);
+
+        Assert.Equal(["Drycoom", "Goonrock"], world.Buildings.Towns.Select(town => town.Name));
+        Assert.Equal([2652.530029296875f, 2186.80908203125f], world.Buildings.Towns.Select(town => town.Override));
+        Assert.All(world.Buildings.Towns, town => Assert.Equal(7, town.Owner));
     }
 
     /// <summary>
