@@ -378,16 +378,14 @@ static class CharacterShaders
             return vec3(lambert) + extra * hue * hue * share;
         }
 
-        // The lamps' diffuse term (LampShaders, LAMP_SKIN), from what main sets before lighting: plain N.L, and the light through thin parts. Not the sun's band past the
-        // terminator: a room has several lamps round a body and each one's band, as wide as a thin body's curvature makes it, filled every side turned from it with the
-        // skin's hue (a lit armpit, no shape), unshadowed by the traced lamp shadows, which take back N.L alone.
+        // The lamps' diffuse term (LampShaders, LAMP_SKIN): the same skin as the sun's, from what main sets before lighting (no skin: plain N.L).
         vec3 skinGeometric = vec3(0.0, 1.0, 0.0), skinAlbedo = vec3(1.0);
         float skinCurvature = 0.0, skinShare = 0.0, skinThickness = 2.0;
         {{CharacterSurface.Functions}}
         {{StudioShaders.Functions}}
         vec3 lampSkinDiffuse(vec3 n, vec3 l)
         {
-            vec3 d = vec3(clamp(dot(n, l), 0.0, 1.0));
+            vec3 d = skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo);
             return surfaceOn ? d + skinThrough(l) : d;
         }
 
