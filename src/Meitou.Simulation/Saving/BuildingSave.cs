@@ -267,23 +267,27 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Applies attached states, then full runtime states in save order, returning their properties only if the final owner is the player.
+    /// A town state as the original applies it: the state, whether its owner was the player at that point and the TOWN template's
+    /// <c>is public</c> (what a foreign owner's application leaves <c>public</c> as).
     /// </summary>
-    static List<FcsRecord>? PlayerTownStates(SaveGame save, FcsInstance? instance, string instanceId, string? template,
+    readonly record struct AppliedState(FcsRecord Record, bool Player, bool TemplatePublic);
+
+    /// <summary>
+    /// Applies the attached state, then the full runtime states in save order, returning them (with the owner at each) only if the final owner is
+    /// the player. Of the attached states only the LAST listed one applies (<b>Verified</b>, <c>FUN_1400f40e0</c>: the instance keeps its states in
+    /// a map by record type).
+    /// </summary>
+    static List<AppliedState>? PlayerTownStates(SaveGame save, FcsInstance? instance, string instanceId, string? template,
         Dictionary<string, FcsRecord> byId, GameDatabase? db, string playerFactionId)
     {
-        var applied = new List<FcsRecord>();
+        var applied = new List<AppliedState>();
         string? owner = TownFaction(null, template, db, playerFactionId);
-        if (instance is not null)
+        bool templatePublic = template is not null && db?.Find(template) is { Type: FcsRecordType.Town } record && record.GetBool("is public");
+        var attached = instance?.States.Select(id => byId.GetValueOrDefault(id)).LastOrDefault(state => state is { RecordType: FcsRecordType.GamestateTown });
+        if (attached is not null && !attached.Bools.GetValueOrDefault("is nest"))
         {
-            foreach (string id in instance.States)
-            {
-                if (byId.GetValueOrDefault(id) is not { RecordType: FcsRecordType.GamestateTown } state ||
-                    state.Bools.GetValueOrDefault("is nest")) continue;
-
-                owner = TownFaction(state, template, db, playerFactionId);
-                applied.Add(state);
-            }
+            owner = TownFaction(attached, template, db, playerFactionId);
+            applied.Add(new AppliedState(attached, owner == playerFactionId, templatePublic));
         }
 
         foreach (var town in save.Towns)
@@ -291,7 +295,7 @@ public static class BuildingSave
             if (town.Instance != instanceId || town.IsNest || owner == playerFactionId && !town.Discovered) continue;
 
             owner = TownFaction(town.Record, template, db, playerFactionId);
-            applied.Add(town.Record);
+            applied.Add(new AppliedState(town.Record, owner == playerFactionId, templatePublic));
         }
 
         return owner == playerFactionId ? applied : null;
@@ -354,18 +358,21 @@ public static class BuildingSave
     /// <summary>
     /// Combines linked town properties in save order, restoring runtime names and keeping the first nonnull handle.
     /// </summary>
-    static void ApplyTownStates(PlayerTown town, string instanceId, Vector3 position, IEnumerable<FcsRecord> states)
+    static void ApplyTownStates(PlayerTown town, string instanceId, Vector3 position, IEnumerable<AppliedState> states)
     {
         town.SaveInstance = instanceId;
         town.Position = position;
-        foreach (var state in states)
+        foreach (var (state, player, templatePublic) in states)
         {
             string name = TownName(state);
             if (name.Length > 0 && (state.Strings.GetValueOrDefault("name", "").Length > 0 || town.Name == PlayerTown.DefaultName))
                 town.Name = name;
-            if (state.Bools.ContainsKey("public")) town.Public = state.Bools["public"];
-            if (state.Floats.TryGetValue("override", out float radius)) town.Override = radius;
-            else if (state.Ints.TryGetValue("override", out int oldRadius)) town.Override = oldRadius;   // earlier Meitou builds wrote an integer
+
+            // FUN_1403715c0 (Verified): `public` is assigned by every application (a missing key is false) and for a foreign owner replaced by the
+            // template's `is public`; `override` is read only for the player's own state and only when present.
+            town.Public = player ? state.Bools.GetValueOrDefault("public") : templatePublic;
+            if (player && state.Floats.TryGetValue("override", out float radius)) town.Override = radius;
+            else if (player && state.Ints.TryGetValue("override", out int oldRadius)) town.Override = oldRadius;   // earlier Meitou builds wrote an integer
 
             var hand = Hand.Read(state, "hand");
             if (!hand.IsNull && town.SaveHandle is null) town.SaveHandle = hand;

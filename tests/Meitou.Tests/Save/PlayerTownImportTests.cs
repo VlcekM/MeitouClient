@@ -434,6 +434,49 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// Of two attached states only the last applies (the instance keeps its states by record type): the radius is the second state's default, not
+    /// the first one's 4000.
+    /// </summary>
+    [Fact]
+    public void Only_the_last_attached_town_state_applies()
+    {
+        var builder = new SaveBuilder(7);
+        var first = Town(builder, "Town state First", "camp", Player, new Hand(13, 4, 55, 2, 9), true, 4000);
+        var second = Town(builder, "Town state Second", "camp", Player, new Hand(13, 4, 56, 2, 9), true);
+        first.Record.Bools["discovered"] = false;
+        second.Record.Bools["discovered"] = false;
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [first, second]));
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+
+        Assert.Equal(0, Assert.Single(world.Buildings.Towns).Override);
+    }
+
+    /// <summary>
+    /// `override` is read only while the state's owner is the player and `public` is taken from every application (a missing key is false), so a
+    /// foreign state's radius and public flag do not survive the player's later state.
+    /// </summary>
+    [Fact]
+    public void A_foreign_states_override_and_public_do_not_survive_the_players_later_state()
+    {
+        var builder = new SaveBuilder(7);
+        var foreign = Town(builder, "Town state Foreign", "camp", Foreign, new Hand(13, 4, 55, 2, 9), true, 4000);
+        var mine = Town(builder, "Town state Mine", "camp", Player, new Hand(13, 4, 55, 2, 9));
+        mine.Record.Bools.Remove("public");
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), []));
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, SyntheticTown.Database(), Player, 7);
+
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal((0f, false), (town.Override, town.Public));
+        Assert.NotNull(foreign);
+    }
+
+    /// <summary>
     /// A player-faction town state that was never imported as an outpost survives a save.
     /// </summary>
     [Fact]
