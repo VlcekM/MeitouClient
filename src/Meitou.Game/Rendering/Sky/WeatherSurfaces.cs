@@ -52,6 +52,20 @@ internal sealed class WeatherSurfaces : IDisposable
     public bool WetWorld = true;
 
     /// <summary>
+    /// The last feet that stepped in a puddle (<c>uWetSplash</c>): x, z, <see cref="Seconds"/> at the step, the strength (0: none). The terrain draws
+    /// their rings for <see cref="SplashSeconds"/>; an older one is cleared, so the wrapping clock cannot play it again.
+    /// </summary>
+    readonly Vector4[] _splashes = new Vector4[8];
+    int _nextSplash;
+    public const float SplashSeconds = 3;
+
+    public void AddSplash(Vector2 at, float strength)
+    {
+        _splashes[_nextSplash] = new Vector4(at.X, at.Y, Seconds, strength);
+        _nextSplash = (_nextSplash + 1) % _splashes.Length;
+    }
+
+    /// <summary>
     /// The shader's <c>rainAmount</c>.
     /// </summary>
     public static float RainAmount(float rain) => Math.Clamp(rain / 50f, 0f, 1f);
@@ -65,6 +79,7 @@ internal sealed class WeatherSurfaces : IDisposable
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, Meitou.Data.World.WorldWater.Height));
         g.PublishUniform("uWetClock", () => Seconds);
         g.PublishUniform("uWetWorld", () => WetWorld ? 1f : 0f);
+        g.PublishUniformArray("uWetSplash", _splashes, () => _splashes.Length);
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }
@@ -81,6 +96,8 @@ internal sealed class WeatherSurfaces : IDisposable
     public void Apply(Data.World.WeatherState state)
     {
         Wetness = WetnessOverride ?? state.Wetness;
+        for (int i = 0; i < _splashes.Length; i++)
+            if (_splashes[i].W > 0 && (Seconds - _splashes[i].Z + 4096) % 4096 > SplashSeconds) _splashes[i].W = 0;
         Rain = RainOverride ?? state.Rain;
         var d = state.DustAmount;
         if (DustOverride is { } o) d = new Vector3(o.X, float.IsNaN(o.Y) ? d.Y : o.Y, float.IsNaN(o.Z) ? d.Z : o.Z);

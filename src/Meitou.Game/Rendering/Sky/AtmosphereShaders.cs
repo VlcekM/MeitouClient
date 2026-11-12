@@ -140,6 +140,7 @@ static class AtmosphereShaders
         // ---- the wet world (Meitou, docs/formats/weather.md "Wet world"; uWetWorld 1 with the row on) ----
         uniform float uWetClock;   // game seconds wrapping at 4096 (WeatherSurfaces.Seconds)
         uniform float uWetWorld;
+        uniform vec4 uWetSplash[8];   // the last feet in the puddles: x, z, the wet clock at the step, the strength (0: none)
         // Three numbers in 0..1 from a cell's whole coordinates (an integer hash: one of floats repeated across a large surface).
         vec3 wetHash(vec3 cell, uint salt)
         {
@@ -285,10 +286,30 @@ static class AtmosphereShaders
             }
             return slope;
         }
+        // The slope (x, z) a foot's step gives a puddle's surface at xz: from where it stepped (uWetSplash) a short train of ripples runs out at half a
+        // metre a second, flattening over three seconds and with the distance.
+        vec2 wetSteps(vec2 xz)
+        {
+            vec2 slope = vec2(0.0);
+            for (int i = 0; i < 8; i++)
+            {
+                vec4 s = uWetSplash[i];
+                if (s.w <= 0.0) continue;
+                float age = mod(uWetClock - s.z + 4096.0, 4096.0);
+                if (age > 3.0) continue;
+                vec2 d = xz - s.xy;
+                float dist = length(d), front = 0.6 + age * 5.0, w = (dist - front) / 0.45;
+                if (abs(w) > 4.0) continue;
+                float left = 1.0 - age / 3.0;
+                slope += d / max(dist, 1e-3) * sin(w * 3.0) * exp(-0.35 * w * w) * s.w * left * left / (1.0 + 0.15 * front);
+            }
+            return slope;
+        }
         // Puddles on wet ground (the terrain). Water gathers where level ground lies low: "low" is two noises of the place (hollows 8 m and 1.5 m across, a
         // 30 cm one for the outline), and the water's level rises with the weather's wetness (none under 0.2; at 1 about a third of level ground, less on
         // ground that takes the rain in, absorbance). None on slopes over about 10 degrees. In a puddle the ground shows darker through the water, the
-        // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains; round it a rim of soaked ground. world: the fragment;
+        // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains and by the feet that step in it (wetSteps; WetPuddles is this
+        // rule on the CPU, which finds those feet); round it a rim of soaked ground. world: the fragment;
         // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm).
         void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, inout vec3 n, inout vec4 surface)
         {
@@ -304,8 +325,13 @@ static class AtmosphereShaders
             surface.a = mix(mix(surface.a, max(surface.a, 0.6), rim), 0.95, water);
             if (water <= 0.0) return;
             vec3 up = vec3(0.0, 1.0, 0.0);
-            float rings = rain * (1.0 - smoothstep(0.6, 1.5, pixel));
-            if (rings > 0.0) { vec2 s = wetRings(world.xz) * 0.35 * rings; up = normalize(vec3(-s.x, 1.0, -s.y)); }
+            float fine = 1.0 - smoothstep(0.6, 1.5, pixel);
+            if (fine > 0.0)
+            {
+                vec2 s = wetSteps(world.xz) * 0.5 * fine;
+                if (rain > 0.0) s += wetRings(world.xz) * 0.35 * rain * fine;
+                up = normalize(vec3(-s.x, 1.0, -s.y));
+            }
             n = normalize(mix(n, up, water));
         }
         // objects.hlsl / triplanar.hlsl: how far a surface is covered by dust (0..1). n: its normal, gloss: the diffuse alpha before `specular mult`, amount: dustAmount.x (.y inside).

@@ -135,6 +135,7 @@ sealed partial class GameHost
     {
         var point = ev.Bone.Length > 0 && characters.BonePosition(key, ev.Bone) is { } bone && bone.Y != 0 ? bone : position;
         if (!float.IsFinite(point.X) || !float.IsFinite(point.Y) || !float.IsFinite(point.Z)) return;
+        if (ev.Bone.Length > 0 && PuddleSplash(particles, point, speed)) return;
         var surface = point with { Y = WorldWater.Height };
         if (!InSplashFrustum(surface)) return;
         float depth = WorldWater.Height - point.Y;
@@ -147,6 +148,26 @@ sealed partial class GameHost
         Gpu.Water?.Ripples?.AddSplash(new Vector2(point.X, point.Z), strength);
         // Water too shallow to reach the ankle bone: the game shows nothing; the biome's shallowest splash.
         if (fired is null && WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, surface, Quaternion.Identity, SplashEmitSeconds);
+    }
+
+    /// <summary>
+    /// A foot's ground event in one of the wet world's puddles (Meitou, the "Rain drops and puddles" row; <see cref="WetPuddles"/>): the biome's
+    /// shallowest splash at the ground and rings in the puddle (<see cref="WeatherSurfaces.AddSplash"/>). False when the foot is in none.
+    /// </summary>
+    bool PuddleSplash(ParticleRenderer particles, Vector3 point, float speed)
+    {
+        if (Gpu.Surfaces is not { WetWorld: true } wet || wet.Wetness <= 0.2f || point.Y <= WorldWater.Height + 2) return false;
+        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
+        if (!float.IsFinite(ground) || MathF.Abs(point.Y - ground) > 4) return false;   // on a floor, not on the ground
+        const float step = 2;
+        float dx = (Gpu.Terrain.HeightAt(point.X + step, point.Z) - Gpu.Terrain.HeightAt(point.X - step, point.Z)) / (2 * step);
+        float dz = (Gpu.Terrain.HeightAt(point.X, point.Z + step) - Gpu.Terrain.HeightAt(point.X, point.Z - step)) / (2 * step);
+        if (!float.IsFinite(dx) || !float.IsFinite(dz) || !WetPuddles.Under(point.X, point.Z, wet.Wetness, 1 / MathF.Sqrt(1 + dx * dx + dz * dz))) return false;
+        var at = new Vector3(point.X, ground, point.Z);
+        if (!InSplashFrustum(at)) return true;
+        wet.AddSplash(new Vector2(point.X, point.Z), Math.Clamp(speed / 50, 0.5f, 1));
+        if (WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, at, Quaternion.Identity, SplashEmitSeconds);
+        return true;
     }
 
     /// <summary>The biome's <c>water effects</c> entry with the greatest depth at most <paramref name="depth"/>, then the greatest speed at most <paramref name="speed"/>; null for none.</summary>
