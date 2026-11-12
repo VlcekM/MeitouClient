@@ -275,6 +275,24 @@ static class AtmosphereShaders
             gloss = mix(gloss, 0.9, cover);
             albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
         }
+        // Wet foliage (leaves, blades): the water lies on it as a film (gloss up to film: 0.36 on grass, whose normal looks straight up at the sky and went white with more, 0.5 on leaves) and as drops, seen as glints: in cells of the leaf's own texture
+        // coordinates (40 across the texture, so they stay on the leaf as it sways) about a fifth hold a drop when all is wet, a small disc where the gloss
+        // is 0.95 and the normal leans a way of its own, so each catches the light from a different side. cells: how many of those cells a pixel covers
+        // (the fragment stage's derivatives); the drops go where it is over one.
+        void wetFoliage(vec2 uv, float cells, float wet, float rain, float film, inout vec3 n, inout float gloss)
+        {
+            float amount = max(wet, rain);
+            if (amount <= 0.05) return;
+            gloss = mix(gloss, max(gloss, film), amount);
+            float shown = 1.0 - smoothstep(0.5, 1.2, cells);
+            if (shown <= 0.0) return;
+            vec2 g = uv * 40.0, c = floor(g);
+            vec3 h = wetHash(vec3(c.x, 5.0, c.y), 5u);
+            if (h.z > 0.22 * amount) return;
+            float r = 0.12 + 0.16 * h.x, drop = smoothstep(r, r * 0.6, length(g - c - 0.3 - 0.4 * h.xy)) * shown;
+            n = normalize(n + (wetHash(vec3(c.x, 6.0, c.y), 6u) - 0.5) * 0.9 * drop);
+            gloss = mix(gloss, 0.95, drop);
+        }
         // The slope (x, z) the rain's impacts give a puddle's surface at xz: in each 16 cm cell a drop lands 1 to 1.75 times a second, somewhere new each
         // time, and its ring widens to 11 cm as it dies down. The slope is the ring's profile differentiated (no height is sampled twice).
         vec2 wetRings(vec2 xz)
@@ -312,18 +330,19 @@ static class AtmosphereShaders
             }
             return slope;
         }
-        // Puddles on wet ground (the terrain). Water gathers where level ground lies low: "low" is two noises of the place (hollows 8 m and 1.5 m across, a
-        // 30 cm one for the outline), and the water's level rises with the weather's wetness (none under 0.2; at 1 about a third of level ground, less on
+        // Puddles on wet ground (the terrain). Water gathers where level ground lies low: "low" is two noises of the place (8 m and 1.5 m across, a 30 cm
+        // one for the outline) less hollow, how far the ground really lies under what is round it (TerrainShaders wetHollow, and the relief's troughs
+        // where the ground is displaced): a dip fills first and deepest, a rise stays dry. The water's level rises with the weather's wetness (none under 0.2; at 1 about a third of level ground, less on
         // ground that takes the rain in, absorbance). None on slopes over about 10 degrees. In a puddle the ground shows darker through the water, the
         // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains and by the feet that step in it (wetSteps; WetPuddles is this
         // rule on the CPU, which finds those feet); round it a rim of soaked ground. world: the fragment;
         // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm).
-        void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, inout vec3 n, inout vec4 surface)
+        void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, float hollow, inout vec3 n, inout vec4 surface)
         {
             float even = smoothstep(0.955, 0.99, level.y);
             if (even <= 0.0 || wet <= 0.2) return;
             vec3 at = vec3(world.x, 0.0, world.z);
-            float low = 0.6 * wetNoise(at / 80.0) + 0.4 * wetNoise(at / 15.0) + 0.1 * (wetNoise(at / 3.0) - 0.5) * (1.0 - smoothstep(1.5, 3.0, pixel));
+            float low = 0.6 * wetNoise(at / 80.0) + 0.4 * wetNoise(at / 15.0) + 0.1 * (wetNoise(at / 3.0) - 0.5) * (1.0 - smoothstep(1.5, 3.0, pixel)) - hollow;
             float fill = smoothstep(0.2, 1.0, wet) * mix(0.47, 0.3, clamp(absorbance, 0.0, 1.0)) - (1.0 - even) * 0.3;
             float over = fill - low;   // how far the water stands over the ground here (in the noise's units)
             float rim = smoothstep(-0.07, 0.0, over), water = smoothstep(0.0, 0.025, over);

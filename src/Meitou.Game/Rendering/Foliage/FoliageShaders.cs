@@ -135,6 +135,11 @@ static class FoliageShaders
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
+        // The wet world (Meitou): the film and the drops' glints on the leaves, after the game's wetness.
+        f = Replace(f, @"glossLit\s*=\s*wetSurface\.a\s*;", """
+            glossLit = wetSurface.a;
+            if (uWetWorld > 0.5 && uFogDistance > 0.0) wetFoliage(uv, max(length(dFdx(uv)), length(dFdy(uv))) * 40.0, uWeatherWet.x, uWeatherWet.y, 0.5, n, glossLit);
+            """, required: true);
         // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
         // no cut-out.)
         f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;",
@@ -250,6 +255,7 @@ static class FoliageShaders
             }
             // The weather's wetness (foliage.hlsl: gloss 0, then makeWet with the absorbance 0.9; the gloss is written × 0.6).
             float grassGloss = 0.0;
+            vec3 grassNormal = vec3(0.0, 1.0, 0.0);
             if (uWeatherWet.x > 0.0)
             {
                 vec4 wetSurface = vec4(albedo, 0.0);
@@ -257,6 +263,9 @@ static class FoliageShaders
                 albedo = wetSurface.rgb;
                 grassGloss = wetSurface.a * 0.6;
             }
+            // The wet world (Meitou, the "Rain drops and puddles" row): the film and the drops' glints on the blades.
+            if (uWetWorld > 0.5 && uFogDistance > 0.0)
+                wetFoliage(vUv, max(length(dFdx(vUv)), length(dFdy(vUv))) * 40.0, uWeatherWet.x, uWeatherWet.y, 0.36, grassNormal, grassGloss);
             // Lit as the shared mesh shader lights a surface facing straight up (foliage.hlsl writes the normal (0, 1, 0)).
             vec3 l = normalize(uLightDir);
             float diff = max(l.y, 0.0);
@@ -276,7 +285,7 @@ static class FoliageShaders
                 atmoSelfShadow = mix(1.0, exp(-0.55 * depth / max(l.y, 0.4)), far);
                 albedo *= mix(1.0, 1.0 - 0.25 * depth, far);
             }
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), grassGloss, vWorld);
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, grassNormal, normalize(uEye - vWorld), grassGloss, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);
         }

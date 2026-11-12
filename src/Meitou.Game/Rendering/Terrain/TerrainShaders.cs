@@ -68,6 +68,20 @@ static partial class TerrainShaders
             float hz = terrainHeight(p - vec2(0.0, e)) - terrainHeight(p + vec2(0.0, e));
             return normalize(vec3(hx, 2.0 * e, hz));
         }
+        // How far the ground at p lies under the ground round it, for the wet world's puddles (AtmosphereShaders wetGround; WetPuddles.Hollow is this on
+        // the CPU): the mean height of six points 1.2 m away and of six 4 m away, less the height here; 12 cm under the near ring or 40 cm under the far
+        // one count as full (0.25 each), a rise as much the other way. An even slope gives 0.
+        float wetHollow(vec2 p)
+        {
+            float h = terrainHeight(p), near = 0.0, far = 0.0;
+            for (int i = 0; i < 6; i++)
+            {
+                vec2 d = vec2(cos(float(i) * 1.0471976), sin(float(i) * 1.0471976));
+                near += terrainHeight(p + d * 12.0);
+                far += terrainHeight(p + d * 40.0);
+            }
+            return 0.25 * clamp((near / 6.0 - h) / 1.2, -1.0, 1.0) + 0.25 * clamp((far / 6.0 - h) / 4.0, -1.0, 1.0);
+        }
         """;
 
     /// <summary>
@@ -1585,7 +1599,8 @@ static partial class TerrainShaders
             makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - vWorld.y, 2.0);
             // The wet world's puddles (Meitou, the "Rain drops and puddles" row), above the water line only.
             if (uWetWorld > 0.5 && wetAmount > 0.2 && vWorld.y > uWaterHeight + 2.0)
-                wetGround(vWorld, n, absorbance, wetAmount, uWeatherWet.y, max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), shadingNormal, albedo);
+                wetGround(vWorld, n, absorbance, wetAmount, uWeatherWet.y, max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))),
+                    wetHollow(vWorld.xz) + clamp((terrainHeight(vWorld.xz) - vWorld.y) / 1.5, -0.3, 0.3), shadingNormal, albedo);
 
             atmoSelfShadow = reliefShade;
             atmoSurfaceNormal = n;

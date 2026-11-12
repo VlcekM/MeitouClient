@@ -226,7 +226,7 @@ sealed class CharacterAudio(GameHost host)
         _definitionWeapons = weapons;
         _definitionLoops = [.. library.Definitions.Select(d => d.Loop)];
         _workEvents.Clear();
-        Sounds = new CharacterSounds(sound.Player, _groundSurfaces) { Floor = FloorSurface };
+        Sounds = new CharacterSounds(sound.Player, _groundSurfaces) { Floor = FloorSurface, Puddle = host.InPuddle };
     }
 
     /// <summary>

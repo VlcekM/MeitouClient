@@ -156,18 +156,28 @@ sealed partial class GameHost
     /// </summary>
     bool PuddleSplash(ParticleRenderer particles, Vector3 point, float speed)
     {
-        if (Gpu.Surfaces is not { WetWorld: true } wet || wet.Wetness <= 0.2f || point.Y <= WorldWater.Height + 2) return false;
-        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
-        if (!float.IsFinite(ground) || MathF.Abs(point.Y - ground) > 4) return false;   // on a floor, not on the ground
-        const float step = 2;
-        float dx = (Gpu.Terrain.HeightAt(point.X + step, point.Z) - Gpu.Terrain.HeightAt(point.X - step, point.Z)) / (2 * step);
-        float dz = (Gpu.Terrain.HeightAt(point.X, point.Z + step) - Gpu.Terrain.HeightAt(point.X, point.Z - step)) / (2 * step);
-        if (!float.IsFinite(dx) || !float.IsFinite(dz) || !WetPuddles.Under(point.X, point.Z, wet.Wetness, 1 / MathF.Sqrt(1 + dx * dx + dz * dz))) return false;
-        var at = new Vector3(point.X, ground, point.Z);
+        if (!InPuddle(point) || Gpu.Surfaces is not { } wet) return false;
+        var at = new Vector3(point.X, Gpu.Terrain.HeightAt(point.X, point.Z), point.Z);
         if (!InSplashFrustum(at)) return true;
         wet.AddSplash(new Vector2(point.X, point.Z), Math.Clamp(speed / 50, 0.5f, 1));
         if (WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, at, Quaternion.Identity, SplashEmitSeconds);
         return true;
+    }
+
+    /// <summary>
+    /// A point on the ground (a foot, a character's position) lies in one of the wet world's puddles: the row is on, the ground is wet, above the water
+    /// line, the point within 4 units of the terrain (not on a floor), and <see cref="WetPuddles.Under"/> finds water there. The footsteps' sound asks too.
+    /// </summary>
+    internal bool InPuddle(Vector3 point)
+    {
+        if (Gpu?.Surfaces is not { WetWorld: true } wet || wet.Wetness <= 0.2f || point.Y <= WorldWater.Height + 2) return false;
+        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
+        if (!float.IsFinite(ground) || MathF.Abs(point.Y - ground) > 4) return false;
+        const float step = 2;
+        float dx = (Gpu.Terrain.HeightAt(point.X + step, point.Z) - Gpu.Terrain.HeightAt(point.X - step, point.Z)) / (2 * step);
+        float dz = (Gpu.Terrain.HeightAt(point.X, point.Z + step) - Gpu.Terrain.HeightAt(point.X, point.Z - step)) / (2 * step);
+        return float.IsFinite(dx) && float.IsFinite(dz)
+            && WetPuddles.Under(point.X, point.Z, wet.Wetness, 1 / MathF.Sqrt(1 + dx * dx + dz * dz), WetPuddles.Hollow(Gpu.Terrain.HeightAt, point.X, point.Z));
     }
 
     /// <summary>The biome's <c>water effects</c> entry with the greatest depth at most <paramref name="depth"/>, then the greatest speed at most <paramref name="speed"/>; null for none.</summary>

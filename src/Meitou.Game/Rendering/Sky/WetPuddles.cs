@@ -13,13 +13,30 @@ static class WetPuddles
     const float Absorbance = 0.6f;
 
     /// <summary>
-    /// Water stands at (x, z): <paramref name="wetness"/> the weather's, <paramref name="levelY"/> the y of the ground's normal there.
+    /// The shader's <c>wetHollow</c> (TerrainShaders): how far the ground at (x, z) lies under the ground round it, from <paramref name="height"/>.
     /// </summary>
-    public static bool Under(float x, float z, float wetness, float levelY)
+    public static float Hollow(Func<float, float, float> height, float x, float z)
+    {
+        float h = height(x, z), near = 0, far = 0;
+        for (int i = 0; i < 6; i++)
+        {
+            var (s, c) = MathF.SinCos(i * 1.0471976f);
+            near += height(x + c * 12, z + s * 12);
+            far += height(x + c * 40, z + s * 40);
+        }
+        float hollow = 0.25f * Math.Clamp((near / 6 - h) / 1.2f, -1, 1) + 0.25f * Math.Clamp((far / 6 - h) / 4, -1, 1);
+        return float.IsFinite(hollow) ? hollow : 0;
+    }
+
+    /// <summary>
+    /// Water stands at (x, z): <paramref name="wetness"/> the weather's, <paramref name="levelY"/> the y of the ground's normal there,
+    /// <paramref name="hollow"/> from <see cref="Hollow"/> (the displaced relief's troughs, which only the GPU has, are left out).
+    /// </summary>
+    public static bool Under(float x, float z, float wetness, float levelY, float hollow)
     {
         float even = Smooth(0.955f, 0.99f, levelY);
         if (even <= 0 || wetness <= 0.2f) return false;
-        float low = 0.6f * Noise(x / 80f, 0, z / 80f) + 0.4f * Noise(x / 15f, 0, z / 15f) + 0.1f * (Noise(x / 3f, 0, z / 3f) - 0.5f);
+        float low = 0.6f * Noise(x / 80f, 0, z / 80f) + 0.4f * Noise(x / 15f, 0, z / 15f) + 0.1f * (Noise(x / 3f, 0, z / 3f) - 0.5f) - hollow;
         float fill = Smooth(0.2f, 1f, wetness) * (0.47f + (0.3f - 0.47f) * Absorbance) - (1 - even) * 0.3f;
         return fill - low > 0.0125f;   // half way up the shader's water edge (0 to 0.025)
     }
