@@ -139,6 +139,7 @@ static class SettingHints
         WorldFrame.MaterialBeadsSwitch => "Drops of water stand on wet skin, leather and metal, in the rain and after a swim.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
+        "Blood on weapons and gear" => "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them.",
         "Soft grazing sun" => "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches.",
         "Reflections" => "Glossy and wet surfaces mirror their surroundings instead of one sky picture.",
         "Traced sun shadows" => "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing.",

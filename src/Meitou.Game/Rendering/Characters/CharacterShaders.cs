@@ -57,12 +57,16 @@ static class CharacterShaders
         // A worn chain or plate item (ARMOUR material type, CharacterContent.ArmourMetal): what has no colour of its own is bare metal, as on a held item.
         ArmourMetal = 1 << 27,
         // A prosthetic (LIMB_REPLACEMENT with its own material): judged as a held item, by colour and its painted gloss, so a wooden or organic limb stays as it is.
-        LimbMetal = 1 << 28;
+        LimbMetal = 1 << 28,
+        // Blood on a worn item (drawn from the race's blood and the body part under each vertex) or on a held weapon's blade (from the instance; Meitou, optional: docs/game/blood-decals.md "On weapons and gear").
+        GearBloody = 1 << 29;
     // Instance flag (CharInstance.Flags; bit 0 interior, 1-11 the water's mark (CharacterRenderer.SoakBits), 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
     // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
     // A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
     public const uint HeadOnly = 1u << 29;
+    // A weapon that carries blood (GearBlood): the w of the instance matrix's first two rows hold its colour and amounts instead of the body's blood amounts.
+    public const uint WeaponBlood = 1u << 30;
     // Shading modes.
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
     // Texture slots (CharacterMaterialRecord.Tex).
@@ -140,6 +144,9 @@ static class CharacterShaders
         out vec3 vBind;         // the vertex in the mesh's own space, as modelled (the water beads sit there: CharacterSurface.wetBeads)
         out vec3 vAxisX;        // the mesh's X axis in the world at the vertex (its Y is vColour's)
         out float vBloodAmount; // the blood amount of the vertex's body part (the instance carries the parts': two 8-bit amounts in the w of each matrix row)
+        out vec3 vLocal;        // the vertex in the mesh's own space (a weapon's blade position)
+        flat out vec4 vGear;    // a weapon's blood (WeaponBlood): rgb its colour, a its amount
+        flat out float vGearFresh;  // how wet it still is (1 just struck, 0 dry)
 
         void main()
         {
@@ -185,6 +192,16 @@ static class CharacterShaders
                 uint k = bloodPart - 1u;
                 float pair = k < 2u ? aInstance0.w : k < 4u ? aInstance1.w : k < 6u ? aInstance2.w : aInstance3.w;
                 vBloodAmount = float((uint(pair + 0.5) >> (8u * (k & 1u))) & 255u) / 255.0;
+            }
+            // A weapon's blood: colour 8 bits a channel in the w of row 0, amount and wetness a byte each in row 1's (CharacterRenderer.GearBlood).
+            vLocal = aPosition;
+            vGear = vec4(0.0);
+            vGearFresh = 0.0;
+            if ((aInstanceData.z & {{WeaponBlood}}u) != 0u)
+            {
+                uint rgb = uint(aInstance0.w + 0.5), amounts = uint(aInstance1.w + 0.5);
+                vGear = vec4(float((rgb >> 16) & 255u), float((rgb >> 8) & 255u), float(rgb & 255u), float(amounts & 255u)) / 255.0;
+                vGearFresh = float((amounts >> 8) & 255u) / 255.0;
             }
             // The water's mark (skin.hlsl waterLine): wet below its height on the mesh as it is modelled (not as it is posed), by its strength.
             uint soak = (aInstanceData.z >> 1) & 2047u;
@@ -258,6 +275,9 @@ static class CharacterShaders
         in vec3 vBind;
         in vec3 vAxisX;
         in float vBloodAmount;
+        in vec3 vLocal;
+        flat in vec4 vGear;
+        flat in float vGearFresh;
         layout(location = 0) out vec4 fragColour;
 
         bool flag(uint f, uint bit) { return (f & bit) != 0u; }
@@ -422,6 +442,36 @@ static class CharacterShaders
                 float amount = flag(f, 2097152u) ? 1.0 : vBloodAmount;
                 albedo = mix(albedo, blood.rgb, clamp(blood.a - 1.0 + clamp(amount, 0.0, 1.0), 0.0, 1.0));
             }
+            // Blood on gear (Meitou, optional; docs/game/blood-decals.md "On weapons and gear"). A worn item: the body's splatter over the item, by the blood of the body part the
+            // vertex is skinned to, in the same mapping as the body (hairColour.rgb the race's blood colour, hairAlpha.xy its scales: an item has no hair). A weapon: the blade
+            // (hairAlpha.xyz the axis towards the tip, hairMult.x the axis value at the hilt end, .y one over the length, .z the splatter's scale), the colour, amount and wetness
+            // from the instance, thicker towards the tip.
+            float gearCover = 0.0, gearGloss = 0.0;
+            if (flag(f, {{GearBloody}}u))
+            {
+                vec3 gearBlood = vec3(0.0);
+                if (flag(f, 16384u))
+                {
+                    if (vBloodAmount > 0.0)
+                    {
+                        vec2 bc = vec2(vBlood.x * m.hairAlpha.y, (vBlood.w < 0.0 ? vBlood.z : vBlood.y) * m.hairAlpha.x);
+                        vec4 splat = tex(m.tex[19], bc);
+                        gearCover = clamp(splat.a - 1.0 + vBloodAmount, 0.0, 1.0);
+                        gearBlood = splat.rgb * m.hairColour.rgb;
+                        gearGloss = 0.35;
+                    }
+                }
+                else if (vGear.a > 0.0)
+                {
+                    float along = (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y;
+                    float blade = smoothstep(0.3, 0.5, along);
+                    vec4 splat = tex(m.tex[19], (vLocal.xy + 0.5 * vLocal.zx) * m.hairMult.z);
+                    gearCover = smoothstep(0.15, 0.6, splat.a - 1.0 + vGear.a * mix(0.9, 2.2, smoothstep(0.4, 1.0, along))) * blade;
+                    gearBlood = splat.rgb * vGear.rgb * 0.6;
+                    gearGloss = mix(0.3, 0.85, vGearFresh);
+                }
+                albedo = mix(albedo, gearBlood, gearCover);
+            }
             // A headless body's neck cap (NeckCap): uv is (0, 0) at its centre and 1 at the rim; colour1 the race's blood colour, the diffuse slot the splatter map.
             // Flesh: the fluid darkening into the cut, a bone at the centre. Mechanical (a robot race): a dark metal socket, its core darker, the fluid over it.
             float woundRelief = 0.0, woundMetal = 0.0, woundGloss = 0.0;
@@ -487,6 +537,7 @@ static class CharacterShaders
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
             if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
+            if (gearCover > 0.0) { metal *= 1.0 - gearCover; gloss = mix(gloss, gearGloss, gearCover); }   // blood on a blade or plate is no metal: wet, then dry
             if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
             if ((surfaceParts & 8u) != 0u)
             {

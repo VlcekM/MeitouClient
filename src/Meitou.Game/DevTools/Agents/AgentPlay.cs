@@ -155,6 +155,18 @@ sealed class AgentPlay(GameHost host)
             con.Print($"hurt {who.Length} by {cut:0.#}");
         });
 
+        add("bloody", "bloody <hits> [colour RRGGBB] [--id <c:slot.gen>]", "debug: the weapon of each selected character (or the one given by --id) takes that many wounding hits of blood, in the colour (default 8A0303), as if it had wounded something; needs the 'Blood on weapons and gear' row on", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            if (!ControlTargets(args, con, "bloody", out var who, out var rest)) return;
+            uint colour = 0x8A0303;
+            if (rest.Count is < 1 or > 2 || !int.TryParse(rest[0], NumberStyles.None, CultureInfo.InvariantCulture, out int hits) || hits < 1 || hits > 20
+                || rest.Count == 2 && !uint.TryParse(rest[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out colour)) { con.Error("usage: bloody <hits 1..20> [colour RRGGBB] [--id <c:slot.gen>]"); return; }
+            if (host.Gpu.Characters is not { } crowd) { con.Error("bloody: no character renderer"); return; }
+            foreach (var id in who) for (int i = 0; i < hits; i++) crowd.WeaponHit(host.DrawKey(id), colour, 0.3f);
+            con.Print($"bloodied the weapons of {who.Length}");
+        });
+
         RegisterControlPlayMoreCommands(add, loaded);
         RegisterControlCombatCommands(add, loaded);
         host.RegisterControlSpawnCommands(add, loaded);

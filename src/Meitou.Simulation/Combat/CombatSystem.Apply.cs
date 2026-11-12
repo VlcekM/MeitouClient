@@ -225,7 +225,7 @@ public sealed partial class CombatSystem
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
         Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
-        Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
+        Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce, fighter.Unarmed ? -1 : a);
         if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
         if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
         if (dc.Medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);

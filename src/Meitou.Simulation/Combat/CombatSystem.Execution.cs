@@ -101,7 +101,7 @@ public sealed partial class CombatSystem
         var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
         float total = damage.Cut + damage.Blunt + damage.Pierce;
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, unarmed: ac.Fighter!.Unarmed, robot: ac.Race!.IsRobot);
-        Splash(world, d, dc, -toAttacker, total);
+        Splash(world, d, dc, -toAttacker, total, ac.Fighter!.Unarmed ? -1 : a);
         if (death) Knockdown(world, d, dc, -toAttacker, total, part);
         if (dc.Medical!.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
         if (death && world.Uniques.RecordOf(table.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);

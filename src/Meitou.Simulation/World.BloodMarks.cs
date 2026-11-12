@@ -40,8 +40,9 @@ public enum BloodMarkKind : byte
 /// <param name="Direction">X/Z: the way a smear runs or a splash flies.</param>
 /// <param name="Colour">The race's <c>blood colour</c> (0xRRGGBB).</param>
 /// <param name="Race">The RACE record id (an <see cref="BloodMarkKind.Explosion"/> only: its severed limbs fly).</param>
+/// <param name="Attacker">A <see cref="BloodMarkKind.Splash"/> of a melee hit with a weapon: whose it was (the weapon takes some of the blood); none for fists, bolts and the other marks.</param>
 public readonly record struct BloodMark(
-    BloodMarkKind Kind, CharacterId Who, Vector3 Position, Vector2 Direction, float Amount, uint Colour, string? Race = null);
+    BloodMarkKind Kind, CharacterId Who, Vector3 Position, Vector2 Direction, float Amount, uint Colour, string? Race = null, CharacterId? Attacker = null);
 
 public sealed partial class World
 {

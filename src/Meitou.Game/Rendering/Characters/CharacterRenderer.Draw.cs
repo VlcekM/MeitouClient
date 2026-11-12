@@ -335,12 +335,13 @@ internal sealed unsafe partial class CharacterRenderer
                 level = GeneratedLevel(part, value, _depthPass);
             }
 
+            uint gearFlags = 0;
             var instance = new CharInstance
             {
-                Model = part.IsBody ? WithBlood(model, l.Blood) : model,
+                Model = part.IsBody ? WithBlood(model, l.Blood) : GearModel(part, in l, model, ref gearFlags),
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
-                Flags = (interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset),
+                Flags = (interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
             if (_motionPass)
@@ -570,12 +571,13 @@ internal sealed unsafe partial class CharacterRenderer
     void GatherPart(in Live l, AssetPart part, in PartFrame f, int c, uint seen, GatherView[] views, int viewCount, bool depth, bool motion,
         float bias)
     {
+        uint gearFlags = 0;
         var instance = new CharInstance
         {
-            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model,
+            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : GearModel(part, in l, f.Model, ref gearFlags),
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
-            Flags = (l.Interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset),
+            Flags = (l.Interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,
             MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };

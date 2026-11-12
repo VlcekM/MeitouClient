@@ -188,6 +188,15 @@ internal sealed class PartMaterial
     /// </summary>
     public bool Bloody, BloodFull;
     /// <summary>
+    /// Takes the gear blood (<see cref="CharacterShaders.GearBloody"/>, docs/game/blood-decals.md "On weapons and gear"): a worn item shows the wearer's body blood, in <see cref="GearColour"/> (the race's blood colour) and
+    /// <see cref="GearScale"/> (its <c>blood horizontal</c> and <c>blood vertical</c>); a weapon's blade is described by <see cref="BladeAxis"/> (towards the tip), <see cref="BladeLow"/> (the axis value at the hilt end),
+    /// <see cref="BladeScale"/> (one over the length) and <see cref="SplatScale"/>. Sent in the record's hair fields, which an item does not use.
+    /// </summary>
+    public bool GearBlood;
+    public Vector3 GearColour, BladeAxis;
+    public Vector2 GearScale;
+    public float BladeLow, BladeScale, SplatScale;
+    /// <summary>
     /// A headless body's neck cap (<see cref="CharacterShaders.Wound"/>): <see cref="Colour1"/> the race's blood colour, the diffuse slot the
     /// splatter map; <see cref="Mechanical"/> a robot race's.
     /// </summary>
@@ -824,7 +833,7 @@ internal sealed class CharacterContent : IDisposable
 
     /// <summary>
     /// A worn item skinned to the body's skeleton (clothing, armour, goggles in any slot): bit 14 (<see cref="HeadBit"/>) on the vertices of the head's bones, nothing else, so a
-    /// decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped before, and a belt-slot item over the eyes stayed on the neck);
+    /// decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped before, and a belt-slot item over the eyes stayed on the neck); and bits 16 to 19, the part (as MarkBody) whose blood the item shows;
     /// the mesh's own vertex colour no longer stands in the hide bits (a white vertex read as the left arm's).
     /// </summary>
     static void MarkWorn(Model model, LimbHide hide)
@@ -846,7 +855,12 @@ internal sealed class CharacterContent : IDisposable
                     }
                 }
 
-                v.Colour.Y = (uint)bone < (uint)hide.LimbOfBone.Length && hide.LimbOfBone[bone] == HeadLimb ? HeadBit : 0;
+                int bits = (uint)bone < (uint)hide.LimbOfBone.Length && hide.LimbOfBone[bone] == HeadLimb ? HeadBit : 0;
+
+                // The part of the heaviest bone, as the body's vertices have it (MarkBody): the blood of the gear (bits 16 to 19, its index + 1).
+                int owner = (uint)bone < (uint)hide.PartOfBone.Length ? hide.PartOfBone[bone] : -1;
+                if ((uint)owner < 8) bits |= (owner + 1) << 16;
+                v.Colour.Y = bits;
             }
         }
     }
@@ -1151,7 +1165,7 @@ internal sealed class CharacterContent : IDisposable
                 Label = $"{part.Record.Type} '{part.Record.Name}' .{part.Field}",
                 Mesh = loaded.Gpu,
                 Shared = shared,
-                Material = MarkScabbard(ItemMaterial(c, part, path, loaded), part),
+                Material = MarkGear(MarkScabbard(ItemMaterial(c, part, path, loaded), part), c, part, loaded),
                 BoundsCentre = loaded.Centre,
                 BoundsRadius = loaded.Radius,
                 Shown = part.Shown,
@@ -1345,6 +1359,40 @@ internal sealed class CharacterContent : IDisposable
     static PartMaterial MarkScabbard(PartMaterial m, CharacterPart part)
     {
         m.Scabbard = IsScabbard(part);
+        return m;
+    }
+
+    /// <summary>
+    /// Opts the part into the gear blood (<see cref="CharacterShaders.GearBloody"/>): a worn item of a bleeding person's, a melee weapon's drawn blade or bare item. The weapon's blade is the mesh's long
+    /// axis, towards the end farther from the mesh origin (the hand's grip), whose extent the picking box gives (<see cref="PartMaterial.BladeAxis"/>).
+    /// </summary>
+    PartMaterial MarkGear(PartMaterial m, CharacterAppearance c, CharacterPart part, LoadedMesh loaded)
+    {
+        if (m.Shading != CharacterShaders.ShadeItem || m.Bloody || m.Wound) return m;
+        var item = part.Record;
+        if (part.Mode == AttachMode.SharedSkeleton)
+        {
+            if (c.Animal is not null || item.Type is FcsRecordType.LimbReplacement || c.Race.GetFloat("bleed rate", 1) <= 0) return m;
+            m.GearColour = CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF);
+            m.GearScale = new Vector2(c.Race.GetFloat("blood horizontal", 1), c.Race.GetFloat("blood vertical", 0.15f));
+        }
+        else
+        {
+            if (part.Slot != AttachSlot.Weapon || item.Type != FcsRecordType.Weapon || m.Scabbard || loaded.PickBoxes is not { Length: > 0 } boxes) return m;
+            if (part.Field is not ("bare sword" or "mesh" or "mesh female")) return m;
+            var min = boxes.Aggregate(new Vector3(float.MaxValue), (a, b) => Vector3.Min(a, b.Min));
+            var max = boxes.Aggregate(new Vector3(float.MinValue), (a, b) => Vector3.Max(a, b.Max));
+            var size = max - min;
+            int axis = size.X >= size.Y && size.X >= size.Z ? 0 : size.Y >= size.Z ? 1 : 2;
+            float lo = min[axis], hi = max[axis];
+            float sign = hi >= -lo ? 1 : -1;
+            if (sign < 0) (lo, hi) = (-hi, -lo);
+            if (hi - lo < 1e-4f) return m;
+            m.BladeAxis = axis == 0 ? new Vector3(sign, 0, 0) : axis == 1 ? new Vector3(0, sign, 0) : new Vector3(0, 0, sign);
+            (m.BladeLow, m.BladeScale, m.SplatScale) = (lo, 1 / (hi - lo), 5 / (hi - lo));
+        }
+        m.GearBlood = true;
+        m.Tex[CharacterShaders.SlotBlood] = Texture("bloody.png", false);
         return m;
     }
 

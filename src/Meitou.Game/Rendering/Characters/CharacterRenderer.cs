@@ -377,6 +377,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public ulong Blood;
         /// <summary>
+        /// Its weapon's blood this frame (<see cref="GearBlood"/>): the colour as 24 bits, the amount and wetness as two bytes; which of its weapons took it.
+        /// </summary>
+        public float GearColour, GearAmounts;
+        public bool GearBack;
+        /// <summary>
         /// Posed this frame whatever the thinning (the player's, a ragdoll, a new asset or a first pose).
         /// </summary>
         public bool MustPose;
@@ -1031,6 +1036,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         state.PreviousWorld = state.HasWorld ? state.World : l.World;
         (state.World, state.HasWorld) = (l.World, true);
         if (far) l.Soak = 0; else Soaked(ref l, state);
+        if (far) (l.GearColour, l.GearAmounts) = (0, 0); else WeaponBloodOf(ref l);
 
         // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the
         // same bones). A new asset (other gear, another rig) is posed at once: its parts' attach matrices and its arrays' sizes come from it. The
@@ -1337,6 +1343,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var (key, state) in _states)
             if (_updateStamp - state.Seen > (state.Frozen ? 600 : 60)) _staleKeys.Add(key);   // a held pose waits longer for its look to be ready
         foreach (var key in _staleKeys) _states.Remove(key);
+        if (_weaponBlood.Count > 0 && !GearBlood.Enabled) _weaponBlood.Clear();
     }
 
     void AddLayer(in ActiveLayer layer)
@@ -1418,6 +1425,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (m.Strands) flags |= CharacterShaders.Strands;
         if (m.Bloody && has[CharacterShaders.SlotBlood])
             flags |= CharacterShaders.Bloody | (m.BloodFull ? CharacterShaders.BloodFull : 0);
+        if (m.GearBlood && has[CharacterShaders.SlotBlood]) flags |= CharacterShaders.GearBloody;
         if (m.Wound) flags |= CharacterShaders.Wound;
         if (m.Mechanical) flags |= CharacterShaders.Mechanical;
         if (m.Scabbard) flags |= CharacterShaders.Scabbard;
@@ -1454,6 +1462,13 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         r.AlphaChannel = m.AlphaChannel;
         r.Colour1 = m.Colour1;
         r.Colour2 = m.Colour2;
+        if (m.GearBlood)
+        {
+            // An item has no hair: the gear blood's values ride in its hair fields (CharacterShaders, "Blood on gear").
+            r.HairColour = new Vector4(m.GearColour, 0);
+            r.HairAlpha = m.Worn ? new Vector4(m.GearScale, 0, 0) : new Vector4(m.BladeAxis, 0);
+            r.HairMult = new Vector4(m.BladeLow, m.BladeScale, m.SplatScale, 0);
+        }
     }
 
     /// <summary>
