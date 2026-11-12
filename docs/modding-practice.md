@@ -84,3 +84,47 @@ What authors of published code mods ran into from the v0.16.1 nightlies to v0.17
 - SteamCMD uploads (`workshop_build_item` for app 233860) work for code mods: first upload hidden, checked, then made public; a
   download of the item back shows what players get. SteamCMD cannot set tags, and an upload signs the desktop Steam client out.
   **Observed** (2026-11).
+
+## Starting a mod with an AI coding agent
+
+A prompt for a player to paste into a coding agent on the PC they play on, filling in the brackets. It asks for a feasibility
+report before any code and carries the practice above.
+
+```
+I want to make a code mod for Meitou, the open-source C# rebuild of the Kenshi engine
+(https://github.com/VlcekM/MeitouClient). Help me find out if my idea is possible, then build it.
+
+My idea: [what the player sees and does, when it happens, what it must never do]
+Inspired by / porting: [a Kenshi mod, RE_Kenshi plugin or another game's feature, with a link; or "nothing"]
+I play Meitou version: [the launcher shows it; default: 0.17.3 or later]
+Working name: [letters and digits, e.g. HideHeadgear]
+I'll know it's done when: [the one or two things I want to see in my own game]
+
+How to work:
+1. First find my Kenshi folder and my Meitou install (the launcher keeps game versions in
+   %LOCALAPPDATA%\Meitou\versions). Clone the Meitou source at the tag of the version I play
+   (git clone --depth 1 --branch v<version>) and read docs/modding.md, docs/modding-practice.md
+   and the wiki page "Writing code mods". Check whether the game or an existing mod already does this.
+2. Then write me a short feasibility report and STOP: the verdict first (possible / possible with
+   limits / not without an engine change), how each part would work (public mod API, or which
+   internal game member it would patch with Harmony and how likely updates break it), what is not
+   possible and the closest alternative, the decisions I need to make (with your recommendation),
+   and how big it is. Mark every technical claim Verified (file:line at the tag), Observed or Unknown.
+3. After I say go, build it in small steps, each with a check that can fail:
+   - Build against the OLDEST Meitou version it must run on, targeting net10.0 (that also loads
+     on the .NET 11 versions); reference the game DLLs with Private=false and never ship them.
+   - Look up every internal game member by name in one place; if one is missing, switch that part
+     off with a log line instead of crashing (by-name lookups fail silently when the game renames
+     things, which happens often).
+   - Never touch the world outside the simulation's serial steps: keys, F10 rows, UI and settings
+     only read a snapshot and queue commands. Use the game's Rng with the mod's RngPurpose.
+   - Settings on the game's Mods page (AddSettings), save data with a format number, an F10 status
+     row, and one "ready" line in log.txt saying what is on.
+   - Test cheapest first: a small offline check program that finds every member and applies every
+     patch for real; then "meitou-tools mod-check <save> --mod <folder>" from the game folder; then
+     a real game run.
+4. Never change my game, my mod list (data\mods.cfg) or my saves without asking, and back them up
+   first. Close the Meitou launcher before editing mods.cfg. Do not upload or post anything.
+5. When done: install it (after asking), give me numbered test steps, a README, and tell me
+   exactly what was tested and what was not. Never say it works in game until it ran in a game.
+```
