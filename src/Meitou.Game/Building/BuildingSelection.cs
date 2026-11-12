@@ -99,6 +99,12 @@ sealed class BuildingSelection(PlayerInterface player)
     #region Picking
 
     /// <summary>
+    /// How far from a piece of furniture its house's placement point is looked for (world units): twice the 200 that BuildingFootprints.StaticAround
+    /// takes as a building's own extent beyond its placement point.
+    /// </summary>
+    const float HouseReach = 400;
+
+    /// <summary>
     /// The nearest building under the pixel, a site of the player's or a level-data one, when the ray meets it before the ground.
     /// </summary>
     internal SelectedBuilding? PickBuilding(Vector2 pixel) => PickBuildingAt(pixel)?.Building;
@@ -152,6 +158,9 @@ sealed class BuildingSelection(PlayerInterface player)
             best = SiteBuilding(inner.Site);
         }
 
+        if (PickCampBuildingAt(pixel) is { } camp && camp.T < bestT)
+            (best, bestT) = camp;
+
         if (player.Furniture.PickRockAt(pixel) is { } rock && rock.T < bestT)
             (best, bestT) = (player.Furniture.RockBuilding(rock.Rock), rock.T);
 
@@ -159,45 +168,169 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The visible bed, container or cage nearest under the pixel, which takes the click over the house around it, as the original picks furniture
-    /// as a building by its own collision (docs/game/ui-input.md "Building picking and selection"); a plain building is no right-click candidate
-    /// (PickAt). A nearer object site or rock still wins. One that belongs to a site of the player's selects that site.
+    /// The visible furniture nearest under the pixel (a bed, container, cage or seat, else a piece of a house's layout), which takes the click over
+    /// the house around it, as the original picks furniture as a building by its own collision (docs/game/ui-input.md "Building picking and
+    /// selection"); a plain building is no right-click candidate (PickAt). A nearer object site or rock still wins. One that belongs to a site of
+    /// the player's selects that site; any other names the town of the house it stands in.
     /// </summary>
     (SelectedBuilding Building, float T)? PickFurnitureAt(Vector2 pixel)
     {
-        if (NearestFurnitureAt(pixel) is not { } hit) return null;
-        if (player.Build.PickSiteAt(pixel) is { } front && !IsSiteOf(front.Site, hit.Id) && player.Build.SiteIsObject(front.Site) && front.T < hit.T)
-            return null;
-        if (player.Furniture.PickRockAt(pixel) is { } stone && stone.T < hit.T) return null;
+        var fixture = NearestFurnitureAt(pixel);
+        if (PickPieceAt(pixel) is { } piece && !(fixture is { } nearer && nearer.T <= piece.T))
+            return Blocked(pixel, piece.Building.Instance, piece.T) ? null : piece;
+
+        if (fixture is not { } hit || Blocked(pixel, hit.Id, hit.T)) return null;
 
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => IsSiteOf(s, hit.Id)) is { } site)
             return (SiteBuilding(site), hit.T);
 
         var name = player.Build.Services?.ItemName(hit.Record) ?? hit.Record;
         var owner = player.FactionName?.Invoke(hit.Owner);
-        return (new SelectedBuilding(name, null, owner, null, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
+        var town = TownOf(hit.House, hit.Position);
+        return (new SelectedBuilding(name, null, owner, town, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
     }
 
     /// <summary>
-    /// The nearest of the bed, container and cage under the pixel: its fixture id, BUILDING record, place, owner faction and ray distance. A
-    /// container or cage that is a level building of its own (a town's standalone cage or safe, its fixture id the placement's key) is left to the
-    /// level buildings' pick, which gives its Type and Town.
+    /// Whether a nearer object site of another, or a nearer rock, takes the click from the furniture <paramref name="id"/> met at
+    /// <paramref name="t"/>.
     /// </summary>
-    (string Id, string Record, Vector3 Position, int Owner, float T)? NearestFurnitureAt(Vector2 pixel)
+    bool Blocked(Vector2 pixel, string id, float t) =>
+        player.Build.PickSiteAt(pixel) is { } front && !IsSiteOf(front.Site, id) && player.Build.SiteIsObject(front.Site) && front.T < t
+        || player.Furniture.PickRockAt(pixel) is { } stone && stone.T < t;
+
+    /// <summary>
+    /// The town piece nearest under the pixel before the ground (a table, shelf, lamp, torch or dummy of a house the ray passes,
+    /// Data.World.TownBuilding.Pieces) as the selected building: named by its record, with its house's owner and town. Left out of a level
+    /// building the level editor cleared.
+    /// </summary>
+    (SelectedBuilding Building, float T)? PickPieceAt(Vector2 pixel)
     {
-        (string Id, string Record, Vector3 Position, int Owner, float T)? best = null;
-        void Offer(string id, string record, Vector3 position, int owner, float t)
+        if (player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
+
+        float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } ground ? Vector3.Distance(ray.Origin, ground) : 6000;
+        (Data.World.TownPiece Piece, Data.World.BuildingPlacement House, float T)? best = null;
+        foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
         {
-            if (best is not { } b || t < b.T) best = (id, record, position, owner, t);
+            var house = candidate.Placement;
+            if (player.LevelEditorPanel.Services?.IsCleared(house.Key) == true) continue;
+
+            foreach (var piece in host.WorldInfo(house).Pieces ?? [])
+            {
+                if (PieceRayT(ray, house.Key, piece, best?.T ?? limit) is { } t)
+                    best = (piece, house, t);
+            }
+        }
+
+        if (best is not { } hit) return null;
+
+        var info = host.WorldInfo(hit.House);
+        var (id, record) = (hit.Piece.Id, hit.Piece.RecordId);
+        return (new SelectedBuilding(host.ItemName(record), null, info.Owner, info.Town, null, id, hit.Piece.Position, null, Record: record), hit.T);
+    }
+
+    /// <summary>
+    /// The camp building nearest under the pixel before the ground (a camp fire or tent of a nest, WorldSnapshot.NestBuildings) as the selected
+    /// building, with the camp's owner: by its collision, else the hull of its parts' bounds as a site without collision is picked (a camp fire
+    /// has none, yet the original selects it, docs/game/ui-screens.md "Selected building"). A camp bed is left to the beds.
+    /// </summary>
+    (SelectedBuilding Building, float T)? PickCampBuildingAt(Vector2 pixel)
+    {
+        var camps = player.Session.CurrentSnapshot.NestBuildings;
+        if (camps.Count == 0 || player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
+
+        float ground = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } at ? Vector3.Distance(ray.Origin, at) : float.MaxValue;
+        (Simulation.Construction.BuildingSnapshot Camp, float T)? best = null;
+        foreach (var camp in camps)
+            if (CampRayT(ray, camp, ground) is { } t && (best is not { } b || t < b.T)) best = (camp, t);
+
+        if (best is not { } hit) return null;
+
+        var c = hit.Camp;
+        var name = c.Name.Length > 0 ? c.Name : host.ItemName(c.Record);
+        return (new SelectedBuilding(name, null, player.FactionName?.Invoke(c.Owner), null, null, c.Id, c.Position, null, Record: c.Record), hit.T);
+    }
+
+    /// <summary>
+    /// Where the ray meets the camp building <paramref name="camp"/> before <paramref name="ground"/>; null when it misses, it is a bed, or a
+    /// building seen from outside stands before it.
+    /// </summary>
+    float? CampRayT((Vector3 Origin, Vector3 Direction) ray, Simulation.Construction.BuildingSnapshot camp, float ground)
+    {
+        if (player.Build.Services is not { } host) return null;
+
+        var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(camp.Rotation));
+        float? t = host.Placement.Footprint(camp.Record) is { } footprint
+            ? player.Picking.BuildingRayT(ray, footprint.Place(camp.Position, yaw), footprint.YMin, footprint.YMax, camp.Record, camp.Position,
+                camp.Position.Y, yaw)
+            : host.Placement.Plot(camp.Record) is { } plot
+                ? WorldPicking.PlotT(ray, plot.Place(camp.Position, yaw), ground < float.MaxValue ? ground : null)
+                : null;
+        if (t is not { } hit || hit >= ground || player.Hidden(ray, hit)) return null;
+
+        return player.Session.CurrentSnapshot.Beds.Any(b => b.Id == camp.Id + "@bed0") ? null : hit;
+    }
+
+    /// <summary>
+    /// Where the ray meets <paramref name="piece"/>'s own collision before <paramref name="before"/> (the ground, or a nearer piece), as a building
+    /// is picked; null when it misses, the piece has no collision (or it is still being read), it is not drawn
+    /// (<see cref="FurnitureUse.FloorHidden"/> of its <paramref name="house"/>) or a wall stands before it.
+    /// </summary>
+    float? PieceRayT((Vector3 Origin, Vector3 Direction) ray, string house, Data.World.TownPiece piece, float before)
+    {
+        if (player.Furniture.FloorHidden?.Invoke(house, piece.Floor, piece.Outside) == true) return null;
+        if (player.Build.Services?.Placement.Footprint(piece.RecordId) is not { } footprint) return null;
+
+        var placed = footprint.Place(piece.Position, piece.Rotation);
+        var rayT = player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, piece.RecordId, piece.Position, piece.Position.Y,
+            piece.Rotation);
+        return rayT is { } t && t < before && !player.Hidden(ray, t) ? t : null;
+    }
+
+    /// <summary>
+    /// The nearest of the bed, container, cage and seat under the pixel: its fixture id, BUILDING record, place, owner faction, the house it stands
+    /// in and ray distance. A container, cage or seat that is a level building of its own (a town's standalone cage, safe, bench or throne) is left
+    /// to the level buildings' pick, which gives its Type, Town and outline. A bed names no house: its panel takes the town from the bed itself.
+    /// </summary>
+    (string Id, string Record, Vector3 Position, int Owner, string? House, float T)? NearestFurnitureAt(Vector2 pixel)
+    {
+        (string Id, string Record, Vector3 Position, int Owner, string? House, float T)? best = null;
+        void Offer(string id, string record, Vector3 position, int owner, string? house, float t)
+        {
+            if (best is not { } b || t < b.T) best = (id, record, position, owner, house, t);
         }
 
         if (player.Furniture.PickBedAt(pixel) is ({ } bed, var bedT))
-            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, bedT);
+            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, null, bedT);
         if (player.Furniture.PickContainerAt(pixel) is ({ } box, var boxT) && !IsLevelBuilding(box.Id, box.Position))
-            Offer(box.Id, box.Record, box.Position, box.Owner, boxT);
+            Offer(box.Id, box.Record, box.Position, box.Owner, HouseOf(box.Id), boxT);
         if (player.Furniture.PickCageAt(pixel) is ({ } cage, var cageT) && !IsLevelBuilding(cage.Id, cage.Position))
-            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, cageT);
+            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, HouseOf(cage.Id), cageT);
+        if (player.Furniture.PickSeatAt(pixel) is ({ } seat, var seatT) && !StandsAlone(seat))
+            Offer(seat.Id, seat.Record, seat.Position, seat.Owner, seat.Building, seatT);
         return best;
+    }
+
+    /// <summary>
+    /// The level building a selected instance belongs to: the house of an interior fixture or piece (<c>&lt;house key&gt;/&lt;index&gt;</c>), seat
+    /// (<c>@seat</c>) or bed (<c>@bed</c>); any other instance itself.
+    /// </summary>
+    internal static string HouseKeyOf(string instance) => instance.IndexOfAny(['/', '@']) is > 0 and var end ? instance[..end] : instance;
+
+    /// <summary>
+    /// The house key of an interior fixture (<c>&lt;house key&gt;/&lt;index&gt;</c>); null for any other.
+    /// </summary>
+    static string? HouseOf(string fixture) => fixture.LastIndexOf('/') is > 0 and var end ? fixture[..end] : null;
+
+    /// <summary>
+    /// The town of the level building <paramref name="house"/> that furniture at <paramref name="at"/> stands in, which the furniture's panel shows
+    /// (docs/game/ui-screens.md "Selected building"). Null when it stands in none or the house is in no town.
+    /// </summary>
+    string? TownOf(string? house, Vector3 at)
+    {
+        if (house is null || player.Build.Services is not { } host) return null;
+
+        var placement = host.Placement.StaticPlacementsAround(new Vector2(at.X, at.Z), HouseReach).FirstOrDefault(p => p.Key == house);
+        return placement is null ? null : host.WorldInfo(placement).Town;
     }
 
     /// <summary>
@@ -206,6 +339,14 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     bool IsLevelBuilding(string id, Vector3 at) =>
         player.Build.Services?.Placement.StaticPlacementsAround(new Vector2(at.X, at.Z), 1).Any(p => p.Key == id) == true;
+
+    /// <summary>
+    /// Whether <paramref name="seat"/> is a level building of its own (a bench or throne standing alone in a town, registered as
+    /// <c>&lt;its key&gt;@seat0</c>): its building's placement stands where the seat does, with the seat's own record.
+    /// </summary>
+    bool StandsAlone(Simulation.Locks.SeatSpot seat) =>
+        player.Build.Services?.Placement.StaticPlacementsAround(new Vector2(seat.Position.X, seat.Position.Z), 1)
+            .Any(p => p.Key == seat.Building && p.BuildingId == seat.Record) == true;
 
     /// <summary>
     /// Whether the fixture <paramref name="fixture"/> belongs to the player's <paramref name="site"/>: its bed (<c>&lt;site&gt;@bed0</c>) or its own

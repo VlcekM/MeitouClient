@@ -701,8 +701,16 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   (`FUN_14030d620`, `FUN_140300090`, `FUN_140307bf0` ...: Working / No power / Out of resource / Output full, power, workers, fuel).
   A town bed (**Observed**, original-game screenshot of a Squin bar): a left click selects the bed itself, not the bar; panel:
   faction, Town, Cost to use `(Pay c.100)`, Healing bonus `x4`, Condition; no door rows. Value colours and the rows of a free bed
-  are **Unknown** (Meitou omits the cost row at 0). A town container or cage is selected the same way, by its own collision before the house
-  around it (`BuildingSelection.PickFurnitureAt`); Meitou's panel for one has only its name and owner, without the Town, lock and Empty rows.
+  are **Unknown** (Meitou omits the cost row at 0). Any other furniture with collision is selected the same way, before the house around it
+  (**Observed** in The Hub's bar and street: stools, benches, sitting pillows, tables, shelves, ceiling lamps, torches); a rug (record `Carpet`,
+  parts but no collision, [collision](../formats/collision.md)) is not (**Observed**, the same bar). A seat's panel (**Observed**): its name and
+  owner faction, `Town:` The Hub, `Workers:` 0/1, `Efficiency:` 0%, `Max efficiency:` 100%, Condition. Meitou (`BuildingSelection.PickFurnitureAt`):
+  beds, containers and cages by their fixtures, seats by their seat spots, everything else of a town building's interior layout but nodes
+  (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
+  house it stands in and Condition, without the lock, Empty and worker rows. A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
+  camp near The Hub), the Campfire though its part has no `xml collision` (base data); its panel says it is out of fuel while it burns. Meitou: a
+  camp bed by its bed, any other camp building (`WorldSnapshot.NestBuildings`) among the buildings by distance, by its collision, else the hull of
+  its parts' bounds as a site without collision (`BuildingSelection.PickCampBuildingAt`); its panel has its name, owner and Condition.
 - **Richness** (**Observed**, ProductionBuilding slot 40 `FUN_1402ffeb0` section 6 calls slot 186 `getGUIFertility` `FUN_140309a40` first): for function 1 or 27 with a
   functionality, a line by `world resource mining`: 1 `Iron Quality:`, 2 `Stone Richness:`, 3 `Copper Quality:`, 4 `Carbon Quality:`, 5 `Water Available:`, 6
   `Ground Fertility:` (other: no label); value `{1,num}` of int(yield × 100) (slot 92, no `%`), coloured r = clamp(0.8 − y), g = clamp(0.8 y), b 0.1; tooltip "The

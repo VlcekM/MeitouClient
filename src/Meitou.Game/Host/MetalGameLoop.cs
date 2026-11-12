@@ -1065,6 +1065,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         hud.StealthView.DrawnHead = id => _characters?.BonePosition(host.DrawKey(id), "Bip01 Head");
         hud.Picking.ShownInteriorHit = (origin, direction, distance) => _objects?.ShownInteriorHit(origin, direction, distance);
         hud.Furniture.AboveViewedFloor = host.Interiors.AboveViewedFloor;
+        hud.Furniture.FloorHidden = host.Interiors.FloorHidden;
         hud.GroundItemPicks.GroundItemShape = host.GroundItemSync.GroundShape;
         hud.GroundItemPicks.GroundItemHidden = host.GroundItemSync.HiddenGround.Contains;
         hud.Furniture.DoorShape = (record, door) => host.Nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];

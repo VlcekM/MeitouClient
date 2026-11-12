@@ -24,6 +24,11 @@ sealed class TownChanges(GameHost host)
     readonly HashSet<string> _shownEmptied = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Whether the town house <paramref name="key"/> was bought, so its furniture is gone.
+    /// </summary>
+    internal bool IsEmptied(string key) => _shownEmptied.Contains(key);
+
+    /// <summary>
     /// Once a frame, with the ruins.
     /// </summary>
     internal void UpdateEmptiedHouses(WorldSnapshot snapshot)
