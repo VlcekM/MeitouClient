@@ -3,10 +3,14 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Saving;
 using Meitou.Simulation.Population;
+using Meitou.Tests.Bodies;
 using Meitou.Tests.Simulation;
 using Xunit;
 using SimWorld = Meitou.Simulation.World;
@@ -30,7 +34,19 @@ public class PlayerTownImportTests
     /// <summary>
     /// An empty headless world on flat walkable ground.
     /// </summary>
-    static SimWorld World() => new(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 300));
+    static SimWorld World()
+    {
+        // The synthetic "building" record is a house (an interior), so it counts for its town's centre.
+        var house = new FcsRecord { StringId = "building", Flags = 0x10, Name = "House", RecordType = FcsRecordType.Building };
+        house.References["interior"] = [new FcsReference("interior-t", 0, 0, 0)];
+        var file = new FcsFile();
+        file.Records.Add(house);
+        var db = new GameDatabase();
+        db.Apply(file, "houses.mod");
+        var construction = new ConstructionSystem(db, BodyFixtures.BaseGame, BodyOptions.Default, new ItemFactory(db, BodyFixtures.BaseGame), [], "",
+            new ConstructionSettings());
+        return new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 300), [construction]);
+    }
 
     /// <summary>
     /// A complete synthetic player building assigned to the given outpost number.

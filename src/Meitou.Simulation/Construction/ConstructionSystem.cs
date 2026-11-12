@@ -409,8 +409,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
         TownForWalls(world, placed);
         AttachWalls(world.Buildings, Data, placed);
-        foreach (int number in placed.Select(s => s.Town).Distinct())
-            if (reg.FindTown(number) is { } town) ReassessTown(world, town);
+        foreach (var town in placed.Select(s => TownLookup.PlayerTownOf(world, s)).Distinct())
+            TownRefit.Reassess(world, town, this);
 
         // Confirm ends by sending the selection to build the last building created (FUN_1404d72a0: order 2 through FUN_1407f9e20, Shift ignored).
         if (placed.Count > 0) OrderBuild(world, world.Player.Selection.ToArray(), Root(reg, placed[^1]), queued: false);
@@ -801,68 +801,38 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Reassesses a player town the placement or dismantle touched (<c>FUN_1405488f0</c>, <b>Observed</b>): refits it, then refits every other
-    /// player-faction town (removing an empty one), then merges the first overlapping town into the larger one (<see cref="MergeOverlappingTown"/>).
+    /// Reassesses a player town the placement or dismantle touched (<c>FUN_14054d080</c>, <b>Observed</b>, <see cref="TownRefit"/>): refits it, then
+    /// refits every other player-faction town (removing an empty one), then merges the first overlapping town into the larger one.
     /// </summary>
-    public static void ReassessTown(World world, PlayerTown town)
+    public static void ReassessTown(World world, PlayerTown town) => TownRefit.Reassess(world, town, world.SystemOf<ConstructionSystem>());
+
+    /// <summary>
+    /// The building function key of a BUILDING record as the original's constructors give it (<b>Verified</b>, <c>FUN_14055ca90</c>,
+    /// <c>FUN_140551b20</c>, <c>FUN_140563140</c>, <c>FUN_140592570</c>): 21 for a wall gate, 20 for a wall piece, the functionality's
+    /// <c>function</c> when it names one other than 0 and 18, 19 for a building with an interior, else 18.
+    /// </summary>
+    public int FunctionKey(string record)
     {
-        if (!RefitTown(world, town)) return;
+        var data = Data(record);
+        if (data is null) return TownRefit.Fluff;
+        if (data.IsWallGate) return TownRefit.Gate;
+        if (data.LinksTogether) return TownRefit.Wall;
 
-        foreach (var other in world.Buildings.Towns.Where(t => t != town && t.Owner == world.Player.Faction).ToList()) RefitTown(world, other);
+        int function = _db.Find(record) is { } r && TownBuildings.FunctionOf(_db, r, []) is { } f ? f.GetInt("function") : 0;
+        if (function is not (0 or TownRefit.Fluff)) return function;
 
-        MergeOverlappingTown(world, town);
+        return data.HasInterior ? TownRefit.Shell : TownRefit.Fluff;
     }
 
     /// <summary>
-    /// Moves a player town's centre to its buildings and sizes its radius to them (<c>Town::reassessTownPosition</c>,
-    /// docs/game/buildings-production.md "Outposts"): the mean of its outdoor buildings, on walkable ground when some is near, then
-    /// <see cref="TownRadiusMargin"/> beyond the farthest. Engine choice: a plain mean (the original weighs two building sets, <b>Unknown</b> which);
-    /// the town is removed only when no registered building is assigned to it, including indoor/orphan sites. Foliage resources are outside this
-    /// registry. Loading never reassesses: a saved centre and radius stay as saved. False when the town has no outdoor building (removed when it has
-    /// no building at all).
+    /// Whether a BUILDING record is a wall piece, which the radius of a town ignores (a gate is not one).
     /// </summary>
-    static bool RefitTown(World world, PlayerTown town)
-    {
-        var sum = Vector3.Zero;
-        int count = 0;
-        foreach (var s in world.Buildings.All)
-            if (s.Town == town.Number && s.Parent is null) { sum += s.Position; count++; }
-        if (count == 0)
-        {
-            if (!world.Buildings.All.Any(site => site.Town == town.Number)) world.Buildings.RemoveTown(town);
-            return false;
-        }
-        var centre = sum / count;
-        if (WalkableSpots.Nearest(world.Walkability, new Vector2(centre.X, centre.Z), out var spot)) centre = new Vector3(spot.X, centre.Y, spot.Y);
-        float radius = TownRadiusStart;
-        foreach (var s in world.Buildings.All)
-            if (s.Town == town.Number) radius = MathF.Max(radius, DistanceXz(s.Position, centre) + TownRadiusMargin);
-        town.Position = centre;
-        town.Override = Math.Clamp(radius, TownRadiusMin, TownRadiusMax);
-        return true;
-    }
-
-    /// <summary>
-    /// Merges the first overlapping player-faction outpost into the larger town, retaining this town on ties and reassessing the survivor.
-    /// </summary>
-    static void MergeOverlappingTown(World world, PlayerTown town)
-    {
-        var other = world.Buildings.Towns
-            .FirstOrDefault(t => t != town && t.Owner == world.Player.Faction &&
-                DistanceXzSquared(t.Position, town.Position) < (t.Radius + town.Radius) * (t.Radius + town.Radius));
-        if (other is null) return;
-
-        var survivor = town.Radius >= other.Radius ? town : other;
-        var removed = survivor == town ? other : town;
-        world.Buildings.MoveTownBuildings(removed, survivor);
-        world.Buildings.RemoveTown(removed);
-        ReassessTown(world, survivor);
-    }
+    public bool IsWallPiece(string record) => Data(record) is { LinksTogether: true, IsWallGate: false };
 
     /// <summary>
     /// The ground distance between two points.
     /// </summary>
-    static float DistanceXz(Vector3 a, Vector3 b)
+    internal static float DistanceXz(Vector3 a, Vector3 b)
     {
         float dx = a.X - b.X, dz = a.Z - b.Z;
         return MathF.Sqrt(dx * dx + dz * dz);
@@ -871,7 +841,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The squared horizontal distance between two outpost centres.
     /// </summary>
-    static float DistanceXzSquared(Vector3 a, Vector3 b)
+    internal static float DistanceXzSquared(Vector3 a, Vector3 b)
     {
         float dx = a.X - b.X, dz = a.Z - b.Z;
         return dx * dx + dz * dz;
@@ -886,7 +856,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (IsWall(site))
             foreach (var child in reg.All.Where(s => s.WallParent == site.Id).ToList()) reg.Remove(child);
         reg.Remove(site);
-        if (reg.FindTown(site.Town) is { } town) ReassessTown(world, town);
+        TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, site), this);
         _sweep = true;
     }
 

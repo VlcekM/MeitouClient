@@ -270,4 +270,36 @@ public static class WalkableSpots
 
         return false;
     }
+
+    /// <summary>
+    /// The closest walkable point to <paramref name="at"/> inside the square of half size <paramref name="reach"/> round it (the original's closest
+    /// navmesh point query of a town's centre, <b>Verified</b>, <c>FUN_1403a3ac0</c>): <paramref name="at"/> itself when it is walkable, else the first
+    /// walkable point on rings of growing radius (a fixed order, a ring's points spaced about <see cref="ClosestStep"/> apart); false (and
+    /// <paramref name="spot"/> = <paramref name="at"/>) when there is none. Engine choice: the walkability model is 2D, the original's query is 3D.
+    /// </summary>
+    public static bool Closest(IWalkability walk, Vector2 at, float reach, out Vector2 spot)
+    {
+        spot = at;
+        if (walk.IsWalkable(at.X, at.Y)) return true;
+
+        for (float r = ClosestStep; r <= reach * MathF.Sqrt(2); r += ClosestStep)
+        {
+            int count = Math.Max(8, (int)MathF.Ceiling(MathF.Tau * r / ClosestStep));
+            for (int k = 0; k < count; k++)
+            {
+                var p = at + new Vector2(MathF.Cos(k * MathF.Tau / count), MathF.Sin(k * MathF.Tau / count)) * r;
+                if (MathF.Abs(p.X - at.X) > reach || MathF.Abs(p.Y - at.Y) > reach || !walk.IsWalkable(p.X, p.Y)) continue;
+
+                spot = p;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The ring spacing of <see cref="Closest"/>.
+    /// </summary>
+    const float ClosestStep = 8;
 }

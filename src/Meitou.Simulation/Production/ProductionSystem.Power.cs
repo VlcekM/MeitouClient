@@ -105,25 +105,7 @@ public sealed partial class ProductionSystem
         if (site.Town != 0) return site.Town;
         if (_powerTowns.TryGetValue(site.Id, out var known) && known.Layout == _townLayout) return known.Town;
 
-        int found = NoPowerTown;
-        float best = float.MaxValue;
-        var at = new Vector2(site.Position.X, site.Position.Z);
-        foreach (var t in world.Buildings.Towns)
-        {
-            float d = Vector2.DistanceSquared(new Vector2(t.Position.X, t.Position.Z), at);
-            if (d < best) (found, best) = (t.Number, d);
-        }
-
-        if (world.SystemOf<PopulationSystem>()?.Data.Sites is { } sites)
-        {
-            foreach (var t in sites)
-            {
-                if (t.Town.Type is TownType.Nest or TownType.NestMarker) continue;
-
-                float d = Vector2.DistanceSquared(new Vector2(t.Position.X, t.Position.Z), at);
-                if (d < best) (found, best) = (-(t.Index + 1), d);
-            }
-        }
+        int found = TownLookup.NearestKey(world, site.Position);
 
         _powerTowns[site.Id] = (found, _townLayout);
         return found;

@@ -62,6 +62,7 @@ public class ConstructionTests
         var outpost = Rec(Outpost, FcsRecordType.Building, "Test Camp Hut");
         outpost.Ints["build materials"] = 2;
         outpost.Bools["creates player town"] = true;
+        outpost.References["interior"] = [new FcsReference("93-t", 0, 0, 0)];   // a house: it alone sets the outpost's centre
         FcsRecord Wall(string id, string name, int linkType, float length, int materials)
         {
             var r = Rec(id, FcsRecordType.Building, name);
@@ -205,7 +206,18 @@ public class ConstructionTests
         using (var source = new Rig())
         {
             var town = source.World.Buildings.AddTown(HutAt, Rig.PlayerFaction);
-            if (keepOtherTown) source.World.Buildings.AddTown(HutAt + new Vector3(8000, 0, 0), Rig.PlayerFaction);
+            if (keepOtherTown)
+            {
+                // The other outpost holds a building: a reassessment removes an outpost without one.
+                var otherAt = HutAt + new Vector3(8000, 0, 0);
+                var other = source.World.Buildings.AddTown(otherAt, Rig.PlayerFaction);
+                source.World.Buildings.Add(new BuildSite
+                {
+                    Id = SiteId(2, otherAt), Record = Hut, Position = otherAt, Town = other.Number, Owner = Rig.PlayerFaction,
+                    Materials = [], Complete = true, Target = 1, Progress = 1,
+                });
+            }
+
             source.World.Buildings.Add(new BuildSite
             {
                 Id = SiteId(1, HutAt), Record = Hut, Position = HutAt, Town = town.Number, Owner = Rig.PlayerFaction,
@@ -224,10 +236,10 @@ public class ConstructionTests
         using var rig = new Rig();
         BuildingSave.Read(save, rig.World, rig.Db, player, Rig.PlayerFaction);
         var worker = rig.Add(HutAt.X, HutAt.Z + 10, Unit);
-        var site = Assert.Single(rig.World.Buildings.All);
+        var site = rig.World.Buildings.All.Single(s => s.Id == SiteId(1, HutAt));
         rig.Say(new DismantleOrder([worker], site.Id) { Tick = rig.World.Tick });
-        for (int t = 0; t < 3000 && rig.World.Buildings.Count > 0; t++) rig.World.RunTick();
-        Assert.Empty(rig.World.Buildings.All);
+        for (int t = 0; t < 3000 && rig.World.Buildings.Find(site.Id) is not null; t++) rig.World.RunTick();
+        Assert.Equal(keepOtherTown ? 1 : 0, rig.World.Buildings.Count);
         Assert.Equal(keepOtherTown ? 1 : 0, rig.World.Buildings.Towns.Count);
 
         BuildingSave.Write(save, rig.World, player);
@@ -351,9 +363,9 @@ public class ConstructionTests
         rig.World.RunTicks(2);
         var town = Assert.Single(rig.World.Buildings.Towns);
 
-        // Made at the hut, then reassessed: centred between its two buildings, the radius 200 beyond them but at least 1250.
-        Assert.Equal((1, PlayerTown.DefaultName, (ShedAt + campAt) / 2, Rig.PlayerFaction), (town.Number, town.Name, town.Position, town.Owner));
-        Assert.Equal(1700, town.Radius);
+        // Made at the hut, then reassessed: centred on its house (the shed does not move the centre), the radius 200 beyond the farthest building.
+        Assert.Equal((1, PlayerTown.DefaultName, campAt, Rig.PlayerFaction), (town.Number, town.Name, town.Position, town.Owner));
+        Assert.Equal(3200, town.Radius);
         Assert.All(rig.World.Buildings.All, s => Assert.Equal(1, s.Town));
 
         var builder = new SaveBuilder(1);
