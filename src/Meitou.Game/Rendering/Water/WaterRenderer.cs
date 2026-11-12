@@ -590,6 +590,33 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform mat4 uReflectionViewProjection;
         uniform float uReflect;
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureScene)
+
+        // The scene under the water at a screen position, from the half-size copy: its four texels weighed by how near the depths they were made of are to this pixel's
+        // own (zHere, 0 without a depth copy: plain filtering). A leg or a blade in the water otherwise took some of the bright floor beside it, which it shows through
+        // its own thin layer of water: a light rim along its edge.
+        vec3 sceneUnder(vec2 uv, float zHere)
+        {
+            if (zHere <= 0.0) return texture(uRefraction, uv).rgb;
+            ivec2 size = textureSize(uRefraction, 0);
+            vec2 full = vec2(textureSize(uSceneDepth, 0));
+            vec2 f = uv * vec2(size) - 0.5;
+            ivec2 i0 = ivec2(floor(f));
+            vec2 w = f - vec2(i0);
+            vec3 sum = vec3(0.0);
+            float total = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 o = ivec2(k & 1, k >> 1);
+                ivec2 q = clamp(i0 + o, ivec2(0), size - 1);
+                vec4 d = textureGather(uSceneDepth, (vec2(q) * 2.0 + 1.0) / full);   // the four pixels the texel averages
+                float rel = 0.0;
+                for (int j = 0; j < 4; j++) rel = max(rel, abs(depthViewZ(d[j], uDepthPlanes.xy) - zHere));
+                float weight = max((o.x == 1 ? w.x : 1.0 - w.x) * (o.y == 1 ? w.y : 1.0 - w.y), 1e-3) / (rel / zHere + 0.005);
+                sum += texelFetch(uRefraction, q, 0).rgb * weight;
+                total += weight;
+            }
+            return sum / total;
+        }
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
         uniform vec2 uCentre;           // the grid's centre and its spacing over its radius (the vertex stage's), for the hump's vertex spacing
@@ -886,7 +913,14 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // What lies under the water, seen through the waves: the scene copied before the water, its lookup bent by the surface's slope
                 // (less in thin water and far away).
                 vec2 bend = n.xz * 0.06 * clamp(depth / 30.0, 0.0, 1.0) / (1.0 + dist / 600.0);
-                under = texture(uRefraction, gl_FragCoord.xy * uScreen + bend).rgb;
+                float zHere = uDepthPlanes.z > 0.5 ? depthViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r, uDepthPlanes.xy) : 0.0;
+                if (zHere > 0.0)
+                {
+                    // The bend stays on what this pixel shows: across a silhouette it brought the floor's colour under a leg's thin water, or the leg's under the floor's deep water.
+                    ivec2 bent = clamp(ivec2(gl_FragCoord.xy + bend / uScreen), ivec2(0), textureSize(uSceneDepth, 0) - 1);
+                    bend *= 1.0 - smoothstep(0.03, 0.1, abs(depthViewZ(texelFetch(uSceneDepth, bent, 0).r, uDepthPlanes.xy) - zHere) / zHere);
+                }
+                under = sceneUnder(gl_FragCoord.xy * uScreen + bend, zHere);
                 // Caustics: the waves focus the sun into a moving web of light on the floor of shallow water (two drifting webs of the foam
                 // texture's cell rims, multiplied).
                 if (uLean < 0.5 || (dist < 2500.0 && floorDepth > 1.5 && l.y > 0.0))

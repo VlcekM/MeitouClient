@@ -83,6 +83,7 @@ its surface is raised over the beach and cut back to the run-up. Beside it, the 
 subtracted (the breaker hump only where the vertices carry it, as in the vertex stage), else the water stood a few
 units deep at a dry waterline (the stepped line along the heightmap contour). Wet sand blends over the full-size scene,
 not the half-size copy. SSAO fades under the water plane the same way ([post](render-post.md) "SSAO").
+The refracted colour is read depth-aware (`sceneUnder`): the half-size copy's four texels are weighed by how near the depths they average are to the pixel's own, and the surface's bend is dropped where it would cross a silhouette (3 to 10 % of depth). Plain filtering gave a leg or a blade in the water some of the bright floor beside it under its own thin water: a light rim along its edge (**Observed**, swimmers in the Flats Lagoon).
 The depth copy is gated like the refraction: Meitou only with refraction on (`--no-water-refraction` pays neither),
 Faithful only while the nearest water is nearer than 4000 units; with reflections off the nearest water is unknown, so it then runs
 whether or not water is in view. **Observed** (2560x1440, DLSS, RTX 4090, Shark): about 0.03 ms with Meitou water (its
