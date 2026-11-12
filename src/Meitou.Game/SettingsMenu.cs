@@ -304,6 +304,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's frame generation DLLs and turns Reflex on. "
         + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
 
+    /// <summary>The HDR output rows of the Display page and of the launcher (docs/render-post.md "HDR output").</summary>
+    internal const string HdrName = "HDR output", HdrPaperName = "HDR white brightness", HdrPeakName = "HDR peak brightness";
+    internal const string HdrHint = "Sends an HDR10 picture to a display that takes one (Windows: HDR turned on for that monitor): highlights keep going above white. "
+        + "Not with frame generation. Takes effect at start-up.";
+    internal const string HdrPaperHint = "How bright white is in HDR (the interface, sunlit ground), in nits. 200 suits a lit room; raise it if the picture looks dim.";
+    internal const string HdrPeakHint = "The brightest your display shows, in nits: the highlights roll off up to it.";
+
     internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
 
     string FrameGenerationHint() => Loc.Tr(FrameGenerationTemplate, Loc.Tr(FrameGenerationStatus?.Invoke() ?? "off"));
@@ -416,7 +423,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The Display page: its sliders, the frame limit, world tick and frame generation, in the catalogue's order; modes replace their sliders.
+    /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their sliders.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
@@ -433,6 +440,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         {
             result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)Config.FrameGenerationMethod,
                 i => Config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
+            result.Add(new(HdrName, HdrHint, Toggle: new(HdrName, () => Config.Hdr, v => Config.Hdr = v, OnOff: true), Raw: "hdr"));
+            result.Add(new(HdrPaperName, HdrPaperHint, Slider: new Slider(HdrPaperName, 80, 500, () => Config.HdrPaperNits,
+                v => Config.HdrPaperNits = MathF.Round(v / 10) * 10, "0"), Raw: "hdrPaperNits"));
+            result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 400, 4000, () => Config.HdrPeakNits,
+                v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits"));
         }
 
         result.RemoveAll(e => !ShownNow(e));

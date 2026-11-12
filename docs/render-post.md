@@ -171,7 +171,7 @@ halo round the character against the far ground; the rest of the picture is the 
 
 ## HDR output
 
-`--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). The swapchain takes HDR10
+The Display page's `HDR output` row (the launcher and the in-game menu), `--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). `HDR white brightness` and `HDR peak brightness` (`hdrPaperNits` 80 to 500, `hdrPeakNits` 400 to 4000) are read every frame. The swapchain takes HDR10
 (10-bit PQ) when the display lists it, else stays SDR. The backbuffer and LDR targets are then RGBA16F, the composite replaces the tone curve with
 `hdrShoulder` (the SDR picture below 0.8, then a roll-off to `PostOptions.HdrPeak`), and `UiLayer.CompositeHdr` decodes gamma 2.2, places white at
 `hdrPaperNits` (200), converts to BT.2020 and encodes PQ; `hdrPeakNits` (1000) sets the ceiling. Saved pictures use the SDR composite.

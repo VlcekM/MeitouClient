@@ -206,7 +206,29 @@ static class LauncherSchema
     ];
 
     /// <summary>
-    /// The launcher's Display section: full screen, VSync, the frame limit, the world tick and the Display ones of the given sliders.
+    /// HDR output (docs/render-post.md "HDR output"): the switch, read at start-up, and the picture's white and the display's peak in nits.
+    /// </summary>
+    static SettingDescription[] HdrSettings(UserConfig defaults) =>
+    [
+        new()
+        {
+            Key = Key(nameof(UserConfig.Hdr)), Kind = SettingKind.Toggle, Name = SettingsMenu.HdrName, Description = SettingsMenu.HdrHint,
+            Default = defaults.Hdr ? 1 : 0, On = "On", Off = "Off",
+        },
+        new()
+        {
+            Key = Key(nameof(UserConfig.HdrPaperNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPaperName, Description = SettingsMenu.HdrPaperHint,
+            Default = defaults.HdrPaperNits, Shown = defaults.HdrPaperNits, Min = 80, Max = 500, Step = 10, Suffix = " nits",
+        },
+        new()
+        {
+            Key = Key(nameof(UserConfig.HdrPeakNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPeakName, Description = SettingsMenu.HdrPeakHint,
+            Default = defaults.HdrPeakNits, Shown = defaults.HdrPeakNits, Min = 400, Max = 4000, Step = 50, Suffix = " nits",
+        },
+    ];
+
+    /// <summary>
+    /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of the given sliders.
     /// </summary>
     static SettingsSection DisplaySection(UserConfig defaults, List<SettingDescription> sliders) => new()
     {
@@ -230,6 +252,7 @@ static class LauncherSchema
                 Step = 5, Suffix = " fps", OffBelow = 1, OffText = "Unlimited",
             },
             .. (!OperatingSystem.IsMacOS() ? FrameGenerationSettings(defaults) : []),
+            .. (!OperatingSystem.IsMacOS() ? HdrSettings(defaults) : []),
             new()
             {
                 Key = Key(nameof(UserConfig.TickAhead)), Kind = SettingKind.Slider, Name = "World tick alongside drawing",
