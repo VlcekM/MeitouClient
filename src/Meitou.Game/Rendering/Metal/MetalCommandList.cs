@@ -706,7 +706,7 @@ public sealed class MetalCommandList : IGpuCommandList
                 if (binding.Buffer.Buffer.IsNull) continue;
 
                 var (buffer, offset) = _ctx.Buffer(binding.Buffer);
-                UseResource(buffer, MTLResourceUsage.Read, computePass);
+                UseResource(buffer, BufferUsage(binding.Kind, computePass), computePass);
                 entries[at] = buffer.GpuAddress + offset;
             }
             else
@@ -737,6 +737,14 @@ public sealed class MetalCommandList : IGpuCommandList
             BindVertexBuffer(MetalShaders.VertexBlockBase + set, argumentBuffer, constants.Offset);
         else BindFragmentBuffer(set, argumentBuffer, constants.Offset);
     }
+
+    /// <summary>
+    /// How the encoder is told a buffer of an argument buffer is used. A compute pass's storage buffers may be written (the engine's compute shaders
+    /// declare which are <c>readonly</c>, but the argument buffer hides that from Metal): declared read-only, a buffer one dispatch writes and the next
+    /// reads (the foliage cull's counts, offsets, fades and rows) gets no ordering between the encoders, and the reader runs on stale data.
+    /// </summary>
+    static MTLResourceUsage BufferUsage(GpuBindingKind kind, bool computePass) =>
+        computePass && kind == GpuBindingKind.StorageBuffer ? MTLResourceUsage.Read | MTLResourceUsage.Write : MTLResourceUsage.Read;
 
     /// <summary>
     /// Tells the current encoder a resource the argument buffer holds; the compute encoder needs it for its writes too.

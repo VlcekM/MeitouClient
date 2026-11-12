@@ -106,12 +106,22 @@ public sealed unsafe class MetalFrame : IGpuFrame
     }
 
     /// <summary>
-    /// Logs the failure of the frame's last command buffer, if it failed.
+    /// Logs the failure of the frame's scene and present command buffers, if they failed.
     /// </summary>
     void ReportFailure()
     {
-        if (Command.NativePtr != IntPtr.Zero && Command.Status == MTLCommandBufferStatus.Error)
-            Console.WriteLine($"metal     frame slot {Slot} command buffer failed: {Command.Error.LocalizedDescription}");
+        Report(SceneCommand, "scene");
+        Report(_presentCommand, "present");
+    }
+
+    /// <summary>
+    /// Logs <paramref name="command"/>'s error, if it has one.
+    /// </summary>
+    void Report(MTLCommandBuffer command, string kind)
+    {
+        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Error) return;
+
+        Console.WriteLine($"metal     frame slot {Slot} {kind} command buffer failed: {command.Error.LocalizedDescription}");
     }
 
     /// <summary>
@@ -227,6 +237,9 @@ public sealed unsafe class MetalFrame : IGpuFrame
     /// </summary>
     internal void ReleasePreFrame()
     {
+        if (_preCommand.NativePtr != IntPtr.Zero && _preCommand.Status == MTLCommandBufferStatus.Error)
+            Console.WriteLine($"metal     frame slot {Slot} pre-frame command buffer failed: {_preCommand.Error.LocalizedDescription}");
+
         if (_preCommand.NativePtr != IntPtr.Zero) _preCommand.Dispose();
         _preCommand = default;
     }
