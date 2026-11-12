@@ -209,6 +209,11 @@ public sealed class WorldSession : IDisposable
     #region Frame advance
 
     /// <summary>
+    /// The drawn frame's length in seconds, smoothed over the last ten or so frames (the strategy camera's turn and tilt averaging counts in it).
+    /// </summary>
+    double _frameSeconds;
+
+    /// <summary>
     /// A world tick's wall time (ms), smoothed over the last ten or so ticks, whether run in the frame or ahead (the host's dynamic tick ahead reads
     /// it).
     /// </summary>
@@ -223,6 +228,9 @@ public sealed class WorldSession : IDisposable
     /// </summary>
     public int Advance(double realSeconds)
     {
+        _frameSeconds = _frameSeconds == 0 ? realSeconds : _frameSeconds + (realSeconds - _frameSeconds) * 0.1;
+        Camera.Strategy.DrawnFrameSeconds = (float)_frameSeconds;
+
         int n = Ticks.Advance(realSeconds);
         for (int i = 0; i < n; i++) Tick();
         AdvanceSimulation(realSeconds);

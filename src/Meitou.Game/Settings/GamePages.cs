@@ -359,8 +359,20 @@ sealed class GamePages(SettingsMenu menu)
                 v => KeyMap.SwapButtons = (menu.Config.SwapMouseButtons = v) == true, OnOff: true)));
         result.Add(new("Edge scrolling", "The camera moves when the pointer is at the edge of the screen.",
             Toggle: new("Edge scrolling", () => menu.Config.EdgeScroll != false, v => menu.Config.EdgeScroll = v)));
+        result.Add(new("Camera smoothing",
+            "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once.",
+            Toggle: new("Camera smoothing", () => menu.Config.CameraSmoothing, SetCameraSmoothing)));
         foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
+    }
+
+    /// <summary>
+    /// The Camera smoothing toggle, into the config and the camera.
+    /// </summary>
+    void SetCameraSmoothing(bool on)
+    {
+        menu.Config.CameraSmoothing = on;
+        menu.CameraChanged?.Invoke();
     }
 
     /// <summary>

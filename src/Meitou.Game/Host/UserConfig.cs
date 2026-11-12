@@ -386,6 +386,10 @@ sealed class UserConfig
     /// </summary>
     public bool? EdgeScroll { get; set; }
     /// <summary>
+    /// The strategy camera's turn and tilt ease in and out as the original's always do (Controls settings; the original has no such option).
+    /// </summary>
+    public bool CameraSmoothing { get; set; } = true;
+    /// <summary>
     /// The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's
     /// settings.cfg.
     /// </summary>
@@ -558,6 +562,7 @@ sealed class UserConfig
     {
         camera.InvertX = InvertX ?? camera.InvertX;
         camera.InvertY = InvertY ?? camera.InvertY;
+        camera.Smoothing = CameraSmoothing;
         camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
         camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
     }

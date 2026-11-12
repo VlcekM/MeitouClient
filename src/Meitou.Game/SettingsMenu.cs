@@ -424,7 +424,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<float>? CameraRotateSpeedChanged { get; init; }
 
     /// <summary>
-    /// A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
+    /// A camera option other than the rotation speed changed (invert X / Y, smoothing, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
     /// </summary>
     public Action? CameraChanged { get; init; }
 
@@ -1184,6 +1184,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.EnhancedHardwareMouse = true;
         GamePages.CameraRotateSpeed.Set(Data.World.KenshiCamera.DefaultRotateSpeed);
         Config.EdgeScroll = true;
+        Config.CameraSmoothing = true;
         Config.InvertX = false;
         Config.InvertY = true;
         Config.CameraMoveSpeed = Data.World.KenshiCamera.DefaultMoveSpeed;

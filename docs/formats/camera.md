@@ -134,6 +134,10 @@ pivot). The viewer's altitude band starts at 5100 above that and ends at 18700 (
 `StrategyCamera` implements the step above in frames of 1/60 s (a 30 Hz control tick runs two), including edge scrolling (the
 host passes the pointer's place in the window, from Windows, only while the window is in front and nothing else uses the pointer;
 the Controls settings toggle, first taken from the install's `Edge scrolling`, turns it off).
+The turn and tilt averaging counts its 20 frames in drawn frames, as the game's does, while the step stays 1/60 s (so the mouse's turn per
+pixel does not change with the frame rate): a step spanning n drawn frames weighs its samples 1, aⁿ, a²ⁿ, ... over 20 / n samples
+(`StrategyCamera.FramesPerStep`, the host's smoothed frame time). Engine choices: a frame rate under 60 averages as 60 does, and the
+Controls settings' **Camera smoothing** (`UserConfig.CameraSmoothing`, default on; the game has no such option) turns the averaging off.
 Differences, all engine choices: a pitch step is cut into pieces of at most 0.02 rad, each checked against the limits (the game
 overshoots by up to one step); the eye is never left below the clearance by the height lag; tracking is the host's (the pivot
 follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the
