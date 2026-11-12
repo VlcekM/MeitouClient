@@ -91,22 +91,55 @@ static class LampShadowShaders
     /// shadows are near hard.
     /// </summary>
     static readonly string BlockerRays = $$"""
+        // The surface target's bits of a receiver: a fragment the resolve lights (bit 8), or a character (bit 19, AtmosphereShaders' kenshiLight).
+        #define LAMP_RECEIVER 524544u
         // How far along the ray its blocker is (0: nothing between the surface and the lamp). Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
         float lampSkip = LAMP_NEAR_SKIP;   // what a ray leaves out before the lamp
+        // The receiver is a character (bit 19): the cut-out cards of characters (hair, frayed cloth) cast nothing on it. A ray per pixel draws each strand's shadow as a hard
+        // dark line on the skin, where the eye expects the soft shade of a mass of hair.
+        bool lampBody = false;
+        // The receiver's point (relative to the scene's origin), the plane it drew and a pixel's width there, for a character's rays.
+        vec3 lampAt = vec3(0.0), lampSide = vec3(0.0, 1.0, 0.0);
+        float lampPixel = 0.0;
         float lampBlocker(vec3 from, vec3 target, float reach, uint emitter)
         {
+            float tMin = 0.0;
+            if (lampBody)
+            {
+                // A character leaves as it does for the traced sun (TracedSunShaders' visibility): close to its skin, past the creases between its facets; and from under a
+                // facet turned from the lamp while its smooth shading still takes the light, the ray crosses the body and is asked for blockers from where it leaves it
+                // (a dark triangle on a low-poly shoulder otherwise).
+                vec3 to = normalize(target - lampAt);
+                float facing = dot(lampSide, to);
+                if (facing < 0.0)
+                {
+                    from = lampAt - lampSide * (0.002 + lampPixel * 0.25);
+                    rayQueryEXT inside;
+                    rayQueryInitializeEXT(inside, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullFrontFacingTrianglesEXT, uint(uRayMask.x), from, 0.0, to, {{TracedSunShaders.BodyChordText}});
+                    while (rayQueryProceedEXT(inside)) { }
+                    if (rayQueryGetIntersectionTypeEXT(inside, true) != gl_RayQueryCommittedIntersectionNoneEXT) tMin = rayQueryGetIntersectionTEXT(inside, true) + 0.002;
+                }
+                else
+                {
+                    float clearance = (0.01 + lampPixel * 0.5) / max(facing, 0.2);
+                    from = lampAt + lampSide * clearance;
+                    tMin = max(clearance, {{TracedSunShaders.BodyContactText}});
+                }
+            }
             vec3 ray = target - from;
             float d = length(ray), tMax = min(d - lampSkip, reach);
-            if (tMax <= 0.0) return 0.0;
+            if (tMax <= tMin) return 0.0;
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
             // With the tiles what moves alone (TracedSunShaders.LampMovers), the still world is in the tiles; without them everything the scene holds (TracedSunShaders.LampMask).
-            rayQueryInitializeEXT(shadow, uScene, flags, uint(uRayMask.x), from, 0.0, ray / d, tMax);
+            rayQueryInitializeEXT(shadow, uScene, flags, uint(uRayMask.x), from, tMin, ray / d, tMax);
             while (rayQueryProceedEXT(shadow))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false);
-                if ((emitter == 0u || geometries[record].emitter != emitter) && casterKept(record,
+                Geometry hit = geometries[record];
+                if (lampBody && hit.kind == {{GeometryRecord.Character}}u && (hit.sunMap != 0u ? hit.sunCut : hit.alphaThreshold) > 0.0 && (hit.sunMap | hit.alphaMap) != 0u) continue;
+                if ((emitter == 0u || hit.emitter != emitter) && casterKept(record,
                     rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false), 2.0))
                     rayQueryConfirmIntersectionEXT(shadow);
             }
@@ -141,7 +174,8 @@ static class LampShadowShaders
         {
             total0 = total1 = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w & 256u) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
+            lampBody = (surface.w & 524288u) != 0u;
+            if ((surface.w & LAMP_RECEIVER) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
             float z = depthAt(px);
             if (z <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0);
             vec3 world = positionAt(px, z);
@@ -156,6 +190,7 @@ static class LampShadowShaders
             if (dot(anyLight, vec3(1.0)) <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0);
             // Off the surface's plane by what its depth and the traced mesh can be wrong by: a floor, and two pixels' width there.
             vec3 from = world - uOrigin + rankPlane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
+            lampAt = world - uOrigin; lampSide = rankPlane; lampPixel = z * uFootprint;
             if (picked == 2 && pickLamp[0] > pickLamp[1])
             {
                 int lamp = pickLamp[0]; pickLamp[0] = pickLamp[1]; pickLamp[1] = lamp;
@@ -355,7 +390,8 @@ static class LampShadowShaders
             vec4 lost = vec4(0.0, 0.0, 0.0, -1.0);
             vec3 total = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            float z = (surface.w & 256u) == 0u ? 0.0 : depthAt(px);
+            lampBody = (surface.w & 524288u) != 0u;
+            float z = (surface.w & LAMP_RECEIVER) == 0u ? 0.0 : depthAt(px);
             if (z > 0.0)
             {
                 vec3 world = positionAt(px, z);
@@ -368,6 +404,7 @@ static class LampShadowShaders
                 {
                     int lamp = int(uRayMask.y);
                     vec3 from = world - uOrigin + rankPlane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
+                    lampAt = world - uOrigin; lampSide = rankPlane; lampPixel = z * uFootprint;
                     vec4 p = texelFetch(uLightData, ivec2(0, lamp), 0);
                     vec3 target = p.xyz - uOrigin;
                     float t = lampBlocker(from, target, p.w, oneEmitter);
@@ -479,7 +516,8 @@ static class LampShadowShaders
             if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
             vec3 shown = vec3(0.0, 0.0, 0.15);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            float z = (surface.w & 256u) == 0u ? 0.0 : depthAt(px);
+            lampBody = (surface.w & 524288u) != 0u;
+            float z = (surface.w & LAMP_RECEIVER) == 0u ? 0.0 : depthAt(px);
             int lamp = int(uRayMask.y);
             if (z > 0.0)
             {
@@ -502,6 +540,7 @@ static class LampShadowShaders
                         float radius = texelFetch(uLightData, ivec2(5, lamp), 0).x;
                         lampSkip = uMode > 1.5 ? 60.0 : max(LAMP_NEAR_SKIP, 8.0 * radius);   // as the tiles (LampTiles.FixtureSources); mode 2: well past the lamp's housing
                         vec3 from = world - uOrigin + plane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint), centre = p.xyz - uOrigin;
+                        lampAt = world - uOrigin; lampSide = plane; lampPixel = z * uFootprint;
                         int lit = 0;
                         for (int k = 0; k < 256; k++)
                         {

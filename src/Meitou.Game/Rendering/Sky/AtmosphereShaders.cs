@@ -517,7 +517,7 @@ static class AtmosphereShaders
         // What a lit fragment writes to the GI resolve's surface target (GiResolveShaders.WithAlbedo; RGBA32UI, 0: no probes here), set by kenshiLight:
         // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | takes the probes << 8 | interior << 9 | gloss << 10
         // (with the reflections on: 1 + gloss * 62, else 0) | traced << 16 | receiver << 17 (with the traced sun, docs/render-shadows.md "Traced sun": also from the
-        // programs that read the probes themselves).
+        // programs that read the probes themselves) | lamp receiver << 19 (a character, with its normal and albedo, while the lamps are traced).
         uvec4 giAlbedoOut = uvec4(0u);
         bool giInterior = false;
         // The sun term the traced sun's pass adds where its rays reach (location 2, GiResolveShaders.WithAlbedo), before the haze, and the kind of surface, set before kenshiLight:
@@ -581,6 +581,16 @@ static class AtmosphereShaders
             // reflection dimmed as much as the probes dim the sky (an occluded corner reflects no sky).
             float specularOcclusion = 1.0;
             bool useGi = uGiParams.x > 0.5 && (!giInterior || uGiParams.w > 0.5);
+            #ifdef GI_IN_SHADER
+            // The traced lamp shadows' receivers among the fragments that read the probes themselves: while the lamps are traced (uGiParams.z bit 16) a character writes
+            // its normal and albedo with bit 19, which the lamp pass alone reads (docs/render-lights.md "Traced lamp shadows").
+            if (atmoReceiver == 3 && (int(uGiParams.z + 0.5) & 16) != 0)
+            {
+                uvec2 o = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
+                uvec3 c = uvec3(sqrt(clamp(albedo, 0.0, 1.0)) * 255.0 + 0.5);
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 524288u | (giAlbedoOut.w & 458752u));
+            }
+            #endif
             #ifndef GI_IN_SHADER
             // The GI resolve (uGiParams.z, docs/render-gi.md "Resolve"): the sky's ambient here, the albedo out for the post pass that swaps in the probes.
             // z is bits: 1 the resolve, 2 the reflections, which want every lit surface and its gloss too (docs/render-gi.md "Reflections"), 4 the traced sun.

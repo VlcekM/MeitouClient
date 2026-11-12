@@ -858,6 +858,9 @@ static partial class WorldFrame
         // The contact shadows' sun (PostProcess.ContactSun) leaves the colours the same way, with its cascades, until ContactSun puts it back.
         bool apart = !traced && gpu.Post is { ContactSunReady: true } && gpu.Probes is not null;
         if (apart) gpu.Probes!.SunApart = true;
+        // The traced lamps' shadows fall on the characters too, which mark themselves as receivers while the pass will run (PostProcess.RunLampShadows).
+        bool lampReceivers = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 } && gpu.Gi is { Top: not null } && gpu.Probes is not null;
+        if (lampReceivers) gpu.Probes!.LampReceivers = true;
 
         DrawSceneTerrain(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
@@ -867,6 +870,7 @@ static partial class WorldFrame
         DrawSceneLate(ref f, s);
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
+        if (lampReceivers) gpu.Probes!.LampReceivers = false;
         DrawSkyBehind(ref f);
         if (traced) TraceSun(ref f, s);
         if (apart)

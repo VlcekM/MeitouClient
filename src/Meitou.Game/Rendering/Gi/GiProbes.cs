@@ -144,11 +144,13 @@ internal sealed unsafe class GiProbes : IDisposable
     /// <summary>True: the cloud transmission map dims the sun at the probes' hits (the <c>gihybrid</c> switch's <c>clouds</c> part, docs/render-clouds.md).</summary>
     public bool CloudShadows { get; set; }
 
-    /// <summary>Render globals: x on/filled, y strength, z bits: 1 resolve, 2 reflections, 4 the traced sun, 8 the sun written apart with its cascades (both with the resolve); w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
+    /// <summary>Render globals: x on/filled, y strength, z bits: 1 resolve, 2 reflections, 4 the traced sun, 8 the sun written apart with its cascades, 16 the traced lamps (all three with the resolve); w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
     Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength,
-        (Resolve ? 1 : 0) + (Reflections && !InReflection ? 2 : 0) + (Resolve && Traced ? 4 : 0) + (Resolve && SunApart ? 8 : 0), InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+        (Resolve ? 1 : 0) + (Reflections && !InReflection ? 2 : 0) + (Resolve && Traced ? 4 : 0) + (Resolve && SunApart ? 8 : 0) + (Resolve && LampReceivers ? 16 : 0), InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
     /// <summary>True while the main view's opaque scene draws with the traced sun (<c>kenshiLight</c> reads it from <c>uGiParams.z</c> bit 4; docs/render-shadows.md "Traced sun").</summary>
     public bool Traced { get; set; }
+    /// <summary>True while the main view's opaque scene draws with the lamps traced: the characters write themselves as the lamp shadows' receivers (<c>uGiParams.z</c> bit 16; docs/render-lights.md "Traced lamp shadows").</summary>
+    public bool LampReceivers { get; set; }
     /// <summary>True while the main view's opaque scene draws with the sun written apart for the contact shadows (<c>uGiParams.z</c> bit 8; docs/render-post.md "Contact shadows").</summary>
     public bool SunApart { get; set; }
     /// <summary>True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").</summary>

@@ -139,9 +139,6 @@ static class CharacterShaders
     /// </summary>
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
 
-    /// <summary>
-    /// The colour and depth passes' vertex program (no motion).
-    /// </summary>
     public static string Vertex() => VertexSource(false);
     /// <summary>
     /// The vertex program for the motion vectors: also skins with last frame's palette (binding 9) and model matrix (locations 12 to 15).
@@ -677,6 +674,8 @@ static class CharacterShaders
                 vec3 sunDiffuse = skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo);
                 skinSunBand = sunDiffuse - clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0);
                 colour = kenshiLight(albedo, n, v, gloss, vWorld, sunDiffuse);
+                // Hair is no receiver of the traced lamp shadows (kenshiLight's bit 19): its cards shadow each other into black, and its own shading has no single surface.
+                if (m.shading == 2u) giAlbedoOut.w &= ~524288u;
             }
             // The studio (Meitou, the previewsun switch; the editor's stage and the portraits, a fog distance of -4): a fixed warm sun and a sky over a sunlit
             // ground, so the still shows form without depending on the hour it was drawn (docs/character-renderer.md "Meitou stage and portraits").

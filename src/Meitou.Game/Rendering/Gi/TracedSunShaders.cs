@@ -75,6 +75,10 @@ static class TracedSunShaders
 
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
+    /// <summary><see cref="BodyChord"/> and <see cref="BodyContact"/> as GLSL constants, for the lamps' rays on a character (<see cref="LampShadowShaders"/>).</summary>
+    internal static string BodyChordText => F(BodyChord);
+    internal static string BodyContactText => F(BodyContact);
+
     /// <summary>One ray per pixel: the mask's red is what of the sun reaches the pixel (1 where nothing is asked).</summary>
     public static readonly string Mask = $$"""
         #version 460
