@@ -67,6 +67,11 @@ sealed class PhotoMode
     /// The characters' speech bubbles are drawn (hidden on entering: a picture is of the scene).
     /// </summary>
     bool _dialogue;
+    /// <summary>
+    /// The simulation's speed while it runs in the mode (<see cref="SetGameSpeed"/>).
+    /// </summary>
+    float _gameSpeed = 1;
+    const float MinGameSpeed = 0.05f, MaxGameSpeed = 5;
     float _focusMetres = 10, _aperture = 1, _exposureStops;
 
     /// <summary>
@@ -105,7 +110,13 @@ sealed class PhotoMode
     /// <see cref="Choices"/> (two are an off/on switch). <see cref="Name"/> is the <c>photo set</c> name.
     /// </summary>
     internal sealed record Param(string Name, string Label, float Min, float Max, Func<float> Get, Action<float> Set, Func<float, string> Text,
-        bool Log = false, string[]? Choices = null, Func<bool>? Enabled = null);
+        bool Log = false, string[]? Choices = null, Func<bool>? Enabled = null, string Group = "");
+
+    /// <summary>
+    /// The panel's tabs, in order: each setting's <see cref="Param.Group"/> is one of them.
+    /// </summary>
+    internal const string CameraGroup = "Camera", FocusGroup = "Focus", LightGroup = "Light", PictureGroup = "Composition", TimeGroup = "Time";
+    internal static readonly string[] Groups = [CameraGroup, FocusGroup, LightGroup, PictureGroup, TimeGroup];
 
     /// <summary>
     /// The settings in the panel's order.
@@ -115,30 +126,31 @@ sealed class PhotoMode
     Param[] BuildParams() =>
     [
         new("fov", "Field of view", 10, 100, () => _host.Camera.FieldOfView * 180 / MathF.PI, v => _host.Camera.FieldOfView = v * MathF.PI / 180,
-            v => $"{v:0} deg"),
+            v => $"{v:0} deg", Group: CameraGroup),
         new("roll", "Roll", -90, 90, () => _host.Session.Camera.Free.Roll * 180 / MathF.PI,
-            v => _host.Session.Camera.Free.Roll = Math.Clamp(v, -90f, 90f) * MathF.PI / 180, v => $"{v:0.0} deg"),
-        new("dof", "Depth of field", 0, 1, () => _dof ? 1 : 0, v => _dof = v >= 0.5f, v => v >= 0.5f ? "on" : "off", Choices: ["off", "on"]),
+            v => _host.Session.Camera.Free.Roll = Math.Clamp(v, -90f, 90f) * MathF.PI / 180, v => $"{v:0.0} deg", Group: CameraGroup),
+        new("dof", "Depth of field", 0, 1, () => _dof ? 1 : 0, v => _dof = v >= 0.5f, v => v >= 0.5f ? "on" : "off", Choices: ["off", "on"], Group: FocusGroup),
         new("focusmode", "Focus", 0, 1, () => _autoFocus ? 1 : 0, v => _autoFocus = v >= 0.5f, v => v >= 0.5f ? "auto (centre)" : "manual",
-            Choices: ["manual", "auto"]),
+            Choices: ["manual", "auto"], Group: FocusGroup),
         new("focus", "Focus distance", 0.3f, 1000, () => _focusMetres, v => (_focusMetres, _autoFocus) = (Math.Clamp(v, 0.3f, 1000), false),
-            v => $"{v:0.0} m", Log: true, Enabled: () => !_autoFocus),
+            v => $"{v:0.0} m", Log: true, Enabled: () => !_autoFocus, Group: FocusGroup),
         new("aperture", "Aperture", 0.25f, 22, () => _aperture, v => _aperture = Math.Clamp(MathF.Round(v * 20) / 20, 0.25f, 22),
-            v => $"f/{v:0.0#}", Log: true),
+            v => $"f/{v:0.0#}", Log: true, Group: FocusGroup),
         new("exposure", "Exposure", -3, 3, () => _exposureStops, v => _exposureStops = Math.Clamp(MathF.Round(v * 10) / 10, -3, 3),
-            v => $"{v:+0.0;-0.0;0.0} EV"),
+            v => $"{v:+0.0;-0.0;0.0} EV", Group: LightGroup),
         new("hour", "Time of day", 0, 24 - 1 / 60f, () => _host.PhotoHour ?? (float)_host.Session.Clock.HourOfDay,
-            v => _host.PhotoHour = Math.Clamp(MathF.Round(v * 60) / 60, 0, 24 - 1 / 60f), WorldFrame.TimeText),
+            v => _host.PhotoHour = Math.Clamp(MathF.Round(v * 60) / 60, 0, 24 - 1 / 60f), WorldFrame.TimeText, Group: LightGroup),
         new("grid", "Grid", 0, 4, () => (float)Grid, v => Grid = (PhotoGrid)Math.Clamp((int)MathF.Round(v), 0, 4), v => Grid.ToString(),
-            Choices: ["off", "thirds", "golden", "cross", "diagonals"]),
+            Choices: ["off", "thirds", "golden", "cross", "diagonals"], Group: PictureGroup),
         new("frame", "Frame", 0, 5, () => (float)Frame, v => Frame = (PhotoFrame)Math.Clamp((int)MathF.Round(v), 0, 5), v => Frame.ToString(),
-            Choices: ["off", "2.39:1", "16:9", "4:3", "1:1", "4:5"]),
+            Choices: ["off", "2.39:1", "16:9", "4:3", "1:1", "4:5"], Group: PictureGroup),
         new("dialogue", "Dialogue", 0, 1, () => _dialogue ? 1 : 0, v => _dialogue = v >= 0.5f, v => v >= 0.5f ? "shown" : "hidden",
-            Choices: ["hidden", "shown"]),
+            Choices: ["hidden", "shown"], Group: PictureGroup),
         new("speed", "Fly speed", 0.5f, 3000, () => _controls.FlySpeed / 10, v => _controls.FlySpeed = Math.Clamp(v * 10, PhotoControls.MinSpeed,
-            PhotoControls.MaxSpeed), v => $"{v:0.#} m/s", Log: true),
+            PhotoControls.MaxSpeed), v => $"{v:0.#} m/s", Log: true, Group: CameraGroup),
         new("live", "Simulation", 0, 1, () => _host.Session.Simulation.IsPaused ? 0 : 1, SetLive, v => v >= 0.5f ? "running" : "paused",
-            Choices: ["paused", "running"]),
+            Choices: ["paused", "running"], Group: TimeGroup),
+        new("gamespeed", "Game speed", MinGameSpeed, MaxGameSpeed, () => _gameSpeed, SetGameSpeed, v => $"x{v:0.##}", Log: true, Group: TimeGroup),
     ];
 
     /// <summary>
@@ -152,7 +164,19 @@ sealed class PhotoMode
     void SetLive(float value)
     {
         var clock = _host.Session.Simulation;
-        clock.SetSpeed(value >= 0.5f ? (_clock.Last > 0 ? _clock.Last : 1) : 0);
+        clock.SetSpeed(value >= 0.5f ? _gameSpeed : 0);
+    }
+
+    /// <summary>
+    /// The speed the simulation runs at while the mode lets it run: slow motion below 1 (to pick the instant of a strike), the game's fast speeds above.
+    /// Steps of a hundredth, and 1 exactly within five hundredths of it.
+    /// </summary>
+    void SetGameSpeed(float value)
+    {
+        float speed = Math.Clamp(MathF.Round(value * 100) / 100, MinGameSpeed, MaxGameSpeed);
+        _gameSpeed = MathF.Abs(speed - 1) <= 0.05f ? 1 : speed;
+        var clock = _host.Session.Simulation;
+        if (!clock.IsPaused) clock.SetSpeed(_gameSpeed);
     }
 
     /// <summary>
@@ -170,7 +194,7 @@ sealed class PhotoMode
         (_dof, _autoFocus, _focusMetres, _aperture, _exposureStops) = (_entryDof, true, 10, _entryAperture, 0);
         UseGameTime();
         (Grid, Frame) = (PhotoGrid.Thirds, PhotoFrame.Off);
-        _dialogue = false;
+        (_dialogue, _gameSpeed) = (false, 1);
         _controls.FlySpeed = 300;
         SetLive(0);
     }

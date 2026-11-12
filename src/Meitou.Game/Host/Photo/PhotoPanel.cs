@@ -7,7 +7,7 @@ using Meitou.Game.Settings;
 namespace Meitou.Game.Host.Photo;
 
 /// <summary>
-/// Photo mode's panel at the left of the picture and the guides over it. The panel is drawn as the settings window is: the interface's painter,
+/// Photo mode's panel, a bar along the bottom of the picture with a tab for each kind of setting, and the guides over the picture. The panel is drawn as the settings window is: the interface's painter,
 /// its window, button and paper surfaces (the game's skins in the Faithful interface), its font and inks, with sliders, switches and buttons the
 /// mouse works (the same settings as <c>photo set</c>). The panel, the grid and the message are left out of a saved picture; the frame bars are not.
 /// </summary>
@@ -18,19 +18,15 @@ sealed class PhotoPanel(PhotoMode mode)
     static readonly Vector4 DarkInk = new(20 / 255f, 8 / 255f, 6 / 255f, 1);
     static readonly Vector4 Groove = new(0.10f, 0.08f, 0.07f, 1);
 
-    static readonly string[] Hints =
-    [
-        "WASD move, R / F up and down, right mouse looks",
-        "Wheel fly speed, Shift faster, Alt slower",
-        "Z / X roll, V level, PageUp / PageDown lens",
-        "F7 hides this panel, Enter or F8 takes the picture",
-        "P or Esc leaves",
-    ];
+    const string Hints = "WASD move    R / F up, down    Right mouse look    Wheel fly speed    Shift fast    Alt slow    Z / X roll    V level    "
+        + "F7 hide panel    Enter picture    P / Esc leave";
 
     /// <summary>
-    /// The panel's place, width and rows' heights, in the settings window's units (pixels at a 900-line picture).
+    /// The panel's measures in the settings window's units (pixels at a 900-line picture): a bar along the bottom of the picture, its tabs over one row
+    /// of four settings.
     /// </summary>
-    const float Left = 30, Top = 30, Width = 320, Pad = 14, SliderRow = 38, ChoiceRow = 32, ChoiceWidth = 150;
+    const float BarWidth = 1040, BarHeight = 138, BarBottom = 26, Pad = 14, TabWidth = 118, TabGap = 6, CellGap = 24, ChoiceWidth = 124;
+    const int Columns = 4;
 
     /// <summary>
     /// What the last drawn frame laid out for the mouse: a rectangle and what a press on it does; a slider also keeps its setting and the track's
@@ -46,6 +42,10 @@ sealed class PhotoPanel(PhotoMode mode)
     Hit? _drag;
     float _scale = 1;
     bool _down, _meitou;
+    /// <summary>
+    /// The tab shown (an index into <see cref="PhotoMode.Groups"/>).
+    /// </summary>
+    int _tab;
 
     #endregion
 
@@ -127,62 +127,65 @@ sealed class PhotoPanel(PhotoMode mode)
         _art.Ensure(painter, _meitou, mode.Host.Player.UiAtlas);
         _scale = Math.Max(0.6f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
         _controls.Clear();
-        if (mode.PanelShown) DrawPanel();
-        DrawMessage(width, height);
+        if (mode.PanelShown) DrawPanel(width, height);
+        DrawMessage(width);
         if (_controls.Count > 0) painter.Draw(_controls, width, height, _pointer, null);
     }
 
     UiRect R(float x, float y, float w, float h) => new(MathF.Round(x * _scale), MathF.Round(y * _scale), MathF.Round(w * _scale), MathF.Round(h * _scale));
 
-    void DrawPanel()
+    /// <summary>
+    /// The bar: the tabs at the left of its top row, Reset and Take picture at the right, the shown tab's settings side by side under them, the keys
+    /// on its last line.
+    /// </summary>
+    void DrawPanel(int width, int height)
     {
-        float rows = mode.Params.Sum(p => p.Choices is null ? SliderRow : ChoiceRow);
-        float height = Pad + 34 + rows + 6 + 32 + 8 + 28 + 12 + Hints.Length * 16 + Pad;
-        var window = R(Left, Top, Width, height);
+        float barWidth = Math.Min(BarWidth, width / _scale - 48), left = (width / _scale - barWidth) / 2, top = height / _scale - BarHeight - BarBottom;
+        var window = R(left, top, barWidth, BarHeight);
         Surface(window, "window");
         float margin = _meitou ? 16 * _scale : 0;
         _panel = new(window.X - margin, window.Y - margin, window.Width + 2 * margin, window.Height + 2 * margin);
 
-        float x = Left + Pad, inner = Width - 2 * Pad, y = Top + Pad;
-        Text("Photo mode", R(x, y, inner, 26), 20, SettingsCanvas.LightInk);
-        Fill(R(x, y + 29, inner, 1), SettingsCanvas.MainInk with { W = 0.14f });
-        y += 34;
-        foreach (var p in mode.Params)
+        float x = left + Pad, inner = barWidth - 2 * Pad, y = top + 12;
+        _tab = Math.Clamp(_tab, 0, PhotoMode.Groups.Length - 1);
+        for (int i = 0; i < PhotoMode.Groups.Length; i++)
         {
-            if (p.Choices is { } choices) DrawChoice(p, choices, x, inner, y);
-            else DrawSlider(p, x, inner, y);
-            y += p.Choices is null ? SliderRow : ChoiceRow;
+            int index = i;
+            Button(PhotoMode.Groups[i], R(x + i * (TabWidth + TabGap), y, TabWidth, 28), () => _tab = index, selected: i == _tab);
         }
 
-        y += 6;
-        Button("Take picture", R(x, y, inner, 32), () => mode.TakePicture(), primary: true);
-        y += 40;
-        float half = (inner - 8) / 2;
-        Button("Game time", R(x, y, half, 28), mode.UseGameTime);
-        Button("Reset", R(x + half + 8, y, half, 28), mode.Reset);
-        y += 40;
-        foreach (string line in Hints)
+        Button("Take picture", R(x + inner - 160, y - 1, 160, 30), () => mode.TakePicture(), primary: true);
+        Button("Reset", R(x + inner - 160 - 8 - 90, y, 90, 28), mode.Reset);
+        Fill(R(x, y + 36, inner, 1), SettingsCanvas.MainInk with { W = 0.14f });
+
+        y += 46;
+        float cell = (inner - (Columns - 1) * CellGap) / Columns, at = x;
+        foreach (var p in mode.Params.Where(p => p.Group == PhotoMode.Groups[_tab]))
         {
-            Text(line, R(x, y, inner, 16), 11, SettingsCanvas.MutedInk);
-            y += 16;
+            if (p.Choices is { } choices) DrawChoice(p, choices, at, cell, y);
+            else DrawSlider(p, at, cell, y);
+            at += cell + CellGap;
         }
+
+        if (PhotoMode.Groups[_tab] == PhotoMode.LightGroup) Button("Game time", R(at, y + 6, ChoiceWidth, 26), mode.UseGameTime);
+        Text(Hints, R(x, top + BarHeight - 28, inner, 16), 11, SettingsCanvas.MutedInk, "Center");
     }
 
     /// <summary>
-    /// A slider row as the settings window's: the name, the value at the right, the bar under them.
+    /// A slider as the settings window's: the name, the value at its right, the bar under them.
     /// </summary>
-    void DrawSlider(PhotoMode.Param p, float x, float inner, float y)
+    void DrawSlider(PhotoMode.Param p, float x, float width, float y)
     {
         bool enabled = p.Enabled?.Invoke() ?? true;
-        Text(p.Label, R(x, y, inner * 0.6f, 20), 13, enabled ? SettingsCanvas.MainInk : SettingsCanvas.MutedInk);
-        Text(PhotoMode.ValueText(p), R(x + inner * 0.5f, y, inner * 0.5f, 20), 13, enabled ? SettingsCanvas.LightInk : SettingsCanvas.MutedInk,
+        Text(p.Label, R(x, y, width * 0.62f, 20), 13, enabled ? SettingsCanvas.MainInk : SettingsCanvas.MutedInk);
+        Text(PhotoMode.ValueText(p), R(x + width * 0.5f, y, width * 0.5f, 20), 13, enabled ? SettingsCanvas.LightInk : SettingsCanvas.MutedInk,
             "Right VCenter", translate: false);
-        var track = R(x, y + 26, inner, 3);
+        var track = R(x, y + 29, width, 3);
         float t = Fraction(p);
         Fill(track, Groove);
         Fill(track with { Width = track.Width * t }, enabled ? SettingsCanvas.Brass with { W = 0.75f } : SettingsCanvas.MutedInk with { W = 0.5f });
         Fill(new(track.X + t * track.Width - 3 * _scale, track.Y - 4 * _scale, 6 * _scale, 11 * _scale), enabled ? SettingsCanvas.LightInk : SettingsCanvas.MutedInk);
-        if (enabled) _hits.Add(new Hit(R(x, y + 16, inner, 20), () => { }, p, track.X, track.X + track.Width));
+        if (enabled) _hits.Add(new Hit(R(x, y + 18, width, 22), () => { }, p, track.X, track.X + track.Width));
     }
 
     static float Fraction(PhotoMode.Param p)
@@ -193,21 +196,21 @@ sealed class PhotoPanel(PhotoMode mode)
     }
 
     /// <summary>
-    /// A choice row: the name and a button showing the current choice, which a press steps on.
+    /// A choice: the name and a button showing the current choice, which a press steps on.
     /// </summary>
-    void DrawChoice(PhotoMode.Param p, string[] choices, float x, float inner, float y)
+    void DrawChoice(PhotoMode.Param p, string[] choices, float x, float width, float y)
     {
-        Text(p.Label, R(x, y, inner - ChoiceWidth - 8, 26), 13, SettingsCanvas.MainInk);
+        Text(p.Label, R(x, y + 6, width - ChoiceWidth - 8, 26), 13, SettingsCanvas.MainInk);
         int count = choices.Length;
-        Button(PhotoMode.ValueText(p), R(x + inner - ChoiceWidth, y, ChoiceWidth, 26), () => p.Set((MathF.Round(p.Get()) + 1) % count));
+        Button(PhotoMode.ValueText(p), R(x + width - ChoiceWidth, y + 6, ChoiceWidth, 26), () => p.Set((MathF.Round(p.Get()) + 1) % count));
     }
 
-    void Button(string label, UiRect at, Action action, bool primary = false)
+    void Button(string label, UiRect at, Action action, bool primary = false, bool selected = false)
     {
         bool hovered = at.Contains(_pointer.X, _pointer.Y), pressed = hovered && _down;
         var drawn = at with { Y = at.Y + (pressed ? _scale : 0) };
-        Surface(drawn, primary ? "primary" : "button", pressed, hovered);
-        var ink = primary && _meitou ? DarkInk : hovered ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
+        Surface(drawn, primary ? "primary" : "button", selected || pressed, hovered && !selected);
+        var ink = primary && _meitou ? DarkInk : hovered || selected ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
         Text(label, new(drawn.X + 8 * _scale, drawn.Y, drawn.Width - 16 * _scale, drawn.Height), primary ? 15 : 13, ink, "Center");
         _hits.Add(new Hit(at, action, null, 0, 0));
     }
@@ -262,15 +265,15 @@ sealed class PhotoPanel(PhotoMode mode)
     }
 
     /// <summary>
-    /// The mode's last message (a saved picture's path), on a dark band at the bottom of the picture.
+    /// The mode's last message (a saved picture's path), on a dark band at the top of the picture.
     /// </summary>
-    void DrawMessage(int width, int height)
+    void DrawMessage(int width)
     {
         if (mode.Message is not { } message) return;
-        float w = Math.Min(width - 40 * _scale, 900 * _scale), h = 40 * _scale;
-        var at = new UiRect(MathF.Round((width - w) / 2), MathF.Round(height - h - 44 * _scale), MathF.Round(w), MathF.Round(h));
+        float w = Math.Min(width - 40 * _scale, 900 * _scale), h = 40 * _scale, line = MathF.Max(1, MathF.Round(_scale));
+        var at = new UiRect(MathF.Round((width - w) / 2), MathF.Round(28 * _scale), MathF.Round(w), MathF.Round(h));
         Fill(at, new(8 / 255f, 6 / 255f, 5 / 255f, 0.78f));
-        Fill(at with { Height = MathF.Max(1, MathF.Round(_scale)) }, SettingsCanvas.Brass with { W = 0.55f });
+        Fill(at with { Y = at.Y + at.Height - line, Height = line }, SettingsCanvas.Brass with { W = 0.55f });
         Text(message, new(at.X + 12 * _scale, at.Y, at.Width - 24 * _scale, at.Height), 13, SettingsCanvas.LightInk, "Center", translate: false, wrap: true);
     }
 
