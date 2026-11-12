@@ -1248,11 +1248,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The window's scale and bounds for a <paramref name="width"/> x <paramref name="height"/> screen, slid by the opening motion.
+    /// The window's scale and bounds for a <paramref name="width"/> x <paramref name="height"/> screen (physical pixels, so a high-DPI display's is
+    /// larger than its points: Retina's twice), slid by the opening motion. The scale has no upper limit: the window keeps its share of the screen
+    /// at any resolution.
     /// </summary>
     void PlaceWindow(int width, int height)
     {
-        Scale = Math.Max(0.35f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
+        Scale = Math.Max(0.35f, Math.Min(height / 900f, width / 1280f));
         Canvas.TextViewportHeight = height;
         Bounds = new(MathF.Round((width - 1120 * Scale) / 2), MathF.Round((height - 720 * Scale) / 2), MathF.Round(1120 * Scale),
             MathF.Round(720 * Scale));
