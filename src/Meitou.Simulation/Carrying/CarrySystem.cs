@@ -240,6 +240,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         world.Player.LootWalker == world.Characters.IdOf(i) && world.Player.OpeningLoot == world.Characters.Cold(i)!.CarryTarget;
 
     /// <summary>
+    /// Whether slot <paramref name="i"/>'s loot is an <see cref="OpenLootOrder"/>'s, walking to the window or holding it open: its target stays
+    /// valid while <see cref="Openable"/> (a standing own character or pickpocket target too), not only while lootable (#511).
+    /// </summary>
+    static bool OpensOrHolds(World world, int i, CharacterCold cold) => Opening(world, i) || (cold.LootFlags & LootStart.WindowHeld) != 0;
+
+    /// <summary>
     /// Whether <paramref name="a"/> regards <paramref name="b"/> as friendly for the put-down KO: the same faction, or allied factions (relation 50
     /// or more) when a table is known (engine reading of <c>CharacterAnimal::vfunc_126</c>, whose last faction test is <b>Unknown</b>).
     /// </summary>
@@ -739,7 +745,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 || (lifting
                     ? cold.LiftTime < 0 && !(CanCarry(world, cold, cold.Kidnapping ? TaskType.KidnapOrder : TaskType.LiftPersonPlayerOrder)
                         && (Liftable(world, i, t) || cold.Kidnapping && CanBeKidnapped(table, t)))
-                    : !(Opening(world, i) ? Openable(table, t) : CanBeLooted(table.Cold(t)!))))
+                    : !(OpensOrHolds(world, i, cold) ? Openable(table, t) : CanBeLooted(table.Cold(t)!))))
             {
                 if (!(lifting && cold.LiftTime >= 0)) End(world, i);   // a lift under way is finished or broken off in SlowWorld
                 continue;
