@@ -8,8 +8,8 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// The indoor volume of a placed building (docs/formats/zones.md, "Interior view"): the collision of its <c>interior mask</c> parts placed with the
-/// building's node (position, rotation, <c>scale</c>), kept as the convex footprint of the hull on the ground plane and its height range. A point
-/// inside is indoors.
+/// building's node (position, rotation, <c>scale</c>), kept as the convex footprint of the hull on the ground plane and its height range, and per
+/// trigger shape its own footprint and height range. A point inside a shape's footprint and height range is indoors.
 /// </summary>
 /// <param name="PlacementId">The building's <see cref="BuildingKey"/> (what <see cref="PlacedMesh.PlacementId"/> carries for its parts).</param>
 /// <param name="Footprint">Convex polygon of the hull in world X/Z, counter-clockwise.</param>
@@ -48,38 +48,34 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public Matrix4x4 Node { get; init; } = Matrix4x4.Identity;
 
     /// <summary>
-    /// Whether the volume is straight below or above the ground point (<paramref name="x"/>, <paramref name="z"/>): its footprint contains it,
-    /// whatever the height. What a ray cast down from far above hits (the game's building test for the interior ambience).
+    /// Whether the volume is straight below or above the ground point (<paramref name="x"/>, <paramref name="z"/>): a shape's footprint contains
+    /// it, whatever the height. What a ray cast down from far above hits (the game's building test for the interior ambience).
     /// </summary>
     public bool ContainsGround(float x, float z)
     {
         if (Footprint.Length < 3) return false;
         var q = new Vector2(x, z);
-        for (int i = 0; i < Footprint.Length; i++)
-        {
-            var a = Footprint[i];
-            var e = Footprint[(i + 1) % Footprint.Length] - a;
-            float len = e.Length();
-            if (len < 1e-4f) continue;
-            if ((e.X * (q.Y - a.Y) - e.Y * (q.X - a.X)) / len < 0) return false;
-        }
-        return true;
+        if (!_edges.Holds(q, 0)) return false;
+        if (_pieces.Length == 0) return true;
+        foreach (var piece in _pieces)
+            if (piece.Edges.Holds(q, 0)) return true;
+        return false;
     }
 
     /// <summary>
-    /// Whether <paramref name="p"/> is inside the footprint and height range, both widened by <paramref name="margin"/>.
+    /// Whether <paramref name="p"/> is inside a shape's footprint and height range, both widened by <paramref name="margin"/> (a volume made by
+    /// hand: its one footprint and range). A shape is tested on its own: the hull of all of them also takes in what lies between them, as the yard in
+    /// an L-shaped house's corner, and a roof shape's footprint at ground level.
     /// </summary>
     public bool Contains(Vector3 p, float margin = 0)
     {
         if (p.Y < YMin - margin || p.Y > YMax + margin || Footprint.Length < 3) return false;
         var q = new Vector2(p.X, p.Z);
-        var e = _edges;
-        float reach = margin > 0 ? margin * e.Reach : 0;
-        if (q.X < e.Min.X - reach || q.X > e.Max.X + reach || q.Y < e.Min.Y - reach || q.Y > e.Max.Y + reach) return false;
-        // Counter-clockwise: inside is to the left of every edge.
-        for (int i = 0; i < e.Points.Length; i++)
-            if (Vector2.Dot(e.Normals[i], q - e.Points[i]) < -margin) return false;
-        return true;
+        if (!_edges.Holds(q, margin)) return false;
+        if (_pieces.Length == 0) return true;
+        foreach (var piece in _pieces)
+            if (piece.Holds(q, p.Y, margin)) return true;
+        return false;
     }
 
     /// <summary>
@@ -100,6 +96,32 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     readonly FootprintEdges _edges = FootprintEdges.Of(Footprint);
 
     /// <summary>
+    /// The trigger's shapes, each with its own footprint and height range; empty for a volume made by hand.
+    /// </summary>
+    Piece[] _pieces = [];
+
+    /// <summary>
+    /// One shape of the trigger hull (a box, capsule or convex mesh): the convex footprint of its corners and their height range.
+    /// </summary>
+    sealed record Piece(FootprintEdges Edges, float YMin, float YMax)
+    {
+        /// <summary>
+        /// Whether the ground point <paramref name="q"/> at height <paramref name="y"/> is inside, both widened by <paramref name="margin"/>.
+        /// </summary>
+        public bool Holds(Vector2 q, float y, float margin) => y >= YMin - margin && y <= YMax + margin && Edges.Holds(q, margin);
+
+        /// <summary>
+        /// The piece of the world-space corners <paramref name="corners"/>, or null when their footprint has no area.
+        /// </summary>
+        public static Piece? Of(IReadOnlyList<Vector3> corners)
+        {
+            var hull = ConvexHull2([.. corners.Select(c => new Vector2(c.X, c.Z))]);
+            if (hull.Length < 3) return null;
+            return new Piece(FootprintEdges.Of(hull), corners.Min(c => c.Y), corners.Max(c => c.Y));
+        }
+    }
+
+    /// <summary>
     /// The footprint's edges that are not degenerate (a point on each and its inward unit normal), their box, and how far past the box the footprint
     /// widened by a margin reaches, per unit of margin: the most a corner moves (1 / cos of half the turn between the normals; √2 at a right angle).
     /// </summary>
@@ -117,6 +139,19 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         /// How far past the box the footprint widened by a margin reaches, per unit of margin.
         /// </summary>
         public float Reach;
+
+        /// <summary>
+        /// Whether <paramref name="q"/> is inside the footprint widened by <paramref name="margin"/>: within the widened box, then to the left of every
+        /// edge (counter-clockwise).
+        /// </summary>
+        public bool Holds(Vector2 q, float margin)
+        {
+            float reach = margin > 0 ? margin * Reach : 0;
+            if (q.X < Min.X - reach || q.X > Max.X + reach || q.Y < Min.Y - reach || q.Y > Max.Y + reach) return false;
+            for (int i = 0; i < Points.Length; i++)
+                if (Vector2.Dot(Normals[i], q - Points[i]) < -margin) return false;
+            return true;
+        }
 
         /// <summary>
         /// The edges of <paramref name="footprint"/>, their box and reach.
@@ -246,6 +281,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         var points = new List<Vector2>();
         var meshes = new List<string>();
         var corners = new List<Vector3>();
+        var pieces = new List<Piece>();
         float yMin = float.MaxValue, yMax = float.MinValue;
         foreach (var r in building.GetReferences("interior mask"))
         {
@@ -253,6 +289,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             if (mask.GetPath("phs or mesh") is { } meshPath && meshPath.Contains(".mesh", StringComparison.OrdinalIgnoreCase)) meshes.Add(meshPath);
             if (collision.Mesh(mask.GetPath("xml collision")) is not { } shape) continue;
             foreach (int i in shape.Indices) corners.Add(Vector3.Transform(shape.Vertices[i], node));
+            pieces.AddRange(PiecesOf(shape, node));
             foreach (var v in shape.Vertices)
             {
                 var w = Vector3.Transform(v, node);
@@ -273,8 +310,24 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             MaskMeshes = meshes,
             Node = node,
             _maskCorners = [.. corners],
+            _pieces = [.. pieces],
             _floors = new Lazy<FloorSurfaces>(() => FloorSurfaces.For(db, building, placementId, position, rotation, node, collision)),
         };
+    }
+
+    /// <summary>
+    /// The trigger's shapes in <paramref name="mesh"/> placed with <paramref name="node"/>, one piece each (a mesh without its shapes' starts: one
+    /// piece of all of it).
+    /// </summary>
+    static IEnumerable<Piece> PiecesOf(CollisionMesh mesh, Matrix4x4 node)
+    {
+        int[] starts = mesh.ShapeStarts.Length > 0 ? mesh.ShapeStarts : [0];
+        for (int s = 0; s < starts.Length; s++)
+        {
+            int end = s + 1 < starts.Length ? starts[s + 1] : mesh.Vertices.Length;
+            var placed = mesh.Vertices[starts[s]..end].Select(v => Vector3.Transform(v, node)).ToArray();
+            if (Piece.Of(placed) is { } piece) yield return piece;
+        }
     }
 
     /// <summary>
@@ -459,7 +512,13 @@ public sealed partial class FloorSurfaces
 /// triangle: wound outward (a box, capsule or convex hull, <see cref="CollisionTriangulator"/>); a triangle mesh's keeps the file's winding and
 /// is false.
 /// </summary>
-public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Outward);
+public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Outward)
+{
+    /// <summary>
+    /// Per shape of the file, in file order, the index of its first vertex in <see cref="Vertices"/>.
+    /// </summary>
+    public int[] ShapeStarts { get; init; } = [];
+}
 
 /// <summary>
 /// The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts), read and triangulated once each; safe from several
@@ -496,16 +555,18 @@ public sealed class InteriorCollisions(GameInstall install)
         var vertices = new List<Vector3>();
         var indices = new List<int>();
         var outward = new List<bool>();
+        var starts = new List<int>();
         foreach (var s in file.Shapes)
         {
             var v = new List<Vector3>();
             var i = new List<int>();
             int added = CollisionTriangulator.Triangulate(s, v, i);
             int offset = vertices.Count;
+            if (v.Count > 0) starts.Add(offset);
             vertices.AddRange(v.Select(CollisionTriangulator.ToWorldAxes));
             indices.AddRange(i.Select(x => x + offset));
             outward.AddRange(Enumerable.Repeat(s.Kind != CollisionShapeKind.TriangleMesh, added));
         }
-        return vertices.Count == 0 ? null : new CollisionMesh([.. vertices], [.. indices], [.. outward]);
+        return vertices.Count == 0 ? null : new CollisionMesh([.. vertices], [.. indices], [.. outward]) { ShapeStarts = [.. starts] };
     }
 }

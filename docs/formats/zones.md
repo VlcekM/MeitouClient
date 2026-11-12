@@ -23,6 +23,18 @@ files; 957 in `rebirth/interiors.level`) and nothing else; that is how layers re
 outside the building's convex interior-mask hull (OgreMeshReader positions transformed into
 world space and compared with InteriorVolume footprint planes). A mask is not an exact visible-surface boundary.
 
+**Verified** (probe of the `interior mask` parts' `xml collision` files): 17 of the trigger files hold more than one shape (boxes, capsules,
+convex meshes), among them the L-House, Y-House, Longhouse, Saloon, Snailhouse and Watchtower ones. The Watchtower's
+(`Storm_House_09_Interior_TRIGGER.xml`) is the tower body (a convex mesh) and a capsule at the roof, about 284 up. Along the building's X axis
+on one side the body reaches about 96 from the center and the outer wall (`Storm09-WallCOL.xml`) about 101, while the capsule reaches about 144.
+
+**Observed** (original 1.0.68, plain game): a player character on the sand at the Sho-Battai Watchtower's outer foot, below the capsule and
+outside the body, leaves the tower closed.
+
+Meitou: `InteriorVolume.Contains` tests each shape's own footprint and height range, so ground between shapes, or below a roof shape, is not
+indoors; the volume's `Footprint` stays the convex hull of all of them. `ContainsGround` ignores height and holds a point under any shape's
+footprint, as a ray cast down from above hits the shape.
+
 **Verified** (probe: placed part bounds, zone 20.33 in the `Newwworld` and `rebirth` layers, which agree): the Hub's two
 `Defensive Wall IV` (`14`, `66`) end in the Shinobi Thieves `Watchtower` (`2`, Storm House 09), the wall's corner: `66` runs
 about 150 inside its east side, `14` overlaps its north edge (bounds boxes). No part rule hides them and building parts take no interior cut
