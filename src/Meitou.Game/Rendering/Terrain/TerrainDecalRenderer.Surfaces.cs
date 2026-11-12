@@ -96,7 +96,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         """ + DepthConvention.Glsl + """
 
         // The surface point under a depth texel, relative to the eye, and its linear depth. The depth was drawn with the projection moved by the jitter: the texel's ray
-        // is the unjittered one at its centre less that move. A top-down target (Metal) has NDC +1 at row 0: rowSign -1 turns the row into the projection's NDC.
+        // is the unjittered one at its centre less that move. A top-down target (Metal) has NDC +1 at row 0: rowSign -1 turns the row into
+        // the projection's NDC.
         vec3 posAt(ivec2 t, vec2 size, out float z)
         {
             t = clamp(t, ivec2(0), ivec2(size) - 1);
@@ -239,7 +240,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         public Vector2 Jitter;
 
         /// <summary>
-        /// 1 when the targets' row 0 is the bottom (Vulkan), −1 when it is the top (Metal): the sign from a texel row to the projection's NDC Y.
+        /// 1 when the targets' row 0 is the bottom (Vulkan), −1 when it is the top (Metal): the sign from a texel row to the projection's
+        /// NDC Y.
         /// </summary>
         public float RowSign;
     }
