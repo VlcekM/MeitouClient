@@ -1285,7 +1285,8 @@ sealed class GameLoop(GameHost host)
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered
             && !host.GameOptions.NoPopulation
             && !(PanelLive() && _panel?.Visible == true) && !_cinema.Contains(pointerAt);
-        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen;
+        // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
+        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen && (!_photo.Active || !_photo.PanelShown || host.OrbitHeld());
         Outline(takeFile, highlighting, pointerWorld);
         return new FramePointer(pointerMouse, pointerAt, pointerWorld, freeLook);
     }
@@ -1590,7 +1591,7 @@ sealed class GameLoop(GameHost host)
         var cursorMode = _orbitAnchor is not null ? Silk.NET.Input.CursorMode.Disabled
             : (host.Config.HardwareMouse || byWindow) && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
         if (cursorMode != _windowCursor) pointerMouse.Cursor.CursorMode = _windowCursor = cursorMode;
-        string pointerName = pointer.OverWorld ? host.Player.PointerPanel.PointerName : "arrow";
+        string pointerName = pointer.OverWorld && !_photo.Active ? host.Player.PointerPanel.PointerName : "arrow";
         bool enhanced = host.Config.HardwareMouse && host.Config.EnhancedHardwareMouse && !freeLook;
         bool hand = enhanced
             && (pointer.OverWorld ? host.Player.PointerPanel.PointsAtClickable(pointerName) : _panel?.OverClickable(pointer.At) == true);

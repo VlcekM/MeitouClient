@@ -22,6 +22,11 @@ sealed class PhotoMode
     readonly GameHost _host;
 
     /// <summary>
+    /// The game the mode works on (the panel draws through its interface).
+    /// </summary>
+    internal GameHost Host => _host;
+
+    /// <summary>
     /// Photo mode is on.
     /// </summary>
     public bool Active { get; private set; }
@@ -58,6 +63,10 @@ sealed class PhotoMode
     /// The lens and picture settings (units as <see cref="Params"/> shows them).
     /// </summary>
     bool _dof, _autoFocus = true;
+    /// <summary>
+    /// The characters' speech bubbles are drawn (hidden on entering: a picture is of the scene).
+    /// </summary>
+    bool _dialogue;
     float _focusMetres = 10, _aperture = 1, _exposureStops;
 
     /// <summary>
@@ -124,6 +133,8 @@ sealed class PhotoMode
             Choices: ["off", "thirds", "golden", "cross", "diagonals"]),
         new("frame", "Frame", 0, 5, () => (float)Frame, v => Frame = (PhotoFrame)Math.Clamp((int)MathF.Round(v), 0, 5), v => Frame.ToString(),
             Choices: ["off", "2.39:1", "16:9", "4:3", "1:1", "4:5"]),
+        new("dialogue", "Dialogue", 0, 1, () => _dialogue ? 1 : 0, v => _dialogue = v >= 0.5f, v => v >= 0.5f ? "shown" : "hidden",
+            Choices: ["hidden", "shown"]),
         new("speed", "Fly speed", 0.5f, 3000, () => _controls.FlySpeed / 10, v => _controls.FlySpeed = Math.Clamp(v * 10, PhotoControls.MinSpeed,
             PhotoControls.MaxSpeed), v => $"{v:0.#} m/s", Log: true),
         new("live", "Simulation", 0, 1, () => _host.Session.Simulation.IsPaused ? 0 : 1, SetLive, v => v >= 0.5f ? "running" : "paused",
@@ -159,6 +170,7 @@ sealed class PhotoMode
         (_dof, _autoFocus, _focusMetres, _aperture, _exposureStops) = (_entryDof, true, 10, _entryAperture, 0);
         UseGameTime();
         (Grid, Frame) = (PhotoGrid.Thirds, PhotoFrame.Off);
+        _dialogue = false;
         _controls.FlySpeed = 300;
         SetLive(0);
     }
@@ -236,6 +248,7 @@ sealed class PhotoMode
         (options.PhotoExposure, options.PhotoDepthOfField) = (1, null);
         (_host.Camera.Roll, _host.Camera.FocusDistance, _host.Camera.Aperture) = (0, null, null);
         (_host.PhotoHour, _host.PhotoLook) = (null, false);
+        _host.Player.SpeechBubbles.Hidden = false;
         Active = false;
         _pending = null;
         _shotWithGuides = false;
@@ -269,6 +282,7 @@ sealed class PhotoMode
         options.PhotoDepthOfField = _dof;
         options.CinematicView = true;
         _host.PhotoLook = true;
+        _host.Player.SpeechBubbles.Hidden = !_dialogue;
         _controls.LookScale = MathF.Tan(camera.FieldOfView * 0.5f) / MathF.Tan(25 * MathF.PI / 180);
         _host.AgentChannel.InterfaceHidden = true;
     }

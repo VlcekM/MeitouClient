@@ -15,6 +15,11 @@ public readonly record struct CameraState(
     Vector3 Eye, Vector3 Forward, Vector3 Up, Vector3 Target, float Yaw, float Pitch, float Distance, bool IsFree)
 {
     /// <summary>
+    /// What <see cref="Eye"/> leaves out of an eye kept in double precision (the free camera's): under half a float step; zero elsewhere.
+    /// </summary>
+    public Vector3 EyeResidual { get; init; }
+
+    /// <summary>
     /// Right handed look-at view matrix (as <c>Matrix4x4.CreateLookAt</c>).
     /// </summary>
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Eye + Forward, Up);
@@ -28,10 +33,19 @@ public readonly record struct CameraState(
         if (a.IsFree != b.IsFree) return b;
         var forward = Vector3.Lerp(a.Forward, b.Forward, t);
         forward = forward.LengthSquared() < 1e-12f ? b.Forward : Vector3.Normalize(forward);
+        // The eye between the two in double precision, with their residuals: in float the blend stepped with the float's grid.
+        double x = Between(a.Eye.X, a.EyeResidual.X, b.Eye.X, b.EyeResidual.X, t), y = Between(a.Eye.Y, a.EyeResidual.Y, b.Eye.Y, b.EyeResidual.Y, t),
+            z = Between(a.Eye.Z, a.EyeResidual.Z, b.Eye.Z, b.EyeResidual.Z, t);
+        var eye = new Vector3((float)x, (float)y, (float)z);
         return new CameraState(
-            Interp.Lerp(a.Eye, b.Eye, t), forward, Vector3.UnitY, Interp.Lerp(a.Target, b.Target, t),
-            Interp.LerpAngle(a.Yaw, b.Yaw, t), Interp.LerpAngle(a.Pitch, b.Pitch, t), Interp.Lerp(a.Distance, b.Distance, t), b.IsFree);
+            eye, forward, Vector3.UnitY, Interp.Lerp(a.Target, b.Target, t),
+            Interp.LerpAngle(a.Yaw, b.Yaw, t), Interp.LerpAngle(a.Pitch, b.Pitch, t), Interp.Lerp(a.Distance, b.Distance, t), b.IsFree)
+        {
+            EyeResidual = new((float)(x - eye.X), (float)(y - eye.Y), (float)(z - eye.Z)),
+        };
     }
+
+    static double Between(float a, float aRest, float b, float bRest, float t) => (a + (double)aRest) * (1 - (double)t) + (b + (double)bRest) * t;
 
     /// <summary>
     /// The eye for yaw, pitch and distance round a target (the formula in the type's summary).

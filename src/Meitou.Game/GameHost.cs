@@ -925,6 +925,8 @@ sealed partial class GameHost(
         Camera.Yaw = s.Yaw;
         Camera.Pitch = s.Pitch;
         Camera.Distance = s.Distance;
+        // The free camera is placed by its eye, in double precision (after the pose, which clears it).
+        if (s.IsFree) Camera.PreciseEye = (s.Eye.X + (double)s.EyeResidual.X, s.Eye.Y + (double)s.EyeResidual.Y, s.Eye.Z + (double)s.EyeResidual.Z);
 
         // A cinema key's lens goes with the camera it held; the roll is photo mode's, which sets it again after this.
         (Camera.FocusDistance, Camera.Aperture, Camera.Roll) = (null, null, 0);

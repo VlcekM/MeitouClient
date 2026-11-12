@@ -25,7 +25,28 @@ public sealed class FreeCamera
         this._settings = settings ?? new CameraSettings();
     }
 
-    public Vector3 Position { get; private set; }
+    /// <summary>
+    /// The eye, kept in double precision: far from the origin a float steps by 0.004 units at 50000, a pixel or two for something a few units from the
+    /// eye, so a slow flight close to a thing moved in small jumps. <see cref="PositionResidual"/> is what the float leaves out.
+    /// </summary>
+    double _x, _y, _z;
+    public Vector3 Position
+    {
+        get => new((float)_x, (float)_y, (float)_z);
+        private set => (_x, _y, _z) = (value.X, value.Y, value.Z);
+    }
+
+    /// <summary>
+    /// The double-precision eye less <see cref="Position"/>: under half a float step.
+    /// </summary>
+    public Vector3 PositionResidual
+    {
+        get
+        {
+            var p = Position;
+            return new((float)(_x - p.X), (float)(_y - p.Y), (float)(_z - p.Z));
+        }
+    }
     public Vector3 Velocity { get; private set; }
     public float Yaw { get; private set; }
     /// <summary>
@@ -61,7 +82,7 @@ public sealed class FreeCamera
     /// </summary>
     public void Enter(CameraState from)
     {
-        Position = from.Eye;
+        (_x, _y, _z) = (from.Eye.X + (double)from.EyeResidual.X, from.Eye.Y + (double)from.EyeResidual.Y, from.Eye.Z + (double)from.EyeResidual.Z);
         Velocity = Vector3.Zero;
         Yaw = from.Yaw;
         Pitch = Math.Clamp(MathF.Asin(Math.Clamp(-from.Forward.Y, -1f, 1f)), -PitchLimit, PitchLimit);
@@ -75,7 +96,7 @@ public sealed class FreeCamera
         get
         {
             var f = Forward;
-            return new CameraState(Position, f, Vector3.UnitY, Position + f * ReportedDistance, Yaw, Pitch, ReportedDistance, true);
+            return new CameraState(Position, f, Vector3.UnitY, Position + f * ReportedDistance, Yaw, Pitch, ReportedDistance, true) { EyeResidual = PositionResidual };
         }
     }
 
@@ -107,7 +128,7 @@ public sealed class FreeCamera
             : shift ? 2 : 1;
         var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * factor : Vector3.Zero;
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
-        Position += Velocity * dt;
+        (_x, _y, _z) = (_x + (double)Velocity.X * dt, _y + (double)Velocity.Y * dt, _z + (double)Velocity.Z * dt);
         KeepAboveGround();
     }
 
@@ -138,8 +159,8 @@ public sealed class FreeCamera
     void KeepAboveGround()
     {
         float min = _ground(Position.X, Position.Z) + _settings.FreeClearance;
-        if (Position.Y >= min) return;
-        Position = new Vector3(Position.X, min, Position.Z);
+        if (_y >= min) return;
+        _y = min;
         if (Velocity.Y < 0) Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
     }
 

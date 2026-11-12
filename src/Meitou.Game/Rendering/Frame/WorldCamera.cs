@@ -9,18 +9,26 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public sealed class WorldCamera
 {
-    public Vector3 Target { get; set; }
+    public Vector3 Target { get; set { field = value; PreciseEye = null; } }
+
+    /// <summary>
+    /// The eye itself in double precision, for a camera that is placed by its eye (the game's free camera): <see cref="Target"/> is then a float point far
+    /// along the view, and the eye worked back from it stepped with the float's grid as it moved (0.004 units at 50000: a jump of a pixel or two for
+    /// something a few units away). Set after the pose; setting <see cref="Target"/>, <see cref="Yaw"/>, <see cref="Pitch"/> or <see cref="Distance"/>
+    /// clears it.
+    /// </summary>
+    public (double X, double Y, double Z)? PreciseEye { get; set; }
 
     /// <summary>
     /// Radians; 0 looks along −Z from +Z (the eye sits at +Z of the target).
     /// </summary>
-    public float Yaw { get; set; }
+    public float Yaw { get; set { field = value; PreciseEye = null; } }
 
     /// <summary>
     /// Radians above the horizon of the eye, as seen from the target.
     /// </summary>
-    public float Pitch { get; set; } = 0.5f;
-    public float Distance { get; set; } = 2000;
+    public float Pitch { get; set { field = value; PreciseEye = null; } } = 0.5f;
+    public float Distance { get; set { field = value; PreciseEye = null; } } = 2000;
 
     /// <summary>
     /// Radians the picture is turned about the view direction (photo mode; 0 keeps the horizon level). Positive banks the camera to the right (the view's up turns
@@ -60,6 +68,7 @@ public sealed class WorldCamera
     {
         double cp = Math.Cos(Pitch), d = Distance;
         double x = Target.X + cp * Math.Sin(Yaw) * d, y = Target.Y + Math.Sin(Pitch) * d, z = Target.Z + cp * Math.Cos(Yaw) * d;
+        if (PreciseEye is { } precise) (x, y, z) = precise;
         var eye = new Vector3((float)x, (float)y, (float)z);
         residual = new Vector3((float)(x - eye.X), (float)(y - eye.Y), (float)(z - eye.Z));
         return eye;
