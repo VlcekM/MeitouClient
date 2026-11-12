@@ -1589,10 +1589,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// A complete player bench counts in a player outpost or a bought NPC house, but not with an unresolved saved town.
+    /// A complete player-owned bench counts regardless of its town association.
     /// </summary>
     bool CanResearch(World world, Machine machine) => Site(world, machine.Site) is { Complete: true } site &&
-        site.Owner == world.Player.Faction && (site.Town != 0 || !site.UnresolvedTown);
+        site.Owner == world.Player.Faction;
 
     /// <summary>
     /// One operator's work at a research bench (<b>Observed</b>, <c>FUN_14029b8d0</c> and <c>FUN_140836b70</c>): <c>rate x s</c>, x 0.6 for each

@@ -123,9 +123,6 @@ public static class BuildingSave
                     Floor = state.Ints.GetValueOrDefault("floornum"),
                     Parent = parent,
                     Town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, CS: townHand.Cs)),
-                    UnresolvedTown = state.Bools.GetValueOrDefault("meitou unresolved town") ||
-                        !townHand.IsNull && !townOf.ContainsKey((townHand.C, townHand.Cs)) &&
-                        !IsNpcTown(save, handles.Town(townHand), townHand, playerFactionId),
                     Owner = playerIndex,
                     Materials = materials,
                     Target = target,
@@ -146,13 +143,6 @@ public static class BuildingSave
         ConstructionSystem.ReassessTowns(world);
         return made;
     }
-
-    /// <summary>
-    /// A resolved non-player level town is valid even though it has no player-outpost number.
-    /// </summary>
-    static bool IsNpcTown(SaveGame save, SaveTown? town, Hand handle, string playerFactionId) =>
-        town is { IsNest: false } && town.Handle.Cs == handle.Cs && town.FactionId != playerFactionId &&
-        save.TownInstanceList?.Instances.Any(instance => instance.Id == town.Instance && instance.Target == PlayerTown.Template) != true;
 
     /// <summary>
     /// Whether <paramref name="instance"/> is listed outside the zone its position lies in while that zone lists it too. The original lists a
@@ -553,8 +543,7 @@ public static class BuildingSave
         state.Ints["serialised interior"] = 1;
         hand.Write(state, "handle");
         town.Write(state, "town");
-        if (site.Town == 0 && site.UnresolvedTown) state.Bools["meitou unresolved town"] = true;
-        else state.Bools.Remove("meitou unresolved town");
+        state.Bools.Remove("meitou unresolved town");
         Hand.Null.Write(state, "residents");
         state.Bools["foliage"] = false;
         state.Bools["pause"] = site.Paused;
