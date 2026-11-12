@@ -72,7 +72,7 @@ static class CharacterShaders
     const string PushMembers = """
             vec3 flatColour;
             uint depthIndex;
-            vec4 fill;          // rgb; a: the chars2 switch's parts (CharacterSurface: 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal; 0 off)
+            vec4 fill;          // rgb; a: the chars2 switch's parts (CharacterSurface: 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads; 0 off)
             uint skinLut;       // the skin scattering table's bindless index (SkinScattering), 0: the switch is off
         """;
 
@@ -137,6 +137,8 @@ static class CharacterShaders
         out vec4 vColour;
         out vec4 vBlood;        // the blood mapping of character.hlsl (cylinder projection of the part in its own space), before the race scale
         out float vSoak;        // how wet the water's mark leaves the vertex (0..1)
+        out vec3 vBind;         // the vertex in the mesh's own space, as modelled (the water beads sit there: CharacterSurface.wetBeads)
+        out vec3 vAxisX;        // the mesh's X axis in the world at the vertex (its Y is vColour's)
         out float vBloodAmount; // the blood amount of the vertex's body part (the instance carries the parts': two 8-bit amounts in the w of each matrix row)
 
         void main()
@@ -159,6 +161,8 @@ static class CharacterShaders
             vWorld = p.xyz + view.eye;   // the instances are relative to the eye (CharacterRenderer.DrawView)
             mat3 n = mat3(world);
             vNormal = n * aNormal;
+            vBind = local;
+            vAxisX = n[0];
             vTangent = vec4(n * aTangent.xyz, aTangent.w);
             vUv = aUv;
             // An icon mesh's own vertex colours (a body's carry the morph slot and limb bits); elsewhere the mesh's up axis in the world, the hair's strand (CharacterSurface).
@@ -251,6 +255,8 @@ static class CharacterShaders
         in vec4 vColour;
         in vec4 vBlood;
         in float vSoak;
+        in vec3 vBind;
+        in vec3 vAxisX;
         in float vBloodAmount;
         layout(location = 0) out vec4 fragColour;
 
@@ -487,7 +493,9 @@ static class CharacterShaders
                 eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
                 skin *= 1.0 - eyeShare;
             }
+            float dryGloss = gloss;
             wetSurface(albedo, gloss, surfaceOn ? metal : 0.0, skin, vSoak);
+            if ((surfaceParts & 32u) != 0u && m.shading != 2u) wetBeads(n, albedo, gloss, dryGloss, surfaceOn ? metal : 0.0, skin, vSoak);
             if ((surfaceParts & 1u) != 0u && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
             clothSheen = (surfaceParts & 2u) != 0u ? sheen * 0.25 : 0.0;

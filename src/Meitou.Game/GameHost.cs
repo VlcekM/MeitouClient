@@ -1235,6 +1235,7 @@ sealed partial class GameHost(
         // 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
         double shownSeconds = Session.Clock.GameSeconds + Session.SimulationAlpha * Session.Simulation.TickSeconds;
         float gameTime = (float)(shownSeconds / 600 % 1e4);
+        if (Gpu.Surfaces is { } wetSurfaces) wetSurfaces.Seconds = (float)(shownSeconds % 4096);
         float hour = (float)Session.Clock.HourOfDay;
 
         // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here to the

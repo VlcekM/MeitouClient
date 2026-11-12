@@ -10,7 +10,7 @@ static class CharacterSurface
     /// <summary>Ahead of the atmosphere text: what its two hooks (<see cref="Lighting"/>) call.</summary>
     public const string Prototypes = """
         bool surfaceOn = false;
-        uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal
+        uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo, float share);
         vec3 surfaceSunTraced(vec3 sun, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
@@ -241,6 +241,56 @@ static class CharacterSurface
             }
             albedo = mix(wet.rgb, albedo, eyeShare);
             gloss = mix(wet.a, 0.4, eyeShare);
+        }
+
+        // Beads of water on a wet character (docs/character-renderer.md "Water beads"): where the weather or the water's mark leaves the surface wet, drops stand on it,
+        // each a small dome that turns the normal and shines. They sit in the mesh's own space (vBind), so they stay put on the body as it moves: one drop at most in each
+        // 9 mm cell, its place, size and life from the cell's number. In the rain a drop swells and runs off, again and again; without it the drops stand as they are
+        // until the surface dries. Cloth, which soaks the water up, holds few. Gone where a drop would be under a pixel wide.
+        // frame.wetClock: game seconds, wrapping at 4096 (WeatherSurfaces.Seconds).
+        vec3 beadHash(vec3 c)
+        {
+            vec3 q = fract(c * vec3(0.1031, 0.1030, 0.0973));
+            q += dot(q, q.yxz + 33.33);
+            return fract((q.xxy + q.yxx) * q.zyx);
+        }
+        void wetBeads(inout vec3 n, inout vec3 albedo, inout float gloss, float dryGloss, float metal, float skin, float soak)
+        {
+            if (view.fogDistance <= 0.0 || uWeatherWet.w > vWorld.y) return;   // not the world's view, or under the water
+            float rain = vInterior == 0u ? uWeatherWet.y : 0.0;
+            float fromSky = (vInterior == 0u ? max(uWeatherWet.x, rain) : 0.0) * mix(0.3, 1.0, smoothstep(-0.2, 0.6, n.y));   // the rain wets what faces it
+            float absorbs = max(1.0 - 2.0 * dryGloss, 0.0) * (1.0 - metal) * (1.0 - 0.8 * skin);
+            float hold = max(soak, fromSky) * (1.0 - 0.8 * absorbs) * (1.0 - eyeShare);
+            if (hold <= 0.02) return;
+            const float cell = 0.09;
+            float pixel = max(length(dFdx(vBind)), length(dFdy(vBind)));
+            float shown = 1.0 - smoothstep(0.006, 0.02, pixel);
+            if (shown <= 0.0) return;
+            vec3 X = normalize(vAxisX), Y = normalize(vColour.xyz), Z = normalize(cross(X, Y));
+            vec3 nb = vec3(dot(n, X), dot(n, Y), dot(n, Z));
+            vec3 base = floor(vBind / cell - 0.5), bead = nb;
+            float cover = 0.0;
+            for (int i = 0; i < 8; i++)
+            {
+                vec3 c = base + vec3(float(i & 1), float((i >> 1) & 1), float(i >> 2));
+                vec3 h = beadHash(c);
+                if (h.z > hold * 0.75) continue;
+                // The rates divide the clock's wrap (4096 s), so no drop jumps when it wraps.
+                float life = rain > 0.0 ? fract(h.x + frame.wetClock * (2.0 + floor(h.y * 6.0)) / 64.0) : 0.4 + 0.6 * h.x;
+                float r = cell * (0.1 + 0.28 * h.y * h.y) * sqrt(life);   // many small, a few large (1 to 3.4 mm)
+                vec3 d = vBind - (c + 0.25 + 0.5 * beadHash(c + 7.31)) * cell;
+                float off = dot(d, nb);
+                vec3 along = d - nb * off;
+                float rho2 = dot(along, along);
+                if (rho2 >= r * r || abs(off) > cell * 0.45) continue;
+                float height = sqrt(r * r - rho2), mask = smoothstep(0.0, 0.3 * r, height);
+                if (mask > cover) { cover = mask; bead = normalize(along + nb * height * 1.6); }
+            }
+            cover *= shown;
+            if (cover <= 0.0) return;
+            n = normalize(mix(n, X * bead.x + Y * bead.y + Z * bead.z, 0.9 * cover));
+            gloss = mix(gloss, 0.92, cover);
+            albedo *= 1.0 - 0.12 * cover;
         }
 
         // A hair fragment's inputs. The strand is the mesh's bitangent (the cards' streaks run along v) averaged with its up axis: the tangents alone change from triangle to triangle

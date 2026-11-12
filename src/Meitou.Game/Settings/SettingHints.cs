@@ -136,6 +136,7 @@ static class SettingHints
         WorldFrame.MaterialSkinSwitch => "Skin's oily sheen, a soft bright edge, and light through ears and fingers.",
         WorldFrame.MaterialEyesSwitch => "A small catchlight on the eyes instead of a mirror of the landscape.",
         WorldFrame.MaterialMetalSwitch => "Weapons, armour plates, prosthetics and robots read as metal.",
+        WorldFrame.MaterialBeadsSwitch => "Drops of water stand on wet skin, leather and metal, in the rain and after a swim.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
         "Soft grazing sun" => "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches.",

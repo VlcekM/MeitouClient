@@ -97,6 +97,7 @@ static partial class NativeShaders
             uint atmoClouds;
             uint atmoCloudsTile;
             float grassRayReach;
+            float wetClock;
         } frame;
 
         """;
@@ -221,7 +222,7 @@ static partial class NativeShaders
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
-        ["uGrassRayReach"] = "frame.grassRayReach",
+        ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
@@ -456,6 +457,8 @@ unsafe struct FrameConstants
     [FieldOffset(8692)] public uint AtmoCloudsTile;
     /// <summary>How far from the eye the traced sun's rays see grass (<c>uGrassRayReach</c>, <c>GiScene.GrassRayParams</c>): 0 while they see none.</summary>
     [FieldOffset(8696)] public float GrassRayReach;
+    /// <summary>Game seconds wrapping at 4096 (<c>uWetClock</c>, <c>WeatherSurfaces.Seconds</c>): what the characters' water beads swell and run off by.</summary>
+    [FieldOffset(8700)] public float WetClock;
 
     /// <summary>
     /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
@@ -467,7 +470,7 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
-        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16), ("uGrassRayReach", 8696, 4),
+        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16), ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4),
     ];
 
     /// <summary>

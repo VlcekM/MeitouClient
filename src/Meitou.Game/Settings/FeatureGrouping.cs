@@ -67,7 +67,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // Characters: the skin switch, then one row per race (added by Entries)
         new(SkinGroup, "Skin", []),
         new("Advanced materials", "Advanced materials", [WorldFrame.MaterialHairSwitch, WorldFrame.MaterialClothSwitch, WorldFrame.MaterialSkinSwitch,
-            WorldFrame.MaterialEyesSwitch, WorldFrame.MaterialMetalSwitch]),
+            WorldFrame.MaterialEyesSwitch, WorldFrame.MaterialMetalSwitch, WorldFrame.MaterialBeadsSwitch]),
     ];
 
     /// <summary>

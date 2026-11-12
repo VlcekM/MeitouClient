@@ -40,6 +40,11 @@ internal sealed class WeatherSurfaces : IDisposable
     /// The water shader's <c>gameTime</c> (game hours); the frame sets it.
     /// </summary>
     public float GameTime;
+    /// <summary>
+    /// Game seconds wrapping at 4096, exact to under a millisecond (<see cref="GameTime"/>'s float steps by more than a second late in a game): the
+    /// characters' water beads move by it (<c>uWetClock</c>); the host sets it.
+    /// </summary>
+    public float Seconds;
 
     /// <summary>
     /// The shader's <c>rainAmount</c>.
@@ -53,6 +58,7 @@ internal sealed class WeatherSurfaces : IDisposable
                     "weather dust noise");
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, Meitou.Data.World.WorldWater.Height));
+        g.PublishUniform("uWetClock", () => Seconds);
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }
