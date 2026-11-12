@@ -5,7 +5,7 @@ namespace Meitou.Launcher;
 
 /// <summary>
 /// Self-update through Velopack (docs/launcher.md, "Self-update"): the feed of each <c>launcher-v*</c> release, one Velopack channel
-/// per runtime (<see cref="Releases.Rid"/>). Only a launcher installed by its Setup or AppImage can update itself; a build run from
+/// per build family (<see cref="Releases.Channel"/>). Only a launcher installed by its Setup or AppImage can update itself; a build run from
 /// anywhere else reports <see cref="IsInstalled"/> false.
 /// </summary>
 public sealed class LauncherUpdater(Releases releases, bool prereleases)
@@ -13,7 +13,7 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
     /// <summary>
     /// Velopack's update manager over the launcher releases of this repository, on this runtime's channel.
     /// </summary>
-    readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Rid });
+    readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Channel });
 
     /// <summary>
     /// The update found by the last check, downloaded and waiting to be applied; null when none.

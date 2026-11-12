@@ -33,14 +33,14 @@ public sealed record Release(ReleaseKind Kind, string Tag, string Version, strin
     string Notes, string PageUrl, IReadOnlyList<ReleaseAsset> Assets)
 {
     /// <summary>
-    /// The zip for this machine: <c>Meitou-&lt;version&gt;-&lt;rid&gt;.zip</c> or <c>MeitouLauncher-&lt;version&gt;-&lt;rid&gt;.zip</c>.
+    /// The zip for this build's platform and compatibility channel.
     /// </summary>
     public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name == AssetName);
 
     /// <summary>
     /// The name of <see cref="Asset"/>.
     /// </summary>
-    string AssetName => $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Rid}.zip";
+    string AssetName => $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Channel}.zip";
 }
 
 /// <summary>
@@ -65,6 +65,21 @@ public sealed class Releases(HttpClient http)
     /// The platform part of asset names, e.g. <c>win-x64</c>, <c>linux-x64</c>, <c>osx-arm64</c>.
     /// </summary>
     public static string Rid => RuntimeInformation.RuntimeIdentifier;
+
+    /// <summary>
+    /// Whether this launcher installs the .NET 10 legacy macOS packages.
+    /// </summary>
+    public static bool LegacyMac =>
+#if MEITOU_LEGACY_MAC
+        true;
+#else
+        false;
+#endif
+
+    /// <summary>
+    /// The package and self-update channel, with a legacy suffix for the compatibility build.
+    /// </summary>
+    public static string Channel => LegacyMac ? $"{Rid}-legacy" : Rid;
 
     /// <summary>
     /// The launcher's HTTP client: no timeout, the launcher's name and version as its user agent.
@@ -241,7 +256,7 @@ public sealed class Releases(HttpClient http)
     /// <summary>
     /// The folder holding one folder per installed version.
     /// </summary>
-    static string VersionsDirectory => Path.Combine(LauncherConfig.InstallDirectory, "versions");
+    static string VersionsDirectory => Path.Combine(LauncherConfig.InstallDirectory, LegacyMac ? "versions-legacy" : "versions");
 
     /// <summary>
     /// The game's executable in <paramref name="directory"/>, or null.
@@ -268,19 +283,31 @@ public sealed class Releases(HttpClient http)
     public static string VersionDirectory(string version) => Path.Combine(VersionsDirectory, version);
 
     /// <summary>
-    /// Moves the installed versions from <paramref name="from"/>'s <c>versions/</c> into <paramref name="to"/>'s, copying across drives.
+    /// Moves standard and legacy installed versions from <paramref name="from"/> to <paramref name="to"/>, copying across drives.
     /// A version already in the target is left where it was.
     /// </summary>
     public static void MoveInstalled(string from, string to)
     {
-        var source = Path.Combine(from, "versions");
+        MoveVersionFolder(from, to, "versions");
+        MoveVersionFolder(from, to, "versions-legacy");
+    }
+
+    /// <summary>
+    /// Moves one build family's installed versions when the shared install folder changes.
+    /// </summary>
+    static void MoveVersionFolder(string from, string to, string folder)
+    {
+        var source = Path.Combine(from, folder);
         if (!Directory.Exists(source) || Path.GetFullPath(from) == Path.GetFullPath(to)) return;
-        var target = Path.Combine(to, "versions");
+
+        var target = Path.Combine(to, folder);
         Directory.CreateDirectory(target);
+
         foreach (var dir in Directory.EnumerateDirectories(source))
         {
             var dest = Path.Combine(target, Path.GetFileName(dir));
             if (Directory.Exists(dest)) continue;
+
             try
             {
                 Directory.Move(dir, dest);
@@ -291,6 +318,7 @@ public sealed class Releases(HttpClient http)
                 Directory.Delete(dir, recursive: true);
             }
         }
+
         if (!Directory.EnumerateFileSystemEntries(source).Any()) Directory.Delete(source);
     }
 

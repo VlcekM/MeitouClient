@@ -5,7 +5,7 @@
     <MeitouMacNativeDirectory>$(MSBuildThisFileDirectory)macos-runtime/$(RuntimeIdentifier)</MeitouMacNativeDirectory>
   </PropertyGroup>
   <Target Name="UseMacNativeLibraries" AfterTargets="ResolvePackageAssets" BeforeTargets="EmbedNativeLibraries"
-          Condition="$(RuntimeIdentifier.StartsWith('osx-')) and Exists('$(MeitouMacNativeDirectory)')">
+          Condition="'$(MeitouLegacyMac)' == 'true' and $(RuntimeIdentifier.StartsWith('osx-')) and Exists('$(MeitouMacNativeDirectory)')">
     <ItemGroup>
       <_MacNativeReplacement Include="@(NativeCopyLocalItems)"
                              Condition="Exists('$(MeitouMacNativeDirectory)/%(Filename)%(Extension)')" />

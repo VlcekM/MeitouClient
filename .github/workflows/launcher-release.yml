@@ -65,10 +65,12 @@ jobs:
       fail-fast: false # one platform failing must not hide the others' results
       matrix:
         include:
-          - { rid: win-x64, os: windows-latest, exe: meitou-launcher.exe }
-          - { rid: linux-x64, os: ubuntu-22.04, exe: meitou-launcher }
-          - { rid: osx-x64, os: macos-latest, exe: meitou-launcher }
-          - { rid: osx-arm64, os: macos-latest, exe: meitou-launcher }
+          - { rid: win-x64, os: windows-latest, exe: meitou-launcher.exe, legacy: false, channel: win-x64 }
+          - { rid: linux-x64, os: ubuntu-22.04, exe: meitou-launcher, legacy: false, channel: linux-x64 }
+          - { rid: osx-x64, os: macos-latest, exe: meitou-launcher, legacy: false, channel: osx-x64 }
+          - { rid: osx-arm64, os: macos-latest, exe: meitou-launcher, legacy: false, channel: osx-arm64 }
+          - { rid: osx-x64, os: macos-latest, exe: meitou-launcher, legacy: true, channel: osx-x64-legacy }
+          - { rid: osx-arm64, os: macos-latest, exe: meitou-launcher, legacy: true, channel: osx-arm64-legacy }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -82,7 +84,7 @@ jobs:
           dotnet-version: 11.0.x
 
       - name: macOS compatibility runtime
-        if: runner.os == 'macOS'
+        if: matrix.legacy
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
@@ -122,7 +124,7 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git "$RUNNER_TEMP/vcpkg"
           git -C "$RUNNER_TEMP/vcpkg" checkout "$VCPKG_COMMIT"
           case "$RUNNER_OS" in Windows) "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics ;; *) "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics ;; esac
-          # For macOS 12, the launcher's own minimum (.NET's default), not the runner's version.
+          # Build for a baseline shared by standard and legacy macOS packages, rather than the runner's version.
           MACOSX_DEPLOYMENT_TARGET=12.0 VCPKG_KEEP_ENV_VARS=MACOSX_DEPLOYMENT_TARGET "$RUNNER_TEMP/vcpkg/vcpkg" install "libvpx:$triplet"
           mkdir -p vpx-runtime && cp -R "$RUNNER_TEMP/vcpkg/installed/$triplet" "vpx-runtime/$triplet"
 
@@ -132,25 +134,33 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           RID: ${{ matrix.rid }}
           EXE: ${{ matrix.exe }}
+          LEGACY_MAC: ${{ matrix.legacy }}
+          CHANNEL: ${{ matrix.channel }}
         run: |
-          if [ "$RUNNER_OS" = macOS ]; then bash tools/scripts/build-native-macos.sh "$RID"; fi
+          if [ "$LEGACY_MAC" = true ]; then bash tools/scripts/build-native-macos.sh "$RID"; fi
           # Without libvpx the publish still succeeds, with news videos left out: refuse that.
           find vpx-runtime -path "*/lib/*" \( -name vpx.lib -o -name libvpx.a \) 2>/dev/null | grep -q . || { echo "libvpx missing in vpx-runtime/"; exit 1; }
           dotnet tool install -g vpk --version "$VPK_VERSION"
-          dotnet publish launcher/Meitou.Launcher -c Release -r "$RID" --self-contained -p:Version="$VERSION" -o pub
-          if [ "$RUNNER_OS" = macOS ]; then cp "macos-runtime/$RID/LICENSE-OpenAL-Soft.txt" pub/; fi
+          dotnet publish launcher/Meitou.Launcher -c Release -r "$RID" --self-contained -p:Version="$VERSION" -p:MeitouLegacyMac="$LEGACY_MAC" -o pub
+          if [ "$LEGACY_MAC" = true ]; then cp "macos-runtime/$RID/LICENSE-OpenAL-Soft.txt" pub/; fi
           # No paid Developer ID: ad-hoc sign the macOS executable so its integrity can be checked. Gatekeeper still warns.
           case "$RID" in osx-*) codesign --force --deep --sign - pub/meitou-launcher ;; esac
           icon=()
           [ "$RID" = win-x64 ] && icon=(--icon assets/branding/meitou.ico)
           [ "$RID" = linux-x64 ] && icon=(--icon assets/branding/meitou-64.png)
-          vpk pack --packId MeitouLauncher --packVersion "$VERSION" --packTitle "Meitou Launcher" --packDir pub \
-            --mainExe "$EXE" --channel "$RID" --outputDir "out/$RID" "${icon[@]}"
+          pack_id=MeitouLauncher
+          pack_title="Meitou Launcher"
+          if [ "$LEGACY_MAC" = true ]; then
+            pack_id=MeitouLauncherLegacy
+            pack_title="Meitou Launcher Legacy"
+          fi
+          vpk pack --packId "$pack_id" --packVersion "$VERSION" --packTitle "$pack_title" --packDir pub \
+            --mainExe "$EXE" --channel "$CHANNEL" --outputDir "out/$CHANNEL" "${icon[@]}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: launcher-${{ matrix.rid }}
-          path: out/${{ matrix.rid }}
+          name: launcher-${{ matrix.channel }}
+          path: out/${{ matrix.channel }}
           if-no-files-found: error
 
   release:
@@ -193,6 +203,7 @@ jobs:
             echo "- **Windows**: \`MeitouLauncher-win-x64-Setup.exe\` (or the Portable zip)."
             echo "- **Linux**: the \`linux-x64\` AppImage."
             echo "- **macOS**: the \`osx-arm64\` (Apple silicon) or \`osx-x64\` (Intel) package; not notarized yet, so Gatekeeper warns."
+            echo "- **Legacy macOS 13**: \`MeitouLauncherLegacy-osx-arm64-legacy-Setup.pkg\` or \`MeitouLauncherLegacy-osx-x64-legacy-Setup.pkg\`; uses .NET 10."
             echo; echo "Verify every download against \`SHA256SUMS\`. Once installed, the launcher updates itself. You need Kenshi installed."
           } > "$RUNNER_TEMP/notes.md"
           flags=(--latest)

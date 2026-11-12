@@ -29,6 +29,11 @@ updates the game and manages mods. Download the newest one for
 
 [macOS Intel](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncher-osx-x64-Setup.pkg) (unsigned, Gatekeeper warns).
 
+For macOS 13 Ventura, use the .NET 10 legacy launcher:
+[Intel](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncherLegacy-osx-x64-legacy-Setup.pkg) or
+[Apple silicon](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncherLegacy-osx-arm64-legacy-Setup.pkg).
+It installs the matching legacy game builds; standard builds use .NET 11 and require macOS 14 or later.
+
 By hand: [releases](https://github.com/VlcekM/MeitouClient/releases) for Windows, Linux and macOS, unzip and run
 
 Steam installs, and GOG installs made by GOG Galaxy, Heroic, Lutris or Bottles, are located automatically; otherwise select the Kenshi folder when prompted,

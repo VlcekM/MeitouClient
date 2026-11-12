@@ -157,7 +157,7 @@ public sealed partial class MainWindow : Window
         ConfigureOptions(config);
         ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
-        LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Rid}";
+        LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Channel}";
         RefreshPresets();
         RefreshInstalled();
         UseKenshi(found);

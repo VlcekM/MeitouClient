@@ -13,7 +13,8 @@ items); the launcher never downloads or hosts mods.
   setup links are `/releases/latest/download/<name>`, so the Setup/AppImage/pkg names must stay free of the version. Full releases of both pass
   `--notes-start-tag` with the previous tag of their own family, so the generated notes never span the other family's tag.
 - Both manual release workflows accept `build_only`: packages go to workflow artifacts, with no tag, release or announcement;
-  the supplied version needs no changelog section. Mac builds use .NET 10 for [older macOS compatibility](macos-port.md#running).
+  the supplied version needs no changelog section. Mac matrices include standard .NET 11 and separate .NET 10
+  [legacy compatibility](macos-port.md#running) builds for both architectures.
 - Both tag the commit the run started on with `GITHUB_TOKEN`. **Verified** (throwaway test workflow, 2026-10-22): GitHub refuses that
   token a tag or release (HTTP 403 "Resource not accessible by integration") on a commit whose `.github/workflows/` files differ from
   the current master, as it lacks the `workflows` permission. So pushing a workflow edit while a release runs fails its release step;
@@ -27,7 +28,10 @@ items); the launcher never downloads or hosts mods.
   as the Tinfist bot (secret `DISCORD_BOT_TOKEN`, repository variable `DISCORD_NIGHTLY_CHANNEL`), else through the `DISCORD_WEBHOOK_URL`
   channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed.
 - Game assets: `Meitou-<version>-<rid>.zip`, `<rid>` as .NET's `RuntimeInformation.RuntimeIdentifier` (`win-x64`, `linux-x64`,
-  `osx-x64`, `osx-arm64`). A release with no zip for the machine's RID is listed but not installable.
+  `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
+  matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
+  `MeitouLauncherLegacy` / `Meitou Launcher Legacy`; installed games live in `versions-legacy/`, separately from standard builds.
+  Settings are shared; changing the install folder moves both build families. A release with no matching zip is listed but not installable.
 - The list comes from the REST API without a token (60 requests an hour per IP). Every page is read (`per_page=100`, until a short page),
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count
   against the quota.
@@ -160,7 +164,7 @@ folder containing `data/gamedata.base`. DepotDownloader is not bundled or automa
 - On, on Windows Kenshi installs that include `steam_api64.dll`, Play writes `steam_appid.txt` (`233860`) in the working directory and beside the Meitou executable and sets `SteamAppId`/`SteamGameId` for the game, then removes the files when Meitou exits (or on the next Play, if the launcher closed first). If either place already holds another ID, it writes nothing and sets no variables. The game (not for `--screenshot` or a start listing) loads the install's Steamworks DLL and calls `SteamAPI_InitFlat` when exported, else `SteamAPI_Init`, before creating its graphics device, and `SteamAPI_Shutdown` on exit; Meitou ships no Steamworks binaries. Other platforms and installs without the DLL skip it.
 - **Unknown** (from the [Steamworks API](https://partner.steamgames.com/doc/sdk/api) and [overlay](https://partner.steamgames.com/doc/features/overlay) docs, not yet checked against a Steam run): a direct launch with `steam_appid.txt` counts as Kenshi play time, needs a Kenshi licence and a running Steam client, and gets the overlay on Vulkan, whose FPS counter is under Steam Settings → In Game.
 
-`versions/` and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
+The version folders and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
 is saved) an overlay asks for the install folder, the Kenshi folder and the renderer, prefilled with the current and the
 detected ones. Changing the install folder there or in Settings moves the installed versions (copied, then deleted,
 across drives).
