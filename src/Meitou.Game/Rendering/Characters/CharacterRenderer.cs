@@ -778,6 +778,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     int _materialEpoch = 1;
 
     /// <summary>
+    /// The check for records drawn with a freed texture index (<c>MEITOU_DIAG_FAULT=1</c>, issue #319); null otherwise.
+    /// </summary>
+    readonly StaleMaterialCheck? _staleCheck;
+
+    /// <summary>
     /// Compiles the colour, depth and motion programs and makes the content, the skin table and the pass timers.
     /// </summary>
     public CharacterRenderer(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assetLocator, CharacterRigs? rigs = null)
@@ -793,6 +798,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             CharacterShaders.InstanceLocation);
         _content = new CharacterContent(gpu, install, db, assetLocator, rigs);
         _skinScattering = new SkinScattering(gpu);
+        if (gpu.Bindless is BindlessTable { Freed: { } freed }) _staleCheck = new StaleMaterialCheck(freed);
         _colourTimer = new PassTimer(gpu);
         _depthTimer = new PassTimer(gpu);
     }

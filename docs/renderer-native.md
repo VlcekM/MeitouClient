@@ -75,7 +75,10 @@ journal replays at begin/before submission; freed indices wait for consumers. Up
 changes every submitted draw using it, including already-recorded draws. Use new indices for
 mid-frame binding changes. At a slot's next begin a freed 2D, 2D-array or cube index points at the
 stand-in, so a reader holding a stale index samples (0,0,0,1) instead of a destroyed view (issue #319:
-AMD lost the device on such a read). Tables/views/globals are render-thread state.
+AMD lost the device on such a read). **Observed** in the three #319 fault reports (nightly 20261110): a character texture's
+index freed in frame N (its image destroyed at frame N+2's begin) was read by a draw of frame N+1; the reader is not known yet.
+With `MEITOU_DIAG_FAULT=1` the table keeps each freed index's frame (`FreedIndices`) and the character draws log records that name
+one (`StaleMaterialCheck`). Tables/views/globals are render-thread state.
 `ScalarOf` lists the integer `InternalFormat`s (unsigned or signed samplers); all others sample as
 float. Verified by `BindlessTests.Integer_textures_read_back_exact_values_through_the_bindless_arrays`
 (integer routing and texels).

@@ -443,6 +443,7 @@ internal sealed unsafe partial class CharacterRenderer
                 Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
+            _staleCheck?.Check(part, Gpu.Frame.Number, _materialEpoch, _updateStamp, PassName(_depthPass, _motionPass));
             if (_motionPass)
             {
                 var previousWorld = Relative(l.State.PreviousWorld, origin);
@@ -708,6 +709,7 @@ internal sealed unsafe partial class CharacterRenderer
             MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };
+        _staleCheck?.Check(part, Gpu.Frame.Number, _materialEpoch, _updateStamp, PassName(depth, motion));
         float lod = f.Lod * bias;
         if (depth && HairInShadow(part, l.Asset)) lod *= CharacterContent.HairLodScale;
 
@@ -726,6 +728,11 @@ internal sealed unsafe partial class CharacterRenderer
                 if (GroupLevel(gps[g], level) is int lv) chunk.Add(BatchId(part, g, gps[g], lv, twoSided), in instance);
         }
     }
+
+    /// <summary>
+    /// The draw's name in <see cref="StaleMaterialCheck"/>'s log line.
+    /// </summary>
+    string PassName(bool depth, bool motion) => _portraitLive >= 0 ? "portrait" : depth ? "shadow" : motion ? "motion" : "colour";
 
     /// <summary>
     /// Gives each gathered instance of <paramref name="vb"/> its place in its batch in character order (the order one thread adds them in), and the
