@@ -47,8 +47,8 @@ public sealed class UiLayer : IDisposable
         void main()
         {
             vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
-            vec4 ui = _texture(uUi, uv);
-            vec3 c = ui.rgb + max(_texture(uBack, uv).rgb, 0.0) * (1.0 - ui.a);
+            vec4 ui = texture(uUi, uv);
+            vec3 c = ui.rgb + max(texture(uBack, uv).rgb, 0.0) * (1.0 - ui.a);
             vec3 linear709 = pow(max(c, 0.0), vec3(2.2));
             const mat3 TO_2020 = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0114, 0.8956);
             fragColour = vec4(pq(TO_2020 * linear709 * uPaperNits), 1.0);
