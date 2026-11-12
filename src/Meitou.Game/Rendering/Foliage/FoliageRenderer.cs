@@ -64,6 +64,35 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public FoliageLayoutCache? LayoutCache { get; }
     readonly List<FoliageWorld> _allWorlds = [];
     readonly Dictionary<ZoneCoordinate, ZoneState> _zones = [];
+
+    /// <summary>
+    /// The alpha cut the grass fragment tests its sprite with (FoliageShaders, the game's 0.6).
+    /// </summary>
+    const float GrassCut = 0.6f;
+
+    /// <summary>
+    /// Grass keeps its cover at a distance (docs/render-foliage.md "Far grass"): its sprites are loaded with mips that keep the share of texels the
+    /// top level keeps at the cut (<see cref="AlphaCover"/>); off, the files' own mips, with which thin grass fades out a short way from the eye, as in
+    /// the game. A change takes every patch's sprite again.
+    /// </summary>
+    public bool GrassFarCover
+    {
+        get => _grassFarCover;
+        set
+        {
+            if (_grassFarCover == value) return;
+            _grassFarCover = value;
+            _grassSpriteVersion++;
+            foreach (var state in _zones.Values)
+                for (int i = 0; i < state.PatchTextures.Length && i < state.Patches.Count; i++)
+                    state.PatchTextures[i] = (GrassSprite(state.Patches[i].Grass.Sprite), state.PatchTextures[i].ColourMap);
+        }
+    }
+
+    bool _grassFarCover = true;
+    int _grassSpriteVersion;
+
+    WorldTexture? GrassSprite(string? name) => _textures.Get(name, false, cut: _grassFarCover ? GrassCut : 0);
     readonly Dictionary<FoliageMesh, MeshAsset> _assetsByMesh = [];
     readonly List<MeshAsset> _decoding = [];
     readonly Queue<Action> _uploads = new();
@@ -562,6 +591,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     sealed class GrassBuffer
     {
         /// <summary>
+        /// The <see cref="_grassSpriteVersion"/> its sprite was looked up at.
+        /// </summary>
+        public int SpriteVersion = -1;
+
+        /// <summary>
         /// Where the blades are in the grass arena (<see cref="FoliageGrassGpu"/>): the draw's first instance is <see cref="FirstBlade"/>;
         /// <see cref="Slot"/> is its place in the GPU cull's slot table (-1 for a patch without blades).
         /// </summary>
@@ -929,7 +963,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int i = 0; i < state.Patches.Count; i++)
         {
             var p = state.Patches[i];
-            state.PatchTextures[i] = (_textures.Get(p.Grass.Sprite, false), _textures.Get(p.Grass.ColourMap,
+            state.PatchTextures[i] = (GrassSprite(p.Grass.Sprite), _textures.Get(p.Grass.ColourMap,
                 false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
@@ -3151,10 +3185,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     GrassBuffer Patch(GrassBuffer b, FoliageGrassPatch patch)
     {
-        if (!ReferenceEquals(b.Patch, patch))
+        if (!ReferenceEquals(b.Patch, patch) || b.SpriteVersion != _grassSpriteVersion)
         {
             b.Patch = patch;
-            b.Sprite = _textures.Get(patch.Grass.Sprite, false);
+            b.SpriteVersion = _grassSpriteVersion;
+            b.Sprite = GrassSprite(patch.Grass.Sprite);
             b.ColourMap = _textures.Get(patch.Grass.ColourMap, false);
             b.ShownDensity = float.NaN;
         }

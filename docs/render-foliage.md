@@ -46,6 +46,8 @@ causes temporal ghosting. Keep blade motion consistent between colour/depth/velo
 
 The traced sun builds pages near the eye into structures from the arena: [Traced sun](render-shadows.md#traced-sun).
 
+**Far grass** (`AlphaCover`, the `Far grass cover` row, on by default; engine choice): a grass sprite's mips average its alpha, so a thin mask falls under the fixed 0.6 cut a few levels down (`WiryThorns01-WHITEblue_DIF`, Gut: 7.7 % of the texels pass at the top level, under 1 % four levels down) and the drawn grass vanished a short way from the eye while its traced shadow stayed (**Observed** at Gut from 900 units: dark ground, no grass). The sprites are loaded through `WorldTextureCache.Get(cut: 0.6)`: each BC2/BC3 level's stored alpha is scaled as it is read (BC3: the blocks' two alpha endpoints) by cut / t, t the threshold at which that level keeps the top level's share of texels, never above the cut; the top level is untouched (Castano, "Computing Alpha Mipmaps", as rewritten levels: the shadows read the same texture and stay with the drawn grass). The table is worked out once per file from all its levels and logged (`textures  cover kept in ...`); a cut texture is cached and shared apart from the same file loaded plain. Off: the files' own mips, as the original. **Verified** by same-view pairs at Gut.
+
 ## Visibility, depth and memory
 
 Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are distinct filters.
