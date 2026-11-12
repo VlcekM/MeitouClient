@@ -333,6 +333,16 @@ copies its text into the platoon's record name, `FUN_14048df00`, **Observed**; 9
 renamed). Meitou keeps each loaded squad on its own file (`Squad.SaveName`) and writes a squad made since as a new platoon, empty squads included; a
 character that changed squads is written anew in its new platoon and leaves the old file; a removed squad's platoon is deleted.
 
+### Missing character records
+
+A platoon file's character instance whose CHARACTER record the game data lacks (its mod removed; the file holds only the id, not the record) is made
+from the Exile `136-gamedata.quack` with its saved states on top, when its id is longer than 2 characters and more than 4 of its state records
+were found; the log says "missing character base data assumed to be deleted <id>". Otherwise it is skipped ("Possible problem- leveldata has
+missing item from gamedata..."). **Verified** by decompile: ActivePlatoon vtable slot 7 `FUN_14036f6b0`, called by `FUN_14036d7e0` with the
+found-states count. The character's record is then the Exile, so the next save writes that id. Meitou does the same (`SavedCharacters.RecordOf`,
+player and NPC platoons; a load note instead of the log). **Observed** on #511's save (UWE removed): Rusty loads with the squad, his 6 items and
+saved look.
+
 ### NPC platoons (Meitou mapping)
 
 Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped); town-bound ones (an `sqt` 1 platoon, or a template that does not travel) are pinned to their town, and a town holding any
