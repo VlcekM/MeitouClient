@@ -662,6 +662,7 @@ public static class BuildingSave
                 ? h
                 : new Hand((int)FcsRecordType.Town, ++container, (int)Rng.Mix(Rng.StableHash(id) ^ seed), 0, 0));
             hands[town.Number] = hand;
+            world.Buildings.ImportedTownInstances.Add(id);
 
             if (fresh) WriteFreshTownKeys(state);
             foreach (var linked in states) WriteTownState(world, town, id, linked, hand, playerFactionId);
