@@ -43,7 +43,8 @@ internal sealed partial class CharacterRenderer
     /// The characters this update placed within <paramref name="range"/> of <paramref name="eye"/> whose shadow can be in view (<see cref="Live.OffScreen"/>), nearest first, at most
     /// <paramref name="max"/>, with their shown parts at the levels the colour pass draws. The list's entries are reused. Render thread, after <see cref="Update"/>.
     /// </summary>
-    internal void RayCharacters(Vector3 eye, float range, int max, List<RayCharacter> into)
+    /// <param name="minAngle">Past 4000 units (the range the traced sun always keeps): only those whose radius is at least this share of their distance.</param>
+    internal void RayCharacters(Vector3 eye, float range, int max, List<RayCharacter> into, float minAngle = 0)
     {
         into.Clear();
         if (_portraitLive >= 0 || _partStamp != _updateStamp || _paletteFrame != Gpu.Frame.Number) return;
@@ -53,7 +54,7 @@ internal sealed partial class CharacterRenderer
             ref readonly var l = ref _live[i];
             if (l.PortraitOnly || l.OffScreen || l.Asset.IsIcon) continue;
             float d = Vector3.Distance(l.Centre, eye) - l.Radius;
-            if (d <= range) _rayOrder.Add((i, d));
+            if (d <= range && (d <= Gi.TracedCharacters.Range || l.Radius >= minAngle * d)) _rayOrder.Add((i, d));
         }
         _rayOrder.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         for (int k = 0; k < _rayOrder.Count && into.Count < max; k++)

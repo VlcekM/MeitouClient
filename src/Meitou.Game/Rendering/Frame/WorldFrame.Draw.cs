@@ -492,7 +492,12 @@ static partial class WorldFrame
             gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
             gi.GrassReach = TracedReach(ref f);
             // Traced, the objects cast as far as the cascades reached (the probes see them too).
-            gi.Range = gpu.Traced && gpu.Shadow is { } reach ? Math.Max(Gi.GiScene.ProbeRange, reach.Settings.Range) : Gi.GiScene.ProbeRange;
+            // Through a lens longer than the game's what is far is drawn large, so the casters reach as much further (to 24000 at most: past it stand distant meshes).
+            float lens = Meitou.Data.Ogre.MeshLod.LensFactor(f.Camera.FieldOfView);
+            gi.Range = gpu.Traced && gpu.Shadow is { } reach
+                ? Math.Max(Gi.GiScene.ProbeRange, lens < 1 ? Math.Max(reach.Settings.Range, Math.Min(reach.Settings.Range / lens, 24000)) : reach.Settings.Range)
+                : Gi.GiScene.ProbeRange;
+            gi.PixelsPerRadian = f.Render.TerrainPixelScale;
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
             if (gpu.Lamps is { Tiles: { } lampTiles } tileLamps) { lampTiles.Fill(gi, tileLamps); StageClock.Sub("lamp tiles"); }
             // The traced sun's volume for what draws no traced pixel, before anything reads it (the reflection first).

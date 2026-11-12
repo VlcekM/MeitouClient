@@ -153,7 +153,18 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>The mask pass's <c>grass</c> constants: the reach (0: no grass this frame), the tallest blade, the blind range and its fade.</summary>
     public Vector4 GrassRayParams => Casters && _grass is not null ? _grass.RayParams : default;
     /// <summary>Foliage under <see cref="FoliageMinSize"/> traced for the sun alone: this radius and up, this far from the eye (past the traced range by the scene's commit step).</summary>
-    const float TracedFoliageRange = 3000, TracedFoliageMinSize = 6;
+    const float TracedFoliageMinSize = 6;
+
+    /// <summary>
+    /// The main view's pixels per radian (set each frame): what a caster's size on screen is judged with. Bushes, small trees and characters cast in
+    /// the traced sun while their bounds are at least <see cref="CasterPixels"/> across, up to <see cref="Range"/> (the shadow distance); a fixed
+    /// 3000 units (4000 for characters) left them without a shadow while still plainly in view, further off or through a long lens.
+    /// </summary>
+    public float PixelsPerRadian { get; set; } = 1080 / (2 * MathF.Tan(25 * MathF.PI / 180));
+    public float CasterPixels { get; set; } = 3;
+    /// <summary>A caster's least radius over its distance (<see cref="CasterPixels"/> at this frame's lens).</summary>
+    float CasterAngle => CasterPixels / (2 * MathF.Max(PixelsPerRadian, 1));
+    float _foliageAngle;
     /// <summary>Instances kept for the small foliage and for the grass, and records the small foliage may leave free (a foliage block past the records is not traced at all).</summary>
     const int SmallFoliageInstances = 5000, GrassInstances = TracedGrass.MaxInstances, RecordsKept = 24000;
     /// <summary>Refits of the top level over moving characters before it is built again.</summary>
@@ -559,7 +570,7 @@ internal sealed unsafe class GiScene : IDisposable
         }
         _people ??= new TracedCharacters(_ctx);
         _people.Stamp(Open(), 0);
-        _people.Update(Open, characters, eye, _frame);
+        _people.Update(Open, characters, eye, _frame, Range, CasterAngle);
         _people.Emit(_instances, _records, Origin, MaxInstances, MaxRecords);
     }
 
@@ -662,7 +673,7 @@ internal sealed unsafe class GiScene : IDisposable
     bool _foliageComplete, _foliageCasters;
 
     bool FoliageStale(Vector3 eye, FoliageRenderer foliage, bool lazy, bool commit) =>
-        _foliageCasters != Casters || _frame - _foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye, _foliageEye) > 250f * 250f) || foliage.RayGeneration != _foliageGeneration
+        _foliageCasters != Casters || _frame - _foliageFrame >= 120 || (Casters && MathF.Abs(CasterAngle - _foliageAngle) > 0.15f * _foliageAngle) || (lazy ? commit : Vector3.DistanceSquared(eye, _foliageEye) > 250f * 250f) || foliage.RayGeneration != _foliageGeneration
         || !_foliageComplete && _frame - _foliageFrame >= 2;
 
     /// <summary>
@@ -693,7 +704,8 @@ internal sealed unsafe class GiScene : IDisposable
     void AddSmallFoliage(Vector3 eye, FoliageRenderer foliage, int room)
     {
         _rayFoliage.Clear();
-        foliage.RayInstances(eye, TracedFoliageRange, TracedFoliageMinSize, _rayFoliage, FoliageMinSize);
+        // The largest on screen first while the budget lasts (the list's distance is the distance over the radius).
+        foliage.RayInstances(eye, MathF.Max(Range, FoliageRange), TracedFoliageMinSize, _rayFoliage, FoliageMinSize, _foliageAngle = CasterAngle);
         _rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         foreach (var (mesh, transform, _) in _rayFoliage)
         {

@@ -77,13 +77,15 @@ What draws no traced pixel reads the **sun map** instead (`Gi.TracedSunVolume`, 
 **Rays** go to the sun's centre, the same every frame (no noise for the upscaler to average, no history to trail). There is no receiver identity as in KenshiNative's
 G-buffer, so what it skips by name is skipped along the ray. Solids leave the plane the depth shows by half a pixel's footprint, slope-scaled; cards leave from the sun's face
 and skip 3 footprints plus 0.5. Queries, each after the last missed:
-- objects (as far as the shadows' range, at least the probes' 6000), foliage, small foliage (`0x10`: radius 6 and up within 3000), characters (`0x40`), alpha-tested in
+- objects (as far as the shadows' range, at least the probes' 6000), foliage, small foliage (`0x10`: radius 6 and up; see "Casters by size on screen"), characters (`0x40`), alpha-tested in
   candidates; a part an object's material cuts reports candidates through `ForceNoOpaque`;
 - the fine terrain grid along the whole ray from the grid's own height under the point (a ray down within the relief's 12-unit amplitude; a point farther from the grid, a
   roof, leaves from where it is), lifted 3 units (+0.2 % of the distance): the grid holds no relief and not the curved outline, so a crest the relief raised must not see
   over a ridge its trough is shadowed by (**Observed** in play: lit ripple crests inside a dune's shadow), and the 24-unit blind range it had let the ground at a cliff's
   foot see the sun through the cliff; the coarse grid (`0x08`) from 320 along the ray. Back faces are skipped as the probes skip them, but not from interiors (bit 9);
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, fading out by amount (not noise) over the last quarter of its reach.
+
+**Casters by size on screen** (`GiScene.CasterPixels`, 3): small foliage and characters cast while their bounds are at least 3 pixels across at the frame's lens (`PixelsPerRadian`), up to the shadow distance; small foliage takes the largest on screen first within its 5000 instances. Fixed ranges (3000 for small foliage, 4000 for characters) left a tree or a character plainly in view without a shadow, further off or through a long lens (**Verified**, t_flats_shore, the same tree and character from 2500, 5000 and 9000 units at a matching lens: shadows at 2500 only before, at all three after). Through a lens longer than the game's the object range grows by the lens's factor, to 24000 at most. Cost at Gut (13184 foliage instances against 4326 with no small foliage): 0.02 ms of GPU (**Verified**, paused pair).
 
 **Characters** (receiver class 3): a low-poly body's facet can face away from the sun while its smooth shading (and skin's band past the terminator) is still lit; a
 ray from it stopped inside the body, a dark triangle (**Observed** on a face: eye corners, nostrils, the temple). There the ray starts under the facet, the nearest back of a
@@ -101,7 +103,7 @@ along wide penumbrae (**Observed** in play). The one-pixel least radius anti-ali
 rays leave from the jittered pixel's own depth, so the upscaler sees the edge move with its jitter. A still view gives the same mask every frame; under motion nothing
 trails. Contact hardening follows from the blocker distance.
 
-**Characters** are in the rays (`TracedCharacters`, [render-lights](render-lights.md#traced-lamp-shadows)): the nearest 128 within 4000 whose shadow can be in view, at the level the
+**Characters** are in the rays (`TracedCharacters`, [render-lights](render-lights.md#traced-lamp-shadows)): the nearest 128 whose shadow can be in view, within 4000 and past it by their size on screen ("Casters by size on screen"), at the level the
 colour pass draws, skinned with the frame's palettes, so a surface's ray leaves the same triangles it drew and a body shadows itself only where it does (armour layers, hair over
 a face). No character layers are drawn.
 
@@ -119,8 +121,8 @@ only for groups they drew): **Observed** (Obedience, 08:00, offscreen) the block
 fog. The fine terrain grid's ray origin is taken down to the grid under displaced ground, never up onto it (a wall's foot against a cliff the grid passes above).
 
 **Not traced** (they cast no sun shadow while traced): construction sites (drawn clipped by their progress; the whole mesh would cast the finished building), debris
-(bolts, dropped items) and birds (no caster in any mode), particles, objects past the range or drawn only as impostors, foliage past the shadows' range (nearest first within the instance budget; small foliage past 3000), grass
-past the reach, characters past the 128 nearest or 4000. Landmarks keep their map.
+(bolts, dropped items) and birds (no caster in any mode), particles, objects past the range or drawn only as impostors, foliage past the shadows' range (nearest first within the instance budget; small foliage and characters under 3 pixels across), grass
+past the reach, characters past the 128 nearest. Landmarks keep their map.
 
 **Limits.** Blood on surfaces (`RecordSurfaces`) blends before the sun is added. The objects' traced transforms and level are the GI's: rotors and doors are frozen as the
 GI sees them; an object's texture tile is not read in the alpha test. The penumbra filter works on what the screen shows: a blocker's shadow whose taps fall on another

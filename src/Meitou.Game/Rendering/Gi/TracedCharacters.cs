@@ -185,12 +185,12 @@ sealed unsafe class TracedCharacters : IDisposable
     /// This frame's characters near <paramref name="eye"/>, skinned and their structures refitted or built, into the scene's native list (<paramref name="open"/>). Their palettes are
     /// this update's, so the structures hold the pose the frame draws.
     /// </summary>
-    public void Update(Func<IGpuCommandList> open, CharacterRenderer people, Vector3 eye, long frame)
+    public void Update(Func<IGpuCommandList> open, CharacterRenderer people, Vector3 eye, long frame, float reach = Range, float minAngle = 0)
     {
         _shown.Clear();
         _jobs.Clear();
         (_jobTriangles, _built, _refitted, _triangles, _held) = (0, 0, 0, 0, 0);
-        people.RayCharacters(eye, Range, MaxCharacters, _characters);
+        people.RayCharacters(eye, MathF.Max(Range, reach), MaxCharacters, _characters, minAngle);
         foreach (var c in _characters)
         {
             int count = Pieces(c);
