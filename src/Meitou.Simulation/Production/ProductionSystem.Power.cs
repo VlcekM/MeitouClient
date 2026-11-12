@@ -37,6 +37,10 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<int, float> _npcSupply = [];
     /// <summary>
+    /// The draws of the machine-class buildings of each such town (<see cref="NpcDraws"/>): pseudo consumers of its frame. A scratch map.
+    /// </summary>
+    readonly Dictionary<int, List<float>> _npcDraws = [];
+    /// <summary>
     /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
     /// </summary>
     readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
@@ -200,14 +204,39 @@ public sealed partial class ProductionSystem
     /// The generation of each town of the level data that a player machine resolved to (<see cref="PowerTown"/>, a negative key; <b>Observed</b>,
     /// <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, so an NPC town's frame has the output of the generators
     /// placed in it): a wind generator gives its rated output x its blades' wind share (nothing below 1), a fuel generator nothing (the base game
-    /// places 47 of them, all with an empty tank; the placed fuel and the switch are not read). The NPC town's own consumers (lights, machines) are
-    /// not modelled, so the player's machine takes its water-filling share of the generation alone; with no running generator it gets 0.
+    /// places 47 of them, all with an empty tank; the placed fuel and the switch are not read). The NPC town's own machine-class buildings
+    /// are consumers of the same frame (<see cref="NpcDraws"/>); with no running generator the player's machine gets 0.
     /// </summary>
     void NpcGeneration(World world)
     {
         _npcSupply.Clear();
+        _npcDraws.Clear();
         foreach (var town in _grids.Where(g => g.Key < 0 && g.Value.Count > 0).Select(g => g.Key))
+        {
             _npcSupply[town] = NpcOutput(world, -town - 1);
+            _npcDraws[town] = NpcDraws(world, -town - 1);
+        }
+    }
+
+    /// <summary>
+    /// The draws of the machine-class buildings placed in the level-data town of <paramref name="index"/> (<b>Observed</b>, <c>FUN_1402a1750</c>
+    /// registers a level building with its power town as a consumer by the sign of its <c>power output</c>): every standing building with a
+    /// functionality whose output is negative (turrets, searchlights, wells, mines, refineries); a light only outside daytime (LightBuilding slot
+    /// 164). Houses and stalls have no functionality and are left out. Each is one consumer of the frame at its level-data draw.
+    /// </summary>
+    List<float> NpcDraws(World world, int index)
+    {
+        var draws = new List<float>();
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return draws;
+
+        foreach (var b in site.Buildings)
+        {
+            if (b.Destroyed || Data(b.BuildingId) is not { IsConsumer: true, Function: >= 0 } data || data.IsLight && world.Daytime) continue;
+
+            draws.Add(MathF.Abs(data.PowerOutput));
+        }
+
+        return draws;
     }
 
     /// <summary>
@@ -362,15 +391,8 @@ public sealed partial class ProductionSystem
         float generated = supply;
         _townSupply[town] = (generated > 0, batteries > 0);
         consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));
-        int left = consumers.Count, @short = 0;
-        foreach (var c in consumers)
-        {
-            float share = supply / Math.Max(1, left--);
-            float give = MathF.Min(share, c.Demand);
-            supply -= give;
-            c.Granted = give;
-            if (give < c.Demand && c.GetsBattery) @short++;
-        }
+        int @short = ShareOut(consumers, _npcDraws.GetValueOrDefault(town), ref supply);
+        demandTotal += _npcDraws.TryGetValue(town, out var npc) ? npc.Sum() : 0;
 
         float batteryLeft = batteries;
         if (mode && @short > 0)
@@ -410,6 +432,33 @@ public sealed partial class ProductionSystem
         }
 
         _townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
+    }
+
+    /// <summary>
+    /// The water-filling of <paramref name="supply"/> over the machines (sorted by demand) and the NPC town's pseudo consumers (<paramref name="npc"/>,
+    /// null: none): in ascending demand each takes at most an equal share of what is left; a machine of equal demand to a pseudo consumer comes
+    /// after it. Returns how many battery-taking machines were left short.
+    /// </summary>
+    static int ShareOut(List<Machine> consumers, List<float>? npc, ref float supply)
+    {
+        var draws = npc is null ? new Queue<float>() : new Queue<float>(npc.Order());
+        int left = consumers.Count + draws.Count, @short = 0;
+        foreach (var c in consumers)
+        {
+            while (draws.Count > 0 && draws.Peek() <= c.Demand)
+            {
+                float draw = draws.Dequeue();
+                supply -= MathF.Min(supply / Math.Max(1, left--), draw);
+            }
+
+            float give = MathF.Min(supply / Math.Max(1, left--), c.Demand);
+            supply -= give;
+            c.Granted = give;
+            if (give < c.Demand && c.GetsBattery) @short++;
+        }
+
+        while (draws.Count > 0) supply -= MathF.Min(supply / Math.Max(1, left--), draws.Dequeue());
+        return @short;
     }
 
     /// <summary>

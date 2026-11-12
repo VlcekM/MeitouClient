@@ -1234,6 +1234,37 @@ public class ProductionTests
     }
 
     /// <summary>
+    /// An NPC town's frame also holds the town's machine-class level buildings as consumers (<c>FUN_14092cd60</c> shares the generation over all of
+    /// them): the installed Wind Generator at full wind (50) with three level turrets (function 12) drawing 5 each leaves a player machine drawing
+    /// 40 only 35, satisfaction 0.875; without the turrets it gets its 40 (docs/game/buildings-production.md "Power").
+    /// </summary>
+    [Theory, Slow]
+    [InlineData(3, 35f)]
+    [InlineData(0, 40f)]
+    public void An_npc_towns_turrets_take_their_draw_from_the_wind_a_player_machine_shares(int turrets, float granted)
+    {
+        var db = InstallData.BaseGame;
+
+        Assert.SkipWhen(db is null, "Kenshi install not found");
+
+        var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is
+            { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0, PowerOutput: -40 }).StringId;
+        var turret = db.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { Function: 12, PowerOutput: -5 }).StringId;
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var buildings = new List<TownBuilding> { new("wind", "1999-gamedata.base", "Wind Generator", at, 0, false, false, []) { Zone = zone } };
+        for (int i = 0; i < turrets; i++) buildings.Add(new TownBuilding("turret" + i, turret, "Turret", at, 0, false, false, []) { Zone = zone });
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone) { Buildings = buildings };
+        var population = new PopulationData { Db = db, Sites = [site], Factions = [] };
+        using var rig = new Rig(db, GameConstants.FromDatabase(db), [consumer], town: 0, population: population);
+        rig.World.Weather = new Wind(50);
+        rig.World.RunTicks(6);
+
+        Assert.Equal(granted, rig.Machine(0).Granted, 0.01f);
+        Assert.Equal(granted / 40, rig.Machine(0).Power, 0.001f);
+    }
+
+    /// <summary>
     /// The foliage of the middle zone (32, 32) holds Iron Resource rocks; an ore mine standing on one yields the rock's own yield, which is between
     /// 0.1 and 1 (docs/game/buildings-production.md "Resources").
     /// </summary>
