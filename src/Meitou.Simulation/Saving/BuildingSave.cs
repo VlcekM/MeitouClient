@@ -236,6 +236,9 @@ public static class BuildingSave
         return TownHandles(world);
     }
 
+    /// <summary>
+    /// Imports one nonremoved player-owned town after collecting all its runtime states.
+    /// </summary>
     static void ReadTownInstance(FcsInstance instance, Dictionary<string, FcsRecord> byId, SaveGame save, World world,
         string playerFactionId, int playerIndex, Dictionary<string, PlayerTown> byInstance)
     {
@@ -249,6 +252,9 @@ public static class BuildingSave
         ApplyTownStates(town, instance.Id, instance.Position, states);
     }
 
+    /// <summary>
+    /// Enumerates town states linked by state id or instance id, without repeating the same record.
+    /// </summary>
     static IEnumerable<FcsRecord> TownStates(FcsInstance instance, Dictionary<string, FcsRecord> byId, SaveGame save)
     {
         var seen = new HashSet<FcsRecord>(ReferenceEqualityComparer.Instance);
@@ -272,6 +278,9 @@ public static class BuildingSave
         return owners.Count > 0 || template == PlayerTown.Template;
     }
 
+    /// <summary>
+    /// Imports player-owned level towns and applies their runtime states when population data can resolve the placement.
+    /// </summary>
     static void ReadLevelTowns(SaveGame save, PopulationData? population, World world, string playerFactionId, int playerIndex,
         Dictionary<string, PlayerTown> byInstance, Dictionary<string, FcsRecord> byId)
     {
@@ -301,6 +310,9 @@ public static class BuildingSave
         }
     }
 
+    /// <summary>
+    /// Combines linked town properties in save order, keeping the first name and nonnull handle.
+    /// </summary>
     static void ApplyTownStates(PlayerTown town, string instanceId, Vector3 position, IEnumerable<FcsRecord> states)
     {
         town.SaveInstance = instanceId;
@@ -317,6 +329,9 @@ public static class BuildingSave
         }
     }
 
+    /// <summary>
+    /// Extracts the saved display name when the state uses the original town-state prefix.
+    /// </summary>
     static string TownName(FcsRecord state)
     {
         if (!state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal)) return "";
@@ -324,6 +339,9 @@ public static class BuildingSave
         return state.Name[TownStatePrefix.Length..].TrimEnd();
     }
 
+    /// <summary>
+    /// Removes a player town strictly inside its nearest other player town without changing building handles or town numbers.
+    /// </summary>
     internal static void NormalizeTownOverlap(World world)
     {
         foreach (var current in world.Buildings.Towns.ToList())
@@ -338,6 +356,9 @@ public static class BuildingSave
         }
     }
 
+    /// <summary>
+    /// Maps surviving saved town container identities to their live outpost numbers.
+    /// </summary>
     static Dictionary<(int C, int CS), int> TownHandles(World world)
     {
         var map = new Dictionary<(int, int), int>();
@@ -347,6 +368,9 @@ public static class BuildingSave
         return map;
     }
 
+    /// <summary>
+    /// The squared horizontal distance between two saved town centres.
+    /// </summary>
     static float DistanceSquaredXz(Vector3 a, Vector3 b)
     {
         float x = a.X - b.X, z = a.Z - b.Z;
@@ -547,7 +571,7 @@ public static class BuildingSave
 
     /// <summary>
     /// Writes the player's outposts into <c>quick.save</c> (docs/formats/save.md "Player outposts"; the original's town-list writer
-    /// <c>FUN_14092a6c0</c> and <c>Town::vfunc_17/85</c>, <b>Verified</b> by code, no sample save has one): an entry of the
+    /// <c>FUN_14092a6c0</c> and <c>Town::vfunc_17/85</c>, <b>Verified</b> by code and <b>Observed</b> in Beep Fan Club 1): an entry of the
     /// GAMESTATE_TOWN_INSTANCE_LIST (made when the save has none) with id <c>&lt;n&gt;-quick.save-INGAME</c>, target
     /// <see cref="PlayerTown.Template"/>, the absolute position and a zero quaternion, and its GAMESTATE_TOWN <c>&lt;id&gt;-S5e</c> named "Town state
     /// &lt;name&gt;". An outpost read from a save keeps its entry, state and handle; a new one gets the next town container. Returns each outpost's

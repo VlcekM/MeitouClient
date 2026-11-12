@@ -836,6 +836,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         foreach (var town in world.Buildings.Towns) ReassessTown(world, town, mergeOverlaps: false, removeEmpty: false);
     }
 
+    /// <summary>
+    /// Merges overlapping same-owner outposts into the smaller-radius town and reassesses the survivor once.
+    /// </summary>
     static void MergeOverlappingTown(World world, PlayerTown town)
     {
         var other = world.Buildings.Towns
@@ -859,6 +862,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
+    /// <summary>
+    /// The squared horizontal distance between two outpost centres.
+    /// </summary>
     static float DistanceXzSquared(Vector3 a, Vector3 b)
     {
         float dx = a.X - b.X, dz = a.Z - b.Z;

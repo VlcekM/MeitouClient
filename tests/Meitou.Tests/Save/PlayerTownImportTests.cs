@@ -13,14 +13,28 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Save;
 
-/// <summary>Player-town save import rules (docs/formats/save.md "Towns").</summary>
+/// <summary>
+/// Player-town save import rules (docs/formats/save.md "Towns").
+/// </summary>
 public class PlayerTownImportTests
 {
+    /// <summary>
+    /// The player faction id used in the synthetic saves.
+    /// </summary>
     const string Player = "204-gamedata.base";
+    /// <summary>
+    /// A different faction whose towns must remain untouched.
+    /// </summary>
     const string Foreign = "20-t";
 
+    /// <summary>
+    /// An empty headless world on flat walkable ground.
+    /// </summary>
     static SimWorld World() => new(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 300));
 
+    /// <summary>
+    /// A complete synthetic player building assigned to the given outpost number.
+    /// </summary>
     static BuildSite Site(string id, Vector3 position, int town) => new()
     {
         Id = id,
@@ -34,6 +48,9 @@ public class PlayerTownImportTests
         Complete = true,
     };
 
+    /// <summary>
+    /// Builds a synthetic outpost instance list linked to the supplied states.
+    /// </summary>
     static (SaveGame Save, FcsRecord InstanceList) SaveWithInstances(params (string Id, Vector3 Position, SaveTown[] States)[] towns)
     {
         var builder = new SaveBuilder(7);
@@ -48,6 +65,9 @@ public class PlayerTownImportTests
         return (builder.Game, list);
     }
 
+    /// <summary>
+    /// Adds a town state with explicit ownership, handle, public flag and optional radius.
+    /// </summary>
     static SaveTown Town(SaveBuilder builder, string name, string instance, string faction, Hand handle, bool publicTown = true, int? overrideRadius = null)
     {
         var town = builder.AddTown(name, instance, faction, isNest: false, zone: null, hand: handle);
@@ -67,7 +87,6 @@ public class PlayerTownImportTests
     {
         var builder = new SaveBuilder(7);
         var handle = new Hand((int)FcsRecordType.Town, 4, 55, 2, 9);
-
 
         var record = new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building };
         var db = new GameDatabase();
@@ -99,6 +118,9 @@ public class PlayerTownImportTests
         Assert.Equal(unresolved, Assert.Single(reloaded.Buildings.All).UnresolvedTown);
     }
 
+    /// <summary>
+    /// A normal template outpost may omit faction while retaining its saved properties.
+    /// </summary>
     [Fact]
     public void A_template_town_without_a_faction_is_imported_with_its_saved_properties()
     {
@@ -117,6 +139,9 @@ public class PlayerTownImportTests
             (town.Number, town.Name, town.Owner, town.Public, town.Override, town.SaveHandle!.Value));
     }
 
+    /// <summary>
+    /// A template alone cannot turn an explicitly foreign town into a player outpost.
+    /// </summary>
     [Fact]
     public void A_template_town_with_a_foreign_faction_is_not_imported()
     {
@@ -161,6 +186,9 @@ public class PlayerTownImportTests
         Assert.Equal(explicitPlayer ? Player : null, first.Record.Strings.GetValueOrDefault("faction"));
     }
 
+    /// <summary>
+    /// Linked states combine into one outpost with the first valid name and handle and the last public/radius values.
+    /// </summary>
     [Fact]
     public void Multiple_town_states_for_one_instance_are_merged()
     {
@@ -215,6 +243,9 @@ public class PlayerTownImportTests
         });
     }
 
+    /// <summary>
+    /// A level placement can resolve a player-town state even when the save has no outpost instance list.
+    /// </summary>
     [Fact]
     public void A_player_level_town_is_imported_without_a_town_instance_list()
     {
@@ -230,6 +261,9 @@ public class PlayerTownImportTests
         Assert.Equal(("Level Camp", SyntheticTown.Centre, 7, false, 1900f), (town.Name, town.Position, town.Owner, town.Public, town.Override));
     }
 
+    /// <summary>
+    /// Load normalization excludes the exact radius boundary and preserves sparse town numbers.
+    /// </summary>
     [Fact]
     public void Town_overlap_normalisation_is_strict_and_preserves_numbers()
     {
@@ -253,6 +287,9 @@ public class PlayerTownImportTests
         Assert.Equal(4, added.Number);
     }
 
+    /// <summary>
+    /// Placement reassessment moves buildings to the smaller overlapping outpost and expands its radius.
+    /// </summary>
     [Fact]
     public void Placement_overlap_merges_buildings_into_the_smaller_radius_town()
     {
@@ -271,6 +308,9 @@ public class PlayerTownImportTests
         Assert.True(first.Override > 1000);
     }
 
+    /// <summary>
+    /// Load normalization leaves building town references unchanged when their town is removed.
+    /// </summary>
     [Fact]
     public void Load_overlap_normalisation_does_not_rewrite_building_town_handles()
     {
@@ -286,6 +326,9 @@ public class PlayerTownImportTests
         Assert.Same(survivor, Assert.Single(world.Buildings.Towns));
     }
 
+    /// <summary>
+    /// Saving replaces the old radius with the live reassessed value.
+    /// </summary>
     [Fact]
     public void Save_writes_the_current_outpost_radius()
     {
@@ -304,6 +347,9 @@ public class PlayerTownImportTests
         Assert.Equal(3400, state.Record.Ints["override"]);
     }
 
+    /// <summary>
+    /// Placement/dismantle reassessment drops an outpost whose last building was removed.
+    /// </summary>
     [Fact]
     public void Reassessing_after_the_last_building_is_removed_removes_the_town()
     {
