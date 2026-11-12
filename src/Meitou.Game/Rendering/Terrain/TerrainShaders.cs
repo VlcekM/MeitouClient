@@ -1574,6 +1574,9 @@ static partial class TerrainShaders
             // the layers'. A rock bake (uWaterHeight far below the world) is without weather, so its impostor does not keep a rain.
             float wetAmount = uWaterHeight > -1.0e5 ? uWeatherWet.x : 0.0;
             makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - vWorld.y, 2.0);
+            // The wet world's puddles (Meitou, the "Rain drops and puddles" row), above the water line only.
+            if (uWetWorld > 0.5 && wetAmount > 0.2 && vWorld.y > uWaterHeight + 2.0)
+                wetGround(vWorld, n, absorbance, wetAmount, uWeatherWet.y, max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), shadingNormal, albedo);
 
             atmoSelfShadow = reliefShade;
             atmoSurfaceNormal = n;

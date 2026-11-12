@@ -267,6 +267,47 @@ static class AtmosphereShaders
             gloss = mix(gloss, 0.9, cover);
             albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
         }
+        // The slope (x, z) the rain's impacts give a puddle's surface at xz: in each 16 cm cell a drop lands 1 to 1.75 times a second, somewhere new each
+        // time, and its ring widens to 11 cm as it dies down. The slope is the ring's profile differentiated (no height is sampled twice).
+        vec2 wetRings(vec2 xz)
+        {
+            const float cell = 1.6;
+            vec2 base = floor(xz / cell), slope = vec2(0.0);
+            for (int i = 0; i < 9; i++)
+            {
+                vec2 c = base + vec2(float(i % 3) - 1.0, float(i / 3) - 1.0);
+                vec3 h = wetHash(vec3(c.x, 3.0, c.y), 3u);
+                float turn = h.z + uWetClock * (64.0 + floor(h.x * 48.0)) / 64.0, t = fract(turn);
+                vec3 at = wetHash(vec3(c.x, floor(turn), c.y), 4u);
+                vec2 d = xz - (c + 0.15 + 0.7 * at.xy) * cell;
+                float dist = length(d), w = (dist - t * cell * 0.7) / (cell * 0.05);
+                slope += d / max(dist, 1e-3) * (-2.0 * w * exp(-w * w)) * (1.0 - t) * (1.0 - t);
+            }
+            return slope;
+        }
+        // Puddles on wet ground (the terrain). Water gathers where level ground lies low: "low" is two noises of the place (hollows 8 m and 1.5 m across, a
+        // 30 cm one for the outline), and the water's level rises with the weather's wetness (none under 0.2; at 1 about a third of level ground, less on
+        // ground that takes the rain in, absorbance). None on slopes over about 10 degrees. In a puddle the ground shows darker through the water, the
+        // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains; round it a rim of soaked ground. world: the fragment;
+        // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm).
+        void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, inout vec3 n, inout vec4 surface)
+        {
+            float even = smoothstep(0.955, 0.99, level.y);
+            if (even <= 0.0 || wet <= 0.2) return;
+            vec3 at = vec3(world.x, 0.0, world.z);
+            float low = 0.6 * wetNoise(at / 80.0) + 0.4 * wetNoise(at / 15.0) + 0.1 * (wetNoise(at / 3.0) - 0.5) * (1.0 - smoothstep(1.5, 3.0, pixel));
+            float fill = smoothstep(0.2, 1.0, wet) * mix(0.47, 0.3, clamp(absorbance, 0.0, 1.0)) - (1.0 - even) * 0.3;
+            float over = fill - low;   // how far the water stands over the ground here (in the noise's units)
+            float rim = smoothstep(-0.07, 0.0, over), water = smoothstep(0.0, 0.025, over);
+            if (rim <= 0.0) return;
+            surface.rgb *= mix(1.0, 0.82, rim) * mix(1.0, mix(0.8, 0.5, smoothstep(0.0, 0.2, over)), water);
+            surface.a = mix(mix(surface.a, max(surface.a, 0.6), rim), 0.95, water);
+            if (water <= 0.0) return;
+            vec3 up = vec3(0.0, 1.0, 0.0);
+            float rings = rain * (1.0 - smoothstep(0.6, 1.5, pixel));
+            if (rings > 0.0) { vec2 s = wetRings(world.xz) * 0.35 * rings; up = normalize(vec3(-s.x, 1.0, -s.y)); }
+            n = normalize(mix(n, up, water));
+        }
         // objects.hlsl / triplanar.hlsl: how far a surface is covered by dust (0..1). n: its normal, gloss: the diffuse alpha before `specular mult`, amount: dustAmount.x (.y inside).
         float dustCover(vec3 n, float gloss, vec3 world, float amount)
         {

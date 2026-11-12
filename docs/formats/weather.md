@@ -289,4 +289,6 @@ The optional row "Rain drops and puddles" (`WeatherSurfaces.WetWorld`, `uWetWorl
   (the dust noise stretched down the wall, drifting in the rain); a film on what faces the sky (gloss to 0.8); the drops. Scaled by how little the surface
   absorbs (its dry gloss).
 - **Observed** (hidden run, t_flats_shore, forced wetness 1 rain 40, a placed Small Shack): the wall darker with vertical variation at 70 units.
-- Not done: puddles on the terrain, foliage. **Unknown**: the look on metal buildings and at night.
+- `wetGround` (the terrain, above the water line): puddles where level ground (slope under about 10 degrees) lies low. "Low" is three noises of the place (8 m, 1.5 m, and 30 cm for the outline), not the terrain's own hollows; the water's level rises with the wetness (none under 0.2; at 1 about a third of level ground, less where the layers' absorbance is high). In a puddle: the ground darker (x 0.8 to 0.5 with depth), gloss 0.95, the normal level; a rim of soaked ground round it (gloss at least 0.6); in the rain `wetRings`, one impact per 16 cm cell 1 to 1.75 times a second, its ring widening to 11 cm (off where a pixel covers over 15 cm).
+- **Observed** (hidden run, t_flats_shore, forced wetness 0.6 and 1 with rain 40, three camera distances): puddles with the sky and the characters reflected, rings in the rain, dark patches from afar; none dry.
+- Not done: foliage; puddles ignore the relief of the ground texture (water lies over the dune ripples). **Unknown**: the look on metal buildings, at night, and on other biomes than sand.
