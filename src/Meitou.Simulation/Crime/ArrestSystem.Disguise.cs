@@ -1,7 +1,7 @@
-using Meitou.Simulation.Factions;
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
@@ -9,8 +9,10 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 
-// Disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through it, and the faction a
-// disguised character passes for.
+/// <summary>
+/// The arrest system's disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through
+/// it, and the faction a disguised character passes for.
+/// </summary>
 public sealed partial class ArrestSystem
 {
     /// <summary>
@@ -35,13 +37,17 @@ public sealed partial class ArrestSystem
     /// </summary>
     public PopulationData? Towns { get; set; }
 
+    /// <summary>
+    /// Per looker and disguised target: the see-through meter (through at above 1), filled while the looker sees the target and drained otherwise.
+    /// </summary>
     readonly Dictionary<(CharacterId Looker, CharacterId Target), float> _disguiseMeters = [];
 
     /// <summary>
     /// The faction a looker takes <paramref name="c"/> for: its uniform's while the disguise works (<see cref="DisguiseWorks"/>, not blown), else its
     /// own.
     /// </summary>
-    public static int SeenFaction(CharacterCold c) => c.DisguiseFaction >= 0 && c.DisguiseLevel > DisguiseWorks && c.RecentlyWanted <= 0 ? c.DisguiseFaction : c.Faction;
+    public static int SeenFaction(CharacterCold c) =>
+        c.DisguiseFaction >= 0 && c.DisguiseLevel > DisguiseWorks && c.RecentlyWanted <= 0 ? c.DisguiseFaction : c.Faction;
 
     /// <summary>
     /// The clothing disguise (<c>AI::vfunc_9</c> <c>FUN_1405a51e0</c>, <b>Observed</b>): a uniform hat 0.4, a uniform body armour 0.4 (its faction
@@ -100,7 +106,11 @@ public sealed partial class ArrestSystem
             for (int w = 0; w < table.HighWater; w++)
             {
                 if (w == s || !next[w].Alive || next[w].Task == (byte)CharacterTask.Rest) continue;
-                if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc || wc.Faction == player || !Crimes.Relations.Contains(wc.Faction) || SquadRegistry.IsAnimal(wc)) continue;
+                if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc
+                    || wc.Faction == player || !Crimes.Relations.Contains(wc.Faction) || SquadRegistry.IsAnimal(wc))
+                {
+                    continue;
+                }
                 if (Vector3.DistanceSquared(next[w].Position, at) > DisguiseRange * DisguiseRange) continue;
                 float v = world.Sight.Sees(w, s, next[w].Position, at, DisguiseRange);
                 if (v <= 0) continue;
@@ -136,15 +146,30 @@ public sealed partial class ArrestSystem
     {
         float stealth = c.Stats is { } stats ? Math.Clamp(stats[StatsEnumerated.Stealth] * stats.Scale * 0.01f, 0, 1) : 0;
         float k = (1 + stealth) * c.DisguiseLevel;
-        if (Talk?.Memory.Find(world, wc.SquadId, target) is { } e && (e.Long & Dialogue.MemoryTag.HateMask) != 0) { k *= 0.5f; Mark(c, KnowsMeMark); }
-        if (c.DisguiseFaction == wc.Faction) { k *= 0.6f; Mark(c, SameFactionMark); }
-        if (c.SlaveOwner >= 0 && c.SlaveOwner == wc.Faction) { k *= 0.5f; Mark(c, SlaveOwnerMark); }
+        if (Talk?.Memory.Find(world, wc.SquadId, target) is { } e && (e.Long & Dialogue.MemoryTag.HateMask) != 0)
+        {
+            k *= 0.5f;
+            Mark(c, KnowsMeMark);
+        }
+        if (c.DisguiseFaction == wc.Faction)
+        {
+            k *= 0.6f;
+            Mark(c, SameFactionMark);
+        }
+        if (c.SlaveOwner >= 0 && c.SlaveOwner == wc.Faction)
+        {
+            k *= 0.5f;
+            Mark(c, SlaveOwnerMark);
+        }
         if (secure) k *= 0.75f;
         if (!InFriendlyTown(world, world.Characters.Next[w].Position, wc.Faction)) k *= 2;
         float a = 5 + 40 * k;
         return (5 * a + (a - 5 * a) * Math.Clamp(v, 0, 1)) * (4 + (1 - 4) * Orders.SpotAlertness);
     }
 
+    /// <summary>
+    /// Sets the looker tooltip mark <paramref name="mark"/> of <paramref name="c"/> to <see cref="MarkSeconds"/>.
+    /// </summary>
     static void Mark(CharacterCold c, int mark) => (c.DisguiseMarks ??= new float[3])[mark] = MarkSeconds;
 
     /// <summary>
@@ -193,11 +218,19 @@ public sealed partial class ArrestSystem
         return owner == faction || !relations.Contains(faction) || !relations.IsHostile(faction, owner);
     }
 
+    /// <summary>
+    /// Adds the see-through meters in looker and target slot order to the world hash, only while there are any.
+    /// </summary>
     void HashDisguise(ref StateHasher hasher)
     {
         if (_disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before
         hasher.Add(0x4D747273);
         hasher.Add(_disguiseMeters.Count);
-        foreach (var ((looker, target), meter) in _disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot)) { hasher.Add(looker); hasher.Add(target); hasher.Add(meter); }
+        foreach (var ((looker, target), meter) in _disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot))
+        {
+            hasher.Add(looker);
+            hasher.Add(target);
+            hasher.Add(meter);
+        }
     }
 }

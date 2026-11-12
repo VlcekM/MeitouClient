@@ -9,7 +9,21 @@ namespace Meitou.Simulation.Navigation;
 /// <summary>
 /// How an edge of the original's navmesh ends: shared with a face of its tile, joined to a neighbouring tile, or the mesh's end.
 /// </summary>
-public enum OriginalEdge : byte { Inner, TileBorder, End }
+public enum OriginalEdge : byte
+{
+    /// <summary>
+    /// The edge is shared with another face of its tile (it has an opposite face).
+    /// </summary>
+    Inner,
+    /// <summary>
+    /// The edge lies on the tile's border and is joined to a neighbouring tile.
+    /// </summary>
+    TileBorder,
+    /// <summary>
+    /// The edge is the mesh's end: nothing is behind it.
+    /// </summary>
+    End
+}
 
 /// <summary>
 /// A zone's exterior navmesh as the original game built it, in world coordinates: polygons (vertex indices) and, per polygon edge, how it ends.
@@ -17,9 +31,9 @@ public enum OriginalEdge : byte { Inner, TileBorder, End }
 public sealed record OriginalNavMesh(ZoneCoordinate Zone, Vector3[] Vertices, int[][] Polygons, OriginalEdge[][] Edges);
 
 /// <summary>
-/// The original game's cached navmesh tiles (<c>data/newland/land/navtiles/tileX.Y.hkt</c>, Havok tagfiles; docs/game/pathfinding.md "Original tiles"): its
-/// <c>hkaiNavMesh</c> faces, edges and vertices. The exterior mesh (the tile's first) has its vertices zone-local at 0.1 scale; the interior groups that follow it
-/// (<see cref="LoadInteriors"/>) have theirs relative to their <c>Info</c> point (docs/formats/havok-tagfile.md).
+/// The original game's cached navmesh tiles (<c>data/newland/land/navtiles/tileX.Y.hkt</c>, Havok tagfiles; docs/game/pathfinding.md "Original
+/// tiles"): its <c>hkaiNavMesh</c> faces, edges and vertices. The exterior mesh (the tile's first) has its vertices zone-local at 0.1 scale; the
+/// interior groups that follow it (<see cref="LoadInteriors"/>) have theirs relative to their <c>Info</c> point (docs/formats/havok-tagfile.md).
 /// </summary>
 public static class OriginalNavTiles
 {
@@ -28,6 +42,9 @@ public static class OriginalNavTiles
     /// </summary>
     const float Scale = 10;
 
+    /// <summary>
+    /// The install's tile file of <paramref name="zone"/> (<c>navtiles/tileX.Y.hkt</c> under the land folder).
+    /// </summary>
     public static string PathOf(GameInstall install, ZoneCoordinate zone) =>
         Path.Combine(install.DataDirectory, TerrainMaps.LandDirectory, "navtiles", $"tile{zone.X}.{zone.Y}.hkt");
 
@@ -40,6 +57,9 @@ public static class OriginalNavTiles
         return File.Exists(path) ? Exterior(HavokTagfile.ReadFile(path), zone) : null;
     }
 
+    /// <summary>
+    /// The exterior mesh of a read tile in world coordinates; null when the file has no <c>hkaiNavMesh</c> with faces, edges and vertices.
+    /// </summary>
     public static OriginalNavMesh? Exterior(HavokTagfile file, ZoneCoordinate zone)
     {
         if (file.Variant("hkaiNavMesh") is not { } mesh || mesh["faces"] is not HkObject[] faces || mesh["edges"] is not HkObject[] edges
@@ -114,8 +134,8 @@ public static class OriginalNavTiles
     }
 
     /// <summary>
-    /// The tile's interior groups (docs/formats/havok-tagfile.md: after the exterior, per interior a NavMesh, an Info <c>uidhex;x;y;z</c> and its building's
-    /// interior hash; vertices are 0.1-scale offsets from the Info point), in world coordinates. Empty when the install has no tile.
+    /// The tile's interior groups (docs/formats/havok-tagfile.md: after the exterior, per interior a NavMesh, an Info <c>uidhex;x;y;z</c> and its
+    /// building's interior hash; vertices are 0.1-scale offsets from the Info point), in world coordinates. Empty when the install has no tile.
     /// </summary>
     public static List<OriginalInterior> LoadInteriors(GameInstall install, ZoneCoordinate zone)
     {
@@ -141,7 +161,8 @@ public static class OriginalNavTiles
                 result[^1] = result[^1] with { Hash = value };
                 hashed = true;
             }
-            else if (name == "Info" && v["variant"] is HkObject info && info["string"] is string text && mesh is not null && Group(mesh, text) is { } group)
+            else if (name == "Info" && v["variant"] is HkObject info && info["string"] is string text && mesh is not null
+                && Group(mesh, text) is { } group)
             {
                 result.Add(group);
                 (mesh, hashed) = (null, false);
@@ -175,9 +196,10 @@ public static class OriginalNavTiles
     }
 
     /// <summary>
-    /// The interior hash the original files a building's interior group under (docs/game/pathfinding.md, "Generator", interior hash): its level position's x and
-    /// z and its rotation's x, y, z, w, each truncated to an integer, then 0x100 when destroyed. The original also hashes each content item of a standing
-    /// furnished interior, which this leaves out, so a furnished standing building's misses; a ruin's contents are gone, so a ruin's matches.
+    /// The interior hash the original files a building's interior group under (docs/game/pathfinding.md, "Generator", interior hash): its level
+    /// position's x and z and its rotation's x, y, z, w, each truncated to an integer, then 0x100 when destroyed. The original also hashes each
+    /// content item of a standing furnished interior, which this leaves out, so a furnished standing building's misses; a ruin's contents are gone,
+    /// so a ruin's matches.
     /// </summary>
     public static uint InteriorHash(BuildingPlacement placement, bool destroyed)
     {
@@ -189,6 +211,9 @@ public static class OriginalNavTiles
         return destroyed ? Combine(hash, 0x100) : hash;
     }
 
+    /// <summary>
+    /// Mixes <paramref name="value"/> into <paramref name="hash"/> (the boost hash_combine step).
+    /// </summary>
     static uint Combine(uint hash, uint value) => hash ^ (value + 0x9e3779b9 + (hash << 6) + (hash >> 2));
 
     /// <summary>
@@ -197,8 +222,8 @@ public static class OriginalNavTiles
     public const float InteriorCoverHeight = 12;
 
     /// <summary>
-    /// How far (units, X/Z) from an original interior face's centre a kept polygon at its height may end and still cover it: the original's small faces
-    /// along a mesh end have their centres a unit or two past ours, which is not a lost floor.
+    /// How far (units, X/Z) from an original interior face's centre a kept polygon at its height may end and still cover it: the original's small
+    /// faces along a mesh end have their centres a unit or two past ours, which is not a lost floor.
     /// </summary>
     public const float InteriorCoverReach = 3;
 
@@ -246,7 +271,8 @@ public static class OriginalNavTiles
     }
 
     /// <summary>
-    /// Whether a kept polygon of <paramref name="mesh"/> covers an original face centre (<see cref="CoverInteriors"/>); <paramref name="heights"/> is scratch.
+    /// Whether a kept polygon of <paramref name="mesh"/> covers an original face centre (<see cref="CoverInteriors"/>); <paramref name="heights"/>
+    /// is scratch.
     /// </summary>
     public static bool Covers(ZoneNavMesh mesh, Vector3 c, List<float> heights)
     {
@@ -256,13 +282,20 @@ public static class OriginalNavTiles
             || mesh.Nearest(c.X, c.Y, c.Z, InteriorCoverReach, out _, p => MathF.Abs(mesh.HeightAt(p, c.X, c.Z) - c.Y) > InteriorCoverHeight) >= 0;
     }
 
+    /// <summary>
+    /// A number of an interior group's Info string, invariant culture; 0 when it does not parse.
+    /// </summary>
     static float Float(string s) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
 
+    /// <summary>
+    /// A tagfile integer member's value; 0 when it is missing or not an integer.
+    /// </summary>
     static long Int(object? v) => v is long l ? l : 0;
 }
 
 /// <summary>
-/// One interior group of an original tile: the uid from its Info string, the Info point, its mesh in world coordinates and its mesh connections to the exterior.
+/// One interior group of an original tile: the uid from its Info string, the Info point, its mesh in world coordinates and its mesh connections to
+/// the exterior.
 /// </summary>
 public sealed record OriginalInterior(string Uid, Vector3 Origin, Vector3[] Vertices, int[][] Polygons, int Connections = 0)
 {

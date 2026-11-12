@@ -2,12 +2,15 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
+/// <summary>
+/// The part with <see cref="TriangleGrid"/>.
+/// </summary>
 public sealed partial class FloorSurfaces
 {
     /// <summary>
-    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened, holds the point's cell,
-    /// in their order in the surface, so it finds what testing them all would. Every character inside a building asks its floor and cover whenever it moves, and a large
-    /// building's floor part holds thousands of triangles.
+    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened,
+    /// holds the point's cell, in their order in the surface, so it finds what testing them all would. Every character inside a building asks its
+    /// floor and cover whenever it moves, and a large building's floor part holds thousands of triangles.
     /// </summary>
     sealed class TriangleGrid
     {
@@ -21,13 +24,28 @@ public sealed partial class FloorSurfaces
         /// </summary>
         const int MaxEntriesPerTriangle = 16;
 
+        /// <summary>
+        /// The grid's minimum X/Z corner.
+        /// </summary>
         readonly Vector2 _min;
+        /// <summary>
+        /// Cells per world unit along X and along Z.
+        /// </summary>
         readonly float _perX, _perZ;
+        /// <summary>
+        /// Cells along X and along Z.
+        /// </summary>
         readonly int _nx, _nz;
 
-        // Cell c's triangles (their first corner's index) are items[start[c]..start[c + 1]].
+        /// <summary>
+        /// Cell c's triangles (their first corner's index) are items[start[c]..start[c + 1]].
+        /// </summary>
         readonly int[] _start, _items;
 
+        /// <summary>
+        /// Bins the triangles of <paramref name="corners"/> (three each) over the box <paramref name="min"/>..<paramref name="max"/>: about one
+        /// triangle per cell, the grid halved while the triangles take too many entries.
+        /// </summary>
         public TriangleGrid(Vector3[] corners, Vector2 min, Vector2 max)
         {
             this._min = min;
@@ -46,6 +64,9 @@ public sealed partial class FloorSurfaces
             _items = Fill(corners);
         }
 
+        /// <summary>
+        /// Cells along a side of <paramref name="extent"/> at <paramref name="cell"/> per cell, 1..<see cref="MaxSide"/>.
+        /// </summary>
         static int Side(float extent, float cell) => Math.Clamp((int)MathF.Ceiling(extent / cell), 1, MaxSide);
 
         /// <summary>
@@ -57,6 +78,9 @@ public sealed partial class FloorSurfaces
             return _items.AsSpan(_start[c], _start[c + 1] - _start[c]);
         }
 
+        /// <summary>
+        /// The cell of <paramref name="v"/> along an axis, clamped to the grid.
+        /// </summary>
         static int Cell(float v, float origin, float per, int n) => Math.Clamp((int)((v - origin) * per), 0, n - 1);
 
         /// <summary>
@@ -95,8 +119,8 @@ public sealed partial class FloorSurfaces
         }
 
         /// <summary>
-        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>, <see cref="RayTriangle"/>:
-        /// a barycentric 1e-4 of the triangle's size).
+        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>,
+        /// <see cref="RayTriangle"/>: a barycentric 1e-4 of the triangle's size).
         /// </summary>
         (int X0, int X1, int Z0, int Z1) Cells(Vector3[] corners, int i)
         {
@@ -104,7 +128,8 @@ public sealed partial class FloorSurfaces
             var lo = new Vector2(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
             var hi = new Vector2(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             float pad = 1e-3f * MathF.Max(hi.X - lo.X, hi.Y - lo.Y) + 1e-2f;
-            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx), Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
+            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx),
+                Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
         }
     }
 }

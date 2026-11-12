@@ -6,6 +6,10 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class TgaReader
 {
+    /// <summary>
+    /// Reads a whole Targa file; <see cref="FormatException"/> when it is truncated or empty, <see cref="NotSupportedException"/> for another image
+    /// type or depth.
+    /// </summary>
     public static RgbaImage Read(ReadOnlySpan<byte> file)
     {
         if (file.Length < 18) throw new FormatException("TGA header is truncated.");
@@ -13,7 +17,8 @@ public static class TgaReader
         int colourMapLength = file[5] | file[6] << 8, colourMapBits = file[7];
         int width = file[12] | file[13] << 8, height = file[14] | file[15] << 8, bits = file[16];
         bool topDown = (file[17] & 0x20) != 0;
-        if (colourMapType != 0 || imageType is not (2 or 10)) throw new NotSupportedException($"TGA image type {imageType} (colour map {colourMapType}) is not supported.");
+        if (colourMapType != 0 || imageType is not (2 or 10))
+            throw new NotSupportedException($"TGA image type {imageType} (colour map {colourMapType}) is not supported.");
         if (bits is not (24 or 32)) throw new NotSupportedException($"TGA with {bits} bits per pixel is not supported.");
         if (width == 0 || height == 0) throw new FormatException("TGA has no pixels.");
         int bytesPerPixel = bits / 8;

@@ -20,6 +20,9 @@ public readonly record struct GrassTables(Transient Zones, int ZoneCount, Transi
 public readonly record struct GrassResult(GpuBuffer Draws, ulong DrawsOffset, GpuBuffer Counters, ulong CountersOffset, int MaxDraws,
     Transient Patches)
 {
+    /// <summary>
+    /// Nothing to draw: the cull did not run (no slots, no patches, or no scratch memory).
+    /// </summary>
     public bool IsEmpty => MaxDraws == 0;
 }
 
@@ -32,32 +35,45 @@ public readonly record struct GrassResult(GpuBuffer Draws, ulong DrawsOffset, Gp
 /// </summary>
 public sealed unsafe class FoliageGrassGpu : IDisposable
 {
-    public const int PrefixStride = FoliageGrassField.PrefixSteps + 1;
-    /// <summary>
-    /// Bytes of a blade (<see cref="FoliageGrassField.Stride"/> floats).
-    /// </summary>
-    public const int BladeBytes = FoliageGrassField.Stride * 4;
-    const ulong Align = 256;
-    const int MaxViews = 64;
+    #region Kernels and lifetime
 
+    /// <summary>
+    /// The device the store and the kernels live on.
+    /// </summary>
     readonly IGpuContext _ctx;
+    /// <summary>
+    /// The cull and order kernels (<see cref="FoliageGrassShaders"/>); null without <see cref="Supported"/>.
+    /// </summary>
     readonly GpuProgram? _cull, _order;
+    /// <summary>
+    /// The kernels' compute pipelines.
+    /// </summary>
     readonly GpuComputePipeline? _cullPipe, _orderPipe;
+    /// <summary>
+    /// Each kernel's storage-buffer bindings at set 0, in order (<see cref="Bindings"/>).
+    /// </summary>
     readonly uint[] _cullBindings = [], _orderBindings = [];
-    /// <summary>The pages hidden behind the last frame's surfaces are left out of the main view (docs/render-foliage.md; <c>MEITOU_GRASS_OCCLUSION=0</c> turns it off, for comparing).</summary>
+
+    /// <summary>
+    /// The pages hidden behind the last frame's surfaces are left out of the main view (docs/render-foliage.md; <c>MEITOU_GRASS_OCCLUSION=0</c>
+    /// turns it off, for comparing).
+    /// </summary>
     public static bool OcclusionCull { get; set; } = Environment.GetEnvironmentVariable("MEITOU_GRASS_OCCLUSION") != "0";
-    /// <summary>The view block of the kernels: the planes, the eye and the counts (160 bytes), then the depth pyramid's vectors.</summary>
+
+    /// <summary>
+    /// The view block of the kernels: the planes, the eye and the counts (160 bytes), then the depth pyramid's vectors.
+    /// </summary>
     const int ViewBytes = 160 + HizPyramid.ViewVectors * 16;
-    readonly BufferArena _arena;
-    readonly DeviceBuffer _slots, _prefixes;
-    readonly object _gate = new();
-    readonly List<int> _freeSlots = [];
 
     /// <summary>
     /// Whether the cull kernels exist (<see cref="Supported"/>): without them the store is only the blade arena and the CPU chooses the draws.
     /// </summary>
     public bool Kernels => _cull is not null;
 
+    /// <summary>
+    /// Compiles the kernels and makes the per-view memory when the device has them, then the blade arena (<paramref name="arenaBytes"/>), the slot
+    /// table and its prefixes (<paramref name="slotCapacity"/> slots) and the counters' read-backs.
+    /// </summary>
     public FoliageGrassGpu(IGpuContext ctx, ulong arenaBytes, int slotCapacity)
     {
         this._ctx = ctx;
@@ -83,26 +99,81 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         _countedWritten = new int[ctx.FramesInFlight];
     }
 
-    static uint[] Bindings(GpuContext ctx, GpuProgram p)
-    {
-        var backend = ctx.Shaders.Backend(p);
-        if (!backend.PushDescriptors) throw new InvalidOperationException($"{p.Name}: the grass cull pushes its descriptors, the device cannot");
-        return [.. backend.ComputeReflection!.Blocks.Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0).Select(b => (uint)b.Binding).Order()];
-    }
-
     /// <summary>
     /// Whether the device can run the GPU grass (push descriptors, indirect draws with a count and a first instance).
     /// </summary>
     public static bool Supported(IGpuContext ctx) =>
-        ctx is GpuContext vk && vk.Device.HasPushDescriptor && vk.Device.DrawIndirectCount && vk.Device.DrawIndirectFirstInstance && vk.Device.MultiDrawIndirect;
+        ctx is GpuContext vk && vk.Device.HasPushDescriptor && vk.Device.DrawIndirectCount && vk.Device.DrawIndirectFirstInstance
+            && vk.Device.MultiDrawIndirect;
 
-    // ---- the blade arena ----
+    /// <summary>
+    /// Frees the kernels, the arena, the slot table, the per-view memory and the read-backs.
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var p in new[] { _cull, _order })
+            if (p is not null)
+            {
+                _ctx.Pipelines.Forget(p.Value);
+                _ctx.Shaders.Dispose(p.Value);
+            }
+        _arena.Dispose();
+        _slots.Dispose();
+        _prefixes.Dispose();
+        _scratch?.Dispose();
+        foreach (var c in _counted) c?.Dispose();
+    }
 
+    /// <summary>
+    /// A kernel's storage-buffer bindings at set 0, sorted; throws when the device has no push descriptors.
+    /// </summary>
+    static uint[] Bindings(GpuContext ctx, GpuProgram p)
+    {
+        var backend = ctx.Shaders.Backend(p);
+        if (!backend.PushDescriptors) throw new InvalidOperationException($"{p.Name}: the grass cull pushes its descriptors, the device cannot");
+        return [.. backend.ComputeReflection!.Blocks
+            .Where(b => b.Kind == Gpu.Shaders.BlockKind.StorageBuffer && b.Set == 0)
+            .Select(b => (uint)b.Binding)
+            .Order()];
+    }
+
+    /// <summary>
+    /// The upload commands (Vulkan's pre-frame list; Metal's main list, recorded before the pass).
+    /// </summary>
+    IGpuCommandList UploadCommands => _ctx is GpuContext vk ? vk.Frame.PreFrame : _ctx.Frame.Commands;
+    /// <summary>
+    /// The Vulkan context the cull kernels need (the Metal path never records them).
+    /// </summary>
+    GpuContext Vk => _ctx as GpuContext ?? throw new NotSupportedException("the Metal backend has no GPU grass cull");
+
+    /// <summary>
+    /// Orders a pass's work against the next one's (the engine's words; the backend's masks).
+    /// </summary>
+    static void Barrier(IGpuCommandList cmd, Access from, Access to) => cmd.Barrier([new GpuDependency(from, to)]);
+
+    #endregion
+
+    #region Blade arena
+
+    /// <summary>
+    /// Bytes of a blade (<see cref="FoliageGrassField.Stride"/> floats).
+    /// </summary>
+    public const int BladeBytes = FoliageGrassField.Stride * 4;
+    /// <summary>
+    /// The blade arena (a vertex buffer, see <see cref="BladeBuffer"/>).
+    /// </summary>
+    readonly BufferArena _arena;
     /// <summary>
     /// The arena as a vertex buffer: blade <c>i</c> is at byte <c>i * <see cref="BladeBytes"/></c>.
     /// </summary>
     public GpuBuffer BladeBuffer => _arena.Buffer.Handle;
+    /// <summary>
+    /// The arena's size in bytes.
+    /// </summary>
     public ulong ArenaBytes => _arena.Buffer.Size;
+    /// <summary>
+    /// Bytes of the arena in use.
+    /// </summary>
     public ulong ArenaUsed => _arena.Buffer.Size - _arena.FreeBytes;
     /// <summary>
     /// Pages that could not be placed (arena or slot table full) since the start.
@@ -119,6 +190,9 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     /// </summary>
     public static uint FirstBlade(ArenaRange range) => (uint)(range.Offset / BladeBytes);
 
+    /// <summary>
+    /// Gives a range of blades back to the arena.
+    /// </summary>
     public void FreeBlades(ArenaRange range) => _arena.Free(range);
 
     /// <summary>
@@ -130,13 +204,41 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         batch.Write(_arena.Buffer, range.Offset + (ulong)byteStart, data);
     }
 
-    // ---- the slot table ----
+    #endregion
 
+    #region Slot table
+
+    /// <summary>
+    /// Blade counts per slot in the prefix table: one per density step and one more.
+    /// </summary>
+    public const int PrefixStride = FoliageGrassField.PrefixSteps + 1;
+    /// <summary>
+    /// The slot table (<see cref="GrassSlot"/> records) and each slot's blade prefixes (<see cref="PrefixStride"/> counts).
+    /// </summary>
+    readonly DeviceBuffer _slots, _prefixes;
+    /// <summary>
+    /// Guards <see cref="_freeSlots"/> and the counts (slots are given back from deferred deletes).
+    /// </summary>
+    readonly object _gate = new();
+    /// <summary>
+    /// Slots given back, handed out again before new ones.
+    /// </summary>
+    readonly List<int> _freeSlots = [];
+    /// <summary>
+    /// Whether the slot table has been cleared (<see cref="Initialise"/>).
+    /// </summary>
+    bool _initialised;
+    /// <summary>
+    /// How many slots the table holds.
+    /// </summary>
     public int SlotCapacity { get; }
     /// <summary>
     /// One more than the highest slot ever handed out: the kernels' range.
     /// </summary>
     public int SlotHigh { get; private set; }
+    /// <summary>
+    /// Slots handed out and not given back.
+    /// </summary>
     public int SlotsUsed { get; private set; }
 
     /// <summary>
@@ -147,36 +249,16 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         lock (_gate)
         {
             int slot;
-            if (_freeSlots.Count > 0) { slot = _freeSlots[^1]; _freeSlots.RemoveAt(_freeSlots.Count - 1); }
+            if (_freeSlots.Count > 0)
+            {
+                slot = _freeSlots[^1];
+                _freeSlots.RemoveAt(_freeSlots.Count - 1);
+            }
             else if (SlotHigh < SlotCapacity) slot = SlotHigh++;
             else return -1;
             SlotsUsed++;
             return slot;
         }
-    }
-
-    bool _initialised;
-
-    /// <summary>
-    /// The upload commands (Vulkan's pre-frame list; Metal's main list, recorded before the pass).
-    /// </summary>
-    IGpuCommandList UploadCommands => _ctx is GpuContext vk ? vk.Frame.PreFrame : _ctx.Frame.Commands;
-
-    /// <summary>
-    /// The Vulkan context the cull kernels need (the Metal path never records them).
-    /// </summary>
-    GpuContext Vk => _ctx as GpuContext ?? throw new NotSupportedException("the Metal backend has no GPU grass cull");
-
-    /// <summary>
-    /// The slot table starts as zeros (every slot has no blades), written once by the first frame that needs it.
-    /// </summary>
-    void Initialise()
-    {
-        if (_initialised) return;
-        var cmd = UploadCommands;
-        cmd.FillBuffer(_slots.Handle, 0, _slots.Size, 0);
-        Barrier(cmd, Access.TransferDst, Access.TransferSrc | Access.TransferDst);   // the slots are copied from and into after the fill
-        _initialised = true;
     }
 
     /// <summary>
@@ -206,11 +288,74 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         }
         _ctx.DeferDelete(() =>
         {
-            lock (_gate) { _freeSlots.Add(slot); SlotsUsed--; }
+            lock (_gate)
+            {
+                _freeSlots.Add(slot);
+                SlotsUsed--;
+            }
         });
     }
 
-    // ---- per view ----
+    /// <summary>
+    /// The slot table starts as zeros (every slot has no blades), written once by the first frame that needs it.
+    /// </summary>
+    void Initialise()
+    {
+        if (_initialised) return;
+        var cmd = UploadCommands;
+        cmd.FillBuffer(_slots.Handle, 0, _slots.Size, 0);
+        Barrier(cmd, Access.TransferDst, Access.TransferSrc | Access.TransferDst);   // the slots are copied from and into after the fill
+        _initialised = true;
+    }
+
+    #endregion
+
+    #region Views
+
+    /// <summary>
+    /// The alignment of the tables and view constants in the frame's constants, in bytes.
+    /// </summary>
+    const ulong Align = 256;
+    /// <summary>
+    /// The most views a frame whose counters are copied for <see cref="LateDraws"/>.
+    /// </summary>
+    const int MaxViews = 64;
+    /// <summary>
+    /// Device memory per frame slot for the per-view keys, draws and counters; null without the kernels.
+    /// </summary>
+    readonly FrameScratch? _scratch;
+    /// <summary>
+    /// The frame slot of <see cref="_scratchFrame"/> (-1: none yet).
+    /// </summary>
+    int _scratchSlot = -1;
+    /// <summary>
+    /// The GPU frame the per-view state is for (-1: none yet; <see cref="NewFrame"/>).
+    /// </summary>
+    long _scratchFrame = -1;
+    /// <summary>
+    /// This frame's views so far (the next view's call number).
+    /// </summary>
+    int _viewIndex;
+    /// <summary>
+    /// The counters' read-back per frame slot (<see cref="MaxViews"/> × 16 bytes), made on first use.
+    /// </summary>
+    readonly ReadbackBuffer?[] _counted;
+    /// <summary>
+    /// How many views each slot's counters hold.
+    /// </summary>
+    readonly int[] _countedWritten;
+    /// <summary>
+    /// The draws and blades the view with this call number drew a frame ring ago (0 before): statistics for the CPU.
+    /// </summary>
+    public int LateDraws { get; private set; }
+    /// <summary>
+    /// See <see cref="LateDraws"/>: the blades.
+    /// </summary>
+    public long LateBlades { get; private set; }
+    /// <summary>
+    /// The per-view lists' memory (<see cref="FrameScratch"/>); null without the cull kernels.
+    /// </summary>
+    public FrameScratch? Scratch => _scratch;
 
     /// <summary>
     /// Copies the tables of a view into the frame's constants (valid for the frame).
@@ -223,51 +368,6 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         Transient z = _ctx.Frame.WriteConstants(MemoryMarshal.AsBytes(zoneRows), Align);
         Transient p = _ctx.Frame.WriteConstants(MemoryMarshal.AsBytes(patchRows), Align);
         return new GrassTables(z, zones.Length, p, patches.Length);
-    }
-
-    readonly FrameScratch? _scratch;
-    int _scratchSlot = -1;
-    long _scratchFrame = -1;
-    int _viewIndex;
-    readonly ReadbackBuffer?[] _counted;
-    readonly int[] _countedWritten;
-
-    /// <summary>
-    /// The draws and blades the view with this call number drew a frame ring ago (0 before): statistics for the CPU.
-    /// </summary>
-    public int LateDraws { get; private set; }
-    public long LateBlades { get; private set; }
-
-    void NewFrame()
-    {
-        var frame = _ctx.Frame;
-        if (_scratchFrame == frame.Number) return;
-        if (_scratchSlot >= 0) _countedWritten[_scratchSlot] = _viewIndex;
-        (_scratchFrame, _scratchSlot, _viewIndex) = (frame.Number, frame.Slot, 0);
-    }
-
-    /// <summary>
-    /// The per-view lists' memory (<see cref="FrameScratch"/>); null without the cull kernels.
-    /// </summary>
-    public FrameScratch? Scratch => _scratch;
-
-    readonly List<(QuerySlot Begin, QuerySlot End)> _pendingTimes = [];
-    public double GpuMicroseconds { get; private set; }
-    public long GpuTimedViews { get; private set; }
-    public long Dispatched { get; private set; }
-
-    void CollectTimes()
-    {
-        var q = _ctx.Frame.Timestamps;
-        for (int i = 0; i < _pendingTimes.Count; i++)
-        {
-            var (b, e) = _pendingTimes[i];
-            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number) { _pendingTimes.RemoveAt(i--); continue; }
-            if (!q.TryRead(b, out ulong tb) || !q.TryRead(e, out ulong te)) continue;
-            GpuMicroseconds += (te - tb) / 1000.0;
-            GpuTimedViews++;
-            _pendingTimes.RemoveAt(i--);
-        }
     }
 
     /// <summary>
@@ -353,25 +453,6 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         return new GrassResult(draws.Buffer, draws.Offset, counters.Buffer, counters.Offset, n, tables.Patches);
     }
 
-    void Run(IGpuCommandList cmd, GpuProgram program, GpuComputePipeline pipe, uint[] bindings, ReadOnlySpan<GpuBufferBinding> b, uint groups)
-    {
-        cmd.BindPipeline(pipe);
-        int count = bindings.Length;
-        var list = stackalloc GpuBinding[count];
-        for (int i = 0; i < count; i++)
-        {
-            ref readonly var bb = ref b[(int)bindings[i]];
-            list[i] = GpuBinding.Storage(bindings[i], bb);
-        }
-        cmd.BindProgramResources(program, 0, new ReadOnlySpan<GpuBinding>(list, count));
-        cmd.Dispatch(groups);
-    }
-
-    /// <summary>
-    /// Orders a pass's work against the next one's (the engine's words; the backend's masks).
-    /// </summary>
-    static void Barrier(IGpuCommandList cmd, Access from, Access to) => cmd.Barrier([new GpuDependency(from, to)]);
-
     /// <summary>
     /// The density setting as the prefix step and the fraction into it, as <see cref="FoliageGrassField.PrefixCount"/> takes them.
     /// </summary>
@@ -397,18 +478,76 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         cmd.CopyBuffer(r.Draws, target.Handle, new GpuBufferCopy(r.DrawsOffset, 16, (ulong)r.MaxDraws * 16));
     }
 
-    public void Dispose()
+    /// <summary>
+    /// At a frame's first dispatch: notes how many views the last slot's counters hold and starts the count again for this frame's slot.
+    /// </summary>
+    void NewFrame()
     {
-        foreach (var p in new[] { _cull, _order })
-            if (p is not null)
-            {
-                _ctx.Pipelines.Forget(p.Value);
-                _ctx.Shaders.Dispose(p.Value);
-            }
-        _arena.Dispose();
-        _slots.Dispose();
-        _prefixes.Dispose();
-        _scratch?.Dispose();
-        foreach (var c in _counted) c?.Dispose();
+        var frame = _ctx.Frame;
+        if (_scratchFrame == frame.Number) return;
+        if (_scratchSlot >= 0) _countedWritten[_scratchSlot] = _viewIndex;
+        (_scratchFrame, _scratchSlot, _viewIndex) = (frame.Number, frame.Slot, 0);
     }
+
+    /// <summary>
+    /// Binds a kernel's pipeline, its storage buffers (picked from <paramref name="b"/> by its bindings), then dispatches <paramref name="groups"/>
+    /// groups.
+    /// </summary>
+    void Run(IGpuCommandList cmd, GpuProgram program, GpuComputePipeline pipe, uint[] bindings, ReadOnlySpan<GpuBufferBinding> b, uint groups)
+    {
+        cmd.BindPipeline(pipe);
+        int count = bindings.Length;
+        var list = stackalloc GpuBinding[count];
+        for (int i = 0; i < count; i++)
+        {
+            ref readonly var bb = ref b[(int)bindings[i]];
+            list[i] = GpuBinding.Storage(bindings[i], bb);
+        }
+        cmd.BindProgramResources(program, 0, new ReadOnlySpan<GpuBinding>(list, count));
+        cmd.Dispatch(groups);
+    }
+
+    #endregion
+
+    #region GPU timing
+
+    /// <summary>
+    /// The dispatches' timestamp pairs not yet read.
+    /// </summary>
+    readonly List<(QuerySlot Begin, QuerySlot End)> _pendingTimes = [];
+    /// <summary>
+    /// The dispatches' GPU time summed, in microseconds.
+    /// </summary>
+    public double GpuMicroseconds { get; private set; }
+    /// <summary>
+    /// The views whose GPU time was read.
+    /// </summary>
+    public long GpuTimedViews { get; private set; }
+    /// <summary>
+    /// Views dispatched so far.
+    /// </summary>
+    public long Dispatched { get; private set; }
+
+    /// <summary>
+    /// Reads the timestamps of earlier dispatches that are ready into the sums (and drops the ones too old to be read).
+    /// </summary>
+    void CollectTimes()
+    {
+        var q = _ctx.Frame.Timestamps;
+        for (int i = 0; i < _pendingTimes.Count; i++)
+        {
+            var (b, e) = _pendingTimes[i];
+            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number)
+            {
+                _pendingTimes.RemoveAt(i--);
+                continue;
+            }
+            if (!q.TryRead(b, out ulong tb) || !q.TryRead(e, out ulong te)) continue;
+            GpuMicroseconds += (te - tb) / 1000.0;
+            GpuTimedViews++;
+            _pendingTimes.RemoveAt(i--);
+        }
+    }
+
+    #endregion
 }

@@ -61,19 +61,34 @@ sealed class EditorBar
     /// The staged ground: a flat-topped rock block under the bar, its top this far across at least, so the doorways and windows look out on ground.
     /// </summary>
     const string GroundMesh = "FLatTop_Pillar01.mesh";
+    /// <summary>
+    /// Half the staged ground's width (units, at least).
+    /// </summary>
     const float GroundHalfWidth = 1500;
     /// <summary>
     /// Shrubs scattered round the bar on the staged ground: count, and the ring they stand in (from the bar's origin).
     /// </summary>
     static readonly string[] Shrubs = ["bush01.mesh", "shrub.mesh", "shrubs&grass.mesh"];
+    /// <summary>
+    /// How many shrubs are scattered.
+    /// </summary>
     const int ShrubCount = 14;
+    /// <summary>
+    /// The ring the shrubs stand in: nearest and farthest from the bar's origin (units).
+    /// </summary>
     const float ShrubNear = 140, ShrubFar = 700;
     /// <summary>
     /// The room's neutral fill: a white point light under the roof, this share of the bar's own lamps' mean power, reaching this far.
     /// </summary>
     public const float FillShare = 0.5f, FillRadius = 220;
+    /// <summary>
+    /// How high under the roof the fill light hangs (units, in the building's frame).
+    /// </summary>
     const float FillHeight = 45;
 
+    /// <summary>
+    /// The copy's placement: the source's, moved to <see cref="Origin"/> under its own key.
+    /// </summary>
     public BuildingPlacement Placement { get; }
     /// <summary>
     /// The origin (absolute height).
@@ -83,6 +98,9 @@ sealed class EditorBar
     /// Where the edited character stands and its yaw (0 along +Z, turning towards +X).
     /// </summary>
     public Vector3 Stand { get; }
+    /// <summary>
+    /// The edited character's yaw (0 along +Z, turning towards +X).
+    /// </summary>
     public float StandYaw { get; }
     /// <summary>
     /// The seats for the editor's characters, nearest the focus first: their place, the yaw the sitter faces and the clip it sits with.
@@ -102,6 +120,10 @@ sealed class EditorBar
     /// </summary>
     public Vector3 FillAt { get; }
 
+    /// <summary>
+    /// The bar at <paramref name="origin"/> from the record <paramref name="record"/>: its placement, the stand, the seats, the crowd, the staged
+    /// ground and the fill light.
+    /// </summary>
     EditorBar(WorldObjects world, GameRecord record, Vector3 origin)
     {
         var db = world.Database;

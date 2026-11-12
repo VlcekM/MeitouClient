@@ -9,10 +9,19 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed class BuildingSwaps
 {
+    /// <summary>
+    /// One BUILDINGS_SWAP: the BUILDINGs it replaces and what replaces them with their weights (entries of weight 0 or less dropped).
+    /// </summary>
     sealed record Swap(HashSet<string> Replace, (string Id, int Weight)[] With);
 
+    /// <summary>
+    /// Each faction's swap sets in its list order, by FACTION string id.
+    /// </summary>
     readonly Dictionary<string, Swap[]> _byFaction;
 
+    /// <summary>
+    /// Swaps from the sets read by <see cref="From"/>.
+    /// </summary>
     BuildingSwaps(Dictionary<string, Swap[]> byFaction) => this._byFaction = byFaction;
 
     /// <summary>

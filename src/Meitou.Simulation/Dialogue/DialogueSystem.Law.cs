@@ -3,29 +3,27 @@ using Meitou.Data.Gameplay.Dialogue;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's bail list, and the events and queries other systems use.
+/// </summary>
 public sealed partial class DialogueSystem
 {
+    #region Bail list
+
     /// <summary>
     /// DA_CHOOSE_PRISONER_BAIL.
     /// </summary>
     const int ChoosePrisonerBail = 43;
 
-    // DA_CHOOSE_PRISONER_BAIL: the desk and talker whose bail list opens when the conversation ends, and the prisoners of the list on show (null:
-    // none).
+    /// <summary>
+    /// DA_CHOOSE_PRISONER_BAIL: the desk and talker whose bail list opens when the conversation ends (null: none).
+    /// </summary>
     (CharacterId Npc, CharacterId Player)? _bailAfter;
+
+    /// <summary>
+    /// The prisoners of the bail list on show (null: none).
+    /// </summary>
     List<CharacterId>? _bailList;
-
-    /// <summary>
-    /// Fires <paramref name="ev"/> at <paramref name="npc"/> now, with <paramref name="target"/> as its partner (<c>FUN_140684990</c>; the police's
-    /// spotting, events 44 and 45): a line of its list for the event said as a speech bubble, its effects at once. Returns whether a line was said;
-    /// false while the event lines are off (<see cref="DialogueSettings.AmbientEvents"/>).
-    /// </summary>
-    public bool FireEvent(World world, CharacterId npc, CharacterId target, int ev) => Settings.AmbientEvents && Fire(world, npc, target, ev);
-
-    /// <summary>
-    /// Whether <paramref name="npc"/> is saying a line or is in the open conversation.
-    /// </summary>
-    public bool Engages(CharacterId npc) => _open?.Npc == npc || BubbleOf(npc);
 
     /// <summary>
     /// The bail list (DA 43 <c>CHOOSE_PRISONER_BAIL</c>, the original's <c>CharacterTrading_PrisonerBailout</c> window, docs/game/economy.md 11.5):
@@ -64,4 +62,22 @@ public sealed partial class DialogueSystem
         if (_bailList is { } list && (uint)index < (uint)list.Count) Arrests?.PayBail(world, list[index], c.Player);
         c.Ended = true;
     }
+
+    #endregion
+
+    #region Events and queries for other systems
+
+    /// <summary>
+    /// Fires <paramref name="ev"/> at <paramref name="npc"/> now, with <paramref name="target"/> as its partner (<c>FUN_140684990</c>; the police's
+    /// spotting, events 44 and 45): a line of its list for the event said as a speech bubble, its effects at once. Returns whether a line was said;
+    /// false while the event lines are off (<see cref="DialogueSettings.AmbientEvents"/>).
+    /// </summary>
+    public bool FireEvent(World world, CharacterId npc, CharacterId target, int ev) => Settings.AmbientEvents && Fire(world, npc, target, ev);
+
+    /// <summary>
+    /// Whether <paramref name="npc"/> is saying a line or is in the open conversation.
+    /// </summary>
+    public bool Engages(CharacterId npc) => _open?.Npc == npc || BubbleOf(npc);
+
+    #endregion
 }

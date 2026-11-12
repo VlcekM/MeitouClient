@@ -3,9 +3,12 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// The medical tick and what feeds it: food, first aid, splints, the parts' healing and degeneration, blood, hunger and the knock-out timer.
+/// </summary>
 public sealed partial class MedicalState
 {
-    // ------------------------------------------------------------------ food
+    #region Food
 
     /// <summary>
     /// Puts food into the stomach buffer, in hunger levels (a bite of n nutrition is n / 100, <see cref="Items.FeedSystem"/>). The buffer digests
@@ -13,7 +16,9 @@ public sealed partial class MedicalState
     /// </summary>
     public void Feed(float amount) => Fed += MathF.Max(0, amount);
 
-    // ------------------------------------------------------------------ first aid
+    #endregion
+
+    #region First aid
 
     /// <summary>
     /// The bandaging rate of a treatment (<c>FUN_140649a00</c>): lerp(1, 15, min(skill, kit quality) x 0.01) x <c>medic speed mult</c>, x <c>robot
@@ -160,7 +165,9 @@ public sealed partial class MedicalState
         return (c.MedkitDrain99 + (c.MedkitDrain1 - c.MedkitDrain99) * t) * dt * (robotKit ? c.RobotMedicSpeedMult : 1);
     }
 
-    // ------------------------------------------------------------------ splints
+    #endregion
+
+    #region Splints
 
     /// <summary>
     /// Effective HP (h - s + rig, absolute) under which a part can take a splint, and to which healing wears the splint down (<c>FUN_140649d50</c>,
@@ -203,7 +210,9 @@ public sealed partial class MedicalState
         return 0;
     }
 
-    // ------------------------------------------------------------------ the tick
+    #endregion
+
+    #region The tick
 
     /// <summary>
     /// Game hours in one second of character time (the Verified 1200/11 s per game hour, <c>GameClock</c>).
@@ -222,72 +231,15 @@ public sealed partial class MedicalState
         if (Dead || dt <= 0) return;
         if (EatenCountdown > 0) EatenCountdown--;
         var c = ctx.Constants;
-        var race = ctx.Race;
-        float chance = ctx.Options.ChanceOfDeath;
         float hours = dt * GameHoursPerSecond;
         float medicalTime = dt + MathF.Max(0, ctx.BudgetSeconds);
         LegKoPoint = KoPoint(c, ctx.Toughness);
 
-        // Part healing rates. In a bed (kinds 6 and 0x19) degeneration is 0 and the bed scales the organic or the robotic rate; state 2 doubles the
-        // organic rate (HealMult).
-        float degMult = ctx.Bed != BedKind.None ? 0 : DegenerationMult(c, ctx.Toughness);
-        float organic = race.HealRate * (ctx.Bed == BedKind.Bed ? ctx.BedFactor : 1) * ctx.HealMult;
-        float robotic = race.HealRate * (ctx.Bed == BedKind.RepairBed ? ctx.BedFactor : 1);
-        bool conscious = !Unconscious;
-        float dtb = medicalTime * ctx.BodyTimeScale;
-
-        for (int i = 0; i < Parts.Count && !Dead; i++)
-        {
-            var p = Parts[i];
-            float m = p.MaxHp;
-            if (m <= 0.01f) m = 0.01f;
-            bool isRobotic = p.IsRobotic(race);
-
-            // R: M / 100 x the organic or robotic rate; a stump's is twice the organic rate, without M / 100.
-            float r = p.Limb == LimbState.Stump ? organic * 2 : m / 100 * (isRobotic ? robotic : organic);
-
-            // The hit-focus multiplier decays towards 1 while the flesh is not negative, and is reset once it is.
-            if (p.Flesh < 0) p.HitMult = 1;
-            else if (p.HitMult > 1) p.HitMult = MathF.Max(1, p.HitMult - 0.01f * dtb);
-
-            // Self healing (the race's): untreated damage becomes treated at 0.4 of the heal speed, in place of degenerating.
-            if (p.SelfHealing && conscious && p.Flesh - p.Stun < m - p.Bandage)
-                p.Bandage += dtb * 0.05f * c.HealRateMult * r * 0.4f;
-
-            // Degeneration of untreated damage; none for non-vital robotic parts.
-            else if (p.Flesh < m && p.Flesh > -3 * m)
-            {
-                float dm = isRobotic && !p.IsVital ? 0 : degMult;
-                p.Flesh -= dtb * 0.05f * c.BodypartDegenerationRate * chance * dm * UntreatedDamage(m, p.Flesh, p.Bandage) * 1.2f;
-            }
-
-            // Healing of treated damage, 250 times faster on robotic parts; a crushed limb does not heal.
-            if (p.Bandage > 0 && p.Flesh < m && p.Limb != LimbState.Crushed)
-            {
-                float heal = MathF.Min(p.Bandage, dtb * 0.05f * c.HealRateMult * r * (isRobotic ? 250 : 1));
-                p.Bandage -= heal;
-                p.Flesh = MathF.Min(p.Flesh + heal, m);
-            }
-
-            // Repair in a repair bed: the amount comes off the wear and goes into the treated pool, which stays within the part's HP; with no wear
-            // left it treats the untreated damage (character-stats.md "Part tick").
-            if (ctx.RepairRate > 0)
-            {
-                float amount = dtb * 0.05f * c.RestingHealRateMult * ctx.RepairRate;
-                float full = p.MaxHp + p.Wear;
-                p.Wear = MathF.Max(0, p.Wear - amount);
-                p.Bandage = MathF.Min(p.Bandage + amount, MathF.Max(full - p.Wear - p.Flesh, 0));
-            }
-
-            // The extra buffer is held under 50 - (h - s); stun recovers.
-            if (p.Rig > 0) p.Rig = MathF.Max(0, MathF.Min(p.Rig, 50 - (p.Flesh - p.Stun)));
-            if (p.Stun > 0) p.Stun = MathF.Max(0, p.Stun - dtb * 0.05f * c.StunRecoveryRate * c.HealRateMult * r);
-
-            CheckPart(i, ctx, events, inHitPath: false);
-        }
+        var rates = PartTickRates(ctx, medicalTime);
+        for (int i = 0; i < Parts.Count && !Dead; i++) TickPart(i, rates, ctx, events);
         if (Dead) return;
 
-        TickBlood(dtb, ctx);
+        TickBlood(rates.Dtb, ctx);
         TickHunger(hours, ctx);
         bool freshStump = HasFreshStump;
         if (freshStump) BloodKo = true;
@@ -303,50 +255,136 @@ public sealed partial class MedicalState
             return;
         }
 
-        // Starvation passes the character out below a toughness-dependent point; after waking, a grace period (game hours) keeps it from happening at
-        // once.
-        _starveGrace = MathF.Max(0, _starveGrace - hours);
-        if (!Unconscious && _starveGrace <= 0 && Hunger < StarvationKoThreshold(c, ctx.Toughness, Fed > 0))
-        {
-            _starvationKo = true;
-            StartKo(ctx, events);
-        }
+        StarvationKo(hours, ctx, events);
 
         // A vital part under the KO point puts the character into a coma at once, without a KO timer.
         bool vitalDown = VitalPartsKeepDown(LegKoPoint);
         if (vitalDown && !Unconscious) ApplyKo(0, events);
 
-        if (Unconscious)
-        {
-            KoTimer -= medicalTime;
-
-            // Blood under 0 keeps an unconscious character out (reassessCollapseMode), under -25 with a fresh stump; the blood-KO flag otherwise only
-            // lowers the conscious threshold to -25 (CheckBlood).
-            bool bloodOk = Blood >= (freshStump ? -25 : 0);
-            if (KoTimer <= 0 && !vitalDown && bloodOk && (ctx.PlayDead || ctx.GetUpUnasked))
-            {
-                // Awake but not safe to get up: it lies on, playing dead (posture 3), until it is (docs/game/ragdolls.md "Playing dead"). Not asked
-                // yet: it stays out until its look.
-                KoTimer = 0;
-                PlayingDead = ctx.PlayDead;
-            }
-            else if (KoTimer <= 0 && !vitalDown && bloodOk)
-            {
-                Unconscious = false;
-                PlayingDead = false;
-                KoTimer = 0;
-                if (_starvationKo)
-                {
-                    _starvationKo = false;
-                    _starveGrace = 0.5f + 1.5f * NextRoll(ctx);
-                }
-                events?.Add(new MedicalEvent(MedicalEventKind.WokeUp));
-            }
-        }
+        if (Unconscious) TickUnconscious(medicalTime, vitalDown, freshStump, ctx, events);
         bool legsDown = LegsDown;
         if (legsDown && _legsWereDown == 0) CollapseOnset = true;
         _legsWereDown = legsDown ? 1 : 0;
         _posture = Standing ? PostureState.Normal : PostureState.Other;
+    }
+
+    /// <summary>
+    /// The part rates of one <see cref="Tick"/>.
+    /// </summary>
+    PartRates PartTickRates(in MedicalContext ctx, float medicalTime)
+    {
+        var c = ctx.Constants;
+        var race = ctx.Race;
+        float chance = ctx.Options.ChanceOfDeath;
+
+        // Part healing rates. In a bed (kinds 6 and 0x19) degeneration is 0 and the bed scales the organic or the robotic rate; state 2 doubles the
+        // organic rate (HealMult).
+        float degMult = ctx.Bed != BedKind.None ? 0 : DegenerationMult(c, ctx.Toughness);
+        float organic = race.HealRate * (ctx.Bed == BedKind.Bed ? ctx.BedFactor : 1) * ctx.HealMult;
+        float robotic = race.HealRate * (ctx.Bed == BedKind.RepairBed ? ctx.BedFactor : 1);
+        bool conscious = !Unconscious;
+        float dtb = medicalTime * ctx.BodyTimeScale;
+        return new PartRates(dtb, degMult, organic, robotic, conscious, chance);
+    }
+
+    /// <summary>
+    /// One part's step of <see cref="Tick"/>: hit focus, self healing or degeneration, healing, repair, the rig and stun, then its checks.
+    /// </summary>
+    void TickPart(int i, in PartRates rates, in MedicalContext ctx, List<MedicalEvent>? events)
+    {
+        var c = ctx.Constants;
+        float dtb = rates.Dtb;
+        var p = Parts[i];
+        float m = p.MaxHp;
+        if (m <= 0.01f) m = 0.01f;
+        bool isRobotic = p.IsRobotic(ctx.Race);
+
+        // R: M / 100 x the organic or robotic rate; a stump's is twice the organic rate, without M / 100.
+        float r = p.Limb == LimbState.Stump ? rates.Organic * 2 : m / 100 * (isRobotic ? rates.Robotic : rates.Organic);
+
+        // The hit-focus multiplier decays towards 1 while the flesh is not negative, and is reset once it is.
+        if (p.Flesh < 0) p.HitMult = 1;
+        else if (p.HitMult > 1) p.HitMult = MathF.Max(1, p.HitMult - 0.01f * dtb);
+
+        // Self healing (the race's): untreated damage becomes treated at 0.4 of the heal speed, in place of degenerating.
+        if (p.SelfHealing && rates.Conscious && p.Flesh - p.Stun < m - p.Bandage)
+            p.Bandage += dtb * 0.05f * c.HealRateMult * r * 0.4f;
+
+        // Degeneration of untreated damage; none for non-vital robotic parts.
+        else if (p.Flesh < m && p.Flesh > -3 * m)
+        {
+            float dm = isRobotic && !p.IsVital ? 0 : rates.DegMult;
+            p.Flesh -= dtb * 0.05f * c.BodypartDegenerationRate * rates.Chance * dm * UntreatedDamage(m, p.Flesh, p.Bandage) * 1.2f;
+        }
+
+        // Healing of treated damage, 250 times faster on robotic parts; a crushed limb does not heal.
+        if (p.Bandage > 0 && p.Flesh < m && p.Limb != LimbState.Crushed)
+        {
+            float heal = MathF.Min(p.Bandage, dtb * 0.05f * c.HealRateMult * r * (isRobotic ? 250 : 1));
+            p.Bandage -= heal;
+            p.Flesh = MathF.Min(p.Flesh + heal, m);
+        }
+
+        // Repair in a repair bed: the amount comes off the wear and goes into the treated pool, which stays within the part's HP; with no wear
+        // left it treats the untreated damage (character-stats.md "Part tick").
+        if (ctx.RepairRate > 0)
+        {
+            float amount = dtb * 0.05f * c.RestingHealRateMult * ctx.RepairRate;
+            float full = p.MaxHp + p.Wear;
+            p.Wear = MathF.Max(0, p.Wear - amount);
+            p.Bandage = MathF.Min(p.Bandage + amount, MathF.Max(full - p.Wear - p.Flesh, 0));
+        }
+
+        // The extra buffer is held under 50 - (h - s); stun recovers.
+        if (p.Rig > 0) p.Rig = MathF.Max(0, MathF.Min(p.Rig, 50 - (p.Flesh - p.Stun)));
+        if (p.Stun > 0) p.Stun = MathF.Max(0, p.Stun - dtb * 0.05f * c.StunRecoveryRate * c.HealRateMult * r);
+
+        CheckPart(i, ctx, events, inHitPath: false);
+    }
+
+    /// <summary>
+    /// Starvation passes the character out below a toughness-dependent point; after waking, a grace period (game hours) keeps it from happening at
+    /// once.
+    /// </summary>
+    void StarvationKo(float hours, in MedicalContext ctx, List<MedicalEvent>? events)
+    {
+        _starveGrace = MathF.Max(0, _starveGrace - hours);
+        if (!Unconscious && _starveGrace <= 0 && Hunger < StarvationKoThreshold(ctx.Constants, ctx.Toughness, Fed > 0))
+        {
+            _starvationKo = true;
+            StartKo(ctx, events);
+        }
+    }
+
+    /// <summary>
+    /// An unconscious character's KO timer counts down; once out and allowed, it lies on playing dead or wakes.
+    /// </summary>
+    void TickUnconscious(float medicalTime, bool vitalDown, bool freshStump, in MedicalContext ctx, List<MedicalEvent>? events)
+    {
+        KoTimer -= medicalTime;
+
+        // Blood under 0 keeps an unconscious character out (reassessCollapseMode), under -25 with a fresh stump; the blood-KO flag otherwise only
+        // lowers the conscious threshold to -25 (CheckBlood).
+        bool bloodOk = Blood >= (freshStump ? -25 : 0);
+        if (KoTimer <= 0 && !vitalDown && bloodOk && (ctx.PlayDead || ctx.GetUpUnasked))
+        {
+            // Awake but not safe to get up: it lies on, playing dead (posture 3), until it is (docs/game/ragdolls.md "Playing dead"). Not asked
+            // yet: it stays out until its look.
+            KoTimer = 0;
+            PlayingDead = ctx.PlayDead;
+        }
+        else if (KoTimer <= 0 && !vitalDown && bloodOk)
+        {
+            Unconscious = false;
+            PlayingDead = false;
+            KoTimer = 0;
+            if (_starvationKo)
+            {
+                _starvationKo = false;
+                _starveGrace = 0.5f + 1.5f * NextRoll(ctx);
+            }
+            events?.Add(new MedicalEvent(MedicalEventKind.WokeUp));
+        }
     }
 
     /// <summary>
@@ -390,6 +428,10 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// One tick of blood: the wounds clot, the wounds and damaged stumps bleed, blood is held to capacity and, while nothing bleeds, recovers; the
+    /// blood-loss trauma flag clears above 25.
+    /// </summary>
     void TickBlood(float dt, in MedicalContext ctx)
     {
         var c = ctx.Constants;
@@ -451,4 +493,16 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// The rates every part of one <see cref="Tick"/> steps with.
+    /// </summary>
+    /// <param name="Dtb">The medical time times the body time scale.</param>
+    /// <param name="DegMult">The degeneration multiplier, 0 in a bed.</param>
+    /// <param name="Organic">The organic heal rate.</param>
+    /// <param name="Robotic">The robotic heal rate.</param>
+    /// <param name="Conscious">Whether the character was conscious when the tick began.</param>
+    /// <param name="Chance">The chance of death option.</param>
+    readonly record struct PartRates(float Dtb, float DegMult, float Organic, float Robotic, bool Conscious, float Chance);
+
+    #endregion
 }

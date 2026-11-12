@@ -8,7 +8,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public enum PlacedKind
 {
+    /// <summary>
+    /// A BUILDING_PART of a placed building.
+    /// </summary>
     BuildingPart,
+    /// <summary>
+    /// A placed MAP_FEATURES record.
+    /// </summary>
     MapFeature,
 
     /// <summary>
@@ -116,7 +122,8 @@ public readonly record struct TurnJoint(string PartId, Vector3 Pivot, Vector3 Ax
 /// <param name="Position">World position.</param>
 /// <param name="Direction">World direction a spot light points in (unit length); also set for point lights.</param>
 /// <param name="Power">The light's power: <c>brightness</c> plus the building's roll in ±<c>variance</c>/2.</param>
-/// <param name="Function">The owner's <c>function</c>, read from its BUILDING_FUNCTIONALITY (-1 without one): the BUILDING itself has no such field.</param>
+/// <param name="Function">The owner's <c>function</c>, read from its BUILDING_FUNCTIONALITY (-1 without one): the BUILDING itself has no
+/// such field.</param>
 public sealed record PlacedLight(
     GameRecord Light,
     GameRecord Holder,
@@ -147,7 +154,8 @@ public sealed record PlacedEffect(
 /// <summary>
 /// State of a placed building that changes what is drawn (from its GAMESTATE_BUILDING and its town).
 /// </summary>
-/// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without one go.</param>
+/// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without
+/// one go.</param>
 /// <param name="TownMaterial">The building's town's material (see <see cref="WorldObjectLayout.TownMaterial"/>), used when the building has none of
 /// its own.</param>
 public sealed record BuildingState(bool Destroyed = false, GameRecord? TownMaterial = null)
@@ -196,6 +204,9 @@ public static class WorldObjectLayout
     public static Matrix4x4 InstanceTransform(Vector3 position, Quaternion rotation, Vector3 scale) =>
         Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(Normalized(rotation)) * Matrix4x4.CreateTranslation(position);
 
+    /// <summary>
+    /// <paramref name="q"/> normalised; identity for a zero quaternion.
+    /// </summary>
     static Quaternion Normalized(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);
 
     /// <summary>
@@ -338,6 +349,9 @@ public static class WorldObjectLayout
         return null;
     }
 
+    /// <summary>
+    /// The state of laying out one building: its inputs, its outputs and the values its parts inherit.
+    /// </summary>
     sealed class Assembly(
         GameDatabase db,
         GameRecord building,
@@ -347,21 +361,54 @@ public static class WorldObjectLayout
         List<PlacedLight>? lights,
         List<PlacedEffect>? effects)
     {
+        /// <summary>
+        /// The database the parts are found in.
+        /// </summary>
         public readonly GameDatabase Db = db;
+        /// <summary>
+        /// The BUILDING being laid out.
+        /// </summary>
         public readonly GameRecord Building = building;
+        /// <summary>
+        /// The placement's id, part of the seed of material collections.
+        /// </summary>
         public readonly string PlacementId = placementId;
 
         /// <summary>
         /// What the output is named by (<see cref="BuildingState.Identity"/>).
         /// </summary>
         public readonly string Identity = state.Identity ?? placementId;
+        /// <summary>
+        /// The placement's state (town material, interior, identity).
+        /// </summary>
         public readonly BuildingState State = state;
+        /// <summary>
+        /// The meshes laid out.
+        /// </summary>
         public readonly List<PlacedMesh> Result = result;
+        /// <summary>
+        /// The lights laid out; null when not wanted.
+        /// </summary>
         public readonly List<PlacedLight>? Lights = lights;
+        /// <summary>
+        /// The effects laid out; null when not wanted.
+        /// </summary>
         public readonly List<PlacedEffect>? Effects = effects;
+        /// <summary>
+        /// The building's scale (its parent's for a door), never 0 or less.
+        /// </summary>
         public float Scale = 1;
+        /// <summary>
+        /// The building's base material: its first <c>material</c> resolved, else its town's.
+        /// </summary>
         public GameRecord? BaseMaterial;
+        /// <summary>
+        /// The building's random source, seeded by its position (and seeded again for the interior).
+        /// </summary>
         public BuildingRandom Random = new(0);
+        /// <summary>
+        /// The building's scene node: its position and rotation, without the scale.
+        /// </summary>
         public Matrix4x4 Node = Matrix4x4.Identity;
 
         /// <summary>
@@ -389,6 +436,10 @@ public static class WorldObjectLayout
     public static Vector3? PositionMarker(GameDatabase db, GameRecord building, Vector3 worldPosition, Quaternion rotation) =>
         AddBuilding(db, building, building.StringId, worldPosition, rotation, new BuildingState(), [], null, null)?.Marker;
 
+    /// <summary>
+    /// Lays out <paramref name="building"/> at <paramref name="position"/>, its interior too when <paramref name="state"/> asks; null for an <c>is
+    /// node</c> building.
+    /// </summary>
     static Assembly? AddBuilding(
         GameDatabase db,
         GameRecord building,
@@ -492,65 +543,111 @@ public static class WorldObjectLayout
             a.Marker = Vector3.Transform(marker, a.Node);
         }
 
-        // Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation
-        // (unless ROTATION_WIND_SPEED) and a start angle about their axis. The viewer leaves turret parts (ROTATION_TARGET) unrotated.
         string collision = DestroyedCollision(part, a.State.Destroyed, blankCollision);
-        RotorSpec? rotor = null;
-        var rotorAxis = Vector3.Zero;
-        if (collision.Length == 0 && (part.GetInt("rotation function") > 0 || holder.GetInt("rotation function") > 0))
-        {
-            int function = part.GetInt("rotation function");
-            if (function == 0) function = 6;
-
-            float speedMin = float.DegreesToRadians(part.GetFloat("rotation speed min"));
-            float speedMax = float.DegreesToRadians(part.GetFloat("rotation speed max"));
-            float windMin = part.GetFloat("wind speed rotation min");
-            float windMax = part.GetFloat("wind speed rotation max");
-            if (function == RotorSpec.WindSpeed) (speedMax, windMax) = (MathF.Max(speedMin, speedMax), MathF.Max(windMin, windMax));
-            else speedMax = a.Random.NextFloat(speedMax * 0.95f, speedMax * 1.05f);
-            if (entity)
-            {
-                float angle = a.Random.NextFloat(0, MathF.Tau);
-                rotorAxis = part.GetInt("rotation axis", 2) switch
-                {
-                    0 => Vector3.UnitX,
-                    1 => Vector3.UnitY,
-                    2 => Vector3.UnitZ,
-                    _ => Vector3.Zero,
-                };
-                if (function != 5 && rotorAxis != Vector3.Zero) local *= Matrix4x4.CreateFromAxisAngle(rotorAxis, angle);
-                if (function is >= RotorSpec.Constant and <= RotorSpec.WindDirection && rotorAxis != Vector3.Zero)
-                {
-                    var spinAxis = Vector3.Normalize(new Vector3(parentNode.M11, parentNode.M12, parentNode.M13));
-                    var windAxis = Vector3.Normalize(new Vector3(parentNode.M31, parentNode.M32, parentNode.M33));
-                    rotor = new RotorSpec(function, speedMin, speedMax, windMin, windMax, angle, spinAxis, windAxis);
-                }
-            }
-        }
+        var rotor = RollRotor(a, holder, part, parentNode, entity, collision, ref local, out var rotorAxis);
 
         local *= Matrix4x4.CreateTranslation(offset);
         var node = local * parentNode;
         if (!entity)
         {
-            // A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision
-            // made); children hang from the building.
-            a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-            {
-                Material = PartMaterial(a, part),
-                Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
-                Interior = a.Interior,
-                DoorIndex = a.DoorIndex,
-                RenderHidden = true,
-            });
+            AddCollisionOnlyPart(a, part, mesh, node);
             return null;
         }
+
+        below = PartJoints(part, node, joints, rotor, rotorAxis);
+        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
+        {
+            Material = PartMaterial(a, part),
+            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
+            Interior = a.Interior,
+            DoorIndex = a.DoorIndex,
+            Joints = below,
+            BlankXmlCollision = blankCollision,
+        });
+        return node;
+    }
+
+    /// <summary>
+    /// Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation
+    /// (unless ROTATION_WIND_SPEED) and a start angle about their axis, turned into <paramref name="local"/>. Returns the rotor of a part that
+    /// turns by itself, with its axis in <paramref name="rotorAxis"/>; null otherwise. The viewer leaves turret parts (ROTATION_TARGET) unrotated.
+    /// </summary>
+    static RotorSpec? RollRotor(
+        Assembly a,
+        GameRecord holder,
+        GameRecord part,
+        Matrix4x4 parentNode,
+        bool entity,
+        string collision,
+        ref Matrix4x4 local,
+        out Vector3 rotorAxis)
+    {
+        RotorSpec? rotor = null;
+        rotorAxis = Vector3.Zero;
+        bool rotates = collision.Length == 0 && (part.GetInt("rotation function") > 0 || holder.GetInt("rotation function") > 0);
+        if (!rotates) return rotor;
+
+        int function = part.GetInt("rotation function");
+        if (function == 0) function = 6;
+
+        float speedMin = float.DegreesToRadians(part.GetFloat("rotation speed min"));
+        float speedMax = float.DegreesToRadians(part.GetFloat("rotation speed max"));
+        float windMin = part.GetFloat("wind speed rotation min");
+        float windMax = part.GetFloat("wind speed rotation max");
+        if (function == RotorSpec.WindSpeed) (speedMax, windMax) = (MathF.Max(speedMin, speedMax), MathF.Max(windMin, windMax));
+        else speedMax = a.Random.NextFloat(speedMax * 0.95f, speedMax * 1.05f);
+        if (!entity) return rotor;
+
+        float angle = a.Random.NextFloat(0, MathF.Tau);
+        rotorAxis = part.GetInt("rotation axis", 2) switch
+        {
+            0 => Vector3.UnitX,
+            1 => Vector3.UnitY,
+            2 => Vector3.UnitZ,
+            _ => Vector3.Zero,
+        };
+        if (function != 5 && rotorAxis != Vector3.Zero) local *= Matrix4x4.CreateFromAxisAngle(rotorAxis, angle);
+        if (function is >= RotorSpec.Constant and <= RotorSpec.WindDirection && rotorAxis != Vector3.Zero)
+        {
+            var spinAxis = Vector3.Normalize(new Vector3(parentNode.M11, parentNode.M12, parentNode.M13));
+            var windAxis = Vector3.Normalize(new Vector3(parentNode.M31, parentNode.M32, parentNode.M33));
+            rotor = new RotorSpec(function, speedMin, speedMax, windMin, windMax, angle, spinAxis, windAxis);
+        }
+        return rotor;
+    }
+
+    /// <summary>
+    /// A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision made);
+    /// children hang from the building.
+    /// </summary>
+    static void AddCollisionOnlyPart(Assembly a, GameRecord part, string mesh, Matrix4x4 node)
+    {
+        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
+        {
+            Material = PartMaterial(a, part),
+            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
+            Interior = a.Interior,
+            DoorIndex = a.DoorIndex,
+            RenderHidden = true,
+        });
+    }
+
+    /// <summary>
+    /// The joints above the part's children: <paramref name="joints"/>, and the part itself when it turns (by itself, or to the target).
+    /// </summary>
+    static IReadOnlyList<TurnJoint>? PartJoints(GameRecord part, Matrix4x4 node, IReadOnlyList<TurnJoint>? joints, RotorSpec? rotor, Vector3 rotorAxis)
+    {
+        var below = joints;
 
         // A part that turns by itself is a joint too: it and everything hanging from it turn about its node's axis.
         if (rotor is not null)
         {
             var axis = Vector3.TransformNormal(rotorAxis, node);
             if (axis.LengthSquared() > 1e-12f)
-                below = [.. joints ?? [], new TurnJoint(part.StringId, node.Translation, Vector3.Normalize(axis), rotorAxis == Vector3.UnitY, rotor)];
+            {
+                var turnJoint = new TurnJoint(part.StringId, node.Translation, Vector3.Normalize(axis), rotorAxis == Vector3.UnitY, rotor);
+                below = [.. joints ?? [], turnJoint];
+            }
         }
 
         // A part that turns to the target (ROTATION_TARGET) is a joint: it and everything hanging from it turn about its node (see TurnJoint).
@@ -564,17 +661,7 @@ public static class WorldObjectLayout
                 below = [.. joints ?? [], turnJoint];
             }
         }
-
-        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-        {
-            Material = PartMaterial(a, part),
-            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
-            Interior = a.Interior,
-            DoorIndex = a.DoorIndex,
-            Joints = below,
-            BlankXmlCollision = blankCollision,
-        });
-        return node;
+        return below;
     }
 
     /// <summary>

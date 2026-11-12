@@ -21,6 +21,9 @@ public sealed partial class LockSystem
     /// </summary>
     Dictionary<int, List<(int To, int State, GateLink Gate)>>? _gateGraph;
 
+    /// <summary>
+    /// Takes the host's gate regions; the gate graph is built again.
+    /// </summary>
     void GateInputs(GateRegionsCommand command)
     {
         Regions = command.Regions;
@@ -41,13 +44,19 @@ public sealed partial class LockSystem
             int s = f.DoorBroken || f.Motion is DoorMotion.Open or DoorMotion.Opening ? 1 : f.Lock is { EffectivelyLocked: true } ? 3 : 2;
             state = state == 0 ? s : Math.Min(state, s);
         }
+
         return state == 0 ? 1 : state;
     }
 
+    /// <summary>
+    /// The lock the gate graph is built under.
+    /// </summary>
     readonly object _gateGraphLock = new();
 
-    // Built on first use; the combat step asks from its workers (CombatSystem.ImmediateThreat), so the graph is built under a lock and published
-    // whole.
+    /// <summary>
+    /// The gate graph: each gate region's links to the others, with the state of the gates between. Built on first use; the combat step asks from its
+    /// workers (CombatSystem.ImmediateThreat), so the graph is built under a lock and published whole.
+    /// </summary>
     Dictionary<int, List<(int To, int State, GateLink Gate)>> GateGraph(World world)
     {
         if (Volatile.Read(ref _gateGraph) is { } built) return built;
@@ -56,18 +65,23 @@ public sealed partial class LockSystem
             if (_gateGraph is { } raced) return raced;
             var graph = new Dictionary<int, List<(int To, int State, GateLink Gate)>>();
             if (Regions is not null)
+            {
                 foreach (var gate in Regions.Gates)
                 {
                     if (gate.Codes.Length < 2) continue;
                     int state = GateState(world.Fixtures, gate.Building);
                     for (int i = 0; i < gate.Codes.Length; i++)
+                    {
                         for (int j = 0; j < gate.Codes.Length; j++)
                         {
                             if (i == j) continue;
                             if (!graph.TryGetValue(gate.Codes[i], out var list)) graph[gate.Codes[i]] = list = [];
                             list.Add((gate.Codes[j], state, gate));
                         }
+                    }
                 }
+            }
+
             Volatile.Write(ref _gateGraph, graph);
             return graph;
         }
@@ -94,9 +108,11 @@ public sealed partial class LockSystem
         {
             if (best.TryGetValue(next, out var known) && (known.State < state || known.State == state && Nearer(world, known.Gate, gate, near)))
                 continue;
+
             best[next] = (state, gate);
             open.Enqueue(next, state);
         }
+
         var done = new HashSet<int> { from };
 
         // States only grow along a route, so a code's first dequeue is its best.
@@ -109,6 +125,7 @@ public sealed partial class LockSystem
                 first = via;
                 return worst;
             }
+
             if (!graph.TryGetValue(code, out var edges)) continue;
             foreach (var (next, state, _) in edges)
             {
@@ -118,6 +135,7 @@ public sealed partial class LockSystem
                 open.Enqueue(next, s);
             }
         }
+
         return 3;
     }
 
@@ -127,6 +145,9 @@ public sealed partial class LockSystem
     static bool Nearer(World world, GateLink known, GateLink other, Vector2 near)
             => GateDistance(world, known, near) <= GateDistance(world, other, near);
 
+    /// <summary>
+    /// The distance from <paramref name="near"/> to the gate's main door leaf (infinity without one).
+    /// </summary>
     static float GateDistance(World world, GateLink gate, Vector2 near) =>
         MainGateDoor(world, gate.Building) is { } d ? Vector2.Distance(near, Flat(d.Spot.Centre)) : float.MaxValue;
 
@@ -174,6 +195,7 @@ public sealed partial class LockSystem
             if (gate.DoorBroken || gate.Motion == DoorMotion.Open) return false;
             any = true;
         }
+
         return any;
     }
 
@@ -184,8 +206,11 @@ public sealed partial class LockSystem
     {
         (Fixture, DoorSpot)? main = null;
         foreach (var f in world.Fixtures.OfBuilding(building))
+        {
             if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is { } spot && (main is null || f.DoorIndex < main.Value.Item1.DoorIndex))
                 main = (f, spot);
+        }
+
         return main;
     }
 
@@ -210,6 +235,9 @@ public sealed partial class LockSystem
         return true;
     }
 
+    /// <summary>
+    /// The planner's view of an attacker whose target is behind a gate, reused across plans.
+    /// </summary>
     readonly GatePlan _gatePlan = new();
 
     /// <summary>
@@ -223,6 +251,7 @@ public sealed partial class LockSystem
         int a = Regions.CodeAt(from), b = Regions.CodeAt(to);
         if (a == b || a < 0 || b < 0 || RouteState(world, a, b, Flat(from), out var gate) == 1)
             return (DoorPlan.Entry.Walk, null);
+
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return (DoorPlan.Entry.Blocked, null);
         var entry = _gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
         return (entry, entry == DoorPlan.Entry.Bash ? main.Door.Id : null);

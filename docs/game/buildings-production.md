@@ -214,8 +214,8 @@ shows the first failing message in this order (**Verified** unless marked):
 | "No resources at this location, mining would be pointless." / "This crop will not grow in this environment." | resource value or crop yield < 0.01 (below) |
 | "Cannot build inside incomplete buildings." | the building under the ghost is incomplete |
 | "Must be placed outside or on a roof." / "Must be placed inside a building." | indoor/outdoor rule; the first for `BF_RAIN_COLLECTOR` (26) |
-| "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node |
-| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid |
+| "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node ([snapping](#snapping-to-a-building); Meitou never fails it) |
+| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid. Meitou (`PlacementCheck.HullBlock`) overlaps footprints in 2D instead, leaving out the sites and ghosts on another floor of the building the ghost stands in (the boxes are 3D). Inside a building, the footprint must lie in its convex indoor hull, and its prism (2 over the floor to 2 under its top) must not reach more than 1 into that building's own collision (walls, floors, roofs; `FootprintPrism`): the hull takes in the walls, so a footprint inside it could stand in a Storm house's sloped wall |
 | "There are characters in the way." | an object in a node box is rejected by `FUN_1407d1440` (**Observed**) |
 | "The building blocks another building use nodes." | the footprint covers another building's usage node |
 | "The building has one or more parts on invalid ground." | a BUILDING_PART with `ground type` LAND has its node centre below y = 98 (water level, **Observed**) |
@@ -241,7 +241,8 @@ shows the first failing message in this order (**Verified** unless marked):
   town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a
   building takes that building's town when it is within 5000 (X/Z) of the ghost, so furniture in a bought town house
-  joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; a level building
+  joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; the parent instance id is unique only per
+  zone ([zones](../formats/zones.md)), so the level building of that id nearest the ghost is meant; a level building
   of no town, such as a wilderness ruin, goes on to the rules below); else the nearest town of the player faction within 5000 (X/Z); else the town of
   the nearest player building within 2500 (the decompile adds an X/Z > 10000 test there that looks unreachable,
   **Observed**); else a `creates player town` building that is not a wall makes an outpost at its position
@@ -300,6 +301,9 @@ shows the first failing message in this order (**Verified** unless marked):
   - **Not modelled:** ghosts on a building's floor (Meitou takes the floor as level, the original measures against the terrain
     under them, **Unknown**), the indoor lift reset, parts nested under another part (the node position is the whole chain's, the
     original's the part's own scene node), and a mesh whose bounds file is missing (the part is left out).
+  - **Observed** (base-game `data/buildings/windmill/windmill03.mesh`, fast versus full reader): the fast bounds walk fails for the
+    windmill base although the structural mesh reader returns its bounds. `BuildingFootprints.PartBounds` falls back to that reader;
+    omitting the base leaves only above-ground rotor groups and incorrectly sinks the ghost by roughly 300 units.
 - **Indoors** (`FUN_1404d69c0`, flags read in `FUN_1404debc0`): an `is interior furniture` or `is node` building
   is valid with all node points in one player-owned building; otherwise only if it is `is exterior furniture` or
   `is node` (**Verified** by code). So interior-only furniture must be inside, while interior+exterior items (Campfire,
@@ -338,6 +342,25 @@ shows the first failing message in this order (**Verified** unless marked):
   at the speed the player had: Confirm (`FUN_1404db180`), the Esc handler (`FUN_14082b010` -> `FUN_1404d4320`, when
   `FUN_1404d1860` says the mode is on) and the end of the commit (`FUN_1404e4120`) all end in `FUN_1404d1870` ->
   `FUN_140787d40(world, 0)`. Meitou pauses by speed and resumes only a game that build mode paused.
+
+### Snapping to a building
+
+- **Data** (**Verified**, fcs.def and a dump of the merged base-game data): `snaps to` (BUILDING list) "makes this building aggressively
+  snap to others. Used for ramps and stairs." Its users: Wall Ramp and Wall Ramp (old) -> Concrete Wall, Defensive Wall Ramp II-V -> their
+  Defensive Wall, Outpost Prison Ramp, Ancient Lab Ramp (Gate), HIVE Door A-C -> Hive Commune Hut, Spotlight and Searchlight -> Node Light
+  Mount, GunPlank -> Node Turret, Ore Drill I-III -> Iron Resource (a foliage resource). Which ghosts are `PreviewBuilding_Snapping` and how
+  they snap is **Unknown** (not decompiled yet).
+- **A ramp's mesh sits in its wall's own space** (**Verified**, mesh bounds): `basic_wall_ramp2.mesh` spans x -102..-20, z 0..24, just
+  outside Concrete Wall's `wall_basic02.mesh` (x -19.5..3.9, z -2.7..118.7); Defensive Wall Ramp IV's staircase spans x -268..-49, z
+  187..222 against Wall IV (x -59..27, z 0..305; both scale 0.85). At its wall's position and turn a ramp stands against the wall's -X side.
+- **Turrets** have no `snaps to`, and none refers to the `Node Turret` instances (node type 3, as `Node Defensive Position`) that wall parts
+  such as `Wall Level 02` carry: they stand on a wall's walkway like on any surface (**Observed**, data only).
+- **Meitou** (engine choice, `GhostSnap`, `BuildMode.SnapToTarget`): a `snaps to` ghost takes the position and turn of the nearest building
+  of a target record (queued ghost, site or level building) that puts its footprint centre within 150 of the cursor; it is judged by its own
+  pitch like a wall piece, and neither its target nor, on a wall, any other wall blocks it. With no target in reach it places as usual (the
+  "blue nodes" refusal is not decided). Nodes inside other buildings (light mounts) and resources are not searched. A ghost over a raised
+  walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
+  walls do not block it.
 
 ### Upgrades
 
@@ -559,8 +582,8 @@ Status `+0x468` of a `ProductionBuilding` (production, furnace, generator, wind,
   an unmet !63 into rows 92 Collecting resource (`Task_EmptyMachine`; A: 66, !63, !169) and 113 (A: !63, 105, !66, !89), which achieve it: the worker takes the output into its own inventory (B 82 room; 114 ditching makes it) before operating.
 - **Crafting** (`FUN_1402bcac0`, **Observed**): after a finished item is stored, status 1 when the output has become full (not when it could not be stored).
 
-Meitou: `Machine.Status` (hashed, not saved, a producer starts at 2), `HasEmptyInputs`, `OutputBlocked`, `Jammed`; `ProductionSystem.SlowWorld` clears 1 / 0 for a producer that takes operators, an operator's or automatic machine's step sets them. The panel reads the word chain
-(`ProductionStatus`). Planner: `Holds` evaluates 62 / 63 / 64 for a `Targets.Machine` target, which no finder gives yet; 65, 105, 106, the farm and bench variants and the 87 to 92 plan are not modelled (the job system's `HasWork` / `Room` is the engine reading of the blocked start).
+Meitou: `Machine.Status` (hashed, not saved, a producer starts at 2), `HasEmptyInputs`, `OutputBlocked`, `Jammed`; `ProductionSystem.ClearBlocked` (its serial step) clears 1 / 0 for a producer that takes operators, an operator's or automatic machine's step sets them. The panel reads the word chain
+(`ProductionStatus`). Planner: `Holds` evaluates 62 / 63 / 64 for a `Targets.Machine` target, which no finder gives yet; 65, 105, 106, the farm and bench variants and the 87 to 92 plan are not modelled (the job system's `HasWork` / `Room` is the engine reading of the blocked start; its power test is [state 93](ai-tasks.md), `ProductionSystem.Powered`, since an unworked machine's demand is 0 and its granted share reads 1).
 
 ### Item furnace
 
@@ -903,7 +926,7 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
     thunk `1400525e5`, the only caller of `FUN_140786100`), so it is reached indirectly, if at all.
   - Not read by production (slot 150 `FUN_140298700`, slot 109 `FUN_140296e00`), power (slots 163, 166, `FUN_140299370`), `Task_OperateMachine`, or the
     engineers' finder (slot 101 `FUN_1400f6b70`: progress below target).
-  Meitou: `Machine.Broken`, saved as `broken`, set and cleared by the dismantle, build, completion and ruin steps; the header (`PlayerInterface.BuildingLines`) and
+  Meitou: `Machine.Broken`, saved as `broken`, set and cleared by the dismantle, build, completion and ruin steps; the header (`BuildingSelection.SiteStatus`) and
   turret manning read it, and a town turret's saved `broken` (below). A player-built cage's or safe's lock is a fixture of its own ([locks](locks.md#lock-object)); a broken machine keeps its fixtures registered (doors, cage, bed) and its own lock counts as broken.
 - **What damages a building** (**Verified**, decompile): hits go to slot 62, which is `FUN_1402972c0` (returns 1, no effect) for every UseableStuff class (machines,
   turrets, storages, lights) and `FUN_1400d20b0` (returns 0, no effect either) for plain and gate buildings; only WallBuilding (`FUN_14029d560`, [walls](#walls)) and doors (`FUN_14029d690`)
@@ -945,7 +968,7 @@ is lost once a part moves):
 - Data (**Verified**, probe of the merged data): Wind Generator (I, II) head 25°/s, blades 90°/s, wind 10 to 50; Small Wind Generator body
   25°/s, blades 180°/s wind 4 to 25 (its share), dynamo wind 5 to 25; refinery spinners 16, drills 100, generator spinner 100, looms 90.
 
-Meitou (`RotorSpec`, `WorldObjectRenderer.AdvanceRotors`): the renderer turns the parts it draws by the game frame time and the scheduled
+Meitou (`RotorSpec`, `RotatingParts.Advance`): the renderer turns the parts it draws by the game frame time and the scheduled
 wind; a level building's mult comes from its data as its sound emitter's efficiency does (generator output x 0.01, batteries and machines
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
@@ -959,6 +982,12 @@ Water Tower takes only Water and `Storage: Ore` only Raw Iron, both with mult 10
 storage` (function 2); Large Barrels also hold Water. Other `itemtype limit`s (**Verified**, merged game data): ARMOUR
 (Armour Storage, Armour Stand), WEAPON (weapon stands, cabinets, display boards), CROSSBOW (Crossbow Locker); none takes
 CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (`IsStorage` is functions 2 and 13 only).
+Two acceptance rules (**Verified**, decompile): the AI's storage finder (`StorageBuilding` slot `0x4a0`, `FUN_1402988c0`) needs the item's record
+type to equal `itemtype limit` (and the item in `limit inventory` when listed); the player's hand (drag or put, refusal "Invalid container type.",
+code 6 of `FUN_140713d20`) asks the inventory section (`FUN_14074bc30`), which the building gives type 7 "any" unless `itemtype limit` is WEAPON
+(then 0, compared with an item field `+0x110` whose meaning is **Unknown**; Meitou reads it as the item being a weapon) (`FUN_140554530`), and a
+`limit inventory` list restricts it to the listed items. So a General Storage Chest (ITEM) takes armour and weapons by hand while haulers never fill
+it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
 
 
 ### NPC town machines
@@ -982,7 +1011,7 @@ CONTAINER (backpacks). Shop counters (function 9) have no type limit in Meitou (
   82 `FUN_14059bd80` inventory or worn backpack has room for the target's item (a machine: its output item); 105 `FUN_1405a2c40` machine output empty; 169 `FUN_1405975d0` input invalid
   (production type 6 flag).
 - **Meitou** (`ProductionSystem.TownWork`, `AiSystem.WorkAtMachine`): the town building a worker of goal 189 stands at is a virtual complete site `townwork:<building key>` of the town's
-  faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory and in the save), made when the first worker arrives and kept in the save ([town machines](../formats/save.md)). A worker whose plan starts with
+  faction (like a rock or a training dummy: no registry site, not drawn, saved or built; its machine is kept in memory and in the save), made when the first worker arrives (a turret's on the player's first order to man it, [ui-input](ui-input.md#building-picking-and-selection)) and kept in the save ([town machines](../formats/save.md)). A worker whose plan starts with
   87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
   research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)). Row 94 (`WANT_TO_FILL_MACHINE`, effect 66) and its finder `FUN_14059d9b0` (**Verified**: for each input item of the target machine in list order, `FUN_14059d000` looks for a cached earlier pick, then loose ground items, then the nearest building whose production component's output lists the item (identity for ITEM records, same record type otherwise) with some in it, the buildings split by the owner test of vfunc `0x3b0`, within the sight range of the AI's range mode) give the chain 92 at the source, 94, 93 at the machine, 87: Meitou plans it (`PlanContext.Find` row 94, states 66 / 67 on machine targets), the worker walks to the source (`AiSystem.StepBuilding`), `TownWorkers` empties it (92), fills the inputs (93, `FillInputs`) and operates. Not modelled (**Unknown** or undecoded): the cached pick, ground items, the `0x3b0` split and the building mask `0x4002436` (the town's workplaces stand in). A machine exists only once a worker has been at its building; the original's has its empty output from the start, so a source with no output yet is none in both. Unpowered: town machines draw no player grid (power held true).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).

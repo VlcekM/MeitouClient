@@ -42,12 +42,30 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     const int IconGiveUpFrames = 300;
 
+    /// <summary>
+    /// One item icon (by its <see cref="IconKey"/>): its asset, style, textures and how far its drawing has come.
+    /// </summary>
     sealed class IconEntry
     {
+        /// <summary>
+        /// The item, material and colour the icon is of.
+        /// </summary>
         public required IconKey Key;
+        /// <summary>
+        /// The icon's asset (built in turn, at most <see cref="IconAssetsPerFrame"/> a frame); null until built or when it failed.
+        /// </summary>
         public CharacterAsset? Asset;
+        /// <summary>
+        /// How the item is framed and lit (<see cref="ItemIconStyle"/>), set when the asset is built.
+        /// </summary>
         public ItemIconStyle Style = null!;
+        /// <summary>
+        /// The icon's picture (RGBA8 at the style's texture size, made on first draw) and its depth target (plain icons only).
+        /// </summary>
         public GpuTexture? Colour, Depth;
+        /// <summary>
+        /// <see cref="Colour"/> with a clamped bilinear sampler, as the interface samples it.
+        /// </summary>
         public SampledTexture Sampled;
         /// <summary>
         /// The asset could not be made (no mesh): the cell keeps the name.
@@ -65,6 +83,9 @@ internal sealed unsafe partial class CharacterRenderer
         /// The image holds a picture (published to the UI thread).
         /// </summary>
         public volatile bool Drawn;
+        /// <summary>
+        /// How many frames it has been drawn waiting for its textures (past <see cref="IconGiveUpFrames"/> it is shown with what it has).
+        /// </summary>
         public int Frames;
         /// <summary>
         /// The material record it is drawn with (the key's, else the item's first): the picture's file is named by it.
@@ -74,6 +95,9 @@ internal sealed unsafe partial class CharacterRenderer
         /// The supersampled picture an enhanced icon is drawn into before it is resolved into <see cref="Colour"/> (<see cref="EnhancedIcons"/>).
         /// </summary>
         public GpuTexture? Large, LargeDepth;
+        /// <summary>
+        /// <see cref="Large"/> sampled for the resolve.
+        /// </summary>
         public SampledTexture LargeSampled;
     }
 
@@ -87,6 +111,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     static readonly PreviewLook IconLook = new(true, IconSupersample, ToneMapOperator.Clamp, 0, false, false);
 
+    /// <summary>
+    /// Backing field of <see cref="EnhancedIcons"/>, and whether a change of it has yet to drop the icons made so far.
+    /// </summary>
     bool _enhancedIcons, _iconsStale;
 
     /// <summary>
@@ -111,12 +138,30 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public string? IconSaveDirectory { get; set; }
 
+    /// <summary>
+    /// The icon pictures being read back for saving, with the GPU frame of their copy (<see cref="IconSaveDirectory"/>).
+    /// </summary>
     readonly List<(IconEntry Entry, IGpuReadback Buffer, long Frame)> _iconSaves = [];
 
+    /// <summary>
+    /// Every icon asked for, by key (any thread).
+    /// </summary>
     readonly ConcurrentDictionary<IconKey, IconEntry> _icons = new();
+    /// <summary>
+    /// Icons asked for and not yet taken by the render thread's update.
+    /// </summary>
     readonly ConcurrentQueue<IconEntry> _iconRequests = new();
+    /// <summary>
+    /// Icons being drawn until they settle; the first of them are drawn each frame.
+    /// </summary>
     readonly List<IconEntry> _iconsUnsettled = [];
+    /// <summary>
+    /// The icon of each built icon asset, for posing and drawing the live entries.
+    /// </summary>
     readonly Dictionary<CharacterAsset, IconEntry> _iconByAsset = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
+    /// Icon assets built in this update (at most <see cref="IconAssetsPerFrame"/>).
+    /// </summary>
     int _iconAssetsBuilt;
 
     /// <summary>
@@ -180,7 +225,12 @@ internal sealed unsafe partial class CharacterRenderer
                 _iconAssetsBuilt++;
                 BuildIconAsset(entry);
             }
-            if (entry.Failed) { _iconsUnsettled.RemoveAt(i--); continue; }
+            if (entry.Failed)
+            {
+                _iconsUnsettled.RemoveAt(i--);
+                continue;
+            }
+
             if (entry.Asset is not { } asset) continue;
             entry.TexturesReady = asset.Parts[0].Material.Tex.All(t => t is null || t.Native is not null || t.State == WorldTexture.Residency.Missing);
             if (_liveCount == _live.Length) Array.Resize(ref _live, _liveCount * 2);
@@ -197,15 +247,28 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// Builds the icon's asset from its item record, material and dye; marks the entry failed when the item or its mesh is missing.
+    /// </summary>
     void BuildIconAsset(IconEntry entry)
     {
         var item = _content.Database.Find(entry.Key.Record);
-        if (item is null) { entry.Failed = true; return; }
+        if (item is null)
+        {
+            entry.Failed = true;
+            return;
+        }
+
         var spec = _content.IconMaterialOf(item, entry.Key.Material);
         entry.MaterialId = spec?.StringId ?? "";
         entry.Style = ItemIconStyle.Of(item, spec);
         entry.Asset = _content.BuildIcon(item, spec, entry.Key.Colour.Length > 0 ? _content.Database.Find(entry.Key.Colour) : null);
-        if (entry.Asset is null) { entry.Failed = true; return; }
+        if (entry.Asset is null)
+        {
+            entry.Failed = true;
+            return;
+        }
+
         _iconByAsset[entry.Asset] = entry;
     }
 
@@ -216,8 +279,10 @@ internal sealed unsafe partial class CharacterRenderer
     void PoseIcons()
     {
         for (int i = 0; i < _liveCount; i++)
+        {
             if (_live[i].Asset.IsIcon)
                 _attach[_live[i].AttachBase] = _iconByAsset[_live[i].Asset].Style.Matrices().Model;
+        }
     }
 
     /// <summary>
@@ -260,6 +325,10 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// Draws the live entry <paramref name="index"/>'s icon into its picture (enhanced: supersampled, then resolved), making its targets on first
+    /// use; <paramref name="save"/>: also copies the picture into a read-back buffer for saving.
+    /// </summary>
     void DrawIcon(IconEntry entry, int index, bool save)
     {
         var (w, h) = entry.Style.TextureSize;
@@ -267,8 +336,8 @@ internal sealed unsafe partial class CharacterRenderer
         {
             entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h,
                 Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"icon {entry.Key.Record}"));
-            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), entry.Colour.View());
+            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+                entry.Colour.View());
         }
 
         // Enhanced: drawn into a half-float picture IconSupersample times larger, then resolved into the icon (coverage-weighted, so the edges blend
@@ -278,8 +347,11 @@ internal sealed unsafe partial class CharacterRenderer
         if (large && entry.Large is null)
             (entry.Large, entry.LargeDepth, entry.LargeSampled) = PreviewResolve.Targets(Gpu, w, h, IconLook, $"icon large {entry.Key.Record}");
         if (!large && entry.Depth is null)
+        {
             entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
                     Name: $"icon depth {entry.Key.Record}"));
+        }
+
         int s = large ? IconSupersample : 1;
         var cmd = Gpu.BeginNative("item icon");
         var target = large ? PassTargets.Of(entry.Large, entry.LargeDepth) : PassTargets.Of(entry.Colour, entry.Depth);
@@ -291,8 +363,15 @@ internal sealed unsafe partial class CharacterRenderer
         var (_, view, projection) = entry.Style.Matrices();
         var eye = new Vector3(0, 0, entry.Style.Distance);
         _portraitLive = index;
-        try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = -1 }, eye, []); }
-        finally { _portraitLive = -1; }
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = -1 }, eye, []);
+        }
+        finally
+        {
+            _portraitLive = -1;
+        }
+
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         if (large)
@@ -341,12 +420,19 @@ internal sealed unsafe partial class CharacterRenderer
                     Data.Textures.PngWriter.Write(temporary, w, h, rows);
                     File.Move(temporary, path, overwrite: true);
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }   // not cached: the next run draws it again
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // not cached: the next run draws it again
+                }
+
                 return true;
             });
         }
     }
 
+    /// <summary>
+    /// Frees the read-backs and every icon's targets.
+    /// </summary>
     void DisposeIcons()
     {
         foreach (var save in _iconSaves) save.Buffer.Dispose();

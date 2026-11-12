@@ -21,9 +21,14 @@ sealed class WalkUp(float giveUpSeconds)
     /// </summary>
     const float Moved = 1;
 
+    /// <summary>
+    /// The tick the walk is given up at (pushed on while the walker moves) and the tick of the next look.
+    /// </summary>
     long _giveUp, _nextAim;
 
-    // Where the walk last sent the walker (the NPC's place then), and where the walker stood at the last look.
+    /// <summary>
+    /// Where the walk last sent the walker (the NPC's place then), and where the walker stood at the last look.
+    /// </summary>
     Vector2 _aimedAt, _lastAt;
 
     /// <summary>
@@ -70,7 +75,13 @@ sealed class WalkUp(float giveUpSeconds)
         return true;
     }
 
+    /// <summary>
+    /// The X/Z of <paramref name="p"/>.
+    /// </summary>
     static Vector2 Xz(Vector3 p) => new(p.X, p.Z);
 
+    /// <summary>
+    /// <paramref name="seconds"/> as whole ticks, rounded up.
+    /// </summary>
     static long Ticks(World world, float seconds) => (long)MathF.Ceiling(seconds / world.TickSeconds);
 }

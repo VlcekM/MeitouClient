@@ -105,7 +105,8 @@ public class CollisionInstallTests
     {
         var db = InstallData.BaseGame!;
         var meshIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in Directory.EnumerateFiles(install.DataDirectory, "*.mesh", SearchOption.AllDirectories)) meshIndex.TryAdd(Path.GetFileName(f), f);
+        foreach (var f in Directory.EnumerateFiles(install.DataDirectory, "*.mesh", SearchOption.AllDirectories))
+            meshIndex.TryAdd(Path.GetFileName(f), f);
 
         var ious = new List<float>();
         foreach (var part in Parts(db))

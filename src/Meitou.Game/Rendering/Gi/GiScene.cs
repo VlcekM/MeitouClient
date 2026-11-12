@@ -129,7 +129,7 @@ internal sealed unsafe class GiScene : IDisposable
     CommandList? _seg;
     bool _split;
     public int FoliageInstances { get; private set; }
-    readonly List<(FoliageRenderer.RayMesh Mesh, Matrix4x4 Transform, float Distance)> _rayFoliage = [];
+    readonly List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> _rayFoliage = [];
 
     /// <summary>
     /// This frame's sun is traced (docs/render-shadows.md "Traced sun"): what the probes do not need joins the scene under instance masks of its own (the small foliage near the
@@ -629,9 +629,9 @@ internal sealed unsafe class GiScene : IDisposable
     }
 
     /// <summary>
-    /// A foliage mesh's structure (FoliageRenderer.RayMesh: its key is the resident GpuMesh, which a reload replaces, so it never changes under it).
+    /// A foliage mesh's structure (FoliageRayMesh: its key is the resident GpuMesh, which a reload replaces, so it never changes under it).
     /// </summary>
-    MeshEntry? FoliageEntryFor(FoliageRenderer.RayMesh mesh)
+    MeshEntry? FoliageEntryFor(FoliageRayMesh mesh)
     {
         if (_meshes.TryGetValue(mesh.Key, out var entry)) return entry;
         if (BuiltThisFrame >= MaxBuildsPerFrame) return null;
@@ -666,7 +666,7 @@ internal sealed unsafe class GiScene : IDisposable
     // The foliage block: rebuilt now and then (the foliage does not move), not every frame (FoliageRenderer.RayInstances walks every zone).
     readonly List<InstanceRecord> _foliageBlock = [];
     readonly List<GeometryRecord> _foliageRecords = [];
-    readonly List<(FoliageRenderer.RayMesh Mesh, int Part)> _foliageSources = [];
+    readonly List<(FoliageRayMesh Mesh, int Part)> _foliageSources = [];
     Vector3 _foliageOrigin, _foliageEye;
     long _foliageFrame = long.MinValue / 2;
     int _foliageGeneration = -1;
@@ -715,7 +715,7 @@ internal sealed unsafe class GiScene : IDisposable
     }
 
     /// <summary>A foliage instance into the block, unless its structure is not built yet (the block is then incomplete).</summary>
-    void AddFoliage(FoliageRenderer.RayMesh mesh, in Matrix4x4 transform, byte mask)
+    void AddFoliage(FoliageRayMesh mesh, in Matrix4x4 transform, byte mask)
     {
         var entry = FoliageEntryFor(mesh);
         if (entry is null) { _foliageComplete = false; return; }

@@ -9,10 +9,22 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 public sealed class ZoneNavMesh
 {
+    /// <summary>
+    /// The most vertices a polygon has.
+    /// </summary>
     public const int MaxVerticesPerPolygon = 6;
 
+    /// <summary>
+    /// The zone's X in the zone grid.
+    /// </summary>
     public required int ZoneX { get; init; }
+    /// <summary>
+    /// The zone's Z in the zone grid.
+    /// </summary>
     public required int ZoneZ { get; init; }
+    /// <summary>
+    /// The vertices, world coordinates.
+    /// </summary>
     public required Vector3[] Vertices { get; init; }
     /// <summary>
     /// Per polygon: vertex indices.
@@ -22,6 +34,9 @@ public sealed class ZoneNavMesh
     /// Per polygon: the neighbour behind each edge, −1 for none.
     /// </summary>
     public required int[][] Neighbours { get; init; }
+    /// <summary>
+    /// Per polygon: its area (<see cref="NavArea"/>).
+    /// </summary>
     public required byte[] Areas { get; init; }
     /// <summary>
     /// Per polygon: links across edges that face several polygons (the borders between tiles, where the two sides' vertices do not match), as pairs
@@ -32,7 +47,13 @@ public sealed class ZoneNavMesh
     /// Per polygon: false when the seed pass removed it.
     /// </summary>
     public required bool[] Kept { get; init; }
+    /// <summary>
+    /// The smallest world X and Z of the zone's box.
+    /// </summary>
     public required Vector2 BoundsMin { get; init; }
+    /// <summary>
+    /// The largest world X and Z of the zone's box.
+    /// </summary>
     public required Vector2 BoundsMax { get; init; }
     /// <summary>
     /// Instance ids of the buildings whose doors are in this mesh (<see cref="NavDoors"/>); null when there are none.
@@ -63,6 +84,9 @@ public sealed class ZoneNavMesh
     /// </summary>
     public Meitou.Data.World.HeightWindow? Terrain { get; internal set; }
 
+    /// <summary>
+    /// The number of polygons, kept and pruned.
+    /// </summary>
     public int PolygonCount => Polygons.Length;
 
     /// <summary>
@@ -75,6 +99,9 @@ public sealed class ZoneNavMesh
     /// </summary>
     internal bool HasLink(int polygon, int edge) => NavGeometry.HasLink(LinksOf(polygon), edge);
 
+    /// <summary>
+    /// Per vertex, whether it is a wall vertex; made by the first <see cref="IsWallVertex"/>.
+    /// </summary>
     bool[]? _wallVertices;
 
     /// <summary>
@@ -220,6 +247,9 @@ public sealed class ZoneNavMesh
         return result;
     }
 
+    /// <summary>
+    /// <paramref name="neighbours"/> with each neighbour moved to its new number in <paramref name="map"/> (-1 stays -1).
+    /// </summary>
     static int[] Renumbered(int[] neighbours, int[] map)
     {
         var result = new int[neighbours.Length];
@@ -248,6 +278,9 @@ public sealed class ZoneNavMesh
 
     // ---- point queries ----
 
+    /// <summary>
+    /// Makes <see cref="Index"/> on first use (thread-safe).
+    /// </summary>
     readonly Lazy<PointIndex> _index;
 
     /// <summary>
@@ -256,15 +289,36 @@ public sealed class ZoneNavMesh
     /// </summary>
     internal PointIndex Index => _index.Value;
 
+    /// <summary>
+    /// A mesh whose point index is built on first use.
+    /// </summary>
     public ZoneNavMesh() => _index = new Lazy<PointIndex>(() => new PointIndex(this), LazyThreadSafetyMode.ExecutionAndPublication);
 
+    /// <summary>
+    /// A grid over the polygons' X/Z boxes: for each cell the polygons whose box meets it, in ascending order.
+    /// </summary>
     internal sealed class PointIndex
     {
+        /// <summary>
+        /// A grid cell's edge (units).
+        /// </summary>
         public const float Cell = 64;
+        /// <summary>
+        /// The grid's columns (along X) and rows (along Z), from the mesh's box.
+        /// </summary>
         public readonly int Columns, Rows;
+        /// <summary>
+        /// The polygons of each cell, row-major (z x <see cref="Columns"/> + x).
+        /// </summary>
         public readonly int[][] Cells;
+        /// <summary>
+        /// Each polygon's box on X/Z: smallest and largest corner.
+        /// </summary>
         public readonly Vector2[] Min, Max;
 
+        /// <summary>
+        /// Indexes the polygons of <paramref name="m"/>: their boxes, then each cell's polygons in two passes (count, then fill).
+        /// </summary>
         public PointIndex(ZoneNavMesh m)
         {
             Columns = (int)MathF.Ceiling((m.BoundsMax.X - m.BoundsMin.X) / Cell) + 1;
@@ -299,14 +353,27 @@ public sealed class ZoneNavMesh
             {
                 var (x0, x1, z0, z1) = CellRange(m, p);
                 for (int z = z0; z <= z1; z++)
-                    for (int x = x0; x <= x1; x++) { int c = z * Columns + x; Cells[c][counts[c]++] = p; }
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        int c = z * Columns + x;
+                        Cells[c][counts[c]++] = p;
+                    }
             }
         }
 
+        /// <summary>
+        /// The cells polygon <paramref name="p"/>'s box covers.
+        /// </summary>
         (int X0, int X1, int Z0, int Z1) CellRange(ZoneNavMesh m, int p) =>
             (Col(Min[p].X - m.BoundsMin.X), Col(Max[p].X - m.BoundsMin.X), Row(Min[p].Y - m.BoundsMin.Y), Row(Max[p].Y - m.BoundsMin.Y));
 
+        /// <summary>
+        /// The column of an X offset from the mesh's box, clamped into the grid.
+        /// </summary>
         public int Col(float v) => Math.Clamp((int)(v / Cell), 0, Columns - 1);
+        /// <summary>
+        /// The row of a Z offset from the mesh's box, clamped into the grid.
+        /// </summary>
         public int Row(float v) => Math.Clamp((int)(v / Cell), 0, Rows - 1);
     }
 
@@ -348,6 +415,10 @@ public sealed class ZoneNavMesh
             if (Covers(ix, p, x, z)) heights.Add(HeightAt(p, x, z));
     }
 
+    /// <summary>
+    /// The point index and the cell of (<paramref name="x"/>, <paramref name="z"/>); false (an empty cell) for a point more than 1 unit outside the
+    /// mesh's box.
+    /// </summary>
     bool TryCell(float x, float z, out PointIndex ix, out int[] cell)
     {
         ix = _index.Value;
@@ -357,6 +428,10 @@ public sealed class ZoneNavMesh
         return true;
     }
 
+    /// <summary>
+    /// Whether kept polygon <paramref name="p"/> contains (<paramref name="x"/>, <paramref name="z"/>): its box first (1e-3 slack), then the
+    /// exact test.
+    /// </summary>
     bool Covers(PointIndex ix, int p, float x, float z) =>
         Kept[p] && x >= ix.Min[p].X - 1e-3f && x <= ix.Max[p].X + 1e-3f && z >= ix.Min[p].Y - 1e-3f && z <= ix.Max[p].Y + 1e-3f && Contains(p, x, z);
 
@@ -395,6 +470,9 @@ public sealed class ZoneNavMesh
         return best;
     }
 
+    /// <summary>
+    /// The number of polygons the seed pass kept.
+    /// </summary>
     public int KeptCount
     {
         get
@@ -405,6 +483,9 @@ public sealed class ZoneNavMesh
         }
     }
 
+    /// <summary>
+    /// The vertex average of a polygon.
+    /// </summary>
     public Vector3 Centre(int polygon)
     {
         var sum = Vector3.Zero;
@@ -536,11 +617,29 @@ public sealed class HeightGrid(float x0, float z0, float step, int columns, int 
     /// </summary>
     public static readonly HeightGrid OnTerrain = new(0, 0, 1, 0, 0, []);
 
+    /// <summary>
+    /// The world X of the first sample.
+    /// </summary>
     public float X0 { get; } = x0;
+    /// <summary>
+    /// The world Z of the first sample.
+    /// </summary>
     public float Z0 { get; } = z0;
+    /// <summary>
+    /// Units between samples.
+    /// </summary>
     public float Step { get; } = step;
+    /// <summary>
+    /// Samples per row (along X).
+    /// </summary>
     public int Columns { get; } = columns;
+    /// <summary>
+    /// Rows of samples (along Z).
+    /// </summary>
     public int Rows { get; } = rows;
+    /// <summary>
+    /// The heights, row-major; NaN where the polygon's own surface had none.
+    /// </summary>
     public float[] Values { get; } = values;
     /// <summary>
     /// While the zone is built: per sample, whether it is a span of the polygon's own region (not the span nearest its plane); null once built or

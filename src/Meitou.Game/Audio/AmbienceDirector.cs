@@ -19,6 +19,9 @@ public readonly record struct AmbienceInput
     /// GLOBAL CONSTANTS <c>sunrise</c> / <c>sunset</c> (5 and 23 in the base game).
     /// </summary>
     public float Sunrise { get; init; }
+    /// <summary>
+    /// GLOBAL CONSTANTS <c>sunset</c> (23 in the base game): the hour day ends at.
+    /// </summary>
     public float Sunset { get; init; }
     /// <summary>
     /// The camera eye's height above the ground under it.
@@ -48,13 +51,34 @@ public sealed class AmbienceDirector(WwisePlayer player)
     /// The state the game compares each frame: the biome index, with bit 8 set at night; -1 before the first.
     /// </summary>
     int _state = -1;
+    /// <summary>
+    /// Whether the last update was day (between sunrise and sunset); null before the first, so the first sets <c>Time_in_Game</c>.
+    /// </summary>
     bool? _day;
+    /// <summary>
+    /// Whether the rain bed and the wind bed are playing (the weather's rain and wind above 0 at the last update).
+    /// </summary>
     bool _raining, _windy;
+    /// <summary>
+    /// Real seconds summed over the updates: the <c>Time_in_Game</c> game parameter is this as a 0..10 sawtooth over 10 minutes.
+    /// </summary>
     double _clock;
 
+    /// <summary>
+    /// The ambience last entered (the low byte of the state); null before the first update or after <see cref="Silence"/>.
+    /// </summary>
     public Ambience? Biome => _state < 0 ? null : (Ambience)(_state & 0xFF);
+    /// <summary>
+    /// Whether the last entered state is the night one (bit 8 of the state).
+    /// </summary>
     public bool Night => (_state & 0x100) != 0;
+    /// <summary>
+    /// Whether the rain bed is playing.
+    /// </summary>
     public bool Raining => _raining;
+    /// <summary>
+    /// Whether the wind bed is playing.
+    /// </summary>
     public bool Windy => _windy;
 
     /// <summary>
@@ -92,6 +116,11 @@ public sealed class AmbienceDirector(WwisePlayer player)
         _raining = _windy = false;
     }
 
+    /// <summary>
+    /// One frame's ambience: flips <c>Time_in_Game</c> between day and night, sets the <c>Time_in_Game</c> and <c>Camera_Zoom</c> parameters, posts
+    /// the Leave and Enter events when the biome or the day/night half changes (loading the biome's bank), starts and ends the rain and wind beds and
+    /// sets their intensities.
+    /// </summary>
     public void Update(in AmbienceInput input)
     {
         // Day strictly between sunrise and sunset; Time_in_Game (the state group) changes only when that flips.

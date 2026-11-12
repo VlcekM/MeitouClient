@@ -7,8 +7,14 @@ namespace Meitou.Modding;
 /// </summary>
 sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
 {
+    /// <summary>
+    /// The extension id of Meitou's own shared actions.
+    /// </summary>
     public string Id => "meitou";
 
+    /// <summary>
+    /// Registers the shared actions (the speed buttons, the panels and orders) that run the host's commands.
+    /// </summary>
     public void Register(UiRegistration r)
     {
         for (int i = 0; i < 4; i++)
@@ -21,7 +27,7 @@ sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
         {
             "inventory", "stats", "squad", "stop", "medic", "rescue", "member", "context", "extendedstats", "floor-up", "floor-down", "build",
             "job-remove", "prospect", "building-buy", "building-dismantle", "building-pause", "building-doors", "building-locks", "building-public",
-            "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "tutorial",
+            "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "tutorial", "help",
         };
         foreach (string name in names)
             r.RegisterAction(name, c => command(name, c.Argument));

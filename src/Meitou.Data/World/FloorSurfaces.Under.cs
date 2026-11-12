@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
+/// <summary>
+/// The part with the heights under and over a point.
+/// </summary>
 public sealed partial class FloorSurfaces
 {
     /// <summary>
@@ -60,6 +63,10 @@ public sealed partial class FloorSurfaces
     /// </summary>
     public float? CeilingAbove(float x, float z, float bottom) => Lowest(x, z, bottom, [_surfaces, _roofs, _undersides]);
 
+    /// <summary>
+    /// The lowest triangle height over (<paramref name="x"/>, <paramref name="z"/>) at or above <paramref name="bottom"/> among
+    /// <paramref name="lists"/>, on floors up to <paramref name="maxFloor"/>; null when there is none.
+    /// </summary>
     float? Lowest(float x, float z, float bottom, ReadOnlySpan<List<Surface>> lists, int maxFloor = int.MaxValue)
     {
         float best = float.PositiveInfinity;

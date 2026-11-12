@@ -9,23 +9,53 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class DdsReader
 {
-    public const uint Magic = 0x20534444; // "DDS "
+    /// <summary>
+    /// "DDS " the first four bytes of every DDS file, little-endian.
+    /// </summary>
+    public const uint Magic = 0x20534444;
+    /// <summary>
+    /// The DDS_HEADER size after the magic, and the size of the DX10 extension header that follows it when the FourCC is <c>DX10</c>.
+    /// </summary>
     const int HeaderSize = 124, Dx10HeaderSize = 20;
 
     // DDS_HEADER.flags
+    /// <summary>
+    /// DDS_HEADER.flags bit: the header's mip map count is valid; without it the file has one level.
+    /// </summary>
     public const uint FlagMipMapCount = 0x20000;
+    /// <summary>
+    /// DDS_HEADER.flags bit: the header's depth is valid (a volume texture).
+    /// </summary>
     public const uint FlagDepth = 0x800000;
 
     // DDS_PIXELFORMAT.flags
+    /// <summary>
+    /// DDS_PIXELFORMAT.flags bits: alpha present, alpha only, FourCC valid, RGB masks valid, YUV (refused) and luminance.
+    /// </summary>
     const uint PfAlphaPixels = 0x1, PfAlpha = 0x2, PfFourCc = 0x4, PfRgb = 0x40, PfYuv = 0x200, PfLuminance = 0x20000;
 
     // caps2
+    /// <summary>
+    /// caps2 bits: a cubemap, a volume texture.
+    /// </summary>
     const uint Caps2Cubemap = 0x200, Caps2Volume = 0x200000;
+    /// <summary>
+    /// caps2 bits of the cube faces present, in file order: +X, -X, +Y, -Y, +Z, -Z.
+    /// </summary>
     static readonly uint[] CubeFaces = [0x400, 0x800, 0x1000, 0x2000, 0x4000, 0x8000];
 
+    /// <summary>
+    /// DX10 header miscFlag bit: the texture array is of cubes.
+    /// </summary>
     const uint Dx10MiscTextureCube = 0x4;
+    /// <summary>
+    /// DX10 header resourceDimension value of a 3D (volume) texture.
+    /// </summary>
     const int Dx10DimensionTexture3D = 4;
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
@@ -34,15 +64,18 @@ public static class DdsReader
     public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
 
     /// <summary>
-    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>: every surface laid out, no
-    /// data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the
-    /// bytes from its first surface on are read. A dropped top level is three quarters of a mip chain's bytes, which were read, held and thrown away with the file.
-    /// The result's <see cref="DdsFile.Data"/> starts at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped)
-    /// the result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file.
-    /// With <paramref name="pool"/> the result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
-    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md, pooled buffers).
+    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>:
+    /// every surface laid out, no data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by
+    /// <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the bytes from its first surface on are read. A dropped top level
+    /// is three quarters of a mip chain's bytes, which were read, held and thrown away with the file. The result's <see cref="DdsFile.Data"/> starts
+    /// at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped) the
+    /// result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file. With <paramref name="pool"/> the
+    /// result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
+    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md,
+    /// pooled buffers).
     /// </summary>
-    public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole, System.Buffers.ArrayPool<byte>? pool = null)
+    public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole,
+        System.Buffers.ArrayPool<byte>? pool = null)
     {
         long length = RandomAccess.GetLength(file);
         if (length > int.MaxValue) throw new DdsFormatException($"File of {length} bytes is too large.");
@@ -68,8 +101,9 @@ public static class DdsReader
     }
 
     /// <summary>
-    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's bytes. The result's
-    /// <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32 MB instead of 43 MB read and held.
+    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's
+    /// bytes. The result's <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32
+    /// MB instead of 43 MB read and held.
     /// </summary>
     public static DdsFile ReadTopSurface(Microsoft.Win32.SafeHandles.SafeFileHandle file)
     {
@@ -85,6 +119,9 @@ public static class DdsReader
         return headers.WithData(data, [top with { Offset = 0 }]);
     }
 
+    /// <summary>
+    /// Reads from <paramref name="offset"/> until <paramref name="buffer"/> is full or the file ends; the number of bytes read.
+    /// </summary>
     static int ReadFully(Microsoft.Win32.SafeHandles.SafeFileHandle file, Span<byte> buffer, long offset)
     {
         int read = 0;
@@ -102,6 +139,37 @@ public static class DdsReader
     /// <paramref name="data"/> (empty when only the headers were read).
     /// </summary>
     static DdsFile Parse(ReadOnlySpan<byte> span, long fileLength, byte[] data)
+    {
+        var header = ReadHeader(span);
+        ReadPixelFormat(span, ref header);
+
+        if (!header.Volume) header.Depth = 1;
+        var surfaces = LayOutSurfaces(header, fileLength);
+
+        return new DdsFile
+        {
+            Data = data,
+            Width = header.Width,
+            Height = header.Height,
+            Depth = header.Depth,
+            MipCount = header.MipCount,
+            ImageCount = header.Images,
+            IsCubemap = header.Cube,
+            IsVolume = header.Volume,
+            Format = header.Format,
+            FourCc = header.FourCcText,
+            DxgiFormat = header.Dxgi,
+            Masks = header.Masks,
+            HeaderFlags = header.Flags,
+            HeaderSize = header.HeaderEnd,
+            Surfaces = surfaces,
+        };
+    }
+
+    /// <summary>
+    /// The DDS_HEADER: its size, mips, pixel format fields and caps, and the layout they give before the pixel format is read.
+    /// </summary>
+    static Header ReadHeader(ReadOnlySpan<byte> span)
     {
         if (span.Length < 4 + HeaderSize) throw new DdsFormatException($"File too short for a DDS header ({span.Length} bytes).");
         if (U32(span, 0) != Magic) throw new DdsFormatException("Missing 'DDS ' magic.");
@@ -125,85 +193,109 @@ public static class DdsReader
         bool cube = (caps2 & Caps2Cubemap) != 0;
         int images = cube ? CubeFaces.Count(f => (caps2 & f) != 0) : 1;
         if (cube && images == 0) images = 6; // some writers set only DDSCAPS2_CUBEMAP
-        DdsFormat format;
-        DdsPixelMasks? masks = null;
-        string? fourCcText = null;
-        int? dxgi = null;
 
-        if ((pfFlags & PfFourCc) != 0)
+        return new Header
         {
-            fourCcText = Encoding.ASCII.GetString(span.Slice(84, 4));
-            if (fourCcText == "DX10")
-            {
-                if (span.Length < headerEnd + Dx10HeaderSize) throw new DdsFormatException("File too short for the DX10 header.");
-                dxgi = (int)U32(span, headerEnd);
-                int dimension = (int)U32(span, headerEnd + 4);
-                uint misc = U32(span, headerEnd + 8);
-                int arraySize = Math.Max(1, (int)U32(span, headerEnd + 12));
-                headerEnd += Dx10HeaderSize;
-                (format, masks) = FromDxgi(dxgi.Value);
-                cube = (misc & Dx10MiscTextureCube) != 0;
-                volume = dimension == Dx10DimensionTexture3D && depth > 1;
-                images = arraySize * (cube ? 6 : 1);
-            }
-            else
-            {
-                format = fourCcText switch
-                {
-                    "DXT1" => DdsFormat.Bc1,
-                    "DXT2" or "DXT3" => DdsFormat.Bc2,
-                    "DXT4" or "DXT5" => DdsFormat.Bc3,
-                    "ATI1" or "BC4U" => DdsFormat.Bc4,
-                    "ATI2" or "BC5U" => DdsFormat.Bc5,
-                    "RXGB" => DdsFormat.Rxgb,
-                    _ => throw new DdsFormatException($"Unsupported FourCC '{Printable(fourCcText, fourCc)}'."),
-                };
-            }
-        }
-        else if ((pfFlags & (PfRgb | PfLuminance | PfAlpha)) != 0 && (pfFlags & PfYuv) == 0)
-        {
-            if (bitCount is not (8 or 16 or 24 or 32)) throw new DdsFormatException($"Unsupported bit count {bitCount}.");
-            format = DdsFormat.Uncompressed;
-            bool hasAlpha = (pfFlags & (PfAlphaPixels | PfAlpha)) != 0;
-            masks = (pfFlags & PfAlpha) != 0 && (pfFlags & (PfRgb | PfLuminance)) == 0
-                ? new DdsPixelMasks(bitCount, 0, 0, 0, aMask)
-                : new DdsPixelMasks(bitCount, rMask, (pfFlags & PfLuminance) != 0 ? 0 : gMask, (pfFlags & PfLuminance) != 0 ? 0 : bMask,
-                    hasAlpha ? aMask : 0, (pfFlags & PfLuminance) != 0);
-        }
-        else throw new DdsFormatException($"Unsupported pixel format flags 0x{pfFlags:X}.");
-
-        if (!volume) depth = 1;
-        var surfaces = new List<DdsSurface>(images * mipCount);
-        long offset = headerEnd;
-        for (int image = 0; image < images; image++)
-            for (int level = 0; level < mipCount; level++)
-            {
-                int w = Math.Max(1, width >> level), h = Math.Max(1, height >> level), d = Math.Max(1, depth >> level);
-                long length = SurfaceSize(format, masks, w, h) * d;
-                if (offset + length > fileLength)
-                    throw new DdsFormatException($"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, past the end of the file ({fileLength}).");
-                surfaces.Add(new DdsSurface(image, level, w, h, d, (int)offset, (int)length));
-                offset += length;
-            }
-
-        return new DdsFile
-        {
-            Data = data,
+            Flags = flags,
             Width = width,
             Height = height,
             Depth = depth,
             MipCount = mipCount,
-            ImageCount = images,
-            IsCubemap = cube,
-            IsVolume = volume,
-            Format = format,
-            FourCc = fourCcText,
-            DxgiFormat = dxgi,
-            Masks = masks,
-            HeaderFlags = flags,
-            HeaderSize = headerEnd,
-            Surfaces = surfaces,
+            PfFlags = pfFlags,
+            FourCc = fourCc,
+            BitCount = bitCount,
+            RMask = rMask,
+            GMask = gMask,
+            BMask = bMask,
+            AMask = aMask,
+            HeaderEnd = headerEnd,
+            Volume = volume,
+            Cube = cube,
+            Images = images,
         };
+    }
+
+    /// <summary>
+    /// The format and masks the pixel format gives: a FourCC (DX10 with its extension header) or uncompressed masks.
+    /// </summary>
+    static void ReadPixelFormat(ReadOnlySpan<byte> span, ref Header header)
+    {
+        if ((header.PfFlags & PfFourCc) != 0)
+        {
+            header.FourCcText = Encoding.ASCII.GetString(span.Slice(84, 4));
+            if (header.FourCcText == "DX10") ReadDx10(span, ref header);
+            else header.Format = FourCcFormat(header.FourCcText, header.FourCc);
+        }
+        else if ((header.PfFlags & (PfRgb | PfLuminance | PfAlpha)) != 0 && (header.PfFlags & PfYuv) == 0)
+            ReadMasks(ref header);
+        else throw new DdsFormatException($"Unsupported pixel format flags 0x{header.PfFlags:X}.");
+    }
+
+    /// <summary>
+    /// The DX10 extension header: the DXGI format, and the dimension, cube flag and array size that replace the legacy layout.
+    /// </summary>
+    static void ReadDx10(ReadOnlySpan<byte> span, ref Header header)
+    {
+        if (span.Length < header.HeaderEnd + Dx10HeaderSize) throw new DdsFormatException("File too short for the DX10 header.");
+        header.Dxgi = (int)U32(span, header.HeaderEnd);
+        int dimension = (int)U32(span, header.HeaderEnd + 4);
+        uint misc = U32(span, header.HeaderEnd + 8);
+        int arraySize = Math.Max(1, (int)U32(span, header.HeaderEnd + 12));
+        header.HeaderEnd += Dx10HeaderSize;
+        (header.Format, header.Masks) = FromDxgi(header.Dxgi.Value);
+        header.Cube = (misc & Dx10MiscTextureCube) != 0;
+        header.Volume = dimension == Dx10DimensionTexture3D && header.Depth > 1;
+        header.Images = arraySize * (header.Cube ? 6 : 1);
+    }
+
+    /// <summary>
+    /// The block format of a legacy FourCC.
+    /// </summary>
+    static DdsFormat FourCcFormat(string fourCcText, uint fourCc) => fourCcText switch
+    {
+        "DXT1" => DdsFormat.Bc1,
+        "DXT2" or "DXT3" => DdsFormat.Bc2,
+        "DXT4" or "DXT5" => DdsFormat.Bc3,
+        "ATI1" or "BC4U" => DdsFormat.Bc4,
+        "ATI2" or "BC5U" => DdsFormat.Bc5,
+        "RXGB" => DdsFormat.Rxgb,
+        _ => throw new DdsFormatException($"Unsupported FourCC '{Printable(fourCcText, fourCc)}'."),
+    };
+
+    /// <summary>
+    /// An uncompressed RGB, luminance or alpha format's masks.
+    /// </summary>
+    static void ReadMasks(ref Header header)
+    {
+        if (header.BitCount is not (8 or 16 or 24 or 32)) throw new DdsFormatException($"Unsupported bit count {header.BitCount}.");
+        header.Format = DdsFormat.Uncompressed;
+        bool hasAlpha = (header.PfFlags & (PfAlphaPixels | PfAlpha)) != 0;
+        bool luminance = (header.PfFlags & PfLuminance) != 0;
+        header.Masks = (header.PfFlags & PfAlpha) != 0 && (header.PfFlags & (PfRgb | PfLuminance)) == 0
+            ? new DdsPixelMasks(header.BitCount, 0, 0, 0, header.AMask)
+            : new DdsPixelMasks(header.BitCount, header.RMask, luminance ? 0 : header.GMask, luminance ? 0 : header.BMask, hasAlpha ? header.AMask : 0,
+                luminance);
+    }
+
+    /// <summary>
+    /// Every surface, image by image and level by level from the end of the headers; throws when one runs past the file.
+    /// </summary>
+    static List<DdsSurface> LayOutSurfaces(in Header header, long fileLength)
+    {
+        var surfaces = new List<DdsSurface>(header.Images * header.MipCount);
+        long offset = header.HeaderEnd;
+        for (int image = 0; image < header.Images; image++)
+            for (int level = 0; level < header.MipCount; level++)
+            {
+                int w = Math.Max(1, header.Width >> level), h = Math.Max(1, header.Height >> level), d = Math.Max(1, header.Depth >> level);
+                long length = SurfaceSize(header.Format, header.Masks, w, h) * d;
+                if (offset + length > fileLength)
+                    throw new DdsFormatException($"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, "
+                        + $"past the end of the file ({fileLength}).");
+                surfaces.Add(new DdsSurface(image, level, w, h, d, (int)offset, (int)length));
+                offset += length;
+            }
+        return surfaces;
     }
 
     /// <summary>
@@ -221,6 +313,9 @@ public static class DdsReader
         };
     }
 
+    /// <summary>
+    /// The format (and masks for an uncompressed one) of a DX10 header's DXGI format number; <see cref="DdsFormatException"/> for an unsupported one.
+    /// </summary>
     static (DdsFormat, DdsPixelMasks?) FromDxgi(int dxgi) => dxgi switch
     {
         70 or 71 or 72 => (DdsFormat.Bc1, null),      // BC1_TYPELESS / UNORM / UNORM_SRGB
@@ -228,7 +323,8 @@ public static class DdsReader
         76 or 77 or 78 => (DdsFormat.Bc3, null),
         79 or 80 => (DdsFormat.Bc4, null),            // BC4_TYPELESS / UNORM (SNORM 81 not supported)
         82 or 83 => (DdsFormat.Bc5, null),            // BC5_TYPELESS / UNORM (SNORM 84 not supported)
-        97 or 98 or 99 => (DdsFormat.Bc7, null),      // BC7_TYPELESS / UNORM / UNORM_SRGB (sRGB is not applied: like BC1-BC3 the data is sampled as stored)
+        // BC7_TYPELESS / UNORM / UNORM_SRGB (sRGB is not applied: like BC1-BC3 the data is sampled as stored)
+        97 or 98 or 99 => (DdsFormat.Bc7, null),
         27 or 28 or 29 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000)), // R8G8B8A8
         87 or 90 or 91 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)), // B8G8R8A8
         88 or 92 or 93 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)),          // B8G8R8X8
@@ -240,7 +336,84 @@ public static class DdsReader
         _ => throw new DdsFormatException($"Unsupported DXGI format {dxgi}."),
     };
 
+    /// <summary>
+    /// The little-endian uint32 at byte <paramref name="at"/>.
+    /// </summary>
     static uint U32(ReadOnlySpan<byte> s, int at) => BinaryPrimitives.ReadUInt32LittleEndian(s[at..]);
 
+    /// <summary>
+    /// A FourCC for an error message: its text when printable ASCII, else the value in hex.
+    /// </summary>
     static string Printable(string text, uint value) => text.All(c => c is >= ' ' and <= '~') ? text : $"0x{value:X8}";
+
+    /// <summary>
+    /// The header values <see cref="Parse"/> reads, and the format and layout they give.
+    /// </summary>
+    struct Header
+    {
+        /// <summary>
+        /// DDS_HEADER.flags.
+        /// </summary>
+        public uint Flags;
+
+        /// <summary>
+        /// The top level's size (the depth is 1 unless the file is a volume).
+        /// </summary>
+        public int Width, Height, Depth;
+
+        /// <summary>
+        /// The mip levels of each image (1 without the mip count flag).
+        /// </summary>
+        public int MipCount;
+
+        /// <summary>
+        /// DDS_PIXELFORMAT.flags and its FourCC.
+        /// </summary>
+        public uint PfFlags, FourCc;
+
+        /// <summary>
+        /// DDS_PIXELFORMAT's bit count.
+        /// </summary>
+        public int BitCount;
+
+        /// <summary>
+        /// DDS_PIXELFORMAT's red, green, blue and alpha masks.
+        /// </summary>
+        public uint RMask, GMask, BMask, AMask;
+
+        /// <summary>
+        /// Where the headers end and the first surface starts.
+        /// </summary>
+        public int HeaderEnd;
+
+        /// <summary>
+        /// Whether the file is a volume texture and whether a cubemap.
+        /// </summary>
+        public bool Volume, Cube;
+
+        /// <summary>
+        /// The images (cube faces, array slices), each with its own mip chain.
+        /// </summary>
+        public int Images;
+
+        /// <summary>
+        /// The pixel format.
+        /// </summary>
+        public DdsFormat Format;
+
+        /// <summary>
+        /// The uncompressed format's masks (null for a block format).
+        /// </summary>
+        public DdsPixelMasks? Masks;
+
+        /// <summary>
+        /// The FourCC as text (null without one).
+        /// </summary>
+        public string? FourCcText;
+
+        /// <summary>
+        /// The DXGI format of a DX10 header (null without one).
+        /// </summary>
+        public int? Dxgi;
+    }
 }

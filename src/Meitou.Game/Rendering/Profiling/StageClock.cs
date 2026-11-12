@@ -10,6 +10,9 @@ static class StageClock
 {
     #region Stages
 
+    /// <summary>
+    /// The stages' names by index, as the profiler, the bench output and the pass meter show them.
+    /// </summary>
     public static readonly string[] Names =
     [
         "upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "ui",
@@ -17,44 +20,83 @@ static class StageClock
         "sim", "birds", "lamp-shadows",
     ];
 
-    // Stages 15 to 17 exist on the GPU only: the pre-frame command buffer's uploads (what it holds besides the next two), the foliage and grass culls
-    // and the impostor bakes, timed by stamps in that buffer (FrameProfiler.PreStamp). The render thread has no lap for them. 18 and 19 are the light
-    // shafts and the fog volumes, 20 and 21 the characters' colour and motion draws and their update.
+    /// <summary>
+    /// Stages 15 to 17 exist on the GPU only: the pre-frame command buffer's uploads (what it holds besides the next two), the foliage and grass
+    /// culls and the impostor bakes, timed by stamps in that buffer (<see cref="FrameProfiler.PreStamp"/>). The render thread has no lap for them. 18
+    /// and 19 are the light shafts and the fog volumes, 20 and 21 the characters' colour and motion draws and their update; 10 is post-processing.
+    /// </summary>
     public const int Uploads = 15, Cull = 16, Bake = 17, Shafts = 18, Fog = 19, Characters = 20, UpdChars = 21, Post = 10;
+
+    /// <summary>
+    /// The interface (everything from the world's last stage to the submission), the submission, and the wait for the driver (CPU only).
+    /// </summary>
     public const int Ui = 11, Submit = 22, DriverWait = 23;
 
-    // 24 is the game host's own work in the frame before the world draws (the viewer has none), 25 the blood on the ground: the host's marks and
-    // pools and the decal layers redrawn.
+    /// <summary>
+    /// 24 is the game host's own work in the frame before the world draws (the viewer has none), 25 the blood on the ground: the host's marks and
+    /// pools and the decal layers redrawn.
+    /// </summary>
     public const int Host = 24, Blood = 25;
 
-    // 26 is the game's simulation ticks: on the render thread, before the frame's clock starts (FrameProfiler.Outside); the viewer has none.
+    /// <summary>
+    /// 26 is the game's simulation ticks: on the render thread, before the frame's clock starts (<see cref="FrameProfiler.Outside(double)"/>); the
+    /// viewer has none.
+    /// </summary>
     public const int Sim = 26;
 
-    // 27 is the game host's birds (the step runs on its own thread; this is the host's share: collecting the last step's flocks and starting the
-    // next).
+    /// <summary>
+    /// 27 is the game host's birds (the step runs on its own thread; this is the host's share: collecting the last step's flocks and starting the
+    /// next).
+    /// </summary>
     public const int Birds = 27;
 
-    // 28 is the lamps' traced shadows (part of the gi group in the legend).
+    /// <summary>
+    /// 28 is the lamps' traced shadows (part of the gi group in the legend).
+    /// </summary>
     public const int LampShadows = 28;
 
+    /// <summary>
+    /// The stage the last lap ended (-1 before the first of the frame).
+    /// </summary>
     public static int LastStage { get; private set; }
 
+    /// <summary>
+    /// Whether the frame's submission has started (<see cref="BeginSubmission"/>): the GPU time after it counts as submit.
+    /// </summary>
     public static bool SubmissionStarted { get; private set; }
 
+    /// <summary>
+    /// Whether a frame's clock is running (between <see cref="Start"/> and <see cref="EndFrame"/>); laps do nothing otherwise.
+    /// </summary>
     public static bool Active;
 
+    /// <summary>
+    /// The profiler that takes a GPU timestamp at every lap; null when none.
+    /// </summary>
     public static FrameProfiler? Profiler;
 
+    /// <summary>
+    /// Whether a stage has no GPU time of its own: the driver wait and the simulation.
+    /// </summary>
     public static bool CpuOnly(int stage) => stage is DriverWait or Sim;
 
+    /// <summary>
+    /// Whether a stage exists on the GPU only: the pre-frame uploads, culls and bakes.
+    /// </summary>
     public static bool GpuOnly(int stage) => stage is Uploads or Cull or Bake;
 
     #endregion
 
     #region Frame clock
 
+    /// <summary>
+    /// This frame's render-thread ms per stage.
+    /// </summary>
     public static readonly double[] Ms = new double[Names.Length];
 
+    /// <summary>
+    /// When the last lap and the last part ended, in <see cref="Stopwatch"/> ticks.
+    /// </summary>
     static long s_last, s_partLast;
 
     /// <summary>
@@ -64,8 +106,14 @@ static class StageClock
     /// </summary>
     public static Action<string, bool>? OnClose;
 
+    /// <summary>
+    /// Called when a frame's clock starts (<see cref="Start"/>); null by default.
+    /// </summary>
     public static Action? OnStart;
 
+    /// <summary>
+    /// Starts a frame's clock: every stage's, job's and part's time cleared.
+    /// </summary>
     public static void Start()
     {
         Active = true;
@@ -79,7 +127,9 @@ static class StageClock
         OnStart?.Invoke();
     }
 
-    // Called before the window copy, or before submission for an offscreen frame.
+    /// <summary>
+    /// Called before the window copy, or before submission for an offscreen frame: ends the interface stage, and the GPU time after it is submit.
+    /// </summary>
     public static void BeginSubmission()
     {
         if (!Active || SubmissionStarted) return;
@@ -88,6 +138,10 @@ static class StageClock
         SubmissionStarted = true;
     }
 
+    /// <summary>
+    /// Ends the frame's clock with the last stage (the submit or driver wait, else the interface), without a GPU timestamp: submission has closed the
+    /// commands.
+    /// </summary>
     public static void EndFrame()
     {
         // Submission has closed the commands; a GPU timestamp here would open the next frame.
@@ -140,6 +194,9 @@ static class StageClock
     /// </summary>
     public static readonly string[] PartNames = ["fill", "textures", "gather", "pose", "materials", "bolts", "portraits", "hover", "icons"];
 
+    /// <summary>
+    /// The indices of <see cref="PartNames"/>.
+    /// </summary>
     public const int PartFill = 0, PartTextures = 1, PartGather = 2, PartPose = 3, PartMaterials = 4, PartBolts = 5, PartPortraits = 6, PartHover = 7,
         PartIcons = 8;
 
@@ -156,6 +213,9 @@ static class StageClock
     public static readonly string[] UiPartNames =
     ["world end", "markers", "steer", "hud", "debug", "settings", "cinema", "loading", "pointer", "composite",];
 
+    /// <summary>
+    /// The indices of <see cref="UiPartNames"/>.
+    /// </summary>
     public const int UiWorldEnd = 0, UiMarkers = 1, UiSteer = 2, UiHud = 3, UiDebug = 4, UiSettings = 5, UiCinema = 6, UiLoading = 7, UiPointer = 8,
         UiComposite = 9;
 

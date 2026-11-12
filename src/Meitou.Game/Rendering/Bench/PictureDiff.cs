@@ -40,6 +40,10 @@ public static class PictureDiff
         return (result, heat);
     }
 
+    /// <summary>
+    /// The heat map's colour of a pixel's largest channel difference <paramref name="d"/>: black for none, then from dark blue through cyan, yellow
+    /// and red to white at 32 and over.
+    /// </summary>
     static (byte, byte, byte) Ramp(int d)
     {
         if (d <= 0) return (0, 0, 0);

@@ -1,7 +1,12 @@
 <Project>
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Explicit compatibility builds keep Ventura-only Macs on .NET 10; standard builds use .NET 11. -->
+    <MeitouTargetFramework Condition="'$(MeitouTargetFramework)' == '' and '$(MeitouLegacyMac)' == 'true'">net10.0</MeitouTargetFramework>
+    <MeitouTargetFramework Condition="'$(MeitouTargetFramework)' == ''">net11.0</MeitouTargetFramework>
+    <TargetFramework>$(MeitouTargetFramework)</TargetFramework>
+    <AppleMinOSVersion Condition="'$(MeitouLegacyMac)' == 'true'">13.0</AppleMinOSVersion>
+    <DefineConstants Condition="'$(MeitouLegacyMac)' == 'true'">$(DefineConstants);MEITOU_LEGACY_MAC</DefineConstants>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

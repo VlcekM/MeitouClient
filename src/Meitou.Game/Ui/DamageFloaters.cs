@@ -22,6 +22,9 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     const float FloaterHeight = 15, FloaterRiseSpeed = 4, FloaterFadeFrom = 8, FloaterGone = 12;
 
+    /// <summary>
+    /// How far at random a building's damage number starts from the point hit, each axis.
+    /// </summary>
     const float BuildingFloaterJitter = 20;
 
     /// <summary>
@@ -30,6 +33,9 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, FloaterMode Mode, float Height = FloaterHeight)
     {
+        /// <summary>
+        /// The anchor's last position (the character's as drawn).
+        /// </summary>
         public Vector3 Last { get; set; }
         /// <summary>
         /// The units risen so far: game time, so it stands still while the game is paused and runs faster at the fast speeds (<c>FUN_1406ea9f0</c> adds the game's frame time).
@@ -37,9 +43,19 @@ sealed class DamageFloaters(PlayerInterface player)
         public float Rise { get; set; }
     }
 
+    /// <summary>
+    /// The floaters on screen.
+    /// </summary>
     internal readonly List<Live> Floaters = [];
+    /// <summary>
+    /// The timestamp of the last draw, for the real seconds that passed since.
+    /// </summary>
     long _lastDraw;
 
+    /// <summary>
+    /// Takes the world's new floaters (none when off, out of range or without text), keeps the newest 24 still rising, and moves each to its
+    /// character.
+    /// </summary>
     internal void DrawFloaters(DebugOverlay o)
     {
         var queue = player.Session.World.Floaters ??= new();
@@ -98,7 +114,7 @@ sealed class DamageFloaters(PlayerInterface player)
     {
         if (Floaters.Count == 0) return;
 
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         int n = 0;
         foreach (var l in Floaters)
         {

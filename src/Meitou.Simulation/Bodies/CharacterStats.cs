@@ -14,7 +14,9 @@ public sealed class CharacterStats
     /// </summary>
     public const float XpCap = 101;
 
-    // Indexed by stat number; numbers 14, 15 (shared with Medic), 20 and 33 (no storage) stay unused.
+    /// <summary>
+    /// The stored values by stat number. Indexed by stat number; numbers 14, 15 (shared with Medic), 20 and 33 (no storage) stay unused.
+    /// </summary>
     readonly float[] _values = new float[StatsInfo.Count];
 
     /// <summary>
@@ -43,18 +45,32 @@ public sealed class CharacterStats
     /// </summary>
     public float Scale { get; set; } = 1;
 
+    /// <summary>
+    /// The stored strength.
+    /// </summary>
     public float Strength => _values[(int)StatsEnumerated.Strength];
+    /// <summary>
+    /// The stored dexterity.
+    /// </summary>
     public float Dexterity => _values[(int)StatsEnumerated.Dexterity];
+    /// <summary>
+    /// The stored toughness (unscaled; the formulas read <see cref="ScaledToughness"/>).
+    /// </summary>
     public float Toughness => _values[(int)StatsEnumerated.Toughness];
 
     /// <summary>
     /// The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.
     /// </summary>
     public float ScaledToughness => Toughness * Scale;
+    /// <summary>
+    /// The stored athletics.
+    /// </summary>
     public float Athletics => _values[(int)StatsEnumerated.Athletics];
 
-    // The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach
-    // a save.
+    /// <summary>
+    /// The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach
+    /// a save.
+    /// </summary>
     float[]? _godOriginal;
 
     /// <summary>

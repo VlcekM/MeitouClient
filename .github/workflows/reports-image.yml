@@ -1,4 +1,4 @@
-# Reports image: builds services/Meitou.Reports (play reports for the roadmap), pushes it to GHCR as ghcr.io/vlcekm/meitou-reports,
+# Reports image: builds services/Meitou.Reports (the game's feedback button), pushes it to GHCR as ghcr.io/vlcekm/meitou-reports,
 # then calls the Cloudovna redeploy webhook. Runs on pushes to master that touch the service or this file, and on demand.
 name: Reports image
 

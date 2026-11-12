@@ -13,7 +13,13 @@ internal sealed class MetalTableLayout
 {
     #region State
 
+    /// <summary>
+    /// Each kind's texture array offset in entries; -1 when the stage's layout lacks it.
+    /// </summary>
     readonly int[] _textureAt = Filled();
+    /// <summary>
+    /// Each kind's sampler array offset in entries; -1 when the stage's layout lacks it.
+    /// </summary>
     readonly int[] _samplerAt = Filled();
 
     /// <summary>
@@ -30,15 +36,27 @@ internal sealed class MetalTableLayout
     /// </summary>
     public int Entries { get; private set; }
 
+    /// <summary>
+    /// Whether the stage's layout has no table members (it never reads the table).
+    /// </summary>
     public bool IsEmpty => Entries == 0;
 
+    /// <summary>
+    /// A kind's texture array offset in entries; -1 when the layout lacks it.
+    /// </summary>
     public int TextureAt(int kind) => _textureAt[kind];
+    /// <summary>
+    /// A kind's sampler array offset in entries; -1 when the layout lacks it.
+    /// </summary>
     public int SamplerAt(int kind) => _samplerAt[kind];
 
     #endregion
 
     #region Parsing
 
+    /// <summary>
+    /// An offset array with every kind missing (-1).
+    /// </summary>
     static int[] Filled()
     {
         var at = new int[BindlessTable.ArrayCount];
@@ -93,13 +111,37 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 {
     #region State
 
+    /// <summary>
+    /// The backend: frame numbers and the shared buffers the slots are made of.
+    /// </summary>
     readonly MetalContext _ctx;
-    readonly ulong[][] _textures = new ulong[BindlessTable.ArrayCount][];   // per kind: the entries' texture ids
-    readonly ulong[][] _samplers = new ulong[BindlessTable.ArrayCount][];   // per kind: the entries' sampler ids (where the layout has them)
+    /// <summary>
+    /// Per kind: the entries' texture ids.
+    /// </summary>
+    readonly ulong[][] _textures = new ulong[BindlessTable.ArrayCount][];
+    /// <summary>
+    /// Per kind: the entries' sampler ids (where the layout has them).
+    /// </summary>
+    readonly ulong[][] _samplers = new ulong[BindlessTable.ArrayCount][];
+    /// <summary>
+    /// Per kind: the entries' textures, told to the encoder as resident (<see cref="UseResources"/>).
+    /// </summary>
     readonly MTLTexture?[][] _live = new MTLTexture?[BindlessTable.ArrayCount][];
+    /// <summary>
+    /// Per kind: the indices freed and past the frames in flight, handed out again first.
+    /// </summary>
     readonly Stack<uint>[] _free = new Stack<uint>[BindlessTable.ArrayCount];
+    /// <summary>
+    /// Per kind: the next index never handed out.
+    /// </summary>
     readonly uint[] _next = new uint[BindlessTable.ArrayCount];
+    /// <summary>
+    /// Freed indices with the frame they were freed in, waiting for the ring to pass.
+    /// </summary>
     readonly List<(long Frame, BindlessKind Kind, uint Index)> _pendingFree = [];
+    /// <summary>
+    /// The argument buffers by program layout and frame slot.
+    /// </summary>
     readonly Dictionary<(MetalTableLayout Layout, int Slot), Slot> _slots = [];
 
     /// <summary>
@@ -111,14 +153,32 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 
     #region Construction
 
+    /// <summary>
+    /// One argument buffer: a shared buffer, its contents' address and size, and the entry version it was last filled at.
+    /// </summary>
     sealed class Slot
     {
+        /// <summary>
+        /// The shared buffer.
+        /// </summary>
         public MTLBuffer Buffer;
+        /// <summary>
+        /// Its contents' CPU address.
+        /// </summary>
         public byte* Pointer;
+        /// <summary>
+        /// Its length in bytes.
+        /// </summary>
         public ulong Size;
+        /// <summary>
+        /// The <see cref="_version"/> it was last filled at; -1 before the first fill.
+        /// </summary>
         public long Version = -1;
     }
 
+    /// <summary>
+    /// An empty table sized to <see cref="MetalShaders.TableCapacity"/>.
+    /// </summary>
     public MetalBindlessTable(MetalContext ctx)
     {
         this._ctx = ctx;
@@ -135,8 +195,10 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 
     #region Properties
 
+    /// <inheritdoc/>
     public uint[] Capacity => MetalShaders.TableCapacity;
 
+    /// <inheritdoc/>
     public int Registered
     {
         get
@@ -156,6 +218,7 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 
     #region Registration
 
+    /// <inheritdoc/>
     public uint Register(BindlessKind kind, in SampledTexture texture)
     {
         int k = (int)kind;
@@ -166,6 +229,7 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
         return index;
     }
 
+    /// <inheritdoc/>
     public BindlessHandle Register(GpuTexture texture, GpuSampler sampler, bool shadow = false)
     {
         var kind = BindlessTable.KindFor(texture.Desc.Format, texture.Desc.Kind, shadow);
@@ -176,10 +240,15 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 
     #region Entries
 
+    /// <inheritdoc/>
     public void Update(BindlessKind kind, uint index, in SampledTexture texture) => Set(kind, index, texture);
 
+    /// <inheritdoc/>
     public void Update(BindlessHandle handle, in SampledTexture texture) => Update(handle.Kind, handle.Index, texture);
 
+    /// <summary>
+    /// Writes an entry: its texture's and sampler's resource ids (zero for a null texture), and bumps <see cref="_version"/>.
+    /// </summary>
     void Set(BindlessKind kind, uint index, in SampledTexture texture)
     {
         int k = (int)kind;
@@ -200,14 +269,17 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
         _version++;
     }
 
+    /// <inheritdoc/>
     public void Free(BindlessKind kind, uint index) => _pendingFree.Add((_ctx.FrameNumber, kind, index));
 
+    /// <inheritdoc/>
     public void Free(BindlessHandle handle) => Free(handle.Kind, handle.Index);
 
     #endregion
 
     #region Frames
 
+    /// <inheritdoc/>
     public void BeginFrame(int slot)
     {
         // The frames that could have read an index freed when frame f was open are done once the ring wraps past it.
@@ -226,6 +298,9 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
         }
     }
 
+    /// <summary>
+    /// Nothing to do: a slot's argument buffer refills when it is next asked for (<see cref="BufferFor"/>).
+    /// </summary>
     public void EndFrame() { }
 
     #endregion
@@ -282,6 +357,9 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
 
     #region Lifetime
 
+    /// <summary>
+    /// Releases the argument buffers.
+    /// </summary>
     public void Dispose()
     {
         foreach (var (_, made) in _slots) made.Buffer.Dispose();

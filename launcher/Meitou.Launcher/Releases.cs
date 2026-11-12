@@ -1,8 +1,6 @@
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Meitou.Launcher;
@@ -10,18 +8,39 @@ namespace Meitou.Launcher;
 /// <summary>
 /// What a GitHub release of this repository is: the game (tags <c>v&lt;version&gt;</c>) or the launcher (<c>launcher-v&lt;version&gt;</c>).
 /// </summary>
-public enum ReleaseKind { Game, Launcher }
+public enum ReleaseKind
+{
+    /// <summary>
+    /// A game release (tag <c>v&lt;version&gt;</c>).
+    /// </summary>
+    Game,
 
+    /// <summary>
+    /// A launcher release (tag <c>launcher-v&lt;version&gt;</c>).
+    /// </summary>
+    Launcher,
+}
+
+/// <summary>
+/// A file attached to a release: its name, download URL, size in bytes and GitHub's digest (<c>sha256:&lt;hex&gt;</c>) when listed.
+/// </summary>
 public sealed record ReleaseAsset(string Name, string Url, long Size, string? Digest);
 
+/// <summary>
+/// A published release as GitHub lists it, its version taken from the tag.
+/// </summary>
 public sealed record Release(ReleaseKind Kind, string Tag, string Version, string Title, bool Prerelease, DateTimeOffset Published,
     string Notes, string PageUrl, IReadOnlyList<ReleaseAsset> Assets)
 {
     /// <summary>
-    /// The zip for this machine: <c>Meitou-&lt;version&gt;-&lt;rid&gt;.zip</c> or <c>MeitouLauncher-&lt;version&gt;-&lt;rid&gt;.zip</c>.
+    /// The zip for this build's platform and compatibility channel.
     /// </summary>
-    public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name ==
-        $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Rid}.zip");
+    public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name == AssetName);
+
+    /// <summary>
+    /// The name of <see cref="Asset"/>.
+    /// </summary>
+    string AssetName => $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Channel}.zip";
 }
 
 /// <summary>
@@ -30,7 +49,17 @@ public sealed record Release(ReleaseKind Kind, string Tag, string Version, strin
 /// </summary>
 public sealed class Releases(HttpClient http)
 {
+    #region Listing
+
+    /// <summary>
+    /// The GitHub repository whose releases, news and launcher updates the launcher reads.
+    /// </summary>
     public const string Repository = "VlcekM/MeitouClient";
+
+    /// <summary>
+    /// GitHub's largest page; the page cap only guards against a runaway loop (5000 releases).
+    /// </summary>
+    const int PageSize = 100, MaxPages = 50;
 
     /// <summary>
     /// The platform part of asset names, e.g. <c>win-x64</c>, <c>linux-x64</c>, <c>osx-arm64</c>.
@@ -38,19 +67,23 @@ public sealed class Releases(HttpClient http)
     public static string Rid => RuntimeInformation.RuntimeIdentifier;
 
     /// <summary>
-    /// The game's executable names, newest first: <c>MeitouClient</c> since 0.15, <c>meitou</c> before (<c>.exe</c> on Windows).
+    /// Whether this launcher installs the .NET 10 legacy macOS packages.
     /// </summary>
-    static readonly string[] GameExecutables = OperatingSystem.IsWindows() ? ["MeitouClient.exe", "meitou.exe"] : ["MeitouClient", "meitou"];
+    public static bool LegacyMac =>
+#if MEITOU_LEGACY_MAC
+        true;
+#else
+        false;
+#endif
 
     /// <summary>
-    /// The game's executable in <paramref name="directory"/>, or null.
+    /// The package and self-update channel, with a legacy suffix for the compatibility build.
     /// </summary>
-    public static string? FindGame(string directory) =>
-        GameExecutables.Select(name => Path.Combine(directory, name)).FirstOrDefault(File.Exists);
+    public static string Channel => LegacyMac ? $"{Rid}-legacy" : Rid;
 
-    static string VersionsDirectory => Path.Combine(LauncherConfig.InstallDirectory, "versions");
-    static string CacheFile => Path.Combine(LauncherConfig.DataDirectory, "releases-cache.json");
-
+    /// <summary>
+    /// The launcher's HTTP client: no timeout, the launcher's name and version as its user agent.
+    /// </summary>
     public static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan }; // a big download may take minutes; callers cancel instead
@@ -64,7 +97,7 @@ public sealed class Releases(HttpClient http)
     /// </summary>
     public async Task<(List<Release> Releases, string? Problem)> FetchAsync(CancellationToken ct = default)
     {
-        var cached = ReadCache();
+        var cached = ReleaseCache.Read();
         string? problem = null;
         string? body = cached?.Body;
         try
@@ -101,7 +134,7 @@ public sealed class Releases(HttpClient http)
             if (pages.Count > 0)
             {
                 body = Join(pages);
-                WriteCache(new Cache(etag, body));
+                ReleaseCache.Write(new ReleaseCache.Cache(etag, body));
             }
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
@@ -111,9 +144,6 @@ public sealed class Releases(HttpClient http)
         }
         return (body is null ? [] : Parse(body), problem);
     }
-
-    // GitHub's largest page; the page cap only guards against a runaway loop (5000 releases).
-    const int PageSize = 100, MaxPages = 50;
 
     /// <summary>
     /// The pages' JSON arrays as one array.
@@ -134,6 +164,9 @@ public sealed class Releases(HttpClient http)
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>
+    /// The listed releases of this repository that are not drafts and are tagged as the game's or the launcher's, newest first.
+    /// </summary>
     static List<Release> Parse(string json)
     {
         var list = new List<Release>();
@@ -155,17 +188,27 @@ public sealed class Releases(HttpClient http)
                 version = tag[1..];
             }
             else continue;
-            var assets = r.GetProperty("assets").EnumerateArray().Select(a => new ReleaseAsset(
-                a.GetProperty("name").GetString() ?? "",
-                a.GetProperty("browser_download_url").GetString() ?? "",
-                a.GetProperty("size").GetInt64(),
-                a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null)).ToList();
+            var assets = r.GetProperty("assets").EnumerateArray().Select(ReadAsset).ToList();
             list.Add(new Release(kind, tag, version, r.GetProperty("name").GetString() ?? tag, r.GetProperty("prerelease").GetBoolean(),
                 r.TryGetProperty("published_at", out var p) && p.ValueKind == JsonValueKind.String ? p.GetDateTimeOffset() : default,
                 r.GetProperty("body").GetString() ?? "", r.GetProperty("html_url").GetString() ?? "", assets));
         }
         return [.. list.OrderByDescending(r => r.Published)];
     }
+
+    /// <summary>
+    /// One entry of a release's <c>assets</c> list.
+    /// </summary>
+    static ReleaseAsset ReadAsset(JsonElement a) =>
+        new ReleaseAsset(
+            a.GetProperty("name").GetString() ?? "",
+            a.GetProperty("browser_download_url").GetString() ?? "",
+            a.GetProperty("size").GetInt64(),
+            a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null);
+
+    #endregion
+
+    #region Versions
 
     /// <summary>
     /// A nightly's version, <c>0.15.1-nightly.20261020</c> or a same-day second build <c>….20261020.2</c> (nightly.yml): its number, build date and
@@ -188,6 +231,40 @@ public sealed class Releases(HttpClient http)
         version.Contains("-nightly.", StringComparison.Ordinal) ? $"v{ParseVersion(version).Number} nightly" : $"v{version}";
 
     /// <summary>
+    /// Orders versions oldest first: by number, a release after its own pre-releases, nightlies by date, then that day's build.
+    /// </summary>
+    public static int CompareVersions(string a, string b)
+    {
+        static Version Number(string v) => Version.TryParse(v.Split('-')[0], out var n) ? n : new Version();
+        int c = Number(a).CompareTo(Number(b));
+        if (c == 0) c = b.Contains('-').CompareTo(a.Contains('-'));
+        if (c == 0) c = Nullable.Compare(ParseVersion(a).Nightly, ParseVersion(b).Nightly);
+        if (c == 0) c = ParseVersion(a).Build.CompareTo(ParseVersion(b).Build);
+        return c != 0 ? c : StringComparer.Ordinal.Compare(a, b);
+    }
+
+    #endregion
+
+    #region Installed versions
+
+    /// <summary>
+    /// The game's executable names, newest first: <c>MeitouClient</c> since 0.15, <c>meitou</c> before (<c>.exe</c> on Windows).
+    /// </summary>
+    internal static readonly string[] GameExecutables =
+        OperatingSystem.IsWindows() ? ["MeitouClient.exe", "meitou.exe"] : ["MeitouClient", "meitou"];
+
+    /// <summary>
+    /// The folder holding one folder per installed version.
+    /// </summary>
+    static string VersionsDirectory => Path.Combine(LauncherConfig.InstallDirectory, LegacyMac ? "versions-legacy" : "versions");
+
+    /// <summary>
+    /// The game's executable in <paramref name="directory"/>, or null.
+    /// </summary>
+    public static string? FindGame(string directory) =>
+        GameExecutables.Select(name => Path.Combine(directory, name)).FirstOrDefault(File.Exists);
+
+    /// <summary>
     /// Installed game versions (folders of <c>versions/</c> holding the game), newest version first: a release before its own
     /// pre-releases (<c>0.15.0</c> before <c>0.15.0-nightly.20261020</c>), nightlies of one version newest date first, then that day's newest build.
     /// </summary>
@@ -201,34 +278,36 @@ public sealed class Releases(HttpClient http)
     }
 
     /// <summary>
-    /// Orders versions oldest first: by number, a release after its own pre-releases, nightlies by date, then that day's build.
+    /// The folder <paramref name="version"/> is installed in, whether it is there or not.
     /// </summary>
-    public static int CompareVersions(string a, string b)
-    {
-        static Version Number(string v) => Version.TryParse(v.Split('-')[0], out var n) ? n : new Version();
-        int c = Number(a).CompareTo(Number(b));
-        if (c == 0) c = b.Contains('-').CompareTo(a.Contains('-'));
-        if (c == 0) c = Nullable.Compare(ParseVersion(a).Nightly, ParseVersion(b).Nightly);
-        if (c == 0) c = ParseVersion(a).Build.CompareTo(ParseVersion(b).Build);
-        return c != 0 ? c : StringComparer.Ordinal.Compare(a, b);
-    }
-
     public static string VersionDirectory(string version) => Path.Combine(VersionsDirectory, version);
 
     /// <summary>
-    /// Moves the installed versions from <paramref name="from"/>'s <c>versions/</c> into <paramref name="to"/>'s, copying across drives.
+    /// Moves standard and legacy installed versions from <paramref name="from"/> to <paramref name="to"/>, copying across drives.
     /// A version already in the target is left where it was.
     /// </summary>
     public static void MoveInstalled(string from, string to)
     {
-        var source = Path.Combine(from, "versions");
+        MoveVersionFolder(from, to, "versions");
+        MoveVersionFolder(from, to, "versions-legacy");
+    }
+
+    /// <summary>
+    /// Moves one build family's installed versions when the shared install folder changes.
+    /// </summary>
+    static void MoveVersionFolder(string from, string to, string folder)
+    {
+        var source = Path.Combine(from, folder);
         if (!Directory.Exists(source) || Path.GetFullPath(from) == Path.GetFullPath(to)) return;
-        var target = Path.Combine(to, "versions");
+
+        var target = Path.Combine(to, folder);
         Directory.CreateDirectory(target);
+
         foreach (var dir in Directory.EnumerateDirectories(source))
         {
             var dest = Path.Combine(target, Path.GetFileName(dir));
             if (Directory.Exists(dest)) continue;
+
             try
             {
                 Directory.Move(dir, dest);
@@ -239,108 +318,20 @@ public sealed class Releases(HttpClient http)
                 Directory.Delete(dir, recursive: true);
             }
         }
+
         if (!Directory.EnumerateFileSystemEntries(source).Any()) Directory.Delete(source);
     }
 
+    /// <summary>
+    /// Copies <paramref name="from"/> and everything below it to <paramref name="to"/>.
+    /// </summary>
     static void CopyDirectory(string from, string to)
     {
         Directory.CreateDirectory(to);
         foreach (var file in Directory.EnumerateFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
-        foreach (var dir in Directory.EnumerateDirectories(from)) CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
+        foreach (var dir in Directory.EnumerateDirectories(from))
+            CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
     }
 
-    /// <summary>
-    /// Downloads the release's zip, checks its SHA-256 against the digest GitHub lists (when it lists one) and unpacks it into
-    /// <c>versions/&lt;version&gt;</c>, taking the zip's single top folder as the version's folder. <paramref name="progress"/> gets the bytes
-    /// downloaded and the total (0 when unknown), at most every 100 ms and once at the end.
-    /// </summary>
-    public async Task InstallAsync(Release release, IProgress<(long Done, long Total)> progress, CancellationToken ct = default)
-    {
-        var asset = release.Asset ?? throw new InvalidOperationException($"{release.Title} has no download for {Rid}.");
-        var downloads = Path.Combine(LauncherConfig.InstallDirectory, "downloads");
-        Directory.CreateDirectory(downloads);
-        var zip = Path.Combine(downloads, asset.Name);
-        var target = VersionDirectory(release.Version);
-        var staging = target + ".partial";
-        try
-        {
-            await DownloadAsync(asset, zip, progress, ct);
-            await UnpackAsync(asset, zip, staging, target, ct);
-        }
-        finally
-        {
-            // Also on failure or cancel: no half download or half unpacked version is left behind.
-            File.Delete(zip);
-            if (Directory.Exists(staging)) Directory.Delete(staging, true);
-        }
-    }
-
-    /// <summary>
-    /// Downloads the asset to <paramref name="zip"/>, reporting progress, and checks its SHA-256 against the one GitHub lists.
-    /// </summary>
-    async Task DownloadAsync(ReleaseAsset asset, string zip, IProgress<(long Done, long Total)> progress, CancellationToken ct)
-    {
-        using (var response = await http.GetAsync(asset.Url, HttpCompletionOption.ResponseHeadersRead, ct))
-        {
-            response.EnsureSuccessStatusCode();
-            long total = response.Content.Headers.ContentLength ?? asset.Size;
-            await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using var file = File.Create(zip);
-            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[1 << 16];
-            long done = 0, reported = 0;
-            int n;
-            while ((n = await source.ReadAsync(buffer, ct)) > 0)
-            {
-                await file.WriteAsync(buffer.AsMemory(0, n), ct);
-                sha.AppendData(buffer, 0, n);
-                done += n;
-                if (Environment.TickCount64 - reported >= 100)
-                {
-                    progress.Report((done, total));
-                    reported = Environment.TickCount64;
-                }
-            }
-
-            progress.Report((done, total));
-            var hash = Convert.ToHexStringLower(sha.GetHashAndReset());
-            if (asset.Digest is { } digest && digest.StartsWith("sha256:", StringComparison.Ordinal) && digest[7..] != hash)
-                throw new InvalidDataException($"{asset.Name} is damaged: SHA-256 {hash}, GitHub lists {digest[7..]}.");
-        }
-    }
-
-    /// <summary>
-    /// Unpacks the download into <paramref name="staging"/>, checks the game's executable is there and moves the version's folder to
-    /// <paramref name="target"/>.
-    /// </summary>
-    async Task UnpackAsync(ReleaseAsset asset, string zip, string staging, string target, CancellationToken ct)
-    {
-        if (Directory.Exists(staging)) Directory.Delete(staging, true);
-        await ZipFile.ExtractToDirectoryAsync(zip, staging, ct);
-        var root = staging;
-        if (FindGame(root) is null && Directory.GetFiles(root).Length == 0 && Directory.GetDirectories(root) is [var only])
-            root = only;
-        var exe = FindGame(root) ?? throw new InvalidDataException($"{asset.Name} has no {GameExecutables[0]}.");
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(exe, File.GetUnixFileMode(exe) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-        if (Directory.Exists(target)) Directory.Delete(target, true);
-        Directory.Move(root, target);
-    }
-
-    internal sealed record Cache(string? ETag, string Body);
-
-    static Cache? ReadCache()
-    {
-        try
-        {
-            return File.Exists(CacheFile) ? JsonSerializer.Deserialize(File.ReadAllText(CacheFile), LauncherJson.Default.Cache) : null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return null; }
-    }
-
-    static void WriteCache(Cache cache)
-    {
-        Directory.CreateDirectory(LauncherConfig.DataDirectory);
-        File.WriteAllText(CacheFile, JsonSerializer.Serialize(cache, LauncherJson.Default.Cache));
-    }
+    #endregion
 }

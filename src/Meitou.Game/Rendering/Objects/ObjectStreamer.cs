@@ -18,6 +18,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// How much nearer than its placement point an unresolved instance counts (a guess at its size): a mesh is wanted a little before it can be seen.
     /// </summary>
     public const float RequestMargin = 600;
+
     /// <summary>
     /// How far outside its zone a parked part's centre may be (a part's bounds; generous).
     /// </summary>
@@ -28,9 +29,21 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// </summary>
     public sealed class Instance
     {
+        /// <summary>
+        /// The placement: its mesh, record, kind, owner and transform as the layout made it.
+        /// </summary>
         public required PlacedMesh Placed;
+
+        /// <summary>
+        /// The placement's mesh in the mesh cache (a distant stand-in's is a distant mesh).
+        /// </summary>
         public required ObjectMesh Mesh;
+
+        /// <summary>
+        /// Where the instance is drawn: the placement's transform, or a posed part's or ghost's own.
+        /// </summary>
         public Matrix4x4 Transform;
+
         /// <summary>
         /// An animated part (door, turret joint, rotor): the transform it was drawn with in the last frame that wrote motion (<c>WorldObjectRenderer.NoteMotion</c>) and that frame's number.
         /// </summary>
@@ -49,48 +62,69 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         /// World bounding sphere (the placement point and a guess until resolved).
         /// </summary>
         public Vector3 Centre;
+
+        /// <summary>
+        /// The bounding radius (world units, scaled): 400 until resolved.
+        /// </summary>
         public float Radius = 400;
+
         /// <summary>
         /// <see cref="MeshLod.Value"/>-like distance beyond which the instance is not drawn (<see cref="ObjectRanges.PartRenderingDistance"/>).
         /// Kept on an unload (<c>WorldObjectRenderer.Unresolve</c>), so <see cref="Scan"/> knows the part distance before the mesh is back.
         /// </summary>
         public float Limit = float.MaxValue;
+
         /// <summary>
         /// A map feature drawn with the terrain material.
         /// </summary>
         public bool TerrainMode;
+
         /// <summary>
         /// A building's distant mesh standing in for a town without a baked one.
         /// </summary>
         public bool Stand;
+
         /// <summary>
         /// A landmark (<see cref="LandmarkClass"/>): kept in <see cref="LandmarkZone"/>, drawn to the landmark distance. Its <see cref="Radius"/> is
         /// the true world radius from the start, so <see cref="ScanLandmarks"/> asks for its mesh as soon as its bounds could be in range.
         /// </summary>
         public bool Landmark;
+
         /// <summary>
-        /// A door part: the open amount its <see cref="Transform"/> was last posed at (-1: not yet; <c>WorldObjectRenderer.PoseDoor</c>).
+        /// A door part: the open amount its <see cref="Transform"/> was last posed at (-1: not yet; <c>DoorPoses.Pose</c>).
         /// </summary>
         public float DoorOpen = -1;
+
         /// <summary>
         /// A turret part (<see cref="PlacedMesh.Joints"/>): the <see cref="TurretPose.Version"/> its <see cref="Transform"/> was last posed at (0:
-        /// from its placement; <c>WorldObjectRenderer.PoseJoints</c>).
+        /// from its placement; <c>JointPoses.Pose</c>).
         /// </summary>
         public int TurretStamp;
+
         /// <summary>
-        /// A part under a rotor: the <c>WorldObjectRenderer.AdvanceRotors</c> frame its <see cref="Transform"/> was last posed at (-1: not yet).
+        /// A part under a rotor: the <c>RotatingParts.Advance</c> frame its <see cref="Transform"/> was last posed at (-1: not yet).
         /// </summary>
         public long RotorFrame = -1;
+
+        /// <summary>
+        /// The mesh the instance resolved to (null: waiting for it); a draw that finds the mesh no longer holds it unresolves the instance.
+        /// </summary>
         public GpuObjectMesh? Gpu;
+
+        /// <summary>
+        /// One material per part, made when the instance resolved (null until then).
+        /// </summary>
         public ObjectMaterialSet? Materials;
+
         /// <summary>
         /// Whether it stands in a loaded building's interior, as last found (<c>WorldObjectRenderer.InInterior</c>); one object, so a view recorded
         /// on another thread reads it whole.
         /// </summary>
         public InteriorAnswer? Interior;
+
         /// <summary>
-        /// A colour its albedo is multiplied by (a farm plant's, <c>WorldObjectRenderer.SetFarmPlants</c>), packed by
-        /// <c>WorldObjectRenderer.PackTint</c>; 0: none.
+        /// A colour its albedo is multiplied by (a farm plant's, <c>FarmPlants.Set</c>), packed by
+        /// <c>FarmPlants.PackTint</c>; 0: none.
         /// </summary>
         public float Tint;
     }
@@ -106,8 +140,20 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     #region Zones
 
+    /// <summary>
+    /// The laid-out zones by coordinate.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, Zone> _zones = [];
+
+    /// <summary>
+    /// The zone layouts running on workers, by coordinate.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, Task<ZoneObjects>> _jobs = [];
+
+    /// <summary>
+    /// The zones with placements inside the grid and their origins (world units), the ones <see cref="Update"/> lays out within range; a runtime
+    /// building adds its zone.
+    /// </summary>
     readonly List<(ZoneCoordinate Coordinate, double X0, double Z0)> _populated =
         objects.PopulatedZones
             .Where(z => z.IsInsideGrid)
@@ -117,6 +163,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                 return (z, x, zz);
             })
             .ToList();
+
+    /// <summary>
+    /// The scratch list <see cref="ZonesNear"/> returns (cleared at each call).
+    /// </summary>
     readonly List<Zone> _near = [];
 
     /// <summary>
@@ -133,26 +183,59 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         if (_zones.Remove(coordinate, out var gone) && gone.Interiors.Length > 0) InteriorVersion++;
     }
 
+    /// <summary>
+    /// A laid-out zone: its real instances, its distant stand-ins, those still waiting for their meshes, and its buildings' indoor volumes.
+    /// </summary>
     public sealed class Zone
     {
+        /// <summary>
+        /// The zone's coordinate (-1, -1 for the landmark pseudo-zone).
+        /// </summary>
         public required ZoneCoordinate Coordinate;
+
+        /// <summary>
+        /// The zone's origin in the world (x, z, world units).
+        /// </summary>
         public double X0, Z0;
+
+        /// <summary>
+        /// The full-detail instances.
+        /// </summary>
         public List<Instance> Real { get; } = [];
+
+        /// <summary>
+        /// The distant stand-ins (buildings' distant meshes) drawn past the object distance.
+        /// </summary>
         public List<Instance> Stand { get; } = [];
+
+        /// <summary>
+        /// The instances whose meshes are not resolved yet, scanned while in range (<see cref="Scan"/>).
+        /// </summary>
         public List<Instance> Unresolved { get; } = [];
+
         /// <summary>
         /// Unresolved instances out of range, out of <see cref="Unresolved"/> until the eye comes near (<see cref="Scan"/>): the largest part
         /// distance of the real ones (<see cref="Instance.Limit"/>, so the object distance when unknown) and whether any are distant stand-ins (back
         /// by the distant range).
         /// </summary>
         public List<Instance> Parked { get; } = [];
+
+        /// <summary>
+        /// The largest part distance among the real instances of <see cref="Parked"/>.
+        /// </summary>
         public float ParkedLimit;
+
+        /// <summary>
+        /// Some instance of <see cref="Parked"/> is a distant stand-in.
+        /// </summary>
         public bool ParkedStand;
+
         /// <summary>
         /// The indoor volumes of the zone's buildings (<see cref="ZoneObjects.Interiors"/>). An array, so the per-frame interior walks (camera,
         /// audio, lamps, GI) enumerate without allocating.
         /// </summary>
         public InteriorVolume[] Interiors = [];
+
         /// <summary>
         /// The gateway hulls of the zone (<see cref="ZoneObjects.GateHulls"/>): only the audio's indoor ray tests them.
         /// </summary>
@@ -163,11 +246,13 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// Zones laid out at once.
     /// </summary>
     public int MaxJobs { get; set; } = 3;
+
     /// <summary>
     /// No new zone layouts are started (memory pressure, <see cref="VramGuard"/>) but within <see cref="PausedReach"/>; the ones in flight are taken
     /// in.
     /// </summary>
     public bool Paused { get; set; }
+
     /// <summary>
     /// While <see cref="Paused"/>, zones this near the eye are still laid out (<see cref="VramGuard.NearReach"/>; 0: none).
     /// </summary>
@@ -177,6 +262,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     #region Landmarks and staging
 
+    /// <summary>
+    /// The placements behind <see cref="Staged"/>.
+    /// </summary>
     IReadOnlyList<PlacedMesh>? _staged;
 
     /// <summary>
@@ -185,10 +273,12 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// frame.
     /// </summary>
     public Zone? LandmarkZone { get; private set; }
+
     /// <summary>
     /// Set before the zones are laid out: from then on <see cref="Update"/> leaves landmark placements out of them.
     /// </summary>
     public LandmarkClass? Landmarks { get; set; }
+
     /// <summary>
     /// No zone is laid out until the landmarks are collected (<see cref="SetLandmarks"/>), or a zone laid out before would hold them too.
     /// </summary>
@@ -218,6 +308,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
     }
 
+    /// <summary>
+    /// The zone a placement stands in, by its translation.
+    /// </summary>
     static ZoneCoordinate ZoneOf(PlacedMesh p) => WorldLayout.ZoneOf(p.Transform.M41, p.Transform.M43);
 
     /// <summary>
@@ -241,6 +334,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     #region Runtime buildings
 
+    /// <summary>
+    /// The runtime buildings' layouts running on workers: their zone, the placement key, whether they replace the zone's level building, the job.
+    /// </summary>
     readonly List<(ZoneCoordinate Zone, string Id, bool Replace, Task<ZoneObjects> Job)> _runtimeJobs = [];
 
     // ---- runtime buildings (WorldObjects.AddRuntime / RemoveRuntime; docs/simulation.md "Buildings", host seam) ----
@@ -281,7 +377,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         RemoveInstances(z, key, instanceId);
     }
 
-    // The parts are named by the placement's instance id and its indoor volume by its key; a player's building has the one name for both.
+    /// <summary>
+    /// Takes a building's instances out of a zone: those named by the placement's instance id or its key and their children (the parts are named by
+    /// the placement's instance id and its indoor volume by its key; a player's building has the one name for both).
+    /// </summary>
     void RemoveInstances(Zone z, string key, string? instanceId = null)
     {
         // a part with no parent is no match for a missing instance id
@@ -297,6 +396,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         z.GateHulls = [.. z.GateHulls.Where(v => v.PlacementId != instanceId)];
     }
 
+    /// <summary>
+    /// Adds a zone inside the grid to the zones laid out within range (a runtime building's zone may have had no placements).
+    /// </summary>
     void EnsurePopulated(ZoneCoordinate zone)
     {
         if (!zone.IsInsideGrid || _populated.Any(p => p.Coordinate == zone)) return;
@@ -304,6 +406,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         _populated.Add((zone, x, z));
     }
 
+    /// <summary>
+    /// Lays a zone out again from scratch: dropped, its layout and runtime jobs forgotten, kept among the zones to lay out.
+    /// </summary>
     void Invalidate(ZoneCoordinate zone)
     {
         Drop(zone);
@@ -320,6 +425,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         foreach (var zone in coordinates) Invalidate(zone);
     }
 
+    /// <summary>
+    /// Takes the runtime buildings' finished layouts into their resident zones (not while a zone is still being filled): a replacing house's old
+    /// instances out, the new ones in, their interiors and gate hulls added to the zone's.
+    /// </summary>
     void TakeRuntime()
     {
         for (int i = _runtimeJobs.Count - 1; i >= 0; i--)
@@ -347,16 +456,39 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
     }
 
+    /// <summary>
+    /// The zones laid out.
+    /// </summary>
     public int Loaded => _zones.Count;
-    // a struct enumerator: walked every frame
+
+    /// <summary>
+    /// Every laid-out zone (a struct enumerator: walked every frame).
+    /// </summary>
     public Dictionary<ZoneCoordinate, Zone>.ValueCollection AllZones => _zones.Values;
+
+    /// <summary>
+    /// The laid-out zone at a coordinate, or null.
+    /// </summary>
     public Zone? ZoneAt(ZoneCoordinate coordinate) => _zones.GetValueOrDefault(coordinate);
+
     /// <summary>
     /// Zones in range not laid out yet, and those being laid out.
     /// </summary>
     public int Pending => _jobs.Count + Wanted + _fills.Count;
+
+    /// <summary>
+    /// The zones in range not laid out yet, as the last <see cref="Update"/> counted them.
+    /// </summary>
     public int Wanted { get; private set; }
+
+    /// <summary>
+    /// Every instance of the zones and the landmarks.
+    /// </summary>
     public int Instances => _zones.Values.Sum(z => z.Real.Count + z.Stand.Count) + (LandmarkZone?.Real.Count ?? 0);
+
+    /// <summary>
+    /// The instances resolved to a mesh, of the zones and the landmarks.
+    /// </summary>
     public int Resolved =>
         _zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null))
         + (LandmarkZone?.Real.Count(i => i.Gpu is not null) ?? 0);
@@ -410,7 +542,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         return taken;
     }
 
-    // Indexed: a foreach over the interface boxed an enumerator per call, for every object and zone scanned.
+    /// <summary>
+    /// The distance from <paramref name="p"/> to the nearest kept point (infinity: none). Indexed: a foreach over the interface boxed an enumerator
+    /// per call, for every object and zone scanned.
+    /// </summary>
     float NearKept(Vector3 p)
     {
         float d = float.PositiveInfinity;
@@ -421,6 +556,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         return d;
     }
 
+    /// <summary>
+    /// The distance from a zone's square to the nearest kept point (infinity: none).
+    /// </summary>
     float NearKeptZone(double x0, double z0)
     {
         float d = float.PositiveInfinity;
@@ -467,6 +605,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         return MathF.Min(Vector3.Distance(eye, p), kept);
     }
 
+    /// <summary>
+    /// A zone's distance as the zones are loaded by: from the lifted eye, the nearest kept point or, during a flight, <see cref="Ahead"/>.
+    /// </summary>
     float NearZone(double x0, double z0, Vector3 eye)
     {
         float d = MathF.Min(EyeLift.Apply(ZoneDistance(x0, z0, eye), EyeLift.Of(eye, GroundUnderEye)), NearKeptZone(x0, z0));
@@ -483,6 +624,11 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         if (Kept.Count > 0) d = MathF.Min(d, NearKept(p) + lead);
         return Ahead is { } a ? MathF.Min(Vector3.Distance(a, p), d + lead) : d;
     }
+
+    /// <summary>
+    /// A zone's load order (smaller first), as <see cref="Rank"/> for a point: from the eye, or behind the kept points and the arrival
+    /// by <paramref name="lead"/>.
+    /// </summary>
     float RankZone(double x0, double z0, Vector3 eye, float lead)
     {
         float d = ZoneDistance(x0, z0, eye);
@@ -510,6 +656,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     #region Streaming
 
+    /// <summary>
+    /// The laid-out zones whose instances are being made, oldest first.
+    /// </summary>
     readonly Queue<Fill> _fills = [];
 
     /// <summary>
@@ -568,11 +717,25 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// </summary>
     sealed class Fill
     {
+        /// <summary>
+        /// The zone the instances go into.
+        /// </summary>
         public required Zone Zone;
+
+        /// <summary>
+        /// The layout from the worker.
+        /// </summary>
         public required ZoneObjects Laid;
+
+        /// <summary>
+        /// The next of the layout's placements to make (real ones first, then the stand-ins).
+        /// </summary>
         public int Index;
     }
 
+    /// <summary>
+    /// Takes a worker's layout as the zone (replacing any older one) and queues its instances to be made.
+    /// </summary>
     void Add(ZoneObjects laid)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(laid.Zone);
@@ -610,6 +773,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
     }
 
+    /// <summary>
+    /// Makes an instance of a placement, unresolved: TERRAIN-mode for a map feature or staged foliage mesh whose texturing is 2 (the mesh then keeps
+    /// its level indices).
+    /// </summary>
     Instance Make(PlacedMesh p, bool stand, Zone zone)
     {
         // A map feature names its texturing "texture mode", a foliage mesh (staged by the Meitou title) "material type"; 2 is TERRAIN in both.
@@ -850,6 +1017,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     #endregion
 
+    /// <summary>
+    /// Waits for the zone layouts still running (up to 5 s each).
+    /// </summary>
     public void Dispose()
     {
         foreach (var job in _jobs.Values)

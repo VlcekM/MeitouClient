@@ -14,11 +14,26 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalPipelines : IGpuPipelines
 {
+    /// <summary>
+    /// The device the pipeline states are made on.
+    /// </summary>
     readonly MTLDevice _device;
+    /// <summary>
+    /// The programs the pipelines' functions come from.
+    /// </summary>
     readonly MetalShaders _shaders;
+    /// <summary>
+    /// The made render pipeline states, by description.
+    /// </summary>
     readonly Dictionary<GraphicsPipelineDesc, MTLRenderPipelineState> _graphics = [];
+    /// <summary>
+    /// The made compute pipeline states, by description.
+    /// </summary>
     readonly Dictionary<ComputePipelineDesc, MTLComputePipelineState> _computes = [];
 
+    /// <summary>
+    /// An empty cache on <paramref name="device"/> over <paramref name="shaders"/>.
+    /// </summary>
     public MetalPipelines(MTLDevice device, MetalShaders shaders)
     {
         this._device = device;
@@ -35,6 +50,10 @@ public sealed class MetalPipelines : IGpuPipelines
     /// </summary>
     internal MTLComputePipelineState Backend(in GpuComputePipeline pipeline) => _computes[pipeline.Desc];
 
+    /// <summary>
+    /// The render pipeline for <paramref name="desc"/>, its state made on first use (blend, colour mask, attachments, vertex inputs); throws when
+    /// Metal rejects it.
+    /// </summary>
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
     {
         if (_graphics.TryGetValue(desc, out var made)) return new GpuPipeline(desc);
@@ -57,10 +76,10 @@ public sealed class MetalPipelines : IGpuPipelines
             attachment.DestinationAlphaBlendFactor = MetalConventions.BlendFactor(desc.Blend.AlphaDst ?? desc.Blend.Dst);
             attachment.RgbBlendOperation = MetalConventions.BlendOp(desc.Blend.ColourOp);
             attachment.AlphaBlendOperation = MetalConventions.BlendOp(desc.Blend.AlphaOp);
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.R) ? attachment.WriteMask | MTLColorWriteMask.Red : attachment.WriteMask & ~MTLColorWriteMask.Red;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.G) ? attachment.WriteMask | MTLColorWriteMask.Green : attachment.WriteMask & ~MTLColorWriteMask.Green;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.B) ? attachment.WriteMask | MTLColorWriteMask.Blue : attachment.WriteMask & ~MTLColorWriteMask.Blue;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.A) ? attachment.WriteMask | MTLColorWriteMask.Alpha : attachment.WriteMask & ~MTLColorWriteMask.Alpha;
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.R), attachment.WriteMask, MTLColorWriteMask.Red);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.G), attachment.WriteMask, MTLColorWriteMask.Green);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.B), attachment.WriteMask, MTLColorWriteMask.Blue);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.A), attachment.WriteMask, MTLColorWriteMask.Alpha);
             d.ColorAttachments.SetObject(attachment, 0);
         }
         if (desc.Targets.Extra != InternalFormat.None)
@@ -81,6 +100,15 @@ public sealed class MetalPipelines : IGpuPipelines
         return new GpuPipeline(desc);
     }
 
+    /// <summary>
+    /// <paramref name="mask"/> with <paramref name="channel"/> written when <paramref name="on"/>, masked off otherwise.
+    /// </summary>
+    static MTLColorWriteMask WithChannel(bool on, MTLColorWriteMask mask, MTLColorWriteMask channel) => on ? mask | channel : mask & ~channel;
+
+    /// <summary>
+    /// The compute pipeline for <paramref name="desc"/>, its state made on first use; throws when the program is not a compute program or Metal
+    /// rejects it.
+    /// </summary>
     public GpuComputePipeline Get(in ComputePipelineDesc desc)
     {
         if (_computes.ContainsKey(desc)) return new GpuComputePipeline(desc);

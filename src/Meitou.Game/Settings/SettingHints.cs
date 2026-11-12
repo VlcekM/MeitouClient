@@ -8,6 +8,9 @@ namespace Meitou.Game.Settings;
 /// </summary>
 static class SettingHints
 {
+    /// <summary>
+    /// The hint of <paramref name="slider"/> (by its label).
+    /// </summary>
     internal static string SliderHint(Slider slider) => SliderHint(slider.Label);
 
     /// <summary>
@@ -23,6 +26,8 @@ static class SettingHints
         "Anisotropic filtering" => "Keep textures sharp when viewed at an angle.",
         "Metal upscaling" => "Sets the render scale. MetalFX temporal by default; spatial is an alternative.",
         "Render scale" => "Internal rendering resolution relative to the window.",
+        "Metal render scale" => "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at "
+            + "least; Native always renders at full size).",
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
         "DLSS preset" => "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more.",
         "Object draw distance" => "Maximum distance at which objects remain visible.",
@@ -79,6 +84,9 @@ static class SettingHints
         _ => $"Adjust {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
+    /// <summary>
+    /// The hint of the switch <paramref name="label"/>.
+    /// </summary>
     internal static string ToggleHint(string label) => label switch
     {
         "Ambient occlusion" => "Add contact shading around nearby surfaces and creases.",
@@ -149,6 +157,9 @@ static class SettingHints
         _ => $"Enable {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
+    /// <summary>
+    /// The hint of a bindable <paramref name="action"/>.
+    /// </summary>
     internal static string BindingHint(InputAction action) => action switch
     {
         InputAction.MoveForward => "Move the camera forward.",
@@ -193,7 +204,8 @@ static class SettingHints
         InputAction.ToggleHelp => "Open the Tutorials window, or close it.",
         InputAction.ChangeSquad => "Show the next squad in the squad bar.",
         InputAction.SelectAll => "Select the whole squad (Shift adds it to the selection).",
-        >= InputAction.SelectMember1 and <= InputAction.SelectMember10 => "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them).",
+        >= InputAction.SelectMember1 and <= InputAction.SelectMember10 => "Select this member of the squad bar (Shift adds them to the selection; "
+            + "press twice to centre on them).",
         InputAction.NextCharacter => "Select the next member of the character's squad.",
         InputAction.PreviousCharacter => "Select the previous member of the character's squad.",
         InputAction.FocusCharacter => "Centre the camera on the selected character.",

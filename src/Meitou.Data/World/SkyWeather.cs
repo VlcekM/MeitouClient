@@ -9,7 +9,8 @@ namespace Meitou.Data.World;
 /// strength before the weather strength and the sun factor: <see cref="World.HeatHaze"/>, docs/formats/weather.md). Rain,
 /// wetness, dust and wind fields are not read here.
 /// </summary>
-public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax, float CloudDensity, float HeatHaze = 0)
+public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax,
+    float CloudDensity, float HeatHaze = 0)
 {
     /// <summary>
     /// The base game's "Default" weather: clear, no fog, no clouds, white multipliers.
@@ -21,6 +22,9 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
     /// </summary>
     public static Vector3 Unpack(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
 
+    /// <summary>
+    /// The sky fields of WEATHER record <paramref name="r"/>.
+    /// </summary>
     public static SkyWeather FromRecord(GameRecord r) => new(r.Name,
         Unpack(r.GetInt("sky color mult", 0xFFFFFF)), r.GetBool("fog enabled"), Unpack(r.GetInt("fog color", 0xFFFFFF)),
         r.GetFloat("fog distance min"), r.GetFloat("fog distance max"), r.GetFloat("clouds density"), r.GetFloat("heat haze"));
@@ -37,6 +41,9 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
         return r is null ? null : FromRecord(r);
     }
 
+    /// <summary>
+    /// The names of every WEATHER record.
+    /// </summary>
     public static IEnumerable<string> Names(GameDatabase db) => db.OfType(FcsRecordType.Weather).Select(w => w.Name);
 
     /// <summary>
@@ -44,5 +51,5 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
     /// (docs/formats/lighting.md).
     /// </summary>
     public static float NightDarkness(GameDatabase db) =>
-        (db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
+        Gameplay.ConstantsRecord.Find(db)?.GetFloat("night darkness", 0.5f) ?? 0.5f;
 }

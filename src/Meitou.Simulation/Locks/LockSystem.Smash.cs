@@ -26,10 +26,12 @@ public sealed partial class LockSystem
         {
             if (site.Destroyed || site.WallParent is not null || site.Progress <= 0 || construction.Data(site.Record) is not { LinksTogether: true })
                 continue;
+
             float d = Vector2.DistanceSquared(Flat(from), new Vector2(site.Position.X, site.Position.Z));
             if (d >= bestD || Regions.CodeAt(site.Position) != code) continue;
             (best, bestD) = (site, d);
         }
+
         return best;
     }
 
@@ -41,6 +43,7 @@ public sealed partial class LockSystem
     {
         if (NearestWall(world, world.Characters.Next[s].Position, code) is not { } wall || !_gatePlan.PlansSmash(world, Combat, this, s, t, wall))
             return false;
+
         c.Bashing = wall.Id;
         c.BashWall = true;
         c.BashTime = 0;
@@ -68,6 +71,7 @@ public sealed partial class LockSystem
             StopBashing(table, s, c);
             return;
         }
+
         if (!GatePlan.AtWall(world, this, wall, n))
         {
             if ((n.Flags & (ushort)MoveFlags.AnyPath) == 0)
@@ -77,19 +81,23 @@ public sealed partial class LockSystem
                     StopBashing(table, s, c);
                     return;
                 }
+
                 n.Goal = new Vector2(wall.Position.X, wall.Position.Z);
                 n.Mode = SpeedMode.Free;
                 n.Flags |= (ushort)MoveFlags.NeedPath;
                 c.BashTime = -1;
             }
+
             return;
         }
+
         if ((n.Flags & (ushort)MoveFlags.AnyPath) != 0)
         {
             n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
             n.PathCursor = 0;
             c.PathRequest = 0;
         }
+
         var face = new Vector2(wall.Position.X, wall.Position.Z) - Flat(n.Position);
         if (face.LengthSquared() > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Y);
         if (c.BashTime < 0) c.BashTime = 0;

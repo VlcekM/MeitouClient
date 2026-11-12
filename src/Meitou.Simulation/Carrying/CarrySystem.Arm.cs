@@ -9,10 +9,14 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Carrying;
 
-// Goal 42 "Don't be unarmed" and its step 8 FIND_WEAPON (docs/game/ai-tasks.md "Finders of the jobs", docs/simulation.md "Carrying, rescue and
-// looting").
+/// <summary>
+/// Arming: Goal 42 "Don't be unarmed" and its step 8 FIND_WEAPON (docs/game/ai-tasks.md "Finders of the jobs", docs/simulation.md "Carrying, rescue
+/// and looting").
+/// </summary>
 public sealed partial class CarrySystem
 {
+    #region Arming
+
     /// <summary>
     /// How near a weapon must be for <c>AI::findWeapon</c> (<b>Verified</b>: squared distance 10000 in each pass).
     /// </summary>
@@ -53,7 +57,7 @@ public sealed partial class CarrySystem
                     cold.PickingUpItem = item;
                     var at = world.GroundItems.Find(item)!.Position;
                     if (Vector2.Distance(new Vector2(table.Next[slot].Position.X, table.Next[slot].Position.Z), new Vector2(at.X, at.Z))
-                        > PlayerSystem.PickUpReach)
+                        > Items.PickUps.PickUpReach)
                         TaskStart.Walk(world, slot, at, SpeedMode.Run, TaskType.NotBeUnarmed, TaskSource.Npc);
                 }
                 else if (body >= 0)
@@ -130,4 +134,6 @@ public sealed partial class CarrySystem
         }
         return (-1, dead >= 0 ? dead : down);
     }
+
+    #endregion
 }

@@ -27,13 +27,18 @@ public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, flo
 /// </summary>
 public sealed class HoverOutlineRenderer
 {
+    /// <summary>
+    /// The vertex shader: a full-screen triangle.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
         """;
 
-    // Inside the mask: a tint where the character is in front of the scene (both depths made linear; the scene's is jittered and at the render size,
-    // hence the tolerance). Outside it: the outline, strongest next to the silhouette, fading over uRadius pixels.
+    /// <summary>
+    /// The fragment shader. Inside the mask: a tint where the character is in front of the scene (both depths made linear; the scene's is jittered
+    /// and at the render size, hence the tolerance). Outside it: the outline, strongest next to the silhouette, fading over <c>uRadius</c> pixels.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         out vec4 fragColour;
@@ -77,12 +82,34 @@ public sealed class HoverOutlineRenderer
         }
         """;
 
+    /// <summary>
+    /// The device the outline is drawn on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The outline's program (<see cref="Vertex"/>, <see cref="Fragment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The outline's pipelines.
+    /// </summary>
     readonly NativeSegment _segment;
+
+    /// <summary>
+    /// The program's uniforms: the scene depth's scale, the mask's and the scene's depth planes, the mask's colour and the outline's radius.
+    /// </summary>
     readonly UniformHandle _depthScale, _maskPlanes, _scenePlanes, _colour, _radius;
+
+    /// <summary>
+    /// The program's slots: the mask's colour and depth, and the scene's depth.
+    /// </summary>
     readonly SamplerSlot _mask, _maskDepth, _sceneDepth;
 
+    /// <summary>
+    /// Makes the program, its pipelines and its uniform and sampler handles.
+    /// </summary>
     public HoverOutlineRenderer(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -109,8 +136,7 @@ public sealed class HoverOutlineRenderer
         GpuTexture sceneDepthTexture, int renderWidth, int renderHeight, float sceneNear, float sceneFar, Matrix4x4 viewProjection)
     {
         int outline = Math.Clamp((int)MathF.Round(2.5f * height / 1080f), 1, 6);
-        var nearest = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        var nearest = _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
         foreach (var hover in masks)
         {
@@ -152,6 +178,7 @@ public sealed class HoverOutlineRenderer
         {
             joined = false;
             for (int i = 0; i < rects.Count && !joined; i++)
+            {
                 for (int j = i + 1; j < rects.Count && !joined; j++)
                 {
                     var (a, b) = (rects[i], rects[j]);
@@ -163,6 +190,7 @@ public sealed class HoverOutlineRenderer
                     rects.RemoveAt(j);
                     joined = true;
                 }
+            }
         }
     }
 

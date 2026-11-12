@@ -10,7 +10,25 @@ namespace Meitou.Simulation.Locks;
 /// <summary>
 /// How a character gets shackles off: the original's context-menu verbs Unlock Shackles (task 201), Use Tools (185) and Use Strength (186).
 /// </summary>
-public enum ShackleWork : byte { Pick, Cut, Break, PutOn }
+public enum ShackleWork : byte
+{
+    /// <summary>
+    /// Unlock Shackles (201): picked.
+    /// </summary>
+    Pick,
+    /// <summary>
+    /// Use Tools (185): cut.
+    /// </summary>
+    Cut,
+    /// <summary>
+    /// Use Strength (186): broken.
+    /// </summary>
+    Break,
+    /// <summary>
+    /// Putting shackles on (an engine stand-in for the original's inventory drag; no row).
+    /// </summary>
+    PutOn
+}
 
 /// <summary>
 /// A character working on <see cref="Wearer"/>'s shackles (its own or another's).
@@ -51,6 +69,16 @@ public sealed partial class LockSystem
     /// </summary>
     public static Items.ItemInstance? WornShackles(CharacterCold? c) => c?.Inventory?.Items.FirstOrDefault(i => i.LockedOn);
 
+    /// <summary>
+    /// The chained flag (<c>Character+0x320</c>, <c>setChainedMode</c>): wears a piece with a lock, locked or not. The original's equip and unequip
+    /// handlers set and clear it as such a piece goes on or comes off; a picked, cut or broken lock leaves it set (<b>Verified</b>, docs/game/locks.md).
+    /// </summary>
+    public static bool Chained(CharacterCold? c) =>
+        c?.Inventory?.Items.Exists(i => i.Lock is not null && Items.InventoryCommands.IsEquipmentSection(i.Section)) == true;
+
+    /// <summary>
+    /// The shackle order: the first named player character able to works on the wearer's shackles (from a cage only its own; cutting needs a tool).
+    /// </summary>
     void ShackleInput(World world, ShackleOrder order)
     {
         var table = world.Characters;
@@ -60,6 +88,7 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
                     || !c.CarriedBy.IsNone)
                 continue;
+
             if (c.IsImprisoned && id != order.Wearer) continue;   // from a cage only its own
             if (!TaskStart.Eligible(world, c, RowOf(order.Work))) continue;
             if (order.Work == ShackleWork.Cut && Lockpicking.BestTool(c) is null)
@@ -67,12 +96,16 @@ public sealed partial class LockSystem
                 Say(world, c, "I don't have any tools");
                 continue;
             }
+
             StartWork(world, s, id != order.Wearer ? CharacterTask.GoTo : CharacterTask.Idle, RowOf(order.Work), null, order.Wearer, order.Work,
                     order.Queued);
             break;
         }
     }
 
+    /// <summary>
+    /// A point on the ground plane (X, Z).
+    /// </summary>
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
     /// <summary>
@@ -95,20 +128,26 @@ public sealed partial class LockSystem
                 && (c.IsImprisoned || c.Medical is { Incapacitated: true })
                         && !c.Inventory.Items.Any(i => i.IsLocked && Items.InventoryCommands.IsEquipmentSection(i.Section));
 
+    /// <summary>
+    /// The put-shackles order: a player character puts shackles on a caged or downed wearer.
+    /// </summary>
     void PutShacklesInput(World world, PutShacklesOrder order)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(order.Wearer, out int w) || !CanBeShackled(table.Cold(w), table.Next[w].Alive))
             return;
+
         foreach (var id in Who(world, order.Characters))
         {
             if (id == order.Wearer || !table.TryResolveNext(id, out int s)
                     || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone)
                 continue;
+
             if (CarriedShackles(c) is null) continue;
             StartWork(world, s, CharacterTask.GoTo, RowOf(ShackleWork.PutOn), null, order.Wearer, ShackleWork.PutOn, order.Queued);
             return;
         }
+
         world.Post("No one selected carries shackles.");
     }
 
@@ -136,12 +175,14 @@ public sealed partial class LockSystem
                 inventory.Items.Add(worn);
             }
         }
+
         if (!Items.InventoryCommands.TryEquip(inventory, item))
         {
             item.Section = "main";
             worker.Inventory.Add(item);
             return false;
         }
+
         Assembly?.RefreshEquipment(wearer);
         return true;
     }
@@ -165,6 +206,7 @@ public sealed partial class LockSystem
                 c.Shackles = null;
                 continue;
             }
+
             if (w != s)
             {
                 float d = Vector2.Distance(Flat(next[s].Position), Flat(next[w].Position));
@@ -176,65 +218,85 @@ public sealed partial class LockSystem
                         c.Shackles = null;
                         continue;
                     }
+
                     if (Vector2.Distance(next[s].Goal, Flat(next[w].Position)) > ShackleReach)
                         TaskStart.StepTo(table, s, Flat(next[w].Position), c.RunSpeed);
+
                     continue;
                 }
+
                 if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             }
+
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
-            switch (job.Work)
-            {
-                case ShackleWork.PutOn:
-                    c.Shackles = null;
-                    var wearer = table.Cold(w)!;
-                    if (PutOn(world, c, wearer, item))
+            Work(world, next, s, w, c, job, item);
+        }
+    }
+
+    /// <summary>
+    /// One update of the work on the shackles: putting them on, picking, cutting or breaking them.
+    /// </summary>
+    void Work(World world, Span<CharacterHot> next, int s, int w, CharacterCold c, ShackleJob job, Items.ItemInstance item)
+    {
+        var table = world.Characters;
+        switch (job.Work)
+        {
+            case ShackleWork.PutOn:
+                c.Shackles = null;
+                var wearer = table.Cold(w)!;
+                if (PutOn(world, c, wearer, item))
+                {
+                    // The sound of the original's drop onto the armour slot (the interface's Item_Drop); only the player's order has one.
+                    if (c.IsPlayer)
                     {
-                        // The sound of the original's drop onto the armour slot (the interface's Item_Drop); only the player's order has one.
-                        if (c.IsPlayer)
-                        {
-                            world.Post(Loc.Tr("{1} put {2} on {3}", c.Name, item.Name, wearer.Name));
-                            world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record);
-                        }
+                        world.Post(Loc.Tr("{1} put {2} on {3}", c.Name, item.Name, wearer.Name));
+                        world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record);
                     }
-                    else if (c.IsPlayer) world.Post(Loc.Tr("{1} already wears something in that slot", wearer.Name));
-                    break;
-                case ShackleWork.Pick:
-                    switch (Picking.StepShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
-                    {
-                        case PickOutcome.Open: c.Shackles = null;
+                }
+                else if (c.IsPlayer) world.Post(Loc.Tr("{1} already wears something in that slot", wearer.Name));
+                break;
+            case ShackleWork.Pick:
+                switch (Picking.StepShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
+                {
+                    case PickOutcome.Open:
+                        c.Shackles = null;
                         break;
-                        case PickOutcome.Success: c.Shackles = null;
+                    case PickOutcome.Success:
+                        c.Shackles = null;
                         PickFloater(world, s, true);
                         Freed(world, s, c, job.Wearer, null);
                         break;
-                        case PickOutcome.Failed: PickFloater(world, s, false);
+                    case PickOutcome.Failed:
+                        PickFloater(world, s, false);
                         FailedPick(world, s, job.Wearer);
                         break;
-                        case PickOutcome.NotAllowed: c.Shackles = null;
+                    case PickOutcome.NotAllowed:
+                        c.Shackles = null;
                         if (c.IsPlayer) Say(world, c, "I'm not skilled enough...");
                         break;
-                    }
-                    break;
-                case ShackleWork.Cut:
-                    if (Lockpicking.BestTool(c) is null)
-                    {
-                        c.Shackles = null;
-                        if (c.IsPlayer) Say(world, c, "I don't have any tools");
-                        break;
-                    }
-                    if (Picking.CutShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
-                    {
-                        c.Shackles = null;
-                        Freed(world, s, c, job.Wearer, "Shackles broken!");
-                    }
-                    break;
-                case ShackleWork.Break:
+                }
+
+                break;
+            case ShackleWork.Cut:
+                if (Lockpicking.BestTool(c) is null)
+                {
                     c.Shackles = null;
-                    if (Picking.BreakShackles(world, s, job.Wearer, item, Crimes)) BruteForced(world, s, c, job.Wearer);
-                    else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
+                    if (c.IsPlayer) Say(world, c, "I don't have any tools");
                     break;
-            }
+                }
+
+                if (Picking.CutShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
+                {
+                    c.Shackles = null;
+                    Freed(world, s, c, job.Wearer, "Shackles broken!");
+                }
+
+                break;
+            case ShackleWork.Break:
+                c.Shackles = null;
+                if (Picking.BreakShackles(world, s, job.Wearer, item, Crimes)) BruteForced(world, s, c, job.Wearer);
+                else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
+                break;
         }
     }
 
@@ -261,9 +323,13 @@ public sealed partial class LockSystem
             Say(world, c, "Shackles broken!");
             Say(world, c, "*Crunck*");
         }
+
         Thank(world, world.Characters.IdOf(s), freed);
     }
 
+    /// <summary>
+    /// Shackles came off: the unlocked sound, the player's line, and the thanks of an NPC wearer.
+    /// </summary>
     static void Freed(World world, int s, CharacterCold c, CharacterId wearer, string? message)
     {
         world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
@@ -273,6 +339,9 @@ public sealed partial class LockSystem
         if (c.IsPlayer) Thank(world, world.Characters.IdOf(s), wearer);
     }
 
+    /// <summary>
+    /// An NPC freed by another character thanks it (event UNLOCK_MY_CAGE_OR_SHACKLES).
+    /// </summary>
     static void Thank(World world, CharacterId worker, CharacterId freed)
     {
         if (freed != worker && world.Characters.TryResolveNext(freed, out int w) && world.Characters.Cold(w) is { IsPlayer: false })

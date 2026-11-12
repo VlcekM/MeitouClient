@@ -13,13 +13,15 @@ namespace Meitou.Simulation.Crime;
 public static class SpawnBounties
 {
     /// <summary>
-    /// The faction a record without <c>bounty factions</c> is wanted by: the game looks the literal string id <c>defaultEmpireFactionSID</c> up in its faction list
-    /// (<c>FUN_14062b210</c> and <c>FUN_1402e7a20</c>, <b>Verified</b>: in gamedata.base that id belongs to the faction named United Cities).
+    /// The faction a record without <c>bounty factions</c> is wanted by: the game looks the literal string id <c>defaultEmpireFactionSID</c> up in
+    /// its faction list (<c>FUN_14062b210</c> and <c>FUN_1402e7a20</c>, <b>Verified</b>: in gamedata.base that id belongs to the faction named
+    /// United Cities).
     /// </summary>
     public const string DefaultEmpire = "defaultEmpireFactionSID";
 
     /// <summary>
-    /// The ledger a character made from <paramref name="record"/> starts with, or null (no CHARACTER record, no chance, a failed roll, or no faction to be wanted by).
+    /// The ledger a character made from <paramref name="record"/> starts with, or null (no CHARACTER record, no chance, a failed roll, or no faction
+    /// to be wanted by).
     /// </summary>
     public static BountyLedger? Roll(PopulationData data, GameRecord? record, ulong seed, CharacterId id, long tick)
     {
@@ -65,8 +67,14 @@ public static class SpawnBounties
         }
     }
 
+    /// <summary>
+    /// The index of the <see cref="DefaultEmpire"/> faction (-1 for none).
+    /// </summary>
     static int DefaultFaction(PopulationData data) => data.FactionIndex(DefaultEmpire);
 
+    /// <summary>
+    /// The record's integer <paramref name="key"/>, a float one rounded, 0 when it has neither.
+    /// </summary>
     static int IntOf(GameRecord r, string key) =>
         r.Ints.TryGetValue(key, out int v) ? v : r.Floats.TryGetValue(key, out float f) ? (int)MathF.Round(f) : 0;
 }

@@ -11,14 +11,41 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed class CharacterMaterialTable : IDisposable
 {
+    /// <summary>
+    /// The device the buffer lives on.
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The storage buffer of the records, <see cref="_host"/>'s size; remade (and every record uploaded again) when the table grows.
+    /// </summary>
     DeviceBuffer _buffer;
+    /// <summary>
+    /// The host copy of every slot's record, doubled when full.
+    /// </summary>
     CharacterMaterialRecord[] _host = new CharacterMaterialRecord[1024];
+    /// <summary>
+    /// The material each slot holds (null: free or retired), for <see cref="Sweep"/>.
+    /// </summary>
     PartMaterial?[] _owners = new PartMaterial?[1024];
+    /// <summary>
+    /// How many slots have ever been handed out (the high-water mark).
+    /// </summary>
     int _used;
+    /// <summary>
+    /// Slots ready to be used again.
+    /// </summary>
     readonly Stack<int> _free = [];
+    /// <summary>
+    /// Slots given up, with the GPU frame they were given up in; freed once no frame in flight can read them (<see cref="BeginFrame"/>).
+    /// </summary>
     readonly Queue<(int Slot, long Frame)> _retired = [];
+    /// <summary>
+    /// The slots placed since the last <see cref="Flush"/>.
+    /// </summary>
     readonly List<int> _dirty = [];
+    /// <summary>
+    /// Scratch: the dirty slots' records gathered for the upload, grown as needed.
+    /// </summary>
     CharacterMaterialRecord[] _dirtyRecords = new CharacterMaterialRecord[64];
 
     /// <summary>
@@ -26,13 +53,22 @@ internal sealed class CharacterMaterialTable : IDisposable
     /// </summary>
     public const int IdleUpdates = 600;
 
+    /// <summary>
+    /// Makes the buffer for 1024 records.
+    /// </summary>
     public CharacterMaterialTable(IGpuContext gpu)
     {
         this._gpu = gpu;
         _buffer = DeviceBuffer.Create(gpu, (ulong)_host.Length * CharacterMaterialRecord.Size, BufferUse.Storage, "character materials");
     }
 
+    /// <summary>
+    /// How many slots hold a live record, for the statistics.
+    /// </summary>
     public int Slots => _used - _free.Count - _retired.Count;
+    /// <summary>
+    /// The buffer's size in bytes, for the statistics.
+    /// </summary>
     public long Bytes => (long)_host.Length * CharacterMaterialRecord.Size;
 
     /// <summary>
@@ -58,6 +94,9 @@ internal sealed class CharacterMaterialTable : IDisposable
         _dirty.Add(slot);
     }
 
+    /// <summary>
+    /// Gives up <paramref name="slot"/>: it is freed once the frames in flight are done with it.
+    /// </summary>
     void Retire(int slot)
     {
         _owners[slot] = null;
@@ -70,13 +109,18 @@ internal sealed class CharacterMaterialTable : IDisposable
     public void Sweep(long before)
     {
         for (int s = 0; s < _used; s++)
+        {
             if (_owners[s] is { } m && m.SlotUsed < before)
             {
                 m.Slot = -1;
                 Retire(s);
             }
+        }
     }
 
+    /// <summary>
+    /// A new slot at the end; when the table is full, doubles it and remakes the buffer with every record uploaded again.
+    /// </summary>
     int Reserve()
     {
         int slot = _used++;
@@ -111,7 +155,13 @@ internal sealed class CharacterMaterialTable : IDisposable
         _dirty.Clear();
     }
 
+    /// <summary>
+    /// The buffer's binding for <paramref name="frame"/>.
+    /// </summary>
     public GpuBufferBinding Binding(IGpuFrame frame) => _buffer.Binding(frame);
 
+    /// <summary>
+    /// Frees the buffer.
+    /// </summary>
     public void Dispose() => _buffer.Dispose();
 }

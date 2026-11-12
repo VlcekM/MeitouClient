@@ -10,11 +10,26 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class GroundHeights
 {
+    /// <summary>
+    /// The heightmap window sampled inside it.
+    /// </summary>
     readonly HeightWindow _window;
+    /// <summary>
+    /// The whole-world grid sampled outside the window; null when there is none.
+    /// </summary>
     readonly ushort[]? _coarse;
+    /// <summary>
+    /// Samples per side of the coarse grid.
+    /// </summary>
     readonly int _coarseSize;
+    /// <summary>
+    /// Heightmap samples between neighbouring coarse samples.
+    /// </summary>
     readonly int _coarseStep;
 
+    /// <summary>
+    /// Heights from <paramref name="window"/>, and outside it from <paramref name="coarse"/> when given.
+    /// </summary>
     public GroundHeights(HeightWindow window, ushort[]? coarse = null, int coarseSize = 0, int coarseStep = 8)
     {
         this._window = window ?? throw new ArgumentNullException(nameof(window));

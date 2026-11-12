@@ -10,7 +10,14 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record BiomeGroupData
 {
+    /// <summary>
+    /// The BIOME_GROUP's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The BIOME_GROUP's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
@@ -43,6 +50,9 @@ public sealed record BiomeGroupData
     /// </summary>
     public IReadOnlyList<RecordLink> Nests { get; init; } = [];
 
+    /// <summary>
+    /// Reads the population fields of a BIOME_GROUP record.
+    /// </summary>
     public static BiomeGroupData From(GameRecord r)
     {
         IReadOnlyList<RecordLink> Links(string list) => [.. r.GetReferences(list).Select(RecordLink.From)];
@@ -74,29 +84,43 @@ public sealed record BiomeGroupData
 /// </summary>
 public sealed class BiomeMap
 {
+    /// <summary>
+    /// Each cell's index into <see cref="Groups"/> (-1: none), row by row (z then x).
+    /// </summary>
     readonly int[] _cells;
+    /// <summary>
+    /// The areas map painted (null: none, every point is painted).
+    /// </summary>
+    readonly WeatherAreas? _areas;
 
-    /// <summary>The areas map the cells were painted from (null: none, or built from cells alone).</summary>
-    public WeatherAreas? Areas { get; private init; }
-
-    /// <summary>Whether the areas map's own pixel at a world position is painted (not black), the spawn spot test of <c>FUN_1408f4d70</c>; true when the map keeps no pixels.</summary>
-    public bool Painted(float x, float z) => Areas?.PixelColourAt(x, z) is not { } colour || colour != 0;
-
-    public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups)
+    /// <summary>
+    /// A map of <paramref name="groups"/> with each of the 64 x 64 cells' group index (row by row); another cell count throws.
+    /// <paramref name="areas"/>: the areas map <see cref="IsPainted"/> reads.
+    /// </summary>
+    public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups, WeatherAreas? areas = null)
     {
         if (cellGroups.Length != WeatherAreas.Cells * WeatherAreas.Cells)
             throw new ArgumentException("Expected 64 x 64 cells.", nameof(cellGroups));
 
         Groups = groups;
         _cells = cellGroups;
+        _areas = areas;
     }
 
+    /// <summary>
+    /// The groups the cells index.
+    /// </summary>
     public IReadOnlyList<BiomeGroupData> Groups { get; }
 
     /// <summary>
     /// The group of a cell, a position in <see cref="Groups"/>; -1 outside the map or when no group applies.
     /// </summary>
     public int GroupOf(int cx, int cz) => WeatherAreas.InMap(cx, cz) ? _cells[cz * WeatherAreas.Cells + cx] : -1;
+
+    /// <summary>
+    /// Whether the areas map is not black at a world point (<see cref="WeatherAreas.IsPainted"/>); true without a map.
+    /// </summary>
+    public bool IsPainted(float x, float z) => _areas?.IsPainted(x, z) ?? true;
 
     /// <summary>
     /// Paints the cells from the areas map's colours (null: every cell is NONE).
@@ -119,8 +143,11 @@ public sealed class BiomeMap
                 cells[z * WeatherAreas.Cells + x] = areas is not null && byColour.TryGetValue(colour, out int g) ? g : none;
             }
 
-        return new BiomeMap(groups, cells) { Areas = areas };
+        return new BiomeMap(groups, cells, areas);
     }
 
+    /// <summary>
+    /// Paints the cells of every BIOME_GROUP of <paramref name="db"/> from the areas map's colours.
+    /// </summary>
     public static BiomeMap Create(GameDatabase db, WeatherAreas? areas) => Create(BiomeGroupData.LoadAll(db), areas);
 }

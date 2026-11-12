@@ -19,20 +19,75 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 sealed unsafe class TerrainShadowMap : IDisposable
 {
+    /// <summary>
+    /// Samples along the map's side (the coarse grid's).
+    /// </summary>
     readonly int _size;
+
+    /// <summary>
+    /// World units between samples.
+    /// </summary>
     readonly float _spacing;
+
+    /// <summary>
+    /// The coarse heights (R16).
+    /// </summary>
     readonly GpuTexture _heights;
+
+    /// <summary>
+    /// The heights with the linear, clamped sampler (the first pass's source).
+    /// </summary>
     readonly SampledTexture _heightsSampled;
+
+    /// <summary>
+    /// The doubling sweep program.
+    /// </summary>
     readonly LegacyProgram _sweep;
+
+    /// <summary>
+    /// The sweep's source texture slot.
+    /// </summary>
     readonly SamplerSlot _sourceSlot;
+
+    /// <summary>
+    /// The sweep's uniforms: the map's side, the first pass, the step towards the sun (samples), the shadow top's drop over it and its
+    /// distance (units).
+    /// </summary>
     readonly UniformHandle _uSize, _uFirst, _uStep, _uDrop, _uDistance;
+
+    /// <summary>
+    /// The two RG32F targets the passes ping-pong between.
+    /// </summary>
     readonly GpuTexture[] _targets = new GpuTexture[2];
+
+    /// <summary>
+    /// The targets with the linear, clamped sampler.
+    /// </summary>
     readonly SampledTexture[] _targetsSampled = new SampledTexture[2];
+
+    /// <summary>
+    /// The targets' attachment formats (colour only).
+    /// </summary>
     readonly AttachmentFormats _format;
+
+    /// <summary>
+    /// The sweep's draw state: no culling, depth or blending, all channels.
+    /// </summary>
     readonly DrawState _state;
 
+    /// <summary>
+    /// The sweep's pipeline (made on the first build).
+    /// </summary>
     GpuPipeline? _pipeline;
+
+    /// <summary>
+    /// The sun direction the map was built for.
+    /// </summary>
     Vector3 _builtFor;
+
+    /// <summary>
+    /// The target holding the finished map (-1: none).
+    /// </summary>
     int _result = -1;
 
     /// <summary>
@@ -86,8 +141,14 @@ sealed unsafe class TerrainShadowMap : IDisposable
     /// </summary>
     public SampledTexture? Sampled => _result < 0 ? null : _targetsSampled[_result];
 
+    /// <summary>
+    /// Samples along the map's side.
+    /// </summary>
     public int Size => _size;
 
+    /// <summary>
+    /// World units between samples.
+    /// </summary>
     public float Spacing => _spacing;
 
     /// <summary>
@@ -95,6 +156,9 @@ sealed unsafe class TerrainShadowMap : IDisposable
     /// </summary>
     public int Builds { get; private set; }
 
+    /// <summary>
+    /// Render-thread milliseconds the last rebuild took to record.
+    /// </summary>
     public double LastBuildCpuMs { get; private set; }
 
     /// <summary>
@@ -163,6 +227,9 @@ sealed unsafe class TerrainShadowMap : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Frees the targets, the heights and the program.
+    /// </summary>
     public void Dispose()
     {
         for (int i = 0; i < 2; i++) _targets[i].Dispose();

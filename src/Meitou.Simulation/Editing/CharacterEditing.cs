@@ -10,13 +10,22 @@ using Meitou.Simulation.Saving;
 namespace Meitou.Simulation.Editing;
 
 /// <summary>
-/// Why the character editor is open (docs/characters.md "Character editor"): the new game's characters, a plastic surgeon, or a recruit
-/// (DA_JOIN_SQUAD_WITH_EDIT; free, race and gender kept as at a surgeon).
+/// Why the character editor is open (docs/characters.md "Character editor"): making the start's characters, or a plastic surgeon's work. The
+/// editor's use: the new game's characters, a plastic surgeon, or a recruit (DA_JOIN_SQUAD_WITH_EDIT; free, race and gender kept as at a surgeon).
 /// </summary>
 public enum EditKind : byte
 {
+    /// <summary>
+    /// The new game's characters.
+    /// </summary>
     Creation,
+    /// <summary>
+    /// A plastic surgeon's work, paid.
+    /// </summary>
     Surgery,
+    /// <summary>
+    /// A recruit's edit (DA_JOIN_SQUAD_WITH_EDIT): free, race and gender kept.
+    /// </summary>
     Recruit
 }
 
@@ -139,7 +148,7 @@ public static class CharacterEditing
                 return false;
             }
 
-            bool playable = CharacterDraft.PlayableRaces(data.Db, world.Player.CreationRaces)
+            bool playable = PlayableRaces.Of(data.Db, world.Player.CreationRaces)
                 .Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId));
             if (!playable && !sameRace)
             {
@@ -205,6 +214,8 @@ public static class CharacterEditing
         {
             var prosthetics = Prosthetics(cold.Medical);
             var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
+            if (!raceData.IsRobot && cold.Medical is { } previous) medical.Hunger = previous.Hunger;
+
             foreach (var (limb, item) in prosthetics) medical.FitReplacement(limb, item);
             cold.Race = raceData;
             cold.Stats = stats;
@@ -221,7 +232,7 @@ public static class CharacterEditing
 
         // Stumps and prosthetics stay on the edited look.
         if (kit is not null) SavedKit.SetLimbs(kit, cold.Medical, data.Db);
-        if (kit is not null && data.Appearances?.Create(cold.RecordId, kit) is { } updated)
+        if (kit is not null && data.Appearances?.Create(cold.RecordId, kit, cold.Shaved) is { } updated)
         {
             cold.Appearance = updated;
             cold.LookEdited = true;

@@ -31,6 +31,7 @@ public static class TownExit
             bool gate = b.IsGate && !(destroyed?.Invoke(b) ?? b.Destroyed) && !(regions?.CodeAt(b.Position) > 0);
             if (gate || b.IsWall && b.HasInterior) return Away(centre, new Vector2(b.Position.X, b.Position.Z));
         }
+
         return centre;
     }
 
@@ -43,6 +44,10 @@ public static class TownExit
         return centre;
     }
 
+    /// <summary>
+    /// The point <see cref="Offset"/> beyond <paramref name="at"/> on the way out from <paramref name="centre"/>; the centre when the two are
+    /// the same.
+    /// </summary>
     static Vector2 Away(Vector2 centre, Vector2 at)
     {
         var d = at - centre;

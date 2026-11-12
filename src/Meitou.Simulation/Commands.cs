@@ -49,15 +49,30 @@ public sealed record SandboxMovement(CharacterId Character, byte? Mode, float? S
 /// </summary>
 public sealed class CommandQueue
 {
+    /// <summary>
+    /// Guards <see cref="_pending"/> and <see cref="_sequence"/>.
+    /// </summary>
     readonly Lock _gate = new();
+    /// <summary>
+    /// The commands waiting, each with its place in the queue.
+    /// </summary>
     readonly List<(SimCommand Command, long Sequence)> _pending = [];
+    /// <summary>
+    /// The place the next command gets.
+    /// </summary>
     long _sequence;
 
+    /// <summary>
+    /// The number of commands waiting.
+    /// </summary>
     public int Count
     {
         get { lock (_gate) return _pending.Count; }
     }
 
+    /// <summary>
+    /// Queues a command for its tick (any thread).
+    /// </summary>
     public void Enqueue(SimCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -80,9 +95,11 @@ public sealed class CommandQueue
                 if (p.Command.Tick <= tick && (include is null || include(p.Command))) (due ??= []).Add(p);
                 else _pending[kept++] = p;
             }
+
             if (due is null) return [];
             _pending.RemoveRange(kept, _pending.Count - kept);
         }
+
         due.Sort(static (a, b) => a.Command.Tick != b.Command.Tick ? a.Command.Tick.CompareTo(b.Command.Tick) : a.Sequence.CompareTo(b.Sequence));
         var commands = new SimCommand[due.Count];
         for (int k = 0; k < commands.Length; k++) commands[k] = due[k].Command;
@@ -143,5 +160,8 @@ public sealed record StopCommand(IReadOnlyList<CharacterId> Characters) : SimCom
 /// </summary>
 public sealed record RepathCommand : SimCommand
 {
+    /// <summary>
+    /// The zones whose crossers ask again (null: everyone on the way).
+    /// </summary>
     public IReadOnlySet<ZoneCoordinate>? Zones { get; init; }
 }

@@ -46,9 +46,22 @@ public enum OrderVerdict : byte
 /// </summary>
 public readonly record struct OrderCheck(OrderVerdict Verdict, string? Why = null, bool Posted = false)
 {
+    /// <summary>
+    /// The order can start now.
+    /// </summary>
     public static OrderCheck Run => new(OrderVerdict.Run);
+    /// <summary>
+    /// The order's target or site is gone: it leaves the queue.
+    /// </summary>
     public static OrderCheck Gone => new(OrderVerdict.Gone);
+    /// <summary>
+    /// The order cannot start now; <paramref name="why"/> is the failure text (null: none), <paramref name="posted"/> posts it as a message instead
+    /// of a bark.
+    /// </summary>
     public static OrderCheck Blocked(string? why = null, bool posted = false) => new(OrderVerdict.Blocked, why, posted);
+    /// <summary>
+    /// Whether the verdict is <see cref="OrderVerdict.Run"/>.
+    /// </summary>
     public bool CanRun => Verdict == OrderVerdict.Run;
 }
 
@@ -59,8 +72,20 @@ public readonly record struct OrderCheck(OrderVerdict Verdict, string? Why = nul
 /// </summary>
 public interface IOrderOwner
 {
+    /// <summary>
+    /// Checks the character's order (a pure read: the row's preconditions as far as Meitou models them).
+    /// </summary>
     OrderCheck CanRun(World world, int slot, OrderEntry order);
+    /// <summary>
+    /// Starts the character's order (serial phases only, after a <see cref="OrderVerdict.Run"/>).
+    /// </summary>
     void Start(World world, int slot, OrderEntry order);
+
+    /// <summary>
+    /// Whether a started order's start conditions still hold (the original plans the front again each update); false ends its task and the order
+    /// waits unstarted, its failure text said again.
+    /// </summary>
+    bool StillHolds(World world, int slot, OrderEntry order) => true;
 
     /// <summary>
     /// The code of the order's <see cref="OrderEntry.Detail"/> in a save (<see cref="Saving.OrderSave"/>; 0: no detail), or -1 when the order cannot
@@ -82,18 +107,42 @@ public interface IOrderOwner
 /// </summary>
 public sealed class OrderEntry(TaskType row, IOrderOwner owner)
 {
+    /// <summary>
+    /// The order's TaskType row (what the original's planner runs).
+    /// </summary>
     public TaskType Row { get; } = row;
+    /// <summary>
+    /// The system that checks and starts the order.
+    /// </summary>
     public IOrderOwner Owner { get; } = owner;
+    /// <summary>
+    /// The character or body the order targets (<see cref="CharacterId.None"/>: none).
+    /// </summary>
     public CharacterId Target { get; init; } = CharacterId.None;
+    /// <summary>
+    /// The site the order names (a building or fixture id); null: none.
+    /// </summary>
     public string? Site { get; init; }
+    /// <summary>
+    /// The point the order names (a move's goal).
+    /// </summary>
     public Vector3 Point { get; init; }
+    /// <summary>
+    /// The owner's own data for the order (null: none); see <see cref="IOrderOwner.SaveKind"/> for how it is saved.
+    /// </summary>
     public object? Detail { get; init; }
+    /// <summary>
+    /// Whether the order's start ran: it then stands for the character's task.
+    /// </summary>
     public bool Started { get; internal set; }
     /// <summary>
     /// Its check ran at the front once (its failure text was shown); a front not tried yet is tried at once.
     /// </summary>
     public bool Tried { get; internal set; }
 
+    /// <summary>
+    /// Whether the order is a move (row <c>MoveCusOrdered</c>).
+    /// </summary>
     public bool IsMove => Row == TaskType.MoveCusOrdered;
 }
 
@@ -104,15 +153,40 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
 /// </summary>
 public sealed class OrderQueue : IReadOnlyList<OrderEntry>
 {
+    /// <summary>
+    /// The orders, the front first.
+    /// </summary>
     readonly List<OrderEntry> _entries = [];
 
+    /// <summary>
+    /// How many orders are queued, the one in hand included.
+    /// </summary>
     public int Count => _entries.Count;
+    /// <summary>
+    /// The order at <paramref name="index"/> (0: the front).
+    /// </summary>
     public OrderEntry this[int index] => _entries[index];
+    /// <summary>
+    /// The order in hand; null when the queue is empty.
+    /// </summary>
     public OrderEntry? Front => _entries.Count > 0 ? _entries[0] : null;
+    /// <summary>
+    /// Empties the queue.
+    /// </summary>
     public void Clear() => _entries.Clear();
+    /// <summary>
+    /// Adds an order at the back.
+    /// </summary>
     internal void Add(OrderEntry entry) => _entries.Add(entry);
+    /// <summary>
+    /// Removes the front order.
+    /// </summary>
     internal void PopFront() => _entries.RemoveAt(0);
+    /// <summary>
+    /// The orders from the front.
+    /// </summary>
     public IEnumerator<OrderEntry> GetEnumerator() => _entries.GetEnumerator();
+    /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     /// <summary>
@@ -312,6 +386,9 @@ public static class PlayerOrders
             q.PopFront();
     }
 
+    /// <summary>
+    /// Shows a blocked check's failure text: posted as a message, or barked over the character; nothing without one.
+    /// </summary>
     static void Show(World world, int slot, in OrderCheck check)
     {
         if (check.Why is not { } why) return;
@@ -323,7 +400,8 @@ public static class PlayerOrders
     /// <summary>
     /// The decision step's source 1 before it is asked (<c>checkOrders</c> pops the front when done, or when its desire x finder is 0; serial): a
     /// front whose task ended leaves, gone ones leave; a running front whose row needs no melee threat (<see cref="NeedsNoThreat"/>) ends when one
-    /// comes and waits unstarted (its plan fails, so the character falls through: S3, the turret gunner). A Loot order's threat test is its task's,
+    /// comes, or whose start conditions fail (<see cref="IOrderOwner.StillHolds"/>), and waits unstarted (its plan fails, so the character falls
+    /// through: S3, the turret gunner). A Loot order's threat test is its task's,
     /// once at the body (<c>CarrySystem.HoldWindow</c>), not the walk's.
     /// </summary>
     internal static void Prepare(World world, int slot)
@@ -343,9 +421,11 @@ public static class PlayerOrders
                     Settle(world, slot);
                     continue;
                 }
-                if (Threatened(world, slot, front.Row))
+                bool unmet = !front.Owner.StillHolds(world, slot, front);
+                if (unmet || Threatened(world, slot, front.Row))
                 {
                     front.Started = false;   // waits in the queue: its end below is not the order's
+                    if (unmet) front.Tried = false;
                     TaskStart.End(world, slot, TaskEnd.Stopped);
                 }
                 return;

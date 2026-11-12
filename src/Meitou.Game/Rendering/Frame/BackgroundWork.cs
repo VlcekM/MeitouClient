@@ -9,8 +9,14 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public static class BackgroundWork
 {
+    /// <summary>
+    /// The task scheduler behind <see cref="Run{T}(Func{T})"/>: a fixed set of background threads that take queued jobs, urgent ones first.
+    /// </summary>
     sealed class Scheduler : TaskScheduler
     {
+        /// <summary>
+        /// The jobs waiting for a thread: the ordinary ones and the urgent ones (<see cref="RunUrgent"/>).
+        /// </summary>
         readonly BlockingCollection<Task> _queue = [], _urgent = [];
         int _running;
 
@@ -19,11 +25,15 @@ public static class BackgroundWork
         /// </summary>
         public (int Urgent, int Queued, int Running) Load => (_urgent.Count, _queue.Count, Volatile.Read(ref _running));
 
+        /// <summary>
+        /// Starts <paramref name="threads"/> background threads that run the queued jobs until the process ends.
+        /// </summary>
         public Scheduler(int threads)
         {
             // A free thread takes the oldest urgent job first (TakeFromAny tries the collections in order), then the oldest other one.
             var both = new[] { _urgent, _queue };
             for (int i = 0; i < threads; i++)
+            {
                 new Thread(() =>
                 {
                     while (true)
@@ -35,11 +45,14 @@ public static class BackgroundWork
                     }
                 })
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();
+            }
         }
 
         protected override void QueueTask(Task task) => (task.AsyncState is UrgentMark ? _urgent : _queue).Add(task);
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
         protected override IEnumerable<Task> GetScheduledTasks() => [.. _urgent.ToArray(), .. _queue.ToArray()];
+
+        /// <inheritdoc/>
         public override int MaximumConcurrencyLevel => Math.Max(2, Environment.ProcessorCount - 3);
     }
 
@@ -48,6 +61,9 @@ public static class BackgroundWork
     /// </summary>
     sealed class UrgentMark;
 
+    /// <summary>
+    /// The mark <see cref="RunUrgent"/> passes as a job's state so the scheduler queues it ahead of the others.
+    /// </summary>
     static readonly UrgentMark Urgent = new();
 
     /// <summary>
@@ -55,13 +71,20 @@ public static class BackgroundWork
     /// </summary>
     public static readonly int Threads = Math.Max(2, Environment.ProcessorCount - 3);
 
+    /// <summary>
+    /// The one scheduler every streaming job runs on, with <see cref="Threads"/> threads.
+    /// </summary>
     static readonly Scheduler WorkScheduler = new(Threads);
 
     /// <summary>
     /// The queue, for the loading log: jobs waiting (urgent, other) and running.
     /// </summary>
-    public static string Describe() => WorkScheduler.Load is var (urgent, queued, running) ? $"{running}/{Threads} running, {urgent} urgent and {queued} queued" : "";
+    public static string Describe() =>
+        WorkScheduler.Load is var (urgent, queued, running) ? $"{running}/{Threads} running, {urgent} urgent and {queued} queued" : "";
 
+    /// <summary>
+    /// Queues <paramref name="work"/> on the streaming threads behind the jobs already waiting; the task completes with its result.
+    /// </summary>
     public static Task<T> Run<T>(Func<T> work) =>
         Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 
@@ -72,6 +95,9 @@ public static class BackgroundWork
     public static Task<T> RunUrgent<T>(Func<T> work) =>
         Task.Factory.StartNew(_ => work(), Urgent, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 
+    /// <summary>
+    /// Queues <paramref name="work"/> on the streaming threads behind the jobs already waiting.
+    /// </summary>
     public static Task Run(Action work) =>
         Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 }

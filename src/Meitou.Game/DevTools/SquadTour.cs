@@ -17,26 +17,52 @@ sealed class SquadTour
     /// Seconds the camera stays on each member before the next hop.
     /// </summary>
     const float Hold = 1.5f;
+
     /// <summary>
     /// Seconds each hop takes, whatever its length (Advanced settings "Character flight time").
     /// </summary>
     public float HopSeconds { get; set; } = UserConfig.DefaultFlightSeconds;
+
     /// <summary>
     /// The arc's extra boom at its top, per unit of ground crossed (at least <see cref="MinLift"/> times the view's own distance).
     /// </summary>
     const float LiftPerDistance = 0.55f, MinLift = 1.5f;
+
     /// <summary>
     /// How much steeper the camera looks down at the top of an arc (radians), and its limit.
     /// </summary>
     const float PitchLift = 0.35f, MaxPitch = 1.35f;
 
+    /// <summary>
+    /// The members to visit, in order.
+    /// </summary>
     readonly List<CharacterId> _stops = [];
+
+    /// <summary>
+    /// The index of the stop the camera is on or flying to.
+    /// </summary>
     int _next;
+
+    /// <summary>
+    /// Seconds into the hop or hold, and the view's yaw, pitch and distance the hops keep.
+    /// </summary>
     float _time, _yaw, _pitch, _distance;
+
+    /// <summary>
+    /// The camera's target when the hop began.
+    /// </summary>
     Vector3 _from;
+
+    /// <summary>
+    /// The camera holds on a member between hops.
+    /// </summary>
     bool _holding;
 
+    /// <summary>
+    /// A flight is under way.
+    /// </summary>
     public bool Active { get; private set; }
+
     /// <summary>
     /// The camera is on a hop now (not on a hold between hops).
     /// </summary>
@@ -51,7 +77,8 @@ sealed class SquadTour
         _stops.AddRange(members);
         if (!Active) (_yaw, _pitch, _distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
         _next = 0;
-        if (_stops.Count > 0 && position(_stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * _distance) _next = 1;
+        if (_stops.Count > 0 && position(_stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * _distance)
+            _next = 1;
         Active = _next < _stops.Count;
         if (Active) BeginHop(camera, position);
     }
@@ -79,7 +106,8 @@ sealed class SquadTour
     /// </summary>
     public void Finish(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
-        if (Current is { } id && position(id) is { } at) (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
+        if (Current is { } id && position(id) is { } at)
+            (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
         Active = false;
     }
 
@@ -92,6 +120,9 @@ sealed class SquadTour
             ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch), MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance
             : null;
 
+    /// <summary>
+    /// Ends the flight where the camera is.
+    /// </summary>
     public void Stop() => Active = false;
 
     /// <summary>
@@ -121,10 +152,24 @@ sealed class SquadTour
         camera.Yaw = _yaw;
         camera.Pitch = _pitch + (MathF.Max(MathF.Min(_pitch + PitchLift, MaxPitch), _pitch) - _pitch) * lift;
         camera.Distance = MathF.Min(_distance + height * lift, camera.ViewDistance * 0.5f);
-        if (s >= 1) { _next++; _holding = true; _time = 0; if (_next >= _stops.Count) { Active = false; return false; } }
+        if (s >= 1)
+        {
+            _next++;
+            _holding = true;
+            _time = 0;
+            if (_next >= _stops.Count)
+            {
+                Active = false;
+                return false;
+            }
+        }
+
         return true;
     }
 
+    /// <summary>
+    /// Begins the hop to the next stop that has a position (skipping the gone ones), from the camera's target; the flight ends when none is left.
+    /// </summary>
     void BeginHop(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
         while (_next < _stops.Count && position(_stops[_next]) is null) _next++;
@@ -137,5 +182,8 @@ sealed class SquadTour
         (_time, _holding) = (0, false);
     }
 
+    /// <summary>
+    /// The length of <paramref name="v"/> on the ground (x and z).
+    /// </summary>
     static float Ground(Vector3 v) => new Vector2(v.X, v.Z).Length();
 }

@@ -11,6 +11,10 @@ on:
         description: "Version without the v, e.g. 0.1.0 (empty: 0.0.<run number>)"
         required: false
         default: ""
+      build_only:
+        description: "Upload packages as workflow artifacts without tagging or publishing a release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,7 +32,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       - name: Version
         id: version
@@ -36,10 +40,16 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
+          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
           $v = $env:INPUT_VERSION.Trim().TrimStart('v')
           if (-not $v) { $v = "0.0.$env:RUN_NUMBER" }
           if ($v -notmatch '^[0-9A-Za-z.\-]+$') { throw "bad version '$v'" }
+          if ($env:BUILD_ONLY -eq 'true') {
+            "version=$v" >> $env:GITHUB_OUTPUT
+            Set-Content "$env:RUNNER_TEMP/changes.md" "Unreleased game build $v."
+            exit 0
+          }
           if (git tag -l "v$v") { throw "tag v$v already exists" }
           # The version's CHANGELOG.md section (from its "## v<version>" heading to the next "## "): required.
           $lines = Get-Content CHANGELOG.md
@@ -67,10 +77,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { rid: win-x64, os: windows-latest }
-          - { rid: linux-x64, os: ubuntu-22.04 }
-          - { rid: osx-x64, os: macos-latest }
-          - { rid: osx-arm64, os: macos-latest }
+          - { rid: win-x64, os: windows-latest, legacy: false, package: win-x64 }
+          - { rid: linux-x64, os: ubuntu-22.04, legacy: false, package: linux-x64 }
+          - { rid: osx-x64, os: macos-latest, legacy: false, package: osx-x64 }
+          - { rid: osx-arm64, os: macos-latest, legacy: false, package: osx-arm64 }
+          - { rid: osx-x64, os: macos-latest, legacy: true, package: osx-x64-legacy }
+          - { rid: osx-arm64, os: macos-latest, legacy: true, package: osx-arm64-legacy }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -78,6 +90,12 @@ jobs:
           fetch-depth: 0
 
       - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 11.0.x
+
+      - name: macOS compatibility runtime
+        if: matrix.legacy
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -88,16 +106,17 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./tools/scripts/package-release.ps1 -Version "${{ needs.version.outputs.version }}" -Rid ${{ matrix.rid }} -Output out -Cache "$env:RUNNER_TEMP/release-cache"
+        run: ./tools/scripts/package-release.ps1 -Version "${{ needs.version.outputs.version }}" -Rid ${{ matrix.rid }} -LegacyMac:$${{ matrix.legacy }} -Output out -Cache "$env:RUNNER_TEMP/release-cache"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zip-${{ matrix.rid }}
-          path: out/Meitou-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip
+          name: zip-${{ matrix.package }}
+          path: out/Meitou-${{ needs.version.outputs.version }}-${{ matrix.package }}.zip
           compression-level: 0
           if-no-files-found: error
 
   release:
+    if: ${{ !inputs.build_only }}
     needs: [version, package]
     runs-on: ubuntu-latest
     steps:
@@ -122,7 +141,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          $zips = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64') | ForEach-Object { "out/Meitou-$env:VERSION-$_.zip" }
+          $zips = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64', 'osx-x64-legacy', 'osx-arm64-legacy') | ForEach-Object { "out/Meitou-$env:VERSION-$_.zip" }
           foreach ($zip in $zips) { if (-not (Test-Path $zip)) { throw "$zip missing" } }
           $notes = (Get-Content -Raw "$env:RUNNER_TEMP/changes.md").Trim()
           $flags = @('--latest=false', '--generate-notes')
@@ -132,6 +151,30 @@ jobs:
           if ($previous) { $flags += @('--notes-start-tag', $previous) }
           gh release create "v$env:VERSION" @zips --target $env:GITHUB_SHA `
             --title "Meitou $env:VERSION" --notes $notes @flags
+
+      # Posts the changelog section to Discord as an embed linking the release, in the nightlies' channel and the same way (nightly.yml).
+      - name: Announce on Discord
+        shell: pwsh
+        env:
+          BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL: ${{ vars.DISCORD_NIGHTLY_CHANNEL }}
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $bot = $env:BOT_TOKEN -and $env:CHANNEL
+          if (-not $bot -and -not $env:WEBHOOK) { 'No Discord bot or webhook set; not announced.' >> $env:GITHUB_STEP_SUMMARY; exit 0 }
+          $url = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/tag/v$env:VERSION"
+          $text = (@(Get-Content "$env:RUNNER_TEMP/changes.md" | Select-Object -Skip 2) -join "`n").Trim()
+          # An embed description holds at most 4096 characters; a longer changelog is cut and the release has it all.
+          if ($text.Length -gt 3900) { $text = $text.Substring(0, 3900) + "`n…full notes on the release" }
+          $body = @{ embeds = @(@{ title = "Meitou $env:VERSION"; url = $url; description = $text; color = 0x40A060 }) } | ConvertTo-Json -Depth 4
+          $bytes = [Text.Encoding]::UTF8.GetBytes($body)
+          if ($bot) {
+            # Discord's Cloudflare answers a bot call with a browser-like User-Agent (pwsh's default) with 40333 "internal network error".
+            Invoke-RestMethod -Uri "https://discord.com/api/v10/channels/$env:CHANNEL/messages" -Method Post -Headers @{ Authorization = "Bot $env:BOT_TOKEN" } -UserAgent 'DiscordBot (https://github.com/VlcekM/MeitouClient, 1.0)' -ContentType 'application/json; charset=utf-8' -Body $bytes
+          } else {
+            Invoke-RestMethod -Uri $env:WEBHOOK -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes
+          }
 
   # Every release becomes a benchmark target (bench/README.md).
   bench-target:

@@ -41,19 +41,33 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public const float RecentlyWantedSeconds = 250;
 
-    readonly List<Booking> _bookings = [];
-    long _bookingsTick = -1;
+    /// <summary>
+    /// The bounties booked: the ledger entries' raises and expiry, this tick's bookings by a witness (<see cref="BountyBook"/>).
+    /// </summary>
+    readonly BountyBook _bounties = new();
 
     /// <summary>
     /// The bookings of this tick by a witness (the police-like NPC that booked, the culprit, the faction): the arrest system's witnessed-crime
-    /// trigger. Not world state.
+    /// trigger. Not world state (<see cref="BountyBook.BookingsOf"/>).
     /// </summary>
-    public IReadOnlyList<Booking> BookingsOf(long tick) => _bookingsTick == tick ? _bookings : [];
+    public IReadOnlyList<Booking> BookingsOf(long tick) => _bounties.BookingsOf(tick);
 
+    /// <summary>
+    /// The crime log, kept while <see cref="CrimeSettings.RecordLog"/> is on.
+    /// </summary>
     readonly List<CrimeEvent> _log = [];
 
+    /// <summary>
+    /// The settings; the defaults when none were given.
+    /// </summary>
     public CrimeSettings Settings { get; } = settings ?? new CrimeSettings();
+    /// <summary>
+    /// Who books bounties and whose goods are free, built from the relations.
+    /// </summary>
     public CrimeFactions Factions { get; } = new(relations);
+    /// <summary>
+    /// The faction relations the crime rules read.
+    /// </summary>
     public FactionRelations Relations => Factions.Relations;
 
     /// <summary>
@@ -61,7 +75,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public IReadOnlyList<CrimeEvent> Log => _log;
 
-    // ------------------------------------------------------------------ who is who
+    #region Who is who
 
     /// <summary>
     /// Police-like (the game's <c>FUN_140599600</c>, <b>Observed</b>): never of a BANDIT-type faction; <c>NPC class</c> LAW_ENFORCEMENT; or MILITARY
@@ -72,7 +86,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         if (c.IsPlayer || Factions.Bandit(c.Faction)) return false;
         if (c.NpcClass == FundamentalType.LawEnforcement) return true;
-        return c.NpcClass == FundamentalType.Military && c.SquadId >= 0 && world.Squads.Find(c.SquadId) is { TownOwn: true } squad && squad.Faction == c.Faction;
+        return c.NpcClass == FundamentalType.Military && c.SquadId >= 0 && world.Squads.Find(c.SquadId) is { TownOwn: true } squad
+            && squad.Faction == c.Faction;
     }
 
     /// <summary>
@@ -85,7 +100,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public bool IsWantedBy(CharacterCold c, int faction) => c.Bounties?.BookedFor(Factions.Relations, faction) is { Amount: > 0, Claimed: false };
 
-    // ------------------------------------------------------------------ deeds
+    #endregion
+
+    #region Deeds
 
     /// <summary>
     /// Sets a pending crime on the culprit (the game's setter <c>FUN_140852c80</c>, <b>Verified</b>): refused for a police-like culprit, an
@@ -167,7 +184,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <see cref="IsStealing(World, CharacterCold)"/> alone, the loot permission aside, so a bandit's gear is stolen from the bandits too. Right
     /// click and drag mark only an item with no owner yet; a give overwrites.
     /// </summary>
-    public static bool MarksTheft(World world, CharacterCold taker, CharacterCold victim) => taker.IsPlayer && !victim.IsPlayer && IsStealing(world, victim);
+    public static bool MarksTheft(World world, CharacterCold taker, CharacterCold victim) =>
+        taker.IsPlayer && !victim.IsPlayer && IsStealing(world, victim);
 
     /// <summary>
     /// <c>Character::isItOkForMeToLoot</c> (<c>FUN_140793940</c>, <b>Observed</b>) asked with no item: yes when the victim is a slave or escaped
@@ -190,7 +208,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         var table = world.Characters;
         if (table.Cold(looter) is not { } l || table.Cold(victim) is not { } v || IsPoliceLike(world, l)) return;
         var victimId = table.IdOf(victim);
-        if (l.Bounties is { Any: true } || l.NpcClass == FundamentalType.Bandit) SetPending(world, looter, CrimeCode.Looting, v.Faction, victimId, MinTimer);
+        if (l.Bounties is { Any: true } || l.NpcClass == FundamentalType.Bandit)
+            SetPending(world, looter, CrimeCode.Looting, v.Faction, victimId, MinTimer);
         if (everything)
         {
             world.Defer(new Dialogue.DialogueEvent(table.IdOf(looter), victimId, LootingEverythingEvent) { Tick = world.Tick + 1 });
@@ -228,52 +247,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         if (c.Pending is not null) Book(world, culprit, p.Faction, table.IdOf(police));
     }
 
-    // ------------------------------------------------------------------ booking
+    #endregion
+
+    #region Booking
 
     /// <summary>
-    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <b>Verified</b>): once per pending crime
-    /// (the booked flag), not for a culprit of <c>NPC class</c> BANDIT, DIPLOMAT or LAW_ENFORCEMENT, and Enslaving adds nothing. The amount of the
-    /// crime table is added to the ledger entry, the crime's bit set and the time of the last raise reset. The entry is the booking faction's
-    /// (<c>FUN_140852010</c>, <see cref="CrimeFactions.BookingOf"/>): of the culprit's prison owner while it is imprisoned in a cage that resolves,
-    /// else of <paramref name="faction"/>; its legal system when it has one, else itself when it books bounties. With no booking faction the crime is
-    /// still marked booked and the culprit recently wanted, but the original's entry has a null key that nothing reads, so no bounty is kept.
+    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <see cref="BountyBook.Book"/>); true when
+    /// a bounty was raised.
     /// </summary>
-    public bool Book(World world, int culprit, int faction, CharacterId witness)
-    {
-        var c = world.Characters.Cold(culprit);
-        if (c?.Pending is not { Booked: false } p) return false;
-        if (c.NpcClass is FundamentalType.Bandit or FundamentalType.Diplomat or FundamentalType.LawEnforcement) return false;
-        p.Booked = true;
-        if (p.Code == CrimeCode.Enslaving) return false;
-        int owner = c.IsImprisoned && c.InWhat is { } cageId && world.Fixtures.Find(cageId) is { } cage ? cage.Owner : faction;
-        int key = Factions.BookingOf(owner);
-        if (key < 0)
-        {
-            c.RecentlyWanted = RecentlyWantedSeconds;
-            return false;
-        }
-        faction = key;
-        var entry = (c.Bounties ??= new BountyLedger()).Get(faction, Factions.NameOf(faction));
-        entry.Amount += CrimeTable.Amount(p.Code);
-        entry.Crimes |= 1 << (int)p.Code;
-        entry.RaisedTick = world.Tick;
-        c.RecentlyWanted = RecentlyWantedSeconds;
-        if (!witness.IsNone)
-        {
-            if (_bookingsTick != world.Tick) { _bookings.Clear(); _bookingsTick = world.Tick; }
-            _bookings.Add(new Booking(witness, world.Characters.IdOf(culprit), faction));
-        }
-        Note(world, CrimeEventKind.Booked, culprit, p.Code, faction, entry.Amount, witness);
-        if (c.IsPlayer)
-        {
-            world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", c.Name, entry.FactionName, CrimeTable.Name(p.Code), entry.Amount));
-        }
+    public bool Book(World world, int culprit, int faction, CharacterId witness) => _bounties.Book(this, world, culprit, faction, witness);
 
-        return true;
-    }
+    #endregion
 
-    // ------------------------------------------------------------------ the sweep
+    #region The sweep
 
+    /// <summary>
+    /// The slow-world step: the witness sweep for the characters whose turn it is; on the shared beat the investigators and the alarms' countdown.
+    /// </summary>
     public void SlowWorld(World world)
     {
         int every = world.Every(Settings.SweepEveryTicks);
@@ -289,6 +279,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if ((_alarms[k].Life -= every * world.TickSeconds) < 0) _alarms.RemoveAt(k);
     }
 
+    /// <summary>
+    /// One sweep over the living characters on their turn: the recently wanted marker, the bounties' expiry and the pending crime's timer (none for
+    /// the dead), then the witnesses of a pending crime, or for a player character of a kidnapping or premises.
+    /// </summary>
     void Sweep(World world, float seconds, int every)
     {
         var table = world.Characters;
@@ -302,7 +296,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // The crime tick FUN_1405cbb80 is skipped for a dead character (FUN_1405d00b0): its bounties never expire and its pending crime stays
             // frozen (no countdown, no witness search).
             if (c.Medical is { Dead: true }) continue;
-            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
+
+            // paused while imprisoned (economy.md 11.3)
+            if (c.Bounties is { } ledger && !c.IsImprisoned) BountyBook.Expire(this, world, s, c, ledger, hoursPerTick, every);
             if (c.Pending is { } p)
             {
                 // Check, then subtract (FUN_1405cbb80 tail): cleared on the first call after the timer reached 0.
@@ -322,7 +318,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         }
     }
 
+    /// <summary>
+    /// The aggro system whose spot meters <see cref="Spotted"/> reads; looked up once.
+    /// </summary>
     AggroSystem? _aggro;
+    /// <summary>
+    /// Whether <see cref="_aggro"/> has been looked up.
+    /// </summary>
     bool _aggroLooked;
 
     /// <summary>
@@ -331,7 +333,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     bool Spotted(World world, int witness, CharacterId culprit)
     {
-        if (!_aggroLooked) { _aggroLooked = true; _aggro = world.SystemOf<AggroSystem>(); }
+        if (!_aggroLooked)
+        {
+            _aggroLooked = true;
+            _aggro = world.SystemOf<AggroSystem>();
+        }
         return _aggro?.Spotted(witness, culprit) == true;
     }
 
@@ -340,7 +346,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <c>+0xe9</c> is <b>Unknown</b> and read here as: an NPC of another, real, non-bandit faction, not a bandit and with no bounty).
     /// </summary>
     bool Innocent(CharacterCold carrier, CharacterCold body) =>
-        !body.IsPlayer && body.Faction != carrier.Faction && !Factions.Lawless(body.Faction) && body.NpcClass != FundamentalType.Bandit && body.Bounties is not { Any: true };
+        !body.IsPlayer && body.Faction != carrier.Faction && !Factions.Lawless(body.Faction) && body.NpcClass != FundamentalType.Bandit
+            && body.Bounties is not { Any: true };
 
     /// <summary>
     /// Every awake NPC that sees the culprit, in slot order, reacts as the game's witness function does (<c>FUN_140854d10</c>, <b>Observed</b>): not
@@ -378,7 +385,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             else if (world.Sight.Sees(w, culprit, next[w].Position, at, range) <= 0) continue;
             if (body is not null && !Friendly(wf, c.Faction) && Friendly(wf, body.Faction))
                 SetPending(world, culprit, CrimeCode.Kidnapping, body.Faction, c.Carrying, KidnapTimer, viaWrapper: true);
-            if (premises is { } house && Trespasses(world, wc, c, house)) SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);
+            if (premises is { } house && Trespasses(world, wc, c, house))
+                SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);
             if (c.Pending is not { } p) continue;
             if (!Reacts(world, wc, c, p)) continue;
             if (Friendly(wf, c.Faction) && Betrays(p.Code)) PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta);
@@ -390,7 +398,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // A witness that is the crime's own victim (a trespass's is the witness that called it) goes for the culprit (Character::attackTarget:
             // its squad tags the culprit TEMP_ENEMY).
             if (p.Victim == witness && wc.Fighter?.CanAttack == true
-                && !(world.SystemOf<Combat.CombatSystem>()?.StateOf(witness) is { } fight && fight.TargetSlot == culprit && fight.TargetGeneration == culpritId.Generation))
+                && !(world.SystemOf<Combat.CombatSystem>()?.StateOf(witness) is { } fight && fight.TargetSlot == culprit
+                    && fight.TargetGeneration == culpritId.Generation))
             {
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, w, culprit);
                 world.Defer(new Combat.AttackOrder([witness], culpritId) { Tick = world.Tick + 1, Source = TaskSource.Npc });
@@ -408,8 +417,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             }
             // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once at the player's
             // characters; at an NPC culprit again on every sweep from a police-like witness not yet fighting, as the guards' lines want a culprit
-            // within talking range that does not run (engine choice: lines' repetition limits are not kept).
-            if (first || !c.IsPlayer && !wc.InCombat && IsPoliceLike(world, wc))
+            // within talking range that does not run (engine choice: lines' repetition limits are not kept). Not a Trespassing: its event-17 line
+            // ("intruder law", DA 6 chase forever) needs no range, and repeating it only restarts the chase (#519).
+            if (first || !c.IsPlayer && p.Code != CrimeCode.Trespassing && !wc.InCombat && IsPoliceLike(world, wc))
                 world.Defer(new Dialogue.DialogueEvent(witness, table.IdOf(culprit), WitnessEvent(world, wc, p)) { Tick = world.Tick + 1 });
             if (!p.Booked && IsPoliceLike(world, wc) && Factions.Books(wf)) Book(world, culprit, wf, witness);
             if (p.Booked) return;
@@ -434,14 +444,30 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public const int OpensAt = 7, ClosesAfter = 22;
 
+    /// <summary>
+    /// The key of the building the squad lives in (its AI's own home, else its home building); null for none.
+    /// </summary>
     static string? HomeKey(Squad q) => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key;
 
+    /// <summary>
+    /// The lock system whose house locks <see cref="LockedUp"/> reads; looked up once.
+    /// </summary>
     Locks.LockSystem? _locks;
+    /// <summary>
+    /// Whether <see cref="_locks"/> has been looked up.
+    /// </summary>
     bool _locksLooked;
 
+    /// <summary>
+    /// Whether the house of building <paramref name="key"/> is locked up (false without a lock system).
+    /// </summary>
     bool LockedUp(World world, string key)
     {
-        if (!_locksLooked) { _locksLooked = true; _locks = world.SystemOf<Locks.LockSystem>(); }
+        if (!_locksLooked)
+        {
+            _locksLooked = true;
+            _locks = world.SystemOf<Locks.LockSystem>();
+        }
         return _locks?.IsHouseLocked(world, key) ?? false;
     }
 
@@ -469,7 +495,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     bool Trespasses(World world, CharacterCold w, CharacterCold c, Premises house)
     {
         if (Friendly(w.Faction, c.Faction) || AggroSystem.IsEnemy(Relations, w.Faction, c.Faction)) return false;
-        if (w.SquadId >= 0 && world.Squads.Find(w.SquadId) is { } squad && HomeKey(squad) == house.Key) return house.LockedUp && !house.Open(world.Hour);
+        if (w.SquadId >= 0 && world.Squads.Find(w.SquadId) is { } squad && HomeKey(squad) == house.Key)
+            return house.LockedUp && !house.Open(world.Hour);
         return !house.Public && IsPoliceLike(world, w) && !Friendly(house.Faction, c.Faction) && (c.SlaveState != 0 || house.LockedUp);
     }
 
@@ -485,7 +512,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// The crimes whose witness path reaches the ally branch: every code but Burglary, Looting, Trespassing, Crop Theft and Uniform Theft (their
     /// cases leave the switch elsewhere).
     /// </summary>
-    static bool Betrays(CrimeCode code) => code is not (CrimeCode.Burglary or CrimeCode.Looting or CrimeCode.Trespassing or CrimeCode.CropTheft or CrimeCode.UniformTheft);
+    static bool Betrays(CrimeCode code) =>
+        code is not (CrimeCode.Burglary or CrimeCode.Looting or CrimeCode.Trespassing or CrimeCode.CropTheft or CrimeCode.UniformTheft);
 
     /// <summary>
     /// DA 33 CRIME_ALARM said by <paramref name="speaker"/> at <paramref name="target"/> (<c>FUN_140680560</c>, <b>Observed</b>): the speaker turns
@@ -538,6 +566,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         _alarms.Add(new TownAlarm { Town = town, Code = code, Faction = faction, Position = at, Place = place, Floor = floor });
     }
 
+    /// <summary>
+    /// The towns' raised alarms, oldest first.
+    /// </summary>
     readonly List<TownAlarm> _alarms = [];
 
     /// <summary>
@@ -561,22 +592,25 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public const float AlarmApproach = 30;
 
     /// <summary>
-    /// The alarm an investigator of <paramref name="town"/> at <paramref name="at"/> on <paramref name="floor"/> answers (<c>FUN_14092a810</c>,
-    /// <b>Verified</b>): the nearest within <see cref="AlarmReach"/>, half of it when the alarm was raised in a building
-    /// (<see cref="TownAlarm.Place"/>), whatever the crime; with <paramref name="faction"/> (goal 210, allies only) only its faction's. An alarm in a
-    /// building is skipped when its floor is more than one from the investigator's. An alarm inside a closed building (no open entrance,
-    /// <see cref="Locks.FixtureRegistry.HasOpenDoor"/>) is skipped for an investigator in the same place and halves the reach a second time otherwise
-    /// (needs <paramref name="place"/> and <paramref name="world"/>). Engine: its skip of any other floor in some buildings (building byte
-    /// <c>+0xc2</c>, meaning <b>Unknown</b>), are not modelled. Null when none. </summary> <summary>An alarm in a building whose entrances are all
-    /// closed is skipped for an investigator in the same place.
+    /// An alarm in a building whose entrances are all closed is skipped for an investigator in the same place.
     /// </summary>
-    internal static bool AlarmSkipped(bool closed, int alarmPlace, int investigatorPlace) => closed && alarmPlace >= 0 && alarmPlace == investigatorPlace;
+    internal static bool AlarmSkipped(bool closed, int alarmPlace, int investigatorPlace) =>
+        closed && alarmPlace >= 0 && alarmPlace == investigatorPlace;
 
     /// <summary>
     /// The reach to an alarm: <see cref="AlarmReach"/>, halved for one raised in a building, halved again when that building is closed.
     /// </summary>
     internal static float ReachOfAlarm(bool inBuilding, bool closed) => AlarmReach * (inBuilding ? 0.5f : 1) * (inBuilding && closed ? 0.5f : 1);
 
+    /// <summary>
+    /// The alarm an investigator of <paramref name="town"/> at <paramref name="at"/> on <paramref name="floor"/> answers (<c>FUN_14092a810</c>,
+    /// <b>Verified</b>): the nearest within <see cref="AlarmReach"/>, half of it when the alarm was raised in a building
+    /// (<see cref="TownAlarm.Place"/>), whatever the crime; with <paramref name="faction"/> (goal 210, allies only) only its faction's. An alarm in a
+    /// building is skipped when its floor is more than one from the investigator's. An alarm inside a closed building (no open entrance,
+    /// <see cref="Locks.FixtureRegistry.HasOpenDoor"/>) is skipped for an investigator in the same place and halves the reach a second time otherwise
+    /// (needs <paramref name="place"/> and <paramref name="world"/>). Engine: its skip of any other floor in some buildings (building byte
+    /// <c>+0xc2</c>, meaning <b>Unknown</b>), are not modelled. Null when none.
+    /// </summary>
     public TownAlarm? AlarmFor(int town, Vector3 at, int faction = -1, int floor = 0, int place = -1, World? world = null)
     {
         TownAlarm? best = null;
@@ -600,7 +634,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// The floor of the building the character stands in at <paramref name="at"/> (<c>Character</c> vfunc <c>+0x60</c>, an alarm's <c>+0x60</c>); 0
     /// outdoors.
     /// </summary>
-    public static int FloorOf(World world, int slot, Vector3 at) => world.Sight.BuildingOf(slot) is { } building ? world.Sight.FloorAt(building, at) : 0;
+    public static int FloorOf(World world, int slot, Vector3 at) =>
+        world.Sight.BuildingOf(slot) is { } building ? world.Sight.FloorAt(building, at) : 0;
 
     /// <summary>
     /// The investigators' serial step (<c>Task_InvestigateAlarms</c> update, <b>Observed</b>), for each NPC whose AI acts out goal 209 or 210
@@ -616,8 +651,14 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         var next = table.Next;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!next[i].Alive || table.Cold(i) is not { Ai: { Behaviour: AiBehaviour.Investigate, Goal: { } goal, Squad.Ai: { } board } mind } cold || !AiSystem.Holds(next[i], cold)) continue;
-            var alarm = AlarmFor(board.Town, next[i].Position, goal.Task.Type == Data.Gameplay.Ai.TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1, FloorOf(world, i, next[i].Position), world.Sight.PlaceOf(i), world);
+            if (!next[i].Alive || table.Cold(i) is not { Ai: { Behaviour: AiBehaviour.Investigate, Goal: { } goal, Squad.Ai: { } board } mind } cold
+                || !AiSystem.Holds(next[i], cold))
+            {
+                continue;
+            }
+            var alarm = AlarmFor(board.Town, next[i].Position,
+                goal.Task.Type == Data.Gameplay.Ai.TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1, FloorOf(world, i, next[i].Position),
+                world.Sight.PlaceOf(i), world);
             if (alarm is null) continue;
             if (Vector3.DistanceSquared(alarm.Position, next[i].Position) <= AlarmLookRange * AlarmLookRange)
             {
@@ -632,8 +673,16 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             int last = -1;
             for (int c = 0; c < table.HighWater; c++)
             {
-                if (c == i || !next[c].Alive || table.Cold(c) is not { Pending: { } p, Medical.Incapacitated: false } cc || Friendly(cold.Faction, cc.Faction) || !Friendly(cold.Faction, p.VictimFaction)) continue;
-                if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range || world.Sight.Sees(i, c, next[i].Position, next[c].Position, range) <= 0) continue;
+                if (c == i || !next[c].Alive || table.Cold(c) is not { Pending: { } p, Medical.Incapacitated: false } cc
+                    || Friendly(cold.Faction, cc.Faction) || !Friendly(cold.Faction, p.VictimFaction))
+                {
+                    continue;
+                }
+                if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range
+                    || world.Sight.Sees(i, c, next[i].Position, next[c].Position, range) <= 0)
+                {
+                    continue;
+                }
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
                 last = c;
             }
@@ -641,14 +690,27 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         }
     }
 
+    /// <summary>
+    /// Adds the town alarms (town, code, faction, position, life; place and floor for one raised in a building) to the world hash, only while there
+    /// are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_alarms.Count == 0) return;
         hasher.Add(_alarms.Count);
         foreach (var a in _alarms)
         {
-            hasher.Add(a.Town); hasher.Add((int)a.Code); hasher.Add(a.Faction); hasher.Add(a.Position); hasher.Add(a.Life);
-            if (a.Place >= 0) { hasher.Add(a.Place); hasher.Add(a.Floor); }   // only an alarm raised in a building, so the others hash as before
+            hasher.Add(a.Town);
+            hasher.Add((int)a.Code);
+            hasher.Add(a.Faction);
+            hasher.Add(a.Position);
+            hasher.Add(a.Life);
+            // only an alarm raised in a building, so the others hash as before
+            if (a.Place >= 0)
+            {
+                hasher.Add(a.Place);
+                hasher.Add(a.Floor);
+            }
         }
     }
 
@@ -662,6 +724,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// it; the town update <c>FUN_14092bfe0</c> counts it down and deletes it below 0: <b>Verified</b>).
     /// </summary>
     public const float AlarmLife = 8;
+    /// <summary>
+    /// The game hour "Alarm raised" was last posted at (<see cref="AlarmPostSeconds"/> apart).
+    /// </summary>
     double _lastAlarmHours = double.NegativeInfinity;
 
     /// <summary>
@@ -671,7 +736,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         CrimeCode.Burglary or CrimeCode.Terrorism => 43,   // WITNESS_THIEF_OR_LOCKPICK
         CrimeCode.Theft or CrimeCode.Fencing or CrimeCode.Looting =>
-            world.Characters.TryResolveNext(p.Victim, out int v) && world.Characters.Cold(v) is { SquadId: >= 0 } vc && vc.SquadId == w.SquadId ? 8 : 42,   // THIEF_CAUGHT_STEALING_FROM_ME, WITNESS_LOOTING_ALLY
+            // THIEF_CAUGHT_STEALING_FROM_ME, WITNESS_LOOTING_ALLY
+            world.Characters.TryResolveNext(p.Victim, out int v) && world.Characters.Cold(v) is { SquadId: >= 0 } vc && vc.SquadId == w.SquadId
+                ? 8 : 42,
         CrimeCode.Trespassing => 17,
         CrimeCode.CropTheft => 57,
         CrimeCode.Enslaving or CrimeCode.Kidnapping => 58,
@@ -702,42 +769,18 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// Removes entries whose lifetime since their last raise is over (<c>FUN_1405cbb80</c>, <b>Verified</b>): the original removes the first expired
-    /// entry it meets and stops, once per character tick; this sweep runs every <paramref name="ticks"/> ticks, so it removes at most that many.
+    /// The bounty lines of a character for the HUD (<see cref="BountyBook.Lines"/>).
     /// </summary>
-    void Expire(World world, int slot, CharacterCold c, BountyLedger ledger, double hoursPerTick, int ticks)
-    {
-        for (int k = ledger.Count - 1; k >= 0 && ticks > 0; k--)
-        {
-            var e = ledger.Entries[k];
-            if (e.Amount <= 0) continue;
-            double elapsed = (world.Tick - e.RaisedTick) * hoursPerTick;
-            if (elapsed >= 0 && elapsed <= CrimeTable.LifetimeHours(e.Amount)) continue;
-            ledger.Remove(e);
-            ticks--;
-            Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
-            if (c.IsPlayer) world.Post(Loc.Tr("{1} is no longer wanted by {2}", c.Name, e.FactionName));
-        }
-        if (ledger.Count == 0) c.Bounties = null;
-    }
+    public static IReadOnlyList<BountyLine> Lines(CharacterCold c, long tick, float tickSeconds, int local = -1) =>
+        BountyBook.Lines(c, tick, tickSeconds, local);
 
     /// <summary>
-    /// The bounty lines of a character for the HUD, with the hours left at <paramref name="tick"/>; <paramref name="local"/> is the local faction
-    /// (-1: none).
+    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>).
     /// </summary>
-    public static IReadOnlyList<BountyLine> Lines(CharacterCold c, long tick, float tickSeconds, int local = -1)
-    {
-        if (c.Bounties is not { Count: > 0 } ledger) return [];
-        double hoursPerTick = tickSeconds * 11.0 / 1200.0;
-        var lines = new List<BountyLine>(ledger.Count);
-        foreach (var e in ledger.Entries)
-            if (e.Amount > 0)
-                lines.Add(new BountyLine(e.FactionName, e.Amount, CrimeTable.Names(e.Crimes), CrimeTable.LifetimeHours(e.Amount) - (tick - e.RaisedTick) * hoursPerTick, e.Faction == local));
-        return lines;
-    }
-
-    void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
+    internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
         if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
     }
+
+    #endregion
 }

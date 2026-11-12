@@ -18,6 +18,8 @@ namespace Meitou.Game.Effects;
 /// </summary>
 sealed class Debris(GameHost host)
 {
+    #region Burst
+
     // luckyren Mode's burst (docs/game/luckyren.md): an BloodMarkKind.Explosion throws the game's bone meshes and the race's severed limbs out of
     // the body, which fly, tumble and bounce on the ground and then lie there as long as a corpse would, and it splashes blood all round (with the
     // <c>Blood</c> setting on). Display only: the pieces move in game time (still while paused) and are not saved.
@@ -40,20 +42,61 @@ sealed class Debris(GameHost host)
     /// </summary>
     const float MistSize = 2, MistLife = 3;
 
+    /// <summary>
+    /// A burst's nest bones, raw meat pieces (a race that bleeds) and sprays; the most pieces kept (the oldest go); the blood splashes round it.
+    /// </summary>
     const int BonesPerBurst = 12, MeatPerBurst = 4, SpraysPerBurst = 5, MaxPieces = 400, BurstSplashes = 24;
+    /// <summary>
+    /// The pieces' gravity (units/s²), how high over the body they start, the bounce kept and the slide kept on landing, how far the splashes reach,
+    /// and the nest bones' scale.
+    /// </summary>
     const float Gravity = 98, BurstHeight = 10, Bounce = 0.35f, Grip = 0.6f, BurstReach = 60, BoneScale = 0.12f;
 
+    /// <summary>
+    /// One piece of a burst: its mesh, flight, size and look, and whether it has landed or come to rest.
+    /// </summary>
     internal sealed class Piece
     {
+        /// <summary>
+        /// The mesh (a bone, the meat or one of the race's severed limbs).
+        /// </summary>
         public required string Mesh;
+        /// <summary>
+        /// Where the piece is, its velocity (units/s) and its spin (axis times radians/s).
+        /// </summary>
         public Vector3 Position, Velocity, Spin;
+        /// <summary>
+        /// The piece's orientation.
+        /// </summary>
         public Quaternion Rotation;
+        /// <summary>
+        /// The piece's half size after <see cref="Scale"/>: its thinnest side lies on the ground.
+        /// </summary>
         public Vector3 Extent;
+        /// <summary>
+        /// The mesh scale.
+        /// </summary>
         public float Scale;
+        /// <summary>
+        /// The height of the upper floor the piece lands on; NaN to land on the terrain.
+        /// </summary>
         public float Floor;
+        /// <summary>
+        /// Whether the piece has stopped moving, has touched the ground once (the splash and its sound), and is flesh (meat or a limb,
+        /// which squelches).
+        /// </summary>
         public bool Resting, Landed, Flesh;
+        /// <summary>
+        /// The tick of the burst: the piece goes when a corpse would.
+        /// </summary>
         public long Born;
+        /// <summary>
+        /// The piece's identity for the frame's draw (a fixed handle across frames).
+        /// </summary>
         public readonly long Id = DebrisPiece.NewId();
+        /// <summary>
+        /// The blood decal colour of its landing (opaque ABGR); 0 for a race that does not bleed.
+        /// </summary>
         public uint Colour;
         /// <summary>
         /// The splash particles' colour for a race whose blood is not red (<see cref="BloodDecals.BloodRecolour"/>).
@@ -61,32 +104,35 @@ sealed class Debris(GameHost host)
         public Vector3? Recolour;
     }
 
+    /// <summary>
+    /// The burst pieces flying or lying.
+    /// </summary>
     internal readonly List<Piece> Pieces = [];
+    /// <summary>
+    /// Each race's severed limb meshes, by race id, read once.
+    /// </summary>
     readonly Dictionary<string, string[]> _limbMeshes = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The fall of a severed limb (<see cref="GroundItemSync.StartFall"/>; docs/formats/collision.md "Item physics": the original's item is a dynamic
-    /// PhysX body made at the stump's bone with no speed of its own, in the scene's gravity 98.1, tipping to rest on the ground). Its mesh's origin
-    /// falls from <see cref="Start"/> (the stump, once sampled) to <see cref="Rest"/>'s height, drifting at <see cref="Drift"/> (units/s), then turns
-    /// from <see cref="Hanging"/> to <see cref="Lying"/> in <see cref="FallTipTime"/>, and the item is shown at rest.
+    /// Moves the pieces by <paramref name="dt"/> seconds of game time and hands the renderer this frame's list; those older than a corpse go.
     /// </summary>
-    internal sealed class FallingLimb
+    internal void UpdateDebris(World world, float dt)
     {
-        public required GroundItemSnapshot Ground;
-        public required string Mesh;
-        public LimbLook? Look;
-        public required FallSource Stump;
-        public required Vector3 Rest;
-        public required float RestY;
-        public required Quaternion Hanging, Lying;
-        public Vector3? Start;
-        public readonly long Id = DebrisPiece.NewId();
-        public float Flight;
-        public Vector2 Drift;
+        Pieces.RemoveAll(p => world.Tick - p.Born >= BodySystem.CorpseTicksOf(world));
+        host.Gpu.DebrisPieces.Clear();
+        AddBolts();
+        AddTracers(world);
+        UpdateFalls(world);
+        AddRestingLimbs();
+        if (Pieces.Count == 0) return;
+        int steps = Math.Clamp((int)MathF.Ceiling(dt * 60), 1, 8);
+        float h = dt / steps;
+        foreach (var p in Pieces)
+        {
+            for (int s = 0; s < steps && !p.Resting && h > 0; s++) Step(p, h);
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position, Id: p.Id));
+        }
     }
-
-    internal readonly List<FallingLimb> Falls = [];
-    internal const float FallGravity = 98.1f, FallTipTime = 0.25f, FallUnsampledSeconds = 2;
 
     /// <summary>
     /// A burst: blood all round and the pieces thrown.
@@ -109,7 +155,7 @@ sealed class Debris(GameHost host)
             }
         }
         var centre = m.Position + new Vector3(0, BurstHeight, 0);
-        host.Sound.CharacterSounds?.Burst(centre);
+        host.Sound.Characters.Sounds?.Burst(centre);
         if (bleeds && host.Gpu.Particles is { } particles)
         {
             var recolour = BloodDecals.BloodRecolour(m.Colour);
@@ -177,6 +223,9 @@ sealed class Debris(GameHost host)
         return Quaternion.CreateFromAxisAngle(axis / s, MathF.Atan2(s, Vector3.Dot(from, to)));
     }
 
+    /// <summary>
+    /// A random horizontal unit direction (from the blood decals' random).
+    /// </summary>
     internal Vector2 RandomDirection()
     {
         float a = host.BloodDecals.BloodRandom.NextSingle() * MathF.Tau;
@@ -200,25 +249,121 @@ sealed class Debris(GameHost host)
     }
 
     /// <summary>
-    /// Moves the pieces by <paramref name="dt"/> seconds of game time and hands the renderer this frame's list; those older than a corpse go.
+    /// One substep of a burst piece: gravity, flight and spin; on touching the ground a splash (and a squelch for flesh), then a bounce or, slow
+    /// enough, rest on its thinnest side.
     /// </summary>
-    internal void UpdateDebris(World world, float dt)
+    void Step(Piece p, float h)
     {
-        Pieces.RemoveAll(p => world.Tick - p.Born >= BodySystem.CorpseTicksOf(world));
-        host.Gpu.DebrisPieces.Clear();
-        AddBolts();
-        AddTracers(world);
-        UpdateFalls(world);
-        AddRestingLimbs();
-        if (Pieces.Count == 0) return;
-        int steps = Math.Clamp((int)MathF.Ceiling(dt * 60), 1, 8);
-        float h = dt / steps;
-        foreach (var p in Pieces)
+        p.Velocity.Y -= Gravity * h;
+        p.Position += p.Velocity * h;
+        float spin = p.Spin.Length();
+        if (spin > 0) p.Rotation = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(p.Spin / spin, spin * h) * p.Rotation);
+        float floor = float.IsNaN(p.Floor) ? host.Gpu.Terrain.HeightAt(p.Position.X, p.Position.Z) : p.Floor;
+        float thin = MathF.Min(p.Extent.X, MathF.Min(p.Extent.Y, p.Extent.Z));
+        if (p.Position.Y - thin > floor) return;
+        p.Position.Y = floor + thin;
+        if (!p.Landed && p.Colour != 0 && host.BloodDecals.DecalStore is { } store)
+            store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife,
+                host.BloodDecals.BloodRandom);
+        if (!p.Landed && p.Flesh)
         {
-            for (int s = 0; s < steps && !p.Resting && h > 0; s++) Step(p, h);
-            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position, Id: p.Id));
+            host.Sound.Characters.Sounds?.Splat(p.Position);
+            if (p.Colour != 0) host.Gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
         }
+        p.Landed = true;
+        var flat = new Vector2(p.Velocity.X, p.Velocity.Z);
+        if (MathF.Abs(p.Velocity.Y) < 15 && flat.Length() < 12)
+        {
+            p.Resting = true;
+            p.Velocity = p.Spin = Vector3.Zero;
+            p.Rotation = LieFlat(p.Rotation, p.Extent);
+            return;
+        }
+        p.Velocity = new Vector3(p.Velocity.X * Grip, MathF.Abs(p.Velocity.Y) * Bounce, p.Velocity.Z * Grip);
+        p.Spin *= Grip;
     }
+
+    /// <summary>
+    /// The rotation that lays a piece on its thinnest side, keeping where its long axis pointed on the ground.
+    /// </summary>
+    static Quaternion LieFlat(Quaternion rotation, Vector3 extent)
+    {
+        var axis = extent.X <= extent.Y && extent.X <= extent.Z ? Vector3.UnitX : extent.Y <= extent.Z ? Vector3.UnitY : Vector3.UnitZ;
+        var up = Vector3.Transform(axis, rotation);
+        if (up.Y < 0) up = -up;
+        var tilt = Vector3.Cross(up, Vector3.UnitY);
+        float s = tilt.Length();
+        if (s < 1e-5f) return rotation;
+        return Quaternion.Normalize(Quaternion.CreateFromAxisAngle(tilt / s, MathF.Atan2(s, up.Y)) * rotation);
+    }
+
+    #endregion
+
+    #region Falling limbs
+
+    /// <summary>
+    /// The fall of a severed limb (<see cref="GroundItemSync.StartFall"/>; docs/formats/collision.md "Item physics": the original's item is a dynamic
+    /// PhysX body made at the stump's bone with no speed of its own, in the scene's gravity 98.1, tipping to rest on the ground). Its mesh's origin
+    /// falls from <see cref="Start"/> (the stump, once sampled) to <see cref="Rest"/>'s height, drifting at <see cref="Drift"/> (units/s), then turns
+    /// from <see cref="Hanging"/> to <see cref="Lying"/> in <see cref="FallTipTime"/>, and the item is shown at rest.
+    /// </summary>
+    internal sealed class FallingLimb
+    {
+        /// <summary>
+        /// The ground item the limb becomes when it lands.
+        /// </summary>
+        public required GroundItemSnapshot Ground;
+        /// <summary>
+        /// The limb's mesh.
+        /// </summary>
+        public required string Mesh;
+        /// <summary>
+        /// The severed limb's look; null for an item that is not a race's limb.
+        /// </summary>
+        public LimbLook? Look;
+        /// <summary>
+        /// The character and bone the limb fell from, and the tick it was cut.
+        /// </summary>
+        public required FallSource Stump;
+        /// <summary>
+        /// Where the limb's mesh origin lies at rest.
+        /// </summary>
+        public required Vector3 Rest;
+        /// <summary>
+        /// The height the limb falls to.
+        /// </summary>
+        public required float RestY;
+        /// <summary>
+        /// The limb's orientation while falling, and at rest.
+        /// </summary>
+        public required Quaternion Hanging, Lying;
+        /// <summary>
+        /// Where the fall starts (the stump's bone once sampled); null until the stump is drawn.
+        /// </summary>
+        public Vector3? Start;
+        /// <summary>
+        /// The limb's identity for the frame's draw (a fixed handle across frames).
+        /// </summary>
+        public readonly long Id = DebrisPiece.NewId();
+        /// <summary>
+        /// The seconds the fall takes from <see cref="Start"/> to <see cref="RestY"/>.
+        /// </summary>
+        public float Flight;
+        /// <summary>
+        /// The sideways speed (x, z units/s) that brings the limb from the stump to its rest point over the fall.
+        /// </summary>
+        public Vector2 Drift;
+    }
+
+    /// <summary>
+    /// The severed limbs falling or tipping.
+    /// </summary>
+    internal readonly List<FallingLimb> Falls = [];
+    /// <summary>
+    /// The limbs' gravity (units/s²), the seconds a landed limb takes to tip from hanging to lying, and the seconds after which a limb whose stump
+    /// was never drawn is set at rest.
+    /// </summary>
+    internal const float FallGravity = 98.1f, FallTipTime = 0.25f, FallUnsampledSeconds = 2;
 
     /// <summary>
     /// The severed limbs falling or tipping (docs/simulation.md "Ground items"), timed from the drop's tick by the shown tick and the sub-tick alpha,
@@ -274,6 +419,13 @@ sealed class Debris(GameHost host)
         f.Drift = f.Flight > 0 ? new Vector2(f.Rest.X - start.X, f.Rest.Z - start.Z) / f.Flight : Vector2.Zero;
     }
 
+    #endregion
+
+    #region Bolts and tracers
+
+    /// <summary>
+    /// The snapshot before's bolts by id, to place a bolt in flight between its last two positions.
+    /// </summary>
     readonly Dictionary<int, ProjectileSnapshot> _boltsBefore = [];
     /// <summary>
     /// Each bolt in flight's gap from its shooter's muzzle when it was first drawn, and where that was (by bolt id).
@@ -284,6 +436,59 @@ sealed class Debris(GameHost host)
     /// starts at a fixed point by the shooter (engine choice: the simulation has no posed bones).
     /// </summary>
     const float LaunchBlend = 150;
+
+    /// <summary>
+    /// Where each bolt in flight is drawn this frame and the muzzle it left (by bolt id), for <see cref="AddTracers"/>.
+    /// </summary>
+    readonly Dictionary<int, (Vector3 At, Vector3 Muzzle)> _boltHeads = [];
+    /// <summary>
+    /// The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.
+    /// </summary>
+    readonly Dictionary<int, Trail> _trails = [];
+    /// <summary>
+    /// The tracers gone this frame, kept to avoid allocating.
+    /// </summary>
+    readonly List<int> _trailsGone = [];
+    /// <summary>
+    /// The <see cref="GameSaves.WorldEpoch"/> <see cref="_trails"/> belong to: a load or a new world drops the old world's.
+    /// </summary>
+    int _trailsEpoch = -1;
+
+    /// <summary>
+    /// One bolt's tracer: where its head is, the way it points, how long it is and its bolt's speed.
+    /// </summary>
+    sealed class Trail
+    {
+        /// <summary>
+        /// The streak's head (the drawn bolt) and its unit direction of flight.
+        /// </summary>
+        public Vector3 Head, Direction;
+        /// <summary>
+        /// The streak's length (units) and its bolt's speed (units/s), at which a stopped streak shrinks.
+        /// </summary>
+        public float Length, Speed;
+        /// <summary>
+        /// The game time (seconds) its bolt stuck or went; null while it flies.
+        /// </summary>
+        public double? Stopped;
+    }
+
+    /// <summary>
+    /// Seconds of a bolt's flight its tracer covers, and the longest one (units).
+    /// </summary>
+    const float TracerSeconds = 0.2f, TracerMaxLength = 500;
+    /// <summary>
+    /// The longest a stopped bolt's tracer takes to shrink into it (seconds; a fast bolt's goes at its speed, quicker).
+    /// </summary>
+    const float TracerFade = 0.15f;
+    /// <summary>
+    /// The tracer streak's width (units).
+    /// </summary>
+    const float TracerWidth = 0.7f;
+    /// <summary>
+    /// The tracer's colour (white, semi-transparent).
+    /// </summary>
+    static readonly Vector4 TracerColour = new(1, 1, 1, 0.6f);
 
     /// <summary>
     /// The bolts of the snapshot (docs/game/combat.md "Bolt visuals"): each the crossbow's <c>live ammo</c> mesh with its +z along the flight, a bolt
@@ -308,53 +513,20 @@ sealed class Debris(GameHost host)
             if (!p.Stuck)
             {
                 if (!_boltLaunches.TryGetValue(p.Id, out var launch))
-                    _boltLaunches[p.Id] = launch = (host.Gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
+                    _boltLaunches[p.Id] = launch =
+                        (host.Gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
                 float left = 1 - Vector3.Distance(at, launch.From) / LaunchBlend;
                 if (left > 0) at += launch.Gap * left;
                 _boltHeads[p.Id] = (at, launch.From + launch.Gap);
             }
             else _boltLaunches.Remove(p.Id);
-            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch, Id: -1 - p.Id));   // a bolt's identity is the negative of its id (the others count up)
+            // A bolt's identity is the negative of its id (the others count up).
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch, Id: -1 - p.Id));
         }
         if (_boltLaunches.Count > now.Count)
             foreach (int id in _boltLaunches.Keys.ToArray())
                 if (!now.Any(p => p.Id == id)) _boltLaunches.Remove(id);
     }
-
-    /// <summary>
-    /// Where each bolt in flight is drawn this frame and the muzzle it left (by bolt id), for <see cref="AddTracers"/>.
-    /// </summary>
-    readonly Dictionary<int, (Vector3 At, Vector3 Muzzle)> _boltHeads = [];
-    /// <summary>
-    /// The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.
-    /// </summary>
-    readonly Dictionary<int, Trail> _trails = [];
-    readonly List<int> _trailsGone = [];
-    /// <summary>
-    /// The <see cref="GameSaves.WorldEpoch"/> <see cref="_trails"/> belong to: a load or a new world drops the old world's.
-    /// </summary>
-    int _trailsEpoch = -1;
-
-    sealed class Trail
-    {
-        public Vector3 Head, Direction;
-        public float Length, Speed;
-        /// <summary>
-        /// The game time (seconds) its bolt stuck or went; null while it flies.
-        /// </summary>
-        public double? Stopped;
-    }
-
-    /// <summary>
-    /// Seconds of a bolt's flight its tracer covers, and the longest one (units).
-    /// </summary>
-    const float TracerSeconds = 0.2f, TracerMaxLength = 500;
-    /// <summary>
-    /// The longest a stopped bolt's tracer takes to shrink into it (seconds; a fast bolt's goes at its speed, quicker).
-    /// </summary>
-    const float TracerFade = 0.15f;
-    const float TracerWidth = 0.7f;
-    static readonly Vector4 TracerColour = new(1, 1, 1, 0.6f);
 
     /// <summary>
     /// The Meitou <c>tracers</c> switch (docs/game/combat.md "Bolt visuals"): a semi-transparent streak behind each drawn bolt in flight, <see
@@ -432,50 +604,9 @@ sealed class Debris(GameHost host)
         return kept;
     }
 
-    void Step(Piece p, float h)
-    {
-        p.Velocity.Y -= Gravity * h;
-        p.Position += p.Velocity * h;
-        float spin = p.Spin.Length();
-        if (spin > 0) p.Rotation = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(p.Spin / spin, spin * h) * p.Rotation);
-        float floor = float.IsNaN(p.Floor) ? host.Gpu.Terrain.HeightAt(p.Position.X, p.Position.Z) : p.Floor;
-        float thin = MathF.Min(p.Extent.X, MathF.Min(p.Extent.Y, p.Extent.Z));
-        if (p.Position.Y - thin > floor) return;
-        p.Position.Y = floor + thin;
-        if (!p.Landed && p.Colour != 0 && host.BloodDecals.DecalStore is { } store)
-            store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife,
-                host.BloodDecals.BloodRandom);
-        if (!p.Landed && p.Flesh)
-        {
-            host.Sound.CharacterSounds?.Splat(p.Position);
-            if (p.Colour != 0) host.Gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
-        }
-        p.Landed = true;
-        var flat = new Vector2(p.Velocity.X, p.Velocity.Z);
-        if (MathF.Abs(p.Velocity.Y) < 15 && flat.Length() < 12)
-        {
-            p.Resting = true;
-            p.Velocity = p.Spin = Vector3.Zero;
-            p.Rotation = LieFlat(p.Rotation, p.Extent);
-            return;
-        }
-        p.Velocity = new Vector3(p.Velocity.X * Grip, MathF.Abs(p.Velocity.Y) * Bounce, p.Velocity.Z * Grip);
-        p.Spin *= Grip;
-    }
+    #endregion
 
-    /// <summary>
-    /// The rotation that lays a piece on its thinnest side, keeping where its long axis pointed on the ground.
-    /// </summary>
-    static Quaternion LieFlat(Quaternion rotation, Vector3 extent)
-    {
-        var axis = extent.X <= extent.Y && extent.X <= extent.Z ? Vector3.UnitX : extent.Y <= extent.Z ? Vector3.UnitY : Vector3.UnitZ;
-        var up = Vector3.Transform(axis, rotation);
-        if (up.Y < 0) up = -up;
-        var tilt = Vector3.Cross(up, Vector3.UnitY);
-        float s = tilt.Length();
-        if (s < 1e-5f) return rotation;
-        return Quaternion.Normalize(Quaternion.CreateFromAxisAngle(tilt / s, MathF.Atan2(s, up.Y)) * rotation);
-    }
+    #region Severed limbs at rest
 
     // Severed limbs on the ground, falling and at rest (docs/game/blood-decals.md "On the body and on severed limbs"): drawn by the debris renderer
     // with the original's SeveredLimb look (its material's textures, the skin-tone mask, blood with the cut end solid), not as a world object.
@@ -484,9 +615,23 @@ sealed class Debris(GameHost host)
     /// </summary>
     internal sealed record RestingLimb(string Mesh, LimbLook Look, Quaternion Rotation, Vector3 Origin);
 
+    /// <summary>
+    /// The severed limbs at rest drawn as debris, by ground item id (the ground item sync drops the picked-up ones).
+    /// </summary>
     internal readonly Dictionary<int, RestingLimb> RestLimbs = [];
+    /// <summary>
+    /// Each severed limb item's race (its <c>severed limbs</c> lists it), read once.
+    /// </summary>
     Dictionary<string, GameRecord>? _limbRaces;
+    /// <summary>
+    /// Each item's severed limb look by record id; null for an item that is not a limb.
+    /// </summary>
     readonly Dictionary<string, LimbLook?> _limbLooks = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The meshes of the limbs animals hold in their mouths, by record and skin tone.
+    /// </summary>
+    readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> _mouthMeshes = [];
 
     /// <summary>
     /// Sets a landed limb down where the object path would have put it, drawn as debris with the severed limb's look.
@@ -538,8 +683,6 @@ sealed class Debris(GameHost host)
     internal static LimbLook? ToneOf(LimbLook? look, GroundItemSnapshot g) => look is null ? null
         : look with { SkinTone = g.Fall?.SkinTone ?? default };
 
-    readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> _mouthMeshes = [];
-
     /// <summary>
     /// The limb an animal holds in its mouth (<see cref="CharacterSnapshot.Mouth"/>), drawn at its <c>mouth</c> point by the character renderer: the
     /// item's <c>mesh</c> (the original attaches that one, <c>FUN_140537690</c>) with the severed limb's look and the cut character's skin tone. Null
@@ -561,10 +704,15 @@ sealed class Debris(GameHost host)
     /// </summary>
     static Vector3 LimbMiddle(string mesh, LimbLook? look, Quaternion rotation, Vector3 origin) => origin;
 
+    /// <summary>
+    /// Adds the resting limbs not hidden (picked up) whose meshes are loaded to this frame's debris.
+    /// </summary>
     void AddRestingLimbs()
     {
         foreach (var (id, r) in RestLimbs)
             if (!host.GroundItemSync.HiddenGround.Contains(id) && host.Gpu.Debris?.Extent(r.Mesh, null, r.Look) is not null)
                 host.Gpu.DebrisPieces.Add(new DebrisPiece(r.Mesh, 1, r.Rotation, LimbMiddle(r.Mesh, r.Look, r.Rotation, r.Origin), 1, r.Look));
     }
+
+    #endregion
 }

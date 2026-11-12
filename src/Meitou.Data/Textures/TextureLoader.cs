@@ -8,7 +8,13 @@ namespace Meitou.Data.Textures;
 /// <param name="Source">The DDS file when the texture came from one (for its format and other images).</param>
 public sealed record LoadedTexture(IReadOnlyList<RgbaImage> Levels, DdsFile? Source)
 {
+    /// <summary>
+    /// Width of the full-size level in pixels.
+    /// </summary>
     public int Width => Levels[0].Width;
+    /// <summary>
+    /// Height of the full-size level in pixels.
+    /// </summary>
     public int Height => Levels[0].Height;
 }
 
@@ -18,6 +24,10 @@ public sealed record LoadedTexture(IReadOnlyList<RgbaImage> Levels, DdsFile? Sou
 /// </summary>
 public static class TextureLoader
 {
+    /// <summary>
+    /// Loads the texture at <paramref name="path"/> (case resolved as on disk): a DDS by its magic, else any image StbImageSharp reads. Only a DDS
+    /// has more than one level, and only with <paramref name="allMips"/>.
+    /// </summary>
     public static LoadedTexture LoadFile(string path, bool allMips = true)
     {
         var bytes = File.ReadAllBytes(Content.GameFiles.Resolve(path));
@@ -26,6 +36,9 @@ public static class TextureLoader
         return new LoadedTexture([LoadImage(bytes)], null);
     }
 
+    /// <summary>
+    /// Decodes image 0 of <paramref name="dds"/>: every mip level with <paramref name="allMips"/>, else only the full-size one.
+    /// </summary>
     public static LoadedTexture FromDds(DdsFile dds, bool allMips = true)
     {
         var levels = new List<RgbaImage>();

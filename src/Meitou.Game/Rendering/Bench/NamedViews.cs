@@ -6,24 +6,29 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public static class NamedViews
 {
+    /// <summary>
+    /// The views by name (case-insensitive): the options each stands for.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> Table = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
         // Shark from 2000 units at 30 degrees (the town, its water and the swamp round it, as in play), orbiting the town while measured.
         ["swamp"] =
         [
-            "--world", "--town", "Shark", "--radius", "2", "--distance", "2000", "--pitch", "30", "--yaw", "300", "--time", "12", "--bench-motion", "orbit",
+            "--world", "--town", "Shark", "--radius", "2", "--distance", "2000", "--pitch", "30", "--yaw", "300", "--time", "12",
+            "--bench-motion", "orbit",
         ],
         // The same under the swamp's rain (WEATHER "swamp rain no wind": rain particles, wet ground, rain ripples on the water).
         ["swamp-rain"] =
         [
-            "--world", "--town", "Shark", "--radius", "2", "--distance", "2000", "--pitch", "30", "--yaw", "300", "--time", "12", "--bench-motion", "orbit",
-            "--weather", "swamp rain no wind",
+            "--world", "--town", "Shark", "--radius", "2", "--distance", "2000", "--pitch", "30", "--yaw", "300", "--time", "12",
+            "--bench-motion", "orbit", "--weather", "swamp rain no wind",
         ],
         // Shark from 500 units at 8 degrees, orbiting: the top of the picture reaches 17 degrees above the horizon, so the sky, the clouds and the
         // fog in front of them are in view (`swamp` looks down 30 degrees, and with the 50-degree field of view no ray there goes up).
         ["swamp-low"] =
         [
-            "--world", "--town", "Shark", "--radius", "2", "--distance", "500", "--pitch", "8", "--yaw", "300", "--time", "12", "--bench-motion", "orbit",
+            "--world", "--town", "Shark", "--radius", "2", "--distance", "500", "--pitch", "8", "--yaw", "300", "--time", "12",
+            "--bench-motion", "orbit",
         ],
         // Heft in the desert under a dust storm: big additive sprites (the weather particles' fill rate).
         ["dust"] =
@@ -35,6 +40,9 @@ public static class NamedViews
         ["hub"] = ["--world", "--town", "The Hub", "--radius", "2", "--distance", "9000", "--pitch", "10", "--yaw", "300"],
     };
 
+    /// <summary>
+    /// The views' names, comma-separated.
+    /// </summary>
     public static string Names => string.Join(", ", Table.Keys);
 
     /// <summary>
@@ -46,7 +54,12 @@ public static class NamedViews
         var result = new List<string>();
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] != "--view") { result.Add(args[i]); continue; }
+            if (args[i] != "--view")
+            {
+                result.Add(args[i]);
+                continue;
+            }
+
             if (i + 1 >= args.Length) throw new ArgumentException("--view needs a name");
             string name = args[++i];
             if (!Table.TryGetValue(name, out var expansion)) throw new ArgumentException($"unknown view '{name}' ({Names})");

@@ -8,6 +8,9 @@ namespace Meitou.Game.Rendering.Frame;
 public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour,
     float? Focus = null, float? Aperture = null)
 {
+    /// <summary>
+    /// The shot camera <paramref name="c"/> is at now, at the time of day <paramref name="hour"/>, with its focus and aperture.
+    /// </summary>
     public static CameraShot Of(WorldCamera c, float hour) =>
         new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour, c.FocusDistance, c.Aperture);
 
@@ -35,11 +38,20 @@ public readonly record struct CameraKey(CameraShot Shot, float Time, bool Ease =
 /// </summary>
 public static class CameraPath
 {
+    /// <summary>
+    /// How many values a shot is interpolated as.
+    /// </summary>
     const int Dims = 10;   // eye x, y, z, yaw, pitch, log distance, field of view, hour, log focus, log f-number
 
+    /// <summary>
+    /// A shot as its <see cref="Dims"/> interpolated values (the distance, focus and f-number as their logarithms, so they ease evenly in ratio).
+    /// </summary>
     static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour,
         MathF.Log(MathF.Max(s.Focus ?? s.Distance, 1)), MathF.Log(s.Aperture ?? PostOptions.DefaultAperture)];
 
+    /// <summary>
+    /// The shot for interpolated values <paramref name="v"/>: the distance taken back out of its logarithm and the hour wrapped into 0..24.
+    /// </summary>
     static CameraShot Shot(float[] v)
     {
         float hour = v[7] % 24;
@@ -78,6 +90,7 @@ public static class CameraPath
         if (n == 1) return keys[0].Shot;
         bool loop = loopBack is not null;
         float start = keys[0].Time, back = MathF.Max(loopBack ?? 0, 0.01f);
+
         // The key times on one lap, with the first key again at the lap's end.
         float T(int i) => i < n ? keys[i].Time : keys[0].Time + Duration(keys, back);
         if (loop)

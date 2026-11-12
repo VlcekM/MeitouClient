@@ -30,6 +30,7 @@ public static class ZoneSave
             game.Zones[z] = zone;
             made.Add(z);
         }
+
         if (made.Count > 0) BindTowns(game, data, made);
         return made;
     }
@@ -59,6 +60,9 @@ public static class ZoneSave
         }
     }
 
+    /// <summary>
+    /// The zone's building states by the instance id of the building that lists them.
+    /// </summary>
     static Dictionary<string, FcsRecord> StatesByInstance(SaveZone zone)
     {
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);

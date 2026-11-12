@@ -22,10 +22,19 @@ public readonly record struct TargetCandidate
     /// </summary>
     public int Attackers { get; init; }
 
+    /// <summary>
+    /// Whether the chooser is one of its attackers.
+    /// </summary>
     public bool ChooserAttacks { get; init; }
 
+    /// <summary>
+    /// Its Taunt order is on: +2, and the crowd term x0.35.
+    /// </summary>
     public bool Taunt { get; init; }
 
+    /// <summary>
+    /// Its Passive order is on: -1.
+    /// </summary>
     public bool Passive { get; init; }
 
     /// <summary>
@@ -71,7 +80,14 @@ public readonly record struct TargetCandidate
 /// </summary>
 public static class TargetScore
 {
+    /// <summary>
+    /// The CharStats weights: Stubbornness (the current target's bonus), Professionalness (the stagger malus), HoldingPosition (unused),
+    /// Immediacy and ImmediacyRange (the range term's weight and default reach) and Manliness (the crowd term per attacker).
+    /// </summary>
     public const float Stubbornness = 5, Professionalness = 1, HoldingPosition = 2, Immediacy = 2, ImmediacyRange = 200, Manliness = 1;
+    /// <summary>
+    /// Added for a target that is not fighting (the score is then halved for a peaceful one).
+    /// </summary>
     public const float Murderous = -2;
 
     /// <summary>

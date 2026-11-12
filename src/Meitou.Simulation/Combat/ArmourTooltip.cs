@@ -15,6 +15,9 @@ public static class ArmourTooltip
     /// </summary>
     public static readonly string[] GradeNames = ["Prototype", "Shoddy", "Standard", "High", "Specialist", "Masterwork"];
 
+    /// <summary>
+    /// The quality of each grade 0 to 5 (per cent): where <see cref="GradeOf"/> starts each grade.
+    /// </summary>
     static readonly int[] GradeQualities = [5, 20, 40, 60, 80, 95];
 
     /// <summary>
@@ -39,7 +42,25 @@ public static class ArmourTooltip
     /// How a line is shown: a heading as is, a statistic with its label in the accent colour, a grade in the colour of its grade, a skill effect with
     /// its label in the accent colour and its value in the bad colour below neutral and the good colour above.
     /// </summary>
-    public enum LineKind { Plain, Stat, Grade, Effect }
+    public enum LineKind
+    {
+        /// <summary>
+        /// A heading, shown as is.
+        /// </summary>
+        Plain,
+        /// <summary>
+        /// A statistic: its label in the accent colour.
+        /// </summary>
+        Stat,
+        /// <summary>
+        /// A grade: in the colour of its grade.
+        /// </summary>
+        Grade,
+        /// <summary>
+        /// A skill effect: its label in the accent colour, its value in the bad colour below neutral and the good colour above.
+        /// </summary>
+        Effect
+    }
 
     /// <summary>
     /// One tooltip line: a label and a value (empty for a heading); <paramref name="Grade"/> is the grade of a <see cref="LineKind.Grade"/> line, and
@@ -47,6 +68,9 @@ public static class ArmourTooltip
     /// </summary>
     public readonly record struct Line(string Label, string Value, LineKind Kind = LineKind.Plain, int Grade = 0);
 
+    /// <summary>
+    /// <paramref name="v"/> in the invariant culture with <paramref name="format"/> (up to two decimals by default).
+    /// </summary>
     static string Number(float v, string format = "0.##") => v.ToString(format, CultureInfo.InvariantCulture);
 
     /// <summary>

@@ -14,7 +14,13 @@ public sealed record SaveModSlot(string Name, string Folder, DateTime ModifiedUt
 /// </summary>
 public static class SaveModList
 {
+    /// <summary>
+    /// The FCS record type of a CAMERA record, the one holding the <c>mods</c> list.
+    /// </summary>
     const int CameraType = 56;
+    /// <summary>
+    /// The largest count or string length <see cref="ReadCount"/> accepts (64 Mi); a larger one means the file is not read right.
+    /// </summary>
     const int MaxCount = 64 * 1024 * 1024;
 
     /// <summary>
@@ -59,7 +65,10 @@ public static class SaveModList
         return null;
     }
 
-    // Skips one record; true for a CAMERA record, with its mods list (null without one).
+    /// <summary>
+    /// Skips one record; true for a CAMERA record, with its mods list (null without one). The fields are read in the save's
+    /// record layout (docs/formats/save.md).
+    /// </summary>
     static bool ReadRecordMods(BinaryReader r, out List<string>? mods)
     {
         r.ReadUInt32(); // byte size
@@ -81,7 +90,9 @@ public static class SaveModList
         return camera;
     }
 
-    // The targets of the "mods" category, in order; null without one.
+    /// <summary>
+    /// The targets of the "mods" category, in order; null without one. Each reference is a target string and three ints.
+    /// </summary>
     static List<string>? ReadReferences(BinaryReader r)
     {
         List<string>? mods = null;
@@ -99,6 +110,9 @@ public static class SaveModList
         return mods;
     }
 
+    /// <summary>
+    /// Skips a record's instance list: per instance two strings, position and rotation (28 bytes) and a list of strings.
+    /// </summary>
     static void SkipInstances(BinaryReader r)
     {
         for (int n = ReadCount(r); n > 0; n--)
@@ -110,6 +124,9 @@ public static class SaveModList
         }
     }
 
+    /// <summary>
+    /// Skips a name-keyed map whose values are <paramref name="valueSize"/> bytes each.
+    /// </summary>
     static void SkipMap(BinaryReader r, int valueSize)
     {
         for (int n = ReadCount(r); n > 0; n--)
@@ -119,6 +136,9 @@ public static class SaveModList
         }
     }
 
+    /// <summary>
+    /// Skips a map of string keys to string values.
+    /// </summary>
     static void SkipStringMap(BinaryReader r)
     {
         for (int n = ReadCount(r); n > 0; n--)
@@ -128,10 +148,19 @@ public static class SaveModList
         }
     }
 
+    /// <summary>
+    /// Skips a length-prefixed string.
+    /// </summary>
     static void SkipString(BinaryReader r) => r.BaseStream.Seek(ReadCount(r), SeekOrigin.Current);
 
+    /// <summary>
+    /// Reads a length-prefixed UTF-8 string.
+    /// </summary>
     static string ReadString(BinaryReader r) => Encoding.UTF8.GetString(r.ReadBytes(ReadCount(r)));
 
+    /// <summary>
+    /// Reads an int32 count or length; <see cref="InvalidDataException"/> when it is negative or over <see cref="MaxCount"/>.
+    /// </summary>
     static int ReadCount(BinaryReader r)
     {
         int n = r.ReadInt32();

@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Crime;
@@ -38,7 +39,8 @@ public sealed partial class CrimeSystem
     /// <summary>
     /// The effective thievery: stat 10 times its body multiplier.
     /// </summary>
-    public static float Thievery(CharacterCold c) => (c.Stats?[StatsEnumerated.Thieving] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Thieving) ?? 1);
+    public static float Thievery(CharacterCold c) =>
+        (c.Stats?[StatsEnumerated.Thieving] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Thieving) ?? 1);
 
     /// <summary>
     /// The chance that a steal from a container goes unseen (<c>FUN_1407944d0</c>, <b>Observed</b>): t = lerp(0.5, 1, clamp(distance / 200)), halved
@@ -70,13 +72,37 @@ public sealed partial class CrimeSystem
             if (squad.HomeBuilding?.Key != container.Building) continue;
             foreach (var id in squad.Members)
             {
-                if (!table.TryResolveNext(id, out int s) || !table.Next[s].Alive || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone) continue;
+                if (!table.TryResolveNext(id, out int s) || !table.Next[s].Alive
+                    || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone)
+                {
+                    continue;
+                }
                 float d = Vector3.DistanceSquared(table.Next[s].Position, at);
                 if (world.Sight.FloorOf(s, table.Next[s].Position) == floor) { if (d < sameD) (same, sameD) = (s, d); }
                 else if (d < otherD) (other, otherD) = (s, d);
             }
         }
         return same >= 0 ? same : other;
+    }
+
+    /// <summary>
+    /// The stolen mark of goods of <paramref name="building"/> owned by <paramref name="faction"/> (an item of one of its containers, a loose item
+    /// of one of its slots): its resident squad's leader of that faction, else the faction alone. The original names a character (<b>Observed</b>,
+    /// docs/game/economy.md "Fencing, stealing and smuggling": the item's <c>ownedby</c> is the bar's barman); that it is the leader rather than
+    /// another resident is <b>Unknown</b>.
+    /// </summary>
+    public static StolenMark OwnerMark(World world, string building, int faction)
+    {
+        var table = world.Characters;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.HomeBuilding?.Key != building || squad.Faction != faction || !table.TryResolveNext(squad.Leader, out int s))
+                continue;
+
+            if (table.Cold(s) is { } leader && leader.Faction == faction) return StolenMark.Of(leader, squad.Leader);
+        }
+
+        return StolenMark.OfFaction(faction);
     }
 
     /// <summary>
@@ -109,7 +135,21 @@ public sealed partial class CrimeSystem
     /// <summary>
     /// How the item left its owner's window (the three transfer paths of docs/game/carry-loot.md "Theft and witnesses").
     /// </summary>
-    public enum TakeKind { RightClick, Drag, Give }
+    public enum TakeKind
+    {
+        /// <summary>
+        /// A right click (<c>FUN_140713d20</c>).
+        /// </summary>
+        RightClick,
+        /// <summary>
+        /// A drag (<c>FUN_140715560</c>).
+        /// </summary>
+        Drag,
+        /// <summary>
+        /// A give (<c>FUN_140712490</c>).
+        /// </summary>
+        Give
+    }
 
     /// <summary>
     /// <c>InventoryGUI::isStealing</c> (<c>FUN_140711740</c>, <b>Verified</b>; docs/game/carry-loot.md "Stolen ownership") for a take out of a
@@ -126,6 +166,9 @@ public sealed partial class CrimeSystem
     public static bool IsStealing(World world, Locks.Fixture container) =>
         !NotReal(world, container.Owner) && world.SystemOf<Construction.ConstructionSystem>()?.Data(container.RecordId)?.Category != "CAMPING";
 
+    /// <summary>
+    /// Whether <paramref name="faction"/> is <c>not real</c> (false without a crime system).
+    /// </summary>
     static bool NotReal(World world, int faction) => world.SystemOf<CrimeSystem>()?.Factions.NotReal(faction) == true;
 
     /// <summary>
@@ -160,12 +203,14 @@ public sealed partial class CrimeSystem
         if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, ownerId, MinTimer);
         if (kind == TakeKind.Drag) item = null;
         float p = 1;
-        bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false }) && o.CarriedBy.IsNone && !o.IsImprisoned
+        bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false })
+            && o.CarriedBy.IsNone && !o.IsImprisoned
             && c.Medical is not { Incapacitated: true };
         if (watches)
         {
             p = 1.1f * Thievery(c) * 0.01f;
-            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section)) p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
+            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section))
+                p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
         }
         return Roll(world, thief, watches ? owner : -1, p, o.Faction, ownerId, Rng.Key(ownerId));
     }
@@ -190,16 +235,19 @@ public sealed partial class CrimeSystem
             else
             {
                 if (watcher.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, watcherId);
-                else if (table.Next[w].Task == (byte)CharacterTask.Rest) TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
+                else if (table.Next[w].Task == (byte)CharacterTask.Rest)
+                    TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
                 // One staying low or playing dead stands (posture 0, docs/game/ragdolls.md "Staying low").
                 if (watcher.Medical is { } low) low.StandUp();
                 world.Defer(new Dialogue.DialogueEvent(watcherId, thiefId, CaughtEvent) { Tick = world.Tick + 1 });
                 if (c.IsPlayer) world.Post("Got caught stealing.");
                 SetPending(world, thief, CrimeCode.Theft, faction, victim, CaughtTimer, viaWrapper: true);
-                if (watcher.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Remember(world, watcher.SquadId, thiefId, Dialogue.MemoryTag.StoleFromMe);
+                if (watcher.SquadId >= 0)
+                    world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Remember(world, watcher.SquadId, thiefId, Dialogue.MemoryTag.StoleFromMe);
             }
         }
-        if (p < 0.98f && !c.IsImprisoned && (c.Pending?.Timer ?? 0) < 10 && c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp);
+        if (p < 0.98f && !c.IsImprisoned && (c.Pending?.Timer ?? 0) < 10 && c.Stats is { } stats && c.Race is { } race)
+            Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp);
         return caught;
     }
 

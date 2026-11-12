@@ -41,6 +41,9 @@ public struct CharacterHot
     /// World position: X/Z on the map, Y the height the character stands at.
     /// </summary>
     public Vector3 Position;
+    /// <summary>
+    /// Velocity in world units per second.
+    /// </summary>
     public Vector3 Velocity;
 
     /// <summary>
@@ -52,6 +55,9 @@ public struct CharacterHot
     /// Movement mode (walk, run, ...); the meaning is the movement system's.
     /// </summary>
     public byte Mode;
+    /// <summary>
+    /// The movement flags (<see cref="Movement.MoveFlags"/>).
+    /// </summary>
     public ushort Flags;
 
     /// <summary>
@@ -68,19 +74,31 @@ public struct CharacterHot
     /// Animation state and its time in seconds.
     /// </summary>
     public ushort Animation;
+    /// <summary>
+    /// The animation's time in seconds (see <see cref="Animation"/>).
+    /// </summary>
     public float AnimationTime;
+    /// <summary>
+    /// The blood left as a percentage of the blood capacity, 0..100 (set by <see cref="BodySystem"/>).
+    /// </summary>
     public float Health;
 
     /// <summary>
     /// What the character is doing (a <see cref="CharacterTask"/>) and the time in seconds that task keeps (a wait, a repath cooldown).
     /// </summary>
     public byte Task;
+    /// <summary>
+    /// The time in seconds the task keeps (see <see cref="Task"/>).
+    /// </summary>
     public float TaskTime;
 
     /// <summary>
     /// The speed stat S in world units (decimetres) per second, and the race walk speed (the cap of speed mode 0).
     /// </summary>
     public float MaxSpeed;
+    /// <summary>
+    /// The race walk speed, the cap of speed mode 0 (see <see cref="MaxSpeed"/>).
+    /// </summary>
     public float WalkSpeed;
 }
 
@@ -90,7 +108,13 @@ public struct CharacterHot
 /// </summary>
 public sealed class CharacterCold
 {
+    /// <summary>
+    /// The character's name.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The character's faction, a position in the world's faction list.
+    /// </summary>
     public int Faction { get; set; }
 
     /// <summary>
@@ -112,6 +136,9 @@ public sealed class CharacterCold
     /// The squad it belongs to (-1 for none) and its role in it (the editor's SquadMemberType).
     /// </summary>
     public int SquadId { get; set; } = -1;
+    /// <summary>
+    /// Its role in the squad (see <see cref="SquadId"/>).
+    /// </summary>
     public int Role { get; set; }
 
     /// <summary>
@@ -135,6 +162,9 @@ public sealed class CharacterCold
     /// last update (+0x94). Not saved; the flag is hashed while following.
     /// </summary>
     public bool FollowDirect { get; set; }
+    /// <summary>
+    /// Where the follower was at its last update (see <see cref="FollowDirect"/>).
+    /// </summary>
     public Vector3 FollowLast { get; set; }
 
     /// <summary>
@@ -193,6 +223,9 @@ public sealed class CharacterCold
     /// with the path, not hashed.
     /// </summary>
     public int PathExact { get; set; } = int.MaxValue;
+    /// <summary>
+    /// The tick before which the provisional part is not asked for again (see <see cref="PathExact"/>).
+    /// </summary>
     public long ProvisionalRepathTick { get; set; }
 
     /// <summary>
@@ -230,13 +263,22 @@ public sealed class CharacterCold
     /// not hashed.
     /// </summary>
     public Vector3[]? SplicePath { get; set; }
+    /// <summary>
+    /// The last point of <see cref="SplicePath"/> the splice replaces.
+    /// </summary>
     public int SpliceEnd { get; set; }
+    /// <summary>
+    /// The goal the splice was asked for (see <see cref="SplicePath"/>).
+    /// </summary>
     public Vector2 SpliceGoal { get; set; }
 
     /// <summary>
     /// The splice request in flight (0: none), and the last one sent, so its answer is never taken for a whole path. Not hashed.
     /// </summary>
     public long SpliceRequest { get; set; }
+    /// <summary>
+    /// The last splice request sent (see <see cref="SpliceRequest"/>).
+    /// </summary>
     public long LastSplice { get; set; }
 
     /// <summary>
@@ -255,6 +297,9 @@ public sealed class CharacterCold
     /// stacked. Other goals use the character's own height. Derived from orders and not hashed.
     /// </summary>
     public float GoalHeight { get; set; } = float.NaN;
+    /// <summary>
+    /// The goal <see cref="GoalHeight"/> belongs to.
+    /// </summary>
     public Vector2 GoalHeightAt { get; set; }
 
     /// <summary>
@@ -291,6 +336,9 @@ public sealed class CharacterCold
     /// only: not hashed, not saved).
     /// </summary>
     public Meitou.Data.Gameplay.Bodies.StatsEnumerated SkillInUse { get; private set; }
+    /// <summary>
+    /// The tick <see cref="SkillInUse"/> was set at.
+    /// </summary>
     public long SkillInUseTick { get; private set; } = long.MinValue;
 
     /// <summary>
@@ -326,7 +374,13 @@ public sealed class CharacterCold
     /// visual: not hashed, not saved (the original keeps them in its appearance only).
     /// </summary>
     public List<StuckBolt>? StuckBolts { get; set; }
+    /// <summary>
+    /// The character's stats (null: none).
+    /// </summary>
     public CharacterStats? Stats { get; set; }
+    /// <summary>
+    /// The character's medical state (null: none).
+    /// </summary>
     public MedicalState? Medical { get; set; }
 
     /// <summary>
@@ -334,6 +388,9 @@ public sealed class CharacterCold
     /// speed chain's). Not hashed; the normal game never sets them.
     /// </summary>
     public byte? ModeOverride { get; set; }
+    /// <summary>
+    /// The speed the character walks at in the sandbox (0: the speed chain's; see <see cref="ModeOverride"/>).
+    /// </summary>
     public float SpeedOverride { get; set; }
 
     /// <summary>
@@ -359,6 +416,9 @@ public sealed class CharacterCold
     /// hashed, not saved.
     /// </summary>
     public float StandHeight { get; set; }
+    /// <summary>
+    /// The swim speed (<see cref="Bodies.Speed.Swim"/>), set by <see cref="BodySystem"/>.
+    /// </summary>
     public float SwimSpeed { get; set; }
 
     /// <summary>
@@ -367,7 +427,13 @@ public sealed class CharacterCold
     /// not immune; None otherwise. Sight and hearing read them. Derived each tick: not hashed, not saved.
     /// </summary>
     public Meitou.Data.World.WeatherAffecting Weather { get; set; }
+    /// <summary>
+    /// The region's strength of the weather (see <see cref="Weather"/>).
+    /// </summary>
     public float WeatherStrength { get; set; }
+    /// <summary>
+    /// The worn protection from the weather (see <see cref="Weather"/>).
+    /// </summary>
     public float WeatherProtection { get; set; }
 
     /// <summary>
@@ -376,6 +442,9 @@ public sealed class CharacterCold
     /// shows. Derived each tick: not hashed, not saved.
     /// </summary>
     public WeatherNotice WeatherNotice { get; set; }
+    /// <summary>
+    /// The protection <see cref="WeatherNotice"/> shows.
+    /// </summary>
     public float WeatherNoticeProtection { get; set; }
 
     /// <summary>
@@ -383,6 +452,9 @@ public sealed class CharacterCold
     /// docs/game/blood-decals.md). Display only: not hashed, not saved.
     /// </summary>
     public Vector3 BloodMark { get; set; }
+    /// <summary>
+    /// The drip build-up while it bleeds being carried (see <see cref="BloodMark"/>).
+    /// </summary>
     public float BloodDrip { get; set; }
 
     /// <summary>
@@ -621,6 +693,9 @@ public sealed class CharacterCold
     /// its stealth XP rate reads (<see cref="Bodies.XpService.Sneaking"/>).
     /// </summary>
     public StealthExposure StealthExposure { get; set; }
+    /// <summary>
+    /// The tick <see cref="StealthExposure"/> was set at.
+    /// </summary>
     public long StealthExposureTick { get; set; } = long.MinValue;
 
     /// <summary>
@@ -630,6 +705,9 @@ public sealed class CharacterCold
     /// the stats object and no loader writes it: <b>Observed</b>).
     /// </summary>
     public float StealthFactor { get; set; } = 1;
+    /// <summary>
+    /// The hearing checks' XP, paid into Stealth by <see cref="BodySystem"/> (see <see cref="StealthFactor"/>).
+    /// </summary>
     public float HearingXp { get; set; }
 
     /// <summary>
@@ -780,6 +858,9 @@ public sealed class CharacterCold
     /// until <see cref="BedExitDone"/>. Not saved; hashed while set.
     /// </summary>
     public bool LeavingBed { get; set; }
+    /// <summary>
+    /// The backwards bed clip has played out (see <see cref="LeavingBed"/>).
+    /// </summary>
     public bool BedExitDone { get; set; }
 
     /// <summary>
@@ -881,6 +962,9 @@ public sealed class CharacterCold
     /// any. Row 98's desire reads it ; derived, not hashed or saved.
     /// </summary>
     public double BedUsedHours { get; set; }
+    /// <summary>
+    /// The fixture id it is in (see <see cref="InSomething"/>).
+    /// </summary>
     public string? InWhat { get; set; }
 
     /// <summary>
@@ -893,6 +977,9 @@ public sealed class CharacterCold
     /// hours (save keys <c>sentence</c>, <c>psts</c>); served when start + length is not after now. Length 0: none (served).
     /// </summary>
     public double SentenceStart { get; set; }
+    /// <summary>
+    /// The sentence's length in game hours (see <see cref="SentenceStart"/>).
+    /// </summary>
     public float SentenceLength { get; set; }
 
     /// <summary>
@@ -915,6 +1002,9 @@ public sealed class CharacterCold
     /// set.
     /// </summary>
     public float DisguiseLevel { get; set; }
+    /// <summary>
+    /// The uniform's faction (-1: none; see <see cref="DisguiseLevel"/>).
+    /// </summary>
     public int DisguiseFaction { get; set; } = -1;
 
     /// <summary>
@@ -1214,6 +1304,9 @@ public sealed class CharacterCold
     /// not hashed.
     /// </summary>
     internal long TaskSetTick = -1;
+    /// <summary>
+    /// The task the start path last set (see <see cref="TaskSetTick"/>).
+    /// </summary>
     internal byte TaskSet;
 }
 
@@ -1227,12 +1320,34 @@ public sealed class CharacterCold
 /// </summary>
 public sealed class CharacterTable
 {
+    /// <summary>
+    /// The last tick's state, by slot (see <see cref="Previous"/>).
+    /// </summary>
     CharacterHot[] _previous;
+    /// <summary>
+    /// The state being computed, by slot (see <see cref="Next"/>).
+    /// </summary>
     CharacterHot[] _next;
+    /// <summary>
+    /// The cold half of each slot (null: free).
+    /// </summary>
     CharacterCold?[] _cold;
+    /// <summary>
+    /// The freed slots, the most recently freed on top.
+    /// </summary>
     readonly Stack<int> _free = [];
+    /// <summary>
+    /// The slots ever used (see <see cref="HighWater"/>).
+    /// </summary>
     int _highWater;
+    /// <summary>
+    /// Whether a tick is under way (between <see cref="BeginTick"/> and <see cref="EndTick"/>): a change outside one goes to the last tick's
+    /// state too.
+    /// </summary>
     bool _inTick;
+    /// <summary>
+    /// Where in a tick the table is (see <see cref="Phase"/>).
+    /// </summary>
     TablePhase _phase = TablePhase.Outside;
 
     /// <summary>
@@ -1241,6 +1356,9 @@ public sealed class CharacterTable
     /// </summary>
     public System.Collections.Concurrent.ConcurrentQueue<(int Character, int Limb)> LimbsChanged { get; } = new();
 
+    /// <summary>
+    /// A table with room for <paramref name="capacity"/> slots (it grows when they are used up).
+    /// </summary>
     public CharacterTable(int capacity = 256)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
@@ -1274,6 +1392,9 @@ public sealed class CharacterTable
     /// </summary>
     public Span<CharacterHot> Next => _next.AsSpan(0, _highWater);
 
+    /// <summary>
+    /// The cold half of the character in <paramref name="slot"/> (null: free).
+    /// </summary>
     public CharacterCold? Cold(int slot) => _cold[slot];
 
     /// <summary>
@@ -1296,6 +1417,9 @@ public sealed class CharacterTable
         return slot >= 0 && slot < _highWater && _next[slot].Alive && _next[slot].Generation == id.Generation;
     }
 
+    /// <summary>
+    /// Where in a tick the table is: spawns and removals in the wrong phase throw.
+    /// </summary>
     internal TablePhase Phase
     {
         get => _phase;
@@ -1312,6 +1436,9 @@ public sealed class CharacterTable
     /// </summary>
     internal void SetDormant(int slot, bool dormant) => _previous[slot].Dormant = dormant;
 
+    /// <summary>
+    /// Starts a tick: the state being computed becomes a copy of the last one.
+    /// </summary>
     internal void BeginTick()
     {
         Ticks++;
@@ -1319,6 +1446,9 @@ public sealed class CharacterTable
         _inTick = true;
     }
 
+    /// <summary>
+    /// Ends a tick: the computed state becomes the last tick's.
+    /// </summary>
     internal void EndTick()
     {
         (_previous, _next) = (_next, _previous);
@@ -1347,6 +1477,7 @@ public sealed class CharacterTable
             _highWater++;
             generation = 0;
         }
+
         state.Alive = true;
         state.Generation = generation;
 
@@ -1377,6 +1508,7 @@ public sealed class CharacterTable
     {
         if (_phase is TablePhase.Parallel or TablePhase.Inputs or TablePhase.Schedule)
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
+
         if (!TryResolveNext(id, out int slot)) return false;
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
@@ -1403,6 +1535,9 @@ public sealed class CharacterTable
         if (!_inTick) _previous[slot] = n;
     }
 
+    /// <summary>
+    /// Doubles the table's room.
+    /// </summary>
     void Grow()
     {
         int size = _previous.Length * 2;
@@ -1471,12 +1606,14 @@ public sealed class CharacterTable
             hasher.Add(0x4C766742);
             hasher.Add(k.BedExitDone);
         }
+
         if (c.Task == (byte)CharacterTask.Follow)
         {
             hasher.Add(k.FollowHeading);
             hasher.Add(k.FollowSpeed);
             hasher.Add(k.FollowDirect);
         }
+
         if (k.PaceCap is { } pace) hasher.Add(pace);
         hasher.Add(k.Path.Length);
         hasher.Add(k.PathRequest);
@@ -1487,6 +1624,17 @@ public sealed class CharacterTable
         if (k.Inventory is null) hasher.Add(-1); else k.Inventory.Hash(ref hasher);
         hasher.Add(k.DiedTick);
         if (k.HasFlies) hasher.Add(0x466C6965);
+        HashCombatMotion(ref hasher, k);
+        if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
+        hasher.Add(k.Name.Length);
+    }
+
+    /// <summary>
+    /// The fight and steering part of <see cref="HashColdFields"/>: in combat, the chase run, the steer or path chase, the failed targets, the
+    /// steer and agent speeds (each only while set).
+    /// </summary>
+    static void HashCombatMotion(ref StateHasher hasher, CharacterCold k)
+    {
         hasher.Add(k.InCombat);
         if (k.CombatRunning || k.TargetFleeingTime != 0)
         {
@@ -1514,18 +1662,18 @@ public sealed class CharacterTable
                 }
             }
         }
+
         if (k.SteerSpeed != 0)
         {
             hasher.Add(0x53746572);
             hasher.Add(k.SteerSpeed);
         }
+
         if (k.AgentSpeed != 0)
         {
             hasher.Add(0x41676e74);
             hasher.Add(k.AgentSpeed);
         }
-        if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
-        hasher.Add(k.Name.Length);
     }
 
     /// <summary>
@@ -1554,6 +1702,7 @@ public sealed class CharacterTable
             hasher.Add((int)resume);
             if (k.TreatSplint) hasher.Add(0x53706C74);
         }
+
         if (k.Fleeing) hasher.Add(k.FleesAlone ? 0x466C6566 : 0x466C6565);   // only while set, so worlds without fleeing hash as before
         if (k.StealthExposureTick != long.MinValue)
         {
@@ -1579,11 +1728,13 @@ public sealed class CharacterTable
             hasher.Add(0x43617272);
             hasher.Add(k.Carrying);
         }
+
         if (!k.CarriedBy.IsNone)
         {
             hasher.Add(0x42726E65);
             hasher.Add(k.CarriedBy);
         }
+
         if (k.CarriedAwake) hasher.Add(0x4177616B);
         if (c.Task is (byte)CharacterTask.PickUp or (byte)CharacterTask.PutDown or (byte)CharacterTask.Loot or (byte)CharacterTask.StealthKo)
         {
@@ -1609,6 +1760,7 @@ public sealed class CharacterTable
             hasher.Add(0x4F726473);
             hasher.Add((int)k.Orders);
         }
+
         if (k.RunSpeed != SpeedMode.Free)
         {
             hasher.Add(0x52756E53);
@@ -1625,6 +1777,7 @@ public sealed class CharacterTable
             hasher.Add(0x41694D64);
             mind.Hash(ref hasher);
         }
+
         if (k.Engaged) hasher.Add(0x456E6761);
         if (!k.FollowOrder.IsNone)
         {
@@ -1632,6 +1785,7 @@ public sealed class CharacterTable
             hasher.Add(k.FollowOrder);
             if (k.Guarding) hasher.Add(0x47756172);
         }
+
         if (k.FollowResume) hasher.Add(0x46526573);
         if (k.Replan) hasher.Add(0x52706C6E);
         if (!k.TurretTarget.IsNone)
@@ -1639,11 +1793,13 @@ public sealed class CharacterTable
             hasher.Add(0x54725467);
             hasher.Add(k.TurretTarget);
         }
+
         if (!k.Freeing.IsNone)
         {
             hasher.Add(0x46726565);
             hasher.Add(k.Freeing);
         }
+
         if (k.EnteringCage is { } entering)
         {
             hasher.Add(0x456E7472);
@@ -1672,6 +1828,7 @@ public sealed class CharacterTable
             hasher.Add((int)k.InSomething);
             hasher.Add(k.InWhat is { } w ? Rng.StableHash(w) : 0UL);
         }
+
         if (k.SentenceLength > 0)
         {
             hasher.Add(k.SentenceStart);
@@ -1690,17 +1847,20 @@ public sealed class CharacterTable
             hasher.Add(0x52576E74);
             hasher.Add(k.RecentlyWanted);
         }
+
         if (k.Recognition > 0)
         {
             hasher.Add(0x5265636F);
             hasher.Add(k.Recognition);
         }
+
         if (k.DisguiseLevel > 0)
         {
             hasher.Add(0x44697367);
             hasher.Add(k.DisguiseLevel);
             hasher.Add(k.DisguiseFaction);
         }
+
         if (k.Escaped) hasher.Add(0x45736361);
         if (k.Kidnapped) hasher.Add(0x4B64706E);
         if (k.Freed) hasher.Add(0x46726564);
@@ -1712,6 +1872,7 @@ public sealed class CharacterTable
             hasher.Add(k.SlaveOwner);
             if (k.SlaveState > 1) hasher.Add(k.SlaveSince);
         }
+
         if (k.Shaved) hasher.Add(0x53686176);
         if (k.Crouched) hasher.Add(0x43726F63);
         if (k.PickingLock is { } pick)
@@ -1735,12 +1896,14 @@ public sealed class CharacterTable
             if (k.BashWall) hasher.Add(0x57616C6C);
             if (k.BashErrand) hasher.Add(0x45727264);
         }
+
         if (k.ForcingLock is { } force)
         {
             hasher.Add(0x466F7263);
             hasher.Add(Rng.StableHash(force));
             hasher.Add((int)k.Force);
         }
+
         if (k.DoorJob is { } doorJob)
         {
             hasher.Add(0x446F724A);
@@ -1748,17 +1911,20 @@ public sealed class CharacterTable
             hasher.Add(doorJob.Lock);
             hasher.Add(doorJob.Work);
         }
+
         if (k.Shackles is { } job)
         {
             hasher.Add(0x5368636B);
             hasher.Add(Rng.Key(job.Wearer));
             hasher.Add((int)job.Work);
         }
+
         if (k.PickingUpItem is { } taking)
         {
             hasher.Add(0x54616B65);
             hasher.Add(taking);
         }
+
         if (k.Mouth is { } mouth)
         {
             hasher.Add(0x4D6F7574);
@@ -1775,7 +1941,10 @@ public sealed class CharacterTable
         // A builder's site, bar and the task it goes back to add to the hash only while it works one, so worlds without sites hash as before.
         if (k.BuildSite is { } site)
         {
-            hasher.Add(0x4275696C); hasher.Add(Rng.StableHash(site)); hasher.Add(k.BuildBar); hasher.Add((int)resume);
+            hasher.Add(0x4275696C);
+            hasher.Add(Rng.StableHash(site));
+            hasher.Add(k.BuildBar);
+            hasher.Add((int)resume);
             if (k.FetchRecord is { } fetch)
             {
                 hasher.Add(0x46657463);
@@ -1784,22 +1953,26 @@ public sealed class CharacterTable
                 hasher.Add(k.FetchItem ?? 0);
             }
         }
+
         if (k.OperateSite is { } machine)
         {
             hasher.Add(0x4F706572);
             hasher.Add(Rng.StableHash(machine));
         }
+
         if (k.Prospecting is { } prospected)
         {
             hasher.Add(0x50726F73);
             hasher.Add(prospected);
         }
+
         if (k.HaulSite is { } haul)
         {
             hasher.Add(0x4861756C);
             hasher.Add(Rng.StableHash(haul));
             hasher.Add(Rng.StableHash(k.HaulFetch ?? ""));
         }
+
         if (k.HaulTo is { } haulTo) hasher.Add(Rng.StableHash(haulTo));
     }
 
@@ -1815,12 +1988,14 @@ public sealed class CharacterTable
             hasher.Add((int)listJob.Row);
             hasher.Add((int)listJob.Resume);
         }
+
         // the job passes' mark, only while it runs
         if (k.Running is { Source: TaskSource.Job, Task: CharacterTask.Treat or CharacterTask.PickUp or CharacterTask.Loot } pass
             && pass.Runs((CharacterTask)c.Task))
         {
             hasher.Add(0x4A6F6254);
         }
+
         if (k.Jobs.Count > 0)
         {
             hasher.Add(0x4A6F6273);
@@ -1849,11 +2024,20 @@ public enum TablePhase
     /// Spawns allowed; removals not (the phases that follow read the character as alive).
     /// </summary>
     Inputs,
+    /// <summary>
+    /// The schedule: spawns allowed, removals not (as <see cref="Inputs"/>).
+    /// </summary>
     Schedule,
     /// <summary>
     /// Think, move, act: no spawns or removals.
     /// </summary>
     Parallel,
+    /// <summary>
+    /// The commit: spawns and removals allowed.
+    /// </summary>
     Commit,
+    /// <summary>
+    /// The slow world: spawns and removals allowed.
+    /// </summary>
     SlowWorld,
 }

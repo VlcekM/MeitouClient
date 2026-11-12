@@ -28,25 +28,36 @@ public sealed record GetInCageOrder(IReadOnlyList<CharacterId> Characters, strin
 /// </summary>
 public sealed partial class LockSystem
 {
+    /// <summary>
+    /// The Set Free order: a player character frees a conscious prisoner from its cage.
+    /// </summary>
     void SetFreeInput(World world, SetFreeOrder order)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(order.Prisoner, out int p) || table.Cold(p) is not { IsImprisoned: true, InWhat: { } where } pc
                 || world.Fixtures.Find(where) is not { } cage)
             return;
+
         if (!Conscious(pc)) return;
         int best = NearestWorker(world, order.Characters, cage, TaskType.ReleasePrisoner);
         if (best >= 0)
             StartWork(world, best, CharacterTask.GoTo, TaskType.ReleasePrisoner, cage.Id, order.Prisoner, queued: order.Queued);
     }
 
+    /// <summary>
+    /// Whether a character is conscious (Set Free's precondition 125).
+    /// </summary>
     static bool Conscious(CharacterCold c) => CharacterFacts.Conscious(c);   // Set Free's precondition 125
 
+    /// <summary>
+    /// The Get In order: the nearest player character able to gets into the free cage.
+    /// </summary>
     void GetInInput(World world, GetInCageOrder order)
     {
         var table = world.Characters;
         if (world.Fixtures.Find(order.Cage) is not { Kind: FixtureKind.Cage } cage || !FixtureRegistry.IsFree(table, cage))
             return;
+
         int best = NearestWorker(world, order.Characters, cage, TaskType.UseCage);
         if (best < 0 || !table.Cold(best)!.Carrying.IsNone) return;
         StartWork(world, best, CharacterTask.GoTo, TaskType.UseCage, cage.Id, queued: order.Queued);
@@ -69,6 +80,7 @@ public sealed partial class LockSystem
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(where.Position));
             if (d < bestDistance) (best, bestDistance) = (s, d);
         }
+
         return best;
     }
 
@@ -79,6 +91,9 @@ public sealed partial class LockSystem
     static bool Redirected(in CharacterHot n, Vector2 at, float reach) =>
         n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, at) > MathF.Max(reach, IWalkability.FloorSearch);
 
+    /// <summary>
+    /// Clears a character's lock work.
+    /// </summary>
     static void ClearWork(CharacterCold c)
     {
         c.PickingLock = null;
@@ -123,11 +138,15 @@ public sealed partial class LockSystem
                 TakeOffCuffs(world, c, table.Next[s].Position);
                 continue;
             }
+
             c.PickingLock = null;
             c.Shackles = new ShackleJob(table.IdOf(s), Lockpicking.BestTool(c) is null ? ShackleWork.Pick : ShackleWork.Cut);
         }
     }
 
+    /// <summary>
+    /// How often the AI's shackled characters are looked at for an escape (see <see cref="ShackleEscapes"/>).
+    /// </summary>
     const int EscapeEveryTicks = 30;
 
     /// <summary>
@@ -162,6 +181,7 @@ public sealed partial class LockSystem
             if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || f.Lock is { Locked: true }
                     || !table.TryResolveNext(f.Occupant, out int s))
                 continue;
+
             if (table.Cold(s) is not { IsImprisoned: true, IsPlayer: false, Medical.Incapacitated: false, Ai: { Squad: { Ai: { } board } squad } } c)
                 continue;
             // 256, 207 (Escape cage: A !79, B !54, the same task with the escape flag) or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256)
@@ -183,8 +203,10 @@ public sealed partial class LockSystem
             if (!next[s].Alive || table.Cold(s) is not { } c || c.Freeing.IsNone && c.EnteringCage is null) continue;
             Fixture? cage = null;
             if (!c.Freeing.IsNone)
+            {
                 cage = table.TryResolveNext(c.Freeing, out int p) && table.Cold(p) is { IsImprisoned: true, InWhat: { } where }
                         ? world.Fixtures.Find(where) : null;
+            }
             else if (world.Fixtures.Find(c.EnteringCage!) is { Kind: FixtureKind.Cage } entering && FixtureRegistry.IsFree(table, entering))
                 cage = entering;
             if (cage is null || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone || c.IsImprisoned || !c.Carrying.IsNone
@@ -194,6 +216,7 @@ public sealed partial class LockSystem
                 c.EnteringCage = null;
                 continue;
             }
+
             float reach = cage.UseRange + Reach;
             var at = Flat(cage.Position);
             if (Vector2.Distance(Flat(next[s].Position), at) > reach)
@@ -204,8 +227,10 @@ public sealed partial class LockSystem
                     c.Freeing = CharacterId.None;
                     c.EnteringCage = null;
                 }
+
                 continue;
             }
+
             if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             if (c.Freeing.IsNone)
             {
@@ -215,9 +240,11 @@ public sealed partial class LockSystem
                     if (c.IsPlayer) Say(world, c, "It's locked.");
                     continue;
                 }
+
                 world.Fixtures.Imprison(world, table.IdOf(s), cage, constants.PrisonTime);
                 continue;
             }
+
             var prisoner = c.Freeing;
             c.Freeing = CharacterId.None;
 
@@ -228,12 +255,14 @@ public sealed partial class LockSystem
                 if (c.IsPlayer) Say(world, c, "It's locked.");
                 continue;
             }
+
             if (!table.TryResolveNext(prisoner, out int ps) || table.Cold(ps) is not { } pc || !Conscious(pc)) continue;
 
             // Letting a prisoner out of another faction's cage is the crime of lifting it out (FixtureRegistry.LiftOut): a pending code 7 against the
             // cage's owner.
             if (cage.Owner >= 0 && cage.Owner != c.Faction)
                 Crimes?.SetPending(world, s, CrimeCode.Terrorism, cage.Owner, prisoner, CrimeSystem.MinTimer);
+
             if (FreeBy(world, table.IdOf(s), c.Faction, prisoner))
                 world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
         }
@@ -254,10 +283,12 @@ public sealed partial class LockSystem
             talk.Forgive(world, p, releaser);   // the prisoner forgives the releaser (FUN_14067aca0, both orders)
             if (Crimes?.Factions.Books(faction) == true) talk.Forgive(world, r, prisoner);
         }
-        if (Crimes?.Factions.Books(faction) == true) world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick
-                + 1 });
-        else if (faction == world.Player.Faction) world.Defer(new Dialogue.DialogueEvent(prisoner, releaser,
-                UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+
+        if (Crimes?.Factions.Books(faction) == true)
+            world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
+        else if (faction == world.Player.Faction)
+            world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+
         return true;
     }
 }

@@ -15,16 +15,44 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class NgxDlssUpscaler : IUpscaler
 {
-    // NVSDK_NGX_DLSS_Feature_Flags
+    /// <summary>
+    /// NVSDK_NGX_DLSS_Feature_Flags: HDR colour, motion vectors at the render size, and DLSS's own auto exposure.
+    /// </summary>
     const int FlagHdr = 1 << 0, FlagMotionLowRes = 1 << 1, FlagAutoExposure = 1 << 6;
 
+    /// <summary>
+    /// The NGX instance DLSS runs through.
+    /// </summary>
     readonly Ngx _ngx;
+
+    /// <summary>
+    /// The device context the evaluation is recorded on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The parameter map the feature is created and evaluated with.
+    /// </summary>
     readonly void* _parameters;
+
+    /// <summary>
+    /// The DLSS feature (null: none yet, or released for new options).
+    /// </summary>
     void* _feature;
+
+    /// <summary>
+    /// The options the feature was created with: the mode, the render and display sizes, the preset and whether DLSS measures the exposure.
+    /// </summary>
     (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) _options;
+
+    /// <summary>
+    /// A call failed: DLSS is off for the rest of the run.
+    /// </summary>
     bool _failed;
 
+    /// <summary>
+    /// Keeps the NGX instance and the parameter map; the feature comes with the first dispatch.
+    /// </summary>
     NgxDlssUpscaler(Ngx ngx, GpuContext ctx, void* parameters)
     {
         this._ngx = ngx;
@@ -38,21 +66,45 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     [StructLayout(LayoutKind.Sequential)]
     struct VkResource
     {
+        /// <summary>
+        /// The image view and the image.
+        /// </summary>
         public nint View, Image;
 
-        // VkImageSubresourceRange
+        /// <summary>
+        /// The image's subresource range (a VkImageSubresourceRange): aspect, base level, levels, base layer and layers.
+        /// </summary>
         public uint Aspect, BaseLevel, Levels, BaseLayer, Layers;
+
+        /// <summary>
+        /// The image's format (a VkFormat) and size.
+        /// </summary>
         public uint Format, Width, Height;
 
-        // 0 = image view
+        /// <summary>
+        /// The resource's type: 0 an image view.
+        /// </summary>
         public int Type;
+
+        /// <summary>
+        /// Whether NGX writes the image (the output only).
+        /// </summary>
         public byte ReadWrite;
     }
 
+    /// <summary>
+    /// The upscaler's kind, for the post chain's choice and the statistics.
+    /// </summary>
     public UpscalerKind Kind => UpscalerKind.Dlss;
 
+    /// <summary>
+    /// The upscaler's name with the render size of its feature.
+    /// </summary>
     public string Name { get; private set; } = "dlss";
 
+    /// <summary>
+    /// The upscaler on <paramref name="ngx"/>, or null with the reason (NGX not loaded, DLSS not supported, or the parameter map not allocated).
+    /// </summary>
     public static NgxDlssUpscaler? TryCreate(Ngx? ngx, GpuContext ctx, out string? reason)
     {
         if (ngx is null)
@@ -92,6 +144,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         _ => 3,          // UltraPerformance
     };
 
+    /// <inheritdoc/>
     public bool Dispatch(UpscaleInputs i)
     {
         if (_failed) return false;
@@ -177,6 +230,10 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         };
     }
 
+    /// <summary>
+    /// Creates the DLSS feature for the options <paramref name="o"/> (render and display size, mode, flags, the preset for every mode), recorded into
+    /// <paramref name="cb"/>; false (logged, DLSS off) on failure.
+    /// </summary>
     bool Create(nint cb, (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) o)
     {
         var p = _parameters;
@@ -217,6 +274,9 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         _feature = null;
     }
 
+    /// <summary>
+    /// Logs <paramref name="message"/> and turns DLSS off for the rest of the run; false.
+    /// </summary>
     bool Fail(string message)
     {
         Console.WriteLine($"upscaler  {message}");
@@ -224,6 +284,9 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         return false;
     }
 
+    /// <summary>
+    /// Releases the feature and, after the frames in flight, the parameter map.
+    /// </summary>
     public void Dispose()
     {
         Release();

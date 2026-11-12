@@ -12,8 +12,17 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 public sealed partial class NavmeshWalkability : IWalkability
 {
+    /// <summary>
+    /// The terrain height function, for points the loaded zones' heightmaps do not cover.
+    /// </summary>
     readonly Func<float, float, float> _ground;
+    /// <summary>
+    /// The stand-in that answers outside the loaded zones (open ground over the terrain by default).
+    /// </summary>
     readonly IWalkability _fallback;
+    /// <summary>
+    /// The loaded zones' meshes; replaced whole by <see cref="SetWorld"/>, read once per call.
+    /// </summary>
     volatile NavWorld _world = NavWorld.Empty;
 
     /// <param name="routeTerrain">Makes the finer height function the long-range grid is built from (<see cref="CoarseRoute"/>); null:
@@ -38,6 +47,9 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public NavDoorGeometry? DoorGeometry { get; internal set; }
 
+    /// <summary>
+    /// The loaded zones' meshes now (a snapshot: it does not change under the caller).
+    /// </summary>
     public NavWorld World => _world;
 
     /// <summary>
@@ -82,6 +94,9 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public const float EdgeTolerance = 2;
 
+    /// <summary>
+    /// This thread's list for the heights of the mesh layers at a point.
+    /// </summary>
     [ThreadStatic] static List<float>? s_scratch;
 
     /// <summary>
@@ -102,6 +117,7 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public float GroundHeight(float x, float z, float nearY) => TryStand(_world, x, z, nearY, out float y) ? y : Ground(_world, x, z);
 
+    /// <inheritdoc/>
     public float TerrainHeight(float x, float z) => Ground(_world, x, z);
 
     /// <summary>
@@ -119,6 +135,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         return floor ? s : terrain;
     }
 
+    /// <inheritdoc/>
     public bool IsWalkable(float x, float z)
     {
         var w = _world;
@@ -138,6 +155,34 @@ public sealed partial class NavmeshWalkability : IWalkability
         return TryStand(w, x, z, nearY, out _, out bool reachable) && reachable;
     }
 
+    /// <summary>
+    /// As <see cref="IsWalkable(float, float, float)"/>, without the polygon within <see cref="EdgeTolerance"/>: a walker that stands only by it is
+    /// at the edge of a hole in the mesh.
+    /// </summary>
+    public bool IsOnSurface(float x, float z, float nearY)
+    {
+        var w = _world;
+        if (!w.Contains(WorldLayout.ZoneOf(x, z))) return _fallback.IsWalkable(x, z);
+        return TryStand(w, x, z, nearY, out _, out bool reachable, edges: false) && reachable;
+    }
+
+    /// <inheritdoc/>
+    public Vector3 SurfacePoint(Vector3 at, float inset)
+    {
+        var w = _world;
+        if (!w.Contains(WorldLayout.ZoneOf(at.X, at.Z)) || IsOnSurface(at.X, at.Z, at.Y)) return at;
+        if (!w.TryEdgePoint(at.X, at.Z, at.Y, EdgeTolerance, out var edge)) return at;
+
+        // Over the polygon itself (its layer out of reach of the walker's height): no edge to come in from.
+        var inward = new Vector2(edge.X - at.X, edge.Z - at.Z);
+        float off = inward.Length();
+        if (off < 1e-4f) return at;
+
+        inward *= inset / off;
+        return new Vector3(edge.X + inward.X, at.Y, edge.Z + inward.Y);
+    }
+
+    /// <inheritdoc/>
     public bool TryStand(float x, float z, float nearY, out float y)
     {
         var w = _world;
@@ -149,6 +194,9 @@ public sealed partial class NavmeshWalkability : IWalkability
         return w.Contains(WorldLayout.ZoneOf(x, z)) ? reachable : _fallback.IsWalkable(x, z);
     }
 
+    /// <summary>
+    /// As the other overload, without telling whether a layer was within reach.
+    /// </summary>
     bool TryStand(NavWorld w, float x, float z, float nearY, out float y) => TryStand(w, x, z, nearY, out y, out _);
 
     /// <summary>
@@ -174,9 +222,18 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     const int FloorCacheLimit = 16384;
 
+    /// <summary>
+    /// The <see cref="FloorNear"/> answers found on one loaded world.
+    /// </summary>
     sealed class FloorCache(NavWorld world)
     {
+        /// <summary>
+        /// The world the answers were found on; another world starts a new cache.
+        /// </summary>
         public readonly NavWorld World = world;
+        /// <summary>
+        /// The answers by spot, height and slack (null: no floor near).
+        /// </summary>
         public readonly System.Collections.Concurrent.ConcurrentDictionary<(float X, float Z, float Y, float Slack), Vector3?> Found = new();
         /// <summary>
         /// Answers added since <see cref="Found"/> was last cleared (a spot asked twice at once counts twice: the limit is loose).
@@ -184,20 +241,24 @@ public sealed partial class NavmeshWalkability : IWalkability
         public int Added;
     }
 
+    /// <summary>
+    /// The answers for the current world; replaced when the world changes.
+    /// </summary>
     volatile FloorCache _floors = new(NavWorld.Empty);
 
     /// <summary>
     /// The real surface of the highest mesh layer at (x, z) within <see cref="StandRise"/> above <paramref name="nearY"/> and <see cref="StandDrop"/>
     /// below it (by the mesh's height or the real one: on steep stairs the mesh is up to 20 off, and judged by the real height alone the walker's own
     /// layer could fall out of reach and drop it to a floor far below, Observed at Fallen Tower); with none there, the one of a polygon within
-    /// <see cref="EdgeTolerance"/> (a walker grazing the edge of a hole in a floor); else the lowest. <paramref name="reachable"/>: a layer was
-    /// within reach. False off the mesh.
+    /// <see cref="EdgeTolerance"/> (a walker grazing the edge of a hole in a floor; not when <paramref name="edges"/> is false); else the lowest.
+    /// <paramref name="reachable"/>: a layer was within reach. False off the mesh.
     /// </summary>
-    bool TryStand(NavWorld w, float x, float z, float nearY, out float y, out bool reachable)
+    bool TryStand(NavWorld w, float x, float z, float nearY, out float y, out bool reachable, bool edges = true)
     {
         var heights = s_scratch ??= [];
         heights.Clear();
-        w.HeightsAt(x, z, heights, float.IsFinite(nearY) ? nearY : 0, float.IsFinite(nearY) ? EdgeTolerance : 0);
+        float edge = edges && float.IsFinite(nearY) ? EdgeTolerance : 0;
+        w.HeightsAt(x, z, heights, float.IsFinite(nearY) ? nearY : 0, edge);
         y = float.MinValue;
         reachable = false;
         if (heights.Count == 0) return false;
@@ -213,10 +274,10 @@ public sealed partial class NavmeshWalkability : IWalkability
             y = s;
             reachable = true;
         }
-        if (!reachable && near && w.TryEdgeHeight(x, z, nearY, EdgeTolerance, out float edge))
+        if (!reachable && near && edges && w.TryEdgeHeight(x, z, nearY, EdgeTolerance, out float beside))
         {
-            float s = Snap(w, x, z, edge, out _);
-            if (MathF.Min(edge, s) <= nearY + StandRise && MathF.Max(edge, s) >= nearY - StandDrop)
+            float s = Snap(w, x, z, beside, out _);
+            if (MathF.Min(beside, s) <= nearY + StandRise && MathF.Max(beside, s) >= nearY - StandDrop)
                 (y, reachable) = (s, true);
         }
         if (!reachable) y = lowest;
@@ -268,12 +329,18 @@ public sealed partial class NavmeshWalkability : IWalkability
         return terrain <= TerrainSnapRange ? t : h;
     }
 
+    /// <summary>
+    /// A path for <see cref="NavAgent.Human"/>.
+    /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to) => FindPath(from, to, NavAgent.Human);
 
     /// <summary>
     /// The long-range router over the terrain, for goals in zones whose navmesh is not loaded (its grid is built on first use).
     /// </summary>
     public CoarseRoute Coarse => _coarse.Value;
+    /// <summary>
+    /// Makes <see cref="Coarse"/> on first use, from the terrain and the route factories the constructor was given.
+    /// </summary>
     readonly Lazy<CoarseRoute> _coarse;
 
     /// <summary>
@@ -351,15 +418,24 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// How long (s) a goal found unreachable is remembered (engine choice; a door locked or unlocked meanwhile drops it at once).
     /// </summary>
     public const double UnreachableSeconds = 10;
+    /// <summary>
+    /// How many unreachable goals are remembered at most; reaching it clears them all.
+    /// </summary>
     const int UnreachableLimit = 4096;
 
-    // Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
-    // mesh, after a zone went live or unloaded, asks again), the doors' version (NavDoors.Version), the nearest reachable point and when. Each was
-    // 300-600 ms of searching, asked again and again by a town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in a
-    // building, docs/game/pathfinding.md).
+    /// <summary>
+    /// Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
+    /// mesh, after a zone went live or unloaded, asks again), the doors' version (NavDoors.Version), the nearest reachable point and when. Each was
+    /// 300-600 ms of searching, asked again and again by a town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in a
+    /// building, docs/game/pathfinding.md).
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, int Doors,
             Vector3 Nearest, long At)> _unreachable = new();
 
+    /// <summary>
+    /// The key of the goal polygon of <paramref name="to"/> for <paramref name="agent"/>; null when no polygon is within
+    /// <see cref="NavQuery.GoalSnap"/> of it.
+    /// </summary>
     static (NavRef, float, bool)? UnreachableKey(NavWorld w, Vector3 to, NavAgent agent) =>
         w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
 
@@ -369,6 +445,10 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public const float Lookahead = 4000;
 
+    /// <summary>
+    /// When each zone without a mesh was last passed by a provisional route (a <see cref="System.Diagnostics.Stopwatch"/> timestamp),
+    /// for <see cref="RouteZones"/>.
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<ZoneCoordinate, long> _routeZones = new();
 
     /// <summary>
@@ -384,6 +464,10 @@ public sealed partial class NavmeshWalkability : IWalkability
                 _routeZones.TryRemove(zone, out _);
     }
 
+    /// <summary>
+    /// Records in <see cref="_routeZones"/> the unloaded zones the route's points from <paramref name="exact"/> on pass through, every
+    /// <see cref="HandoverStep"/> units for <see cref="Lookahead"/> units.
+    /// </summary>
     void Ahead(NavWorld w, List<Vector3> points, int exact)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -412,8 +496,15 @@ public sealed partial class NavmeshWalkability : IWalkability
         return path.Found ? FromWalker(from, path) : path;
     }
 
+    /// <summary>
+    /// This thread's set of polygon keys a failed search reached (<see cref="Exact"/>).
+    /// </summary>
     [ThreadStatic] static HashSet<long>? s_failedRegions;
 
+    /// <summary>
+    /// The navmesh path from <paramref name="from"/> to <paramref name="to"/> on the real ground; for a walker off the mesh whose path begins with a
+    /// step it cannot take, up to <see cref="OffMeshStarts"/> other start polygons are tried, skipping the regions failed searches reached.
+    /// </summary>
     PathResult Exact(NavWorld w, Vector3 from, Vector3 to, NavAgent agent)
     {
         var query = new NavQuery(w, Doors);
@@ -470,6 +561,9 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public const float SteppableReach = 10;
 
+    /// <summary>
+    /// Whether some mesh layer lies under <paramref name="p"/> (X/Z).
+    /// </summary>
     static bool IsOnMesh(NavWorld w, Vector3 p)
     {
         var heights = s_scratch ??= [];
@@ -547,9 +641,10 @@ public sealed partial class NavmeshWalkability : IWalkability
     {
         var (route, road) = Route(from, to, agent);
         if (route.Count == 0) return _fallback.FindPath(from, to);
-        if (!fromLoaded) { Ahead(w, route, 1); return new PathResult(route)
+        if (!fromLoaded)
         {
-            Exact = 1 };
+            Ahead(w, route, 1);
+            return new PathResult(route) { Exact = 1 };
         }
 
         // The handover: the farthest point along the route, in steps, that lies well inside the loaded zones, and the index of the route point after
@@ -575,18 +670,20 @@ public sealed partial class NavmeshWalkability : IWalkability
             if (left) break;
             along += length;
         }
-        if (handover is not var (next, point)) { Ahead(w, route, 1); return new PathResult(route)
+        if (handover is not var (next, point))
         {
-            Exact = 1 };
+            Ahead(w, route, 1);
+            return new PathResult(route) { Exact = 1 };
         }
 
         // The navmesh path there, or to the reachable point nearest it (it may stand in a building, or behind a wall or a cliff the terrain grid does
         // not know); from such a point the rest of the route is looked for again.
         var target = new Vector3(point.X, GroundHeight(point.X, point.Z, point.Y), point.Z);
         var part = Toward(w, from, target, agent);
-        if (!part.Found) { Ahead(w, route, 1); return new PathResult(route)
+        if (!part.Found)
         {
-            Exact = 1 };
+            Ahead(w, route, 1);
+            return new PathResult(route) { Exact = 1 };
         }
         var points = part.Points.ToList();
         var end = points[^1];

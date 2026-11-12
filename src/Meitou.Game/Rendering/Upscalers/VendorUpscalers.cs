@@ -36,8 +36,13 @@ public static class VendorUpscalers
                 ? old
                 : null;
 
+    /// <summary>
+    /// Makes the upscaler of a kind: FSR, or DLSS through NGX (Linux, or with <paramref name="ngx"/>) else Streamline; null, with the reason logged,
+    /// when it cannot be made.
+    /// </summary>
     /// <param name="streamline">Streamline, when it was initialised before the device (DLSS on Windows); null otherwise.</param>
-    /// <param name="ngx">NGX, when it was initialised before the device (DLSS on Linux, and on Windows with frame generation); null otherwise.</param>
+    /// <param name="ngx">NGX, when it was initialised before the device (DLSS on Linux, and on Windows with frame generation); null
+    /// otherwise.</param>
     public static Func<UpscalerKind, IUpscaler?> Factory(GpuContext ctx, Streamline? streamline, Ngx? ngx = null) => kind =>
     {
         IUpscaler? upscaler = null;
@@ -46,9 +51,11 @@ public static class VendorUpscalers
         if (kind == UpscalerKind.Fsr)
             upscaler = FsrUpscaler.TryCreate(ctx, out reason);
         else if (kind == UpscalerKind.Dlss)
+        {
             upscaler = OperatingSystem.IsLinux() || ngx is not null
                 ? NgxDlssUpscaler.TryCreate(ngx, ctx, out reason)
                 : DlssUpscaler.TryCreate(streamline, ctx, out reason);
+        }
 
         if (upscaler is null) Console.WriteLine($"upscaler  {reason}");
         return upscaler;

@@ -10,11 +10,26 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class OgreMeshReader
 {
+    /// <summary>
+    /// The header of serializer version 1.100 (Ogre 2.0's), which stores LOD levels as manual or generated chunks.
+    /// </summary>
     public const string Version1100 = "[MeshSerializer_v1.100]";
+    /// <summary>
+    /// The header of serializer version 1.8.
+    /// </summary>
     public const string Version18 = "[MeshSerializer_v1.8]";
+    /// <summary>
+    /// The header of serializer version 1.41: poses have no normals.
+    /// </summary>
     public const string Version141 = "[MeshSerializer_v1.41]";
+    /// <summary>
+    /// The header of serializer version 1.40 (common in mods): no LOD strategy name, LOD distances squared.
+    /// </summary>
     public const string Version140 = "[MeshSerializer_v1.40]";
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static OgreMesh ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
@@ -71,6 +86,9 @@ public static class OgreMeshReader
         }
     }
 
+    /// <summary>
+    /// Reads a whole mesh file; <see cref="OgreFormatException"/> for an unsupported version, an unexpected chunk or a file cut short.
+    /// </summary>
     public static OgreMesh Read(byte[] data)
     {
         var s = new OgreStream(data);
@@ -99,6 +117,10 @@ public static class OgreMeshReader
         }
     }
 
+    /// <summary>
+    /// Reads an <c>M_MESH</c> chunk: its flag, then its sub-chunks; edge lists are walked and animations and extremes skipped, each counted in
+    /// <see cref="OgreMesh.SkippedChunks"/>.
+    /// </summary>
     static void ReadMesh(OgreStream s, OgreMesh mesh)
     {
         mesh.SkeletallyAnimated = s.ReadBool();
@@ -148,8 +170,10 @@ public static class OgreMeshReader
         }
     }
 
-    // Ogre's readPoses / readPose (ogre-next v2-0): POSE chunks with name, target and (from 1.8) an includes-normals
-    // flag, each followed by POSE_VERTEX chunks (vertex index, offset, normal if flagged). 1.41 has no normals.
+    /// <summary>
+    /// Ogre's readPoses / readPose (ogre-next v2-0): POSE chunks with name, target and (from 1.8) an includes-normals flag, each followed by
+    /// POSE_VERTEX chunks (vertex index, offset, normal if flagged). 1.41 has no normals. The poses go to <see cref="OgreMesh.Poses"/>.
+    /// </summary>
     static void ReadPoses(OgreStream s, OgreMesh mesh)
     {
         while (s.TryReadChunk([Pose], out _, out _))
@@ -167,9 +191,16 @@ public static class OgreMeshReader
         }
     }
 
+    /// <summary>
+    /// Counts one more skipped <paramref name="chunk"/> in <see cref="OgreMesh.SkippedChunks"/>.
+    /// </summary>
     static void Count(OgreMesh mesh, OgreMeshChunk chunk) =>
         mesh.SkippedChunks[chunk] = mesh.SkippedChunks.GetValueOrDefault(chunk) + 1;
 
+    /// <summary>
+    /// Reads a submesh: material, shared-vertices flag, indices, its own geometry when it has some, then its operation, bone weights and
+    /// texture aliases.
+    /// </summary>
     static OgreSubMesh ReadSubMesh(OgreStream s)
     {
         var sub = new OgreSubMesh
@@ -208,6 +239,9 @@ public static class OgreMeshReader
         return sub;
     }
 
+    /// <summary>
+    /// Reads a vertex set: the vertex count, the declaration and each buffer, whose vertex size must match its declared elements.
+    /// </summary>
     static OgreVertexData ReadGeometry(OgreStream s)
     {
         var data = new OgreVertexData { VertexCount = s.ReadUInt32() };
@@ -237,8 +271,14 @@ public static class OgreMeshReader
         return data;
     }
 
+    /// <summary>
+    /// Reads one bone weight: vertex index, bone index, weight.
+    /// </summary>
     static OgreBoneAssignment ReadBoneAssignment(OgreStream s) => new(s.ReadUInt32(), s.ReadUInt16(), s.ReadFloat());
 
+    /// <summary>
+    /// Reads <paramref name="count"/> indices of 32 bits when <paramref name="is32"/>, else 16.
+    /// </summary>
     static OgreIndexBuffer ReadIndices(OgreStream s, uint count, bool is32)
     {
         var indices = new uint[count];
@@ -247,7 +287,10 @@ public static class OgreMeshReader
         return new OgreIndexBuffer(is32, indices);
     }
 
-    // Version 1.100: each level is a MANUAL or GENERATED chunk (usage value first); generated levels can share buffers.
+    /// <summary>
+    /// Version 1.100: each level is a MANUAL or GENERATED chunk (usage value first); generated levels can share buffers. Level 0, the full mesh, is
+    /// not stored.
+    /// </summary>
     static OgreLod ReadLod(OgreStream s, OgreMesh mesh)
     {
         var lod = new OgreLod { Strategy = s.ReadString() };
@@ -285,7 +328,9 @@ public static class OgreMeshReader
         return lod;
     }
 
-    // Versions 1.8 / 1.41: a "manual" flag for all levels; each level is a USAGE chunk holding a MANUAL chunk or one GENERATED chunk per submesh.
+    /// <summary>
+    /// Versions 1.8 / 1.41: a "manual" flag for all levels; each level is a USAGE chunk holding a MANUAL chunk or one GENERATED chunk per submesh.
+    /// </summary>
     static OgreLod ReadLodV1_8(OgreStream s, OgreMesh mesh)
     {
         // 1.40 has no strategy name and stores each level's distance squared (docs/formats/ogre-mesh.md).
@@ -318,6 +363,9 @@ public static class OgreMeshReader
         return lod;
     }
 
+    /// <summary>
+    /// Walks the edge list chunks field by field without keeping them.
+    /// </summary>
     static void SkipEdgeLists(OgreStream s)
     {
         while (s.TryReadChunk([EdgeListLod], out _, out _))
@@ -337,6 +385,9 @@ public static class OgreMeshReader
         }
     }
 
+    /// <summary>
+    /// Reads a chunk header that must be <paramref name="chunk"/>; <see cref="OgreFormatException"/> otherwise.
+    /// </summary>
     static void Expect(OgreStream s, OgreMeshChunk chunk)
     {
         var (id, _) = s.ReadChunk();
@@ -350,9 +401,18 @@ public static class OgreMeshReader
 /// </summary>
 sealed class OgreStream(byte[] data)
 {
+    /// <summary>
+    /// Bytes of a chunk header: a ushort id and a uint length that counts the header too.
+    /// </summary>
     public const int ChunkHeaderSize = 6;
 
+    /// <summary>
+    /// The read position in the file.
+    /// </summary>
     public int Position { get; private set; }
+    /// <summary>
+    /// Whether the whole file has been read.
+    /// </summary>
     public bool Eof => Position >= data.Length;
 
     /// <summary>
@@ -368,6 +428,9 @@ sealed class OgreStream(byte[] data)
         return ReadString();
     }
 
+    /// <summary>
+    /// Reads a chunk header: its id and length (header included).
+    /// </summary>
     public (ushort Id, int Length) ReadChunk() => (ReadUInt16(), checked((int)ReadUInt32()));
 
     /// <summary>
@@ -401,8 +464,14 @@ sealed class OgreStream(byte[] data)
         return true;
     }
 
+    /// <summary>
+    /// Reads a one-byte boolean.
+    /// </summary>
     public bool ReadBool() => data[Position++] != 0;
 
+    /// <summary>
+    /// Reads a little-endian ushort.
+    /// </summary>
     public ushort ReadUInt16()
     {
         var v = BitConverter.ToUInt16(data, Position);
@@ -410,6 +479,9 @@ sealed class OgreStream(byte[] data)
         return v;
     }
 
+    /// <summary>
+    /// Reads a little-endian uint.
+    /// </summary>
     public uint ReadUInt32()
     {
         var v = BitConverter.ToUInt32(data, Position);
@@ -417,6 +489,9 @@ sealed class OgreStream(byte[] data)
         return v;
     }
 
+    /// <summary>
+    /// Reads a little-endian float.
+    /// </summary>
     public float ReadFloat()
     {
         var v = BitConverter.ToSingle(data, Position);
@@ -424,6 +499,9 @@ sealed class OgreStream(byte[] data)
         return v;
     }
 
+    /// <summary>
+    /// Reads three floats as x, y, z.
+    /// </summary>
     public Vector3 ReadVector3() => new(ReadFloat(), ReadFloat(), ReadFloat());
 
     /// <summary>
@@ -431,6 +509,9 @@ sealed class OgreStream(byte[] data)
     /// </summary>
     public Quaternion ReadQuaternion() => new(ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat());
 
+    /// <summary>
+    /// Reads <paramref name="count"/> bytes into a new array; <see cref="IndexOutOfRangeException"/> past the end.
+    /// </summary>
     public byte[] ReadBytes(int count)
     {
         if (count < 0 || count > data.Length - Position) throw new IndexOutOfRangeException();
@@ -439,6 +520,9 @@ sealed class OgreStream(byte[] data)
         return result;
     }
 
+    /// <summary>
+    /// Moves past <paramref name="count"/> bytes; <see cref="IndexOutOfRangeException"/> past the end.
+    /// </summary>
     public void Skip(int count)
     {
         if (count < 0 || count > data.Length - Position) throw new IndexOutOfRangeException();
@@ -460,8 +544,14 @@ sealed class OgreStream(byte[] data)
     }
 }
 
+/// <summary>
+/// A malformed or unsupported Ogre binary file, with the byte offset where reading stopped.
+/// </summary>
 public sealed class OgreFormatException(string message, long offset, Exception? inner = null)
     : FormatException($"{message} (at byte {offset})", inner)
 {
+    /// <summary>
+    /// The byte offset in the file where the problem was found.
+    /// </summary>
     public long Offset { get; } = offset;
 }

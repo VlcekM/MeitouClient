@@ -10,7 +10,26 @@ namespace Meitou.Simulation.Navigation;
 /// <summary>
 /// BUILDING <c>path mode</c> (FCS PathMode).
 /// </summary>
-internal enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }
+internal enum PathMode
+{
+    /// <summary>
+    /// IGNORE: paths ignore the building; its shapes are left out of the navmesh and its parts are collision groups 23..26.
+    /// </summary>
+    Ignore = 0,
+    /// <summary>
+    /// The value 1; no rule of the gatherer tests for it, so it is an obstacle like any mode but IGNORE and WALKABLE.
+    /// </summary>
+    Projected = 1,
+    /// <summary>
+    /// OBSTACLE, the default of a record without one: the building's shapes cut the mesh.
+    /// </summary>
+    Obstacle = 2,
+    /// <summary>
+    /// WALKABLE: the building's shapes are walkable up to <see cref="ZoneGeometryGatherer.BuildingSlopeDegrees"/>
+    /// (docs/game/pathfinding.md, "Inputs").
+    /// </summary>
+    Walkable = 3
+}
 
 /// <summary>
 /// Gathers the navmesh input of one zone from the game data as the original's generator does (docs/game/pathfinding.md, "Inputs"; collision files and
@@ -43,20 +62,60 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     /// </summary>
     public const float DefaultMargin = 72;
 
+    /// <summary>
+    /// The game install the heightmap, seeds, foliage and collision files are read from.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// The game data the BUILDING and part records are looked up in.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The level data whose placed buildings, states and interiors are gathered.
+    /// </summary>
     readonly WorldLevelData _levels;
+    /// <summary>
+    /// The collision files read so far (may be shared with other gatherers).
+    /// </summary>
     readonly CollisionCache _collision;
+    /// <summary>
+    /// This gatherer's handle on the terrain heightmap (the reason one instance serves one thread).
+    /// </summary>
     readonly TerrainHeightmap _map;
+    /// <summary>
+    /// The seeds.def points by zone; null when the install has no seeds file.
+    /// </summary>
     readonly List<Vector3>[]? _seedsByZone;
+    /// <summary>
+    /// The building layouts (signs, stalls, furniture) of the level data's interiors, with its layout swaps.
+    /// </summary>
     readonly BuildingLayouts _layouts;
+    /// <summary>
+    /// The buildings placed at run time, gathered with the level data's; null: none.
+    /// </summary>
     readonly NavRuntimeBuildings? _runtime;
 
-    // The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one thread at a time.
+    /// <summary>
+    /// The placed foliage of the zones gathered so far.
+    /// </summary>
+    readonly FoliageObstacles _foliage;
+
+    /// <summary>
+    /// The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one
+    /// thread at a time.
+    /// </summary>
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> _byZone = [];
+    /// <summary>
+    /// The <see cref="WorldLevelData.EditRevision"/> <see cref="_byZone"/> was made at; -1 before the first index.
+    /// </summary>
     int _indexedRevision = -1;
 
-    public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision, NavRuntimeBuildings? runtime = null)
+    /// <summary>
+    /// A gatherer over the install's terrain, seeds and foliage and <paramref name="levels"/>' buildings (and <paramref name="runtime"/>'s, null:
+    /// none), sharing <paramref name="collision"/>.
+    /// </summary>
+    public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision,
+        NavRuntimeBuildings? runtime = null)
     {
         this._install = install;
         this._db = db;
@@ -67,6 +126,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         _seedsByZone = NavSeeds.Load(install);
         _layouts = new BuildingLayouts(db, levels.Interiors);
         _layouts.UseSwaps(levels);
+        _foliage = new FoliageObstacles(install, db, levels);
     }
 
     /// <summary>
@@ -75,17 +135,23 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     public bool IncludeFoliage { get; set; } = true;
 
     /// <summary>
-    /// Every convex obstacle is a <see cref="NavSolid"/> too, so the ground inside a closed building volume is removed (the original's cutting materials).
+    /// Every convex obstacle is a <see cref="NavSolid"/> too, so the ground inside a closed building volume is removed (the original's cutting
+    /// materials).
     /// </summary>
     public bool CarveConvexObstacles { get; set; } = true;
 
+    /// <summary>
+    /// Closes the heightmap and the foliage data.
+    /// </summary>
     public void Dispose()
     {
         _map.Dispose();
-        foreach (var w in _foliagePool)
-            w.Dispose();
+        _foliage.Dispose();
     }
 
+    /// <summary>
+    /// The terrain heightmap's height at world (<paramref name="x"/>, <paramref name="z"/>).
+    /// </summary>
     public float TerrainHeight(double x, double z) => _map.HeightAt(x, z);
 
     /// <summary>
@@ -121,7 +187,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         var sw = Stopwatch.StartNew();
 
         // Foliage placement is the long pole: it runs on the pool while the terrain and buildings are gathered here.
-        var foliageTask = IncludeFoliage ? Task.Run(() => FoliageOf(FoliageRing(zone))) : null;
+        var foliageTask = IncludeFoliage ? Task.Run(() => _foliage.Of(FoliageRing(zone))) : null;
         AddTerrain(g);
         double terrain = sw.Elapsed.TotalMilliseconds;
         sw.Restart();

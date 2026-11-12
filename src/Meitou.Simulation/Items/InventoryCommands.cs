@@ -11,12 +11,19 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality);
 /// <summary>
-/// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange"/> on the character's grids.
+/// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange(Inventory, bool)"/> on the grid of the window
+/// pressed: the character's main grid, or the worn bag's when <paramref name="Bag"/>.
 /// </summary>
-public sealed record ArrangeInventory(CharacterId Character) : SimCommand;
+public sealed record ArrangeInventory(CharacterId Character, bool Bag = false) : SimCommand;
 
+/// <summary>
+/// Moving items between inventory sections and grids, and the sections' rules.
+/// </summary>
 public static class InventoryCommands
 {
+    /// <summary>
+    /// Whether <paramref name="section"/> is a worn item's (equipment) section.
+    /// </summary>
     public static bool IsEquipmentSection(string section) => section is "back" or "hip" or "shirt" or "head" or "legs" or "boots" or "armour"
             or "belt" or "backpack_attach";
 
@@ -84,14 +91,20 @@ public static class InventoryCommands
             if (section == "boots" && cold.Race is { NoShoes: false } && inventory.Items.Find(i => i.Section == section) is { } boots)
             {
                 inventory.Items.Remove(boots);
-                PlayerSystem.DropAhead(world, slot, boots);
+                HeldItems.DropAhead(world, slot, boots);
             }
             inventory.Items.RemoveAll(i => i.Section == section);
         }
     }
 
+    /// <summary>
+    /// The sections a race or a missing limb can close (<see cref="ValidateSections"/>).
+    /// </summary>
     static readonly string[] ClosableSections = ["shirt", "head", "boots"];
 
+    /// <summary>
+    /// Whether items may be moved into <paramref name="section"/>: the main grid, a backpack's contents or an equipment section.
+    /// </summary>
     public static bool IsMovableSection(string section) => section is "main" or "backpack_content" || IsEquipmentSection(section);
     /// <summary>
     /// A fitted prosthetic's section (<see cref="Meitou.Data.Gameplay.Bodies.LimbReplacement.SlotOf"/>): the limbs window's slots; not traded, not
@@ -104,7 +117,9 @@ public static class InventoryCommands
     public static int LimbSlotOf(string section)
             => section switch { "left_arm_replace" => 0, "right_arm_replace" => 1, "left_leg_replace" => 2, "right_leg_replace" => 3, _ => -1 };
 
-    // Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
+    /// <summary>
+    /// Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
+    /// </summary>
     public static (int Width, int Height) SectionSize(string section) => section switch
     {
         "back" => (10, 2),
@@ -155,6 +170,10 @@ public static class InventoryCommands
         return false;
     }
 
+    /// <summary>
+    /// Moves the item of <paramref name="token"/> within <paramref name="root"/> to <paramref name="section"/> at (<paramref name="x"/>,
+    /// <paramref name="y"/>); prosthetic sections allowed; false when it cannot go there.
+    /// </summary>
     public static bool Move(Inventory root, InventoryItemToken token, string section, int x, int y, CharacterCold? wearer = null)
             => Transfer(root, token, root, section, x, y, limbs: true, wearer);
 
@@ -257,10 +276,22 @@ public static class InventoryCommands
     /// by its area, then by its width, largest first (a stable sort); the first order in which everything fits is kept, otherwise every item goes
     /// back where it was (false).
     /// </summary>
-    public static bool Arrange(Inventory root)
+    public static bool Arrange(Inventory root) => Arrange([(root, "main"), (root.Backpack?.Contents, "backpack_content")]);
+
+    /// <summary>
+    /// The ARRANGE button of one window (<c>FUN_14070f740</c>, <b>Observed</b>: it arranges only the inventory its window shows, its vtable
+    /// <c>+0x70</c>): the main grid, or the worn bag's when <paramref name="bag"/>; as <see cref="Arrange(Inventory)"/> otherwise.
+    /// </summary>
+    public static bool Arrange(Inventory root, bool bag) =>
+        Arrange(bag ? [(root.Backpack?.Contents, "backpack_content")] : [(root, "main")]);
+
+    /// <summary>
+    /// Arranges <paramref name="sections"/> (a grid and the section of it arranged; a missing grid is skipped) as <see cref="Arrange(Inventory)"/>.
+    /// </summary>
+    static bool Arrange((Inventory? Grid, string Section)[] sections)
     {
         var grids = new List<(Inventory Grid, string Section, ItemInstance[] Items)>();
-        foreach (var (grid, section) in new[] { (root, "main"), (root.Backpack?.Contents, "backpack_content") })
+        foreach (var (grid, section) in sections)
             if (grid is not null) grids.Add((grid, section, [.. grid.Items]));
         var saved = grids.SelectMany(g => g.Items).Select(i => (Item: i, i.X, i.Y, i.Quantity, i.Charges)).ToArray();
         void Restore()

@@ -12,8 +12,17 @@ namespace Meitou.Simulation.Construction;
 /// </summary>
 public sealed class MaterialSlot(string item, float required)
 {
+    /// <summary>
+    /// The ITEM record of the material.
+    /// </summary>
     public string Item { get; } = item;
+    /// <summary>
+    /// The amount needed, in whole units.
+    /// </summary>
     public float Required { get; set; } = required;
+    /// <summary>
+    /// The amount handed over so far, in whole units.
+    /// </summary>
     public float Delivered { get; set; }
 }
 
@@ -24,11 +33,17 @@ public sealed class MaterialSlot(string item, float required)
 /// </summary>
 public sealed class BuildSite
 {
+    /// <summary>
+    /// The site's instance id (<c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> for a player-built one).
+    /// </summary>
     public required string Id { get; init; }
     /// <summary>
     /// Existing town placement, replaced in place during repairs; never a new save instance.
     /// </summary>
     public BuildingPlacement? LevelPlacement { get; init; }
+    /// <summary>
+    /// The name of the level-data town of <see cref="LevelPlacement"/> (null: none), shown as the town it belongs to.
+    /// </summary>
     public string? LevelTownName { get; init; }
     /// <summary>
     /// The BUILDING record; an upgrade or downgrade swaps it in place (<see cref="ConstructionSystem"/> "Upgrades").
@@ -38,8 +53,17 @@ public sealed class BuildSite
     /// The BUILDING's name (messages only; not hashed).
     /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// Where it stands.
+    /// </summary>
     public Vector3 Position { get; init; }
+    /// <summary>
+    /// Its rotation.
+    /// </summary>
     public Quaternion Rotation { get; init; } = Quaternion.Identity;
+    /// <summary>
+    /// Its floor.
+    /// </summary>
     public int Floor { get; init; }
     /// <summary>
     /// The instance id of the building this one stands in (null outdoors).
@@ -59,14 +83,29 @@ public sealed class BuildSite
     /// The owning faction, a position in the world's faction list.
     /// </summary>
     public int Owner { get; set; }
+    /// <summary>
+    /// The material entries.
+    /// </summary>
     public required MaterialSlot[] Materials { get; set; }
+    /// <summary>
+    /// The build progress, in material units (see <see cref="Target"/>).
+    /// </summary>
     public float Progress { get; set; }
+    /// <summary>
+    /// The progress at which it is complete, in material units.
+    /// </summary>
     public float Target { get; set; }
     /// <summary>
     /// Progress per game second of one unit of build work: <c>build speed mult</c> / (1200/11).
     /// </summary>
     public float Rate { get; set; }
+    /// <summary>
+    /// Whether it is complete.
+    /// </summary>
     public bool Complete { get; set; }
+    /// <summary>
+    /// Whether building it is paused.
+    /// </summary>
     public bool Paused { get; set; }
     /// <summary>
     /// Open to the public (the original's Building+0xc8, saved as <c>is public day</c>; the stats panel's toggle).
@@ -124,13 +163,19 @@ public sealed class BuildSite
     /// </summary>
     public bool NeedsWork => Destroyed || !Complete || Progress < Target;
 
+    /// <summary>
+    /// Adds the site's state to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Rng.StableHash(Id));
         if (LevelPlacement is not null) h.Add(0x4c657665);
         h.Add(Rng.StableHash(Record));
         h.Add(Position);
-        h.Add(Rotation.X); h.Add(Rotation.Y); h.Add(Rotation.Z); h.Add(Rotation.W);
+        h.Add(Rotation.X);
+        h.Add(Rotation.Y);
+        h.Add(Rotation.Z);
+        h.Add(Rotation.W);
         h.Add(Floor);
         h.Add(Parent is null ? 0UL : Rng.StableHash(Parent));
         h.Add(Owner);
@@ -172,6 +217,9 @@ public sealed class PlayerTown
     /// 1, 2, ... in creation (or load) order: what <see cref="BuildSite.Town"/> holds.
     /// </summary>
     public required int Number { get; init; }
+    /// <summary>
+    /// The outpost's name.
+    /// </summary>
     public string Name { get; set; } = DefaultName;
     /// <summary>
     /// The centre: where it was made, then the mean of its buildings (<see cref="ConstructionSystem.ReassessTown"/>).
@@ -205,6 +253,9 @@ public sealed class PlayerTown
     /// </summary>
     public Data.Save.Hand? SaveHandle { get; set; }
 
+    /// <summary>
+    /// Adds the town's state to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Number);
@@ -224,21 +275,51 @@ public sealed class PlayerTown
 /// </summary>
 public sealed partial class BuildingRegistry
 {
+    /// <summary>
+    /// The sites in creation order.
+    /// </summary>
     readonly List<BuildSite> _sites = [];
+    /// <summary>
+    /// The player towns in creation order.
+    /// </summary>
     readonly List<PlayerTown> _towns = [];
+    /// <summary>
+    /// The sites by id.
+    /// </summary>
     readonly Dictionary<string, BuildSite> _byId = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The next id number of each zone (see <see cref="Reserve"/>).
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, int> _counters = [];
+    /// <summary>
+    /// The sites as last published for the host.
+    /// </summary>
     IReadOnlyList<BuildingSnapshot> _published = [];
+    /// <summary>
+    /// The <see cref="Version"/> <see cref="_published"/> was made at (-1: never).
+    /// </summary>
     long _publishedVersion = -1;
 
+    /// <summary>
+    /// The number of sites.
+    /// </summary>
     public int Count => _sites.Count;
+    /// <summary>
+    /// The sites in creation order.
+    /// </summary>
     public IReadOnlyList<BuildSite> All => _sites;
+    /// <summary>
+    /// The site with id <paramref name="id"/>; null when there is none.
+    /// </summary>
     public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
     /// The player towns (outposts), in creation order; never removed.
     /// </summary>
     public IReadOnlyList<PlayerTown> Towns => _towns;
+    /// <summary>
+    /// The player town numbered <paramref name="number"/>; null when there is none.
+    /// </summary>
     public PlayerTown? FindTown(int number) => number > 0 && number <= _towns.Count ? _towns[number - 1] : null;
 
     /// <summary>
@@ -287,6 +368,9 @@ public sealed partial class BuildingRegistry
         }
     }
 
+    /// <summary>
+    /// Matches an id of the pattern <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>.
+    /// </summary>
     [GeneratedRegex(@"^(\d+)-zone(\d+)\.(\d+)-INGAME$")]
     private static partial Regex IdPattern();
 
@@ -300,7 +384,10 @@ public sealed partial class BuildingRegistry
         var m = IdPattern().Match(id);
         if (!m.Success) return false;
         if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out n)) return false;
-        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int x) || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int y)) return false;
+        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int x)
+            || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int y))
+            return false;
+
         zone = new ZoneCoordinate(x, y);
         return true;
     }
@@ -327,9 +414,15 @@ public sealed partial class BuildingRegistry
         }
     }
 
+    /// <summary>
+    /// The id of number <paramref name="n"/> in <paramref name="zone"/>.
+    /// </summary>
     public static string IdOf(int n, ZoneCoordinate zone) =>
         string.Create(CultureInfo.InvariantCulture, $"{n}-zone{zone.X}.{zone.Y}-INGAME");
 
+    /// <summary>
+    /// Adds a site and reserves its id; an id already used throws.
+    /// </summary>
     public void Add(BuildSite site)
     {
         ArgumentNullException.ThrowIfNull(site);
@@ -340,6 +433,9 @@ public sealed partial class BuildingRegistry
         Version++;
     }
 
+    /// <summary>
+    /// Removes a site; false when it is not there.
+    /// </summary>
     public bool Remove(BuildSite site)
     {
         if (!_byId.Remove(site.Id)) return false;
@@ -373,13 +469,21 @@ public sealed partial class BuildingRegistry
         foreach (var s in _sites)
         {
             var materials = new MaterialView[s.Materials.Length];
-            for (int i = 0; i < materials.Length; i++) materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
-            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials, s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
+            for (int i = 0; i < materials.Length; i++)
+                materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
+
+            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials,
+                s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public,
+                TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
         }
+
         _publishedVersion = Version;
         return _published = list;
     }
 
+    /// <summary>
+    /// Adds the id counters, towns and sites to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x426C6473);
@@ -392,6 +496,7 @@ public sealed partial class BuildingRegistry
             h.Add(z.Y);
             h.Add(_counters[z]);
         }
+
         h.Add(_sites.Count);
         foreach (var s in _sites) s.Hash(ref h);
         if (_towns.Count > 0)

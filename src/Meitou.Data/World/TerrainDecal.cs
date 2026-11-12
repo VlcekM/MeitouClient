@@ -5,15 +5,27 @@ namespace Meitou.Data.World;
 /// </summary>
 public enum TerrainDecalType : byte
 {
+    /// <summary>
+    /// 0 <c>line</c>: nothing known makes these.
+    /// </summary>
     Line = 0,
+    /// <summary>
+    /// 1 <c>splash</c>: a hit.
+    /// </summary>
     Splash = 1,
+    /// <summary>
+    /// 2 <c>pool</c>: under a bleeding character that stands still or is carried.
+    /// </summary>
     Pool = 2,
+    /// <summary>
+    /// 3 <c>smear</c>: behind a bleeding character that moves.
+    /// </summary>
     Smear = 3,
 }
 
 /// <summary>
-/// One blood decal as the game keeps it per decal cell (<c>TerrainDecalsManager::DecalInfo</c>, 24 bytes; the fields of a TERRAIN_DECALS instance, docs/formats/save.md).
-/// A decal that crosses cell edges is stored once in every cell its corners touch, each copy placed relative to its own cell.
+/// One blood decal as the game keeps it per decal cell (<c>TerrainDecalsManager::DecalInfo</c>, 24 bytes; the fields of a TERRAIN_DECALS instance,
+/// docs/formats/save.md). A decal that crosses cell edges is stored once in every cell its corners touch, each copy placed relative to its own cell.
 /// </summary>
 /// <param name="Key">The cell (<see cref="TerrainDecalCells.Key(float, float)"/>).</param>
 /// <param name="Variant">Index of the texture within the type's folder.</param>
@@ -23,20 +35,33 @@ public enum TerrainDecalType : byte
 /// <param name="HalfHeight">Size × the texture's height × 10.</param>
 /// <param name="Rotation">The angle in radians × 1000: the texture's width axis points along (sin, cos) in X/Z.</param>
 /// <param name="Colour">ABGR (A in the top byte, R in the bottom): the race's blood colour and the decal's opacity.</param>
-/// <param name="Life">Seconds of game time left (99 when made; the opacity is at most this), as a save holds it; inside a <see cref="TerrainDecalStore"/> the
-/// <see cref="TerrainDecalStore.Clock"/> time it runs out at.</param>
-public record struct TerrainDecal(uint Key, TerrainDecalType Type, byte Variant, short LocalX, short LocalZ, short HalfWidth, short HalfHeight, short Rotation,
-    uint Colour, float Life);
+/// <param name="Life">Seconds of game time left (99 when made; the opacity is at most this), as a save holds it; inside a
+/// <see cref="TerrainDecalStore"/> the <see cref="TerrainDecalStore.Clock"/> time it runs out at.</param>
+public record struct TerrainDecal(uint Key, TerrainDecalType Type, byte Variant, short LocalX, short LocalZ, short HalfWidth, short HalfHeight,
+    short Rotation, uint Colour, float Life);
 
 /// <summary>
-/// The cells blood decals are kept and drawn in: the terrain quadtree's level 10, 1024 × 1024 squares of 288 units over the world (docs/game/blood-decals.md).
-/// A cell's key is 1 &lt;&lt; 20 with the cell's column bits on the even bits and its row bits on the odd ones (the quadtree path, <b>Verified</b> against save keys).
+/// The cells blood decals are kept and drawn in: the terrain quadtree's level 10, 1024 × 1024 squares of 288 units over the world
+/// (docs/game/blood-decals.md). A cell's key is 1 &lt;&lt; 20 with the cell's column bits on the even bits and its row bits on the odd ones (the
+/// quadtree path, <b>Verified</b> against save keys).
 /// </summary>
 public static class TerrainDecalCells
 {
+    /// <summary>
+    /// The terrain quadtree level of the cells.
+    /// </summary>
     public const int Level = 10;
+    /// <summary>
+    /// Cells per world side.
+    /// </summary>
     public const int PerSide = 1 << Level;
+    /// <summary>
+    /// The edge of a cell in world units (288).
+    /// </summary>
     public const float Size = (float)WorldLayout.WorldSize / PerSide;
+    /// <summary>
+    /// The bit above the cell bits that every key has.
+    /// </summary>
     const uint Marker = 1u << (2 * Level);
 
     /// <summary>
@@ -44,6 +69,9 @@ public static class TerrainDecalCells
     /// </summary>
     public static uint Key(float x, float z) => Key(Column(x), Column(z));
 
+    /// <summary>
+    /// The key of the cell at <paramref name="column"/>, <paramref name="row"/>.
+    /// </summary>
     public static uint Key(int column, int row) => Marker | Spread((uint)column) | Spread((uint)row) << 1;
 
     /// <summary>
@@ -65,6 +93,9 @@ public static class TerrainDecalCells
         return (c * Size - WorldLayout.HalfWorldSize, r * Size - WorldLayout.HalfWorldSize);
     }
 
+    /// <summary>
+    /// The low 10 bits of <paramref name="v"/> moved to the even bits.
+    /// </summary>
     static uint Spread(uint v)
     {
         v &= 0x3FF;
@@ -75,6 +106,9 @@ public static class TerrainDecalCells
         return v;
     }
 
+    /// <summary>
+    /// The even bits of <paramref name="v"/> packed into the low 10 bits.
+    /// </summary>
     static uint Gather(uint v)
     {
         v &= 0x55555;
@@ -87,8 +121,8 @@ public static class TerrainDecalCells
 }
 
 /// <summary>
-/// One blood decal on the walls, floors and objects (the Meitou <c>bloodsurfaces</c> switch, docs/game/blood-decals.md "Blood on surfaces"), as a save holds it
-/// (<see cref="Save.SaveSurfaceDecals"/>).
+/// One blood decal on the walls, floors and objects (the Meitou <c>bloodsurfaces</c> switch, docs/game/blood-decals.md "Blood on surfaces"), as a
+/// save holds it (<see cref="Save.SaveSurfaceDecals"/>).
 /// </summary>
 /// <param name="Centre">Its 3D centre (a splash's lifted above the feet).</param>
 /// <param name="Angle">Radians: the texture's width axis points along (sin, cos) in X/Z.</param>
@@ -96,4 +130,5 @@ public static class TerrainDecalCells
 /// <param name="Life">Seconds of game time left.</param>
 /// <param name="Colour">ABGR, as <see cref="TerrainDecal.Colour"/>.</param>
 /// <param name="Floor">Drawn only on up-facing pixels at its height (a pool, drip or smear); else on any surface facing it (a splash).</param>
-public readonly record struct SurfaceBloodDecal(TerrainDecalType Type, byte Variant, System.Numerics.Vector3 Centre, float Angle, float Size, float Life, uint Colour, bool Floor);
+public readonly record struct SurfaceBloodDecal(TerrainDecalType Type, byte Variant, System.Numerics.Vector3 Centre, float Angle, float Size,
+    float Life, uint Colour, bool Floor);

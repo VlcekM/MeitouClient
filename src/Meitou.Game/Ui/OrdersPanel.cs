@@ -115,11 +115,12 @@ sealed class OrdersPanel(PlayerInterface player)
         b.Properties["JobsPanel"] = new Dictionary<string, string>
         {
             ["LineSkin"] = "Kenshi_ConnectBarSkin",
-            ["LineHeight"] = ((int)(24 * player.Height / 1080f)).ToString(CultureInfo.InvariantCulture),
+            ["LineHeight"] = ((int)(24 * player.UiScale)).ToString(CultureInfo.InvariantCulture),
         };
         b.ScrollOffsets["JobsPanel"] = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
 
-        // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
+        // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an
+        // order").
         if (jobs.Count > 0)
         {
             b.Hidden.Add("JobsPanelInfo");
@@ -130,23 +131,29 @@ sealed class OrdersPanel(PlayerInterface player)
             + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
     }
 
+    /// <summary>
+    /// The wheel over the jobs list scrolls it a line a step; false elsewhere.
+    /// </summary>
     internal bool JobsWheel(Vector2 p, float steps)
     {
         if (!player.ScrollBars.InventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
 
-        float line = 24 * player.Height / 1080f;
+        float line = 24 * player.UiScale;
         float scroll = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
         player.ScrollBars.InventoryScroll["JobsPanel"] = Math.Clamp(scroll - steps * line, 0, view.Maximum);
         return true;
     }
 
+    /// <summary>
+    /// Adds the jobs list's scroll bar when its lines do not fit.
+    /// </summary>
     internal void AddJobScrollBar(List<UiControl> controls)
     {
         int panelIndex = controls.FindIndex(c => c.Name == "JobsPanel");
         if (panelIndex < 0) return;
 
         var panel = controls[panelIndex];
-        float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * player.Height / 1080f);
+        float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * player.UiScale);
         float maximum = MyGuiPresentation.Num(panel.Properties, "ScrollMax");
         if (maximum <= 0)
         {
@@ -157,8 +164,8 @@ sealed class OrdersPanel(PlayerInterface player)
 
         float scroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
         player.ScrollBars.InventoryScroll["JobsPanel"] = scroll;
-        float barWidth = 17 * player.InventoryScale;
-        float gap = 3 * player.InventoryScale;
+        float barWidth = 17 * player.UiScale;
+        float gap = 3 * player.UiScale;
         var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth - gap) };
         player.ScrollBars.InventoryViews["JobsPanel"] = (view, maximum);
         NarrowJobRows(controls, view, barWidth, gap);

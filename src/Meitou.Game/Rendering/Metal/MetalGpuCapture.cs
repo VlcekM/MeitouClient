@@ -10,9 +10,18 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalGpuCapture
 {
+    /// <summary>
+    /// The trace file the capture is writing.
+    /// </summary>
     readonly string _path;
+    /// <summary>
+    /// Whether the capture is still running (until <see cref="Stop"/>).
+    /// </summary>
     bool _active;
 
+    /// <summary>
+    /// A running capture into <paramref name="path"/>.
+    /// </summary>
     MetalGpuCapture(string path)
     {
         this._path = path;
@@ -34,7 +43,10 @@ public sealed class MetalGpuCapture
         string path = DefaultPath();
         if (!path.EndsWith(".gputrace", StringComparison.OrdinalIgnoreCase)) path += ".gputrace";
         path = Path.GetFullPath(path);
-        try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); }
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        }
         catch (Exception e)
         {
             error = $"cannot create '{Path.GetDirectoryName(path)}': {e.Message}";
@@ -105,8 +117,12 @@ public sealed class MetalGpuCapture
             if (Directory.Exists(_path)) Directory.Delete(_path, recursive: true);
             else if (File.Exists(_path)) File.Delete(_path);
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

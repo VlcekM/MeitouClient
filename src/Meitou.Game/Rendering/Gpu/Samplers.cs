@@ -25,6 +25,14 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
         return new SamplerDesc(filter, magnification, mipmapped, s, t, r, compare, func, transparentBorder, integerFormat,
             Math.Clamp(anisotropy, 1, 16), mipmapped ? lodBias : 0);
     }
+
+    /// <summary>
+    /// <see cref="FromGl"/> for a plain sampler clamped to the edge on every axis: no compare, no border, no anisotropy, no LOD bias (the
+    /// renderers' own targets and pictures are read with it).
+    /// </summary>
+    public static SamplerDesc Clamped(TextureMinFilter min, TextureMagFilter mag) =>
+        FromGl(min, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false,
+            1, false, 0);
 }
 
 /// <summary>
@@ -34,17 +42,32 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
 /// </summary>
 public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
 {
+    /// <summary>
+    /// The device the samplers are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The made samplers' indices in the device's sampler table, by their (device-adjusted) description.
+    /// </summary>
     readonly Dictionary<SamplerDesc, int> _samplers = [];
+    /// <summary>
+    /// Backs <see cref="MaxAnisotropy"/>.
+    /// </summary>
     int _maxAnisotropy = 16;
 
+    /// <summary>
+    /// An empty cache on <paramref name="device"/>.
+    /// </summary>
     public SamplerCache(VulkanDevice device) => this._device = device;
 
+    /// <summary>
+    /// How many samplers are made.
+    /// </summary>
     public int Count => _samplers.Count;
 
     /// <summary>
-    /// The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change bumps
-    /// <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.
+    /// The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change
+    /// bumps <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.
     /// </summary>
     public int MaxAnisotropy
     {
@@ -56,8 +79,15 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
         }
     }
 
+    /// <summary>
+    /// Bumped by every change of <see cref="MaxAnisotropy"/>.
+    /// </summary>
     public int Generation { get; private set; }
 
+    /// <summary>
+    /// The sampler for <paramref name="desc"/> with its anisotropy capped by <see cref="MaxAnisotropy"/> (1 without device anisotropy); made on first
+    /// use.
+    /// </summary>
     public GpuSampler Get(in SamplerDesc desc)
     {
         var key = _device.SamplerAnisotropy
@@ -94,6 +124,9 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
         return new GpuSampler(_samplers[key], key);
     }
 
+    /// <summary>
+    /// Destroys every sampler made.
+    /// </summary>
     public void Dispose()
     {
         foreach (var s in _samplers.Values) _device.Vk.DestroySampler(_device.Device, _device.SamplerAt(s), null);

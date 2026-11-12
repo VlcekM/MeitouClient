@@ -1,9 +1,9 @@
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// The frame's neutral surface (docs/resource-layer.md): what a renderer may ask of the frame regardless of the backend. The Vulkan frame implements it;
-/// the Metal one has its own (a slot ring over shared buffers). The backend-only parts (the descriptor pools, the parallel secondaries, the host-visible
-/// allocators) stay on the concrete frame.
+/// The frame's neutral surface (docs/resource-layer.md): what a renderer may ask of the frame regardless of the backend. The Vulkan frame implements
+/// it; the Metal one has its own (a slot ring over shared buffers). The backend-only parts (the descriptor pools, the parallel secondaries, the
+/// host-visible allocators) stay on the concrete frame.
 /// </summary>
 public interface IGpuFrame
 {

@@ -6,7 +6,21 @@ namespace Meitou.Simulation.Items;
 /// Whose items an item window shows: a character's inventory (the player's, or the open loot's body), the open trade's stock, or a building's machine
 /// or container.
 /// </summary>
-public enum ItemHolder : byte { Character, Stock, Site }
+public enum ItemHolder : byte
+{
+    /// <summary>
+    /// A character's inventory (<see cref="ItemOwner.Character"/>).
+    /// </summary>
+    Character,
+    /// <summary>
+    /// The open trade's stock.
+    /// </summary>
+    Stock,
+    /// <summary>
+    /// A building's machine or container (<see cref="ItemOwner.Site"/>).
+    /// </summary>
+    Site
+}
 
 /// <summary>
 /// An item window as the held-item commands address it (docs/game/ui-screens.md section 6 "Holding an item"): <see cref="Character"/> for
@@ -14,8 +28,17 @@ public enum ItemHolder : byte { Character, Stock, Site }
 /// </summary>
 public readonly record struct ItemOwner(ItemHolder Holder, CharacterId Character, string Site)
 {
+    /// <summary>
+    /// A character's inventory window.
+    /// </summary>
     public static ItemOwner Of(CharacterId character) => new(ItemHolder.Character, character, "");
+    /// <summary>
+    /// The open trade's stock window.
+    /// </summary>
     public static ItemOwner Stock => new(ItemHolder.Stock, CharacterId.None, "");
+    /// <summary>
+    /// The window of the machine or container at <paramref name="site"/>.
+    /// </summary>
     public static ItemOwner AtSite(string site) => new(ItemHolder.Site, CharacterId.None, site);
 }
 
@@ -28,12 +51,33 @@ public readonly record struct ItemOwner(ItemHolder Holder, CharacterId Character
 /// </summary>
 public sealed class HeldItem
 {
+    /// <summary>
+    /// The held item.
+    /// </summary>
     public required ItemInstance Item { get; init; }
+    /// <summary>
+    /// The window it was taken from.
+    /// </summary>
     public required ItemOwner From { get; init; }
+    /// <summary>
+    /// The root inventory it was in; null for a machine's input or output slot.
+    /// </summary>
     public Inventory? Grid { get; init; }
+    /// <summary>
+    /// The section it was in.
+    /// </summary>
     public required string Section { get; init; }
+    /// <summary>
+    /// Its cell column there.
+    /// </summary>
     public int X { get; init; }
+    /// <summary>
+    /// Its cell row there.
+    /// </summary>
     public int Y { get; init; }
+    /// <summary>
+    /// The character whose inventory window holds it (none: no one).
+    /// </summary>
     public CharacterId Actor { get; init; } = CharacterId.None;
 }
 
@@ -45,6 +89,9 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
         int Width, int Height,
     float? Charge, ItemOwner From, int BagItems)
 {
+    /// <summary>
+    /// The view of <paramref name="held"/>.
+    /// </summary>
     public static HeldItemView Of(HeldItem held)
             => new(held.Item.Record, held.Item.Name, held.Item.MaterialId, held.Item.Type, held.Item.EquipmentSection, held.Item.Quantity,
         held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1)
@@ -58,6 +105,9 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     /// The held item's race limits (<see cref="ItemInstance.WornOnlyBy"/>, <see cref="ItemInstance.WornNeverBy"/>).
     /// </summary>
     public string[] WornOnlyBy { get; init; } = [];
+    /// <summary>
+    /// The races that may not wear it.
+    /// </summary>
     public string[] WornNeverBy { get; init; } = [];
     /// <summary>
     /// Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer).
@@ -71,6 +121,9 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
 /// </summary>
 public abstract record HeldCommand : SimCommand
 {
+    /// <summary>
+    /// The interface's number for the command (the world publishes the last one it applied).
+    /// </summary>
     public long Serial { get; init; }
 }
 

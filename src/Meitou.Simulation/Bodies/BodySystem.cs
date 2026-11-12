@@ -35,6 +35,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// How long a corpse lies before it decays, in game hours (<c>FUN_1405ccd90</c>, <b>Verified</b> literal: "corpse decayed" past 12).
     /// </summary>
     public const float CorpseHours = 12;
+    /// <summary>
+    /// <see cref="CorpseHours"/> in ticks of the default tick length; <see cref="CorpseTicksOf"/> takes the world's.
+    /// </summary>
     public const long CorpseTicks = (long)(CorpseHours / HoursPerTick);
 
     /// <summary>
@@ -48,10 +51,22 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// </summary>
     public static long CorpseTicksOf(World world) => (long)(CorpseHours * World.SecondsPerGameHour / world.TickSeconds);
 
+    /// <summary>
+    /// The CONSTANTS the medical tick and the XP rates read.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
+    /// <summary>
+    /// The body options every character's medical tick gets.
+    /// </summary>
     public BodyOptions Options { get; } = options ?? BodyOptions.Default;
+    /// <summary>
+    /// The last camera view the client sent (also put in <see cref="World.View"/>).
+    /// </summary>
     CameraViewCommand? _view;
 
+    /// <summary>
+    /// Takes the camera view commands: the last one is kept and set as the world's view.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var c in commands)
@@ -62,6 +77,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// The <see cref="MedicalContext.BodyTimeScale"/> every character gets (default 1: the documented rates).
     /// </summary>
     public float BodyTimeScale { get; } = bodyTimeScale;
+    /// <summary>
+    /// The XP rates and level-ups of training.
+    /// </summary>
     readonly XpService _xp = new(constants, options ?? BodyOptions.Default);
 
     /// <summary>
@@ -75,18 +93,18 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     const float BedReach = 3;
 
     /// <summary>
-    /// The bed a character lies in (character state 1; <c>FUN_140652000</c>, character-stats.md "Beds"): the one it is held in (the player's beds,
-    /// <see cref="Locks.BedSystem"/>), else for an AI asleep at its home's bed spot the bed fixture there. Its kind is the functionality's
-    /// <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED) and its factor the Building's <c>+0x3c0</c>: <c>output rate</c> x <c>production mult</c> x the
-    /// research production multiplier. None outside a bed.
-    /// </summary>
-    /// <summary>
     /// The health word tooltip's "Recovery rate: {1}x" (<c>FUN_14088a8f0</c>): in a bed (state 1) of class 6 whose rate is above 1, that rate; null
     /// otherwise. A repair bed has none.
     /// </summary>
     public float? BedRecoveryRate(World world, CharacterCold cold, in CharacterHot n) =>
         cold.InSomething == Locks.HeldState.Bed && BedOf(world, cold, in n) is (BedKind.Bed, var factor) && factor > 1 ? factor : null;
 
+    /// <summary>
+    /// The bed a character lies in (character state 1; <c>FUN_140652000</c>, character-stats.md "Beds"): the one it is held in (the player's beds,
+    /// <see cref="Locks.BedSystem"/>), else for an AI asleep at its home's bed spot the bed fixture there. Its kind is the functionality's
+    /// <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED) and its factor the Building's <c>+0x3c0</c>: <c>output rate</c> x <c>production mult</c> x the
+    /// research production multiplier. None outside a bed.
+    /// </summary>
     (BedKind Kind, float Factor) BedOf(World world, CharacterCold cold, in CharacterHot n)
     {
         if (db is null) return (BedKind.None, 1);
@@ -223,118 +241,168 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (enemies + neutrals >= 1 && allies == 0) _xp.ToughnessFromGettingUp(stats, race, medical, enemies);
     }
 
+    /// <summary>
+    /// Steps the body of every live, stepping character in <paramref name="part"/>.
+    /// </summary>
     public void Act(World world, Partition part, EffectBuffer effects)
+    {
+        List<MedicalEvent>? events = null;
+        for (int i = part.Start; i < part.End; i++) ActOn(world, i, ref events);
+    }
+
+    /// <summary>
+    /// One character's body step: its medical tick with the context of the moment, its speeds, the XP of moving and sneaking, and the stops a
+    /// knockout or death makes. <paramref name="events"/> is the reused list of the medical events.
+    /// </summary>
+    void ActOn(World world, int i, ref List<MedicalEvent>? events)
     {
         var table = world.Characters;
         var prev = table.Previous;
-        var next = table.Next;
-        List<MedicalEvent>? events = null;
-        for (int i = part.Start; i < part.End; i++)
+        if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) return;
+        var cold = table.Cold(i)!;
+        if (cold.Medical is not { } medical || cold.Race is not { } race || cold.Stats is not { } stats) return;
+        ref var n = ref table.Next[i];
+        if (medical.Dead && cold.DiedTick < 0) cold.DiedTick = world.Tick;   // also when something outside the tick killed it (a hit)
+        StopIncapacitated(table, i, cold, medical, ref n);
+        if (medical.Dead) return;
+        if (!TryStartStep(world, i, cold, medical, out float dt)) return;
+        if (cold.Animal is { } animal) Age(cold, animal, stats, medical, dt);
+
+        // The light level the stat multiplier's light term reads (the original's Character +0xd8, kept by the senses).
+        medical.Light = world.Sight.Light(i);
+
+        // The load: inventory weight without a living owner's death items, plus carry person weight, against the strength the injuries leave
+        // (character-stats.md "Encumbrance and carrying").
+        float load = cold.Inventory?.ContentWeight(world.Player.Held, skipDeath: !medical.Dead) ?? 0;
+        bool carrying = !cold.Carrying.IsNone;
+        float encumbrance = load <= 0 && !carrying
+            ? 1
+            : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength));
+        var ctx = ContextOf(world, i, cold, medical, race, stats, in n, encumbrance);
+        cold.MedicalBudgetSeconds = 0;
+
+        // The combat system's own context (hits) reads the encumbrance from the fighter, so it matches the one used here.
+        if (cold.Fighter is { } fighter) fighter.EncumbranceFactor = encumbrance;
+        if (world.BloodMarks is { } marks && medical.Bleeding > 0 && cold.WaterState == 0)
+            BloodTrail(world, marks, i, cold, medical.Bleeding, race, in n);
+        events ??= [];
+        events.Clear();
+        medical.Tick(dt, ctx, events);
+        n.MaxSpeed = Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
+        cold.SwimSpeed = Speed.Swim(race, stats, medical, encumbrance);
+
+        TrainOnTheStep(world, i, cold, stats, race, medical, in n, carrying, encumbrance, dt);
+        if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected)
+            cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, in ctx, carrying);
+        n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
+        foreach (var e in events)
         {
-            if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
-            var cold = table.Cold(i)!;
-            if (cold.Medical is not { } medical || cold.Race is not { } race || cold.Stats is not { } stats) continue;
-            ref var n = ref next[i];
-            if (medical.Dead && cold.DiedTick < 0) cold.DiedTick = world.Tick;   // also when something outside the tick killed it (a hit)
-            // One lying in a bed keeps its task there (it would get up with any other, BedSystem); only its path goes.
-            if (medical.Incapacitated && cold.InSomething == Locks.HeldState.Bed
-                && n.Task == (byte)CharacterTask.Sleep)
-                n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
-            else if (medical.Incapacitated && (n.Task != (byte)CharacterTask.Idle || (n.Flags & (ushort)MoveFlags.AnyPath) != 0))
+            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut)
             {
-                TaskStart.Stand(table, i);
+                if (cold.InSomething != Locks.HeldState.Bed) TaskStart.Stand(table, i);   // one in a bed stays in it
                 n.Velocity = Vector3.Zero;
             }
-            if (medical.Dead) continue;
+        }
+    }
 
-            // At 2x and 5x (World.SpeedSteps) a character no fight, injury or player touches steps on its slot's turn with the time since its last
-            // step: the rates come out the same and the body costs per real second what it does at 1x. The rest step every tick, so knock-outs,
-            // deaths and the HUD keep their timing. a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
-            int steps = Math.Max(world.SpeedSteps, world.StepTicks(i));
-            if (steps > 1 && world.StepTicks(i) == 1 && !cold.IsPlayer && !cold.InCombat && !medical.Incapacitated && !(medical.Bleeding > 0)
-                && i % steps != world.Tick % steps
-                && cold.BodyStepTick >= 0 && world.Tick - cold.BodyStepTick < steps) continue;
-            float dt = cold.BodyStepTick < 0 ? world.TickSeconds : Math.Clamp(world.Tick - cold.BodyStepTick, 1, steps) * world.TickSeconds;
-            cold.BodyStepTick = world.Tick;
-            if (cold.Animal is { } animal) Age(cold, animal, stats, medical, dt);
+    /// <summary>
+    /// An incapacitated character stops: its task and path go, or only its path when it lies in a bed.
+    /// </summary>
+    static void StopIncapacitated(CharacterTable table, int i, CharacterCold cold, MedicalState medical, ref CharacterHot n)
+    {
+        // One lying in a bed keeps its task there (it would get up with any other, BedSystem); only its path goes.
+        if (medical.Incapacitated && cold.InSomething == Locks.HeldState.Bed
+            && n.Task == (byte)CharacterTask.Sleep)
+        {
+            n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
+        }
+        else if (medical.Incapacitated && (n.Task != (byte)CharacterTask.Idle || (n.Flags & (ushort)MoveFlags.AnyPath) != 0))
+        {
+            TaskStart.Stand(table, i);
+            n.Velocity = Vector3.Zero;
+        }
+    }
 
-            // The light level the stat multiplier's light term reads (the original's Character +0xd8, kept by the senses).
-            medical.Light = world.Sight.Light(i);
+    /// <summary>
+    /// Whether the character's body steps this tick, and then the time <paramref name="dt"/> it covers (the step tick is recorded).
+    /// </summary>
+    static bool TryStartStep(World world, int i, CharacterCold cold, MedicalState medical, out float dt)
+    {
+        // At 2x and 5x (World.SpeedSteps) a character no fight, injury or player touches steps on its slot's turn with the time since its last
+        // step: the rates come out the same and the body costs per real second what it does at 1x. The rest step every tick, so knock-outs,
+        // deaths and the HUD keep their timing. a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
+        dt = 0;
+        int steps = Math.Max(world.SpeedSteps, world.StepTicks(i));
+        bool waits = steps > 1 && world.StepTicks(i) == 1 && !cold.IsPlayer && !cold.InCombat && !medical.Incapacitated && !(medical.Bleeding > 0)
+            && i % steps != world.Tick % steps
+            && cold.BodyStepTick >= 0 && world.Tick - cold.BodyStepTick < steps;
+        if (waits) return false;
 
-            // The load: the inventory weight, plus carry person weight while carrying someone, against the strength the injuries leave
-            // (character-stats.md "Encumbrance and carrying").
-            float load = cold.Inventory?.ContentWeight(world.Player.Held) ?? 0;
-            bool carrying = !cold.Carrying.IsNone;
-            float encumbrance = load <= 0 && !carrying
-                ? 1
-                : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength));
-            var (bed, bedFactor) = BedOf(world, cold, in n);
-            var ctx = new MedicalContext(Constants, Options, race)
-            {
-                EncumbranceFactor = encumbrance,
-                Toughness = stats.ScaledToughness,
-                Strength = stats.Strength,
-                Seed = world.Seed,
-                CharacterKey = Rng.Key(table.IdOf(i)),
-                BodyTimeScale = BodyTimeScale,
-                // In a bed (state 1) a character rests: degeneration stops, the bed scales healing, blood and hunger take the resting rates; held
-                // (state 2) the organic rate doubles.
-                Bed = bed,
-                BedFactor = bedFactor,
-                RepairRate = bed == BedKind.RepairBed ? bedFactor : 0,
-                Resting = bed != BedKind.None,
-                HungerFloor = HungerFloor(world, cold, medical),
-                HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
-                PlayDead = i < _playDead.Length && _playDead[i],
-                GetUpUnasked = i < _unasked.Length && _unasked[i],
-                Still = Still(cold, in n),
-                UseHungerRate = UseHungerRate(cold, in n),
-                Idle = AmIdle(world, cold, medical, in n),
-                BudgetSeconds = cold.MedicalBudgetSeconds,
-            };
-            cold.MedicalBudgetSeconds = 0;
+        dt = cold.BodyStepTick < 0 ? world.TickSeconds : Math.Clamp(world.Tick - cold.BodyStepTick, 1, steps) * world.TickSeconds;
+        cold.BodyStepTick = world.Tick;
+        return true;
+    }
 
-            // The combat system's own context (hits) reads the encumbrance from the fighter, so it matches the one used here.
-            if (cold.Fighter is { } fighter) fighter.EncumbranceFactor = encumbrance;
-            if (world.BloodMarks is { } marks && medical.Bleeding > 0 && cold.WaterState == 0)
-                BloodTrail(world, marks, i, cold, medical.Bleeding, race, in n);
-            events ??= [];
-            events.Clear();
-            medical.Tick(dt, ctx, events);
-            n.MaxSpeed = Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
-            cold.SwimSpeed = Speed.Swim(race, stats, medical, encumbrance);
+    /// <summary>
+    /// The medical context of one character's step.
+    /// </summary>
+    MedicalContext ContextOf(
+        World world, int i, CharacterCold cold, MedicalState medical, RaceData race, CharacterStats stats, in CharacterHot n, float encumbrance)
+    {
+        var (bed, bedFactor) = BedOf(world, cold, in n);
+        return new MedicalContext(Constants, Options, race)
+        {
+            EncumbranceFactor = encumbrance,
+            Toughness = stats.ScaledToughness,
+            Strength = stats.Strength,
+            Seed = world.Seed,
+            CharacterKey = Rng.Key(world.Characters.IdOf(i)),
+            BodyTimeScale = BodyTimeScale,
+            // In a bed (state 1) a character rests: degeneration stops, the bed scales healing, blood and hunger take the resting rates; held
+            // (state 2) the organic rate doubles.
+            Bed = bed,
+            BedFactor = bedFactor,
+            RepairRate = bed == BedKind.RepairBed ? bedFactor : 0,
+            Resting = bed != BedKind.None,
+            HungerFloor = HungerFloor(world, cold, medical),
+            HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
+            PlayDead = i < _playDead.Length && _playDead[i],
+            GetUpUnasked = i < _unasked.Length && _unasked[i],
+            Still = Still(cold, in n),
+            UseHungerRate = UseHungerRate(cold, in n),
+            Idle = AmIdle(world, cold, medical, in n),
+            BudgetSeconds = cold.MedicalBudgetSeconds,
+        };
+    }
 
-            // Movement XP only for the player's faction and not while fight steering or swinging (FUN_140660dc0, Verified; Meitou: not on the Attack
-            // task).
-            if ((cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) && n.Task != (byte)CharacterTask.Attack)
-                TrainOnTheMove(stats, race, medical, in n, cold.WaterState == 3, carrying, encumbrance, dt);
+    /// <summary>
+    /// The XP of one character's step: moving, the listeners' hearing checks, and sneaking.
+    /// </summary>
+    void TrainOnTheStep(
+        World world, int i, CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, in CharacterHot n, bool carrying,
+        float encumbrance, float dt)
+    {
+        // Movement XP only for the player's faction and not while fight steering or swinging (FUN_140660dc0, Verified; Meitou: not on the Attack
+        // task).
+        if ((cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) && n.Task != (byte)CharacterTask.Attack)
+            TrainOnTheMove(stats, race, medical, in n, cold.WaterState == 3, carrying, encumbrance, dt);
 
-            // The stealth XP the listeners' hearing checks gave since the last tick (FUN_1408c7330, summed by AggroSystem.Apply;
-            // docs/game/character-stats.md "Stealth (heard check)").
-            if (cold.HearingXp != 0)
-            {
-                _xp.HearingCheck(stats, race, cold.HearingXp);
-                cold.HearingXp = 0;
-            }
+        // The stealth XP the listeners' hearing checks gave since the last tick (FUN_1408c7330, summed by AggroSystem.Apply;
+        // docs/game/character-stats.md "Stealth (heard check)").
+        if (cold.HearingXp != 0)
+        {
+            _xp.HearingCheck(stats, race, cold.HearingXp);
+            cold.HearingXp = 0;
+        }
 
-            // Sneak XP (FUN_1408586d0 / FUN_1408c65a0, Verified): the player's faction only, not in a bed or cage or carried, while moving, and only
-            // with someone about; a watcher of the last 4 s gives the noticed rate. The original also pays x0.1 to a sneaker standing still that a
-            // hostile targets (not modelled: none then).
-            if ((cold.Orders & CharacterOrders.Sneak) != 0 && !medical.Incapacitated
-                && (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction)
-                && cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone)
-                SneakXp(world, i, cold, stats, race, n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z > SneakMoving * SneakMoving, dt);
-            if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected)
-                cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, in ctx, carrying);
-            n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
-            foreach (var e in events)
-            {
-                if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut)
-                {
-                    if (cold.InSomething != Locks.HeldState.Bed) TaskStart.Stand(table, i);   // one in a bed stays in it
-                    n.Velocity = Vector3.Zero;
-                }
-            }
+        // Sneak XP (FUN_1408586d0 / FUN_1408c65a0, Verified): the player's faction only, not in a bed or cage or carried, while moving, and only
+        // with someone about; a watcher of the last 4 s gives the noticed rate. The original also pays x0.1 to a sneaker standing still that a
+        // hostile targets (not modelled: none then).
+        if ((cold.Orders & CharacterOrders.Sneak) != 0 && !medical.Incapacitated
+            && (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction)
+            && cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone)
+        {
+            SneakXp(world, i, cold, stats, race, n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z > SneakMoving * SneakMoving, dt);
         }
     }
 
@@ -380,13 +448,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// The numbers behind the information panel's extended lines (<c>FUN_140895350</c>, docs/game/ui-screens.md section 4). Toughness XP
-    /// (<c>FUN_1408c5f40</c>, <b>Verified</b> in game, #82): 1, or 2 with the left arm crippled, plus 2 for the right arm, 2 while the blood-loss
-    /// trauma flag is set, and 2 for the "Critical wounds" term, which tests the worst part's fraction (at most 1) against 15 and so is always on: a
-    /// whole character reads 3x. Strength XP is the carrying rate here; the published HUD replaces it in combat mode (<see cref="WithCombatMode"/>),
-    /// which needs the fight and turret state of other characters.
-    /// </summary>
-    /// <summary>
     /// The functionality <c>hunger rate</c> of the machine a character works or the chair it sits on, while it stands still out of combat
     /// (<see cref="MedicalContext.UseHungerRate"/>); null otherwise.
     /// </summary>
@@ -418,6 +479,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return cold.AmIdle;
     }
 
+    /// <summary>
+    /// The numbers behind the information panel's extended lines (<c>FUN_140895350</c>, docs/game/ui-screens.md section 4). Toughness XP
+    /// (<c>FUN_1408c5f40</c>, <b>Verified</b> in game, #82): 1, or 2 with the left arm crippled, plus 2 for the right arm, 2 while the blood-loss
+    /// trauma flag is set, and 2 for the "Critical wounds" term, which tests the worst part's fraction (at most 1) against 15 and so is always on: a
+    /// whole character reads 3x. Strength XP is the carrying rate here; the published HUD replaces it in combat mode (<see cref="WithCombatMode"/>),
+    /// which needs the fight and turret state of other characters.
+    /// </summary>
     ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance,
         in MedicalContext ctx, bool carrying)
     {
@@ -444,13 +512,6 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return x with { StrengthXp = rate, Fighting = true, Fists = fists };
     }
 
-    /// <summary>
-    /// XP outside combat (character-stats.md "Levelling"; the movement tick <c>FUN_1408c6660</c>): athletics while running, strength while carrying a
-    /// load. A character counts as running when it moves faster than its race walk speed (+1); whether walking trains too is <b>Unknown</b> (the doc
-    /// names running). In deep water (<paramref name="deepWater"/>) swimming trains instead of athletics (<b>Verified</b>, <c>FUN_1408c6660</c>).
-    /// Strength rises only when the load encumbers it, and only while it moves. The speed the stat sees is the velocity the movement system left this
-    /// tick.
-    /// </summary>
     /// <summary>
     /// A sneaker's exposure for its stealth XP: an exposure older than a second (a looker's scan interval with room to spare) has lapsed.
     /// </summary>
@@ -504,10 +565,22 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return false;
     }
 
+    /// <summary>
+    /// The state of <see cref="SomeoneAbout"/>'s grid query.
+    /// </summary>
     struct AboutScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The sneaker's slot and the player's faction.
+        /// </summary>
         public int Self, PlayerFaction;
+        /// <summary>
+        /// Whether someone the sneaker senses was found.
+        /// </summary>
         public bool Found;
     }
 
@@ -528,6 +601,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         return scan.Found;
     }
 
+    /// <summary>
+    /// XP outside combat (character-stats.md "Levelling"; the movement tick <c>FUN_1408c6660</c>): athletics while running, strength while carrying a
+    /// load. A character counts as running when it moves faster than its race walk speed (+1); whether walking trains too is <b>Unknown</b> (the doc
+    /// names running). In deep water (<paramref name="deepWater"/>) swimming trains instead of athletics (<b>Verified</b>, <c>FUN_1408c6660</c>).
+    /// Strength rises only when the load encumbers it, and only while it moves. The speed the stat sees is the velocity the movement system left this
+    /// tick.
+    /// </summary>
     void TrainOnTheMove(CharacterStats stats, RaceData race, MedicalState medical, in CharacterHot n, bool deepWater, bool carrying,
         float encumbrance, float dt)
     {
@@ -585,6 +665,10 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             (Db: db, Template: squad.TemplateId, world.Seed));
     }
 
+    /// <summary>
+    /// The serial corpse and collapse step: a leg's first collapse stops the character, a burst blows, and a corpse past <see cref="CorpseTicksOf"/>
+    /// (or in a zone that is not loaded) is removed; one carried or held in a bed or cage is kept at most <see cref="HeldCorpseHours"/> old.
+    /// </summary>
     public void SlowWorld(World world)
     {
         var table = world.Characters;

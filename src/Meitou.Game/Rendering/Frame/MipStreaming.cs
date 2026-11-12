@@ -48,6 +48,10 @@ public sealed class MipStreaming
     /// </summary>
     public int Extra { get; set; }
 
+    /// <summary>
+    /// Takes the view the textures are seen through: the pixels per unit of distance at the picture's corner for <paramref name="fieldOfView"/>, and
+    /// the sampler bias in effect.
+    /// </summary>
     /// <param name="height">Height in pixels of the picture the scene is drawn into (the render size, before an upscaler).</param>
     /// <param name="lodBias">
     /// The sampler bias the upscaler adds (<c>GpuContext.LodBias</c>); with the display size instead of the render size, without the part from the
@@ -70,6 +74,10 @@ public sealed class MipStreaming
     /// </summary>
     public int Drop(int width, int height, float need) => Drop(width, height, need, Enabled, PixelsPerDistance, Bias, Extra);
 
+    /// <summary>
+    /// <see cref="Drop(int, int, float)"/> with the view's state passed in: 0 when off, when <paramref name="need"/> is not a positive number or the
+    /// texture is at most <see cref="MinSize"/>; never more levels than leave <see cref="MinSize"/>.
+    /// </summary>
     public static int Drop(int width, int height, float need, bool enabled, float pixelsPerDistance, float bias, int extra)
     {
         if (!enabled || !float.IsFinite(need) || need <= 0) return 0;

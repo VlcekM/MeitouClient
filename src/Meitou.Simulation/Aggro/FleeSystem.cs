@@ -9,21 +9,22 @@ using Meitou.Simulation.Perception;
 namespace Meitou.Simulation.Aggro;
 
 /// <summary>
-/// NPC squads running away from a lost fight (docs/simulation.md "Fleeing"; the original's facts in docs/game/perception.md "Fleeing"). All work is serial
-/// (<c>SlowWorld</c>), in slot and squad-id order, so it is the same at any thread count.
+/// NPC squads running away from a lost fight (docs/simulation.md "Fleeing"; the original's facts in docs/game/perception.md "Fleeing"). All work is
+/// serial (<c>SlowWorld</c>), in slot and squad-id order, so it is the same at any thread count.
 /// <list type="bullet">
 /// <item><b>When</b> (only with <see cref="SquadBreak"/>, off by default: the original runs no squad for being broken; the squad-intact test is
-/// <see cref="Ai.SquadIntact"/>, docs/game/perception.md "Squad not intact"): every <see cref="CheckEveryTicks"/> ticks an NPC squad in a fight breaks when
-/// it is not intact. The FACTION run-away ratios are loaded by the original but never read, and no enemy is counted.</item>
-/// <item><b>How</b> (the original's <c>Task_Runaway</c>, Observed): each member still standing stops fighting and runs at full speed to a point
-/// <see cref="FirstRun"/> + up to <see cref="RunSpread"/> units from the centre of the enemies it can see, on the far side of it; when it gets there (or within
-/// <see cref="Arrived"/> of it, or its path fails) it runs <see cref="Hop"/> + up to <see cref="RunSpread"/> units in a random direction.</item>
-/// <item><b>Until</b> (the task's end conditions, <c>isNoEnemiesInVicinity</c> and not <c>isAggressionTowardsMe</c>): no enemy standing within its sight
-/// range and nobody attacking it. It then goes back to wandering. A fleeing character neither looks for fights (<see cref="AggroSystem"/>) nor
+/// <see cref="Ai.SquadIntact"/>, docs/game/perception.md "Squad not intact"): every <see cref="CheckEveryTicks"/> ticks an NPC squad in a fight
+/// breaks when it is not intact. The FACTION run-away ratios are loaded by the original but never read, and no enemy is counted.</item>
+/// <item><b>How</b> (the original's <c>Task_Runaway</c>, Observed): each member still standing stops fighting and runs at full speed to a
+/// point <see cref="FirstRun"/> + up to <see cref="RunSpread"/> units from the centre of the enemies it can see, on the far side of it; when
+/// it gets there (or within <see cref="Arrived"/> of it, or its path fails) it runs <see cref="Hop"/> + up to <see cref="RunSpread"/> units in
+/// a random direction.</item>
+/// <item><b>Until</b> (the task's end conditions, <c>isNoEnemiesInVicinity</c> and not <c>isAggressionTowardsMe</c>): no enemy standing within its
+/// sight range and nobody attacking it. It then goes back to wandering. A fleeing character neither looks for fights (<see cref="AggroSystem"/>) nor
 /// answers attacks (<see cref="RetaliationSystem"/>). The player's characters never flee by themselves.</item>
-/// <item><b>On the AI's request</b> (<see cref="Ai.AiMind.FleeRequest"/>, the same run): an NPC whose Self preservation goes to Running away (a crippled
-/// one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats and stops when none attacks
-/// it within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
+/// <item><b>On the AI's request</b> (<see cref="Ai.AiMind.FleeRequest"/>, the same run): an NPC whose Self preservation goes to Running away (a
+/// crippled one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats and stops when none
+/// attacks it within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
 /// </list>
 /// </summary>
 public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight) : ITickSystem, IStateHashed
@@ -43,10 +44,14 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// </summary>
     public const float Hop = 1000, Arrived = 200;
 
+    /// <summary>
+    /// The faction relations that say who is an enemy.
+    /// </summary>
     public FactionRelations Relations { get; } = relations;
 
     /// <summary>
-    /// The sight range R before the race multiplier, for the enemies counted and the safety test (the <see cref="AggroSettings.SightRange"/> of the game).
+    /// The sight range R before the race multiplier, for the enemies counted and the safety test (the <see cref="AggroSettings.SightRange"/> of
+    /// the game).
     /// </summary>
     public float SightRange { get; } = sightRange;
 
@@ -69,25 +74,51 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     #region State
 
+    /// <summary>
+    /// The squads of this check, sorted by id.
+    /// </summary>
     readonly List<Squad> _squads = [];
+    /// <summary>
+    /// The slots some living character is fighting, as of this check (<see cref="Attacked"/>).
+    /// </summary>
     readonly HashSet<int> _attacked = [];
-    readonly HashSet<int> _seen = [];
+    /// <summary>
+    /// The standing members of the squad being considered.
+    /// </summary>
     readonly List<int> _standing = [];
 
-    // The characters standing this check by faction (in slot order) and, per faction asked, the standing enemies of it: a battle of one faction, or of
-    // factions at peace, needs no scans, and a few enemies in a big crowd are checked directly rather than by a grid scan over the whole crowd.
+    /// <summary>
+    /// The standing characters by faction. The characters standing this check by faction (in slot order) and, per faction asked, the standing enemies
+    /// of it: a battle of one faction, or of factions at peace, needs no scans, and a few enemies in a big crowd are checked directly rather than by
+    /// a grid scan over the whole crowd.
+    /// </summary>
     readonly Dictionary<int, List<int>> _standingBy = [];
+    /// <summary>
+    /// The factions that have standing characters this check (see <see cref="_standingBy"/>).
+    /// </summary>
     readonly List<int> _standingFactions = [];
+    /// <summary>
+    /// The standing enemies of each faction asked (see <see cref="_standingBy"/>).
+    /// </summary>
     readonly Dictionary<int, List<int>> _enemiesOf = [];
+    /// <summary>
+    /// Spare lists for <see cref="_standingBy"/> and <see cref="_enemiesOf"/>, reused across checks.
+    /// </summary>
     readonly Stack<List<int>> _spare = [];
 
-    // The tick StandingFactions was last built on (a request may come on any tick, the periodic check on every CheckEveryTicks).
+    /// <summary>
+    /// The tick StandingFactions was last built on (a request may come on any tick, the periodic check on every CheckEveryTicks).
+    /// </summary>
     long _standingAt = -1;
 
     #endregion
 
     #region Tick
 
+    /// <summary>
+    /// The flight step: on every <see cref="CheckEveryTicks"/> it lists who is fought and who stands by faction; every tick it starts the flights the
+    /// AI asked for and moves on the running ones; on a check with <see cref="SquadBreak"/> on, squads in a fight that are not intact break.
+    /// </summary>
     public void SlowWorld(World world)
     {
         var table = world.Characters;
@@ -165,6 +196,10 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     #region Squads
 
+    /// <summary>
+    /// Breaks a squad in a fight that is no longer intact: its standing members run from the enemies' centre (a squad with a player character or a
+    /// member already running with its squad is left alone).
+    /// </summary>
     void Consider(World world, CharacterTable table, Squad squad)
     {
         if (!Relations.Contains(squad.Faction)) return;
@@ -174,6 +209,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         foreach (var m in squad.Members)
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
+
             // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
@@ -183,6 +219,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             _standing.Add(s);
             if (c.InCombat || table.Next[s].Task == (byte)CharacterTask.Attack) fighting = true;
         }
+
         // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps
         // it intact; else it needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a
         // share of the squad. No enemy is counted.
@@ -203,9 +240,10 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     #region Flights
 
     /// <summary>
-    /// A flight the AI asked for (<see cref="Ai.AiMind.FleeRequest"/>). From the threats (<see cref="Ai.FleeAsk.Threat"/>, Self preservation's provider 35,
-    /// <see cref="Ai.SelfPreservation"/>): if a threat still attacks it and its body still takes the choice to running; it runs from their centre and stops
-    /// when none is left. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35): as a broken squad's member does.
+    /// A flight the AI asked for (<see cref="Ai.AiMind.FleeRequest"/>). From the threats (<see cref="Ai.FleeAsk.Threat"/>, Self preservation's
+    /// provider 35, <see cref="Ai.SelfPreservation"/>): if a threat still attacks it and its body still takes the choice to running; it runs from
+    /// their centre and stops when none is left. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35): as a broken squad's
+    /// member does.
     /// </summary>
     void Begin(World world, CharacterTable table, int s, FleeAsk ask)
     {
@@ -231,9 +269,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     }
 
     /// <summary>
-    /// <c>Task_Runaway</c>'s start (<c>FUN_14034b440</c>): the character stops fighting and runs at full speed to a point <see cref="FirstRun"/> + up to
-    /// <see cref="RunSpread"/> from <paramref name="centre"/> (the mean of <paramref name="count"/> positions), on the far side of it from the character;
-    /// a random way when there is none.
+    /// <c>Task_Runaway</c>'s start (<c>FUN_14034b440</c>): the character stops fighting and runs at full speed to a point <see cref="FirstRun"/> + up
+    /// to <see cref="RunSpread"/> from <paramref name="centre"/> (the mean of <paramref name="count"/> positions), on the far side of it from the
+    /// character; a random way when there is none.
     /// </summary>
     void Begin(World world, CharacterTable table, int s, Vector3 centre, int count)
     {
@@ -246,6 +284,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             away = new Vector2(here.X - centre.X, here.Z - centre.Z);
             away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : RandomDirection(world, s, 0);
         }
+
         var from = count == 0 ? new Vector2(here.X, here.Z) : new Vector2(centre.X, centre.Z);
         ref var n = ref table.Next[s];
         table.Cold(s)!.Fleeing = true;
@@ -314,15 +353,43 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// </summary>
     const int DirectEnemies = 256;
 
+    /// <summary>
+    /// The state of one enemy scan: who looks from where and how far, the cap of enemies to collect, what to collect them into or call for each, and
+    /// whether one was found.
+    /// </summary>
     struct Scan
     {
+        /// <summary>
+        /// The character table scanned.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The faction relations it judges by.
+        /// </summary>
         public FactionRelations Relations;
+        /// <summary>
+        /// The looker's slot and faction.
+        /// </summary>
         public int Self, Faction;
+        /// <summary>
+        /// Where the looker sees from.
+        /// </summary>
         public Vector3 Eye;
+        /// <summary>
+        /// The sight range, and the count of enemies collected after which the scan stops collecting.
+        /// </summary>
         public float Range, Limit;
+        /// <summary>
+        /// Where the enemies found are collected; null: not collected.
+        /// </summary>
         public HashSet<int>? Into;
+        /// <summary>
+        /// Called for each enemy found with its slot and position; null: none.
+        /// </summary>
         public Action<int, Vector3>? Each;
+        /// <summary>
+        /// Whether an enemy was found.
+        /// </summary>
         public bool Any;
     }
 
@@ -350,6 +417,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         return scan.Any;
     }
 
+    /// <summary>
+    /// Visits one character of a scan: a living, standing enemy within the range is counted, collected and passed to <see cref="Scan.Each"/>.
+    /// </summary>
     static void Visit(int slot, ref Scan s)
     {
         if (slot == s.Self || s.Into?.Count > s.Limit || !s.Table.Next[slot].Alive) return;
@@ -361,6 +431,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         s.Each?.Invoke(slot, p);
     }
 
+    /// <summary>
+    /// Whether the character at <paramref name="s"/> is safe: no one fights it, and no enemy stands within its sight.
+    /// </summary>
     bool Safe(World world, CharacterTable table, int s)
     {
         return !_attacked.Contains(s) && (!AnyEnemy(table.Cold(s)!.Faction) || !Enemies(world, table, s, null, null));
@@ -413,6 +486,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
                 _standingBy[c.Faction] = l = _spare.Count > 0 ? _spare.Pop() : [];
                 _standingFactions.Add(c.Faction);
             }
+
             l.Add(i);
         }
     }
@@ -436,16 +510,24 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     #region Running
 
+    /// <summary>
+    /// A random unit direction for a hop of the character at <paramref name="s"/>, drawn from the tick and <paramref name="salt"/>.
+    /// </summary>
     Vector2 RandomDirection(World world, int s, ulong salt)
     {
         var id = new CharacterId(s, world.Characters.Next[s].Generation);
         ulong roll = Rng.Hash(world.Seed, Rng.Key(id), RngPurpose.Flee, ((ulong)world.Tick << 2) | salt);
+
         // Task_Runaway draws x and z uniformly in [-1, 1] and normalises; a draw at the origin is replaced by +X.
         float x = Rng.Float(roll) * 2 - 1, z = Rng.Float(Rng.Mix(roll)) * 2 - 1;
         var v = new Vector2(x, z);
         return v.LengthSquared() > 1e-8f ? Vector2.Normalize(v) : Vector2.UnitX;
     }
 
+    /// <summary>
+    /// Sends the character at <paramref name="s"/> running from <paramref name="from"/> (else where it stands) <paramref name="distance"/> plus up to
+    /// <see cref="RunSpread"/> at random along <paramref name="direction"/>.
+    /// </summary>
     void Run(World world, CharacterTable table, int s, Vector2 direction, float distance, Vector2? from = null)
     {
         ref var n = ref table.Next[s];
@@ -459,6 +541,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     #region State hash
 
+    /// <summary>
+    /// Adds the counts of broken squads and fled characters to the world's state hash, once anything fled.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         // Only once something fled, so worlds without fleeing hash as before.

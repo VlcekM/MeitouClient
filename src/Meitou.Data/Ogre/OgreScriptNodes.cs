@@ -6,8 +6,17 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public abstract class OgreScriptNode
 {
+    /// <summary>
+    /// The script file the node was read from (an imported file for imported nodes).
+    /// </summary>
     public string File { get; set; } = "";
+    /// <summary>
+    /// The line of the node in <see cref="File"/>.
+    /// </summary>
     public int Line { get; set; }
+    /// <summary>
+    /// The object or property this node belongs to; null at the top level.
+    /// </summary>
     public OgreScriptNode? Parent { get; set; }
 
     /// <summary>
@@ -15,6 +24,9 @@ public abstract class OgreScriptNode
     /// </summary>
     public abstract OgreScriptNode Clone();
 
+    /// <summary>
+    /// Gives <paramref name="node"/> this node's file, line and parent, and returns it (for <see cref="Clone"/>).
+    /// </summary>
     protected T CopyPosition<T>(T node) where T : OgreScriptNode
     {
         node.File = File;
@@ -24,13 +36,22 @@ public abstract class OgreScriptNode
     }
 }
 
+/// <summary>
+/// A property or object value: one word or quoted phrase.
+/// </summary>
 public sealed class OgreScriptAtom(string value) : OgreScriptNode
 {
+    /// <summary>
+    /// The value's text, without quotes.
+    /// </summary>
     public string Value { get; set; } = value;
     public override OgreScriptNode Clone() => CopyPosition(new OgreScriptAtom(Value));
     public override string ToString() => Value;
 }
 
+/// <summary>
+/// A <c>$variable</c> reference, replaced by the variable's value after compilation.
+/// </summary>
 public sealed class OgreScriptVariableAccess(string name) : OgreScriptNode
 {
     /// <summary>
@@ -42,6 +63,9 @@ public sealed class OgreScriptVariableAccess(string name) : OgreScriptNode
     public override string ToString() => Name;
 }
 
+/// <summary>
+/// An <c>import target from source</c> line.
+/// </summary>
 public sealed class OgreScriptImport(string target, string source) : OgreScriptNode
 {
     /// <summary>
@@ -58,8 +82,14 @@ public sealed class OgreScriptImport(string target, string source) : OgreScriptN
     public override string ToString() => $"import {Target} from {Source}";
 }
 
+/// <summary>
+/// A property: its name and its values (<c>lighting off</c>).
+/// </summary>
 public sealed class OgreScriptProperty(string name) : OgreScriptNode
 {
+    /// <summary>
+    /// The property's name, e.g. <c>lighting</c>.
+    /// </summary>
     public string Name { get; } = name;
 
     /// <summary>
@@ -87,6 +117,9 @@ public sealed class OgreScriptProperty(string name) : OgreScriptNode
     public override string ToString() => Values.Count == 0 ? Name : $"{Name} {string.Join(' ', Args)}";
 }
 
+/// <summary>
+/// An object: <c>class name [values] [: bases] { children }</c>, e.g. a material, technique or pass.
+/// </summary>
 public sealed class OgreScriptObject(string cls) : OgreScriptNode
 {
     /// <summary>
@@ -114,6 +147,9 @@ public sealed class OgreScriptObject(string cls) : OgreScriptNode
     /// </summary>
     public bool IsAbstract { get; set; }
 
+    /// <summary>
+    /// The object's properties and child objects in order, inherited ones first after compilation.
+    /// </summary>
     public List<OgreScriptNode> Children { get; } = [];
 
     /// <summary>
@@ -126,10 +162,19 @@ public sealed class OgreScriptObject(string cls) : OgreScriptNode
     /// </summary>
     internal List<OgreScriptNode> Overrides { get; } = [];
 
+    /// <summary>
+    /// The object's properties in order.
+    /// </summary>
     public IEnumerable<OgreScriptProperty> Properties => Children.OfType<OgreScriptProperty>();
 
+    /// <summary>
+    /// The child objects of class <paramref name="cls"/>, in order.
+    /// </summary>
     public IEnumerable<OgreScriptObject> Objects(string cls) => Children.OfType<OgreScriptObject>().Where(o => o.Class == cls);
 
+    /// <summary>
+    /// The <see cref="Values"/> as text.
+    /// </summary>
     public IReadOnlyList<string> Args => [.. Values.Select(v => v is OgreScriptAtom a ? a.Value : v.ToString() ?? "")];
 
     /// <summary>

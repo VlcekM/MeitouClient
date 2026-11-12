@@ -13,14 +13,36 @@ public sealed class GameInstall
     /// </summary>
     static readonly string[] ExecutableNames = ["kenshi_x64.exe", "kenshi_GOG_x64.exe"];
 
+    /// <summary>
+    /// The environment variable that names the install's folder; <see cref="Locate"/> tries it first.
+    /// </summary>
     public const string EnvironmentVariable = "KENSHI_PATH";
+    /// <summary>
+    /// The git-ignored file that names the install (<c>{"kenshiPath": "..."}</c>), searched from the working directory and the executable's
+    /// folder upwards.
+    /// </summary>
     public const string LocalConfigFile = "meitou.local.json";
 
+    /// <summary>
+    /// Wraps an already validated, full install path.
+    /// </summary>
     GameInstall(string root) => Root = root;
 
+    /// <summary>
+    /// Full path of the install's folder (the one holding the game's exe and <c>data</c>).
+    /// </summary>
     public string Root { get; }
+    /// <summary>
+    /// The install's <c>data</c> folder: <c>gamedata.base</c>, <c>mods.cfg</c> and the other base data files.
+    /// </summary>
     public string DataDirectory => Path.Combine(Root, "data");
+    /// <summary>
+    /// The install's <c>mods</c> folder, one subfolder per local mod.
+    /// </summary>
     public string ModsDirectory => Path.Combine(Root, "mods");
+    /// <summary>
+    /// The install's <c>save</c> folder, one subfolder per save.
+    /// </summary>
     public string SaveDirectory => Path.Combine(Root, "save");
 
     /// <summary>
@@ -53,6 +75,9 @@ public sealed class GameInstall
         Directory.Exists(Path.Combine(root, "data")) &&
         File.Exists(Path.Combine(root, "data", "gamedata.base"));
 
+    /// <summary>
+    /// Opens the install at <paramref name="root"/>; throws <see cref="DirectoryNotFoundException"/> when it has no <c>data/gamedata.base</c>.
+    /// </summary>
     public static GameInstall Open(string root)
     {
         root = Path.GetFullPath(root);
@@ -121,6 +146,9 @@ public sealed class GameInstall
         }
     }
 
+    /// <summary>
+    /// The folders <see cref="Locate"/> tries, in its order; entries may be null or empty (an unset variable, an unreadable config file).
+    /// </summary>
     static IEnumerable<string?> Candidates()
     {
         yield return Environment.GetEnvironmentVariable(EnvironmentVariable);
@@ -149,6 +177,9 @@ public sealed class GameInstall
     /// </summary>
     public static void SaveLocalConfig(string directory, string root) => SaveConfigFile(Path.Combine(directory, LocalConfigFile), root);
 
+    /// <summary>
+    /// Writes the config file at <paramref name="path"/> with the full path of <paramref name="root"/> as <c>kenshiPath</c>.
+    /// </summary>
     static void SaveConfigFile(string path, string root)
     {
         // Written by hand, not JsonSerializer: the launcher is Native AOT, where reflection-based serialization is unavailable.
@@ -179,6 +210,9 @@ public sealed class GameInstall
         }
     }
 
+    /// <summary>
+    /// Steam's own folders that exist on this machine, by platform (see <see cref="SteamLibraries"/>).
+    /// </summary>
     static IEnumerable<string> SteamFolders()
     {
         if (OperatingSystem.IsWindows())
@@ -210,6 +244,9 @@ public sealed class GameInstall
         }
     }
 
+    /// <summary>
+    /// The <c>kenshiPath</c> string of the config file at <paramref name="file"/>; null when it is missing, broken or has none.
+    /// </summary>
     static string? ReadLocalConfig(string file)
     {
         if (!File.Exists(file)) return null;

@@ -20,6 +20,9 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class BuildingSave
 {
+    /// <summary>
+    /// Meitou's GAMESTATE_BUILDING key naming the parent's instance id (wins over the original's handle on load).
+    /// </summary>
     public const string MeitouParent = "meitou parent";
 
     #region Shared
@@ -34,8 +37,17 @@ public static class BuildingSave
     /// </summary>
     const int StateVersion = 270;
 
+    /// <summary>
+    /// The suffix of a building's GAMESTATE_BUILDING state id.
+    /// </summary>
     const string StateSuffix = "-S23";   // the hex of GAMESTATE_BUILDING (35)
+    /// <summary>
+    /// The name prefix of a player town's GAMESTATE_TOWN state (the rest is the town's name).
+    /// </summary>
     const string TownStatePrefix = "Town state ";
+    /// <summary>
+    /// The suffix of a player town's GAMESTATE_TOWN state id.
+    /// </summary>
     const string TownStateSuffix = "-S5e";   // the hex of GAMESTATE_TOWN (94)
 
     /// <summary>
@@ -43,6 +55,9 @@ public static class BuildingSave
     /// </summary>
     const string DefaultTownMaterial = "742-gamedata.base";
 
+    /// <summary>
+    /// Whether a building instance is the player's: a registry id, a state that is not a town's construction and the player faction as its owner.
+    /// </summary>
     static bool IsPlayerBuilt(string instanceId, FcsRecord? state, string playerFactionId) =>
         BuildingRegistry.TryParseId(instanceId, out _, out _) && state is not null && !state.Bools.GetValueOrDefault("meitou town construction")
         && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId;
@@ -70,7 +85,8 @@ public static class BuildingSave
 
             foreach (var instance in list.Instances)
             {
-                if (instance.IsRemoved || !states.TryGetValue(BuildingKey.Of(zone.Coordinate, instance.Id), out var state)
+                if (instance.IsRemoved || IsStaleCopy(save, zone, instance)
+                    || !states.TryGetValue(BuildingKey.Of(zone.Coordinate, instance.Id), out var state)
                     || !IsPlayerBuilt(instance.Id, state, playerFactionId))
                     continue;
 
@@ -81,7 +97,10 @@ public static class BuildingSave
                 for (int k = 0; k < materials.Length; k++)
                 {
                     var material = data.Materials[k];
-                    materials[k] = new MaterialSlot(material.Item, material.Required) { Delivered = state.Floats.GetValueOrDefault($"{k}construction mats") };
+                    materials[k] = new MaterialSlot(material.Item, material.Required)
+                    {
+                        Delivered = state.Floats.GetValueOrDefault($"{k}construction mats")
+                    };
                 }
 
                 float target = data.Target;
@@ -125,6 +144,19 @@ public static class BuildingSave
     }
 
     /// <summary>
+    /// Whether <paramref name="instance"/> is listed outside the zone its position lies in while that zone lists it too. The original lists a
+    /// building in the zone it was built from, which may not be its position's (<b>Observed</b>, an imported vanilla save of #493); Meitou before
+    /// it removed that entry wrote a second one in the position's zone, and the newer copy wins.
+    /// </summary>
+    static bool IsStaleCopy(SaveGame save, SaveZone zone, FcsInstance instance)
+    {
+        var home = WorldLayout.ZoneOf(instance.Position.X, instance.Position.Z);
+        if (home == zone.Coordinate || !save.Zones.TryGetValue(home, out var own)) return false;
+
+        return own.BuildingList?.Instances.Any(i => i.Id == instance.Id && !i.IsRemoved) == true;
+    }
+
+    /// <summary>
     /// Reserves the instance id of every building in the save's zone building lists.
     /// </summary>
     static void ReserveIds(SaveGame save, BuildingRegistry reg)
@@ -151,8 +183,10 @@ public static class BuildingSave
             if (zone.BuildingList is not { } ids) continue;
 
             foreach (var i in ids.Instances)
+            {
                 if (states.TryGetValue(BuildingKey.Of(zone.Coordinate, i.Id), out var record))
                     idOf[record] = IsPlayerBuilt(i.Id, record, playerFactionId) ? i.Id : BuildingKey.Of(zone.Coordinate, i.Id);
+            }
         }
 
         return idOf;
@@ -219,7 +253,7 @@ public static class BuildingSave
     public static IReadOnlyDictionary<int, Hand> Write(SaveGame game, World world, string playerFactionId, ulong seed = 0)
     {
         var reg = world.Buildings;
-        var live = new HashSet<string>(reg.All.Select(s => s.Id), StringComparer.Ordinal);
+        var live = reg.All.ToDictionary(s => s.Id, s => s.LevelPlacement is null ? s.Zone : (ZoneCoordinate?)null, StringComparer.Ordinal);
         RemoveDismantled(game, playerFactionId, live);
         var townHands = WriteTowns(game, world, playerFactionId, seed);
         if (reg.Count == 0) return townHands;
@@ -232,9 +266,10 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Removes the player-built buildings of the save that the world no longer has, with their state records and their slots.
+    /// Removes the player-built buildings of the save that the world no longer has, with their state records and their slots, and a live site's
+    /// entry in a zone other than the one it is written in (<paramref name="live"/> maps each site to that zone, null for a level house's).
     /// </summary>
-    static void RemoveDismantled(SaveGame game, string playerFactionId, HashSet<string> live)
+    static void RemoveDismantled(SaveGame game, string playerFactionId, Dictionary<string, ZoneCoordinate?> live)
     {
         foreach (var zone in game.Zones.Values)
         {
@@ -244,7 +279,7 @@ public static class BuildingSave
             foreach (var r in zone.File.Records) byId[r.StringId] = r;
             foreach (var instance in list.Instances.ToList())
             {
-                if (live.Contains(instance.Id)) continue;
+                if (live.TryGetValue(instance.Id, out var home) && (home is null || home == zone.Coordinate)) continue;
 
                 var state = instance.States.Count > 0 ? byId.GetValueOrDefault(instance.States[0]) : null;
                 if (!IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;
@@ -300,7 +335,8 @@ public static class BuildingSave
     /// <summary>
     /// Writes one site: its instance in the zone's building list, its state record and its keys.
     /// </summary>
-    static void WriteSite(SaveGame game, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures, IWalkability walkability)
+    static void WriteSite(SaveGame game, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures,
+        IWalkability walkability)
     {
         var coordinate = site.Zone;
         if (!game.Zones.TryGetValue(coordinate, out var zone)) game.Zones[coordinate] = zone = new SaveZone(coordinate, new SaveFile());
@@ -308,7 +344,8 @@ public static class BuildingSave
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0",
+                StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
 
@@ -395,11 +432,12 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Writes the player's outposts into <c>quick.save</c> (docs/formats/save.md "Player outposts"; the original's town-list writer <c>FUN_14092a6c0</c> and
-    /// <c>Town::vfunc_17/85</c>, <b>Verified</b> by code, no sample save has one): an entry of the GAMESTATE_TOWN_INSTANCE_LIST (made when the save has none)
-    /// with id <c>&lt;n&gt;-quick.save-INGAME</c>, target <see cref="PlayerTown.Template"/>, the absolute position and a zero quaternion, and its GAMESTATE_TOWN
-    /// <c>&lt;id&gt;-S5e</c> named "Town state &lt;name&gt;". An outpost read from a save keeps its entry, state and handle; a new one gets the next town
-    /// container. Returns each outpost's handle by number, for the buildings' <c>town</c>.
+    /// Writes the player's outposts into <c>quick.save</c> (docs/formats/save.md "Player outposts"; the original's town-list writer
+    /// <c>FUN_14092a6c0</c> and <c>Town::vfunc_17/85</c>, <b>Verified</b> by code, no sample save has one): an entry of the
+    /// GAMESTATE_TOWN_INSTANCE_LIST (made when the save has none) with id <c>&lt;n&gt;-quick.save-INGAME</c>, target
+    /// <see cref="PlayerTown.Template"/>, the absolute position and a zero quaternion, and its GAMESTATE_TOWN <c>&lt;id&gt;-S5e</c> named "Town state
+    /// &lt;name&gt;". An outpost read from a save keeps its entry, state and handle; a new one gets the next town container. Returns each outpost's
+    /// handle by number, for the buildings' <c>town</c>.
     /// </summary>
     static Dictionary<int, Hand> WriteTowns(SaveGame game, World world, string playerFactionId, ulong seed)
     {
@@ -493,6 +531,9 @@ public static class BuildingSave
         return list;
     }
 
+    /// <summary>
+    /// The id of number <paramref name="n"/> in <c>quick.save</c>.
+    /// </summary>
     static string QuickId(int n) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n}-{SaveFolder.QuickSaveName}-INGAME");
 
     /// <summary>

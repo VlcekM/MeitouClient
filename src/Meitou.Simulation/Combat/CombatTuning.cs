@@ -28,7 +28,8 @@ public static class CombatTuning
     public const float BreakOutSeconds = 1.2f;
 
     /// <summary>
-    /// The swing progress window of the attackers a stumble break-out is rolled against (<b>Verified</b> constants 0.1 and 0.99, <c>FUN_1406085e0</c>).
+    /// The swing progress window of the attackers a stumble break-out is rolled against (<b>Verified</b> constants 0.1 and
+    /// 0.99, <c>FUN_1406085e0</c>).
     /// </summary>
     public const float BreakOutFrom = 0.1f, BreakOutTo = 0.99f;
 
@@ -51,7 +52,8 @@ public static class CombatTuning
     public const float AnimalNoDefenceSeconds = 2f;
 
     /// <summary>
-    /// A swing is given up to defend while it is under this far through and a blow coming at the fighter is past this far (<b>Verified</b>, FUN_1406083d0(0.5, 0.5)).
+    /// A swing is given up to defend while it is under this far through and a blow coming at the fighter is past this far (<b>Verified</b>,
+    /// FUN_1406083d0(0.5, 0.5)).
     /// </summary>
     public const float AbortOwnProgress = 0.5f, AbortIncomingProgress = 0.5f;
 
@@ -102,7 +104,8 @@ public static class CombatTuning
     public const float LeadBase = 1.2f, LeadSlope = 2;
 
     /// <summary>
-    /// A chaser's lead point is put this many times the two footprints beside the runner's track, so that solid bodies pass instead of pushing (engine choice).
+    /// A chaser's lead point is put this many times the two footprints beside the runner's track, so that solid bodies pass instead of pushing
+    /// (engine choice).
     /// </summary>
     public const float PassWidth = 1.25f;
 
@@ -129,8 +132,8 @@ public static class CombatTuning
 
     /// <summary>
     /// The band a fighter its target does not let close in keeps (<b>Observed</b>, <c>WaitingStateAI</c> <c>FUN_1402b3800</c>, through
-    /// <see cref="CombatSteering.Band"/>): near n / 4 + <see cref="CircleNear"/>, far 3 n + <see cref="CircleFar"/>, n the fighters at the target. The side-step
-    /// speed the state draws is never read by the steering: it does not orbit (docs/game/combat.md "Fight steering").
+    /// <see cref="CombatSteering.Band"/>): near n / 4 + <see cref="CircleNear"/>, far 3 n + <see cref="CircleFar"/>, n the fighters at the target.
+    /// The side-step speed the state draws is never read by the steering: it does not orbit (docs/game/combat.md "Fight steering").
     /// </summary>
     public const float CircleNear = 15, CircleFar = 25;
 
@@ -140,8 +143,8 @@ public static class CombatTuning
     internal static float Footprint(CharacterCold? c) => c?.Race?.PathfindFootprintRadius ?? DefaultFootprint;
 
     /// <summary>
-    /// The gap a technique is chosen by (<b>Observed</b>, <c>FUN_1402b4570</c>; docs/game/combat.md "Attack technique choice"): the distance from the attacker to
-    /// <paramref name="aim"/> less 1.5 x its own footprint x its size k and lerp(k, 0.45, 1) x the target's footprint, at least 0.
+    /// The gap a technique is chosen by (<b>Observed</b>, <c>FUN_1402b4570</c>; docs/game/combat.md "Attack technique choice"): the distance from the
+    /// attacker to <paramref name="aim"/> less 1.5 x its own footprint x its size k and lerp(k, 0.45, 1) x the target's footprint, at least 0.
     /// </summary>
     internal static float Gap(Vector3 from, Vector3 aim, CharacterCold? me, CharacterCold? target)
     {
@@ -150,10 +153,10 @@ public static class CombatTuning
     }
 
     /// <summary>
-    /// The gap between the bodies (footprints) a fighter walks in to (<b>Observed</b>, <c>FUN_1402b4570</c> moving to <c>FUN_14060cd20</c> through the steering's
-    /// <c>FUN_1402ae320</c>): its longest reach (<see cref="CombatSlot.Reach"/>) less a quarter of its weapon's length, at least 6 (the steering keeps the far
-    /// end 5 beyond its near end of 1), +<see cref="RunningGap"/> while it runs (<c>FUN_1402aebf0</c> in <c>CircleStateAI</c>);
-    /// <see cref="CloseInGap"/> before its first choice.
+    /// The gap between the bodies (footprints) a fighter walks in to (<b>Observed</b>, <c>FUN_1402b4570</c> moving to <c>FUN_14060cd20</c> through
+    /// the steering's <c>FUN_1402ae320</c>): its longest reach (<see cref="CombatSlot.Reach"/>) less a quarter of its weapon's length, at least 6
+    /// (the steering keeps the far end 5 beyond its near end of 1), +<see cref="RunningGap"/> while it runs (<c>FUN_1402aebf0</c> in
+    /// <c>CircleStateAI</c>); <see cref="CloseInGap"/> before its first choice.
     /// </summary>
     public static float StandGap(float reach, float weaponLength, bool running) =>
         reach > 0 ? MathF.Max(6, reach - weaponLength * 0.25f + (running ? RunningGap : 0)) : CloseInGap;

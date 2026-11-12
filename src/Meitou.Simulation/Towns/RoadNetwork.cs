@@ -18,17 +18,41 @@ public sealed class RoadNetwork
     /// How far from a trip's ends a road may be joined (<b>Verified</b>, X/Z).
     /// </summary>
     public const float JoinRange = 20000;
+    /// <summary>
+    /// The edge of a grid cell of the road segments (X/Z).
+    /// </summary>
     const float Cell = 2000;
 
+    /// <summary>
+    /// A road: its points (X/Z), each point's share of the way along it (0..1), its <c>length</c> and its two junctions.
+    /// </summary>
     sealed record Road(Vector2[] Points, float[] Along, float Length, int From, int To);
 
+    /// <summary>
+    /// The roads.
+    /// </summary>
     readonly List<Road> _roads = [];
+    /// <summary>
+    /// The junctions' places.
+    /// </summary>
     readonly List<Vector2> _junctions = [];
+    /// <summary>
+    /// The roads of each junction.
+    /// </summary>
     readonly List<List<int>> _edges = [];
+    /// <summary>
+    /// The road segments crossing each grid cell.
+    /// </summary>
     readonly Dictionary<(int, int), List<(int Road, int Segment)>> _grid = [];
 
+    /// <summary>
+    /// The number of roads.
+    /// </summary>
     public int Count => _roads.Count;
 
+    /// <summary>
+    /// Builds the network from the level's roads (a road with fewer than 2 points or no length is left out).
+    /// </summary>
     public RoadNetwork(IEnumerable<RoadPath> paths)
     {
         var junctionOf = new Dictionary<int, int>();
@@ -77,8 +101,14 @@ public sealed class RoadNetwork
         }
     }
 
+    /// <summary>
+    /// The grid cell of a coordinate.
+    /// </summary>
     static int CellOf(float v) => (int)MathF.Floor(v / Cell);
 
+    /// <summary>
+    /// A road point a trip may join at: its road, its share of the way along it, the point and its distance.
+    /// </summary>
     readonly record struct Spot(int Road, float T, Vector2 Point, float Distance);
 
     /// <summary>
@@ -210,21 +240,33 @@ public sealed class RoadNetwork
         }
 
         if (best == float.MaxValue) return null;
+        return (best, RoutePoints(entry, exit, back, bestJunction));
+    }
 
+    /// <summary>
+    /// The points of the route <see cref="Search"/> found: along the entry road to its junction, the chain of roads <paramref name="back"/> holds
+    /// to <paramref name="bestJunction"/>, then along the exit road (along the one road when <paramref name="bestJunction"/> is -1).
+    /// </summary>
+    List<Vector2> RoutePoints(Spot entry, Spot exit, Dictionary<int, int> back, int bestJunction)
+    {
+        var er = _roads[entry.Road];
+        var xr = _roads[exit.Road];
         var points = new List<Vector2>();
 
         if (bestJunction < 0)
         {
             AddAlong(points, er, entry.T, exit.T);
-            return (best, points);
+            return points;
         }
 
         // Back from the junction the exit road was reached at, to a seed junction.
         var chain = new List<(int Road, int To)>();
-        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = _roads[via].From == j ? _roads[via].To : _roads[via].From) chain.Add((via, j));
+        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = _roads[via].From == j ? _roads[via].To : _roads[via].From)
+            chain.Add((via, j));
 
         chain.Reverse();
-        int first = chain.Count > 0 ? (_roads[chain[0].Road].From == chain[0].To ? _roads[chain[0].Road].To : _roads[chain[0].Road].From) : bestJunction;
+        int first = chain.Count > 0
+            ? (_roads[chain[0].Road].From == chain[0].To ? _roads[chain[0].Road].To : _roads[chain[0].Road].From) : bestJunction;
         AddAlong(points, er, entry.T, first == er.From ? 0 : 1);
 
         foreach (var (index, end) in chain)
@@ -234,7 +276,7 @@ public sealed class RoadNetwork
         }
 
         AddAlong(points, xr, bestJunction == xr.From ? 0 : 1, exit.T);
-        return (best, points);
+        return points;
     }
 
     /// <summary>
@@ -257,6 +299,9 @@ public sealed class RoadNetwork
         points.Add(PointAt(road, t1));
     }
 
+    /// <summary>
+    /// The point <paramref name="t"/> of the way along <paramref name="road"/>.
+    /// </summary>
     static Vector2 PointAt(Road road, float t)
     {
         for (int i = 1; i < road.Points.Length; i++)

@@ -10,9 +10,14 @@ namespace Meitou.Game.Rendering.Gpu;
 public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, PixelViewport Viewport,
     PixelRect Scissor, RenderTarget Extra = default)
 {
+    /// <summary>
+    /// The rendering these targets describe: their attachments and size, the shading rate attachment and the extra attachments.
+    /// </summary>
     public RenderingDesc Rendering => new(Colour, Depth, Width, Height, 0, 0, ShadingRate, ShadingRateTexel, Extra, Extra2);
 
-    /// <summary>A third colour attachment (location 2, after <see cref="Extra"/>; the traced sun's term, docs/render-shadows.md).</summary>
+    /// <summary>
+    /// A third colour attachment (location 2, after <see cref="Extra"/>; the traced sun's term, docs/render-shadows.md).
+    /// </summary>
     public RenderTarget Extra2 { get; init; }
 
     /// <summary>
@@ -21,6 +26,9 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
     /// </summary>
     public GpuView ShadingRate { get; init; }
 
+    /// <summary>
+    /// The shading rate attachment's texel size in pixels (see <see cref="ShadingRate"/>).
+    /// </summary>
     public int ShadingRateTexel { get; init; }
 
     /// <summary>
@@ -53,6 +61,9 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
         return this with { Viewport = viewport, Scissor = new PixelRect(x0, y0, (uint)Math.Max(x1 - x0, 0), (uint)Math.Max(y1 - y0, 0)) };
     }
 
+    /// <summary>
+    /// The rectangle of a whole <paramref name="w"/> x <paramref name="h"/> target.
+    /// </summary>
     static PixelRect Whole(int w, int h) => new(0, 0, (uint)w, (uint)h);
 }
 
@@ -65,6 +76,9 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     bool BiasEnable, float BiasConstant, float BiasSlope, BlendState Blend, ColorMask ColourMask, PolygonKind Polygon,
     bool AlphaToCoverage, bool DepthClamp)
 {
+    /// <summary>
+    /// Every colour channel written.
+    /// </summary>
     public const ColorMask Rgba = ColorMask.All;
 
     /// <summary>
@@ -106,7 +120,8 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     /// <summary>
     /// The pipeline for <paramref name="program"/> with this state.
     /// </summary>
-    public GraphicsPipelineDesc Pipeline(GpuProgram program, VertexLayout vertex, PrimitiveType topology, AttachmentFormats targets, string name = "") =>
+    public GraphicsPipelineDesc Pipeline(GpuProgram program, VertexLayout vertex, PrimitiveType topology, AttachmentFormats targets,
+        string name = "") =>
         new(program, vertex, topology, targets, Blend, ColourMask, Polygon, AlphaToCoverage, DepthClamp, name);
 
     /// <summary>
@@ -130,8 +145,17 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
+    /// <summary>
+    /// The open host pass's targets, viewport and scissor.
+    /// </summary>
     PassTargets? _passTargets;
+    /// <summary>
+    /// The state the open host pass hands its guests.
+    /// </summary>
     DrawState? _passState;
+    /// <summary>
+    /// The open host pass's command list; null when no host pass is open.
+    /// </summary>
     CommandList? _passList;
 
     /// <summary>
@@ -198,6 +222,9 @@ public sealed unsafe partial class GpuContext
         _passState = state;
     }
 
+    /// <summary>
+    /// Closes the host pass on <paramref name="cmd"/> (it must be the open one).
+    /// </summary>
     public void EndHostPass(IGpuCommandList cmd)
     {
         if (_passList is null || !ReferenceEquals(cmd, _passList))

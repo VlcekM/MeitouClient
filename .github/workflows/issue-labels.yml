@@ -1,4 +1,5 @@
-# Issue labels: keeps the labels in .github/labels.json on GitHub, and gives an issue opened from a form its area:<category> label.
+# Issue labels: keeps the labels in .github/labels.json on GitHub, and Claude Haiku 5.5 gives each new issue its area:<id> label
+# (feedback issues too: the GitHub App that opens them starts workflows). Run by hand with issue numbers to label older issues.
 name: Issue labels
 
 on:
@@ -9,6 +10,10 @@ on:
   issues:
     types: [opened]
   workflow_dispatch:
+    inputs:
+      issues:
+        description: "Issue numbers to label, space-separated (empty: sync the labels)"
+        required: false
 
 permissions:
   contents: read
@@ -16,7 +21,7 @@ permissions:
 
 jobs:
   sync:
-    if: github.event_name != 'issues'
+    if: github.event_name != 'issues' && !inputs.issues
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,13 +33,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   area:
-    if: github.event_name == 'issues'
+    if: github.event_name == 'issues' || inputs.issues
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: node .github/scripts/label-issue.mjs
+      - run: npm ci
+        working-directory: .github/scripts
+      - name: Ask Claude Haiku 5.5 for the area
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUES: ${{ inputs.issues }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "No ANTHROPIC_API_KEY secret; skipped." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          node .github/scripts/label-issue.mjs

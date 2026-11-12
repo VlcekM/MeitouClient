@@ -186,15 +186,15 @@ public class DialogueTests
     ]), []);
 
     [Fact]
-    public void A_dumb_character_speaks_only_a_dialogue_whose_is_character_list_names_it()
+    public void A_dumb_character_answers_talk_whatever_its_is_character_list()
     {
-        // FUN_14067e060 / FUN_140684d70: for a dumb record an empty list fails.
+        // The line check (FUN_140678f30) has no dumb rule: only the interjector and arrival banter finders have it, so Agnu answers (#446).
         using (var v = new Village(data: Dumb(listed: false)))
         {
             v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             v.World.RunTicks(2);
 
-            Assert.Null(v.Talk);
+            Assert.Equal("Hello.", v.Talk!.Text);
         }
         using (var v = new Village(data: Dumb(listed: true)))
         {
@@ -371,7 +371,12 @@ public class DialogueTests
             Rec("trade-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("trade-l")]),
             Rec("trade-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Looking to trade?"; r.References["lines"] = [Ref("buy-l")]; }),
             Rec("buy-l", FcsRecordType.DialogueLine,
-                    r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
+                    r =>
+                    {
+                        r.Ints["speaker"] = (int)Talker.Target;
+                        r.Strings["text0"] = "I'm looking to buy some slaves";
+                        r.References["effects"] = [Ref("buy-da")];
+                    }),
         ]);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);

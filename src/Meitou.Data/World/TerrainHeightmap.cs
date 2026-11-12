@@ -14,17 +14,38 @@ public sealed class TerrainHeightmap : IDisposable
     /// </summary>
     public const string RelativePath = "newland/land/fullmap.tif";
 
+    /// <summary>
+    /// A heightmap over <paramref name="image"/>.
+    /// </summary>
     TerrainHeightmap(TiffImage image) => Image = image;
 
+    /// <summary>
+    /// The TIFF the samples are read from.
+    /// </summary>
     public TiffImage Image { get; }
+    /// <summary>
+    /// Samples per side.
+    /// </summary>
     public int Size => Image.Width;
 
+    /// <summary>
+    /// Opens the install's heightmap (<see cref="RelativePath"/>).
+    /// </summary>
     public static TerrainHeightmap Open(GameInstall install) => Open(Path.Combine(install.DataDirectory, RelativePath));
 
+    /// <summary>
+    /// Opens the heightmap at <paramref name="path"/>.
+    /// </summary>
     public static TerrainHeightmap Open(string path) => FromImage(TiffImage.Open(path));
 
+    /// <summary>
+    /// Opens the heightmap in <paramref name="stream"/>.
+    /// </summary>
     public static TerrainHeightmap Open(Stream stream) => FromImage(TiffImage.Open(stream));
 
+    /// <summary>
+    /// <paramref name="image"/> as a heightmap; throws (and closes it) unless it is a square 16-bit image.
+    /// </summary>
     static TerrainHeightmap FromImage(TiffImage image)
     {
         if (image.BitsPerSample != 16 || image.Width != image.Height)
@@ -35,8 +56,14 @@ public sealed class TerrainHeightmap : IDisposable
         return new TerrainHeightmap(image);
     }
 
+    /// <summary>
+    /// The raw sample at (<paramref name="column"/>, <paramref name="row"/>).
+    /// </summary>
     public ushort Sample(int column, int row) => Image.ReadSample(column, row);
 
+    /// <summary>
+    /// Reads one row of raw samples into <paramref name="destination"/>.
+    /// </summary>
     public void ReadRow(int row, Span<ushort> destination) => Image.ReadRow(row, destination);
 
     /// <summary>
@@ -61,9 +88,9 @@ public sealed class TerrainHeightmap : IDisposable
     public const float BuildingGroundFloor = 100;
 
     /// <summary>
-    /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its heights, every
-    /// other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16 units off <see cref="HeightAt"/>
-    /// on steep ground. Not thread-safe (it reads the file).
+    /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its
+    /// heights, every other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16
+    /// units off <see cref="HeightAt"/> on steep ground. Not thread-safe (it reads the file).
     /// </summary>
     public float BuildingGroundAt(double x, double z)
     {
@@ -143,6 +170,9 @@ public sealed class TerrainHeightmap : IDisposable
         }
     }
 
+    /// <summary>
+    /// Closes the file.
+    /// </summary>
     public void Dispose() => Image.Dispose();
 }
 
@@ -152,12 +182,18 @@ public sealed class TerrainHeightmap : IDisposable
 /// </summary>
 public sealed class RawHeightTile
 {
+    /// <summary>
+    /// A tile of <paramref name="size"/>² <paramref name="samples"/>.
+    /// </summary>
     RawHeightTile(int size, ushort[] samples)
     {
         Size = size;
         Samples = samples;
     }
 
+    /// <summary>
+    /// Samples per side.
+    /// </summary>
     public int Size { get; }
 
     /// <summary>
@@ -165,10 +201,19 @@ public sealed class RawHeightTile
     /// </summary>
     public ushort[] Samples { get; }
 
+    /// <summary>
+    /// The raw sample at (<paramref name="column"/>, <paramref name="row"/>).
+    /// </summary>
     public ushort this[int column, int row] => Samples[row * Size + column];
 
+    /// <summary>
+    /// Reads the tile file at <paramref name="path"/> (<see cref="GameFiles.Resolve"/>d ignoring case).
+    /// </summary>
     public static RawHeightTile ReadFile(string path) => Read(File.ReadAllBytes(GameFiles.Resolve(path)));
 
+    /// <summary>
+    /// Parses a tile; throws unless the data is a square grid of 16-bit samples.
+    /// </summary>
     public static RawHeightTile Read(ReadOnlySpan<byte> data)
     {
         int size = (int)Math.Round(Math.Sqrt(data.Length / 2.0));

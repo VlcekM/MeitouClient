@@ -9,37 +9,91 @@ namespace Meitou.Game.Rendering.Gpu.Core;
 /// </summary>
 public sealed unsafe class FrameRing : IDisposable
 {
+    /// <summary>
+    /// One frame in flight: its command pool and buffers, fence and the deletions waiting for it.
+    /// </summary>
     sealed class FrameSlot
     {
+        /// <summary>
+        /// The slot's transient command pool.
+        /// </summary>
         public CommandPool Pool;
+        /// <summary>
+        /// The slot's primary command buffer.
+        /// </summary>
         public CommandBuffer Cmd;
+        /// <summary>
+        /// Signalled when the slot's submission completes.
+        /// </summary>
         public Fence Fence;
+        /// <summary>
+        /// The deletions to run once the slot's frame has completed (swapped for a new list when run).
+        /// </summary>
         public List<Action> Deletions = new();
+        /// <summary>
+        /// Submitted and not yet seen complete.
+        /// </summary>
         public bool InFlight;
+        /// <summary>
+        /// The number of the frame the slot holds.
+        /// </summary>
         public long Frame;
         /// <summary>
         /// The primary being recorded: <see cref="Cmd"/>, or after a <see cref="SubmitAndWait"/> one of <see cref="Extra"/>.
         /// </summary>
         public CommandBuffer Recording;
+        /// <summary>
+        /// The further primaries a <see cref="SubmitAndWait"/> split the frame into, kept for the next frames.
+        /// </summary>
         public readonly List<CommandBuffer> Extra = new();
+        /// <summary>
+        /// The further primaries this frame has used.
+        /// </summary>
         public int ExtraUsed;
     }
 
     #region State
 
+    /// <summary>
+    /// The device the ring submits on.
+    /// </summary>
     readonly VulkanDevice _dev;
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     readonly Vk _vk;
+    /// <summary>
+    /// The slots, one per frame in flight.
+    /// </summary>
     readonly FrameSlot[] _slots;
+    /// <summary>
+    /// Guards the deletion lists, the in-flight flags and <see cref="CompletedFrame"/> (deletions come from any thread).
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// The slot submitted last; -1 before the first submission.
+    /// </summary>
     int _lastSubmitted = -1;
+    /// <summary>
+    /// The fence a <see cref="SubmitAndWait"/> waits on, made on first use.
+    /// </summary>
     Fence _splitFence;
+    /// <summary>
+    /// Between <see cref="BeginFrame"/> and <see cref="EndFrame"/>.
+    /// </summary>
     bool _inFrame;
+    /// <summary>
+    /// Set by the first <see cref="Dispose"/>.
+    /// </summary>
     bool _disposed;
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// A ring of <paramref name="count"/> slots, each with a transient pool, a primary command buffer and a fence.
+    /// </summary>
     internal FrameRing(VulkanDevice dev, int count)
     {
         this._dev = dev;
@@ -73,6 +127,9 @@ public sealed unsafe class FrameRing : IDisposable
 
     #region Properties
 
+    /// <summary>
+    /// The slots: the frames in flight.
+    /// </summary>
     public int Count => _slots.Length;
 
     /// <summary>
@@ -89,7 +146,13 @@ public sealed unsafe class FrameRing : IDisposable
     /// The newest frame whose fence has been seen signalled (all its deletions have run).
     /// </summary>
     public long CompletedFrame { get; private set; }
+    /// <summary>
+    /// Whether a frame is being recorded.
+    /// </summary>
     public bool InFrame => _inFrame;
+    /// <summary>
+    /// The primary being recorded now.
+    /// </summary>
     public CommandBuffer Current => _slots[Slot].Recording;
 
     #endregion
@@ -111,7 +174,7 @@ public sealed unsafe class FrameRing : IDisposable
         if (s.InFlight)
         {
             var fence = s.Fence;
-            VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+            _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             Retire(s);
         }
         else
@@ -172,7 +235,7 @@ public sealed unsafe class FrameRing : IDisposable
             };
             lock (_dev.QueueLock)
             {
-                VulkanException.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
+                _dev.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
             }
         }
         lock (_gate)
@@ -199,6 +262,9 @@ public sealed unsafe class FrameRing : IDisposable
         return s.Recording;
     }
 
+    /// <summary>
+    /// Submits two command buffers in order and waits for them on the split fence.
+    /// </summary>
     void SubmitWaited(CommandBuffer first, CommandBuffer second)
     {
         if (_splitFence.Handle == 0)
@@ -210,13 +276,16 @@ public sealed unsafe class FrameRing : IDisposable
         var si = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 2, PCommandBuffers = cmds };
         lock (_dev.QueueLock)
         {
-            VulkanException.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, _splitFence), "vkQueueSubmit");
+            _dev.Check(_vk.QueueSubmit(_dev.GraphicsQueue, 1, in si, _splitFence), "vkQueueSubmit");
         }
         var fence = _splitFence;
-        VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+        _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
         VulkanException.Check(_vk.ResetFences(_dev.Device, 1, in fence), "vkResetFences");
     }
 
+    /// <summary>
+    /// A new primary command buffer from the pool.
+    /// </summary>
     CommandBuffer Allocate(CommandPool pool)
     {
         var ai = new CommandBufferAllocateInfo
@@ -230,6 +299,9 @@ public sealed unsafe class FrameRing : IDisposable
         return cb;
     }
 
+    /// <summary>
+    /// Begins a one-time-submit recording.
+    /// </summary>
     void Begin(CommandBuffer cb)
     {
         var bi = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
@@ -262,6 +334,7 @@ public sealed unsafe class FrameRing : IDisposable
                 }
             }
         }
+
         // Nothing in flight (or the last frame was already retired by WaitAll): safe now.
         destroy();
     }
@@ -278,7 +351,7 @@ public sealed unsafe class FrameRing : IDisposable
             var s = _slots[i];
             if (_inFrame && i == Slot || !s.InFlight) continue;
             var fence = s.Fence;
-            VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+            _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             Retire(s);
             any = true;
         }
@@ -295,7 +368,7 @@ public sealed unsafe class FrameRing : IDisposable
             if (s.InFlight)
             {
                 var fence = s.Fence;
-                VulkanException.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+                _dev.Check(_vk.WaitForFences(_dev.Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
                 Retire(s);
             }
             else
@@ -305,6 +378,9 @@ public sealed unsafe class FrameRing : IDisposable
         }
     }
 
+    /// <summary>
+    /// Marks a slot complete (moving <see cref="CompletedFrame"/> forward) and runs its deletions.
+    /// </summary>
     void Retire(FrameSlot s)
     {
         lock (_gate)
@@ -318,6 +394,9 @@ public sealed unsafe class FrameRing : IDisposable
         RunDeletions(s);
     }
 
+    /// <summary>
+    /// Runs a slot's deletions outside the lock until none are left (a deletion may queue more).
+    /// </summary>
     void RunDeletions(FrameSlot s)
     {
         while (true)

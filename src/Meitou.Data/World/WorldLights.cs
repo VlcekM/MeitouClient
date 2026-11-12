@@ -8,7 +8,14 @@ namespace Meitou.Data.World;
 /// </summary>
 public enum WorldLightType
 {
+    /// <summary>
+    /// POINT (0): an Ogre point light.
+    /// </summary>
     Point = 0,
+
+    /// <summary>
+    /// SPOT (1): an Ogre spotlight.
+    /// </summary>
     Spot = 1,
 }
 
@@ -17,9 +24,24 @@ public enum WorldLightType
 /// </summary>
 public enum WorldLightEffect
 {
+    /// <summary>
+    /// NONE (0): steady.
+    /// </summary>
     None = 0,
+
+    /// <summary>
+    /// PULSE (1): <c>0.5 + 0.5 sin 4t</c>.
+    /// </summary>
     Pulse = 1,
+
+    /// <summary>
+    /// FLICKER (2): no case of it was found.
+    /// </summary>
     Flicker = 2,
+
+    /// <summary>
+    /// SHIMMER (3): <c>0.95 + 0.05 sin 30t · sin 17t</c>.
+    /// </summary>
     Shimmer = 3,
 }
 
@@ -45,7 +67,8 @@ public enum WorldLightRule
 /// </summary>
 /// <param name="Position">World position.</param>
 /// <param name="Colour">The LIGHT <c>diffuse</c>, each channel byte / 255, used as is (the game does no sRGB decode).</param>
-/// <param name="Intensity">The light's power: <c>brightness</c> plus the building's roll in ±<c>variance</c>/2; ≤ 0 means the game never draws it.</param>
+/// <param name="Intensity">The light's power: <c>brightness</c> plus the building's roll in ±<c>variance</c>/2; ≤ 0 means the game never
+/// draws it.</param>
 /// <param name="Radius">The LIGHT <c>radius</c>: the light reaches exactly this far (<see cref="WorldLights.Attenuation"/>).</param>
 /// <param name="Direction">Unit direction a spot light points in (also set for point lights).</param>
 /// <param name="InnerAngle">Spot inner cone, full angle in radians (LIGHT <c>inner</c>, degrees in the data).</param>
@@ -103,8 +126,10 @@ public static class WorldLights
     /// <summary>
     /// The lights of every placed building of the world. Destroyed buildings give none (Unknown in the game).
     /// </summary>
-    /// <param name="layouts">Building layouts (from <c>interiors.level</c>) for the lights of exterior/interior layout objects; null skips them.</param>
-    /// <param name="includeInteriors">Also the interior layouts' lights (furniture inside buildings), flagged <see cref="WorldLight.Interior"/>.</param>
+    /// <param name="layouts">Building layouts (from <c>interiors.level</c>) for the lights of exterior/interior layout objects; null
+    /// skips them.</param>
+    /// <param name="includeInteriors">Also the interior layouts' lights (furniture inside buildings),
+    /// flagged <see cref="WorldLight.Interior"/>.</param>
     public static IReadOnlyList<WorldLight> ForWorld(
         GameDatabase db,
         WorldLevelData levels,
@@ -165,6 +190,10 @@ public static class WorldLights
         return zoneDb.Find(b.StateId);
     }
 
+    /// <summary>
+    /// Adds the lights of <paramref name="building"/>'s layout named <paramref name="name"/> (interior or exterior), each piece placed with the
+    /// building; nothing when there is no such layout.
+    /// </summary>
     static void AddLayout(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding building, string name, bool exterior, List<WorldLight> result)
     {
         if (name.Length == 0 || layouts.Find(building.Record, name, exterior) is not { } layout) return;
@@ -200,7 +229,8 @@ public static class WorldLights
     }
 
     /// <summary>
-    /// A LIGHT record at <paramref name="position"/> with its rolled <paramref name="power"/>; <paramref name="ownerId"/> is the record that carries it.
+    /// A LIGHT record at <paramref name="position"/> with its rolled <paramref name="power"/>; <paramref name="ownerId"/> is the record that
+    /// carries it.
     /// </summary>
     public static WorldLight FromRecord(
         GameRecord light,

@@ -112,8 +112,8 @@ drag-drop unpermitted down-character→Theft3, other source→Looting10. Ordinar
 Ground pickup can raise Theft inside another faction's building, and taking from another faction's container does (Theft by right-click, Looting by drag).
 
 **Observed** steal roll (`FUN_140794810`, chance `FUN_1407944d0`; virtual names KenshiLib 1ce4a16): both inventory transfers above and the give
-set their pending crime, then roll; caught refuses the move. Character owner (Loot, 26, on a sleeper, a playing-dead or a caged
-character: [ui-input](ui-input.md#context-menu-verbs)): the owner watches, p = 1.1 x thievery/100, an equipped item (`Item::isEquipped` +0x129)
+set their pending crime, then roll; caught refuses the move. Character owner (Loot, 26, on a sleeper in a bed, a playing-dead or a caged
+character, never a ground sleeper: the menu tests special state `+0x2f8` != 0, `FUN_1407a6bc0`, **Observed**; [ui-input](ui-input.md#context-menu-verbs)): the owner watches, p = 1.1 x thievery/100, an equipped item (`Item::isEquipped` +0x129)
 x0.75, x0.75 again when it is armour (`isArmour`); the drag passes no item. Container: the container's parent building (`isFurnitureOf` -> its
 building) must have a resident squad (`Building::residentSquad` +0xD0, a CHARACTER or PLATOON hand), else no watcher; the watcher is the nearest
 to the thief of that platoon's active members (`Platoon::activePlatoon` +0x1D8) not down and posture < 3, those on the thief's floor (`getFloor`)
@@ -134,12 +134,16 @@ faction+0x40 books bounty. Kind7 is a squad-level suspect tag, not a faction rel
 Friendly/hostile/slave-owner/lawless/bandit faction gates matter. Carrying past witnesses has
 its own victim/captor ownership checks.
 
+Meitou: the open loot body's limbs window uses the looter for drag and right-click transfers. Taking a fitted prosthetic leaves a stump and
+keeps its damage, wear and stun on the item; a refused right-click move leaves it fitted.
+
 ## Stolen ownership
 
 **Observed** item+0x140=from-owner, +0x160=current holder. Backpack uses its owning character's
 faction. Same faction/lawless holder (faction `fundamental type` 8 or `not real`) is not stolen (**Verified**, `FUN_14079e550`; it is tested before the state checks, whatever the strictness); strict1 can use set/nonmatching original-owner
 handle even if unresolved, strict0 also requires resolution. Dropping ownerless items can set
-dropper as owner. The save's `ownedby` is item+0x140 (**Observed**, `Item` vfunc 75/76); preserve handles, not a boolean only.
+dropper as owner. The save's `ownedby` is item+0x140 (**Observed**, `Item` vfunc 75/76); preserve handles, not a boolean only. A mark naming only a faction (goods of a building
+nobody lives in) or a robbed character the save does not hold has no handle; Meitou keeps the faction in `meitou stolen from` ([save.md](../formats/save.md#zone-files)).
 
 A take from the inventory window (right click `RClickAutoTrade` `FUN_140713d20`, drag `FUN_140715560`) books its Theft/Looting, rolls
 `ImStealingDoYouNotice` and marks an ownerless item (`Item::notifyTheftFrom`, vfunc 0x348: owner = the source, unless the source window is the
@@ -294,7 +298,7 @@ arrival (vfunc 1, `FUN_14034ffa0`) first rolls:
 
 Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as above; asleep is lying in a bed or resting with the sleep behaviour; the
 perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets a deferred defensive attack; a player character's queue is cleared, the kidnapper is
-forced into its senses and the decision step answers with `CarrySystem.EngagedDefence` (an engine stand-in for the threats list, [decision step](../simulation.md#decision-step)); an awake player
+forced into its senses and the decision step answers with `EngagedDefence` (an engine stand-in for the threats list, [decision step](../simulation.md#decision-step)); an awake player
 victim is only forced-sensed.
 
 - **Goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK** (desire `FUN_1405a0710`, **Verified** by decompile; registered with a `Task_Blank` row, B `!47`, whose plan is `Task_PutDownObject` 69): desire 0 unless the character carries; then 1.0 when the carried body is not `+0x5b9` (unconscious), not dead (`+0x5bc`), not `+0x5b8` and (not chained, or the carrier does not regard it as an enemy: vslot `0x3e8` `FUN_14079c950`), else 0. So a woken body is put down by an NPC carrier whose packages list 169 (9 packages), whatever the relation; the put-down task knocks a body that is no friend out again on the ground. Only a chained enemy stays carried awake. Meitou: `CarrySystem.WakesIntoPutDown` (NPC carriers) behind `CarrySystem.ListsPutDown` (the goal is scored only when the carrier's lists hold it: its squad's running package or campaign phase role list, `PopulationSystem.GoalDuty`, and its race's `AI Goals`; faction `AI Goals` are not modelled); any other woken body, and a chained enemy, rides on awake (`CharacterCold.CarriedAwake`) as no other goal puts it down; `+0x5b8` is 0); player-side carriers keep the older rule (a friendly body is set down at once).
@@ -318,7 +322,10 @@ The same update (1.0.68 `FUN_1405a4f50`, **Verified** by decompile) makes a slav
 - the status object's current town (`+0x88`, [below](#the-status-town)) is none, i.e. the slave is out of every town;
 - its owner handle (character `+0x328`) names a character that resolves, and the squared distance between them is above 12 500 000 (`DAT_1416f016c`, about 3 536).
 
-When the handle's character does not resolve, its platoon is looked up and the slave is measured to it the same way. A squad handle (0x5b) is resolved to its platoon. With neither found, the slave escapes unless `FUN_1404fe6e0` holds on the handle (meaning **Unknown**). A cage or a carry is not tested.
+When the handle's character does not resolve, its platoon is looked up and the slave is measured to it the same way. A squad handle (0x5b) is resolved to its platoon.
+**Observed** (1.0.68 `FUN_1405a4f50` and `FUN_1404fe6e0`): with neither found, the slave escapes unless the handle still names a registered object.
+A null handle (type 11) fails that check, so an ownerless slave becomes escaped even inside town; only the resolved-owner distance branch checks the town.
+A cage or a carry is not tested. Meitou keeps an unloaded master squad or pending saved `slaver` handle until it can resolve.
 
 Since the setter removes job 187 Obedient Slave, the slave then plans with its own lists. In the Rebirth hold (**Observed**, one slave), a slave sent to a workplace about 4 000 from its owner became an escaped slave and took its own 172 Getting in my cage, whose finder (`FUN_1408caaf0`) has no slave state test.
 

@@ -7,8 +7,8 @@ using Meitou.Data.World;
 namespace Meitou.Data.Characters;
 
 /// <summary>
-/// A light a character carries (docs/formats/lights.md "Carried lanterns"): the bone it hangs from and the light at its binding-pose position (model
-/// space).
+/// A light a character carries (docs/formats/lights.md "Carried lanterns"): the bone it hangs from and the light at its binding-pose position
+/// (model space).
 /// </summary>
 public sealed record CarriedLight(string Bone, WorldLight Light);
 
@@ -20,8 +20,15 @@ public sealed record CarriedLight(string Bone, WorldLight Light);
 /// </summary>
 public static class CarriedLights
 {
+    /// <summary>
+    /// The hanging body of each physics file by path (ignoring case); null when it has none or does not read.
+    /// </summary>
     static readonly ConcurrentDictionary<string, Vector3?> HangingCache = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The light <paramref name="worn"/> carries: its first <c>physics attachment</c>'s LIGHT at the attachment's hanging body (the female file when
+    /// <paramref name="female"/> and set, else the male one), its power rolled with <paramref name="random"/>; null when any link is missing.
+    /// </summary>
     public static CarriedLight? From(GameDatabase db, string installRoot, GameRecord worn, bool female, Random random)
     {
         if (worn.GetReferences("physics attachment") is not [var link, ..] || db.Find(link.TargetStringId) is not { } attachment)

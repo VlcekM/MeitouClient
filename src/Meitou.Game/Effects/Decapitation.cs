@@ -14,20 +14,34 @@ namespace Meitou.Game.Effects;
 /// </summary>
 sealed class Decapitation(GameHost host)
 {
+    #region Falling heads
+
     // Cut-off heads (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): drawn by the character renderer, not the
     // simulation's. When a character the renderer drew with its head last frame is listed headless, its head falls from where it was: the look's
     // CharacterAppearance.SeveredHead, holding the bones of that last frame (taken at once, Rendering.Characters.CharacterRenderer.HoldPose), placed
     // by the body's placement then, turned about the head bone and dropped until it meets the ground or a body lying under it. The fall's clock
     // starts once the head's look is ready (so it is seen falling), timed by the shown tick as the severed limbs are (still while paused). Not saved:
     // a load or a new game clears them; past the dropped-items limit the oldest goes.
+    /// <summary>
+    /// One cut-off head: its draw key, look and pose, where and how it falls, and where it landed.
+    /// </summary>
     sealed class FallingHead
     {
+        /// <summary>
+        /// The head's own draw key (the body's with bit 54 flipped) and the body's draw key, whose held pose it keeps.
+        /// </summary>
         public required long Key, From;
+        /// <summary>
+        /// The severed head's look (<see cref="CharacterAppearance.SeveredHead"/>).
+        /// </summary>
         public required CharacterAppearance Look;
         /// <summary>
         /// The body's placement and its head bone's place when it was cut.
         /// </summary>
         public required Matrix4x4 World;
+        /// <summary>
+        /// Where the head bone was when it was cut, and the horizontal axis it turns about while falling.
+        /// </summary>
         public required Vector3 Start, Axis;
         /// <summary>
         /// Where it drifts to across the ground (x, z).
@@ -37,12 +51,20 @@ sealed class Decapitation(GameHost host)
         /// The speed it is thrown with (units/s): the blow that cut it off's, as the body's ragdoll (<see cref="CharacterSnapshot.Knockdown"/>).
         /// </summary>
         public required Vector3 Velocity;
+        /// <summary>
+        /// The seconds its drop takes to the ground under where it was cut.
+        /// </summary>
         public required float Flight;
-        /// <summary>The tumble's speed in the air (rad/s): less after each landing.</summary>
+        /// <summary>
+        /// The tumble's speed in the air (radians/s): less after each landing.
+        /// </summary>
         public required float Spin;
+        /// <summary>
+        /// The body's blood amounts when it was cut, drawn on the head.
+        /// </summary>
         public required ulong Blood;
         /// <summary>
-        /// The shown tick its fall started (NaN until its look is drawn) and the seconds into it that it landed, at what height (NaN: still falling).
+        /// The shown tick its fall started (NaN until its look is drawn).
         /// </summary>
         public double Tick = double.NaN;
         /// <summary>
@@ -60,15 +82,23 @@ sealed class Decapitation(GameHost host)
     /// across the ground, how fast a rolling head slows (units/s2; a head is no ball), what a landing keeps of the tumble, and the speed it rests at.
     /// </summary>
     const float Bounce = 0.32f, BounceLeast = 6, LandingGrip = 0.3f, RollSlowing = 28, TumbleKept = 0.5f, RestSpeed = 0.4f;
-    /// <summary>The longest step of a head's motion, and the most seconds caught up in one frame.</summary>
+    /// <summary>
+    /// The longest step of a head's motion, and the most seconds caught up in one frame.
+    /// </summary>
     const float StepSeconds = 1f / 120, CatchUp = 0.25f;
 
+    /// <summary>
+    /// The heads falling or lying, the oldest first; past the dropped-items limit the oldest goes.
+    /// </summary>
     readonly List<FallingHead> _heads = [];
     /// <summary>
     /// The characters whose cut was looked at (a head spawned, or none to spawn: drawn headless already, or not drawn), for <see
     /// cref="_headsEpoch"/>.
     /// </summary>
     readonly HashSet<CharacterId> _headsSeen = [];
+    /// <summary>
+    /// The <see cref="GameSaves.WorldEpoch"/> the heads and spurts belong to: a load or a new world clears them.
+    /// </summary>
     long _headsEpoch = -1;
     /// <summary>
     /// How far above what it lies on the head bone rests (about a head's half height).
@@ -237,14 +267,27 @@ sealed class Decapitation(GameHost host)
         return top;
     }
 
+    #endregion
+
+    #region Neck spurts
+
     // The blood a cut-off head leaves (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): with the <c>Blood</c> setting on
     // and a race that bleeds, the neck spurts SpurtPulses times, weaker each time, the luckyren burst's spray (Debris.BurstSpray) thrown out of the
     // neck along the spine (from <c>Bip01 Spine2</c> to <c>Bip01 Neck</c>, as the body is drawn then), each pulse leaving a splash on the ground
     // where it lands. While a pulse emits, its emitter is moved and turned with the neck every frame, so the spray follows the falling body; what it
     // threw stays in the air. Timed by the shown tick (still while paused). Display only, not saved.
+    /// <summary>
+    /// One neck's spurts of blood: the body it follows, the blood's colour, the neck's place and the pulses left.
+    /// </summary>
     sealed class NeckSpurt
     {
+        /// <summary>
+        /// The draw key of the body whose neck spurts.
+        /// </summary>
         public required long From;
+        /// <summary>
+        /// The blood decal colour (opaque ABGR).
+        /// </summary>
         public required uint Colour;
         /// <summary>
         /// The spray's colour for a race whose blood is not red (<see cref="BloodDecals.BloodRecolour"/>).
@@ -254,21 +297,39 @@ sealed class Decapitation(GameHost host)
         /// Where the neck was and which way the stump pointed (spine to neck) when the body was last drawn.
         /// </summary>
         public required Vector3 Neck;
+        /// <summary>
+        /// The stump's unit direction, spine to neck (up until the body is drawn).
+        /// </summary>
         public Vector3 Along = Vector3.UnitY;
         /// <summary>
         /// The shown tick of the next pulse, and how many are left.
         /// </summary>
         public double Next = double.NaN;
+        /// <summary>
+        /// The pulses left.
+        /// </summary>
         public int Left = SpurtPulses;
         /// <summary>
         /// The pulse emitting now (null: none) and its spray's fixed offset from the stump's line.
         /// </summary>
         public EffectUnit? Emitting;
+        /// <summary>
+        /// The random offset of the emitting pulse's spray from the stump's line.
+        /// </summary>
         public Vector3 Jitter;
     }
 
+    /// <summary>
+    /// The necks spurting.
+    /// </summary>
     readonly List<NeckSpurt> _spurts = [];
+    /// <summary>
+    /// Each race's blood data by race id, read once (the bleed rate and the blood colour).
+    /// </summary>
     readonly Dictionary<string, RaceData> _bloodRaces = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The pulses a neck spurts, each weaker than the one before.
+    /// </summary>
     const int SpurtPulses = 6;
     /// <summary>
     /// Seconds between pulses, and how far (units) the first pulse's blood lands from the neck.
@@ -331,6 +392,9 @@ sealed class Decapitation(GameHost host)
     /// </summary>
     static Vector3 SprayDirection(NeckSpurt s) => Vector3.Normalize(s.Along + s.Jitter + new Vector3(0, 0.3f, 0));
 
+    /// <summary>
+    /// Fires one pulse: a spray out of the neck at its strength (the pulses left out of all) and its splash on the ground.
+    /// </summary>
     void Pulse(NeckSpurt s)
     {
         float strength = s.Left / (float)SpurtPulses;
@@ -359,4 +423,6 @@ sealed class Decapitation(GameHost host)
         if (at.Y <= host.Gpu.Terrain.HeightAt(at.X, at.Z) + BloodDecals.BloodAboveGround)
             store.Add(TerrainDecalType.Splash, at, flat, size, s.Colour, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
     }
+
+    #endregion
 }

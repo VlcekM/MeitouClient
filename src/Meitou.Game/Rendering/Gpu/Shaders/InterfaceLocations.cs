@@ -12,23 +12,65 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 /// </summary>
 static partial class InterfaceLocations
 {
+    /// <summary>
+    /// One name of an interface declaration: its slots and its location (explicit or assigned).
+    /// </summary>
     sealed class Declarator
     {
+        /// <summary>
+        /// The variable's name.
+        /// </summary>
         public required string Name;
+        /// <summary>
+        /// The locations it takes (a matrix's columns times its array length).
+        /// </summary>
         public required int Slots;
-        public int NameStart, DeclEnd;      // [NameStart, DeclEnd): name and its array suffix in the source
-        public int? Location;               // explicit, or assigned
-        public string Suffix = "";          // array dims after the name
+        /// <summary>
+        /// [NameStart, DeclEnd): the name and its array suffix in the source.
+        /// </summary>
+        public int NameStart, DeclEnd;
+        /// <summary>
+        /// The location: explicit, or assigned.
+        /// </summary>
+        public int? Location;
+        /// <summary>
+        /// The array dimensions after the name.
+        /// </summary>
+        public string Suffix = "";
     }
 
+    /// <summary>
+    /// One global <c>in</c> or <c>out</c> declaration statement and where its parts are in the source.
+    /// </summary>
     sealed class Statement
     {
+        /// <summary>
+        /// An <c>out</c> (else an <c>in</c>).
+        /// </summary>
         public required bool IsOut;
-        public int Start, End;              // [Start, End] up to and including ';'
-        public int PrefixEnd;               // start of the first declarator
-        public int? LayoutOpen;             // offset just after "layout(" when a layout without location exists
-        public int? LayoutStart, LayoutEnd; // the whole layout(...) when present
+        /// <summary>
+        /// [Start, End]: the statement up to and including the ';'.
+        /// </summary>
+        public int Start, End;
+        /// <summary>
+        /// The start of the first declarator.
+        /// </summary>
+        public int PrefixEnd;
+        /// <summary>
+        /// The offset just after "layout(" when a layout without a location exists.
+        /// </summary>
+        public int? LayoutOpen;
+        /// <summary>
+        /// The whole layout(...) when present.
+        /// </summary>
+        public int? LayoutStart, LayoutEnd;
+        /// <summary>
+        /// The names the statement declares.
+        /// </summary>
         public List<Declarator> Declarators = [];
+        /// <summary>
+        /// The statement has an explicit location (the scan numbered its names from it).
+        /// </summary>
         public bool HasExplicit;
     }
 
@@ -115,6 +157,9 @@ static partial class InterfaceLocations
         }
     }
 
+    /// <summary>
+    /// The first location from which <paramref name="slots"/> consecutive locations are all free.
+    /// </summary>
     static int Free(HashSet<int> used, int slots)
     {
         for (int start = 0; ; start++)
@@ -125,6 +170,10 @@ static partial class InterfaceLocations
         }
     }
 
+    /// <summary>
+    /// The source with the assigned locations written in: into the layout or as a new one, and a multi-name statement split into one declaration per
+    /// name (line count kept).
+    /// </summary>
     static string Rewrite(string source, List<Statement> statements)
     {
         var edits = new List<(int Start, int Length, string Text)>();
@@ -162,9 +211,15 @@ static partial class InterfaceLocations
 
     #region Scanning
 
+    /// <summary>
+    /// The interpolation and precision qualifiers that may stand before <c>in</c>/<c>out</c>.
+    /// </summary>
     static readonly HashSet<string> Qualifiers =
         ["flat", "smooth", "noperspective", "centroid", "sample", "invariant", "precise", "highp", "mediump", "lowp"];
 
+    /// <summary>
+    /// The global interface statements of a stage's source (comments masked, integer constants collected for array sizes).
+    /// </summary>
     static List<Statement> Scan(string source, string stage)
     {
         string m = MaskComments(source);
@@ -221,12 +276,18 @@ static partial class InterfaceLocations
         return result;
     }
 
+    /// <summary>
+    /// Whether the masked text in [<paramref name="from"/>, <paramref name="to"/>) is only whitespace.
+    /// </summary>
     static bool IsBlank(string m, int from, int to)
     {
         for (int i = from; i < to; i++) if (!char.IsWhiteSpace(m[i])) return false;
         return true;
     }
 
+    /// <summary>
+    /// One statement as an interface declaration (its layout, qualifiers, type and names); null when it is not a global <c>in</c> or <c>out</c>.
+    /// </summary>
     static Statement? Parse(string source, string m, int from, int semi, Dictionary<string, int> consts, string stage)
     {
         int p = from;
@@ -270,7 +331,9 @@ static partial class InterfaceLocations
             }
             SkipWs(m, ref p, semi);
         }
+
         if (isOut is null || typeName is null) return null;
+
         // the vertex stage's `in` and the fragment stage's `out`/`in` handled by the caller's filter; keep all here
         int slots = BaseSlots(typeName);
         if (slots == 0) return null; // interface block or a type we do not know
@@ -294,11 +357,25 @@ static partial class InterfaceLocations
             HasExplicit = explicitLoc is not null,
         };
         st.PrefixEnd = p;
+        if (!ParseDeclarators(st, m, p, semi, slots, typeDims, explicitLoc, consts, stage)) return null;
+        if (st.Declarators.Count > 0) st.PrefixEnd = st.Declarators[0].NameStart;
+
+        // `in vec2 a, b;` prefix for the rebuilt multi-declarations excludes the array dims of the type (they stay in the prefix text)
+        return st;
+    }
+
+    /// <summary>
+    /// The statement's declarators from <paramref name="p"/> to <paramref name="semi"/>, each with its slots and (after an explicit location)
+    /// the location it takes; false when a declarator is not one an interface variable can be.
+    /// </summary>
+    static bool ParseDeclarators(Statement st, string m, int p, int semi, int slots, int typeDims, int? explicitLoc, Dictionary<string, int> consts,
+        string stage)
+    {
         while (p < semi)
         {
             int nameStart = p;
             string? name = Ident(m, ref p, semi);
-            if (name is null) return null;
+            if (name is null) return false;
             int dims = typeDims;
             int suffixStart = p;
             SkipWs(m, ref p, semi);
@@ -307,14 +384,16 @@ static partial class InterfaceLocations
                 dims *= ArraySize(m, ref p, semi, consts, stage);
                 SkipWs(m, ref p, semi);
             }
+
             string suffix = m[suffixStart..p].Trim();
-            if (p < semi && m[p] == '=') return null; // not valid for in/out; leave alone
+            if (p < semi && m[p] == '=') return false; // not valid for in/out; leave alone
             var d = new Declarator { Name = name, Slots = slots * dims, NameStart = nameStart, DeclEnd = p, Suffix = suffix };
             if (explicitLoc is { } e)
             {
                 d.Location = e;
                 explicitLoc = e + d.Slots;
             }
+
             st.Declarators.Add(d);
             if (p < semi && m[p] == ',')
             {
@@ -325,11 +404,13 @@ static partial class InterfaceLocations
 
             break;
         }
-        if (st.Declarators.Count > 0) st.PrefixEnd = st.Declarators[0].NameStart;
-        // `in vec2 a, b;` prefix for the rebuilt multi-declarations excludes the array dims of the type (they stay in the prefix text)
-        return st;
+
+        return true;
     }
 
+    /// <summary>
+    /// An array size at <paramref name="p"/>: a number or an integer constant; throws for anything else.
+    /// </summary>
     static int ArraySize(string m, ref int p, int end, Dictionary<string, int> consts, string stage)
     {
         int close = m.IndexOf(']', p);
@@ -341,6 +422,10 @@ static partial class InterfaceLocations
         throw new ShaderCompileException($"Cannot evaluate the array size '{expr}' of an interface variable in the {stage} shader.", stage, "");
     }
 
+    /// <summary>
+    /// The locations one variable of a GLSL type takes: 1 for scalars and vectors (2 for <c>dvec3</c>/<c>dvec4</c>), a matrix's columns; 0 for
+    /// anything else.
+    /// </summary>
     static int BaseSlots(string type)
     {
         switch (type)
@@ -354,11 +439,17 @@ static partial class InterfaceLocations
         return 0;
     }
 
+    /// <summary>
+    /// Moves <paramref name="p"/> past whitespace.
+    /// </summary>
     static void SkipWs(string m, ref int p, int end)
     {
         while (p < end && char.IsWhiteSpace(m[p])) p++;
     }
 
+    /// <summary>
+    /// The identifier at <paramref name="p"/> (moving past it); null when there is none.
+    /// </summary>
     static string? Ident(string m, ref int p, int end)
     {
         int s = p;
@@ -366,6 +457,9 @@ static partial class InterfaceLocations
         return p == s || char.IsDigit(m[s]) ? null : m[s..p];
     }
 
+    /// <summary>
+    /// The index of the parenthesis closing the one at <paramref name="open"/>; -1 when it is not closed before <paramref name="end"/>.
+    /// </summary>
     static int Balanced(string m, int open, int end)
     {
         int depth = 0;
@@ -414,15 +508,27 @@ static partial class InterfaceLocations
         return sb.ToString();
     }
 
+    /// <summary>
+    /// <c>const int</c>/<c>const uint</c> NAME = number;
+    /// </summary>
     [GeneratedRegex(@"\bconst\s+(?:int|uint)\s+(\w+)\s*=\s*(\d+)\s*;")]
     private static partial Regex ConstIntRegex();
 
+    /// <summary>
+    /// <c>location = N</c>.
+    /// </summary>
     [GeneratedRegex(@"\blocation\s*=\s*(\d+)")]
     private static partial Regex LocationRegex();
 
+    /// <summary>
+    /// A GLSL vector type name, capturing its size.
+    /// </summary>
     [GeneratedRegex(@"^[dbiu]?vec([234])$")]
     private static partial Regex VectorRegex();
 
+    /// <summary>
+    /// A GLSL matrix type name, capturing its column count.
+    /// </summary>
     [GeneratedRegex(@"^d?mat([234])(?:x[234])?$")]
     private static partial Regex MatrixRegex();
 

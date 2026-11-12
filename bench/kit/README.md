@@ -4,7 +4,7 @@ Reproduce the Meitou daily benchmark on your own machine (Linux, Windows or macO
 
 ## What it measures, and why it is comparable
 
-Meitou is a C#/.NET 10 Vulkan reimplementation of Kenshi (upstream: github.com/VlcekM/MeitouClient). The maintainers run one fixed benchmark after every update of upstream master. This kit runs the same one:
+Meitou is a C#/.NET 11 Vulkan reimplementation of Kenshi (upstream: github.com/VlcekM/MeitouClient). The maintainers run one fixed benchmark after every update of upstream master. This kit runs the same one:
 
 - **Play benchmark** (the game's own `--play-bench`): after a `settle` step that is not counted, the segments `idle`, `orbit`, `zoom`, `pan` (about 44 s). Reports frame-time statistics and the slow-world simulation tick.
 - **Base switch** (`bases` scenario): the segments `idle` and `return` (10 s each); 1 s and 6 s into each, the script double-taps `2` then `1`, which centres the camera on the character at base 2, then at base 1. Four switches; it measures streaming and drawing of the other base.
@@ -27,7 +27,7 @@ Total game time is about 8 minutes (plus about 35 s of loading per run).
 ## Prerequisites (all platforms)
 
 - **Python 3.10 or newer** (standard library only; nothing to `pip install`). The commands below say `python3`; on Windows it is usually `py -3` or `python`.
-- **git** and the **.NET 10 SDK** (`dotnet --list-sdks` shows a `10.x`), to build the current benchmark target.
+- **git** and the **.NET 11 SDK** (`dotnet --list-sdks` shows an `11.x`), to build the current benchmark target; targets from before the move to .NET 11 (2026-11-11) need the **.NET 10 SDK** instead.
 - A Kenshi install with **clean data: no mods** installed or active (a fresh GOG or Steam copy). Its folder holds `data/` and `save/`; this is `KENSHI_PATH` below. Kenshi's data are not included in Meitou; you need your own copy.
 - About 6 GB free RAM and 1 GB disk (a copy of the save is made).
 - The benchmark save (step 3).

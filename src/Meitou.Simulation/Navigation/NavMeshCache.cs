@@ -15,18 +15,33 @@ public sealed class NavMeshCache
     /// <summary>
     /// Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).
     /// </summary>
-    public const int BuilderVersion = 54;
+    public const int BuilderVersion = 55;
 
+    /// <summary>
+    /// The layout version of the cache file; a file with another is not read.
+    /// </summary>
     const int FormatVersion = 6;
+    /// <summary>
+    /// The first four bytes of a cache file.
+    /// </summary>
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
+    /// <summary>
+    /// A cache in <paramref name="directory"/>; null: <c>%LOCALAPPDATA%\Meitou\navmesh</c>.
+    /// </summary>
     public NavMeshCache(string? directory = null)
     {
         Directory = directory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "navmesh");
     }
 
+    /// <summary>
+    /// The folder the zone files are written to (made by the first <see cref="Save"/>).
+    /// </summary>
     public string Directory { get; }
 
+    /// <summary>
+    /// The cache file of zone (<paramref name="zoneX"/>, <paramref name="zoneZ"/>): <c>zone.X.Z.nav</c> in <see cref="Directory"/>.
+    /// </summary>
     public string PathOf(int zoneX, int zoneZ) => Path.Combine(Directory, $"zone.{zoneX}.{zoneZ}.nav");
 
     /// <summary>
@@ -35,7 +50,8 @@ public sealed class NavMeshCache
     public static uint SettingsHash(NavBuildSettings s)
     {
         uint h = BuilderVersion;
-        foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError, s.SeedDistance, s.SeedHeightSlack })
+        foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError,
+            s.SeedDistance, s.SeedHeightSlack })
             h = (h * 16777619) ^ (uint)BitConverter.SingleToInt32Bits(v);
 
         foreach (var v in new[] { s.TileCells, s.MaxEdgeLength, s.MinRegionArea, s.MergeRegionArea, s.Watershed ? 1 : 0 })
@@ -74,7 +90,8 @@ public sealed class NavMeshCache
                 : mods.TryGetValue(Path.GetFileNameWithoutExtension(name), out var mod) ? mod : name);
         }
 
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap, MapFeatureFile.RelativePath })
+        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap,
+            MapFeatureFile.RelativePath })
             Stamp(Path.Combine(install.DataDirectory, rel));
 
         if (Path.GetDirectoryName(TerrainMaps.OverlayTile(install, "new_overlay", 0, 0)) is { } overlays && System.IO.Directory.Exists(overlays))
@@ -213,6 +230,9 @@ public sealed class NavMeshCache
         return heights;
     }
 
+    /// <summary>
+    /// Writes a zone's mesh with the hashes <see cref="TryLoad"/> checks: to a temporary file first, then moved over the zone's file.
+    /// </summary>
     public void Save(ZoneNavMesh m, uint buildingHash, uint settingsHash)
     {
         System.IO.Directory.CreateDirectory(Directory);

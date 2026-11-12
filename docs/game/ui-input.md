@@ -8,11 +8,22 @@ tick; host picking/UI issue commands, not direct simulation mutation. [Simulatio
 
 **Verified** code=scancode | Shift0x100 | Ctrl0x200 | Alt0x400. Low-byte OIS scancode; left/right
 modifiers share bits. Low-byte0 mouse=(buttonIndex+1)*4096 (Mouse1/2/3=0x1000/2000/3000).
-Name formatter prefixes Ctrl+Alt+Shift, unnamed Key_n, mouse Mouse_n. Key names are a256-entry
+Name formatter prefixes Ctrl+Alt+Shift, unnamed Key_n, mouse Mouse<n> (`Mouse1` in the install file). Key names are a256-entry
 exe table;111 null. Preserve scancode semantics rather than substituting ASCII key codes.
-Controls.cfg first line version1, repeated action=KeyName entries allow multiple bindings.
+Controls.cfg (install root) first line version1, repeated action=KeyName entries allow multiple bindings.
 Missing/empty file writes defaults; version<1 treats changed camera/floor/build bindings specially
 (exact application partly Observed). Default-unbound and UI-unrebindable actions remain in tables.
+**Verified** (`FUN_140362430`, `FUN_1403622f0`): an action's first line clears its default bindings, each line then adds one, so an
+action the file does not name keeps its defaults. Key names (exe table, **Verified** against the strings and the install's file):
+letters, digits and punctuation are the character, `F1`..`F15`, `NUM0`..`NUM9` `NUM+` `NUM-` `NUM*` `NUM/` `NUM.`, `Left Control` `Right Control`
+`Left Shift` `Right shift` `Left Alt` `Right Alt`, `Return` (main Enter), `Enter` (keypad, by its place in the table: **Observed**), `GRAVE`, `SYSRQ`, `PgUp` `PgDn`, `Mouse1..3`.
+
+Meitou (`GameControls`, `InputBindings.UseGameControls`) reads the file at boot, never writes it, as the defaults of the actions it
+names (the same rule; the version line, modifier names and the build/editor/developer actions are skipped; `camera_tilt+` is `PitchDown`,
+steeper). Medic, Rescue and Highlight get Meitou's H, J and Right Alt back while no other action has them. Its config keeps only the
+bindings that differ from those defaults; in a config that saved every action (older builds) the entries equal to the engine's own
+defaults are ignored.
+Restore defaults returns to controls.cfg.
 
 ## Dispatch and selection
 
@@ -110,6 +121,8 @@ Mouse buttons (Meitou only, **Observed**; `GameHost.PlayerButton`): `Select` (de
 The interface and world logic keep seeing "left" and "right": a physical button bound to Select arrives as left, to Command as right; any other of left,
 right, middle (e.g. Orbit's) arrives as middle (map pan, no click reaches the world under the HUD). An unbound Select / Command falls back to left / right.
 The settings page itself always takes the physical buttons. Binding a mouse button already used swaps: the other action gets the rebound action's old button.
+Binding a key already used takes it from the other actions, as the original's map holds one action per key; Delete or Backspace in the
+prompt unbinds. The page scrolls with the wheel, Page Up / Down, or by dragging (or clicking) its scroll bar.
 
 ### 6. Event dispatch
 
@@ -299,7 +312,7 @@ ground-item picks: the ray stops where it meets the building's `interior mask` c
 **Observed** (owner's original-game report): holding Alt highlights building signs in yellow.
 **Observed** (merged installed game data, reader survey): BUILDING `is sign` is true on `993-gamedata.base`
 (Sign Medic) and `3436-otto.mod` (sign3_bar); category `sign` alone is insufficient (`972-gamedata.base`, Weapon Sign, has the flag false).
-Meitou's rebindable `Highlight` action defaults to either Alt key. While held in the focused gameplay view,
+Meitou's rebindable `Highlight` action defaults to either Alt key; it is also the steal and pick-lock modifier, as in the original, and Meitou's loot one. While held in the focused gameplay view,
 real parts whose owning BUILDING has `is sign` receive a yellow tint, including layout objects and both LODs
 during a transition. Release restores their materials. Loading, menus, hidden UI, free camera and cinema suppress it.
 Rendering details: [objects](../render-objects.md#building-sign-highlight).
@@ -315,7 +328,7 @@ Rendering details: [objects](../render-objects.md#building-sign-highlight).
   clears the hand to `NULL_ITEM`. So the original has a portrait menu: the same menu as on the character in the world, after 0.25 s rather than the world's 0.2 s.
 - Right release over the same portrait with the hand still set (a press shorter than 0.25 s) calls `FUN_140413cd0` with the focus flag set: the same select-and-focus as the double click.
   After the menu opened, the release does not focus. No right-click menu on any other path of the bar.
-- Meitou (`PlayerInterface.MouseDown` / `MouseUp`): a press held `PortraitHoldSeconds` (0.25) opens the member's context menu; a quicker right release on the pressed portrait selects it
+- Meitou (`PlayerInterface.PortraitRightDown` / `MouseUp`): a press held `PortraitHoldSeconds` (0.25) opens the member's context menu; a quicker right release on the pressed portrait selects it
   (Shift toggles) and centres / flies the camera as the double click. With no verbs (nothing selected) no menu opens and the release focuses.
 
 ### Ground item labels
@@ -354,8 +367,11 @@ of which 84 name a character the save no longer holds (one of them inside a buil
 Meitou (`GroundItemPicks`): with the Highlight gating above, every item within 500 units of the camera's focus not hidden by a
 building, name only, coloured as above; a label picks like its item (pointer `pick_item`, right click picks it up at once: a plain item has no inventory, so `FUN_1407a6bc0` adds no verb and a held press shows no menu; **Verified**, decompile). A click on a label is the item's alone: Meitou's Alt / Ctrl loot and lift of a downed body (an extra; in the original Alt is only Highlight) does not take it, so an item lying beside a corpse can be picked up with Alt held (**Observed**: the label is a widget that takes the click, `FUN_140162950`; whether the original prefers the item over a body behind a label is **Unknown**, nothing was traced). Overlapping
 labels are stacked above the nearer one. No quantity. The owner (`GroundItem.OwnedBy`, `Saving/GroundItemSave`) is read once at load: the `ownedby` character's
-platoon faction, else the `insideBuilding` building's `owner faction ID` (also for the verb, engine choice), none for a `not real` faction; items dropped or
-placed in play have none. Picking up another faction's item marks it stolen from that faction (`StolenFrom`); standing inside a building it also sets a pending Theft against the building's faction ([economy](economy.md#fencing-stealing-and-smuggling)).
+platoon faction, else the `insideBuilding` building's `owner faction ID` (also for the verb, engine choice), none for a `not real` faction; a slot's item has
+its building's (`ItemSlots`); an item dropped in play has the faction it was stolen from, none for one not stolen: the original keeps
+the item's `ownedby` on the ground (**Observed**, plain game: a Dried Meat stolen in The Hub's bar and dropped there is saved with the barman as `ownedby`, its label red like
+the bar's goods). Picking up another faction's item marks it stolen from its owner (`PickUps.OwnerMark`: the mark it carries when that names the owner, a slot's item its
+building's, [economy](economy.md#fencing-stealing-and-smuggling), else the faction alone); standing inside a building it also sets a pending Theft against the building's faction.
 
 ### Hover outline
 
@@ -379,7 +395,7 @@ round the foundations, piers and slab under it. A house's placement height is it
 The original's mouse code, kenshi_x64.exe 1.0.68. The panels a selected building fills: [ui-screens](ui-screens.md#selected-building).
 
 **Buttons** (**Verified**: Controls `DAT_142133370`, actions registered in `FUN_1403636c0`): held flags `mouse_select` +0xf3,
-`mouse_command` +0xf4, `highlight` (Left Alt) +0xf2. Each frame `FUN_140801630` stores edges on PlayerInterface (**Observed**): +0x2f1 select
+`mouse_command` +0xf4, `highlight` (Left Alt) +0xf2 (`DAT_142133462`, the flag the steal and pick-lock tests read, so they follow the highlight binding, not Alt). Each frame `FUN_140801630` stores edges on PlayerInterface (**Observed**): +0x2f1 select
 released, +0x2f2 select pressed, +0x2f3 command released, +0x2f4 command pressed; the two command edges are cleared while the context menu
 is visible or was last frame. Then `FUN_140800f10` (drag box) and, unless a box is being dragged, the pick `FUN_140800250` run every frame, so
 hover and clicks share one pick.
@@ -502,8 +518,10 @@ is drawn (as the original). Selecting or inspecting a character clears it, Shift
 included (the original keeps the slot); a site that disappears clears it. A left click on the ground (no character or building picked) clears it too
 (Advanced → Click away deselects, `DeselectBuildings`, default on; off keeps it, as the original). Selecting plays the building's select sound ([audio](../audio.md#interface)). A house is not focused as its first door, but its panels list the
 first door's lines before the house's, as the door's panel does ([ui-screens](ui-screens.md#selected-building)). World (town) buildings act through their
-fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`), beds, cages and doors are picked, pointed at and ordered like the player's. Not built: the
-machines of a town building (crafting and research benches, generators, a town turret for the player, the furniture of a bought house): machines exist only for the sites of `World.Buildings` (player-built ones and town ruins taken over),
+fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`), beds, cages and doors are picked, pointed at and ordered like the player's. A town turret
+(`TownBuilding.Turret`) is picked on its collision with the `use` pointer, as the table's TurretBuilding (146 whoever owns it): a quick right click mans it (`UseTurretOrder` on its
+`townwork:` site), with Shift the Turret guard job, held the menu's Man Turret (`FurnitureUse.TownTurretPress`). Not built: the
+machines of a town building (crafting and research benches, generators, the furniture of a bought house): machines exist only for the sites of `World.Buildings` (player-built ones and town ruins taken over),
 so they have no window, pointer or order. A door (picked by its collision with the leaf
 where it has slid to, `DoorSpot.Slide` × open amount, `FurnitureUse`) shows `door` / `lock` / `lockpick` as in the table and a quick right click gives `DoorOrder` (the nearest selected
 walks to the door's near side and opens or closes it, "It's locked." at a locked one; another faction's locked door: Alt picks the lock, else the hint
@@ -600,7 +618,7 @@ the same labels and order (`VerbOrders`; Meitou's own verbs after), the animals-
 Containers and doors open their menu on a held press (a quick click as before); cages, and another faction's locked doors, open it on the press (above). Built: Put Down, Talk To, Attack Target (hostile), Attack
 Unprovoked, Stealth KO, Follow (`FollowOrder`, [simulation](../simulation.md)), Loot, Trade (the player's own character, standing or down: the nearest selected walks over and its inventory opens beside the
 selection's, as the loot window; both offered when `CharacterSnapshot.CanOpenInventory`, the simulation's own `CarrySystem.Openable`, holds: a carried or playing-dead body too, beside Put Down for its carrier), Pick Up on a standing non-hostile character of another faction that regards the lead as friendly and is not a Diplomat (NPC class 5; a plain 225, never Kidnap, no trader exclusion, `FUN_1407a6bc0`:552-576, **Verified**; the further gate on class 6 and `FUN_1407956a0` is unresolved and ignored), Pick Up and Kidnap (the same pick-up order; Pick Up on the player's own character standing too, when it carries no one: `FUN_1407a6bc0`'s own-faction
-branch adds 26, 45, 31 and, with no selected carrier of it, the pick-up verb for a carriable race not carrying (+0x348) nor carried (+0x3d4), with no down test, **Observed**; Kidnap when the gates above pass (another faction's town, a real faction, not friendly or a trader squad's member or in a campaign force, no bounty, not a Bandit), with its chance, also on a sleeper (with Stealth KO, and Attack Unprovoked, Bodyguard, Talk To when not hostile; Loot on a sleeper or a caged character opens it as a pickpocket, [carry-loot](carry-loot.md#theft-and-witnesses); [carry-loot](carry-loot.md#kidnapping)),
+branch adds 26, 45, 31 and, with no selected carrier of it, the pick-up verb for a carriable race not carrying (+0x348) nor carried (+0x3d4), with no down test, **Observed**; Kidnap when the gates above pass (another faction's town, a real faction, not friendly or a trader squad's member or in a campaign force, no bounty, not a Bandit), with its chance, also on a sleeper (with Stealth KO, and Attack Unprovoked, Bodyguard, Talk To when not hostile; Loot on a sleeper in a bed or a caged character opens it as a pickpocket, [carry-loot](carry-loot.md#theft-and-witnesses); [carry-loot](carry-loot.md#kidnapping)),
 [carry-loot](carry-loot.md)), First Aid, Splint Injuries, Unlock Shackles / Use Tools / Use Strength (shackles), Pick Lock / Use Tools / Use Strength (another faction's locked cage) or Lock / Unlock (the player's own), as its cage row, / Escape / Pick Up / Set Free on a caged
 character, Inventory / Loot / Pick Lock / Use Tools / Use Strength on containers (Loot uses the Alt path: another faction's shop stock is stolen from at once, [locks](locks.md#containers-meitou)),
 Open / Close / Lock / Unlock (all the building's doors) / Pick Lock / Use Tools / Use Strength / Smash on doors ([locks](locks.md#player-orders-on-locks)), Build (any standing unfinished building whatever its owner, **Verified** `FUN_1407a6bc0`: a destroyed one of another faction has no menu; a foreign site is accepted all the way: the order giver `FUN_1407f9e20` has no owner test, row 2's conditions (38, 51, isAtLocation, !26) none, and `Task_Build` update `FUN_14034a440`, the event case 11 and Building slot 70 `FUN_1405595a0` never read the owner (**Verified** by decompile; only the completion message needs a player-faction owner); order 2's acceptance `FUN_1405d1940` tests only the builder's materials), Repair (owned ruined/damaged houses; Shift adds Engineer), Use, Auto-Haul (storage: one haul trip, the Hauling to job with Shift, `FUN_1407fa650`),

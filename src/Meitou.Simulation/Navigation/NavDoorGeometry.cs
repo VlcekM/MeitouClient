@@ -14,8 +14,17 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 {
+    /// <summary>
+    /// The collision files read so far.
+    /// </summary>
     readonly CollisionCache _collision = new(install);
+    /// <summary>
+    /// The door boxes by (BUILDING id, door index), read once each; null for a door with no collision.
+    /// </summary>
     readonly ConcurrentDictionary<(string Building, int Door), DoorSpot?> _spots = new();
+    /// <summary>
+    /// The door collision triangles by (BUILDING id, door index), read once each; empty for a door with none.
+    /// </summary>
     readonly ConcurrentDictionary<(string Building, int Door), IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _shapes = new();
 
     /// <summary>
@@ -30,6 +39,10 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Shape(string buildingRecordId, int doorIndex) =>
         _shapes.GetOrAdd((buildingRecordId, doorIndex), FindShape);
 
+    /// <summary>
+    /// Door <c>key.Door</c>'s collision triangles of the parts of BUILDING <c>key.Building</c>, scaled by its <c>scale</c> (1 when not positive);
+    /// empty for a missing record or a door without collision.
+    /// </summary>
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> FindShape((string Building, int Door) key)
     {
         if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building) return [];
@@ -50,6 +63,10 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
         return result;
     }
 
+    /// <summary>
+    /// The box of door <c>key.Door</c>'s collision shapes in the building's scaled frame, with the leaf's full-open slide as the renderer moves it;
+    /// null for a missing record or a door without collision.
+    /// </summary>
     DoorSpot? Find((string Building, int Door) key)
     {
         if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building) return null;
@@ -91,6 +108,7 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
             : new DoorSpot((lo + hi) / 2, Vector3.UnitZ, size.X / 2, size.Y / 2);
         return spot with { Slide = slide ?? Vector3.Zero };
 
-        static Vector3 Unit(float x, float y, float z) => new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+        static Vector3 Unit(float x, float y, float z) =>
+            new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
     }
 }

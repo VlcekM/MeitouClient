@@ -15,6 +15,10 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public sealed class UiLayer : IDisposable
 {
+    /// <summary>
+    /// The composite's fragment shader: the interface over the world picture (<c>ui + back * (1 - ui.a)</c>), both read bottom-up and written
+    /// top-down.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -30,7 +34,9 @@ public sealed class UiLayer : IDisposable
         }
         """;
 
-    /// <summary>The same composite for HDR output (docs/render-post.md "HDR output"): the picture's gamma undone, paper white placed, BT.2020 primaries, PQ.</summary>
+    /// <summary>
+    /// The same composite for HDR output (docs/render-post.md "HDR output"): the picture's gamma undone, paper white placed, BT.2020 primaries, PQ.
+    /// </summary>
     const string HdrFragment = """
         #version 330 core
         in vec2 vUv;
@@ -55,13 +61,40 @@ public sealed class UiLayer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The device the textures and the composite run on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The composite program (<see cref="Fragment"/> on the full-screen post vertex shader).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The HDR composite program (<see cref="HdrFragment"/>), made at the first HDR frame.
+    /// </summary>
     LegacyProgram? _hdrProgram;
+
+    /// <summary>
+    /// The composite's samplers: the interface (<c>uUi</c>) and the world picture (<c>uBack</c>).
+    /// </summary>
     readonly SamplerSlot _samplerUi, _samplerBack;
+
+    /// <summary>
+    /// The nearest-filtered, edge-clamped sampler both textures are read with.
+    /// </summary>
     readonly SampledTexture _pointSampler;
+
+    /// <summary>
+    /// The interface picture (<see cref="Texture"/>), the composite's output (<see cref="Final"/>) and the HDR composite's; null until first made,
+    /// remade at a new size.
+    /// </summary>
     GpuTexture? _texture, _final, _hdrFinal;
 
+    /// <summary>
+    /// Builds the composite program and its point sampler on <paramref name="gpu"/>.
+    /// </summary>
     public UiLayer(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -150,6 +183,9 @@ public sealed class UiLayer : IDisposable
         _gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Releases the two textures (after the frames in flight).
+    /// </summary>
     public void Dispose()
     {
         _texture?.Dispose();

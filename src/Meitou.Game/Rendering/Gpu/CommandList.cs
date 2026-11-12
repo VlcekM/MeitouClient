@@ -16,6 +16,9 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Load, ClearColour Clear = default, float DepthClear = 1f)
 {
+    /// <summary>
+    /// No view: the attachment is not there.
+    /// </summary>
     public bool IsNull => View.IsNull;
 }
 
@@ -31,40 +34,104 @@ public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget De
 /// </summary>
 public sealed unsafe class CommandList : IGpuCommandList
 {
+    /// <summary>
+    /// The Vulkan API entry points (for the commands not called through the pointers below).
+    /// </summary>
     readonly Vk _vk;
+    /// <summary>
+    /// The context the list records for (pipelines, layouts, frame state).
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// The device whose handle tables resolve the engine's handles.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// VK_KHR_push_descriptor functions; null when the device lacks it.
+    /// </summary>
     readonly KhrPushDescriptor? _push;
+    /// <summary>
+    /// VK_EXT_debug_utils functions for labels; null when the instance lacks it.
+    /// </summary>
     readonly ExtDebugUtils? _debug;
+    /// <summary>
+    /// Label names as UTF-8 strings, made once per name and kept for the list's life.
+    /// </summary>
     readonly Dictionary<string, nint> _labels = [];
-    Pipeline _lastPipeline;
-    PipelineBindPoint _lastPoint;
-    GpuBufferBinding _lastIndex;
-    IndexKind _lastIndexType;
-    readonly Buffer[] _lastVertex = new Buffer[32];
-    readonly ulong[] _lastVertexOffset = new ulong[32];
-    uint _vertexValid;   // bit per binding whose last* entry is known
+
+    /// <summary>
+    /// What this list last bound (the redundancy filter for the pipeline and the vertex and index buffers).
+    /// </summary>
+    readonly BoundState _bound = new();
 
     // The per-draw and per-segment commands, called through the device's own entry points (vkGetDeviceProcAddr: the driver's, or the top
     // layer's when validation is on) instead of Silk.NET's per-call vtable lookup and cast (docs/renderer-native.md 9: ~0.02 us a draw).
     // The same commands with the same arguments; nothing else changes.
+    /// <summary>
+    /// <c>vkCmdBindPipeline</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void> _cmdBindPipeline;
+    /// <summary>
+    /// <c>vkCmdSetViewport</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void> _cmdSetViewport;
+    /// <summary>
+    /// <c>vkCmdSetScissor</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void> _cmdSetScissor;
+    /// <summary>
+    /// <c>vkCmdSetCullMode</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, CullModeFlags, void> _cmdSetCullMode;
+    /// <summary>
+    /// <c>vkCmdSetFrontFace</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, FrontFace, void> _cmdSetFrontFace;
+    /// <summary>
+    /// <c>vkCmdSetDepthTestEnable</c>, <c>vkCmdSetDepthWriteEnable</c> and <c>vkCmdSetDepthBiasEnable</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, Bool32, void> _cmdSetDepthTestEnable, _cmdSetDepthWriteEnable, _cmdSetDepthBiasEnable;
+    /// <summary>
+    /// <c>vkCmdSetDepthCompareOp</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, CompareOp, void> _cmdSetDepthCompareOp;
+    /// <summary>
+    /// <c>vkCmdSetDepthBias</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, float, float, float, void> _cmdSetDepthBias;
+    /// <summary>
+    /// <c>vkCmdBindVertexBuffers</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void> _cmdBindVertexBuffers;
+    /// <summary>
+    /// <c>vkCmdBindIndexBuffer</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void> _cmdBindIndexBuffer;
+    /// <summary>
+    /// <c>vkCmdBindDescriptorSets</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint,
         DescriptorSet*, uint, uint*, void> _cmdBindDescriptorSets;
+    /// <summary>
+    /// <c>vkCmdPushConstants</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> _cmdPushConstants;
+    /// <summary>
+    /// <c>vkCmdDraw</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> _cmdDraw;
+    /// <summary>
+    /// <c>vkCmdDrawIndexed</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> _cmdDrawIndexed;
+    /// <summary>
+    /// <c>vkCmdDrawIndexedIndirect</c>.
+    /// </summary>
     readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void> _cmdDrawIndexedIndirect;
 
+    /// <summary>
+    /// A list for the context, its draws counted into <paramref name="stats"/>; looks up the device's command entry points.
+    /// </summary>
     internal CommandList(GpuContext ctx, GpuStats stats)
     {
         this._ctx = ctx;
@@ -104,7 +171,13 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     #region Recording and render passes
 
+    /// <summary>
+    /// The Vulkan command buffer being recorded (set by whoever hands the list a buffer: the frame, a recording job).
+    /// </summary>
     public CommandBuffer Handle { get; internal set; }
+    /// <summary>
+    /// The draw, dispatch and copy counts the list adds to.
+    /// </summary>
     public GpuStats Stats { get; }
 
     /// <summary>
@@ -122,9 +195,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     public void Invalidate()
     {
-        _lastPipeline = default;
-        _lastIndex = default;
-        _vertexValid = 0;
+        _bound.Forget();
         BoundProgram = null;
         Epoch++;
     }
@@ -196,11 +267,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         stats?.Rendering(this, before: true);
         _vk.CmdBeginRendering(Handle, &info);
         stats?.Rendering(this, before: false);
-        _lastPipeline = default;
-        _lastIndex = default;
-        _vertexValid = 0;
+        _bound.Forget();
     }
 
+    /// <inheritdoc/>
     public void EndRendering()
     {
         var stats = PipelineStatsMeter.Current;
@@ -243,6 +313,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         Invalidate();
     }
 
+    /// <summary>
+    /// Ends recording of a secondary command buffer.
+    /// </summary>
     internal void EndSecondary() => VulkanException.Check(_vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
 
     /// <summary>
@@ -262,8 +335,11 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (colour)
             attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue.Vk));
         if (depth)
+        {
             attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue,
                     0)));
+        }
+
         if (n == 0) return;
         var area = new ClearRect(GlConventions.VkRect(rect), 0, 1);
         _vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
@@ -279,28 +355,32 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     internal static Func<GpuPipeline, GpuPipeline>? PipelineSubstitute;
 
+    /// <inheritdoc/>
     public void BindPipeline(GpuPipeline pipeline)
     {
         if (PipelineSubstitute is { } substitute) pipeline = substitute(pipeline);
         var handle = _ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Graphics) return;
+        if (handle.Handle == _bound.Pipeline.Handle && _bound.Point == PipelineBindPoint.Graphics) return;
         _cmdBindPipeline(Handle, PipelineBindPoint.Graphics, handle);
-        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Graphics);
+        (_bound.Pipeline, _bound.Point) = (handle, PipelineBindPoint.Graphics);
         Stats.PipelinesBound++;
     }
 
+    /// <inheritdoc/>
     public void SetViewport(in PixelViewport v)
     {
         var vk = GlConventions.VkViewport(v);
         _cmdSetViewport(Handle, 0, 1, &vk);
     }
 
+    /// <inheritdoc/>
     public void SetScissor(in PixelRect r)
     {
         var vk = GlConventions.VkRect(r);
         _cmdSetScissor(Handle, 0, 1, &vk);
     }
 
+    /// <inheritdoc/>
     public void SetRaster(CullMode cull, FrontFaceDirection front)
     {
         _cmdSetCullMode(Handle, GlConventions.VkCull(cull));
@@ -315,6 +395,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
     }
 
+    /// <inheritdoc/>
     public void SetDepth(bool test, bool write, DepthFunction op)
     {
         _cmdSetDepthTestEnable(Handle, test);
@@ -322,6 +403,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdSetDepthCompareOp(Handle, GlConventions.CompareOp(op));
     }
 
+    /// <inheritdoc/>
     public void SetDepthBias(bool enable, float constant, float slope)
     {
         _cmdSetDepthBiasEnable(Handle, enable);
@@ -332,51 +414,26 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     #region Bindings
 
+    /// <inheritdoc/>
     public void BindVertexBuffers(uint first, ReadOnlySpan<GpuBufferBinding> bindings)
     {
         int n = bindings.Length;
         var buffers = stackalloc Buffer[n];
         var offsets = stackalloc ulong[n];
-        if (first + (uint)n <= 32)
-        {
-            // One pass: compare with what is bound and gather the arguments; record only when a binding differs or is not known.
-            uint mask = (n == 32 ? uint.MaxValue : (1u << n) - 1) << (int)first;
-            bool same = (_vertexValid & mask) == mask;
-            for (int i = 0; i < n; i++)
-            {
-                ref readonly var bb = ref bindings[i];
-                buffers[i] = _device.BufferAt(bb.Buffer.Index);
-                offsets[i] = bb.Offset;
-                uint b = first + (uint)i;
-                if (_lastVertex[b].Handle != buffers[i].Handle || _lastVertexOffset[b] != bb.Offset)
-                {
-                    same = false;
-                    _lastVertex[b] = buffers[i];
-                    _lastVertexOffset[b] = bb.Offset;
-                }
-            }
-            if (same) return;
-            _vertexValid |= mask;
-        }
-        else
-            for (int i = 0; i < n; i++)
-            {
-                buffers[i] = _device.BufferAt(bindings[i].Buffer.Index);
-                offsets[i] = bindings[i].Offset;
-                uint b = first + (uint)i;
-                if (b < 32) { _lastVertex[b] = buffers[i]; _lastVertexOffset[b] = offsets[i]; _vertexValid |= 1u << (int)b; }
-            }
+        if (_bound.SameVertexBuffers(_device, first, bindings, buffers, offsets)) return;
+
         _cmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
     }
 
+    /// <inheritdoc/>
     public void BindIndexBuffer(GpuBufferBinding binding, IndexKind type)
     {
         var buffer = _device.BufferAt(binding.Buffer.Index);
-        if (binding.Buffer.Index == _lastIndex.Buffer.Index && binding.Offset == _lastIndex.Offset
-            && type == _lastIndexType && _lastIndex.Buffer.Index != 0)
+        if (binding.Buffer.Index == _bound.Index.Buffer.Index && binding.Offset == _bound.Index.Offset
+            && type == _bound.IndexType && _bound.Index.Buffer.Index != 0)
             return;
         _cmdBindIndexBuffer(Handle, buffer, binding.Offset, GlConventions.VkIndexKind(type));
-        (_lastIndex, _lastIndexType) = (binding, type);
+        (_bound.Index, _bound.IndexType) = (binding, type);
     }
 
     /// <summary>
@@ -389,10 +446,15 @@ public sealed unsafe class CommandList : IGpuCommandList
         for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
         fixed (DescriptorSet* ps = resolved)
         fixed (uint* po = dynamicOffsets)
+        {
             _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps,
                     (uint)dynamicOffsets.Length, po);
+        }
     }
 
+    /// <summary>
+    /// The Vulkan bind point of an engine one.
+    /// </summary>
     static PipelineBindPoint VkBindPoint(GpuBindPoint point) =>
         point == GpuBindPoint.Compute ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
 
@@ -454,6 +516,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         }
         var vp = _ctx.Shaders.Backend(program);
         var point = vp.ComputeCode is not null ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
+
         // Pushed only into a layout made for it (a set too large for the device's push limit, or not per draw, is not one).
         if (_push is not null && _ctx.Shaders.Pushes(vp, set))
         {
@@ -461,6 +524,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             Stats.DescriptorPushes++;
             return;
         }
+
         // Otherwise the set is written and bound (the frame's pools free it when the slot comes round). Bound by its own handle, not
         // through the device's set table: a set per draw would grow the table every frame. Safe on a recording job's thread.
         var allocated = _ctx.Frame.AllocateSetAnyThread(vp.SetLayouts[set]);
@@ -479,6 +543,9 @@ public sealed unsafe class CommandList : IGpuCommandList
         fixed (T* p = &value) _cmdPushConstants(Handle, vp.Layout, vp.PushConstantStages, offset, (uint)sizeof(T), p);
     }
 
+    /// <summary>
+    /// The Vulkan shader stage flags of engine stages.
+    /// </summary>
     static ShaderStageFlags VkStageFlags(GpuStage stages)
     {
         var f = ShaderStageFlags.None;
@@ -494,18 +561,21 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     #region Draws and dispatches
 
+    /// <inheritdoc/>
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
         _cmdDraw(Handle, vertices, instances, firstVertex, firstInstance);
         Stats.Draws++;
     }
 
+    /// <inheritdoc/>
     public void DrawIndexed(uint indices, uint instances = 1, uint firstIndex = 0, int vertexOffset = 0, uint firstInstance = 0)
     {
         _cmdDrawIndexed(Handle, indices, instances, firstIndex, vertexOffset, firstInstance);
         Stats.Draws++;
     }
 
+    /// <inheritdoc/>
     public void DrawIndexedIndirect(GpuBuffer args, ulong offset, uint count, uint stride = 20)
     {
         _cmdDrawIndexedIndirect(Handle, _device.BufferAt(args.Index), offset, count, stride);
@@ -513,6 +583,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         Stats.IndirectDraws++;
     }
 
+    /// <inheritdoc/>
     public void DrawIndexedIndirectCount(GpuBuffer args, ulong offset, GpuBuffer count, ulong countOffset, uint maxCount, uint stride = 20)
     {
         _vk.CmdDrawIndexedIndirectCount(Handle, _device.BufferAt(args.Index), offset, _device.BufferAt(count.Index), countOffset, maxCount, stride);
@@ -535,21 +606,26 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     // ---- compute and transfer ----
 
+    /// <inheritdoc/>
     public void BindPipeline(GpuComputePipeline pipeline)
     {
         var handle = _ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Compute) return;
+        if (handle.Handle == _bound.Pipeline.Handle && _bound.Point == PipelineBindPoint.Compute) return;
         _vk.CmdBindPipeline(Handle, PipelineBindPoint.Compute, handle);
-        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Compute);
+        (_bound.Pipeline, _bound.Point) = (handle, PipelineBindPoint.Compute);
         Stats.PipelinesBound++;
     }
 
+    /// <inheritdoc/>
     public void Dispatch(uint x, uint y = 1, uint z = 1)
     {
         _vk.CmdDispatch(Handle, x, y, z);
         Stats.Dispatches++;
     }
 
+    /// <summary>
+    /// Dispatches a compute pass with the group counts read from <paramref name="args"/> at <paramref name="offset"/>.
+    /// </summary>
     public void DispatchIndirect(GpuBuffer args, ulong offset)
     {
         _vk.CmdDispatchIndirect(Handle, _device.BufferAt(args.Index), offset);
@@ -560,9 +636,11 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     #region Transfers
 
+    /// <inheritdoc/>
     public void FillBuffer(GpuBuffer b, ulong offset, ulong size, uint value) =>
         _vk.CmdFillBuffer(Handle, _device.BufferAt(b.Index), offset, size, value);
 
+    /// <inheritdoc/>
     public void CopyBuffer(GpuBuffer src, GpuBuffer dst, in GpuBufferCopy region)
     {
         var copy = new BufferCopy(region.SourceOffset, region.DestinationOffset, region.Size);
@@ -594,6 +672,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         _vk.CmdCopyImageToBuffer(Handle, _device.NativeImage(src), ImageLayout.General, _device.BufferAt(dst.Index), 1, &copy);
     }
 
+    /// <inheritdoc/>
     public void CopyBufferToImage(GpuBuffer src, ulong offset, GpuTexture dst, int level, int layer)
     {
         var copy = new BufferImageCopy
@@ -707,8 +786,17 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     #region Barriers, timestamps and labels
 
+    /// <summary>
+    /// The access bits that write: a barrier's source access keeps only these.
+    /// </summary>
+    const AccessFlags2 WriteMask = AccessFlags2.ColorAttachmentWriteBit | AccessFlags2.DepthStencilAttachmentWriteBit
+        | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.TransferWriteBit | AccessFlags2.MemoryWriteBit;
+
     // ---- sync, timing, labels ----
 
+    /// <summary>
+    /// Records a batch's merged stages and access masks as one global memory barrier (<c>vkCmdPipelineBarrier2</c>).
+    /// </summary>
     public void Barrier(in BarrierBatch batch)
     {
         var barrier = new MemoryBarrier2
@@ -751,9 +839,6 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// Orders everything recorded before against everything after it (the seam between two passes).
     /// </summary>
     public void Order() => Barrier([GpuDependency.Full]);
-
-    const AccessFlags2 WriteMask = AccessFlags2.ColorAttachmentWriteBit | AccessFlags2.DepthStencilAttachmentWriteBit
-        | AccessFlags2.ShaderStorageWriteBit | AccessFlags2.TransferWriteBit | AccessFlags2.MemoryWriteBit;
 
     /// <summary>
     /// The stages and the access of an <see cref="Access"/>, and whether it writes (Vulkan's).
@@ -799,6 +884,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void Timestamp(IGpuTimestamps arena, in QuerySlot slot, GpuStage stage = GpuStage.All)
     {
         if (!slot.IsValid || arena is not QueryArena pools) return;
+
         // A timestamp names one stage: a single shader stage as itself, any combination (GpuStage.All, the default) as all commands.
         var vkStage = stage switch
         {
@@ -830,6 +916,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         _debug.CmdBeginDebugUtilsLabel(Handle, &info);
     }
 
+    /// <inheritdoc/>
     public void EndLabel()
     {
         _debug?.CmdEndDebugUtilsLabel(Handle);

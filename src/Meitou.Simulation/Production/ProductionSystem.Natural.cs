@@ -6,25 +6,38 @@ using Meitou.Simulation.Construction;
 
 namespace Meitou.Simulation.Production;
 
-// Natural sites (docs/simulation.md "Production"; the original's rocks are ProductionBuildings with "is foliage", docs/game/buildings-production.md "Resources"): a rock the foliage
-// system places is worked like a player's mine. It is no BuildSite of the registry: its site is made from its id, a pure function of the rock's BUILDING and position, so orders and
-// perma-jobs name it and a saved job finds it again. Its machine lives in World.Machines like any other and is not saved (the original saves no rock either, Observed).
+/// <summary>
+/// Natural sites (docs/simulation.md "Production"; the original's rocks are ProductionBuildings with "is foliage", docs/game/buildings-production.md
+/// "Resources"): a rock the foliage system places is worked like a player's mine. It is no BuildSite of the registry: its site is made from its id, a
+/// pure function of the rock's BUILDING and position, so orders and perma-jobs name it and a saved job finds it again. Its machine lives in
+/// World.Machines like any other and is not saved (the original saves no rock either, Observed).
+/// </summary>
 public sealed partial class ProductionSystem
 {
+    /// <summary>
+    /// The prefix of a rock's site id.
+    /// </summary>
     const string NaturalPrefix = "natural:";
 
+    /// <summary>
+    /// The rocks' sites by id, made on first use (null: the id names no rock).
+    /// </summary>
     readonly Dictionary<string, BuildSite?> _naturalSites = new(StringComparer.Ordinal);
     /// <summary>
-    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's transform when the source has the mesh: an operator inside
-    /// them has reached the rock.
+    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's
+    /// transform when the source has the mesh: an operator inside them has reached the rock.
     /// </summary>
     readonly record struct RockBounds(Vector3 Centre, float Radius, RockShape? Shape, Matrix4x4 Transform)
     {
+        /// <summary>
+        /// The rock's centre on the ground plane (X, Z).
+        /// </summary>
         public Vector2 Flat => new(Centre.X, Centre.Z);
 
         /// <summary>
-        /// The X/Z gap from <paramref name="from"/> to the rock: to its mesh's footprint (<see cref="RockShape.Outline"/>) where the instance places it (taken at the box's height), else
-        /// to its bounds circle. The footprint, not the bounds box: a long or scattered rock's box reached far past the stone, and miners mined from 20 m off (#332).
+        /// The X/Z gap from <paramref name="from"/> to the rock: to its mesh's footprint (<see cref="RockShape.Outline"/>) where the instance places
+        /// it (taken at the box's height), else to its bounds circle. The footprint, not the bounds box: a long or scattered rock's box reached far
+        /// past the stone, and miners mined from 20 m off (#332).
         /// </summary>
         public float Gap(Vector3 from)
         {
@@ -42,13 +55,18 @@ public sealed partial class ProductionSystem
         /// </summary>
         public bool Touches(Vector3 from)
         {
-            if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse)) return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
+            if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse))
+                return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
+
             var local = Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse);
             var mid = new Vector2((shape.Min.X + shape.Max.X) / 2, (shape.Min.Z + shape.Max.Z) / 2);
             return shape.InsideXz(mid + (new Vector2(local.X, local.Z) - mid) / 1.2f);
         }
     }
 
+    /// <summary>
+    /// The rocks' bounds by site id, from the host's rock source.
+    /// </summary>
     readonly Dictionary<string, RockBounds> _naturalBounds = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -67,16 +85,23 @@ public sealed partial class ProductionSystem
     /// </summary>
     BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id) ?? TownDummy(world, id) ?? TownWorkSite(id);
 
+    /// <summary>
+    /// The training dummies' sites by id, made on first use.
+    /// </summary>
     readonly Dictionary<string, BuildSite> _dummySites = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// A town training dummy (<see cref="Locks.FixtureKind.Training"/>, docs/simulation.md "Production"): like a rock, no BuildSite of the registry, so it is neither drawn, saved nor built
-    /// again; a complete site of the town building's owner, made from the fixture once its town has registered. Its machine lives in World.Machines and is not saved.
+    /// A town training dummy (<see cref="Locks.FixtureKind.Training"/>, docs/simulation.md "Production"): like a rock, no BuildSite of the registry,
+    /// so it is neither drawn, saved nor built again; a complete site of the town building's owner, made from the fixture once its town has
+    /// registered. Its machine lives in World.Machines and is not saved.
     /// </summary>
     BuildSite? TownDummy(World world, string id)
     {
         if (_dummySites.TryGetValue(id, out var known)) return known;
-        if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Training } f || _db.Find(f.RecordId) is not { Type: FcsRecordType.Building } building) return null;
+        if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Training } f
+            || _db.Find(f.RecordId) is not { Type: FcsRecordType.Building } building)
+            return null;
+
         return _dummySites[id] = new BuildSite
         {
             Id = id,
@@ -91,8 +116,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a rock source, one of that BUILDING must
-    /// stand within a unit of the position. Owned by no faction (-1: the original's <c>nofac</c> of its town NO_TOWN) until a player character works it; complete.
+    /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a
+    /// rock source, one of that BUILDING must stand within a unit of the position. Owned by no faction (-1: the original's <c>nofac</c> of its town
+    /// NO_TOWN) until a player character works it; complete.
     /// </summary>
     BuildSite? Natural(string id)
     {
@@ -102,11 +128,13 @@ public sealed partial class ProductionSystem
         int at = id.LastIndexOf('@');
         var parts = at > 0 ? id[(at + 1)..].Split(',') : [];
         if (parts.Length == 3 && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y) && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
+            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
         {
             string record = id[NaturalPrefix.Length..at];
             var position = new Vector3(x, y, z);
-            if (_db.Find(record) is { Type: FcsRecordType.Building } building && building.GetBool("is foliage") && Data(record) is { Operable: true, Resource: not 0 })
+            if (_db.Find(record) is { Type: FcsRecordType.Building } building && building.GetBool("is foliage")
+                && Data(record) is { Operable: true, Resource: not 0 })
             {
                 // No rock there is not remembered: the host's rock source may not have placed that zone yet.
                 if (_nodes is not null)
@@ -114,26 +142,39 @@ public sealed partial class ProductionSystem
                     if (_nodes.Near(0, x, z, 1).FirstOrDefault(n => n.Record == record) is not { Record.Length: > 0 } rock) return null;
                     _naturalBounds[id] = new RockBounds(rock.Centre ?? rock.Position, rock.Radius, rock.Shape, rock.Transform);
                 }
-                site = new BuildSite { Id = id, Record = record, Name = building.Name, Position = position, Owner = -1, Materials = [], Complete = true };
+
+                site = new BuildSite { Id = id, Record = record, Name = building.Name, Position = position, Owner = -1, Materials = [],
+                    Complete = true };
             }
         }
+
         return _naturalSites[id] = site;
     }
 
+    /// <summary>
+    /// The rocks' resource yields by building instance, read from the resource map on first use.
+    /// </summary>
     readonly Dictionary<string, float> _naturalYields = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The richness line of the building <paramref name="instance"/> names (<c>ProductionBuilding::getGUIFertility</c>, function 1 or 27 with a resource): a machine's yield, or a rock's
-    /// before it has been mined (no machine yet); null for anything else.
+    /// The richness line of the building <paramref name="instance"/> names (<c>ProductionBuilding::getGUIFertility</c>, function 1 or 27 with a
+    /// resource): a machine's yield, or a rock's before it has been mined (no machine yet); null for anything else.
     /// </summary>
     public RichnessView? RichnessOf(World world, string? instance)
     {
         if (instance is null) return null;
         if (world.Machines.Find(instance) is { } m)
-            return m.Data is { Function: MachineData.MineFunction or MachineData.NaturalMineFunction, Resource: not 0 and var r } ? new(instance, r, m.Yield) { Owner = Natural(instance)?.Owner ?? -1, TownName = TownNameOf(world, Natural(instance)) } : null;
+        {
+            return m.Data is { Function: MachineData.MineFunction or MachineData.NaturalMineFunction, Resource: not 0 and var r }
+                ? new(instance, r, m.Yield) { Owner = Natural(instance)?.Owner ?? -1, TownName = TownNameOf(world, Natural(instance)) }
+                : null;
+        }
+
         if (Natural(instance) is not { } site || Data(site.Record) is not { Resource: not 0 and var resource } data) return null;
         if (!_naturalYields.TryGetValue(instance, out float y)) _naturalYields[instance] = y = _resources.NodeYield(resource, site.Position);
-        // A rock nobody has mined yet: no machine, so nobody works it; whole, no power draw; research counts only for the player's buildings (FUN_14082ec70).
+
+        // A rock nobody has mined yet: no machine, so nobody works it; whole, no power draw; research counts only for the player's
+        // buildings (FUN_14082ec70).
         return new(instance, resource, y)
         {
             Owner = site.Owner,

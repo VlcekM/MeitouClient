@@ -11,8 +11,14 @@ namespace Meitou.Data;
 /// </summary>
 public sealed unsafe class NativeBuffer : MemoryManager<byte>
 {
+    /// <summary>
+    /// The bytes of every block not freed yet, over the process; changed atomically.
+    /// </summary>
     static long s_liveBytes;
 
+    /// <summary>
+    /// The block's address; 0 once disposed.
+    /// </summary>
     nint _pointer;
 
     /// <summary>
@@ -20,6 +26,10 @@ public sealed unsafe class NativeBuffer : MemoryManager<byte>
     /// </summary>
     public static long LiveBytes => Interlocked.Read(ref s_liveBytes);
 
+    /// <summary>
+    /// Allocates <paramref name="length"/> bytes of native memory (at least one byte, so a zero length still has an address); the content is
+    /// not cleared.
+    /// </summary>
     public NativeBuffer(int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
@@ -29,6 +39,9 @@ public sealed unsafe class NativeBuffer : MemoryManager<byte>
         Interlocked.Add(ref s_liveBytes, length);
     }
 
+    /// <summary>
+    /// The block's size in bytes.
+    /// </summary>
     public int Length { get; }
 
     public override Span<byte> GetSpan()

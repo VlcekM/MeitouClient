@@ -7,14 +7,14 @@ namespace Meitou.Game.Rendering.Impostors;
 /// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2x the frame size with a hard
 /// cut-out and box-filtered to the frame size on the GPU), and per frame
 /// <list type="number">
-/// <item>undoes the premultiplication: coverage = covered samples / 4; albedo the mean of the covered samples; the normal their normalised sum (stored
-/// octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted mean over
-/// the whole atlas;</item>
+/// <item>undoes the premultiplication: coverage = covered samples / 4; albedo the mean of the covered samples; the normal their normalised sum
+/// (stored octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted
+/// mean over the whole atlas;</item>
 /// <item>fills the empty pixels by pull-push from the covered ones, so bilinear filtering and the mips never pull in black or a wrong normal at the
 /// silhouette;</item>
 /// <item>builds the mip chain within the frame (coverage-weighted averages, so frames never bleed into each other), down to 4 x 4;</item>
-/// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin branches do not
-/// vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
+/// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin branches
+/// do not vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
 /// </list>
 /// Then <see cref="Finish"/> encodes the levels (BC1 albedo with the cut-out, BC5 normal). Frames are independent, so a row is processed in parallel.
 /// The per-frame arrays come from a shared pool (<see cref="Scratch"/>) and the atlas levels are not cleared before they are written: a large atlas
@@ -28,10 +28,22 @@ public sealed class ImpostorAssembler
     /// </summary>
     static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> MapPools = new();
 
+    /// <summary>
+    /// The per-frame filtering arrays (<see cref="Scratch"/>) by frame size and level count, shared by the bakes.
+    /// </summary>
     static readonly ConcurrentDictionary<(int Frame, int Levels), ConcurrentBag<Scratch>> Pools = new();
 
+    /// <summary>
+    /// Frames per atlas side.
+    /// </summary>
     readonly int _grid;
+    /// <summary>
+    /// The frame size in pixels at level 0.
+    /// </summary>
     readonly int _frame;
+    /// <summary>
+    /// The mip levels per frame.
+    /// </summary>
     readonly int _levels;
 
     /// <summary>
@@ -39,9 +51,19 @@ public sealed class ImpostorAssembler
     /// </summary>
     readonly byte[][][] _maps;
 
+    /// <summary>
+    /// The coverage-weighted gloss summed over the atlas's frames (see <see cref="_glossWeight"/>).
+    /// </summary>
     double _glossSum;
+    /// <summary>
+    /// The coverage the gloss sum is weighted by; the atlas's gloss is their ratio (0.3 when nothing is covered).
+    /// </summary>
     double _glossWeight;
 
+    /// <summary>
+    /// An assembler for a <paramref name="grid"/> × <paramref name="grid"/> atlas of <paramref name="frame"/>-pixel frames with
+    /// <paramref name="levels"/> levels, its maps taken from the pool when a finished bake of the same size left them.
+    /// </summary>
     public ImpostorAssembler(int grid, int frame, int levels)
     {
         (this._grid, this._frame, this._levels) = (grid, frame, levels);
@@ -75,9 +97,9 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// One row of frames, three RGBA8 pictures (albedo, normal x 0.5 + 0.5, depth + gloss: only the gloss, in green, is used) of <c>grid x frame</c> by
-    /// <c>frame</c> pixels, rows bottom first, each the 2 x 2 box average of a picture rendered at twice the size with alpha 1 on covered samples and 0
-    /// elsewhere (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
+    /// One row of frames, three RGBA8 pictures (albedo, normal x 0.5 + 0.5, depth + gloss: only the gloss, in green, is used) of <c>grid x frame</c>
+    /// by <c>frame</c> pixels, rows bottom first, each the 2 x 2 box average of a picture rendered at twice the size with alpha 1 on covered samples
+    /// and 0 elsewhere (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
     /// </summary>
     public unsafe void AddRow(int row, byte[] albedo, byte[] normal, byte[] depth)
     {
@@ -130,7 +152,8 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// The factor that makes the share of <paramref name="cov"/> x factor &gt;= 0.5 closest to <paramref name="target"/> (bisection; 1 when nothing is covered).
+    /// The factor that makes the share of <paramref name="cov"/> x factor &gt;= 0.5 closest to <paramref name="target"/> (bisection; 1 when nothing
+    /// is covered).
     /// </summary>
     internal static float CoverageScale(float[] cov, float target)
     {
@@ -157,7 +180,8 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// Pull-push: empty pixels (coverage 0) take the coverage-weighted average of the covered pixels around them, from the coarsest level that has some.
+    /// Pull-push: empty pixels (coverage 0) take the coverage-weighted average of the covered pixels around them, from the coarsest level that has
+    /// some.
     /// </summary>
     static void Fill(Scratch scratch, float[] cov, float[] values, int size)
     {
@@ -290,6 +314,10 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Writes one frame's level <paramref name="level"/> (<paramref name="size"/> pixels a side) into the atlas maps at its cell: the albedo with the
+    /// cut-out (coverage times <paramref name="scale"/> at least 0.5) in alpha, and the octahedral normal in red and green.
+    /// </summary>
     void Store(int column, int row, int level, int size, float[] cov, float scale, float[] alb, float[] nrm)
     {
         int atlas = _grid * size;
@@ -317,6 +345,9 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Filters the frame at <paramref name="column"/>, <paramref name="row"/> with arrays from the pool (returned afterwards).
+    /// </summary>
     unsafe void Frame(int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
         var pool = Pools.GetOrAdd((_frame, _levels), _ => new());
@@ -331,6 +362,10 @@ public sealed class ImpostorAssembler
         }
     }
 
+    /// <summary>
+    /// Filters one frame from the rendered row's albedo, normal and gloss bytes: undoes the premultiplication, fills the empty pixels, builds the
+    /// levels and stores them.
+    /// </summary>
     unsafe void Frame(Scratch scratch, int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
         int f = _frame, width = _grid * f, n = f * f;
@@ -398,6 +433,9 @@ public sealed class ImpostorAssembler
     /// </summary>
     sealed class Scratch
     {
+        /// <summary>
+        /// Level 0's coverage, albedo (3 a pixel), normal (3 a pixel) and the fill's level-0 weights.
+        /// </summary>
         public readonly float[] Cov, Alb, Nrm, FillWeight0;
 
         /// <summary>
@@ -410,6 +448,9 @@ public sealed class ImpostorAssembler
         /// </summary>
         public readonly float[][] FillValue, FillWeight;
 
+        /// <summary>
+        /// The arrays for <paramref name="frame"/>-pixel frames with <paramref name="levels"/> levels.
+        /// </summary>
         public Scratch(int frame, int levels)
         {
             int n = frame * frame;

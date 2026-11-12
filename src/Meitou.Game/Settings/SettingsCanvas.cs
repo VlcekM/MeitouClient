@@ -9,22 +9,81 @@ namespace Meitou.Game.Settings;
 /// </summary>
 sealed class SettingsCanvas(SettingsMenu menu)
 {
+    /// <summary>
+    /// The kit's main ink.
+    /// </summary>
     internal static readonly Vector4 MainInk = new(175 / 255f, 166 / 255f, 139 / 255f, 1);
+
+    /// <summary>
+    /// The kit's light ink (selected and hovered text, titles).
+    /// </summary>
     internal static readonly Vector4 LightInk = new(217 / 255f, 206 / 255f, 184 / 255f, 1);
+
+    /// <summary>
+    /// The muted ink.
+    /// </summary>
     internal static readonly Vector4 MutedInk = new(0.52f, 0.49f, 0.43f, 1);
+
+    /// <summary>
+    /// The brass ink (the Meitou mark).
+    /// </summary>
     internal static readonly Vector4 Brass = new(196 / 255f, 160 / 255f, 98 / 255f, 1);
+
+    /// <summary>
+    /// The Faithful mark's ink.
+    /// </summary>
     static readonly Vector4 FaithfulInk = new(0.62f, 0.66f, 0.70f, 1);
+
+    /// <summary>
+    /// Measured text heights by text, width, size, viewport height, scale and language.
+    /// </summary>
     readonly Dictionary<(string Text, int Width, int Size, int Height, int Scale, string Language), float> _textHeights = [];
+
+    /// <summary>
+    /// The window's pixel height (part of the text height cache's key).
+    /// </summary>
     internal int TextViewportHeight;
 
+    /// <summary>
+    /// The open list's anchor (the row's button).
+    /// </summary>
+    internal UiRect ChoiceAnchor;
+
+    /// <summary>
+    /// The list whose fade-in is running.
+    /// </summary>
+    internal SettingsMenu.Choice? AnimatedChoice;
+
+    /// <summary>
+    /// The list's fade-in progress (0..1).
+    /// </summary>
+    float _choiceProgress;
+
+    /// <summary>
+    /// A picture under an entry's row: 560 units wide, the luckyren Mode image's proportions, with 8 units above it.
+    /// </summary>
+    const float PictureWidth = 560, PictureHeight = 72, PictureGap = 8;
+
+    /// <summary>
+    /// The Meitou UI mode is on.
+    /// </summary>
     internal bool Meitou => menu.Player.UiMode == UiMode.Meitou;
 
+    /// <summary>
+    /// A rectangle in the window's 1120-unit space, in pixels.
+    /// </summary>
     internal UiRect R(float x, float y, float w, float h) =>
         new(MathF.Round(menu.Bounds.X + x * menu.Scale), menu.Bounds.Y + y * menu.Scale, MathF.Round(w * menu.Scale), MathF.Round(h * menu.Scale));
 
+    /// <summary>
+    /// A filled rectangle.
+    /// </summary>
     internal void Rect(UiRect at, Vector4 colour, UiRect? clip = null) =>
         menu.Controls.Add(new("settings-fill", "Panel", at, "", "", "", true, new Dictionary<string, string>(), colour, Clip: clip, Pickable: false));
 
+    /// <summary>
+    /// A text box in the standard font at <paramref name="size"/> units (translated unless <paramref name="translate"/> is false).
+    /// </summary>
     internal void Text(string caption, UiRect at, float size = 16, Vector4? colour = null, string align = "Left VCenter", UiRect? clip = null,
         bool wrap = false, bool translate = true)
     {
@@ -40,6 +99,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
             Pickable: false, TextScale: size * menu.Scale / 16));
     }
 
+    /// <summary>
+    /// A surface: a window, paper or button, from the Meitou kit's textures, else the game's skins.
+    /// </summary>
     internal void Surface(UiRect at, string kind, bool selected = false, bool hover = false, UiRect? clip = null)
     {
         if (Meitou)
@@ -76,6 +138,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
     static string SurfaceSkin(string kind) =>
         kind == "window" ? "Kenshi_GenericWindowSkin" : kind == "paper" ? "Kenshi_GenericTextBoxSkin" : "Kenshi_Button1Skin";
 
+    /// <summary>
+    /// A button with its hover fade and press offset; a hit is added when it is not clipped.
+    /// </summary>
     internal void Button(string label, UiRect at, Action action, bool selected = false, bool primary = false, UiRect? clip = null, float textInset = 0)
     {
         bool hovered = at.Contains(menu.Pointer.X, menu.Pointer.Y) && (clip is null || clip.Value.Contains(menu.Pointer.X, menu.Pointer.Y));
@@ -96,6 +161,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
             menu.Hits.Add(new(at, action, Label: label));
     }
 
+    /// <summary>
+    /// Draws the rows from <paramref name="top"/>, scrolled, and sets the scroll's maximum.
+    /// </summary>
     internal void DrawEntries(float top)
     {
         var entries = menu.Entries();
@@ -127,6 +195,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         return measured;
     }
 
+    /// <summary>
+    /// How many lines <paramref name="text"/> wraps to at <paramref name="width"/>.
+    /// </summary>
     int TextLines(string text, float width, float size)
     {
         if (text.Length == 0) return 0;
@@ -169,10 +240,8 @@ sealed class SettingsCanvas(SettingsMenu menu)
     static float Indent(SettingsMenu.Entry entry) => entry.Raw is not null || entry.GroupId is not null ? 28 + entry.Depth * 24 : 0;
 
     /// <summary>
-    /// A picture under an entry's row: 560 units wide, the luckyren Mode image's proportions, with 8 units above it.
+    /// A row's height: its label and hint, at least 36 units.
     /// </summary>
-    const float PictureWidth = 560, PictureHeight = 72, PictureGap = 8;
-
     float RowHeight(SettingsMenu.Entry entry)
     {
         float indent = Indent(entry);
@@ -181,8 +250,14 @@ sealed class SettingsCanvas(SettingsMenu menu)
         return Math.Max(36, 2 + label + 1 + TextHeight(Loc.Tr(entry.Hint), HintWidth(entry), 11) + 2);
     }
 
+    /// <summary>
+    /// A row's height with its picture.
+    /// </summary>
     internal float EntryHeight(SettingsMenu.Entry entry) => RowHeight(entry) + (entry.Picture is null ? 0 : PictureGap + PictureHeight);
 
+    /// <summary>
+    /// Draws a row at <paramref name="y"/>: its line, picture, band, group header, name, reset link, hint and control.
+    /// </summary>
     internal void DrawEntry(SettingsMenu.Entry entry, float y)
     {
         float row = RowHeight(entry), buttonY = y + (row - 26) / 2;
@@ -521,10 +596,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         Rect(new(at.X + half, at.Y + 3 * menu.Scale, line, at.Height - 6 * menu.Scale), edge, menu.Viewport);
     }
 
-    internal UiRect ChoiceAnchor;
-    internal SettingsMenu.Choice? AnimatedChoice;
-    float _choiceProgress;
-
+    /// <summary>
+    /// Draws the open list under its anchor: up to six options, scrolled, fading in; choosing one closes it.
+    /// </summary>
     internal void DrawChoice(SettingsMenu.Choice choice)
     {
         if (!ReferenceEquals(AnimatedChoice, choice))
@@ -554,9 +628,13 @@ sealed class SettingsCanvas(SettingsMenu menu)
                     menu.Focus = -1;
                 }, index == menu.ChoiceSelection);
         }
+
         menu.Motion.Opacity(first, MenuMotion.Ease(_choiceProgress));
     }
 
+    /// <summary>
+    /// Draws a message box over the window: title, body, Cancel and an optional Confirm.
+    /// </summary>
     internal void DrawMessage(string title, string body, Action cancel, Action? confirm = null)
     {
         menu.Hits.Clear();

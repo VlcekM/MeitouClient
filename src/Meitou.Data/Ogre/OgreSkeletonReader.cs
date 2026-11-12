@@ -9,7 +9,13 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class OgreSkeletonReader
 {
+    /// <summary>
+    /// The header of serializer version 1.80.
+    /// </summary>
     public const string Version180 = "[Serializer_v1.80]";
+    /// <summary>
+    /// The header of serializer version 1.10.
+    /// </summary>
     public const string Version110 = "[Serializer_v1.10]";
 
     /// <summary>
@@ -22,8 +28,14 @@ public static class OgreSkeletonReader
     /// </summary>
     public const int KeyFrameLengthWithoutScale = OgreStream.ChunkHeaderSize + 4 + 4 * 4 + 3 * 4;
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static OgreSkeleton ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
+    /// <summary>
+    /// Reads a whole skeleton file; <see cref="OgreFormatException"/> for an unsupported version or a file cut short.
+    /// </summary>
     public static OgreSkeleton Read(byte[] data)
     {
         var s = new OgreStream(data);
@@ -81,6 +93,10 @@ public static class OgreSkeletonReader
         }
     }
 
+    /// <summary>
+    /// Reads a bone chunk; its scale is read only when the chunk's stored <paramref name="length"/> (which leaves out the name) is above
+    /// <see cref="BoneLengthWithoutScale"/>.
+    /// </summary>
     static OgreBone ReadBone(OgreStream s, int length)
     {
         var bone = new OgreBone
@@ -98,6 +114,10 @@ public static class OgreSkeletonReader
         return bone;
     }
 
+    /// <summary>
+    /// Reads an animation: name, length, the optional base info, then its tracks and their keyframes; a chunk whose length does not match counts in
+    /// <see cref="OgreSkeleton.ChunkLengthMismatches"/>.
+    /// </summary>
     static OgreAnimation ReadAnimation(OgreStream s, OgreSkeleton skeleton)
     {
         var animation = new OgreAnimation { Name = s.ReadString(), Length = s.ReadFloat() };
@@ -133,6 +153,9 @@ public static class OgreSkeletonReader
         return animation;
     }
 
+    /// <summary>
+    /// Counts a mismatch when the chunk that began at <paramref name="start"/> did not hold <paramref name="length"/> bytes.
+    /// </summary>
     static void CheckLength(OgreStream s, OgreSkeleton skeleton, int start, int length)
     {
         if (s.Position - start != length) skeleton.ChunkLengthMismatches++;

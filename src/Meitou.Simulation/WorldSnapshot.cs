@@ -22,6 +22,9 @@ public readonly record struct AnimationLayer(string Name, float Time, float Weig
     /// drawn.
     /// </summary>
     public float Length { get; init; }
+    /// <summary>
+    /// The animation library index of the record playing it (-1: none; see <see cref="Length"/>).
+    /// </summary>
     public int Definition { get; init; } = -1;
 }
 
@@ -35,7 +38,21 @@ public readonly record struct WorkEvents(string Functionality, string Clip);
 /// What a character is doing about its body: nothing, bandaging someone (<see cref="CharacterTask.Treat"/>) or resting
 /// (<see cref="CharacterTask.Rest"/>).
 /// </summary>
-public enum CareKind { None, Treating, Resting }
+public enum CareKind
+{
+    /// <summary>
+    /// Neither.
+    /// </summary>
+    None,
+    /// <summary>
+    /// Bandaging someone.
+    /// </summary>
+    Treating,
+    /// <summary>
+    /// Resting.
+    /// </summary>
+    Resting
+}
 
 /// <summary>
 /// The health the interface shows: blood (0..1 of capacity), the worst body part (fraction of its maximum HP), hunger (3 fed .. 0 starving) and
@@ -43,7 +60,8 @@ public enum CareKind { None, Treating, Resting }
 /// (<see cref="NeedsSplint"/>, the menu's test with skill 50), what the character is doing (<see cref="Care"/>), its medic job switch and what is
 /// left of a knockout (<see cref="KoTimer"/>, the header's "Unconscious (N)").
 /// </summary>
-public readonly record struct BodyStatus(float Blood, float WorstPart, float Hunger, bool Unconscious, bool Dead, bool NeedsAid = false, CareKind Care = CareKind.None, bool MedicJob = false, bool RescueJob = false,
+public readonly record struct BodyStatus(float Blood, float WorstPart, float Hunger, bool Unconscious, bool Dead, bool NeedsAid = false,
+    CareKind Care = CareKind.None, bool MedicJob = false, bool RescueJob = false,
     bool NeedsSplint = false, float KoTimer = 0, bool PlayingDead = false, bool StayingLow = false, bool NeedsRobotAid = false)
 {
     /// <summary>
@@ -52,16 +70,32 @@ public readonly record struct BodyStatus(float Blood, float WorstPart, float Hun
     /// the robot one only when the organic is not.
     /// </summary>
     public bool NeedsOrganicAid { get; init; }
+    /// <summary>
+    /// The robot need above the floor (Repairs, 60; see <see cref="NeedsOrganicAid"/>).
+    /// </summary>
     public bool NeedsRepairs { get; init; }
     /// <summary>
     /// The health word's other states (docs/game/ui-screens.md "Health word choice"): being eaten (<see cref="Bodies.MedicalState.EatenCountdown"/>),
     /// the recovery coma, the forced crawl (posture 2) and a right arm that does not work.
     /// </summary>
     public bool BeingEaten { get; init; }
+    /// <summary>
+    /// In the recovery coma (see <see cref="BeingEaten"/>).
+    /// </summary>
     public bool Coma { get; init; }
+    /// <summary>
+    /// In the forced crawl (see <see cref="BeingEaten"/>).
+    /// </summary>
     public bool Crawling { get; init; }
+    /// <summary>
+    /// The right arm does not work (see <see cref="BeingEaten"/>).
+    /// </summary>
     public bool RightArmDisabled { get; init; }
 }
+
+/// <summary>
+/// One body part's row of the health panel: its id, name, flesh, stun, bandage and rig, its maximum HP and whether it is robotic.
+/// </summary>
 public sealed record HealthPartView(string Id, string Name, float Flesh, float Stun, float Bandage, float Rig, float Maximum, bool Robotic)
 {
     /// <summary>
@@ -74,8 +108,16 @@ public sealed record HealthPartView(string Id, string Name, float Flesh, float S
     /// (docs/game/ui-screens.md "Tooltips").
     /// </summary>
     public bool Vital { get; init; }
+    /// <summary>
+    /// The part's type (see <see cref="Vital"/>).
+    /// </summary>
     public Meitou.Data.Gameplay.Bodies.BodyPartType Type { get; init; }
+    /// <summary>
+    /// The part's wear damage (a skeleton's, taken off <see cref="Maximum"/>): the tooltip's wear line.
+    /// </summary>
+    public float Wear { get; init; }
 }
+
 /// <summary>
 /// A line of the HUD's stats panel: the label, the value the character fights with and the value it would have unhurt (docs/game/ui-screens.md
 /// section 4).
@@ -91,13 +133,15 @@ public readonly record struct HudStatLine(string Label, float Value, float Base)
     /// </summary>
     public string? Text { get; init; }
 }
+
 /// <summary>
 /// The tooltip rows of the information panel's extended lines (<c>FUN_140895350</c>, <see cref="HudTips"/>), and what the run speed's rows need,
 /// which the host builds in its speed unit: the stored athletics, the leg factor, the fitted legs' athletics factor, while sneaking the sneak speed
 /// cap in units per second, and the gear's run factor (CharStats <c>+0x18</c>).
 /// </summary>
 public sealed record ExtendedTips(IReadOnlyList<(string Key, string Value)> Athletics, IReadOnlyList<(string Key, string Value)> Strength,
-    IReadOnlyList<(string Key, string Value)> Toughness, IReadOnlyList<(string Key, string Value)> Hunger, float StoredAthletics, float LegFactor, float RoboticLegs, float? SneakCap,
+    IReadOnlyList<(string Key, string Value)> Toughness, IReadOnlyList<(string Key, string Value)> Hunger, float StoredAthletics, float LegFactor,
+    float RoboticLegs, float? SneakCap,
     float Gear = 1);
 /// <summary>
 /// What the HUD shows of a selected character besides <see cref="BodyStatus"/> (docs/game/ui-screens.md section 4): the blood in units and its
@@ -136,6 +180,7 @@ public sealed record HudView(float Blood, float BloodCapacity, float Bleeding, f
     /// </summary>
     public IReadOnlyDictionary<Meitou.Data.Gameplay.Bodies.StatsEnumerated, IReadOnlyList<StatReadout>>? StatReadouts { get; init; }
 }
+
 /// <summary>
 /// A stats window row's English label (as the exe writes it, without the leading "-"), its value and whether the row is in Main (the label and value
 /// of "Knockout point:").
@@ -147,7 +192,8 @@ public readonly record struct StatReadout(string Label, string Value, bool Main 
 /// Swimming the swim speed in units per second (<see cref="Speed"/>); <see cref="Penalised"/> shows it Bad. The tooltip: <see cref="Terms"/> for the
 /// job skill, else the fallback's own breakdown.
 /// </summary>
-public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.StatsEnumerated Stat, string? Label, float Value, bool Penalised = false, bool Speed = false,
+public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.StatsEnumerated Stat, string? Label, float Value, bool Penalised = false,
+    bool Speed = false,
     SkillTerms? Terms = null)
 {
     /// <summary>
@@ -158,11 +204,24 @@ public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.Stats
     /// A melee weapon class line's "Damage:" (its blow's terms summed).
     /// </summary>
     public float? Damage { get; init; }
+    /// <summary>
+    /// The "Accuracy Error:" line's tooltip terms (null: none).
+    /// </summary>
     public AccuracyTerms? Accuracy { get; init; }
+    /// <summary>
+    /// The Stealth line's terms (null: none).
+    /// </summary>
     public StealthTerms? Stealth { get; init; }
+    /// <summary>
+    /// The Athletics line's terms (null: none).
+    /// </summary>
     public AthleticsTerms? Athletics { get; init; }
+    /// <summary>
+    /// The Swim line's terms (null: none).
+    /// </summary>
     public SwimTerms? Swim { get; init; }
 }
+
 /// <summary>
 /// The "Accuracy Error:" line's tooltip: the crossbow's deviation at 0 skill, the effective skill and the resulting deviation, in degrees.
 /// </summary>
@@ -183,13 +242,15 @@ public readonly record struct AthleticsTerms(float Skill, float MaxSpeed, int Le
 /// The Swimming line's tooltip (the HUD update): the trained level, the base swim speed, the injuries (legs and arms), hunger, encumbrance and limb
 /// items' penalties, both arms broken, and the current swim speed.
 /// </summary>
-public readonly record struct SwimTerms(float Skill, float MaxSpeed, int Injuries, int Hunger, int Encumbrance, int Robotics, bool BrokenArms, float Speed);
+public readonly record struct SwimTerms(float Skill, float MaxSpeed, int Injuries, int Hunger, int Encumbrance, int Robotics, bool BrokenArms,
+    float Speed);
 /// <summary>
 /// The breakdown of a skill's tooltip (<c>FUN_140890b00</c>, docs/game/ui-screens.md section 4): the trained level, then each penalty of the stat
 /// multiplier taken alone as (int)((1 - factor) x 100) percent (Robotics below 0 is a bonus), the missing arm penalty (strength only, 0 or 33: (int)
 /// of (1 - 0.66) x 100), the effective level and, for perception, the armour's <c>perception bonus</c> (CharStats <c>+0x30</c>).
 /// </summary>
-public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, int Weather, int Darkness, int Robotics, bool HasRobotics, int Gear, int MissingArm, float Total,
+public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, int Weather, int Darkness, int Robotics, bool HasRobotics, int Gear,
+    int MissingArm, float Total,
     int ArmourBonus = 0)
 {
     /// <summary>
@@ -197,6 +258,7 @@ public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, i
     /// </summary>
     public bool Penalised => Injuries + Hunger + Weather + Darkness + Robotics + Gear > 2;
 }
+
 /// <summary>
 /// The information panel's extended lines (docs/game/ui-screens.md section 4): the XP rates as the fraction the panel shows as a percentage
 /// (Toughness as a plain multiplier), the KO point (negative HP), the run speed in units per second with the unhurt run value it is measured against,
@@ -204,8 +266,12 @@ public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, i
 /// <see cref="Fighting"/>: in combat mode, where Strength XP is the weapon weight factor of the drawn weapon, or with nothing drawn
 /// (<see cref="Fists"/>) 1 - encumbrance, instead of the carrying rate.
 /// </summary>
-public readonly record struct ExtendedStats(float AthleticsXp, float StrengthXp, float ToughnessXp, float KoPoint, float RunSpeed, float RunValue, float HungerRate, bool Resting = false,
+public readonly record struct ExtendedStats(float AthleticsXp, float StrengthXp, float ToughnessXp, float KoPoint, float RunSpeed, float RunValue,
+    float HungerRate, bool Resting = false,
     bool Fighting = false, bool Fists = false, float? WorkHungerRate = null, bool Idle = false);
+/// <summary>
+/// One item of an inventory view: its index, record, name, section, cell and size, quantity, weight and quality.
+/// </summary>
 public sealed record InventoryItemView(int Index, string Record, string Name, string Section, int X, int Y, int Width, int Height, int Quantity,
     float Weight, float Quality)
 {
@@ -229,8 +295,17 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// The smith who crafted the item (<see cref="Items.ItemInstance.Crafter"/>; "" none).
     /// </summary>
     public string Crafter { get; init; } = "";
+    /// <summary>
+    /// The item's model level (see <see cref="Company"/>).
+    /// </summary>
     public int Level { get; init; }
+    /// <summary>
+    /// The item's charges (see <see cref="Company"/>).
+    /// </summary>
     public float Charges { get; init; }
+    /// <summary>
+    /// The item's most charges (see <see cref="Company"/>).
+    /// </summary>
     public float MaxCharges { get; init; }
     /// <summary>
     /// The faction the item counts as stolen from for its holder (<see cref="Items.ItemInstance.IsStolenFor"/>), -1 when it is not stolen.
@@ -245,9 +320,19 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public int BagItems { get; init; } = -1;
 }
+
+/// <summary>
+/// An inventory as a window shows it: the grid's size, the backpack's (0: none) and the items.
+/// </summary>
 public sealed record InventoryView(int Width, int Height, int BagWidth, int BagHeight, IReadOnlyList<InventoryItemView> Items)
 {
+    /// <summary>
+    /// The holder's carry capacity (null: none shown).
+    /// </summary>
     public float? CarryCapacity { get; init; }
+    /// <summary>
+    /// The weight of the items.
+    /// </summary>
     public float TotalWeight { get; init; }
     /// <summary>
     /// The holder's encumbrance factor (<see cref="Bodies.Encumbrance.Factor"/>, 1 unburdened): the window's burden word, for a looted body too
@@ -273,10 +358,25 @@ public sealed class CharacterSnapshot
     public CharacterSnapshot(CharacterId id, CharacterAppearance? appearance, Vector3 position, float yaw, IReadOnlyList<AnimationLayer> animations) =>
         (Id, Appearance, Position, Yaw, Animations) = (id, appearance, position, yaw, animations);
 
+    /// <summary>
+    /// The character.
+    /// </summary>
     public CharacterId Id { get; internal set; }
+    /// <summary>
+    /// Its look (null: nothing to draw).
+    /// </summary>
     public CharacterAppearance? Appearance { get; internal set; }
+    /// <summary>
+    /// Where it stands.
+    /// </summary>
     public Vector3 Position { get; internal set; }
+    /// <summary>
+    /// The way it faces.
+    /// </summary>
     public float Yaw { get; internal set; }
+    /// <summary>
+    /// The animations playing on it.
+    /// </summary>
     public IReadOnlyList<AnimationLayer> Animations { get; internal set; } = [];
     /// <summary>
     /// The list <see cref="Animations"/> is published into when the animation system runs the character: owned by this snapshot, refilled on each
@@ -316,11 +416,17 @@ public sealed class CharacterSnapshot
     /// The bolts stuck in the character (<see cref="CharacterCold.StuckBolts"/>).
     /// </summary>
     public IReadOnlyList<StuckBolt> StuckBolts { get; internal set; } = [];
+    /// <summary>
+    /// The character's name.
+    /// </summary>
     public string Name { get; internal set; } = "";
     /// <summary>
     /// The CHARACTER or ANIMAL_CHARACTER record it was made from (<see cref="CharacterCold.RecordId"/>).
     /// </summary>
     public string RecordId { get; internal set; } = "";
+    /// <summary>
+    /// The character's squad (-1: none).
+    /// </summary>
     public int SquadId { get; internal set; } = -1;
     /// <summary>
     /// One of the player's characters, and whether it is selected.
@@ -334,6 +440,9 @@ public sealed class CharacterSnapshot
     /// The character's NPC class is Diplomat (the standing Pick Up verb skips it, <c>FUN_1407a6bc0</c>).
     /// </summary>
     public bool IsDiplomat { get; internal set; }
+    /// <summary>
+    /// Whether the player has it selected.
+    /// </summary>
     public bool Selected { get; internal set; }
     /// <summary>
     /// Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not
@@ -344,6 +453,9 @@ public sealed class CharacterSnapshot
     /// The orders panel's toggles and the move speed mode (<see cref="CharacterCold.Orders"/>, <see cref="CharacterCold.RunSpeed"/>).
     /// </summary>
     public CharacterOrders Orders { get; internal set; }
+    /// <summary>
+    /// The move speed mode (see <see cref="Orders"/>).
+    /// </summary>
     public byte RunSpeed { get; internal set; } = SpeedMode.Free;
     /// <summary>
     /// The job list (<see cref="CharacterCold.Jobs"/>), first = highest priority.
@@ -391,8 +503,17 @@ public sealed class CharacterSnapshot
     /// A selected character's trained stats (the host formats them); null for the others and for a character without stats.
     /// </summary>
     public SkillSummary? Skills { get; internal set; }
+    /// <summary>
+    /// A selected or inspected character's skills, by stat (empty for the others).
+    /// </summary>
     public IReadOnlyList<float> AllSkills { get; internal set; } = [];
+    /// <summary>
+    /// A selected or inspected character's race XP multipliers, by stat (empty for the others).
+    /// </summary>
     public IReadOnlyList<float> SkillXpMultipliers { get; internal set; } = [];
+    /// <summary>
+    /// A selected or inspected character's health panel rows (empty for the others).
+    /// </summary>
     public IReadOnlyList<HealthPartView> HealthParts { get; internal set; } = [];
     /// <summary>
     /// The limbs' states (<c>MedicalState.LimbBits</c>: limb slot k's <c>LimbState</c> in bits 2k..2k+1; 0 when every limb is the original).
@@ -416,6 +537,10 @@ public sealed class CharacterSnapshot
     /// The HUD's numbers for a selected character (null for the others).
     /// </summary>
     public HudView? Hud { get; internal set; }
+    /// <summary>
+    /// The inventory of a selected character, of the one whose loot window is open, or of a player character whose inventory is shown (null for
+    /// the others).
+    /// </summary>
     public InventoryView? ItemGrid { get; internal set; }
     /// <summary>
     /// The character carrying this one (none when not carried). A carried body has its carrier's position and facing; it is drawn at
@@ -545,6 +670,9 @@ public sealed class CharacterSnapshot
     /// otherwise. Display only.
     /// </summary>
     public WeatherNotice WeatherNotice { get; internal set; }
+    /// <summary>
+    /// The protection <see cref="WeatherNotice"/> shows.
+    /// </summary>
     public float WeatherNoticeProtection { get; internal set; }
     /// <summary>
     /// A sneaking player character's state for its stealth tag (docs/game/perception.md "Spotting a sneaker"): <see cref="StealthExposure.Detected"/>
@@ -647,20 +775,23 @@ public sealed class CharacterSnapshot
 }
 
 /// <summary>
-/// A prisoner's cage and sentence (docs/game/economy.md 11.5): <see cref="Locked"/> the cage is effectively locked; <see cref="Sentence"/> its length
-/// in game hours (0: none, so it waits to be released), <see cref="HoursLeft"/> what remains of it.
-/// </summary>
-/// <summary>
 /// A floating progress bar's caption and fill (0..1).
 /// </summary>
 public readonly record struct TaskBar(string Text, float Progress);
 
+/// <summary>
+/// A prisoner's cage and sentence (docs/game/economy.md 11.5): <see cref="Locked"/> the cage is effectively locked; <see cref="Sentence"/> its length
+/// in game hours (0: none, so it waits to be released), <see cref="HoursLeft"/> what remains of it.
+/// </summary>
 public readonly record struct PrisonView(bool Locked, float Sentence, double HoursLeft)
 {
     /// <summary>
     /// The faction owning the cage it is in (-1 none) and the cage's fixture id.
     /// </summary>
     public int CageOwner { get; init; }
+    /// <summary>
+    /// The cage's fixture id (see <see cref="CageOwner"/>).
+    /// </summary>
     public string? CageId { get; init; }
     /// <summary>
     /// The cage lock's level, -1 when the character is in no cage with a lock (the State line's "Locked (lvl: N)").
@@ -669,12 +800,8 @@ public readonly record struct PrisonView(bool Locked, float Sentence, double Hou
 }
 
 /// <summary>
-/// A slave's state (1 slave, 2 escaped slave, 3 ex-slave; <c>SlaveStateEnum</c>) and the name of the faction that owns it ("someone" is the caller's
-/// word for none).
-/// </summary>
-/// <summary>
-/// The slave state of a character (1 slave, 2 escaped, 3 ex-slave), its owner faction's name and its "looks like a slave" level in 0..1
-/// (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>).
+/// The slave state of a character (1 slave, 2 escaped slave, 3 ex-slave; <c>SlaveStateEnum</c>), the name of the faction that owns it ("someone" is
+/// the caller's word for none) and its "looks like a slave" level in 0..1 (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>).
 /// </summary>
 public readonly record struct SlaveView(int State, string Owner, float Looks = 0);
 
@@ -682,7 +809,8 @@ public readonly record struct SlaveView(int State, string Owner, float Looks = 0
 /// A disguise for the data panel and the health word (docs/game/ui-screens.md "Which lines"): the clothing level, the uniform faction's name, the
 /// blown cooldown (seconds), whether it works, and the tooltip's factors (secure location, the looker marks).
 /// </summary>
-public readonly record struct DisguiseView(float Level, string Faction, float Blown, bool Works, bool Secure, bool SameFaction, bool SlaveOwner, bool KnowsMe);
+public readonly record struct DisguiseView(float Level, string Faction, float Blown, bool Works, bool Secure, bool SameFaction, bool SlaveOwner,
+    bool KnowsMe);
 
 /// <summary>
 /// A turret building being manned (<see cref="CharacterSnapshot.Turret"/>): its key (a <see cref="Meitou.Data.World.TownBuilding"/> key, or a player
@@ -691,7 +819,13 @@ public readonly record struct DisguiseView(float Level, string Faction, float Bl
 /// </summary>
 public sealed record MannedTurret(string Key, string BuildingId, Vector3 Position, float Yaw, string GunId)
 {
+    /// <summary>
+    /// Whether the combat system runs it (see the record's remarks).
+    /// </summary>
     public bool Simulated { get; init; }
+    /// <summary>
+    /// The point its gun aims at (null: none yet).
+    /// </summary>
     public Vector3? Aim { get; init; }
     /// <summary>
     /// The turning of its parts so far, radians, in <c>TurretGun.Parts</c> order (a simulated turret only); the renderer turns the meshes by it.
@@ -768,12 +902,22 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// <see cref="CharacterSnapshot.ItemGrid"/>), and who opened it.
     /// </summary>
     public CharacterId OpenLoot { get; init; } = CharacterId.None;
+    /// <summary>
+    /// Who opened the loot window (see <see cref="OpenLoot"/>).
+    /// </summary>
     public CharacterId LootOpener { get; init; } = CharacterId.None;
+    /// <summary>
+    /// Who opened the open container's window (<see cref="PlayerState.ContainerOpener"/>); none while no container is open.
+    /// </summary>
+    public CharacterId ContainerOpener { get; init; } = CharacterId.None;
     /// <summary>
     /// The item on the mouse (<see cref="PlayerState.Held"/>), null for none, and the serial of the last held-item command applied
     /// (<see cref="PlayerState.HeldSerial"/>).
     /// </summary>
     public Items.HeldItemView? Held { get; init; }
+    /// <summary>
+    /// The serial of the last held-item command applied (see <see cref="Held"/>).
+    /// </summary>
     public long HeldSerial { get; init; }
     /// <summary>
     /// Player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
@@ -793,17 +937,26 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// The standing camps' <c>debris</c> meshes (drawn only); they change with <see cref="NestBuildingsRevision"/>.
     /// </summary>
     public IReadOnlyList<NestMesh> NestMeshes { get; init; } = [];
+    /// <summary>
+    /// The revision of <see cref="NestBuildings"/>.
+    /// </summary>
     public long NestBuildingsRevision { get; init; }
     /// <summary>
     /// The town buildings a town override ruined or stood up again against the level data (<see cref="Locks.FixtureRegistry.Ruins"/>), and their
     /// revision.
     /// </summary>
     public IReadOnlyList<Locks.RuinedBuilding> Ruins { get; init; } = [];
+    /// <summary>
+    /// The revision of <see cref="Ruins"/>.
+    /// </summary>
     public long RuinsRevision { get; init; }
     /// <summary>
     /// The bought town houses drawn without their interior layout (<see cref="Locks.FixtureRegistry.PublishedEmptied"/>), and their revision.
     /// </summary>
     public IReadOnlyList<Meitou.Data.World.TownBuilding> EmptiedHouses { get; init; } = [];
+    /// <summary>
+    /// The revision of <see cref="EmptiedHouses"/>.
+    /// </summary>
     public long EmptiedHousesRevision { get; init; }
     /// <summary>
     /// The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").
@@ -882,18 +1035,33 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// <summary>
     /// What each of the player's crafting benches can craft (by site), for the Craft tab.
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<Production.CraftOptionView>> Crafts { get; init; } = new Dictionary<string, IReadOnlyList<Production.CraftOptionView>>();
+    public IReadOnlyDictionary<string, IReadOnlyList<Production.CraftOptionView>> Crafts { get; init; } =
+        new Dictionary<string, IReadOnlyList<Production.CraftOptionView>>();
     /// <summary>
     /// Each crafting bench's current smith (by site), for the Craft tab's queue description; a bench nobody has worked has none.
     /// </summary>
-    public IReadOnlyDictionary<string, Production.CraftSmithView> Smiths { get; init; } = new Dictionary<string, Production.CraftSmithView>();
+    public IReadOnlyDictionary<string, Production.CraftSmithView> Smiths { get; init; } =
+        new Dictionary<string, Production.CraftSmithView>();
 
-    static readonly IReadOnlyDictionary<(string Building, int Door), Locks.DoorView> NoDoors = new Dictionary<(string Building, int Door), Locks.DoorView>();
+    /// <summary>
+    /// The default of <see cref="Doors"/>: none.
+    /// </summary>
+    static readonly IReadOnlyDictionary<(string Building, int Door), Locks.DoorView> NoDoors =
+        new Dictionary<(string Building, int Door), Locks.DoorView>();
 
+    /// <summary>
+    /// The default of an empty set of ids.
+    /// </summary>
     static readonly IReadOnlySet<string> EmptySet = new HashSet<string>(StringComparer.Ordinal);
+    /// <summary>
+    /// The default of <see cref="KnownFactions"/>: none.
+    /// </summary>
     static readonly IReadOnlySet<int> NoFactions = new HashSet<int>();
 
-    // After the statics above: static initializers run in textual order, and the property defaults read them.
+    /// <summary>
+    /// The snapshot before the first tick: tick -1, no characters. After the statics above: static initializers run in textual order, and the
+    /// property defaults read them.
+    /// </summary>
     public static readonly WorldSnapshot Empty = new(-1, []);
 }
 
@@ -939,7 +1107,33 @@ public sealed record SquadView(int Id, string Name, IReadOnlyList<CharacterId> M
 /// <summary>
 /// Which status line a character's bounty panel shows (<c>FUN_1405d4260</c>, <b>Observed</b>).
 /// </summary>
-public enum StatusKind : byte { Leader, WarLeader, Kidnapped, Crime, EscapedPrisoner, Diplomatic }
+public enum StatusKind : byte
+{
+    /// <summary>
+    /// Leader: the leader of a campaign's leading platoon.
+    /// </summary>
+    Leader,
+    /// <summary>
+    /// War Leader: the leader of a hostile campaign.
+    /// </summary>
+    WarLeader,
+    /// <summary>
+    /// Kidnapped.
+    /// </summary>
+    Kidnapped,
+    /// <summary>
+    /// A pending crime.
+    /// </summary>
+    Crime,
+    /// <summary>
+    /// An escaped prisoner.
+    /// </summary>
+    EscapedPrisoner,
+    /// <summary>
+    /// Diplomatic Status (NPC class Diplomat).
+    /// </summary>
+    Diplomatic
+}
 
 /// <summary>
 /// A status line: for <see cref="StatusKind.Crime"/> the crime's name, its pending timer and the local faction's bounty.

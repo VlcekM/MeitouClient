@@ -45,6 +45,7 @@ sealed class TitleComposition
     /// Where the wanderer stands: on the plateau under this point of a 16:9 frame (0..1 across, 0..1 down), else the ground under it.
     /// </summary>
     static readonly Vector2 WandererOnScreen = new(0.337f, 0.93f);
+
     /// <summary>
     /// The foreground. The ridge: rocks drawn with the terrain texturing of the local cliff feature (<see cref="RidgeLook"/>), side by side from the
     /// frame's bottom left to its bottom right, each one's top under its screen point at its distance ahead (along the ground). The plateau the
@@ -76,10 +77,41 @@ sealed class TitleComposition
     /// </summary>
     static readonly Vector3 RuinCentre = new(-52860, 0, -22715);
 
+    /// <summary>
+    /// The ruin's radius round <see cref="RuinCentre"/>, and how far left it is moved.
+    /// </summary>
     const float RuinRadius = 350, RuinMove = 400;
 
-    enum Part { Ridge, Plateau, OnPlateau, Building }
+    /// <summary>
+    /// What a staged ridge piece is, which says how it is placed.
+    /// </summary>
+    enum Part
+    {
+        /// <summary>
+        /// A ridge mesh with the cliff's terrain texturing, its highest vertex at its ray's height that far ahead.
+        /// </summary>
+        Ridge,
 
+        /// <summary>
+        /// The plateau block, placed like a ridge mesh and moved left; its top is where the pieces on it stand.
+        /// </summary>
+        Plateau,
+
+        /// <summary>
+        /// A piece on the plateau's top under its screen point, sunk by its share of its height; skipped without a plateau.
+        /// </summary>
+        OnPlateau,
+
+        /// <summary>
+        /// A building record by name, laid out as a placed one: on the plateau's top, or on the ground that far ahead.
+        /// </summary>
+        Building,
+    }
+
+    /// <summary>
+    /// The staged ridge's pieces: mesh or building name, part, screen point, yaw in degrees, distance ahead, scale and how far it sinks into the
+    /// plateau (a share of its height).
+    /// </summary>
     static readonly (string Mesh, Part Part, Vector2 Screen, float Yaw, float Ahead, float Scale, float Sink)[] RidgePieces =
     [
         ("FLatTop_Pillar01.mesh", Part.Plateau, new(0.337f, 0.92f), 180, 45, 1, 0),
@@ -99,6 +131,9 @@ sealed class TitleComposition
         ("Watchtower", Part.Building, new(0.88f, 0.5f), 145, 2600, 1, 0),
     ];
 
+    /// <summary>
+    /// The title view's camera pose (<see cref="Spot"/> decoded).
+    /// </summary>
     internal static WorldCameraCode.Pose Pose =>
         WorldCameraCode.Decode(Spot) ?? throw new InvalidOperationException("TitleComposition.Spot is not a camera code");
 
@@ -107,10 +142,19 @@ sealed class TitleComposition
     /// </summary>
     internal static (float X, float Z) Focus => (Pose.Target.X, Pose.Target.Z);
 
+    /// <summary>
+    /// The wanderer's position on the plateau (else the ground under his screen point).
+    /// </summary>
     public Vector3 Wanderer { get; }
 
+    /// <summary>
+    /// The wanderer's yaw: his back to the camera, looking out over the valley.
+    /// </summary>
     public float WandererYaw { get; }
 
+    /// <summary>
+    /// The wanderer's look: the saved character's, else the sandbox character with the title's gear.
+    /// </summary>
     public CharacterAppearance Appearance { get; }
 
     /// <summary>
@@ -133,6 +177,9 @@ sealed class TitleComposition
     /// </summary>
     public IReadOnlyList<PlacedMesh> Staged { get; }
 
+    /// <summary>
+    /// Stages the title: the ridge, the wanderer and his look, the fight centres and the moved ruin.
+    /// </summary>
     public TitleComposition(
         GameInstall install, GameDatabase database, Func<float, float, float> ground, string character, CharacterAppearance? savedCharacter = null)
     {
@@ -153,7 +200,9 @@ sealed class TitleComposition
         Ruins = new(RuinCentre, RuinRadius, left * RuinMove, name => name.StartsWith("Ghost", StringComparison.Ordinal), ground);
         var gear = new[] { "Iron Hat", "Dustcoat", "Drifter's Leather Pants", "Drifter's Boots", "Katana", "Small Backpack" }
             .Where(n => database.Records.Values.Any(r => r.Name == n)).ToArray();
-        Appearance = savedCharacter ?? CharacterAppearance.Build(database, install.Root, character, new CharacterOptions { Female = false, Naked = true, Equip = gear });
+        Appearance = savedCharacter
+            ?? CharacterAppearance.Build(database, install.Root, character, new CharacterOptions { Female = false, Naked = true, Equip = gear });
+
         // A strongish build that reads from behind: more muscle, broader shoulders and back, thicker arms and neck.
         if (savedCharacter is null)
         {
@@ -175,8 +224,8 @@ sealed class TitleComposition
     /// The foreground's pieces, the plateau's vertices in the world and the height of its top (the wanderer is stood on it). Nothing when the cliff
     /// feature is missing.
     /// </summary>
-    static (IReadOnlyList<PlacedMesh> Staged, IReadOnlyList<Vector3> Plateau, float? Top) Ridge(GameInstall install, GameDatabase database, WorldCamera view,
-        Func<float, float, float> ground)
+    static (IReadOnlyList<PlacedMesh> Staged, IReadOnlyList<Vector3> Plateau, float? Top) Ridge(GameInstall install, GameDatabase database,
+        WorldCamera view, Func<float, float, float> ground)
     {
         var look = RidgeRecord(database);
         if (look is null) return ([], [], null);
@@ -218,6 +267,7 @@ sealed class TitleComposition
             {
                 continue;
             }
+
             if (points.Length == 0) continue;
             float highest = points.Max(p => p.Y), lowest = points.Min(p => p.Y);
             var ray = RayThrough(view, screen);
@@ -240,7 +290,9 @@ sealed class TitleComposition
                     at -= Vector3.Normalize(Vector3.Cross(view.Forward, Vector3.UnitY) with { Y = 0 }) * PlateauLeft;
                 }
             }
-            var transform = WorldObjectLayout.InstanceTransform(at, Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180), new Vector3(scale));
+
+            var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180);
+            var transform = WorldObjectLayout.InstanceTransform(at, rotation, new Vector3(scale));
             placed.Add(new PlacedMesh(meshPath, transform, pieceLook, pieceLook, $"meitou title ridge {placed.Count}", PlacedKind.MapFeature));
             if (part == Part.Plateau) surface.AddRange(points.Select(p => Vector3.Transform(p, transform)));
         }
@@ -363,5 +415,8 @@ sealed class TitleComposition
     /// The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster.
     /// </summary>
     public void Fill(CharacterDrawList list) =>
-        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)]) { Build = SavedBuild });
+        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)])
+        {
+            Build = SavedBuild,
+        });
 }

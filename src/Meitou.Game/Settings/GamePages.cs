@@ -16,25 +16,74 @@ sealed class GamePages(SettingsMenu menu)
 {
     #region Fields
 
+    /// <summary>
+    /// The Main menu transition speed slider (the sky flight's speed from the title).
+    /// </summary>
     readonly Slider _mainMenuTransitionSpeed = new("Main menu transition speed", SkyArrival.MinSpeed, SkyArrival.MaxSpeed,
         () => menu.Config.MainMenuTransitionSpeed, v => menu.Config.MainMenuTransitionSpeed = v, "0.00'x'");
+
+    /// <summary>
+    /// The In-game transition speed slider (the sky flight's speed in play).
+    /// </summary>
     readonly Slider _inGameTransitionSpeed = new("In-game transition speed", SkyArrival.MinSpeed, SkyArrival.MaxSpeed,
         () => menu.Config.InGameTransitionSpeed, v => menu.Config.InGameTransitionSpeed = v, "0.00'x'");
+
+    /// <summary>
+    /// The Character flight time slider, 0.5 to 6 seconds.
+    /// </summary>
     readonly Slider _characterFlightTime = new("Character flight time", 0.5f, 6, () => menu.Config.CharacterFlightSeconds,
         v => menu.Config.CharacterFlightSeconds = v, "0.0' s'");
 
+    /// <summary>
+    /// The camera rotation speed slider, made on first use.
+    /// </summary>
     Slider? _cameraRotateSpeed;
+
+    /// <summary>
+    /// The camera move and zoom speed sliders, made on first use.
+    /// </summary>
     Slider? _cameraMoveSpeed, _cameraZoomSpeed;
+
+    /// <summary>
+    /// The audio sliders, made on first use.
+    /// </summary>
     Slider[]? _audioSliders;
+
+    /// <summary>
+    /// The gameplay multiplier sliders, made on first use.
+    /// </summary>
     Slider[]? _gameplaySliders;
+
+    /// <summary>
+    /// The auto save time slider, made on first use.
+    /// </summary>
     Slider? _autoSaveSlider;
+
+    /// <summary>
+    /// The attackers per target slider, made on first use.
+    /// </summary>
     Slider? _attackSlotsSlider;
+
+    /// <summary>
+    /// The harpoon limit slider, made on first use.
+    /// </summary>
     Slider? _harpoonLimitSlider;
+
+    /// <summary>
+    /// The fast and fastest speed sliders, made on first use.
+    /// </summary>
     Slider? _fastSpeedSlider, _fastestSpeedSlider;
+
+    /// <summary>
+    /// The dropped items kept slider, made on first use.
+    /// </summary>
     Slider? _groundItemsSlider;
 
     #endregion
 
+    /// <summary>
+    /// The camera rotation speed slider, in half steps; a change goes to <see cref="SettingsMenu.CameraRotateSpeedChanged"/>.
+    /// </summary>
     internal Slider CameraRotateSpeed => _cameraRotateSpeed ??= new("Camera rotation speed", UserConfig.MinCameraRotateSpeed,
         UserConfig.MaxCameraRotateSpeed, () => menu.Config.CameraRotateSpeed,
         v =>
@@ -44,14 +93,24 @@ sealed class GamePages(SettingsMenu menu)
         },
         "0.#", Faithful: Data.World.KenshiCamera.DefaultRotateSpeed);
 
+    /// <summary>
+    /// The camera move speed slider (the game's default when unset).
+    /// </summary>
     Slider CameraMoveSpeed => _cameraMoveSpeed ??= CameraSpeedSlider("Camera move speed", UserConfig.MinCameraMoveSpeed,
         UserConfig.MaxCameraMoveSpeed, () => menu.Config.CameraMoveSpeed ?? Data.World.KenshiCamera.DefaultMoveSpeed,
         v => menu.Config.CameraMoveSpeed = v, Data.World.KenshiCamera.DefaultMoveSpeed);
 
+    /// <summary>
+    /// The camera zoom speed slider (the game's default when unset).
+    /// </summary>
     Slider CameraZoomSpeed => _cameraZoomSpeed ??= CameraSpeedSlider("Camera zoom speed", UserConfig.MinCameraZoomSpeed,
         UserConfig.MaxCameraZoomSpeed, () => menu.Config.CameraZoomSpeed ?? Data.World.KenshiCamera.DefaultZoomSpeed,
         v => menu.Config.CameraZoomSpeed = v, Data.World.KenshiCamera.DefaultZoomSpeed);
 
+    /// <summary>
+    /// A camera speed slider in whole steps, marked at the game's <paramref name="original"/>; a change goes to <see
+    /// cref="SettingsMenu.CameraChanged"/>.
+    /// </summary>
     Slider CameraSpeedSlider(string label, float min, float max, Func<float> get, Action<float> set, float original) =>
         new(label, min, max, get,
             v =>
@@ -118,21 +177,33 @@ sealed class GamePages(SettingsMenu menu)
             (g, v) => g with { RaidFrequency = v }),
     ];
 
+    /// <summary>
+    /// A gameplay multiplier slider in steps of 0.05, marked at 1 (the game's); a change saves through <see cref="SetGameplay"/>.
+    /// </summary>
     Slider Multiplier(string label, float min, float max, Func<GameplaySettings, float> get, Func<GameplaySettings, float, GameplaySettings> set) =>
         new(label, min, max, () => get(menu.Config.Gameplay ??= new()),
             v => SetGameplay(set(menu.Config.Gameplay ?? new(), Math.Clamp(MathF.Round(v * 20) / 20, min, max))),
             "0.##", Faithful: 1);
 
+    /// <summary>
+    /// The auto save time slider, whole minutes, marked at the game's 10.
+    /// </summary>
     Slider AutoSaveSlider => _autoSaveSlider ??= new("Auto save time (minutes)", GameplaySettings.MinAutoSaveMinutes,
         GameplaySettings.MaxAutoSaveMinutes, () => (menu.Config.Gameplay ??= new()).AutoSaveMinutes,
         v => SetGameplay((menu.Config.Gameplay ?? new()) with { AutoSaveMinutes = MathF.Round(v) }), "0", Text: v => $"{v:0} min", Faithful: 10);
 
+    /// <summary>
+    /// Sets the gameplay settings and calls <see cref="SettingsMenu.GameplayChanged"/>.
+    /// </summary>
     internal void SetGameplay(GameplaySettings value)
     {
         menu.Config.Gameplay = value;
         menu.GameplayChanged?.Invoke();
     }
 
+    /// <summary>
+    /// A volume slider 0..1 shown as a percentage, marked at the game's 0.5; a change calls <see cref="SettingsMenu.AudioChanged"/>.
+    /// </summary>
     Slider Volume(string label, Func<AudioSettings, float> get, Func<AudioSettings, float, AudioSettings> set) =>
         new(label, 0, 1, () => get(menu.Config.Audio ??= new()),
             v =>
@@ -142,12 +213,18 @@ sealed class GamePages(SettingsMenu menu)
             },
             "0.00", Text: v => $"{v * 100:0}%", Faithful: 0.5f, Scale: 100);
 
+    /// <summary>
+    /// The attackers per target slider, 1 to 5; a change goes to <see cref="SettingsMenu.AttackSlotsChanged"/>.
+    /// </summary>
     internal Slider AttackSlotsSlider => _attackSlotsSlider ??= new("Attackers per target", 1, 5, () => menu.Config.AttackSlots, v =>
     {
         menu.Config.AttackSlots = Math.Clamp((int)MathF.Round(v), 1, 5);
         menu.AttackSlotsChanged?.Invoke(menu.Config.AttackSlotsOption);
     }, "0", Faithful: UserConfig.FaithfulAttackSlots, Meitou: UserConfig.MeitouAttackSlots);
 
+    /// <summary>
+    /// The harpoon limit slider (logarithmic, whole counts), marked at the game's default.
+    /// </summary>
     Slider HarpoonLimitSlider => _harpoonLimitSlider ??= new("Harpoon limit", Simulation.Combat.RangedTuning.MinStuckLimit,
         Simulation.Combat.RangedTuning.MaxStuckLimit, () => (menu.Config.Gameplay ??= new()).HarpoonLimit,
         v => SetGameplay((menu.Config.Gameplay ?? new()) with { HarpoonLimit = ClampHarpoonLimit(v) }), "0", Logarithmic: true,
@@ -159,9 +236,15 @@ sealed class GamePages(SettingsMenu menu)
     static int ClampHarpoonLimit(float v) =>
         Math.Clamp((int)MathF.Round(v), Simulation.Combat.RangedTuning.MinStuckLimit, Simulation.Combat.RangedTuning.MaxStuckLimit);
 
+    /// <summary>
+    /// The fast speed slider, in half steps, marked at the game's default.
+    /// </summary>
     Slider FastSpeedSlider => _fastSpeedSlider ??= TimeSpeed("Fast speed", SimulationClock.MinFastSpeed, SimulationClock.MaxFastSpeed, 1,
         () => menu.Config.FastSpeed, v => menu.Config.FastSpeed = v);
 
+    /// <summary>
+    /// The fastest speed slider, in half steps, marked at the game's default.
+    /// </summary>
     Slider FastestSpeedSlider => _fastestSpeedSlider ??= TimeSpeed("Fastest speed", SimulationClock.MinFastestSpeed,
         SimulationClock.MaxFastestSpeed, 2, () => menu.Config.FastestSpeed, v => menu.Config.FastestSpeed = v);
 
@@ -177,18 +260,23 @@ sealed class GamePages(SettingsMenu menu)
             },
             "0.#", Text: v => $"{v:0.#}x", Faithful: (float)SimulationClock.DefaultSpeeds[step]);
 
+    /// <summary>
+    /// The dropped items kept slider (logarithmic), marked at Meitou's default.
+    /// </summary>
     Slider GroundItemsSlider => _groundItemsSlider ??= new("Dropped items kept", 16, Simulation.Items.GroundItems.MaxLimit,
         () => menu.Config.GroundItemLimit,
         v => menu.Config.GroundItemLimit = Math.Clamp((int)MathF.Round(v), 1, Simulation.Items.GroundItems.MaxLimit), "0", Logarithmic: true,
         Meitou: Simulation.Items.GroundItems.DefaultLimit);
 
     /// <summary>
-    /// The Interface page: UI style, units, floaters, font size, names, markers and the mouse.
+    /// The Interface page: UI style, units, floaters, font size, interface scale, names, markers and the mouse.
     /// </summary>
     internal void InterfaceRows(List<SettingsMenu.Entry> result)
     {
         result.Add(new("UI style", "Choose original Kenshi skins or Meitou materials.",
             Choice: new(() => ["Faithful", "Meitou"], () => (int)menu.Player.UiMode, i => menu.Player.SetUiMode((UiMode)i))));
+        result.Add(new("Main menu style", "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style.",
+            Choice: new(() => ["Faithful", "Meitou"], () => menu.Player.MeitouMainMenu ? 1 : 0, i => menu.Player.MeitouMainMenu = menu.Config.MeitouMainMenu = i == 1)));
         result.Add(new("Speed units", "The unit of the run speed in the character's information panel (the game: mph).",
             Choice: new(() => ["mph", "km/h"], () => (int)menu.Config.SpeedUnit, i => menu.Player.SpeedUnit = menu.Config.SpeedUnit = (SpeedUnit)i)));
         result.Add(new("Damage floaters", "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. "
@@ -198,7 +286,11 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Font size", "Points added to every interface font's default height (the game: 3).",
             Slider: new("Font size", UserConfig.MinFontSize, UserConfig.MaxFontSize, () => menu.Config.FontSize ?? KenshiFontSize.DefaultSetting,
                 v => SetFontSize(v), "0", Faithful: KenshiFontSize.DefaultSetting)));
-        result.Add(new("Show names", "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
+        result.Add(new("Interface scale", "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it).",
+            Slider: new("Interface scale", UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale, () => menu.Config.InterfaceScale,
+                SetInterfaceScale, "0.00", Text: v => $"{v * 100:0}%", Faithful: 1, Scale: 100, Step: 0.05f)));
+        result.Add(new("Show names",
+            "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
             Toggle: new("Show names", () => menu.Config.ShowNames, v => menu.Player.ShowNames = menu.Config.ShowNames = v, OnOff: true)));
         result.Add(new("Show movement marker", "The green marker where a move order sends your characters (the game: on).",
             Toggle: new("Show movement marker", () => menu.Config.MovementMarker != false,
@@ -208,16 +300,19 @@ sealed class GamePages(SettingsMenu menu)
                 v => menu.Player.RotationMarker = (menu.Config.RotationMarker = v) == true, OnOff: true)));
         result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
             Toggle: new("Censorship", () => menu.Config.Censorship, v => menu.Config.Censorship = v, OnOff: true)));
-        result.Add(new("Feedback button", "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
+        result.Add(new("Feedback button",
+            "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
             Toggle: new("Feedback button", () => menu.Config.FeedbackButton, v => menu.Player.FeedbackButtonInPlay = menu.Config.FeedbackButton = v,
                 OnOff: true)));
-        result.Add(new("Hardware mouse", "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on).",
+        result.Add(new("Hardware mouse",
+            "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on).",
             Toggle: new("Hardware mouse", () => menu.Config.HardwareMouse, v => menu.Config.HardwareMouse = v)));
         if (menu.Config.HardwareMouse)
         {
             result.Add(new("Enhanced hardware mouse",
                 "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets.",
-                Toggle: new("Enhanced hardware mouse", () => menu.Config.EnhancedHardwareMouse, v => menu.Config.EnhancedHardwareMouse = v, OnOff: true),
+                Toggle: new("Enhanced hardware mouse", () => menu.Config.EnhancedHardwareMouse, v => menu.Config.EnhancedHardwareMouse = v,
+                    OnOff: true),
                 Depth: 1));
         }
     }
@@ -233,11 +328,22 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
+    /// The Interface scale, rounded to 5% and clamped, into the config and the player interface.
+    /// </summary>
+    void SetInterfaceScale(float v)
+    {
+        float scale = Math.Clamp(MathF.Round(v * 20) / 20, UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale);
+        menu.Config.InterfaceScale = scale;
+        menu.Player.InterfaceScale = scale;
+    }
+
+    /// <summary>
     /// The Controls page: the camera's speeds and mouse, then one row per bindable action.
     /// </summary>
     internal void ControlsRows(List<SettingsMenu.Entry> result)
     {
-        result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).", Slider: CameraRotateSpeed));
+        result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).",
+            Slider: CameraRotateSpeed));
         result.Add(new(CameraMoveSpeed.Label,
             "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera).", Slider: CameraMoveSpeed));
         result.Add(new(CameraZoomSpeed.Label, "How fast the wheel and the zoom keys move the camera in and out (the game: 125).",
@@ -311,8 +417,8 @@ sealed class GamePages(SettingsMenu menu)
                 v => SetGameplay((menu.Config.Gameplay ?? new()) with { AutoSave = v }), OnOff: true)));
         result.Add(new(AutoSaveSlider.Label, "Minutes of unpaused play between autosaves (the game: 10).", Slider: AutoSaveSlider));
         result.Add(new("Fast zone hopping",
-            "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses "
-            + "more memory).",
+            "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; "
+            + "uses more memory).",
             Toggle: new("Fast zone hopping", () => (menu.Config.Gameplay ??= new()).FastZoneHopping,
                 v => SetGameplay((menu.Config.Gameplay ?? new()) with { FastZoneHopping = v }), OnOff: true)));
         result.Add(new("Tutorials", "Shows the tutorial hints as you play (the game: on).",
@@ -510,7 +616,7 @@ sealed class GamePages(SettingsMenu menu)
             "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has "
             + "loaded.",
             Toggle: new("Splash screens", () => !menu.Config.SplashScreens, v => menu.Config.SplashScreens = !v, Remaster: true)));
-        result.Add(new("Main menu scene transitions", "Sky flight to/from the main menu (Meitou UI).",
+        result.Add(new("Main menu scene transitions", "Sky flight to/from the main menu (Meitou main menu).",
             Toggle: new("Main menu scene transitions", () => menu.Config.MainMenuTransitions, v => menu.Config.MainMenuTransitions = v)));
         result.Add(new(_mainMenuTransitionSpeed.Label, "Higher values make the camera ascend and descend faster.",
             Slider: _mainMenuTransitionSpeed));

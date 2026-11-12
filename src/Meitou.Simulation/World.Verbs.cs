@@ -42,6 +42,9 @@ public enum TownOwnership : byte
 public readonly record struct VerbFacts(
     bool RegardsLead, bool LeadRegards, bool InsideWalls, bool SquadTrader, TownOwnership Town, int Bounty, bool Bandit, bool NotReal);
 
+/// <summary>
+/// The world's context menu facts: the arrival banter, friendliness and what the pick-up verb reads.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>
@@ -72,7 +75,8 @@ public sealed partial class World
         if (Characters.Phase != TablePhase.Outside || !Characters.TryResolveNext(lead, out int l) || !Characters.TryResolveNext(target, out int t))
             return null;
 
-        if (SystemOf<PopulationSystem>()?.Data is not { } data || SystemOf<Dialogue.DialogueSystem>() is not { } dialogue || Characters.Cold(t) is not { } tc)
+        if (SystemOf<PopulationSystem>()?.Data is not { } data || SystemOf<Dialogue.DialogueSystem>() is not { } dialogue
+            || Characters.Cold(t) is not { } tc)
             return null;
 
         var town = Ai.AiSystem.TownAt(data, this, Characters.Next[t].Position);

@@ -4,6 +4,9 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population behind the loading screen: the builds taken at once and the towns loaded without overrides.
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
@@ -77,8 +80,10 @@ public sealed partial class PopulationSystem
     /// Whether a wanted platoon comes in behind the loading screen. Every one does except a save's never-made town squad
     /// (<see cref="Platoon.Unmade"/>) outside the zones of the player's box: that one waits its 5 s dwell (<see cref="Platoon.DwellLeft"/>), as the
     /// original's (<b>Observed</b> on one save, a new game saved at once: such squads in the player's zone at once, in the camera block's other zones
-    /// 4 to 6 simulated s after load). <see cref="Platoon.Position"/> is X and Z.
+    /// 4 to 6 simulated s after load). A never-made wild one comes in at load wherever it is wanted, as the original's 12 desert squads round
+    /// Sho-Battai stood at their saved places at the first checkpoint, up to 8 500 away (<b>Observed</b>, one save). <see cref="Platoon.Position"/> is
+    /// X and Z.
     /// </summary>
     internal static bool ActivatesAtLoad(Platoon p, IReadOnlySet<ZoneCoordinate> playerBox) =>
-        !p.Unmade || playerBox.Contains(WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+        !p.Unmade || p.Origin < 0 || playerBox.Contains(WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
 }

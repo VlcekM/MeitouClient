@@ -13,6 +13,8 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class FurnitureUse(PlayerInterface player)
 {
+    #region Beds
+
     // Beds (docs/game/ui-input.md "Building hover and click", docs/game/locks.md "Beds"): with characters selected the pointer over a bed is
     // <c>use</c>; a quick right click gives the original's order 258 "Sleep" (UseBedOrder: every selected character walks there, the first to arrive
     // lies in it until another order). Held, the menu offers the original's one bed verb: "Put in Bed" (PutInBedOrder) while a selected character
@@ -24,6 +26,14 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     const float BedPickPixels = 30;
 
+    /// <summary>
+    /// A right press on a bed waiting for its release or the hold time: the bed, where it was and when (Stopwatch).
+    /// </summary>
+    (BedSpot Bed, Vector2 At, long Since)? _bedPending;
+
+    /// <summary>
+    /// The bed under <paramref name="pixel"/> (<see cref="PickBedAt"/>).
+    /// </summary>
     internal BedSpot? PickBed(Vector2 pixel) => PickBedAt(pixel)?.Bed;
 
     /// <summary>
@@ -44,8 +54,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(b.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(b.Position, yaw), footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(b.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((b, t), t);
+                }
 
                 continue;
             }
@@ -60,8 +74,6 @@ sealed class FurnitureUse(PlayerInterface player)
 
         return hit ?? near;
     }
-
-    (BedSpot Bed, Vector2 At, long Since)? _bedPending;
 
     /// <summary>
     /// A right press on a bed with characters selected: released before the hold time it gives the quick order, held longer it opens the menu (true:
@@ -80,8 +92,14 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     CharacterId[] Carriers() => [.. player.Selected().Where(c => !c.Carrying.IsNone).Select(c => c.Id)];
 
+    /// <summary>
+    /// The selection sleeps in <paramref name="bed"/>.
+    /// </summary>
     void SleepIn(BedSpot bed) => player.Say(new UseBedOrder([], bed.Id) { Tick = player.Session.World.Tick });
 
+    /// <summary>
+    /// <paramref name="carriers"/> lay the ones they carry in <paramref name="bed"/>.
+    /// </summary>
     void PutIn(BedSpot bed, CharacterId[] carriers) => player.Say(new PutInBedOrder(carriers, bed.Id) { Tick = player.Session.World.Tick });
 
     /// <summary>
@@ -113,7 +131,12 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var bed = pending.Bed;
         var carriers = Carriers();
-        var verbs = new List<(string Caption, Action Give)> { player.Selected().LastOrDefault() is { } lead && !lead.Carrying.IsNone ? ("Put in Bed", () => PutIn(bed, carriers)) : ("Sleep", () => SleepIn(bed)) };
+        var verbs = new List<(string Caption, Action Give)>
+        {
+            player.Selected().LastOrDefault() is { } lead && !lead.Carrying.IsNone
+                ? ("Put in Bed", () => PutIn(bed, carriers))
+                : ("Sleep", () => SleepIn(bed)),
+        };
 
         // A bed the player built: its site's verbs too (dismantle...), which its quick click no longer reaches.
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } site)
@@ -121,6 +144,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(bed.Record) ?? bed.Record, pending.At, verbs);
     }
+
+    #endregion
+
+    #region Cages
 
     // Cages under the pointer (docs/game/ui-input.md "Context menu verbs", the cage rows; the cages are published as WorldSnapshot.Cages): a quick
     // right click on an empty cage picks a locked one's lock, puts the carried captive in a free one (108) or gets the character in (107) (with Shift
@@ -143,8 +170,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (placement.Footprint(c.Record) is not { } footprint) continue;
 
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
-            if (player.Picking.BuildingRayT(ray, footprint.Place(c.Position, yaw), footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            var placed = footprint.Place(c.Position, yaw);
+            if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            {
                 (hit, bestT) = ((c, t), t);
+            }
         }
 
         return hit;
@@ -186,7 +217,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var carriers = Carriers();
         if (carriers.Length > 0)
-            verbs.Add(("Put in", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        {
+            verbs.Add(("Put in",
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        }
     }
 
     /// <summary>
@@ -196,7 +230,12 @@ sealed class FurnitureUse(PlayerInterface player)
     {
         if (cage.Locked)
         {
-            verbs.Add((player.ContextMenuWindow.PickLockCaption(cage.Position, cage.Level, !occupied), () => player.Say(new PickLockOrder(selection, cage.Occupant) { Cage = occupied ? null : cage.Id, Tick = player.Session.World.Tick })));
+            verbs.Add((player.ContextMenuWindow.PickLockCaption(cage.Position, cage.Level, !occupied),
+                () => player.Say(new PickLockOrder(selection, cage.Occupant)
+                {
+                    Cage = occupied ? null : cage.Id,
+                    Tick = player.Session.World.Tick,
+                })));
             verbs.Add(("Use Tools", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Tools) { Tick = player.Session.World.Tick })));
             verbs.Add(("Use Strength", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Strength) { Tick = player.Session.World.Tick })));
             return;
@@ -210,7 +249,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var carriers = Carriers();
         if (carriers.Length > 0)
-            verbs.Add(("Put in", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        {
+            verbs.Add(("Put in",
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        }
         else verbs.Add(("Get in", () => player.Say(new GetInCageOrder([], cage.Id) { Tick = player.Session.World.Tick })));
     }
 
@@ -246,6 +288,10 @@ sealed class FurnitureUse(PlayerInterface player)
         return player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, CageVerbs(cage)), quick);
     }
 
+    #endregion
+
+    #region Containers
+
     // Containers of a building's interior (docs/game/locks.md "Containers"): a right click on one sends the nearest selected character to open it
     // (pointer <c>search</c>); its inventory then shows in the storage window the research bench uses (<c>ProductionWindows</c>), beside the
     // character's.
@@ -254,6 +300,9 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     public Func<Vector3, bool>? AboveViewedFloor { get; set; }
 
+    /// <summary>
+    /// The container under <paramref name="pixel"/> (<see cref="PickContainerAt"/>).
+    /// </summary>
     internal ContainerSpot? PickContainer(Vector2 pixel) => PickContainerAt(pixel)?.Container;
 
     /// <summary>
@@ -274,8 +323,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (placement.Footprint(c.Record) is not { } footprint) continue;
 
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
-            if (player.Picking.BuildingRayT(ray, footprint.Place(c.Position, yaw), footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            var placed = footprint.Place(c.Position, yaw);
+            if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            {
                 (hit, bestT) = ((c, t), t);
+            }
         }
 
         return hit;
@@ -290,7 +343,10 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0 || PickContainer(p) is not { } container) return false;
 
         string name = player.Build.Services?.ItemName(container.Record) ?? container.Record;
-        if (!player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(name, at, player.ContextMenuWindow.ContainerVerbs(container)), () => player.ContextMenuWindow.OpenContainer(container.Id, alt)))
+        ContextMenuWindow.ContextMenu? ContainerMenu(Vector2 at) =>
+            player.ContextMenuWindow.Menu(name, at, player.ContextMenuWindow.ContainerVerbs(container));
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, ContainerMenu, () => player.ContextMenuWindow.OpenContainer(container.Id, alt)))
             player.ContextMenuWindow.OpenContainer(container.Id, alt);
 
         return true;
@@ -302,6 +358,10 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     internal string ContainerPointer(ContainerSpot container) =>
         container.Owner < 0 || container.Owner == player.Session.World.Player.Faction ? "search" : container.Locked ? "lockpick" : "scavenge";
+
+    #endregion
+
+    #region Doors
 
     // Doors under the pointer (docs/game/ui-input.md "Building hover and click"): a quick right click sends the nearest selected character to open a
     // closed door or close an open one; another faction's locked door takes Alt to pick its lock (with Shift held, else its menu opens on the press).
@@ -388,17 +448,31 @@ sealed class FurnitureUse(PlayerInterface player)
             return true;
         }
 
-        void Quick() => player.Say(DoorBroken(pick.Door) ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick } : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick });
+        void Quick() => player.Say(DoorBroken(pick.Door)
+            ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick }
+            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick });
 
-        if (!player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick)), Quick))
+        ContextMenuWindow.ContextMenu? DoorMenu(Vector2 at) =>
+            player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick));
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, DoorMenu, Quick))
             Quick();
 
         return true;
     }
 
+    #endregion
+
+    #region Training dummies
+
     // A town's training dummies (docs/game/ui-input.md "Context menu verbs": UseableStuff function 7 gives 97 USE_TRAINING_DUMMY whoever owns it):
     // with characters selected the pointer over one is <c>use</c>; a quick right click has them train there (OperateOrder), with Shift it becomes the
     // Training job; held, the menu offers "Training". A player's own dummy is a build site and goes through the site verbs instead.
+    /// <summary>
+    /// A right press on a dummy waiting for its release or the hold time: the dummy, where it was and when (Stopwatch).
+    /// </summary>
+    (TrainingSpot Dummy, Vector2 At, long Since)? _dummyPending;
+
     /// <summary>
     /// The dummy under the pixel with the ray distance, picked as a bed is (<see cref="PickBedAt"/>): on its record's collision, else its middle
     /// projected within <see cref="BedPickPixels"/>.
@@ -415,8 +489,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(d.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, d.Yaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(d.Position, yaw), footprint.YMin, footprint.YMax, d.Record, d.Position, d.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(d.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, d.Record, d.Position, d.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((d, t), t);
+                }
 
                 continue;
             }
@@ -432,8 +510,6 @@ sealed class FurnitureUse(PlayerInterface player)
         return hit ?? near;
     }
 
-    (TrainingSpot Dummy, Vector2 At, long Since)? _dummyPending;
-
     /// <summary>
     /// A right press on a dummy with characters selected: released before the hold time it trains, held longer it opens the menu (true: taken).
     /// </summary>
@@ -445,6 +521,9 @@ sealed class FurnitureUse(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The selection trains on <paramref name="dummy"/> (with Shift as the training job).
+    /// </summary>
     void Train(TrainingSpot dummy) => player.Say(player.SlowModifier
         ? new AddJob(player.SelectedIds(), TaskType.UseTrainingDummy, dummy.Id) { Tick = player.Session.World.Tick }
         : new OperateOrder(player.SelectedIds(), dummy.Id) { Tick = player.Session.World.Tick });
@@ -478,11 +557,80 @@ sealed class FurnitureUse(PlayerInterface player)
             [("Training", () => Train(pending.Dummy))]);
     }
 
+    #endregion
+
+    #region Town turrets
+
+    // A town's turrets (docs/game/ui-input.md "Context menu verbs": a TurretBuilding gives 146 USE_TURRET whoever owns it): with characters selected
+    // the pointer over one is <c>use</c>; a quick right click mans it (UseTurretOrder), with Shift it becomes the Turret guard job; held, the menu
+    // offers "Man Turret". A player's own turret is a build site and goes through the site verbs instead.
+    /// <summary>
+    /// The nearest town turret under the pixel, before the ground: its placement key, BUILDING record and ray distance, picked on its collision as a
+    /// level building is (<see cref="BuildingSelection.PickBuildingAt"/>).
+    /// </summary>
+    internal (string Key, string Record, float T)? PickTownTurretAt(Vector2 pixel)
+    {
+        if (player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
+
+        float bestT = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } ground ? Vector3.Distance(ray.Origin, ground) : 6000;
+        (string, string, float)? best = null;
+        foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, bestT))
+        {
+            var b = candidate.Placement;
+            if (candidate.Plot || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
+
+            float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
+            var hull = candidate.Footprint.Place(b.Position, b.Rotation);
+            var hit = player.Picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y,
+                b.Rotation);
+            if (hit is not { } t || t >= bestT || player.Hidden(ray, t) || host.WorldInfo(b) is not { Turret: true, Destroyed: false }) continue;
+
+            (best, bestT) = ((b.Key, b.BuildingId, t), t);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// A right press on a town turret with characters selected: released before the hold time it mans it, held longer it opens the menu (true:
+    /// taken).
+    /// </summary>
+    internal bool TownTurretPress(Vector2 p)
+    {
+        if (player.SelectedIds().Count == 0 || PickTownTurretAt(p) is not { } turret) return false;
+
+        string site = ProductionSystem.TownWorkPrefix + turret.Key;
+        string title = player.Build.Services?.ItemName(turret.Record) ?? turret.Record;
+        ContextMenuWindow.ContextMenu? TurretMenu(Vector2 at) => player.ContextMenuWindow.Menu(title, at, [("Man Turret", () => ManTurret(site))]);
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, TurretMenu, () => ManTurret(site))) ManTurret(site);
+        return true;
+    }
+
+    /// <summary>
+    /// The selection mans the town turret <paramref name="site"/> (with Shift as the Turret guard job).
+    /// </summary>
+    void ManTurret(string site) => player.Say(player.SlowModifier
+        ? new AddJob(player.SelectedIds(), TaskType.UseTurret, site) { Tick = player.Session.World.Tick }
+        : new UseTurretOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick });
+
+    #endregion
+
+    #region Seats
+
     /// <summary>
     /// How near the pointer the projected middle of a seat without a footprint must be, in pixels (an engine choice).
     /// </summary>
     const float SeatPickPixels = 30;
 
+    /// <summary>
+    /// A right press on a seat waiting for its release or the hold time: the seat, where it was and when (Stopwatch).
+    /// </summary>
+    (SeatSpot Seat, Vector2 At, long Since)? _seatPending;
+
+    /// <summary>
+    /// The seat under <paramref name="pixel"/> (<see cref="PickSeatAt"/>).
+    /// </summary>
     internal SeatSpot? PickSeat(Vector2 pixel) => PickSeatAt(pixel)?.Seat;
 
     /// <summary>
@@ -503,8 +651,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(b.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.PlacementYaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(b.Position, yaw), footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(b.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((b, t), t);
+                }
 
                 continue;
             }
@@ -523,8 +675,6 @@ sealed class FurnitureUse(PlayerInterface player)
         return hit ?? near;
     }
 
-    (SeatSpot Seat, Vector2 At, long Since)? _seatPending;
-
     /// <summary>
     /// A right press on a seat with characters selected: released before the hold time it gives the quick order, held longer it opens the menu (true:
     /// taken).
@@ -537,10 +687,16 @@ sealed class FurnitureUse(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// The selection uses <paramref name="seat"/> (with Shift as the operating job).
+    /// </summary>
     void SitOn(SeatSpot seat) => player.Say(player.SlowModifier
         ? (SimCommand)new AddJob(player.SelectedIds(), TaskType.OperateMachinery, seat.Id) { Tick = player.Session.World.Tick }
         : new OperateOrder(player.SelectedIds(), seat.Id) { Tick = player.Session.World.Tick });
 
+    /// <summary>
+    /// The right button let go: a press on a seat released before the menu opened gives the quick order.
+    /// </summary>
     internal void SeatRelease()
     {
         if (_seatPending is not { } pending) return;
@@ -549,6 +705,9 @@ sealed class FurnitureUse(PlayerInterface player)
         SitOn(pending.Seat);
     }
 
+    /// <summary>
+    /// Once a frame: a press on a seat held past the hold time opens its menu (Use).
+    /// </summary>
     internal void UpdateSeat()
     {
         if (_seatPending is not { } pending
@@ -561,22 +720,32 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0) return;
 
         var seat = pending.Seat;
-        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(seat.Record) ?? seat.Record, pending.At, [("Use", () => SitOn(seat))]);
+        string name = player.Build.Services?.ItemName(seat.Record) ?? seat.Record;
+        player.ContextMenuWindow.OpenMenu = new(name, pending.At, [("Use", () => SitOn(seat))]);
     }
+
+    #endregion
+
+    #region Rocks
 
     // Mining rocks by hand (docs/simulation.md "Production", natural sites): a right click on a resource rock with characters selected has them
     // operate it, with Shift it becomes a job (Operating machine). A left click selects it; its machine window holds the mined ore, taken out by
     // hand. Rocks are the foliage system's (Rocks); a rock is hit by its mesh's triangles, as drawn (engine choice: the original picks the rock
     // building's collision; without the mesh, a sphere of its radius).
     /// <summary>
-    /// The world's resource rocks (null: none, e.g. headless or before the world is loaded).
+    /// A right press on a rock waiting for its release or the hold time: the rock, where it was and when (Stopwatch).
     /// </summary>
-    public Func<IResourceNodes?>? Rocks { get; set; }
+    (ResourceNode Rock, Vector2 At, long Since)? _rockPending;
 
     /// <summary>
     /// How far (X/Z) from the ground under the cursor a rock is looked for: a rock in front of the cursor's ground point is still hit.
     /// </summary>
     const float RockSearch = 200;
+
+    /// <summary>
+    /// The world's resource rocks (null: none, e.g. headless or before the world is loaded).
+    /// </summary>
+    public Func<IResourceNodes?>? Rocks { get; set; }
 
     /// <summary>
     /// The nearest rock the pixel's ray meets before the ground.
@@ -588,8 +757,11 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     internal (ResourceNode Rock, float T)? PickRockAt(Vector2 pixel)
     {
-        if (Rocks?.Invoke() is not { } rocks || player.Ray(pixel) is not { } ray || player.Picking.GroundHit(ray.Origin, ray.Direction) is not { } ground)
+        if (Rocks?.Invoke() is not { } rocks || player.Ray(pixel) is not { } ray
+            || player.Picking.GroundHit(ray.Origin, ray.Direction) is not { } ground)
+        {
             return null;
+        }
 
         float bestT = Vector3.Distance(ray.Origin, ground) + 1;
         ResourceNode? best = null;
@@ -607,9 +779,12 @@ sealed class FurnitureUse(PlayerInterface player)
     /// A rock as a selected building: its site is the natural site, so the machine window shows its output once it has been mined.
     /// </summary>
     internal BuildingSelection.SelectedBuilding RockBuilding(ResourceNode rock) =>
-        new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position), ProductionSystem.NaturalId(rock.Record, rock.Position),
-            rock.Position, null, Record: rock.Record);
+        new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position),
+            ProductionSystem.NaturalId(rock.Record, rock.Position), rock.Position, null, Record: rock.Record);
 
+    /// <summary>
+    /// <paramref name="selection"/> mines <paramref name="rock"/>: an operate order, or with <paramref name="asJob"/> the operating job.
+    /// </summary>
     void MineRock(IReadOnlyList<CharacterId> selection, ResourceNode rock, bool asJob)
     {
         string site = ProductionSystem.NaturalId(rock.Record, rock.Position);
@@ -617,8 +792,6 @@ sealed class FurnitureUse(PlayerInterface player)
             player.Say(new AddJob(selection, TaskType.OperateMachinery, site) { Tick = player.Session.World.Tick });
         else player.Say(new OperateOrder(selection, site) { Tick = player.Session.World.Tick });
     }
-
-    (ResourceNode Rock, Vector2 At, long Since)? _rockPending;
 
     /// <summary>
     /// A right press on a rock with characters selected: released before the menu opens it mines (with Shift as a job), held longer it opens the menu
@@ -664,4 +837,6 @@ sealed class FurnitureUse(PlayerInterface player)
             ("Add to jobs", () => MineRock(selection, pending.Rock, true)),
         ]);
     }
+
+    #endregion
 }

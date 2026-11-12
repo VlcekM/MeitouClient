@@ -26,6 +26,10 @@ sealed class SpeechBubbles(PlayerInterface player)
     /// size changes.
     /// </summary>
     readonly Dictionary<(string Text, bool Large), FittedSpeech> _fittedSpeech = [];
+
+    /// <summary>
+    /// The screen size, UI mode and text size the fitted texts were made for.
+    /// </summary>
     (int Width, int Height, UiMode Mode, float MinimumPixels) _fittedFor;
 
     /// <summary>
@@ -41,7 +45,7 @@ sealed class SpeechBubbles(PlayerInterface player)
         var speech = player.Session.CurrentSnapshot.Speech;
         if (speech.Count == 0 || player.UiPainter is not { } painter) return;
 
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         var shown = new List<(SpeechBubble Bubble, FittedSpeech Text, float Alpha, UiRect Panel)>();
         foreach (var bubble in speech)
         {
@@ -66,8 +70,15 @@ sealed class SpeechBubbles(PlayerInterface player)
     /// An interrupting bubble moved inside the screen, its left and top edges winning on a screen too small for it (<c>FUN_1407221c0</c>).
     /// </summary>
     UiRect OnScreen(UiRect panel) =>
-        panel with { X = MathF.Max(MathF.Min(panel.X, player.Width - panel.Width), 0), Y = MathF.Max(MathF.Min(panel.Y, player.Height - panel.Height), 0) };
+        panel with
+        {
+            X = MathF.Max(MathF.Min(panel.X, player.Width - panel.Width), 0),
+            Y = MathF.Max(MathF.Min(panel.Y, player.Height - panel.Height), 0),
+        };
 
+    /// <summary>
+    /// Adds bubble <paramref name="n"/>: its <c>Kenshi_SpeechPanelSkin</c> panel and its centred, shadowed text at <paramref name="alpha"/>.
+    /// </summary>
     void AddBubble(List<UiControl> controls, int n, SpeechBubble bubble, FittedSpeech text, float alpha, UiRect panel)
     {
         float w = panel.Width, h = panel.Height;
@@ -108,6 +119,10 @@ sealed class SpeechBubbles(PlayerInterface player)
         return [.. r.Select(p => new UiRect(p.X, p.Y, p.W, p.H))];
     }
 
+    /// <summary>
+    /// Pushes rectangles <paramref name="i"/> and <paramref name="j"/> apart along the axis of the smaller overlap (overlap / 2 + 1 each); false when
+    /// they do not overlap.
+    /// </summary>
     static bool PushApart((int X, int Y, int W, int H)[] r, int i, int j)
     {
         var (a, b) = (r[i], r[j]);
@@ -133,11 +148,14 @@ sealed class SpeechBubbles(PlayerInterface player)
     /// </summary>
     readonly record struct FittedSpeech(string Lines, float Width, float Height);
 
+    /// <summary>
+    /// A bubble's font: the large standard font, else the medium.
+    /// </summary>
     static string SpeechFont(SpeechBubble bubble) => bubble.Large ? "Kenshi_StandardFont_Large" : "Kenshi_StandardFont_Medium";
 
     /// <summary>
-    /// <paramref name="bubble"/>'s text wrapped to the layout's widest box and measured in the font it is drawn with, so its advances are the drawn ones
-    /// (CJK included, which breaks between characters as it has no spaces).
+    /// <paramref name="bubble"/>'s text wrapped to the layout's widest box and measured in the font it is drawn with, so its advances are the drawn
+    /// ones (CJK included, which breaks between characters as it has no spaces).
     /// </summary>
     FittedSpeech SpeechText(UiPainter painter, SpeechBubble bubble)
     {

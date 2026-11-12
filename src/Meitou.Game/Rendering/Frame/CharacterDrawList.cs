@@ -14,7 +14,8 @@ public readonly record struct CharacterPose(string Animation, float Time, float 
 /// the renderer can keep its GPU resources and last frame's bones (motion vectors) by it; <see cref="Appearance"/> is compared by
 /// reference to find the meshes and materials.
 /// </summary>
-public readonly record struct CharacterInstance(long Key, CharacterAppearance Appearance, Vector3 Position, float Yaw, IReadOnlyList<CharacterPose> Poses)
+public readonly record struct CharacterInstance(long Key, CharacterAppearance Appearance, Vector3 Position, float Yaw,
+    IReadOnlyList<CharacterPose> Poses)
 {
     /// <summary>
     /// Show the weapon in hand (the parts tagged <see cref="WeaponShown.Drawn"/>) instead of sheathed.
@@ -84,6 +85,9 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     /// </summary>
     public CharacterAppearance? BlendFrom { get; init; }
 
+    /// <summary>
+    /// How far the glide from <see cref="BlendFrom"/> to <see cref="Appearance"/> is, 0..1.
+    /// </summary>
     public float Blend { get; init; }
 
     /// <summary>
@@ -133,13 +137,25 @@ public sealed class CharacterDrawList
     /// Counts the refills of <see cref="Distant"/>.
     /// </summary>
     public int DistantVersion { get; private set; }
+
+    /// <summary>
+    /// Empties <see cref="Items"/> for the next frame.
+    /// </summary>
     public void Clear() => Items.Clear();
+
+    /// <summary>
+    /// Adds a character to <see cref="Items"/>.
+    /// </summary>
     public void Add(in CharacterInstance instance) => Items.Add(instance);
 
     /// <summary>
     /// Empties <see cref="Distant"/> to be filled again.
     /// </summary>
-    public void BeginDistant() { Distant.Clear(); DistantVersion++; }
+    public void BeginDistant()
+    {
+        Distant.Clear();
+        DistantVersion++;
+    }
 }
 
 /// <summary>

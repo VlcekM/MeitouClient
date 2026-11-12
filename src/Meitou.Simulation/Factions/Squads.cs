@@ -7,7 +7,25 @@ namespace Meitou.Simulation.Factions;
 /// <summary>
 /// The editor's SquadMemberType, the role a member plays in its squad (docs/game/factions-squads-towns.md section 5.1).
 /// </summary>
-public enum SquadRole { Squad1 = 0, Squad2 = 1, Leader = 2, Slave = 4 }
+public enum SquadRole
+{
+    /// <summary>
+    /// Member type 0, a squad member.
+    /// </summary>
+    Squad1 = 0,
+    /// <summary>
+    /// Member type 1.
+    /// </summary>
+    Squad2 = 1,
+    /// <summary>
+    /// Member type 2, the leader.
+    /// </summary>
+    Leader = 2,
+    /// <summary>
+    /// Member type 4, a slave.
+    /// </summary>
+    Slave = 4
+}
 
 /// <summary>
 /// A squad in the world: the platoon of docs/game/game-loop.md "Factions and squads", reduced to what loaded squads need now (the active half; the
@@ -15,6 +33,9 @@ public enum SquadRole { Squad1 = 0, Squad2 = 1, Leader = 2, Slave = 4 }
 /// </summary>
 public sealed class Squad
 {
+    /// <summary>
+    /// The squad's id (never reused).
+    /// </summary>
     public required int Id { get; init; }
     /// <summary>
     /// The SQUAD_TEMPLATE it was made from.
@@ -51,6 +72,9 @@ public sealed class Squad
     /// The place and radius the squad wanders in when it has no orders (the town's centre and radius for residents).
     /// </summary>
     public Vector2 HomeCentre { get; set; }
+    /// <summary>
+    /// The radius of <see cref="HomeCentre"/>'s area.
+    /// </summary>
     public float HomeRadius { get; set; }
     /// <summary>
     /// The building the town gave it as its home (docs/game/factions-squads-towns.md "Town residents"), or the one a save names; the AI takes it as
@@ -90,6 +114,9 @@ public sealed class Squad
     /// How many it was made with (its town's regeneration measures losses against it; not part of the state).
     /// </summary>
     public int SpawnSize { get; set; }
+    /// <summary>
+    /// The members.
+    /// </summary>
     public List<CharacterId> Members { get; } = [];
     /// <summary>
     /// The member the others follow (the role-2 leader, else the first member); <see cref="CharacterId.None"/> when none is alive.
@@ -145,7 +172,13 @@ public sealed class Squad
     /// Derived from <see cref="World.ForcedSpeeds"/> by the movement's serial step: not saved or hashed.
     /// </summary>
     public byte ForceSpeed { get; set; } = NoForceSpeed;
+    /// <summary>
+    /// The <see cref="ForceSpeed"/> of no forced speed.
+    /// </summary>
     public const byte NoForceSpeed = 4;
+    /// <summary>
+    /// The key of what <see cref="FormationSlots"/> was built from (see <see cref="FormationSlots"/>).
+    /// </summary>
     public ulong FormationKey { get; set; }
 }
 
@@ -157,7 +190,13 @@ public sealed class Squad
 /// </summary>
 public readonly record struct WarTargets(int Faction, bool Everyone, CampaignTown Town)
 {
+    /// <summary>
+    /// No extra enemies.
+    /// </summary>
     public static readonly WarTargets None = new(-1, false, CampaignTown.None);
+    /// <summary>
+    /// Whether the squad has extra enemies.
+    /// </summary>
     public bool IsSet => Everyone || Faction >= 0;
 }
 
@@ -166,48 +205,101 @@ public readonly record struct WarTargets(int Faction, bool Everyone, CampaignTow
 /// </summary>
 public sealed class SquadRegistry
 {
-    // In id order for the walks (hash, refresh), and a hash index for the lookups: a find in the tree walked it, and the publish asks several per
-    // character.
+    /// <summary>
+    /// In id order for the walks (hash, refresh), and a hash index for the lookups: a find in the tree walked it, and the publish asks several
+    /// per character.
+    /// </summary>
     readonly SortedDictionary<int, Squad> _squads = [];
+    /// <summary>
+    /// The squads by id, for the lookups.
+    /// </summary>
     readonly Dictionary<int, Squad> _byId = [];
+    /// <summary>
+    /// The next id <see cref="NextId"/> gives.
+    /// </summary>
     int _nextId;
 
+    /// <summary>
+    /// The number of squads.
+    /// </summary>
     public int Count => _squads.Count;
+    /// <summary>
+    /// The squads in id order.
+    /// </summary>
     public IEnumerable<Squad> All => _squads.Values;
+    /// <summary>
+    /// The squad with id <paramref name="id"/>; null when there is none.
+    /// </summary>
     public Squad? Find(int id) => _byId.GetValueOrDefault(id);
 
+    /// <summary>
+    /// Takes the next id.
+    /// </summary>
     public int NextId() => _nextId++;
 
+    /// <summary>
+    /// Adds a squad, replacing one of the same id.
+    /// </summary>
     public void Add(Squad squad) => _squads[squad.Id] = _byId[squad.Id] = squad;
 
+    /// <summary>
+    /// Removes a squad; false when it is not there.
+    /// </summary>
     public bool Remove(int id) => _byId.Remove(id) & _squads.Remove(id);
 
     /// <summary>
-    /// After deaths and removals: drops dead members, and picks a new leader (the first member alive) when the old one is gone. Serial phases only.
+    /// After deaths and removals: drops removed members, and picks a new leader (<see cref="Successor"/>) when the old one is gone, or, in a squad not
+    /// of <paramref name="playerFaction"/>, dead while a member lives (its corpse stays in the table, so its squad would follow it and patrol no more).
+    /// Serial phases only.
     /// </summary>
-    public void Refresh(CharacterTable table)
+    public void Refresh(CharacterTable table, int playerFaction)
     {
         foreach (var squad in _squads.Values)
         {
             squad.Members.RemoveAll(m => !table.TryResolveNext(m, out _));
-            if (squad.Leader.IsNone || !table.TryResolveNext(squad.Leader, out _))
+            if (squad.Leader.IsNone || !table.TryResolveNext(squad.Leader, out int slot)
+                || squad.Faction != playerFaction && IsDead(table, slot) && squad.Members.Exists(m => !IsDead(table, m.Slot)))
                 squad.Leader = Successor(squad.Members, table);
         }
     }
 
     /// <summary>
-    /// Who leads an NPC squad that has no leader: its first member that is not an animal, else its first (docs/game/factions-squads-towns.md "Squad
-    /// leader"; engine choice, so a goat never leads a caravan or says its leader's lines). None when it has no members.
+    /// Who leads an NPC squad that has no leader: its first living member that is not an animal, else its first living one, else its first that is
+    /// not an animal, else its first (docs/game/factions-squads-towns.md "Squad leader"; engine choice, so a goat never leads a caravan or says its
+    /// leader's lines). None when it has no members.
     /// </summary>
-    public static CharacterId Successor(List<CharacterId> members, CharacterTable table)
+    public static CharacterId Successor(List<CharacterId> members, CharacterTable table) =>
+        FirstOf(members, table, living: true, person: true) ?? FirstOf(members, table, living: true, person: false)
+        ?? FirstOf(members, table, living: false, person: true) ?? (members.Count > 0 ? members[0] : CharacterId.None);
+
+    /// <summary>
+    /// The first member that resolves and is alive (<paramref name="living"/>) and not an animal (<paramref name="person"/>) as asked; null: none.
+    /// </summary>
+    static CharacterId? FirstOf(List<CharacterId> members, CharacterTable table, bool living, bool person)
     {
         foreach (var id in members)
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c && !IsAnimal(c)) return id;
-        return members.Count > 0 ? members[0] : CharacterId.None;
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } c) continue;
+            if (living && IsDead(table, slot) || person && IsAnimal(c)) continue;
+            return id;
+        }
+
+        return null;
     }
 
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> is dead (a corpse still in the table).
+    /// </summary>
+    static bool IsDead(CharacterTable table, int slot) => table.Cold(slot)?.Medical?.Dead == true;
+
+    /// <summary>
+    /// Whether a character is an animal: its fighter or its look says so.
+    /// </summary>
     public static bool IsAnimal(CharacterCold c) => c.Fighter?.IsAnimal == true || c.Appearance?.Animal is not null;
 
+    /// <summary>
+    /// Adds the id counter and the squads to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
         hasher.Add(_squads.Count);

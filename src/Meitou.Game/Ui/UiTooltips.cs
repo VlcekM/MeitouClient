@@ -8,16 +8,91 @@ namespace Meitou.Game.Ui;
 /// The colour a tooltip text takes: the palette the original's inline colour tags name (<c>data/gui/colours/kenshi_colours.xml</c>); the host maps
 /// each to its UI mode's colour.
 /// </summary>
-public enum TooltipTone { Default, Main, Ink, Title, Bad, BadBright, Good, Grey, GreyBright, Cyan, Grade0, Grade1, Grade2, Grade3, Grade4 }
+public enum TooltipTone
+{
+    /// <summary>
+    /// No tag: the text's own colour.
+    /// </summary>
+    Default,
+
+    /// <summary>
+    /// #afa68b.
+    /// </summary>
+    Main,
+
+    /// <summary>
+    /// #140806.
+    /// </summary>
+    Ink,
+
+    /// <summary>
+    /// #492620.
+    /// </summary>
+    Title,
+
+    /// <summary>
+    /// #59231a.
+    /// </summary>
+    Bad,
+
+    /// <summary>
+    /// #bf4834.
+    /// </summary>
+    BadBright,
+
+    /// <summary>
+    /// #a8b774.
+    /// </summary>
+    Good,
+
+    /// <summary>
+    /// #444444.
+    /// </summary>
+    Grey,
+
+    /// <summary>
+    /// #777777.
+    /// </summary>
+    GreyBright,
+
+    /// <summary>
+    /// #14ffdc.
+    /// </summary>
+    Cyan,
+
+    /// <summary>
+    /// Armour grade 0 (ItemGrade0 of kenshi_colours.xml).
+    /// </summary>
+    Grade0,
+
+    /// <summary>
+    /// Armour grade 1 (ItemGrade1).
+    /// </summary>
+    Grade1,
+
+    /// <summary>
+    /// Armour grade 2 (ItemGrade2).
+    /// </summary>
+    Grade2,
+
+    /// <summary>
+    /// Armour grade 3 (ItemGrade3).
+    /// </summary>
+    Grade3,
+
+    /// <summary>
+    /// Armour grade 4 (ItemGrade4).
+    /// </summary>
+    Grade4,
+}
 
 /// <summary>
-/// One tooltip row: a key (left) and an optional value (right), each with the tone of its leading <c>#rrggbb</c> tag.
+/// One tooltip row: a key (left) and an optional value (right), each with the tone of its leading <c>#rrggbb</c> tag. A paragraph (Paragraph true)
+/// is wrapped at the width the other rows give the tooltip: it does not widen it.
 /// </summary>
-public readonly record struct TooltipLine(string Key, string Value = "", TooltipTone KeyTone = TooltipTone.Default, TooltipTone ValueTone = TooltipTone.Default,
-    string Suffix = "", TooltipTone SuffixTone = TooltipTone.Default, bool Paragraph = false)
+public readonly record struct TooltipLine(string Key, string Value = "", TooltipTone KeyTone = TooltipTone.Default,
+    TooltipTone ValueTone = TooltipTone.Default, string Suffix = "", TooltipTone SuffixTone = TooltipTone.Default, bool Paragraph = false)
 {
-    // A paragraph (Paragraph true) is wrapped at the width the other rows give the tooltip: it does not widen it.
-
     /// <summary>
     /// The value and the suffix (the price mark-up after a price) as one text.
     /// </summary>
@@ -28,25 +103,51 @@ public readonly record struct TooltipLine(string Key, string Value = "", Tooltip
 /// Where a tooltip sits (docs/game/ui-screens.md "Tooltips"): <c>ToolTip</c>/<c>ToolTipDynamic</c> at the pointer, <c>ToolTipFixed</c> on an anchor
 /// panel, <c>ToolTipInventory</c> beside the window holding the item.
 /// </summary>
-public enum TooltipKind { Floating, Fixed, Inventory, Static }
+public enum TooltipKind
+{
+    /// <summary>
+    /// At the pointer (<c>ToolTip</c>, <c>ToolTipDynamic</c>).
+    /// </summary>
+    Floating,
+
+    /// <summary>
+    /// On an anchor panel (<c>ToolTipFixed</c>).
+    /// </summary>
+    Fixed,
+
+    /// <summary>
+    /// Beside the window holding the item (<c>ToolTipInventory</c>).
+    /// </summary>
+    Inventory,
+
+    /// <summary>
+    /// In a widget of its own, the class naming it (<c>static:AIToolTip</c>).
+    /// </summary>
+    Static,
+}
 
 /// <summary>
 /// The rectangles of a laid out row, inside <see cref="TooltipLayout.Panel"/>: the key (left aligned) and the value (right aligned) share one area.
 /// </summary>
 public readonly record struct TooltipRow(UiRect Area);
 
+/// <summary>
+/// A laid out tooltip: its panel, its rows' areas and the rows' inset from the panel's sides.
+/// </summary>
 public sealed record TooltipLayout(UiRect Panel, IReadOnlyList<TooltipRow> Rows, float Offset);
 
 /// <summary>
 /// The tooltip runtime's data and layout (docs/game/ui-screens.md "Tooltips"). A widget carries the original's MyGUI user strings as control
 /// properties (<c>tooltip_type</c> 0 text, 1 rows, 2 data record, 4 map place; <c>tooltip_text</c>, <c>tooltip_size</c>, <c>tooltip_key_N</c>,
-/// <c>tooltip_val_N</c>,
-/// <c>tooltip_data</c>) plus Meitou's <c>tooltip_class</c> (<c>fixed</c> / <c>inventory</c>).
+/// <c>tooltip_val_N</c>, <c>tooltip_data</c>) plus Meitou's <c>tooltip_class</c> (<c>fixed</c> / <c>inventory</c>).
 /// </summary>
 public static class UiTooltips
 {
     #region Properties
 
+    /// <summary>
+    /// The user string names: the type, the text, the row count, the row keys' and values' prefixes, the data record and Meitou's class.
+    /// </summary>
     public const string Type = "tooltip_type", Text = "tooltip_text", Size = "tooltip_size", KeyPrefix = "tooltip_key_", ValuePrefix = "tooltip_val_",
         Data = "tooltip_data", Class = "tooltip_class";
 
@@ -149,34 +250,19 @@ public static class UiTooltips
     /// width in from the left, as wide as its key text plus its value text plus two such offsets, as high as its tallest text; the first row is
     /// round(0.1 x widget height) from the top, the next ones round(0.01 x widget height) under the one before, and the panel ends round(0.1 x widget
     /// height) under the last row.
-    /// <paramref name="measure"/> gives a text's size wrapped to a width (0: unwrapped).
+    /// <paramref name="measure"/> gives a text's size wrapped to a width (0: unwrapped); <paramref name="interfaceScale"/> is the Interface scale
+    /// setting.
     /// </summary>
     public static TooltipLayout Arrange(IReadOnlyList<TooltipLine> lines, TooltipKind kind, int screenWidth, int screenHeight, Vector2 pointer,
-        UiRect? anchor, Func<string, float, Vector2> measure)
+        UiRect? anchor, Func<string, float, Vector2> measure, float interfaceScale = 1)
     {
-        float scale = screenHeight / 1080f;
-        float widgetWidth = 0.25f * screenWidth;
-        float widgetHeight = 0.2f * screenHeight;
-
-        // A tooltip given a widget of its own (the overview's AI panel) measures its margins from that widget.
-        if (kind == TooltipKind.Static && anchor is { } given) (widgetWidth, widgetHeight) = (given.Width, given.Height);
-
-        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it
-        // to FUN_140921440).
-        if (kind == TooltipKind.Fixed && anchor is { } box) (widgetWidth, widgetHeight) = (box.Width, box.Height * FixedBoxFraction);
-
+        float scale = screenHeight / 1080f * interfaceScale;
+        var (widgetWidth, widgetHeight) = WidgetSize(kind, screenWidth, screenHeight, anchor);
         float offset = MathF.Round((kind == TooltipKind.Inventory ? 0.04f : 0.025f) * scale * widgetWidth);
         float margin = MathF.Round(0.1f * widgetHeight);
         float gap = MathF.Round(0.01f * widgetHeight);
         float wrap = Math.Max(1, widgetWidth - 2 * offset);
-        var sizes = new (Vector2 Key, Vector2 Value)[lines.Count];
-        float widest = 0;
-        for (int i = 0; i < lines.Count; i++)
-        {
-            sizes[i] = lines[i].Paragraph ? default
-                : (measure(lines[i].Key, wrap), lines[i].Whole.Length > 0 ? measure(lines[i].Whole, wrap) : default);
-            widest = Math.Max(widest, sizes[i].Key.X + sizes[i].Value.X + 2 * offset);
-        }
+        float widest = Widest(lines, measure, wrap, offset);
 
         float width = kind switch
         {
@@ -186,7 +272,8 @@ public static class UiTooltips
             _ => widest,
         };
 
-        // The text is drawn in the final inner width, which wraps it again: measure the rows once more at that width so the heights match the drawing.
+        // The text is drawn in the final inner width, which wraps it again: measure the rows once more at that width so the heights match the
+        // drawing.
         float inner = Math.Max(1, width - 2 * offset);
         var rows = new List<TooltipRow>(lines.Count);
         float y = margin;
@@ -207,9 +294,54 @@ public static class UiTooltips
             panelHeight = Math.Max(panelHeight + fixedAnchor.Height - widgetHeight, fixedAnchor.Height);
         if (kind == TooltipKind.Static && anchor is { } staticAnchor) panelHeight = staticAnchor.Height;
 
-        // Placement: bottom right corner at the pointer, an axis that would leave the screen taking the pointer itself instead (ToolTip /
-        // ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine
-        // choice).
+        var (x, top) = Place(kind, anchor, pointer, width, panelHeight, screenWidth);
+        x = Math.Clamp(x, 0, Math.Max(0, screenWidth - width));
+        top = Math.Clamp(top, 0, Math.Max(0, screenHeight - panelHeight));
+        var placedRows = rows.Select(r => new TooltipRow(new(x + r.Area.X, top + r.Area.Y, r.Area.Width, r.Area.Height))).ToArray();
+        return new(new(x, top, width, panelHeight), placedRows, offset);
+    }
+
+    /// <summary>
+    /// The widget a tooltip's margins are measured from: 0.25 x 0.2 of the screen, a static tooltip's own widget, the fixed one's parchment box.
+    /// </summary>
+    static (float Width, float Height) WidgetSize(TooltipKind kind, int screenWidth, int screenHeight, UiRect? anchor)
+    {
+        float widgetWidth = 0.25f * screenWidth;
+        float widgetHeight = 0.2f * screenHeight;
+
+        // A tooltip given a widget of its own (the overview's AI panel) measures its margins from that widget.
+        if (kind == TooltipKind.Static && anchor is { } given) (widgetWidth, widgetHeight) = (given.Width, given.Height);
+
+        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it
+        // to FUN_140921440).
+        if (kind == TooltipKind.Fixed && anchor is { } box) (widgetWidth, widgetHeight) = (box.Width, box.Height * FixedBoxFraction);
+
+        return (widgetWidth, widgetHeight);
+    }
+
+    /// <summary>
+    /// The widest row: its key and value texts wrapped to <paramref name="wrap"/>, plus two offsets (a paragraph row counts none).
+    /// </summary>
+    static float Widest(IReadOnlyList<TooltipLine> lines, Func<string, float, Vector2> measure, float wrap, float offset)
+    {
+        var sizes = new (Vector2 Key, Vector2 Value)[lines.Count];
+        float widest = 0;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            sizes[i] = lines[i].Paragraph ? default
+                : (measure(lines[i].Key, wrap), lines[i].Whole.Length > 0 ? measure(lines[i].Whole, wrap) : default);
+            widest = Math.Max(widest, sizes[i].Key.X + sizes[i].Value.X + 2 * offset);
+        }
+
+        return widest;
+    }
+
+    /// <summary>
+    /// Placement: bottom right corner at the pointer, an axis that would leave the screen taking the pointer itself instead (ToolTip /
+    /// ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine choice).
+    /// </summary>
+    static (float X, float Top) Place(TooltipKind kind, UiRect? anchor, Vector2 pointer, float width, float panelHeight, int screenWidth)
+    {
         float x, top;
         switch (kind)
         {
@@ -228,10 +360,7 @@ public static class UiTooltips
                 break;
         }
 
-        x = Math.Clamp(x, 0, Math.Max(0, screenWidth - width));
-        top = Math.Clamp(top, 0, Math.Max(0, screenHeight - panelHeight));
-        var placedRows = rows.Select(r => new TooltipRow(new(x + r.Area.X, top + r.Area.Y, r.Area.Width, r.Area.Height))).ToArray();
-        return new(new(x, top, width, panelHeight), placedRows, offset);
+        return (x, top);
     }
 
     #endregion

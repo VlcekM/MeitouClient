@@ -28,11 +28,12 @@ public static class DefenceFormulas
     }
 
     /// <summary>
-    /// The factor on the block chance against a fist blow (<c>FUN_140887970</c>, <b>Verified</b> disassembly: an attacker that is not an animal and fights with
-    /// fists, CharStats <c>+0x1f0</c> 5): (the defender's raw martial arts - 0.75) / (1.1 - 0.75), at most 1.1 and at least 0.5. Any level from 2 gives 1.1;
-    /// 1 gives 0.71; 0 gives 0.5.
+    /// The factor on the block chance against a fist blow (<c>FUN_140887970</c>, <b>Verified</b> disassembly: an attacker that is not an animal and
+    /// fights with fists, CharStats <c>+0x1f0</c> 5): (the defender's raw martial arts - 0.75) / (1.1 - 0.75), at most 1.1 and at least 0.5. Any
+    /// level from 2 gives 1.1; 1 gives 0.71; 0 gives 0.5.
     /// </summary>
-    public static float FistBlockFactor(float defenderMartialArts) => MathF.Max(MathF.Min((defenderMartialArts - 0.75f) / (1.1f - 0.75f), 1.1f), 0.5f);
+    public static float FistBlockFactor(float defenderMartialArts) =>
+        MathF.Max(MathF.Min((defenderMartialArts - 0.75f) / (1.1f - 0.75f), 1.1f), 0.5f);
 
     /// <summary>
     /// The defender's defence D (<c>FUN_1408862d0</c>): the melee defence stat (effective) plus the weapon's defence mod (dropped when the weapon

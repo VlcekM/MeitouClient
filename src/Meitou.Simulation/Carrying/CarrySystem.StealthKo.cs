@@ -20,10 +20,15 @@ namespace Meitou.Simulation.Carrying;
 /// </summary>
 public sealed partial class CarrySystem
 {
+    #region Stealth knock-outs
+
     /// <summary>
     /// The attacker's clip and the rate it plays at (<c>Task_StealthKO</c>: <c>knockout</c> at 1.2, <b>Verified</b> literals).
     /// </summary>
     public const string KnockoutClip = "knockout";
+    /// <summary>
+    /// The rate the attacker's <see cref="KnockoutClip"/> plays at.
+    /// </summary>
     public const float KnockoutPlaySpeed = 1.2f;
 
     /// <summary>
@@ -49,6 +54,16 @@ public sealed partial class CarrySystem
     const int AssassinationFailed = 56;
 
     /// <summary>
+    /// This tick's stealth knock-out attempts (<see cref="Knockouts"/>).
+    /// </summary>
+    readonly KnockoutLog _knockouts = new();
+
+    /// <summary>
+    /// The XP service the knock-outs train with, found on first use.
+    /// </summary>
+    XpService? _xp;
+
+    /// <summary>
     /// The length of the <c>knockout</c> clip in seconds (1 when the clip lengths are not known); the swing lasts this /
     /// <see cref="KnockoutPlaySpeed"/>.
     /// </summary>
@@ -59,20 +74,15 @@ public sealed partial class CarrySystem
     /// </summary>
     public AggroSystem? Aggro { get; set; }
 
-    readonly List<StealthKoEntry> _knockouts = [];
-    XpService? _xp;
-
     /// <summary>
     /// The swings rolled since the last <see cref="TakeKnockouts"/> (the host shows them as "*Thunk*" or "Failed!").
     /// </summary>
-    public IReadOnlyList<StealthKoEntry> Knockouts => _knockouts;
+    public IReadOnlyList<StealthKoEntry> Knockouts => _knockouts.Entries;
 
-    public StealthKoEntry[] TakeKnockouts()
-    {
-        StealthKoEntry[] all = [.. _knockouts];
-        _knockouts.Clear();
-        return all;
-    }
+    /// <summary>
+    /// The swings rolled since the last take, which empties <see cref="Knockouts"/>.
+    /// </summary>
+    public StealthKoEntry[] TakeKnockouts() => _knockouts.Take();
 
     /// <summary>
     /// A character that may be sent on a stealth knock-out: sneaking, awake, not carrying or carried (a fight it is in ends with the order's new
@@ -118,6 +128,10 @@ public sealed partial class CarrySystem
         return (x + k) / (2 * k) * 100 * (heard ? 0.5f : 1);
     }
 
+    /// <summary>
+    /// Gives the stealth knock-out order to the first of the order's attackers (the selection's order) that can run it, so the chance the interface
+    /// showed is the one rolled; nothing when the target cannot be knocked out.
+    /// </summary>
     void BeginKnockOut(World world, StealthKoOrder order)
     {
         var table = world.Characters;
@@ -217,6 +231,9 @@ public sealed partial class CarrySystem
                 && fight.TargetSlot == attacker && fight.TargetGeneration == attackerId.Generation;
     }
 
+    /// <summary>
+    /// Turns <paramref name="n"/> to face <paramref name="target"/> (unchanged when they stand on one spot).
+    /// </summary>
     static void Face(ref CharacterHot n, in CharacterHot target)
     {
         float dx = target.Position.X - n.Position.X, dz = target.Position.Z - n.Position.Z;
@@ -259,6 +276,10 @@ public sealed partial class CarrySystem
         if (cold.LiftTime >= KnockoutDoneAt * length) End(world, i);
     }
 
+    /// <summary>
+    /// The swing lands: the chance is rolled against the target's awareness, the attacker trains, the target is knocked out or turns on the
+    /// attacker, and the assault is booked either way.
+    /// </summary>
     void Strike(World world, CharacterTable table, int i, int t)
     {
         var cold = table.Cold(i)!;
@@ -286,39 +307,9 @@ public sealed partial class CarrySystem
             float f = target.IsImprisoned ? 0.07f : Asleep(table, t) ? 0.5f : 1;
             (_xp ??= new XpService(Constants, _bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300));
         }
-        if (success)
-        {
-            if (target.Medical is { } medical && target.Race is { } targetRace)
-            {
-                var ctx = new MedicalContext(Constants, _bodyOptions, targetRace)
-                {
-                    Toughness = target.Stats?.ScaledToughness ?? 0,
-                    Strength = target.Stats?.Strength ?? 50,
-                    HasStats = target.Stats is not null,
-                };
-                float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0)
-                    * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
-                medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
-                TaskStart.Stand(table, t);
-                table.Next[t].Velocity = Vector3.Zero;
-            }
-        }
-        else if (!target.Medical!.Incapacitated)
-        {
-            // A miss (Task_StealthKO, FUN_14034cd80, Verified): the victim says event 56 ASSASSINATION_FAILED at the attacker, notices it (its
-            // hearing of it is alarmed for 5 s), each side's squad tags the other TEMP_ENEMY, and the victim goes for the attacker
-            // (Character::attackTarget; no assault is booked for that, so the order is a defensive one).
-            world.Defer(new Dialogue.DialogueEvent(targetId, attackerId, AssassinationFailed) { Tick = world.Tick + 1 });
-            Aggro?.Alarm(world, targetId, attackerId);
-            if (world.SystemOf<Dialogue.DialogueSystem>() is { } talk)
-            {
-                talk.TagEnemy(world, t, i);
-                talk.TagEnemy(world, i, t);
-            }
-            // a player character: attackTarget's replan, the step decides (CarrySystem.Engage)
-            if (DecisionSystem.Decides(target)) Engage(world, t, i);
-            else world.Defer(new AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
-        }
+
+        if (success) KnockOutTarget(table, t, cold, target);
+        else if (!target.Medical!.Incapacitated) Missed(world, i, t, target, attackerId, targetId);
 
         // The swing books an Assault on the target's faction at the roll, hit or miss (the pending-crime setter FUN_140852c80 with code 5, called
         // unconditionally, Verified).
@@ -329,4 +320,47 @@ public sealed partial class CarrySystem
             success ? Loc.Tr("*Thunk*") : Loc.Tr("Failed!") + (noXp ? Loc.Tr(" (No XP)") : ""), success));
         _knockouts.Add(new StealthKoEntry(world.Tick, attackerId, targetId, chance, success, noXp));
     }
+
+    /// <summary>
+    /// A hit: the target is knocked out for the put-down time its toughness and the attacker's assassination give, and stands still.
+    /// </summary>
+    void KnockOutTarget(CharacterTable table, int t, CharacterCold cold, CharacterCold target)
+    {
+        if (target.Medical is { } medical && target.Race is { } targetRace)
+        {
+            var ctx = new MedicalContext(Constants, _bodyOptions, targetRace)
+            {
+                Toughness = target.Stats?.ScaledToughness ?? 0,
+                Strength = target.Stats?.Strength ?? 50,
+                HasStats = target.Stats is not null,
+            };
+            float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0)
+                * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
+            medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
+            TaskStart.Stand(table, t);
+            table.Next[t].Velocity = Vector3.Zero;
+        }
+    }
+
+    /// <summary>
+    /// A miss (Task_StealthKO, FUN_14034cd80, Verified): the victim says event 56 ASSASSINATION_FAILED at the attacker, notices it (its hearing of
+    /// it is alarmed for 5 s), each side's squad tags the other TEMP_ENEMY, and the victim goes for the attacker (Character::attackTarget; no
+    /// assault is booked for that, so the order is a defensive one).
+    /// </summary>
+    void Missed(World world, int i, int t, CharacterCold target, CharacterId attackerId, CharacterId targetId)
+    {
+        world.Defer(new Dialogue.DialogueEvent(targetId, attackerId, AssassinationFailed) { Tick = world.Tick + 1 });
+        Aggro?.Alarm(world, targetId, attackerId);
+        if (world.SystemOf<Dialogue.DialogueSystem>() is { } talk)
+        {
+            talk.TagEnemy(world, t, i);
+            talk.TagEnemy(world, i, t);
+        }
+
+        // a player character: attackTarget's replan, the step decides (EngagedDefence.Engage)
+        if (DecisionSystem.Decides(target)) _engaged.Engage(world, Aggro, t, i);
+        else world.Defer(new AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
+    }
+
+    #endregion
 }

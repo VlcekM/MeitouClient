@@ -5,8 +5,12 @@ namespace Meitou.Data.World;
 /// <summary>
 /// One placed foliage mesh: where, how big and turned, from which layer (docs/formats/foliage.md, "Placing").
 /// </summary>
-public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees, Quaternion Orientation)
+public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees,
+    Quaternion Orientation)
 {
+    /// <summary>
+    /// The instance's transform (<see cref="TransformOf"/>).
+    /// </summary>
     public Matrix4x4 Transform => TransformOf(Scale, Orientation, Position);
 
     /// <summary>
@@ -27,8 +31,17 @@ public sealed record FoliageGrassPatch(FoliageLayer Layer, FoliageGrass Grass, i
 /// </summary>
 public sealed class FoliageZone
 {
+    /// <summary>
+    /// The zone.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
+    /// <summary>
+    /// The placed meshes.
+    /// </summary>
     public List<FoliageInstance> Instances { get; } = [];
+    /// <summary>
+    /// The grass layers.
+    /// </summary>
     public List<FoliageGrassPatch> Grass { get; } = [];
     /// <summary>
     /// Instances of meshes with a <c>building type</c> (mineable rocks), also in <see cref="Instances"/>.
@@ -45,7 +58,13 @@ public sealed class FoliageZone
 /// </summary>
 public sealed class FoliageZoneInput
 {
+    /// <summary>
+    /// The zone.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
+    /// <summary>
+    /// The zone's height grid.
+    /// </summary>
     public required FoliageGround Ground { get; init; }
     /// <summary>
     /// The overlay around the zone; the placer writes grass coverage (R) and grass spots (G) into it.
@@ -82,6 +101,12 @@ public static class FoliageLayout
     /// The game's TreeLoader3D scale range (the bounds of its 8-bit scale).
     /// </summary>
     public const float MinScale = 0.01f, MaxScale = 10f;
+
+    /// <summary>
+    /// The game's TreeLoader3D page size for the mesh layers: half a zone (the zone's width × 0.5 at the PagedGeometry made for them,
+    /// <c>FUN_1406d3e30</c> at 0x1406d4bae, verified by disassembly).
+    /// </summary>
+    const float LoaderPageSize = WorldLayout.ZoneSize * 0.5f;
 
     /// <summary>
     /// Base distances per FoliageVisibilityRange before × 10 and the range setting.
@@ -157,8 +182,15 @@ public static class FoliageLayout
         return zone;
     }
 
+    /// <summary>
+    /// One mesh layer's placing: the zone's input and output, the layer, its random sequence and the zone's X/Z bounds.
+    /// </summary>
     sealed record Context(FoliageZoneInput Input, FoliageZone Zone, FoliageLayer Layer, FoliageRandom Rng, float X0, float Z0, float X1, float Z1);
 
+    /// <summary>
+    /// Places <paramref name="count"/> copies of <paramref name="mesh"/> (in clusters when it is clustered), each accepted after the slope, zone,
+    /// town, altitude and road tests, with its children placed round it; <paramref name="biome"/>, when given, ends a cluster at another biome.
+    /// </summary>
     static void PlaceMesh(Context c, FoliageMesh mesh, int count, uint? biome)
     {
         var rng = c.Rng;
@@ -225,7 +257,8 @@ public static class FoliageLayout
         if (slope > mesh.MaxSlope || slope < mesh.MinSlope) return false;
         if (p.X < c.X0 || p.X > c.X1 || p.Y < c.Z0 || p.Y > c.Z1) return true;
         bool rejected = false;
-        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns (FUN_1406d2410:146-156, Verified).
+        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns
+        // (FUN_1406d2410:146-156, Verified).
         if (mesh.AvoidTowns && input.NearestTown?.Invoke(p.X, p.Y) is { } town && !(mesh.BuildingType is not null && town.Owned) &&
             Vector2.DistanceSquared(town.At, p) < town.Range * town.Range)
             rejected = true;
@@ -242,7 +275,7 @@ public static class FoliageLayout
         {
             float qScale = Quantise(scale, MinScale, MaxScale);
             float qYaw = (byte)(long)(yaw / 360 * 255) * (360f / 255);
-            var position = new Vector3(p.X, y, p.Y);
+            var position = new Vector3(LoaderSnap(p.X, c.X0), y, LoaderSnap(p.Y, c.Z0));
             c.Zone.Instances.Add(new FoliageInstance(mesh, c.Layer, position, qScale, qYaw, Orientation(mesh, input.Ground, position, qYaw)));
             if (mesh.BuildingType is not null) c.Zone.Resources++;
         }
@@ -259,6 +292,20 @@ public static class FoliageLayout
         }
         if (!rejected && mesh.GrassSpot > 0) GrassSpot(input.Overlay, p, mesh.GrassSpot * scale);
         return true;
+    }
+
+    /// <summary>
+    /// Where TreeLoader3D keeps a tree on one axis (<c>FUN_140a46970</c>, run on the copy of the point the instance is made from): 16 bits across
+    /// its page from the zone's edge <paramref name="left"/>, floored to a whole unit. The orientation's noise reads the snapped point, so a
+    /// fraction just above a whole unit can move a rock's seed (issue #406). Float arithmetic as the game's.
+    /// </summary>
+    static float LoaderSnap(float v, float left)
+    {
+        float d = v - left;
+        int page = (int)MathF.Floor(d / LoaderPageSize);
+        float local = d - page * LoaderPageSize;
+        float step = (ushort)(long)(65535f * local / LoaderPageSize);
+        return MathF.Floor(left + page * LoaderPageSize + step / 65535f * LoaderPageSize);
     }
 
     /// <summary>
@@ -363,7 +410,8 @@ public static class FoliageLayout
                 fade = Math.Clamp(fade, 0, 1);
                 float dirt = o.Get(2, i, j) > 70 ? 0 : 255;
                 float n = FoliageNoise.Coverage(x, z, scale, grass.ZeroCutoff, grass.BrightnessBoost, grass.Cap);
-                if (grass.Blackout) n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
+                if (grass.Blackout)
+                    n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
                 if (o.Get(3, i, j) > 10) continue;
                 byte v = (byte)(long)(n * dirt * fade);
                 if (o.Get(0, i, j) < v) o.Set(0, i, j, v);

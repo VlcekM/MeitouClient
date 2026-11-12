@@ -18,16 +18,43 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed class CrowdHarness
 {
+    /// <summary>
+    /// The spiral's spacing between characters, in world units.
+    /// </summary>
     const float Spacing = 12;
+    /// <summary>
+    /// The idle clip of the idling half.
+    /// </summary>
     const string Idle = "idle_stand_relax";
+    /// <summary>
+    /// The clips of the walking half (lower and upper body).
+    /// </summary>
     static readonly string[] Walk = ["walk lower", "walk upper"];
 
+    /// <summary>
+    /// The generated characters' looks.
+    /// </summary>
     readonly CharacterAppearance[] _appearances;
+    /// <summary>
+    /// Each character's animation layers, their times set each frame.
+    /// </summary>
     readonly CharacterPose[][] _poses;
+    /// <summary>
+    /// Each character's place on the ground.
+    /// </summary>
     readonly Vector3[] _positions;
+    /// <summary>
+    /// Each character's heading, and its time offset into its clips.
+    /// </summary>
     readonly float[] _yaws, _phases;
+    /// <summary>
+    /// The clips' clock in seconds: the real time when interactive, a fixed pose time for stills.
+    /// </summary>
     readonly Func<float> _time;
 
+    /// <summary>
+    /// The crowd's characters, by index in each array.
+    /// </summary>
     CrowdHarness(CharacterAppearance[] appearances, Vector3[] positions, float[] yaws, float[] phases, CharacterPose[][] poses, Func<float> time)
         => (this._appearances, this._positions, this._yaws, this._phases, this._poses, this._time) = (appearances, positions, yaws, phases, poses,
                 time);
@@ -71,8 +98,11 @@ internal sealed class CrowdHarness
         var failures = 0;
         Parallel.For(0, n, i =>
         {
-            try { appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId, new CharacterOptions { Seed = 100003 + i,
-                Faction = faction?.StringId }); }
+            try
+            {
+                appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId,
+                    new CharacterOptions { Seed = 100003 + i, Faction = faction?.StringId });
+            }
             catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or IOException or ArgumentException)
             {
                 Interlocked.Increment(ref failures);
@@ -81,7 +111,8 @@ internal sealed class CrowdHarness
         });
         var good = Enumerable.Range(0, n).Where(i => appearances[i] is not null).ToArray();
         var rosterSize = good.Length;
-        Console.WriteLine($"crowd     {rosterSize} characters from {records.Count} records of {(faction is null ? "any squad" : $"'{faction.Name}'")} ({failures} failed), generated in {watch.ElapsedMilliseconds} ms");
+        Console.WriteLine($"crowd     {rosterSize} characters from {records.Count} records of " +
+            $"{(faction is null ? "any squad" : $"'{faction.Name}'")} ({failures} failed), generated in {watch.ElapsedMilliseconds} ms");
 
         var centre = scene.Focus;
         var positions = new Vector3[rosterSize];
@@ -105,7 +136,9 @@ internal sealed class CrowdHarness
         var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists,
                 interactive ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
         var renderer = new CharacterRenderer(context, install, db, assets) { Source = harness.Fill, LoadBudget = interactive ? 4 : 0 };
-        renderer.SettleFirst = !interactive;   // a still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it)
+
+        // A still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it).
+        renderer.SettleFirst = !interactive;
         return renderer;
     }
 
@@ -126,9 +159,14 @@ internal sealed class CrowdHarness
         }
         else templates = db.OfType(FcsRecordType.SquadTemplate);
         foreach (var template in templates)
+        {
             foreach (var r in template.GetReferences("choosefrom list"))
+            {
                 if (db.Find(r.TargetStringId) is { Type: FcsRecordType.Character } character)
                     result.Add((character, Math.Max(r.Values.Value0, 1)));
+            }
+        }
+
         return (result, faction);
     }
 }

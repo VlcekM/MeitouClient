@@ -31,6 +31,9 @@ public sealed record WorldBootOptions(GameInstall Install, GameDatabase Database
     /// </summary>
     public BuildingLayouts? Layouts { get; init; }
 
+    /// <summary>
+    /// The body options the population is made with.
+    /// </summary>
     public BodyOptions Bodies { get; init; } = BodyOptions.Default;
 
     /// <summary>
@@ -46,6 +49,9 @@ public sealed record WorldBootOptions(GameInstall Install, GameDatabase Database
 /// </summary>
 public sealed class WorldBoot
 {
+    /// <summary>
+    /// Where characters can walk: the navmesh, else the open ground.
+    /// </summary>
     public required IWalkability Walkability { get; init; }
 
     /// <summary>
@@ -58,8 +64,14 @@ public sealed class WorldBoot
     /// </summary>
     public RagdollGeometry? RagdollGeometry { get; init; }
 
+    /// <summary>
+    /// The population's data.
+    /// </summary>
     public required PopulationData Data { get; init; }
 
+    /// <summary>
+    /// The towns of the level data.
+    /// </summary>
     public required IReadOnlyList<TownPlacement> Towns { get; init; }
 
     /// <summary>
@@ -67,8 +79,14 @@ public sealed class WorldBoot
     /// </summary>
     public required CharacterRigs Rigs { get; init; }
 
+    /// <summary>
+    /// The animation clips' lengths.
+    /// </summary>
     public required AnimationLengths AnimationLengths { get; init; }
 
+    /// <summary>
+    /// The animation library.
+    /// </summary>
     public required AnimationLibrary AnimationLibrary { get; init; }
 
     /// <summary>
@@ -91,6 +109,9 @@ public sealed class WorldBoot
         return layouts;
     }
 
+    /// <summary>
+    /// Reads a world's content: the levels' ruins and layouts, the navmesh, the ragdoll geometry, the population's data, the rigs and the animations.
+    /// </summary>
     public static WorldBoot Load(WorldBootOptions o)
     {
         var levels = o.Levels;
@@ -130,6 +151,9 @@ public sealed class WorldBoot
         };
     }
 
+    /// <summary>
+    /// Starts the navmesh, its zone listener subscribed and the long-range grid warmed on a worker.
+    /// </summary>
     static NavSystem StartNav(WorldBootOptions o, WorldLevelData levels)
     {
         var nav = new NavSystem(o.Install, o.Database, levels, o.Heights.HeightAt);
@@ -144,6 +168,9 @@ public sealed class WorldBoot
         return nav;
     }
 
+    /// <summary>
+    /// Makes the population's data: the biomes, the town buildings, the layouts, the sight and the resource nodes when there are levels.
+    /// </summary>
     static PopulationData CreateData(WorldBootOptions o, WorldLevelData? levels, BuildingLayouts? layouts, List<TownPlacement> towns)
     {
         var biomes = levels is null ? null : Biomes(o);
@@ -186,7 +213,8 @@ public sealed class WorldBoot
         var buildings = TownBuildings.Build(o.Database, levels, layouts, (x, z) => o.Heights.HeightAt((float)x, (float)z));
         int beds = buildings.Values.Sum(l => l.Sum(b => b.Beds));
         int nodes = buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds));
-        Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {beds} beds, {nodes} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {beds} beds, {nodes} nodes in {buildings.Count} towns "
+            + $"({watch.ElapsedMilliseconds} ms)");
         return buildings;
     }
 
@@ -207,6 +235,7 @@ public sealed class WorldBoot
             Console.Error.WriteLine($"resource rocks without the layout cache: {e.Message}");
         }
 
-        return new FoliageResourceNodes(new FoliageWorld(o.Install, o.Database, levels, catalog, cache: cache), o.Database, name => o.Assets.Find(name));
+        return new FoliageResourceNodes(new FoliageWorld(o.Install, o.Database, levels, catalog, cache: cache), o.Database,
+            name => o.Assets.Find(name));
     }
 }

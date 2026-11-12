@@ -5,11 +5,19 @@ using Avalonia.Layout;
 
 namespace Meitou.Launcher;
 
-// Questions as a plate over the dimmed window (SetupHost), placed so its main button is under the pointer that asked.
+/// <summary>
+/// Questions as a plate over the dimmed window (SetupHost), placed so its main button is under the pointer that asked.
+/// </summary>
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// The last pointer position over the window, in window coordinates; null before the pointer moved.
+    /// </summary>
     Point? _pointer;   // the last pointer position over the window, in window coordinates
 
+    /// <summary>
+    /// Follows the pointer over the window (tunnelling, handled events too) into <see cref="_pointer"/>.
+    /// </summary>
     void TrackPointer() =>
         AddHandler(PointerMovedEvent, (_, e) => _pointer = e.GetPosition(this), Avalonia.Interactivity.RoutingStrategies.Tunnel,
                 handledEventsToo: true);
@@ -20,6 +28,9 @@ public sealed partial class MainWindow
     Task<bool> AskAsync(string title, string text, string yes, string no) =>
         ChooseAsync(title, [Wrapped(text)], [(no, false), (yes, true)], cancel: false);
 
+    /// <summary>
+    /// A question's text: wrapped, medium weight.
+    /// </summary>
     static TextBlock Wrapped(string text) =>
         new() { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = Avalonia.Media.FontWeight.Medium };
 
@@ -57,6 +68,9 @@ public sealed partial class MainWindow
         return answer.Task;
     }
 
+    /// <summary>
+    /// The question's buttons in order, each closing it with its value; the last one is the main (accent) button.
+    /// </summary>
     List<Button> MakeButtons<T>(IReadOnlyList<(string Label, T Value)> choices, Action<T> close)
     {
         var buttons = new List<Button>();
@@ -74,8 +88,10 @@ public sealed partial class MainWindow
         return buttons;
     }
 
-    // Once laid out: move the plate so the main button is centred on the pointer, kept inside the host; then show it. Without a pointer (keyboard) it
-    // sits bottom right, over the footer.
+    /// <summary>
+    /// Once laid out: move the plate so the main button is centred on the pointer, kept inside the host; then show it. Without a pointer (keyboard)
+    /// it sits bottom right, over the footer.
+    /// </summary>
     void PlaceUnderPointer(Border plate, Button main)
     {
         void Place(object? sender, EventArgs e)

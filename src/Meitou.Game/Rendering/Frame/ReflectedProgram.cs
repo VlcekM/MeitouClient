@@ -11,17 +11,40 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 sealed class ReflectedProgram : IDisposable
 {
+    /// <summary>
+    /// The context the program and its pipelines live in.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The native program, built through the frame's program cache.
+    /// </summary>
     public readonly GpuProgram P;
+
+    /// <summary>
+    /// The vertex input locations the reflection lists, one per slot (a matrix input takes several).
+    /// </summary>
     readonly int[] _locations;
+
+    /// <summary>
+    /// The scalar kind of each of <see cref="_locations"/>' inputs, for the dummy format a missing attribute reads.
+    /// </summary>
     readonly ScalarKind[] _kinds;
 
     /// <summary>
     /// The program's own input locations (below the instance rows): 0 .. Own − 1.
     /// </summary>
     public readonly int Own;
+
+    /// <summary>
+    /// The layout <see cref="Layout"/> made last, returned again while the inputs stay the same.
+    /// </summary>
     VertexLayout? _last;
 
+    /// <summary>
+    /// Builds the program from <paramref name="vertex"/> and <paramref name="fragment"/> through the frame's cache and reads its vertex inputs'
+    /// locations and kinds.
+    /// </summary>
     /// <param name="rowLocation">The first per-instance input location; the inputs below it are the mesh's own.</param>
     public ReflectedProgram(IGpuContext ctx, NativeFrame frame, string vertex, string fragment, string name, int rowLocation)
     {
@@ -33,6 +56,10 @@ sealed class ReflectedProgram : IDisposable
         Own = _locations.Where(l => l < rowLocation).DefaultIfEmpty(-1).Max() + 1;
     }
 
+    /// <summary>
+    /// The vertex layout for the GL attributes by location (<paramref name="byLocation"/>): each input the attribute's format and stride, a missing
+    /// one GL's constant (stride 0 where the device has constant vertex attributes, else 16). Reuses the last layout while nothing changed.
+    /// </summary>
     public VertexLayout Layout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
     {
         Span<VertexInput> inputs = stackalloc VertexInput[_locations.Length];
@@ -65,6 +92,9 @@ sealed class ReflectedProgram : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Drops the program's pipelines and the program.
+    /// </summary>
     public void Dispose()
     {
         _ctx.Pipelines.Forget(P);
@@ -83,8 +113,11 @@ static class FrustumTests
     public static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
     {
         foreach (var p in planes)
+        {
             if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z))
                 return false;
+        }
+
         return true;
     }
 }

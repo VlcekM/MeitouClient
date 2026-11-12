@@ -71,7 +71,10 @@ public sealed class CharacterSoundProfile
         if (look.Animal is not null)
         {
             string creature = CharacterSounds.CreatureName(sounds);
-            return new CharacterSoundProfile { Animal = true, Voice = creature, Weapons = creature, Barefoot = false, ArmourMaterial = 0, Ambient = ambient };
+            return new CharacterSoundProfile
+            {
+                Animal = true, Voice = creature, Weapons = creature, Barefoot = false, ArmourMaterial = 0, Ambient = ambient,
+            };
         }
         string race = CharacterSounds.PersonName(sounds);
         return new CharacterSoundProfile
@@ -96,7 +99,25 @@ public readonly record struct SoundLayer(int Definition, AnimationSoundEvent[]? 
 /// <summary>
 /// A job a character does with a sound that lasts (<b>Verified</b>, the task methods of the exe: start in slot 1, stop in slot 3).
 /// </summary>
-public enum CharacterLoop : byte { None, Build, Medic, Unlock }
+public enum CharacterLoop : byte
+{
+    /// <summary>
+    /// No job loop.
+    /// </summary>
+    None,
+    /// <summary>
+    /// Building: <c>Character_Build_Loop_Start</c> / <c>Character_Build_Loop_Stop</c>.
+    /// </summary>
+    Build,
+    /// <summary>
+    /// First aid: <c>Character_Medic_Start</c> / <c>Character_Medic_Stop</c>.
+    /// </summary>
+    Medic,
+    /// <summary>
+    /// Picking a lock: <c>Character_Unlock</c>, ended by <c>Character_Unlock_Fail</c> or a success.
+    /// </summary>
+    Unlock
+}
 
 /// <summary>
 /// The sounds of characters (docs/audio.md "Characters"): a Wwise game object per character near the camera, kept at its position and facing, with
@@ -128,6 +149,9 @@ public sealed class CharacterSounds
     /// The first game object id of a character, and of the pool that bolts sticking in the ground sound on.
     /// </summary>
     public const ulong CharacterObjectBase = 1_000_000, ImpactPoolBase = 900_000;
+    /// <summary>
+    /// The size of the impact object pool (<see cref="ImpactPoolBase"/>), used round robin.
+    /// </summary>
     public const int ImpactPoolSize = 8;
     /// <summary>
     /// The height under which a walker is in water (<c>FUN_14065df80</c>: 100).
@@ -139,12 +163,30 @@ public sealed class CharacterSounds
     /// </summary>
     public const float SquelchLimit = 160000;
 
+    /// <summary>
+    /// The race names of the person RACE <c>sounds</c> values 0..3.
+    /// </summary>
     static readonly string[] Persons = ["Human", "Shek", "Hive", "Robot"];
+    /// <summary>
+    /// The creature names of the animal RACE <c>sounds</c> values from 4 up.
+    /// </summary>
     static readonly string[] Creatures =
         ["Beak", "Bull", "Cage", "Dog", "Duck", "Gar", "Goat", "Gorillo", "IronSpider", "Leviathan", "Pack", "Spider", "Turtle"];
+    /// <summary>
+    /// The <c>Weapons</c> values by WEAPON <c>skill category</c> (the exe's table; unarmed, 5, has none).
+    /// </summary>
     static readonly string[] Weapons = ["Katanas", "Sabres", "Blunt", "Heavy", "Hackers", "", "Bow", "Turret", "Blunt"];
+    /// <summary>
+    /// The <c>Armor_Worn</c> values by armour material 0..3.
+    /// </summary>
     static readonly string[] Armours = ["Cloth", "Leather", "Chain", "Plate"];
+    /// <summary>
+    /// The <c>Surface_Material</c> values by GroundType for shod feet.
+    /// </summary>
     static readonly string[] Shoes = ["Sand", "Grass", "Concrete", "Wood", "Metal", "Water", "Mud", "Snow", "Dirt"];
+    /// <summary>
+    /// The <c>Surface_Material</c> values by GroundType for bare feet (the <c>BFoot_</c> names where the bank has one).
+    /// </summary>
     static readonly string[] Bare = ["BFoot_Sand", "BFoot_Grass", "Concrete", "BFoot_Wood", "BFoot_Metal", "Water", "Mud", "Snow", "BFoot_Dirt"];
 
     /// <summary>
@@ -168,53 +210,152 @@ public sealed class CharacterSounds
     /// </summary>
     public static string ArmourName(int material) => Armours[Math.Clamp(material, 0, 3)];
 
+    /// <summary>
+    /// One tracked character's sound state: its game object, place, profile, the switches and parameters last set, and its animation cursors.
+    /// </summary>
     sealed class Entry
     {
+        /// <summary>
+        /// The character's game object id (from <see cref="CharacterObjectBase"/> up).
+        /// </summary>
         public ulong Object;
+        /// <summary>
+        /// Where the object was last placed (the origin of its events' distance checks).
+        /// </summary>
         public Vector3 Position;
+        /// <summary>
+        /// The race, armour and weapon data its switches come from.
+        /// </summary>
         public CharacterSoundProfile Profile = null!;
+        /// <summary>
+        /// The frame it was last handed in (<see cref="EndFrame"/> drops the rest).
+        /// </summary>
         public int Frame;
+        /// <summary>
+        /// The <c>Surface_Material</c> last set, packed: the GroundType, bit 8 barefoot; -1 to set it again.
+        /// </summary>
         public int Surface = -1;
+        /// <summary>
+        /// Where the building floor was last looked up (<see cref="Floor"/>); null before the first.
+        /// </summary>
         public Vector3? FloorPoint;
+        /// <summary>
+        /// The building floor's GroundType found at <see cref="FloorPoint"/>, -1 for none.
+        /// </summary>
         public int FloorResult;
+        /// <summary>
+        /// The <c>Movement_Speed</c> last sent; -1 before the first.
+        /// </summary>
         public float Speed = -1;
+        /// <summary>
+        /// The real time (seconds of the class's clock) the next passive creature voice may play.
+        /// </summary>
         public double NextPassive;
+        /// <summary>
+        /// The character went down (<see cref="Down"/>): no passive voice, its ambient emitter stops.
+        /// </summary>
         public bool Down;
         /// <summary>
         /// The race's ambient emitter: its switch is set, and it is started.
         /// </summary>
         public bool AmbientSet, AmbientOn;
+        /// <summary>
+        /// The job loop playing (<see cref="CharacterLoop"/>).
+        /// </summary>
         public CharacterLoop Loop;
+        /// <summary>
+        /// One cursor per animation definition with events seen on the character.
+        /// </summary>
         public readonly List<Cursor> Cursors = [];
     }
 
+    /// <summary>
+    /// One animation's event position on a character.
+    /// </summary>
     sealed class Cursor
     {
+        /// <summary>
+        /// The animation definition the cursor belongs to.
+        /// </summary>
         public int Definition;
+        /// <summary>
+        /// The animation's sound events, in time order.
+        /// </summary>
         public AnimationSoundEvent[] Events = [];
+        /// <summary>
+        /// The last fraction seen and the next event to fire.
+        /// </summary>
         public AnimationEventCursor State;
+        /// <summary>
+        /// The frame the animation was last handed in; a cursor not handed this frame has stopped.
+        /// </summary>
         public int Frame;
     }
 
+    /// <summary>
+    /// The bank player the events go to.
+    /// </summary>
     readonly WwisePlayer _player;
+    /// <summary>
+    /// The terrain's ground types for the footsteps; null without them (only the floor and water decide).
+    /// </summary>
     readonly GroundSurfaces? _ground;
+    /// <summary>
+    /// The tracked characters by key.
+    /// </summary>
     readonly Dictionary<ulong, Entry> _entries = [];
+    /// <summary>
+    /// The keys <see cref="EndFrame"/> drops, kept to avoid allocating.
+    /// </summary>
     readonly List<ulong> _gone = [];
+    /// <summary>
+    /// Draws the passive voices' delays and the half of the pain voices that play.
+    /// </summary>
     readonly Random _random = new();
+    /// <summary>
+    /// Real time for the passive voices.
+    /// </summary>
     readonly Stopwatch _clock = Stopwatch.StartNew();
+    /// <summary>
+    /// The impact pool's game object ids.
+    /// </summary>
     readonly ulong[] _pool = new ulong[ImpactPoolSize];
+    /// <summary>
+    /// The camera's eye this frame (<see cref="BeginFrame"/>): the origin of the distance limits.
+    /// </summary>
     Vector3 _camera;
+    /// <summary>
+    /// The frame count (<see cref="BeginFrame"/>) and the next impact pool slot.
+    /// </summary>
     int _frame, _poolAt;
+    /// <summary>
+    /// The next character's game object id.
+    /// </summary>
     ulong _nextObject = CharacterObjectBase;
 
     /// <summary>
     /// Events posted since the start, for the statistics: footsteps, other animation events, impacts, voices.
     /// </summary>
     public int Footsteps { get; private set; }
+    /// <summary>
+    /// Animation events posted other than footsteps (swings, attacks) since the start.
+    /// </summary>
     public int Swings { get; private set; }
+    /// <summary>
+    /// Impacts posted since the start.
+    /// </summary>
     public int Impacts { get; private set; }
+    /// <summary>
+    /// Voices posted since the start.
+    /// </summary>
     public int Voices { get; private set; }
+    /// <summary>
+    /// Job loop events posted since the start.
+    /// </summary>
     public int Jobs { get; private set; }
+    /// <summary>
+    /// Characters that have a game object now.
+    /// </summary>
     public int Objects => _entries.Count;
 
     /// <summary>
@@ -224,6 +365,9 @@ public sealed class CharacterSounds
     /// </summary>
     public Func<Vector3, int>? Floor { get; init; }
 
+    /// <summary>
+    /// Loads the voice and general banks and fills the impact pool's ids.
+    /// </summary>
     public CharacterSounds(WwisePlayer player, GroundSurfaces? ground)
     {
         this._player = player;
@@ -262,6 +406,9 @@ public sealed class CharacterSounds
         _entries.Clear();
     }
 
+    /// <summary>
+    /// Drops a tracked character: posts its animations' stop events and unregisters its object.
+    /// </summary>
     void Remove(ulong key)
     {
         if (!_entries.Remove(key, out var e)) return;
@@ -356,6 +503,10 @@ public sealed class CharacterSounds
         _player.Post("Start_Emitter", e.Object);
     }
 
+    /// <summary>
+    /// Sets <c>Surface_Material</c> to the ground under a moving character within <see cref="SurfaceLimit"/> (water under <see cref="WaterHeight"/>,
+    /// else the building floor, else the terrain); unchanged while the ground is still loading or its type is past the table.
+    /// </summary>
     void UpdateSurface(Entry e, Vector3 position, float d2)
     {
         int surface;
@@ -377,6 +528,9 @@ public sealed class CharacterSounds
         _player.SetSwitch("Surface_Material", SurfaceName(surface, bare), e.Object);
     }
 
+    /// <summary>
+    /// The building floor's GroundType under the character (<see cref="Floor"/>), looked up again only after it moved a unit; -1 for none.
+    /// </summary>
     int BuildingFloor(Entry e, Vector3 position)
     {
         if (Floor is null) return -1;
@@ -385,6 +539,10 @@ public sealed class CharacterSounds
         return e.FloorResult = Floor(position);
     }
 
+    /// <summary>
+    /// Fires the events of the dominant animation (the heaviest with events), keeping a cursor per animation definition, and posts the stop events of
+    /// the animations no longer handed.
+    /// </summary>
     void ProcessLayers(Entry e, ReadOnlySpan<SoundLayer> layers, float d2)
     {
         // Only the heaviest animation that carries events fires them (FUN_1405b5c30: the first of the highest weight).
@@ -441,6 +599,9 @@ public sealed class CharacterSounds
         _player.SetSwitch("Weapons", e.Profile.Robot ? hth + "_Robot" : hth, e.Object);
     }
 
+    /// <summary>
+    /// Posts the stop events of an animation that ended.
+    /// </summary>
     void Stopped(Entry e, Cursor cursor)
     {
         foreach (var ev in cursor.Events)
@@ -496,6 +657,9 @@ public sealed class CharacterSounds
     /// </summary>
     static float StartLimit(CharacterLoop loop) => loop == CharacterLoop.Unlock ? EventLimit : 0;
 
+    /// <summary>
+    /// A job loop's start and stop events.
+    /// </summary>
     static (string Start, string Stop) LoopEvents(CharacterLoop loop) => loop switch
     {
         CharacterLoop.Build => ("Character_Build_Loop_Start", "Character_Build_Loop_Stop"),
@@ -560,6 +724,10 @@ public sealed class CharacterSounds
     /// </summary>
     public bool Tracked(ulong key) => _entries.ContainsKey(key);
 
+    /// <summary>
+    /// Posts an event on a tracked character's object when it is within <paramref name="limit"/> (squared; 0 no limit); false when it is not tracked
+    /// or too far.
+    /// </summary>
     bool Post(ulong key, string ev, float limit = EventLimit)
     {
         if (!_entries.TryGetValue(key, out var e)) return false;
@@ -568,7 +736,9 @@ public sealed class CharacterSounds
         return true;
     }
 
-    // The distance of an event is checked against the position the object was last placed at.
+    /// <summary>
+    /// The distance of an event is checked against the position the object was last placed at.
+    /// </summary>
     static Vector3 LastPosition(Entry e) => e.Position;
 
     /// <summary>
@@ -609,6 +779,9 @@ public sealed class CharacterSounds
         PainVoice(e);
     }
 
+    /// <summary>
+    /// Sets the <c>Impacts</c> switch and posts the impact event on the character within <see cref="EventLimit"/>.
+    /// </summary>
     void Impact(Entry e, string impacts, string ev = "Impact")
     {
         _player.SetSwitch("Impacts", impacts, e.Object);
@@ -697,6 +870,10 @@ public sealed class CharacterSounds
     /// </summary>
     public void Splat(Vector3 at) => PointImpact(at, "Light_Hit");
 
+    /// <summary>
+    /// An impact at a point (a bolt in the ground): the next pool object is placed there, its <c>Impacts</c> switch set and <c>Impact</c> posted,
+    /// within <see cref="EventLimit"/>.
+    /// </summary>
     void PointImpact(Vector3 at, string impacts)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;

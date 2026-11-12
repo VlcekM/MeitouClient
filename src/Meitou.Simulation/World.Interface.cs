@@ -3,8 +3,14 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's interface steps between ticks: the paused commands, the system lookup and the held item.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The first system of each type (see <see cref="SystemOf"/>).
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object?> _systemsByType = new();
 
     /// <summary>
@@ -67,7 +73,8 @@ public sealed partial class World
     /// The first system of type <typeparamref name="T"/> this world runs, or null. Remembered per type (the finders ask once per candidate pair; any
     /// thread).
     /// </summary>
-    internal T? SystemOf<T>() where T : class => (T?)_systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), _systems);
+    internal T? SystemOf<T>() where T : class =>
+        (T?)_systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), _systems);
 
     /// <summary>
     /// Puts the item on the mouse back where it came from (<see cref="PlayerState.Held"/>, <see cref="PlayerSystem.ReturnHeldItem"/>):

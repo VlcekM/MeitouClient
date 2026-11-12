@@ -24,7 +24,8 @@ public sealed partial class MovementSystem
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || n.PathCursor >= cold.Path.Length)
             return;
 
-        int end = Math.Max(ReachEnd(n.Position, cold.Path, n.PathCursor), zones is null ? -1 : LastCrossing(n.Position, cold.Path, n.PathCursor, zones));
+        int end = Math.Max(ReachEnd(n.Position, cold.Path, n.PathCursor),
+            zones is null ? -1 : LastCrossing(n.Position, cold.Path, n.PathCursor, zones));
 
         cold.SplicePath = cold.Path;
         cold.SpliceEnd = end;
@@ -33,7 +34,8 @@ public sealed partial class MovementSystem
     }
 
     /// <summary>
-    /// The last point of the path from <paramref name="cursor"/> within <see cref="SpliceReach"/> of <paramref name="at"/> along it (the next point at least).
+    /// The last point of the path from <paramref name="cursor"/> within <see cref="SpliceReach"/> of <paramref name="at"/> along it (the next point
+    /// at least).
     /// </summary>
     static int ReachEnd(Vector3 at, Vector3[] path, int cursor)
     {
@@ -85,8 +87,8 @@ public sealed partial class MovementSystem
     }
 
     /// <summary>
-    /// Takes a splice's answer (true), or asks for the whole way when it found none or the path changed meanwhile (false: the caller handles the answer as an
-    /// ordinary one when it was not a splice at all).
+    /// Takes a splice's answer (true), or asks for the whole way when it found none or the path changed meanwhile (false: the caller handles the
+    /// answer as an ordinary one when it was not a splice at all).
     /// </summary>
     static bool TakeSpliceAnswer(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathAnswer answer)
     {

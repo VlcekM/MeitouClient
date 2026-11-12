@@ -21,9 +21,13 @@ public sealed partial class FixtureRegistry
     {
         if (Saved is null) return;
         foreach (var site in data.Sites)
+        {
             foreach (var b in site.Buildings.ToList())
+            {
                 if (Saved.GetValueOrDefault(b.Key) is { } saved && saved.Strings.TryGetValue(ResidentRuins.InteriorKey, out string? interior))
                     Relay(world, data, site.Index, b, interior, saved.Strings.GetValueOrDefault(ResidentRuins.ExteriorKey, ""));
+            }
+        }
     }
 
     /// <summary>
@@ -59,6 +63,7 @@ public sealed partial class FixtureRegistry
         var relaid = data.Relay(site, b, interior, exterior, naming);
         if (relaid.LayoutName(exterior: false) == b.LayoutName(exterior: false) && relaid.LayoutName(exterior: true) == b.LayoutName(exterior: true))
             return;
+
         _ruins[b.Key] = new RuinedBuilding(relaid, destroyed);
         RuinsRevision++;
         world.ItemSlots.RelayBuilding(world, data, site, b, relaid);

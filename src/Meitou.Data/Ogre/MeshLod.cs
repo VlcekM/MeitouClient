@@ -15,6 +15,9 @@ public sealed record MeshLodLevel(float Distance, IReadOnlyList<uint[]?> Indices
 /// </summary>
 public readonly record struct LodBlend(int Lower, int Upper, float T)
 {
+    /// <summary>
+    /// Whether two different levels are drawn.
+    /// </summary>
     public bool IsBlending => T > 0 && Upper != Lower;
 }
 
@@ -132,6 +135,10 @@ public static class MeshLod
         return new LodBlend(level, level, 0);
     }
 
+    /// <summary>
+    /// The half width of the blend band around the distance at <paramref name="boundary"/>: <paramref name="fraction"/> of it (at least 0.001),
+    /// within half the gap to each neighbouring distance.
+    /// </summary>
     static float Band(ReadOnlySpan<float> distances, int boundary, float fraction)
     {
         float d = distances[boundary];
@@ -141,6 +148,9 @@ public static class MeshLod
         return Math.Max(w, 1e-3f);
     }
 
+    /// <summary>
+    /// Smoothstep of <paramref name="x"/> clamped to 0..1.
+    /// </summary>
     static float Smooth(float x)
     {
         x = Math.Clamp(x, 0, 1);

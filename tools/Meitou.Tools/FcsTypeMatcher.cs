@@ -7,8 +7,15 @@ using Meitou.Data.Fcs;
 /// </summary>
 static class FcsTypeMatcher
 {
+    /// <summary>
+    /// The base game's data files, in load order.
+    /// </summary>
     static readonly string[] BaseFiles = ["gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod"];
 
+    /// <summary>
+    /// Prints, for every record type number in the base data, the fcs.def types whose fields match the fields its records use, then the field kind
+    /// cross-check and a summary.
+    /// </summary>
     public static int Run(GameInstall install)
     {
         var schema = FcsSchema.Load(Path.Combine(install.Root, "fcs.def"));
@@ -19,6 +26,9 @@ static class FcsTypeMatcher
         return 0;
     }
 
+    /// <summary>
+    /// Per record type number, every field name its records use with the field kind and how many records use it; and the record count per type.
+    /// </summary>
     static (SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> Used, Dictionary<int, int> RecordCounts)
         ReadUsage(GameInstall install)
     {
@@ -26,6 +36,7 @@ static class FcsTypeMatcher
         var used = new SortedDictionary<int, Dictionary<string, (string Kind, int Count)>>();
         var recordCounts = new Dictionary<int, int>();
         foreach (var name in BaseFiles)
+        {
             foreach (var record in FcsReader.ReadFile(Path.Combine(install.DataDirectory, name)).Records)
             {
                 recordCounts[record.Type] = recordCounts.GetValueOrDefault(record.Type) + 1;
@@ -33,10 +44,14 @@ static class FcsTypeMatcher
                 foreach (var (key, kind) in KeysOf(record))
                     fields[key] = (kind, fields.GetValueOrDefault(key).Count + 1);
             }
+        }
 
         return (used, recordCounts);
     }
 
+    /// <summary>
+    /// Prints the best matching schema types of each record type number and returns the best match per number.
+    /// </summary>
     static Dictionary<int, string> PrintTypeMatches(
         FcsSchema schema,
         SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
@@ -77,13 +92,18 @@ static class FcsTypeMatcher
         var kindPairs = new Dictionary<(FcsFieldKind, string), int>();
         foreach (var (type, fields) in used)
             if (best.TryGetValue(type, out var typeName))
+            {
                 foreach (var (key, (kind, count)) in fields)
                     if (schema.FindField(typeName, key) is { } def)
                         kindPairs[(def.Kind, kind)] = kindPairs.GetValueOrDefault((def.Kind, kind)) + count;
+            }
         foreach (var ((schemaKind, dataKind), count) in kindPairs.OrderBy(p => p.Key.Item1).ThenByDescending(p => p.Value))
             Console.WriteLine($"  {schemaKind,-10} -> {dataKind,-9} {count,8}");
     }
 
+    /// <summary>
+    /// Prints the chosen schema type per record type number with how well it matches.
+    /// </summary>
     static void PrintSummary(
         FcsSchema schema,
         SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
@@ -100,6 +120,9 @@ static class FcsTypeMatcher
             .Select(u => $"{u.Key}:{u.Value["REMOVED"].Kind}x{u.Value["REMOVED"].Count}")));
     }
 
+    /// <summary>
+    /// A record's field names with their kinds (bool, float, int, vec3, vec4, string, filename, reference).
+    /// </summary>
     static IEnumerable<(string Key, string Kind)> KeysOf(FcsRecord r) =>
         r.Bools.Keys.Select(k => (k, "bool"))
             .Concat(r.Floats.Keys.Select(k => (k, "float")))
@@ -111,12 +134,19 @@ static class FcsTypeMatcher
             .Concat(r.References.Keys.Select(k => (k, "reference")));
 }
 
+/// <summary>
+/// Prints the records of one type number from the base data files: id, name, flags, field names by kind, references with their counts.
+/// </summary>
 static class FcsRecordDump
 {
+    /// <summary>
+    /// Prints up to <paramref name="limit"/> records of type <paramref name="type"/>; returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, int type, int limit)
     {
         int shown = 0;
         foreach (var name in new[] { "gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod" })
+        {
             foreach (var r in FcsReader.ReadFile(Path.Combine(install.DataDirectory, name)).Records.Where(r => r.Type == type))
             {
                 if (shown++ >= limit) return 0;
@@ -126,8 +156,10 @@ static class FcsRecordDump
                 Console.WriteLine($"  int:    {string.Join(", ", r.Ints.Keys)}");
                 Console.WriteLine($"  string: {string.Join(", ", r.Strings.Keys)}  file: {string.Join(", ", r.Filenames.Keys)}");
                 Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3S.Keys.Concat(r.Vector4S.Keys))}");
-                Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: {r.Instances.Count}");
+                Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: "
+                    + $"{r.Instances.Count}");
             }
+        }
         return 0;
     }
 }

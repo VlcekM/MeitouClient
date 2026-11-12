@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public sealed class GpuLock : IDisposable
 {
+    /// <summary>
+    /// The open lock file while the lock is held; null once released.
+    /// </summary>
     FileStream? _stream;
 
     /// <summary>
@@ -16,6 +19,9 @@ public sealed class GpuLock : IDisposable
     /// </summary>
     internal static string? PathOverride;
 
+    /// <summary>
+    /// The lock file: <see cref="PathOverride"/>, or <c>meitou-gpu.lock</c> in the temp directory.
+    /// </summary>
     public static string FilePath => PathOverride ?? Path.Combine(Path.GetTempPath(), "meitou-gpu.lock");
 
     /// <summary>
@@ -63,6 +69,9 @@ public sealed class GpuLock : IDisposable
         }
     }
 
+    /// <summary>
+    /// The PID the lock file holds, or null when it cannot be read.
+    /// </summary>
     static int? Holder()
     {
         try
@@ -70,22 +79,53 @@ public sealed class GpuLock : IDisposable
             using var fs = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             return int.TryParse(new StreamReader(fs).ReadToEnd().Trim(), out int pid) ? pid : null;
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
+    /// <summary>
+    /// Whether a process with <paramref name="pid"/> is running.
+    /// </summary>
     static bool Alive(int pid)
     {
-        try { using var p = Process.GetProcessById(pid); return !p.HasExited; }
-        catch (ArgumentException) { return false; }
-        catch (InvalidOperationException) { return false; }
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return !p.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
+    /// <summary>
+    /// Releases the lock: closes the file and deletes it when it can.
+    /// </summary>
     public void Dispose()
     {
         if (_stream is null) return;
         _stream.Dispose();
         _stream = null;
-        try { File.Delete(FilePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        try
+        {
+            File.Delete(FilePath);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }

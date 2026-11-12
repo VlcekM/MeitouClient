@@ -18,6 +18,10 @@ using Meitou.Simulation.Saving;
 /// </summary>
 static class ModCheck
 {
+    /// <summary>
+    /// The command line: the save folder, how many ticks to run, the thread count of the parallel run and the mod folders (none: the enabled code
+    /// mods).
+    /// </summary>
     sealed record Options(string Save, int Ticks, int Threads, IReadOnlyList<string> ModFolders);
 
     /// <summary>
@@ -25,14 +29,26 @@ static class ModCheck
     /// </summary>
     sealed record Trace(List<ulong> World, List<Dictionary<string, ulong>> Systems)
     {
+        /// <summary>
+        /// The run's character count at the end (said with the report).
+        /// </summary>
         public int Characters { get; set; }
     }
 
+    /// <summary>
+    /// What every run shares: the game data, the population data read from it and the walkability.
+    /// </summary>
     sealed record Setup(GameDatabase Db, PopulationData Data, IWalkability Walk);
 
-    // The world being run, for the mods' Enqueue and Tick.
+    /// <summary>
+    /// The world being run, for the mods' Enqueue and Tick.
+    /// </summary>
     static World? s_current;
 
+    /// <summary>
+    /// <c>meitou-tools mod-check</c>: loads the setup and the mods, runs the three plays and compares them. Returns 0 when the runs agree, 1 when
+    /// they differ or no mod loads, 2 for a bad command line or a save without a quicksave.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         if (ParseOptions(args) is not { } options) return Usage();
@@ -47,6 +63,9 @@ static class ModCheck
         return Compare(options, setup, mods);
     }
 
+    /// <summary>
+    /// Prints the command line and returns 2.
+    /// </summary>
     static int Usage()
     {
         Console.Error.WriteLine("meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...");
@@ -54,6 +73,9 @@ static class ModCheck
         return 2;
     }
 
+    /// <summary>
+    /// The options from the command line (the save folder first), null when they are wrong.
+    /// </summary>
     static Options? ParseOptions(string[] args)
     {
         if (args.Length == 0 || args[0].StartsWith("--", StringComparison.Ordinal)) return null;
@@ -99,10 +121,14 @@ static class ModCheck
         if (options.ModFolders.Count == 0) return ModHost.EnabledCodeMods(install);
         var mods = options.ModFolders.Select(f => new ModInfo(Path.GetFileName(f), Path.Combine(f, Path.GetFileName(f) + ".mod"), ModSource.Local))
             .ToList();
-        foreach (var missing in mods.Where(m => !m.HasCode)) Console.Error.WriteLine($"mods      {missing.Folder} has no {ModList.CodeManifestFile}");
+        foreach (var missing in mods.Where(m => !m.HasCode))
+            Console.Error.WriteLine($"mods      {missing.Folder} has no {ModList.CodeManifestFile}");
         return [.. mods.Where(m => m.HasCode)];
     }
 
+    /// <summary>
+    /// Loads the code mods into a host bound to the world being run; null (said on the console) when there is none or none loads.
+    /// </summary>
     static ModHost? LoadMods(List<ModInfo> enabled, Setup setup)
     {
         if (enabled.Count == 0)
@@ -116,6 +142,10 @@ static class ModCheck
         return mods.Mods.Count > 0 ? mods : null;
     }
 
+    /// <summary>
+    /// Runs the save twice on one thread and once on <see cref="Options.Threads"/>, compares them and, on a difference, runs it without mods too.
+    /// Returns 0 when the runs agree, else 1.
+    /// </summary>
     static int Compare(Options options, Setup setup, ModHost mods)
     {
         var first = Play(options, setup, mods, threads: 1);
@@ -140,8 +170,10 @@ static class ModCheck
     {
         Console.WriteLine($"world     {characters} characters at the end of a run");
         if (characters < 64)
+        {
             Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; "
                 + "use a busier save");
+        }
     }
 
     /// <summary>
@@ -158,6 +190,10 @@ static class ModCheck
         Console.WriteLine($"baseline  {verdict}");
     }
 
+    /// <summary>
+    /// Loads the save into a new world (synchronous paths, no background population, seed 1, no snapshots), focuses it on the player squad and
+    /// records the ticks.
+    /// </summary>
     static Trace Play(Options options, Setup setup, ModHost? mods, int threads)
     {
         var save = SaveGame.Load(SaveFolder.Open(options.Save));
@@ -172,10 +208,19 @@ static class ModCheck
         SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
         mods?.RestoreSaveData(world, save.ModData);
         Focus(world);
-        try { return Record(world, options.Ticks, mods); }
-        finally { s_current = null; }
+        try
+        {
+            return Record(world, options.Ticks, mods);
+        }
+        finally
+        {
+            s_current = null;
+        }
     }
 
+    /// <summary>
+    /// Puts the camera focus on the player squad's leader, so the zones around it load as in the game.
+    /// </summary>
     static void Focus(World world)
     {
         if (world.Squads.Find(world.Player.Squad) is not { Leader.IsNone: false } squad) return;
@@ -183,6 +228,9 @@ static class ModCheck
         world.Commands.Enqueue(new FocusCommand(at) { Tick = world.Tick });
     }
 
+    /// <summary>
+    /// Runs <paramref name="ticks"/> ticks and records the world's hash and each hashed system's after every one.
+    /// </summary>
     static Trace Record(World world, int ticks, ModHost? mods)
     {
         var trace = new Trace([], []);
@@ -196,6 +244,9 @@ static class ModCheck
         return trace;
     }
 
+    /// <summary>
+    /// Each hashed system's state hash, by its index and label.
+    /// </summary>
     static Dictionary<string, ulong> SystemHashes(World world, ModHost? mods)
     {
         var hashes = new Dictionary<string, ulong>(StringComparer.Ordinal);
@@ -209,6 +260,9 @@ static class ModCheck
         return hashes;
     }
 
+    /// <summary>
+    /// A system's label: the owning mod's id and the system's name, else the system's type name.
+    /// </summary>
     static string Label(ITickSystem system, ModHost? mods) =>
         mods?.OwnerOf(system) is { } owner ? $"mod {owner.ModId} system '{owner.Name}'" : system.GetType().Name;
 
@@ -232,6 +286,9 @@ static class ModCheck
         return false;
     }
 
+    /// <summary>
+    /// The first index at which the two hash lists differ, -1 when they agree over the shorter.
+    /// </summary>
     static int FirstDifference(List<ulong> a, List<ulong> b)
     {
         for (int i = 0; i < Math.Min(a.Count, b.Count); i++)

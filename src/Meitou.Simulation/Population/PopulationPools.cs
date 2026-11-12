@@ -11,8 +11,17 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public sealed class PoolState
 {
+    /// <summary>
+    /// The desired max (<c>popd</c> / <c>popd2</c>).
+    /// </summary>
     public int Desired { get; set; }
+    /// <summary>
+    /// The current max (<c>pop</c> / <c>pop2</c>).
+    /// </summary>
     public float Current { get; set; }
+    /// <summary>
+    /// The game hour it last grew at (not saved).
+    /// </summary>
     public double Stamp { get; set; }
 
     /// <summary>
@@ -28,18 +37,37 @@ public sealed class PoolState
         Current = MathF.Min(Desired, Current + (float)(h * GrowthPerHour));
     }
 
+    /// <summary>
+    /// The current max's growth per game hour (<see cref="Grow"/>).
+    /// </summary>
     public const double GrowthPerHour = 3600.0 / 33 * 0.5 * 0.004;
 }
 
 /// <summary>
-/// A town's or nest's two pools (1 residents, 2 roaming) and its flags: made once (<c>started</c>), wiped out (<c>ded</c>) and when (<c>tod</c>, game hours).
+/// A town's or nest's two pools (1 residents, 2 roaming) and its flags: made once (<c>started</c>), wiped out (<c>ded</c>) and when (<c>tod</c>,
+/// game hours).
 /// </summary>
 public sealed class SitePools
 {
+    /// <summary>
+    /// Pool 1, the residents.
+    /// </summary>
     public PoolState Residents { get; } = new();
+    /// <summary>
+    /// Pool 2, the roaming squads.
+    /// </summary>
     public PoolState Roaming { get; } = new();
+    /// <summary>
+    /// <c>started</c>: the site was made once.
+    /// </summary>
     public bool Started { get; set; }
+    /// <summary>
+    /// <c>ded</c>: the site was wiped out.
+    /// </summary>
     public bool Ded { get; set; }
+    /// <summary>
+    /// <c>tod</c>: the game hour it was wiped out.
+    /// </summary>
     public float DiedAt { get; set; }
 
     /// <summary>
@@ -94,6 +122,9 @@ public sealed partial class PopulationSystem
 {
     #region Pools
 
+    /// <summary>
+    /// Each town site's pools, by site (null: not made yet).
+    /// </summary>
     SitePools?[] _townPools = [];
 
     /// <summary>
@@ -145,7 +176,8 @@ public sealed partial class PopulationSystem
         foreach (var site in _data.Sites)
         {
             if (site.InstanceId.Length > 0 && saved.TownStates.TryGetValue(site.InstanceId, out var state)
-                && (state.Bools.GetValueOrDefault("started") || state.Floats.GetValueOrDefault("popd") > 0 || state.Floats.GetValueOrDefault("popd2") > 0))
+                && (state.Bools.GetValueOrDefault("started") || state.Floats.GetValueOrDefault("popd") > 0
+                    || state.Floats.GetValueOrDefault("popd2") > 0))
                 _townPools[site.Index] = SitePools.Read(state, now);
         }
     }
@@ -227,7 +259,8 @@ public sealed partial class PopulationSystem
             var zone = Meitou.Data.World.WorldLayout.ZoneOf(_data.Sites[s].Position.X, _data.Sites[s].Position.Z);
             if (world.LoadedZones is { } loaded && !loaded.Contains(zone)) continue;
 
-            if (_townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool || roamers[s] > WipeRoamingLiving)
+            if (_townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool
+                || roamers[s] > WipeRoamingLiving)
                 continue;
 
             pools.Ded = true;
@@ -266,8 +299,14 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool Regenerates(Platoon p) => p.Pinned && TownAlive(p.Origin) && _data.Db.Find(p.TemplateId)?.GetBool("regenerates") == true;
 
+    /// <summary>
+    /// Whether a squad of <paramref name="templateId"/> of a living town is made again (its template's <c>regenerates</c>).
+    /// </summary>
     bool Regenerates(string templateId, int site) => TownAlive(site) && _data.Db.Find(templateId)?.GetBool("regenerates") == true;
 
+    /// <summary>
+    /// Whether a town site's pools say it is not wiped out.
+    /// </summary>
     bool TownAlive(int site) => site >= 0 && site < _townPools.Length && _townPools[site] is not { Ded: true };
 
     /// <summary>
@@ -287,7 +326,8 @@ public sealed partial class PopulationSystem
             if (p.Origin != site || !p.Pinned || p.State != PlatoonState.Unloaded || p.Unmade) continue;
 
             // Residents only: the pool counts them (base saves: <c>pop</c> = the resident platoons' size, not the bar squads').
-            if (p.Faction != _data.SiteFactions[site]) continue;   // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
+            // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
+            if (p.Faction != _data.SiteFactions[site]) continue;
             if (p.Stored is { HomeBuilding: null } || p.Saved is { } r && !r.Source.Record.Bools.GetValueOrDefault("is resident")) continue;
 
             int size, living;
@@ -298,7 +338,8 @@ public sealed partial class PopulationSystem
             else if (p.Saved is { } saved)
             {
                 (size, living) = (saved.Members.Count,
-                    saved.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true)));
+                    saved.Members.Count(m => !m.Dead && !m.Gone
+                        && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true)));
             }
             else
             {
@@ -359,7 +400,9 @@ public sealed partial class PopulationSystem
 
         // The old squad's building shop (kept when it left the world, else a save's) leaves its artifacts in its containers for the fresh one's.
         var oldShop = p.Stored?.Shop ?? (p.Saved is { } saved
-            ? saved.Shop ?? Saving.ShopSave.Read(world, new Squad { Id = -1, TemplateId = p.TemplateId, Faction = p.Faction, Town = p.Origin, HomeBuilding = home }, saved.Source.Record, _data)
+            ? saved.Shop ?? Saving.ShopSave.Read(world,
+                new Squad { Id = -1, TemplateId = p.TemplateId, Faction = p.Faction, Town = p.Origin, HomeBuilding = home }, saved.Source.Record,
+                _data)
             : null);
         if (oldShop is not null)
         {
@@ -400,6 +443,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     Squad? MakeUnmade(World world, Platoon p)
     {
+        if (p.Origin < 0) return MakeUnmadeWild(world, p);
         var site = _data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         var home = p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null;
@@ -423,6 +467,31 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// A save's never-made wild platoon (<see cref="Saving.SaveLoader.UnmadeWild"/>) made from its template into the same platoon where it
+    /// was saved, round its nest or (homeless) where it stands. Its generated characters are kept for streaming and written into its original
+    /// save record, so neither activation nor a later load rolls its template again. Null when the template plans no one.
+    /// </summary>
+    Squad? MakeUnmadeWild(World world, Platoon p)
+    {
+        if (p.Saved is not { } sp || RollTemplate(world, p).Built is not { } built) return null;
+
+        var (centre, homeRadius) = WildHome(sp, p.Position);
+        var squad = SpawnSquad(world, built, null, 0, platoonId: p.Id, wild: true);
+        squad.HomeCentre = centre;
+        squad.HomeRadius = homeRadius;
+        squad.Money = p.Money;
+
+        p.Stored = new StoredSquad { Name = squad.Name, Pinned = false };
+        p.Size = built.Plan.TotalMembers;
+        p.Unmade = false;
+        sp.Source.Record.Bools["never been activated"] = false;
+        p.State = PlatoonState.Loaded;
+        p.SquadId = squad.Id;
+        p.UnloadAtTick = -1;
+        return squad;
+    }
+
+    /// <summary>
     /// A town's roamer leaves the world for good (<c>FUN_1406bab60</c> -&gt; <c>FUN_140796b30</c>, <b>Verified</b>): one not intact and not
     /// regenerating takes its living members out of its town's roaming pool, only while the pool is above 0 and with no floor. Its faction's
     /// prosperity drops by 10 (floor 0) with it, pool or not (<c>FUN_1406bab60</c>; platoon +0xa4 read as the member count).
@@ -441,6 +510,9 @@ public sealed partial class PopulationSystem
 
     #region Nests
 
+    /// <summary>
+    /// Each nest site's pools, by wild site.
+    /// </summary>
     readonly Dictionary<int, SitePools> _nestPools = [];
 
     /// <summary>
@@ -454,7 +526,13 @@ public sealed partial class PopulationSystem
     /// </summary>
     public const float NestGuardRadius = 1250;
 
+    /// <summary>
+    /// The wild sites that are nests (null: not listed yet; listed again when the wild sites change).
+    /// </summary>
     int[]? _nests;
+    /// <summary>
+    /// The wild site count <see cref="_nests"/> was listed for.
+    /// </summary>
     int _nestsOf;
 
     /// <summary>
@@ -506,7 +584,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on the ground.
+    /// Whether the camera focus (none: no test) is within sqrt(<see cref="NestFocusBlockSquared"/>) of the nest centre in 3D, the centre taken on
+    /// the ground.
     /// </summary>
     bool FocusBlocksNest(World world, Vector2 centre) =>
         _focus is { } f
@@ -555,7 +634,8 @@ public sealed partial class PopulationSystem
         }
 
         var budget = new NestBudget(
-            (int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded, centre);
+            (int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded,
+            centre);
         if (budget.Members >= budget.Cap)
         {
             // Full: nothing to make. A pool spent below one member with no one left alive can make nothing again: wiped out.
@@ -567,11 +647,12 @@ public sealed partial class PopulationSystem
         long loadId = state.LoadId;
         ulong seed = world.Seed;
         var walk = world.Walkability;
+        var regions = RegionsOf(world);
         var spots = players;
         if (_work is null)
-            SpawnWild(world, BuildNest(site, loadId, seed, walk, spots, budget));
+            SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, spots, budget));
         else
-            _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, spots, budget)));
+            _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, spots, budget)));
     }
 
     /// <summary>
@@ -606,8 +687,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A nest that could make no squad (no entry fits or weighs anything) and has no squad left standing is wiped out for good (<c>FUN_140927440</c>,
-    /// <c>Nest::vfunc_103</c>): <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here (its rule is
-    /// Unknown): a squad with someone alive.
+    /// <c>Nest::vfunc_103</c>): <c>ded</c>, the hour as <c>tod</c>, and "{nest} has been wiped out". Engine choice for the original's "intact" here
+    /// (its rule is Unknown): a squad with someone alive.
     /// </summary>
     void CheckWipe(World world, WildSite site, SiteState state)
     {

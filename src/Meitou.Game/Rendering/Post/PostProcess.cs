@@ -28,25 +28,24 @@ namespace Meitou.Game.Rendering.Post;
 /// </remarks>
 public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 {
-    /// <summary>
-    /// A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped minification).
-    /// </summary>
-    sealed class Target2D(GpuTexture texture, TextureMinFilter min, TextureMagFilter mag)
-    {
-        public readonly GpuTexture Texture = texture;
-        public readonly TextureMinFilter Min = min;
-        public readonly TextureMagFilter Mag = mag;
-        public int Width => Texture.Desc.Width;
-        public int Height => Texture.Desc.Height;
-        public InternalFormat Format => Texture.Desc.Format;
-        public RenderTarget Attachment => new(Texture.Attachment(), LoadOp.Load, default);
-    }
+    #region Chain and its outputs
 
+    /// <summary>
+    /// What every pass draws with: what VkGl made of the GL state the chain set (no culling, depth test or write, bias or blending; all
+    /// channels; filled; one sample).
+    /// </summary>
+    internal static readonly DrawState PassState = new(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal,
+        false, 0, 0, BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
+        PolygonKind.Fill, false, false);
     /// <summary>
     /// The native GPU API (docs/renderer-native.md 7.1 step 8); ports use it instead of looking it up.
     /// </summary>
     public GpuContext Gpu { get; }
+    /// <inheritdoc/>
     IGpuContext IWorldPostChain.Context => Gpu;
+    /// <summary>
+    /// The chain's options (anti-aliasing, the upscaler, the occlusion, the heat haze and the rest), read every frame.
+    /// </summary>
     public PostOptions Options { get; }
     /// <summary>
     /// What the final image goes to: an RGBA8 colour target at least the display size (the window's backbuffer, or an offscreen
@@ -57,6 +56,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// What the scene is drawn into (valid after <see cref="Begin"/>): the scene colour and depth, at the render size.
     /// </summary>
     public PassTargets SceneTargets { get; private set; } = null!;
+    /// <inheritdoc/>
     PassTargets IWorldPostChain.SceneTargetsForParticles => SceneTargets;
     /// <summary>
     /// The scene's depth (reversed-Z, <see cref="DepthConvention"/>; valid after <see cref="Begin"/>).
@@ -75,77 +75,161 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// On (default): <see cref="End"/> builds the pyramid (<c>--no-occlusion-cull</c> turns it off).
     /// </summary>
     public bool OcclusionCull { get; set; } = true;
+
+    /// <summary>
+    /// Compiles the full-screen passes and makes the chain's parts (occlusion, light shafts, bloom, fog shading rate, upscaler exposure, late
+    /// particles, merged kernels); the targets are made by the first <see cref="Begin"/>.
+    /// </summary>
+    public PostProcess(GpuContext gpu, PostOptions options)
+    {
+        Gpu = gpu;
+        Options = options;
+        var (ssao, blur) = (new AmbientOcclusion.SsaoPass(gpu), new AmbientOcclusion.BlurPass(gpu));
+        (_luminancePass, _adaptPass) = (new LuminancePass(gpu), new AdaptPass(gpu));
+        _occlusion = new AmbientOcclusion(this, ssao, blur, new AmbientOcclusion.SsaoMaskPass(gpu));
+        (_compositePass, _fxaaPass, _hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
+        _smaaPasses = new SmaaPasses(gpu);
+        (_velocityPass, _taaPass, _fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
+        _cloudMotionPass = new CloudMotionPass(gpu);
+        (_particleDepthPass, _particleCompositePass, _particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu),
+            new ParticleCoveragePass(gpu));
+        _particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
+        _shafts = new LightShafts(this);
+        _bloom = new Bloom(this);
+        _fogRate = new FogRateImage(this);
+        _upscaleExposure = new UpscaleExposure(this);
+        _lateParticles = new LateParticles(this);
+        _merged = new MergedKernels(this);
+    }
+
     /// <summary>
     /// What this frame's foliage cull may test against (empty when off, on the first frame, after a camera cut).
     /// </summary>
     public OcclusionView OcclusionFor(Vector3 eye) => OcclusionCull && ViewWindow.Current.IsWhole && Hiz is { } hiz ? hiz.ViewFor(eye) : default;
 
-    // width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
-    int _width, _height, _displayWidth, _displayHeight;
-    float _allocatedScale;
-    UpscalerKind _allocatedKind;
-    Target2D? _sceneColour, _sceneDepth;
-    // Temporal upscaling: the motion and depth targets, the display-size history (ping-pong).
-    Target2D? _motion, _upscaleDepth, _reactive, _historyA, _historyB;
-    bool _historyValid, _warnedFallback;
-    // the GI resolve (docs/render-gi.md "Resolve"): the lit fragments' albedo, the probes' light at 1/giDivisor of the render size
-    Target2D? _giAlbedo, _giLow;
-    int _giDivisor;
-    long _frameIndex;
-    Target2D? _aoA, _aoB, _aoMask;
-    Target2D? _ldr, _ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's (or SMAA's) when the heat haze follows it
-    Target2D? _smaaEdges, _smaaWeights;   // SMAA's edges and blending weights
-    GpuTexture? _flowTexture, _perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze)
-    Target2D? _luminance, _adaptA, _adaptB;   // Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong)
-    bool _adaptedValid;
-    int _adaptedFrames;
-    readonly System.Diagnostics.Stopwatch _adaptClock = new();
+    /// <summary>
+    /// Frees the vendor upscaler, every target and part of the chain, the passes' programs and the heat haze's textures.
+    /// </summary>
+    public void Dispose()
+    {
+        External?.Dispose();
+        _retired?.Dispose();
+        Free();
+        _fogRate.Dispose();
+        _shafts.Dispose();
+        DisposeSceneLayers();
+        DisposeReflections();
+        _lateParticles.Dispose();
+        DisposeLateFogShadow();
+        _merged.Dispose();
+        _upscaleExposure.Dispose();
+        _bloom.Dispose();
+        DisposeDepthOfField();
+        DisposeGtao();
+        DisposeLampShadows();
+        Hiz?.Dispose();
+        _occlusion.Dispose();
+        foreach (var p in new FullscreenProgram[] { _luminancePass, _adaptPass, _compositePass, _fxaaPass, _hazePass,
+                _velocityPass, _cloudMotionPass, _taaPass, _fogPass, _particleDepthPass, _particleSoftDepthPass, _particleCompositePass,
+                _particleCoveragePass }) p.P.Dispose();
+        _smaaPasses.Dispose();
+        foreach (var pass in _giResolvePasses) pass?.P.Dispose();
+        _giApplyPass?.P.Dispose();
+        _aoApplyPass?.P.Dispose();
+        _flowTexture?.Dispose();
+        _perturbationTexture?.Dispose();
+    }
+
+    #endregion
+
+    #region Full-screen pass programs
 
     // The native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they
     // replaced. Since phase 8 stage 2 each draws in a rendering of its own (8.6). Every handle is resolved once, here.
-    readonly SsaoPass _ssao;
-    readonly SsaoMaskPass _ssaoMask;
-    readonly BlurPass _blur;
+    /// <summary>
+    /// The luminance measure pass.
+    /// </summary>
     readonly LuminancePass _luminancePass;
+    /// <summary>
+    /// The exposure adaptation pass.
+    /// </summary>
     readonly AdaptPass _adaptPass;
+    /// <summary>
+    /// The composite pass.
+    /// </summary>
     readonly CompositePass _compositePass;
+    /// <summary>
+    /// The FXAA pass.
+    /// </summary>
     readonly FxaaPass _fxaaPass;
+    /// <summary>
+    /// SMAA's three passes.
+    /// </summary>
     readonly SmaaPasses _smaaPasses;
+    /// <summary>
+    /// The heat haze pass.
+    /// </summary>
     readonly HeatHazePass _hazePass;
+    /// <summary>
+    /// The upscalers' velocity pass.
+    /// </summary>
     readonly VelocityPass _velocityPass;
+    /// <summary>
+    /// The clouds' motion pass.
+    /// </summary>
     readonly CloudMotionPass _cloudMotionPass;
+    /// <summary>
+    /// The TAA pass.
+    /// </summary>
     readonly TaaPass _taaPass;
+    /// <summary>
+    /// The fog volumes pass.
+    /// </summary>
     readonly FogPass _fogPass;
-    readonly GiResolvePass?[] _giResolvePasses = new GiResolvePass?[4];   // made the first time the GI resolve runs, by gihybrid's parts: bit 0 relocated probes, bit 1 the radiance cache
+    /// <summary>
+    /// The GI resolve passes, each made the first time the GI resolve runs with it, by gihybrid's parts: bit 0 relocated probes, bit 1 the radiance
+    /// cache.
+    /// </summary>
+    readonly GiResolvePass?[] _giResolvePasses = new GiResolvePass?[4];
+    /// <summary>
+    /// The GI resolve's upsample pass, made with the first resolve pass.
+    /// </summary>
     GiApplyPass? _giApplyPass;
+    /// <summary>
+    /// The low-resolution particles' depth downsample pass.
+    /// </summary>
     readonly ParticleDepthPass _particleDepthPass;
+    /// <summary>
+    /// The soft particles' depth copy pass.
+    /// </summary>
     readonly ParticleSoftDepthPass _particleSoftDepthPass;
+    /// <summary>
+    /// The low-resolution particles' composite pass.
+    /// </summary>
     readonly ParticleCompositePass _particleCompositePass;
+    /// <summary>
+    /// The low-resolution particles' coverage pass.
+    /// </summary>
     readonly ParticleCoveragePass _particleCoveragePass;
-    AoApplyPass? _aoApplyPass;   // made the first time the occlusion goes onto the scene before the particles (ApplySsao)
+    /// <summary>
+    /// The occlusion's multiply pass, made the first time the occlusion goes onto the scene before the particles (ApplySsao).
+    /// </summary>
+    AoApplyPass? _aoApplyPass;
 
     /// <summary>
     /// One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.
     /// </summary>
-    abstract class FullscreenProgram
+    internal abstract class FullscreenProgram
     {
+        /// <summary>
+        /// The program.
+        /// </summary>
         public readonly LegacyProgram P;
+        /// <summary>
+        /// Compiles the shared vertex shader with <paramref name="fragment"/>.
+        /// </summary>
         protected FullscreenProgram(GpuContext gpu, string fragment, string name) => P = LegacyProgram.Create(gpu, PostProcessShaders.Vertex,
             fragment, name);
-    }
-
-    sealed class SsaoMaskPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Scene;
-        public SsaoMaskPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoMask, "post ssao mask") => Scene = P.Sampler("uScene");
-    }
-
-    sealed class BlurPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Ao, Mask;
-        public readonly UniformHandle Step, CharacterAo;
-        public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") =>
-            (Ao, Mask, Step, CharacterAo) = (P.Sampler("uAo"), P.Sampler("uMask"), P.Uniform("uStep"), P.Uniform("uCharacterAo"));
     }
 
     /// <summary>
@@ -153,22 +237,52 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class AoApplyPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uAo</c>.
+        /// </summary>
         public readonly SamplerSlot Ao;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public AoApplyPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoApply, "post ssao apply") => Ao = P.Sampler("uAo");
     }
 
+    /// <summary>
+    /// Kenshi's exposure: the scene's luminance into the measure target (<see cref="PostProcessShaders.Luminance"/>).
+    /// </summary>
     sealed class LuminancePass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uScene</c>.
+        /// </summary>
         public readonly SamplerSlot Scene;
+        /// <summary>
+        /// The program's uniform <c>uCell</c>.
+        /// </summary>
         public readonly UniformHandle Cell;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public LuminancePass(GpuContext gpu) : base(gpu, PostProcessShaders.Luminance, "post luminance") => (Scene, Cell) = (P.Sampler("uScene"),
             P.Uniform("uCell"));
     }
 
+    /// <summary>
+    /// The adapted luminance, smoothed towards the measure and clamped to the band (<see cref="PostProcessShaders.Adapt"/>).
+    /// </summary>
     sealed class AdaptPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uLuminance</c>, <c>uLast</c>.
+        /// </summary>
         public readonly SamplerSlot Luminance, Last;
+        /// <summary>
+        /// The program's uniforms <c>uLevel</c>, <c>uBlend</c>, <c>uBand</c>.
+        /// </summary>
         public readonly UniformHandle Level, Blend, Band;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public AdaptPass(GpuContext gpu) : base(gpu, PostProcessShaders.Adapt, "post adapt")
         {
             (Luminance, Last) = (P.Sampler("uLuminance"), P.Sampler("uLast"));
@@ -176,10 +290,26 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
+    /// <summary>
+    /// The composite into the display picture: exposure, occlusion, bloom, sharpening, tone and grade, dither
+    /// (<see cref="PostProcessShaders.Composite"/>).
+    /// </summary>
     sealed class CompositePass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uScene</c>, <c>uAo</c>, <c>uAdapted</c>, <c>uBloom</c>.
+        /// </summary>
         public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
-        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance, BloomStrength, HdrPeak;
+        /// <summary>
+        /// The program's uniforms <c>uAuto</c>, <c>uExposure</c>, <c>uUseAo</c>, <c>uDither</c>, <c>uSceneSize</c>, <c>uSharpen</c>, <c>uTone</c>,
+        /// <c>uToneMix</c>, <c>uGrade</c>, <c>uSaturation</c>, <c>uContrast</c>, <c>uNight</c>, <c>uBalance</c>, <c>uBloomStrength</c>,
+        /// <c>uHdrPeak</c>.
+        /// </summary>
+        public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance,
+            BloomStrength, HdrPeak;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
@@ -192,10 +322,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
+    /// <summary>
+    /// The game's FXAA on the LDR picture (<see cref="PostProcessShaders.Fxaa"/>).
+    /// </summary>
     sealed class FxaaPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uImage</c>.
+        /// </summary>
         public readonly SamplerSlot Image;
+        /// <summary>
+        /// The program's uniform <c>uTexel</c>.
+        /// </summary>
         public readonly UniformHandle Texel;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FxaaPass(GpuContext gpu) : base(gpu, PostProcessShaders.Fxaa, "post fxaa") => (Image, Texel) = (P.Sampler("uImage"),
             P.Uniform("uTexel"));
     }
@@ -206,8 +348,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class SmaaPasses
     {
+        /// <summary>
+        /// The edges, weights and blend programs.
+        /// </summary>
         public readonly LegacyProgram Edges, Weights, Blend;
+        /// <summary>
+        /// The samplers: the edges pass's <c>uImage</c>, the weights pass's <c>uEdges</c>, the blend pass's <c>uImage</c> and <c>uWeights</c>.
+        /// </summary>
         public readonly SamplerSlot EdgesImage, WeightsEdges, BlendImage, BlendWeights;
+        /// <summary>
+        /// Compiles the three programs and resolves their samplers.
+        /// </summary>
         public SmaaPasses(GpuContext gpu)
         {
             Edges = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, PostProcessShaders.SmaaEdges, "post smaa edges");
@@ -217,13 +368,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (BlendImage, BlendWeights) = (Blend.Sampler("uImage"), Blend.Sampler("uWeights"));
         }
 
+        /// <summary>
+        /// Frees the three programs.
+        /// </summary>
         public void Dispose() { Edges.Dispose(); Weights.Dispose(); Blend.Dispose(); }
     }
 
+    /// <summary>
+    /// The game's heat haze on the final picture (<see cref="PostProcessShaders.HeatHaze"/>).
+    /// </summary>
     sealed class HeatHazePass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uFlow</c>, <c>uPerturbation</c>, <c>uDepth</c>, <c>uImage</c>.
+        /// </summary>
         public readonly SamplerSlot Flow, Perturbation, Depth, Image;
+        /// <summary>
+        /// The program's uniforms <c>uPhase</c>, <c>uAmount</c>, <c>uTan</c>, <c>uNearFar</c>, <c>uFarClip</c>, <c>uHasDepth</c>.
+        /// </summary>
         public readonly UniformHandle Phase, Amount, Tan, NearFar, FarClip, HasDepth;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public HeatHazePass(GpuContext gpu) : base(gpu, PostProcessShaders.HeatHaze, "post heat haze")
         {
             (Flow, Perturbation, Depth, Image) = (P.Sampler("uFlow"), P.Sampler("uPerturbation"), P.Sampler("uDepth"), P.Sampler("uImage"));
@@ -237,8 +403,18 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class CloudMotionPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uClouds</c>, <c>uCloudDistance</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, Clouds, Distance;
+        /// <summary>
+        /// The program's uniforms <c>uToPrev</c>, <c>uPlanes</c>, <c>uJitterNdc</c>, <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>,
+        /// <c>uWind</c>, <c>uSun</c>, <c>uSunMotion</c>.
+        /// </summary>
         public readonly UniformHandle ToPrev, Planes, JitterNdc, Tan, Right, Up, Back, Wind, Sun, SunMotion;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public CloudMotionPass(GpuContext gpu) : base(gpu, UpscaleShaders.CloudMotion, "post cloud motion")
         {
             (NearDepth, Clouds, Distance) = (P.Sampler("uNearDepth"), P.Sampler("uClouds"), P.Sampler("uCloudDistance"));
@@ -248,12 +424,29 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
+    /// <summary>
+    /// The upscalers' inputs from the scene depth (<see cref="UpscaleShaders.Velocity"/>): mode 0 the motion vectors, 1 the depth, 2 the reactive
+    /// mask.
+    /// </summary>
     sealed class VelocityPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uNearDepth</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth;
+        /// <summary>
+        /// The program's uniforms <c>uNearToPrev</c>, <c>uNearPlanes</c>, <c>uFullPlanes</c>, <c>uJitterNdc</c>, <c>uMode</c>, <c>uFlipDepthY</c>,
+        /// <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uEyeY</c>, <c>uWaterY</c>, <c>uWaterReactive</c>.
+        /// </summary>
         public readonly UniformHandle NearToPrev, NearPlanes, FullPlanes, JitterNdc, Mode, FlipDepthY, Tan, Right, Up, Back, EyeY, WaterY,
             WaterReactive;
+        /// <summary>
+        /// The program's uniforms <c>uSun</c>, <c>uSunMotion</c>.
+        /// </summary>
         public readonly UniformHandle Sun, SunMotionUniform;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public VelocityPass(GpuContext gpu) : base(gpu, UpscaleShaders.Velocity, "post velocity")
         {
             (Sun, SunMotionUniform) = (P.Uniform("uSun"), P.Uniform("uSunMotion"));
@@ -266,10 +459,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
+    /// <summary>
+    /// The TAA into the display-size history (<see cref="UpscaleShaders.Taa"/>).
+    /// </summary>
     sealed class TaaPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uColour</c>, <c>uMotion</c>, <c>uHistory</c>.
+        /// </summary>
         public readonly SamplerSlot Colour, Motion, History;
+        /// <summary>
+        /// The program's uniforms <c>uRenderSize</c>, <c>uDisplaySize</c>, <c>uJitter</c>, <c>uBlend</c>, <c>uReset</c>.
+        /// </summary>
         public readonly UniformHandle RenderSize, DisplaySize, Jitter, Blend, Reset;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public TaaPass(GpuContext gpu) : base(gpu, UpscaleShaders.Taa, "post taa")
         {
             (Colour, Motion, History) = (P.Sampler("uColour"), P.Sampler("uMotion"), P.Sampler("uHistory"));
@@ -278,27 +483,24 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    sealed class SsaoPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Depth, Mask;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY, Contact;
-        public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
-        {
-            (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
-                P.Uniform("uWaterY"));
-            (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
-                P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
-            (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
-            Contact = P.Uniform("uContact");
-        }
-    }
-
-
-    /// <summary>Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).</summary>
+    /// <summary>
+    /// Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).
+    /// </summary>
     sealed class ContactPass : FullscreenProgram
     {
+        /// <summary>
+        /// The depth, the GI surfaces and the traced sun's term.
+        /// </summary>
         public readonly SamplerSlot Depth, Surface, Term;
+
+        /// <summary>
+        /// The view's tangents, planes, size, axes and eye, the water height, the march's terms and whether the surfaces and the term are bound.
+        /// </summary>
         public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact, SurfaceOn, TermOn;
+
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ContactPass(GpuContext gpu) : base(gpu, PostProcessShaders.Contact, "post contact")
         {
             (Surface, SurfaceOn, Term, TermOn) = (P.Sampler("uSurface"), P.Uniform("uSurfaceOn"), P.Sampler("uTerm"), P.Uniform("uTermOn"));
@@ -307,16 +509,34 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
         }
     }
+
+    /// <summary>
+    /// The contact shadows' pass (made at its first use).
+    /// </summary>
     ContactPass? _contactPass;
 
-    /// <summary>The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).</summary>
+    /// <summary>
+    /// The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).
+    /// </summary>
     sealed class FogPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uShaftInjected</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, ShaftInjected;
+        /// <summary>
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uWaterY</c>.
+        /// </summary>
         public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, WaterY;
 
-        // The light shafts' grid (LightShaftShaders.FogVolumeShadow): the volumes shadowed where the sun does not reach.
+        /// <summary>
+        /// The light shafts' grid (LightShaftShaders.FogVolumeShadow): the volumes shadowed where the sun does not reach. The program's uniforms
+        /// <c>uShaftGrid</c>, <c>uShaftRange</c>, <c>uShaftTan</c>, <c>uShaftRight</c>, <c>uShaftUp</c>, <c>uShaftBack</c>, <c>uShaftFog</c>.
+        /// </summary>
         public readonly UniformHandle ShaftGrid, ShaftRange, ShaftTan, ShaftRight, ShaftUp, ShaftBack, ShaftFog;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public FogPass(GpuContext gpu) : base(gpu, PostProcessShaders.FogVolumes, "post fog volumes")
         {
             NearDepth = P.Sampler("uNearDepth");
@@ -334,8 +554,18 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     abstract class GiPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uAlbedo</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, Albedo;
+        /// <summary>
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uGiEye</c>, <c>uFullSize</c>,
+        /// <c>uDiv</c>.
+        /// </summary>
         public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, Eye, FullSize, Div;
+        /// <summary>
+        /// Compiles the shared vertex shader with <paramref name="fragment"/> and resolves the shared handles.
+        /// </summary>
         protected GiPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
             (NearDepth, Albedo) = (P.Sampler("uNearDepth"), P.Sampler("uAlbedo"));
@@ -345,17 +575,41 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
+    /// <summary>
+    /// The resolve: the probes' light at the low resolution (<see cref="Gi.GiResolveShaders.ResolveFor"/>, from relocated probes and with the
+    /// radiance cache by its switches).
+    /// </summary>
     sealed class GiResolvePass : GiPass
     {
+        /// <summary>
+        /// The radiance cache's output (<c>uGiCache</c>; unset without the cache).
+        /// </summary>
         public readonly SamplerSlot Cache;
-        public GiResolvePass(GpuContext gpu, bool relocate, bool cache) : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, cache), "post gi resolve") =>
+
+        /// <summary>
+        /// Compiles the variant and resolves its handles.
+        /// </summary>
+        public GiResolvePass(GpuContext gpu, bool relocate, bool cache)
+            : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, cache), "post gi resolve") =>
             Cache = cache ? P.Sampler("uGiCache") : default;
     }
 
+    /// <summary>
+    /// The depth-aware upsample of the resolve added to the scene (<see cref="Gi.GiResolveShaders.Apply"/>).
+    /// </summary>
     sealed class GiApplyPass : GiPass
     {
+        /// <summary>
+        /// The program's sampler <c>uLow</c>.
+        /// </summary>
         public readonly SamplerSlot Low;
+        /// <summary>
+        /// The program's uniform <c>uLowSize</c>.
+        /// </summary>
         public readonly UniformHandle LowSize;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public GiApplyPass(GpuContext gpu) : base(gpu, Gi.GiResolveShaders.Apply, "post gi apply") => (Low, LowSize) = (P.Sampler("uLow"),
             P.Uniform("uLowSize"));
     }
@@ -365,8 +619,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class ParticleDepthPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Depth;
+        /// <summary>
+        /// The program's uniforms <c>uFullSize</c>, <c>uDiv</c>, <c>uLayer</c>, <c>uPlanes</c>.
+        /// </summary>
         public readonly UniformHandle FullSize, Div, Layer, Planes;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleDepthPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleDepth, "post particle depth") =>
             (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"),
                     P.Uniform("uPlanes"));
@@ -377,7 +640,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class ParticleSoftDepthPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's sampler <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Depth;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleSoftDepthPass(GpuContext gpu) : base(gpu,
             PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
     }
@@ -387,8 +656,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class ParticleCompositePass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uAccum</c>, <c>uLowDepth</c>, <c>uAccumFar</c>, <c>uLowDepthFar</c>, <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
+        /// <summary>
+        /// The program's uniforms <c>uLowSize</c>, <c>uNearPlanes</c>, <c>uDiv</c>, <c>uScale</c>, <c>uFootprint</c>.
+        /// </summary>
         public readonly UniformHandle LowSize, NearPlanes, Div, Scale, Footprint;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleCompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
@@ -403,8 +681,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     sealed class ParticleCoveragePass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uAccum</c>, <c>uLowDepth</c>, <c>uAccumFar</c>, <c>uLowDepthFar</c>, <c>uDepth</c>.
+        /// </summary>
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
+        /// <summary>
+        /// The program's uniforms <c>uLowSize</c>, <c>uNearPlanes</c>, <c>uDiv</c>, <c>uFullSize</c>, <c>uLimit</c>.
+        /// </summary>
         public readonly UniformHandle LowSize, NearPlanes, Div, FullSize, Limit;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ParticleCoveragePass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleCoverage, "post particle coverage")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
@@ -414,84 +701,84 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    float _nearPlane = 1, _farPlane = 1000, _fovY = 0.87f, _aspect = 1;
-    bool _haveScene;
+    #endregion
 
-    // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
-    const int MaxStamps = 40;
-    sealed class StampSet
-    {
-        public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
-        public readonly string[] Names = new string[MaxStamps];
-        public int Count;
-        public long Frame;
-        public long Tag;
-    }
-    readonly Queue<StampSet> _pendingStamps = new();
-    readonly Stack<StampSet> _freeStamps = new();
-    StampSet? _stamps;
-    Action<IGpuCommandList>? _stampWriter;
-    QuerySlot _written;
-    readonly Dictionary<string, (double Sum, int Count)> _costs = [];
+    #region Targets
 
     /// <summary>
-    /// The benchmark harness's frame number for the frame begun next; <see cref="OnCost"/> hands it back with each section's GPU ms once the frame's
-    /// timestamps have been read.
+    /// Width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     /// </summary>
-    public long CostTag { get; set; }
-    public Action<long, string, double>? OnCost { get; set; }
+    int _width, _height, _displayWidth, _displayHeight;
+    /// <summary>
+    /// The upscaler scale the targets were made for.
+    /// </summary>
+    float _allocatedScale;
+    /// <summary>
+    /// The upscaler the targets were made for.
+    /// </summary>
+    UpscalerKind _allocatedKind;
+    /// <summary>
+    /// The scene's colour (RGBA16F) and depth targets at the render size.
+    /// </summary>
+    Target2D? _sceneColour, _sceneDepth;
+    /// <summary>
+    /// Whether each format can be a storage image, asked once (<see cref="SupportsStorage"/>).
+    /// </summary>
+    readonly Dictionary<InternalFormat, bool> _storageSupport = [];
+    /// <summary>
+    /// The point sampler the kernels read their inputs with (made with the first use).
+    /// </summary>
+    GpuSampler _pointSampler;
+    /// <summary>
+    /// Whether the failed allocation has been logged (once).
+    /// </summary>
+    bool _unallocatedLogged;
+    /// <summary>
+    /// The targets could not be made (out of video memory): the frame draws no world, and the next <see cref="Begin"/> tries again (the old
+    /// targets, released this frame, are freed by then, and the guard has started evicting).
+    /// </summary>
+    public bool Unallocated { get; private set; }
 
     /// <summary>
-    /// What every pass draws with: what VkGl made of the GL state the chain set (no culling, depth test or write, bias or blending; all
-    /// channels; filled; one sample).
+    /// Every target made (the chain's own and its parts'), for freeing them.
     /// </summary>
-    static readonly DrawState PassState = new(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal,
-        false, 0, 0, BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
-        PolygonKind.Fill, false, false);
-
-    public PostProcess(GpuContext gpu, PostOptions options)
-    {
-        Gpu = gpu;
-        Options = options;
-        (_ssao, _blur, _luminancePass, _adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
-        _ssaoMask = new SsaoMaskPass(gpu);
-        (_compositePass, _fxaaPass, _hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
-        _smaaPasses = new SmaaPasses(gpu);
-        (_velocityPass, _taaPass, _fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
-        _cloudMotionPass = new CloudMotionPass(gpu);
-        (_particleDepthPass, _particleCompositePass, _particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu),
-            new ParticleCoveragePass(gpu));
-        _particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
-    }
-
-    // ---- targets ----
-
     IEnumerable<Target2D> Targets() =>
-        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _aoA, _aoB, _aoMask, _gtaoPacked, _terrainResolve, _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth, _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _rateDistance, _rateImage, _neutralRate, _giAlbedo, _giLow, _lampLost, _ssrHit, _ssrLow, _shaftInjected, _shaftLight, _shaftScatter, _shaftRaw, _shaftHistory, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1 }.OfType<Target2D>();
+        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _occlusion.A, _occlusion.B, _occlusion.Mask,
+                _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth,
+                _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _fogRate.Distance, _fogRate.Image,
+                _fogRate.Neutral, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History,
+                _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch,
+                _lampFiltered, _lampTotal, _lampTotal1 }
+            .OfType<Target2D>();
 
+    /// <summary>
+    /// Frees every target (after the frames in flight) and forgets the histories that read them.
+    /// </summary>
     void Free()
     {
         Hiz?.Invalidate();
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
-        _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = _rateDistance = _rateImage = _neutralRate = null;
-        _rateBuiltFrame = long.MinValue;
+        _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = null;
+        _fogRate.Free();
+        _occlusion.Free();
         _gtaoPacked = _terrainResolve = null;
-        _aoA = _aoB = _aoMask = _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
+        _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
-        _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = _giAlbedo = _giLow = _lampLost = _ssrHit = _ssrLow = _shaftInjected = _shaftLight = _shaftScatter = _shaftRaw = _shaftHistory = _softDepth = null;
-        FreeBloom();
+        _giAlbedo = _giLow = _softDepth = null;
+        _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
+        _lampLost = _ssrHit = _ssrLow = null;
+        _shafts.Free();
+        _bloom.Free();
         FreeDepthOfField();
-        _adaptedValid = _historyValid = _shaftHistoryValid = _softDepthReady = false;
+        _adaptedValid = _historyValid = _softDepthReady = false;
         _adaptedFrames = 0;
     }
-
-    readonly Dictionary<InternalFormat, bool> _storageSupport = [];
 
     /// <summary>
     /// Whether the device can make <paramref name="format"/> a storage image (VkGl gave its float colour textures storage use, which the vendor
     /// upscalers write with).
     /// </summary>
-    bool SupportsStorage(InternalFormat format)
+    internal bool SupportsStorage(InternalFormat format)
     {
         if (!_storageSupport.TryGetValue(format, out bool ok))
         {
@@ -503,23 +790,29 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
+    /// The point sampler (clamped, no mips) the compute kernels and the vendor upscalers' inputs read with.
+    /// </summary>
+    internal GpuSampler Point() => _pointSampler.Index != 0
+        ? _pointSampler
+        : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
+
+    /// <summary>
     /// A target of a GL internal format (the format VkGl made of it), with the uses VkGl's image had, one level unless asked.
     /// </summary>
-    Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
+    internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
     {
-        var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
-        if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat)) use |= TextureUse.Storage;
+        var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst
+            | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
+        if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat))
+            use |= TextureUse.Storage;
         var texture = batch.Create(new TextureDesc(glFormat, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
 
     /// <summary>
-    /// The targets could not be made (out of video memory): the frame draws no world, and the next <see cref="Begin"/> tries again (the old
-    /// targets, released this frame, are freed by then, and the guard has started evicting).
+    /// Makes the targets; out of video memory, frees them and sets <see cref="Unallocated"/>.
     /// </summary>
-    public bool Unallocated { get; private set; }
-    bool _unallocatedLogged;
-
     void Allocate(int displayW, int displayH)
     {
         try
@@ -531,11 +824,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             Free();
             (_displayWidth, _displayHeight, Unallocated) = (0, 0, true);
-            if (!_unallocatedLogged) Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
+            if (!_unallocatedLogged)
+                Console.WriteLine($"vram      post targets for {displayW}x{displayH} not made ({e.Message}): the world is not drawn until they are");
             _unallocatedLogged = true;
         }
     }
 
+    /// <summary>
+    /// Makes the targets for the display size and the upscaler: the scene's, the temporal ones, the occlusion's and the exposure's.
+    /// </summary>
     void AllocateTargets(int displayW, int displayH)
     {
         Free();
@@ -543,7 +840,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         (_allocatedKind, _allocatedScale) = (up.Kind, up.EffectiveScale);
         (_displayWidth, _displayHeight) = (displayW, displayH);
         var (w, h) = up.RenderSize(displayW, displayH);
-        _width = w; _height = h;
+        _width = w;
+        _height = h;
 
         using (var batch = Gpu.Uploads.Begin())
         {
@@ -564,9 +862,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
             // The LDR, FXAA and SMAA targets are made when a frame first needs them (MakeLdrTargets).
             int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
-            _aoA = Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-            _aoB = Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-            _aoMask = Make(batch, hw, hh, InternalFormat.R8, TextureMinFilter.Linear, "post ssao mask");
+            _occlusion.Allocate(batch, hw, hh);
 
             // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read
             // mipmapped.
@@ -577,12 +873,122 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
     }
 
-    // ---- timing ----
+    /// <summary>
+    /// A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped minification).
+    /// </summary>
+    internal sealed class Target2D(GpuTexture texture, TextureMinFilter min, TextureMagFilter mag)
+    {
+        /// <summary>
+        /// The native texture.
+        /// </summary>
+        public readonly GpuTexture Texture = texture;
+        /// <summary>
+        /// The GL minification filter it is sampled with.
+        /// </summary>
+        public readonly TextureMinFilter Min = min;
+        /// <summary>
+        /// The GL magnification filter it is sampled with.
+        /// </summary>
+        public readonly TextureMagFilter Mag = mag;
+        /// <summary>
+        /// The texture's width.
+        /// </summary>
+        public int Width => Texture.Desc.Width;
+        /// <summary>
+        /// The texture's height.
+        /// </summary>
+        public int Height => Texture.Desc.Height;
+        /// <summary>
+        /// The texture's format.
+        /// </summary>
+        public InternalFormat Format => Texture.Desc.Format;
+        /// <summary>
+        /// The texture as a colour attachment that keeps its contents.
+        /// </summary>
+        public RenderTarget Attachment => new(Texture.Attachment(), LoadOp.Load, default);
+    }
+
+    #endregion
+
+    #region Merged passes (MergedKernels)
+
+    /// <summary>
+    /// The merged velocity and exposure kernels (<see cref="MergePasses"/>).
+    /// </summary>
+    readonly MergedKernels _merged;
+    /// <summary>
+    /// The merged velocity and exposure kernels (Meitou default); off runs the separate full-screen passes (<c>--ab post-merge</c>).
+    /// </summary>
+    public bool MergePasses
+    {
+        get => MergeVelocity && MergeExposure;
+        set => MergeVelocity = MergeExposure = value;
+    }
+    /// <summary>
+    /// The velocity kernel alone.
+    /// </summary>
+    public bool MergeVelocity { get; set; } = true;
+    /// <summary>
+    /// The exposure kernel alone.
+    /// </summary>
+    public bool MergeExposure { get; set; } = true;
+    /// <summary>
+    /// Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).
+    /// </summary>
+    public bool MergeSupported =>
+        SupportsStorage(InternalFormat.Rgba16F) && SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rg32F);
+
+    #endregion
+
+    #region Timing
+
+    // GPU timestamps (the frame's QueryArena): a set per frame, section k lasting from stamp k-1 to stamp k, read once its frame has been collected.
+    /// <summary>
+    /// The most timestamps a frame's set holds.
+    /// </summary>
+    const int MaxStamps = 40;
+    /// <summary>
+    /// The sets of frames whose timestamps are not yet read, oldest first.
+    /// </summary>
+    readonly Queue<StampSet> _pendingStamps = new();
+    /// <summary>
+    /// Sets to reuse.
+    /// </summary>
+    readonly Stack<StampSet> _freeStamps = new();
+    /// <summary>
+    /// This frame's set (<see cref="Begin"/>).
+    /// </summary>
+    StampSet? _stamps;
+    /// <summary>
+    /// The interleaved command that writes <see cref="_written"/>, made once.
+    /// </summary>
+    Action<IGpuCommandList>? _stampWriter;
+    /// <summary>
+    /// The slot the interleaved command last wrote.
+    /// </summary>
+    QuerySlot _written;
+    /// <summary>
+    /// Each section's GPU milliseconds summed and its frame count since <see cref="TakeCosts"/>.
+    /// </summary>
+    readonly Dictionary<string, (double Sum, int Count)> _costs = [];
+    /// <summary>
+    /// Whether this frame's "scene" stamp is written (<see cref="MarkScene"/>).
+    /// </summary>
+    bool _sceneMarked, _giResolved;
+    /// <summary>
+    /// The benchmark harness's frame number for the frame begun next; <see cref="OnCost"/> hands it back with each section's GPU ms once the frame's
+    /// timestamps have been read.
+    /// </summary>
+    public long CostTag { get; set; }
+    /// <summary>
+    /// Called with <see cref="CostTag"/>, each section's name and its GPU milliseconds once a frame's timestamps have been read.
+    /// </summary>
+    public Action<long, string, double>? OnCost { get; set; }
 
     /// <summary>
     /// A timestamp at this point of the frame: into the open segment, or interleaved into the frame (VkGl's pass is not ended).
     /// </summary>
-    void Stamp(string name)
+    internal void Stamp(string name)
     {
         var set = _stamps;
         if (set is null || set.Count >= MaxStamps) return;
@@ -595,7 +1001,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         else
         {
-            _stampWriter ??= c => { _written = Gpu.Frame.Timestamps.Allocate(); c.Timestamp(Gpu.Frame.Timestamps, _written); };
+            _stampWriter ??= c =>
+            {
+                _written = Gpu.Frame.Timestamps.Allocate();
+                c.Timestamp(Gpu.Frame.Timestamps, _written);
+            };
             _written = default;
             Gpu.Interleave(_stampWriter);
             slot = _written;
@@ -604,6 +1014,55 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         set.Names[set.Count++] = name;
         if (StageClock.OnClose is not null) StageClock.Sub("post " + name);
     }
+
+    /// <summary>
+    /// Takes in every timing that has arrived. No longer waits (since phase 8 stage 2): a frame's timestamps arrive when its slot of the
+    /// frame ring comes round, so the frames still in flight are counted later.
+    /// </summary>
+    public void Flush() => Collect();
+
+    /// <summary>
+    /// Average GPU milliseconds per section since the last call ("scene" is the frame before post-processing), then resets.
+    /// </summary>
+    public IReadOnlyList<(string Name, double Ms)> TakeCosts()
+    {
+        var list = _costs.Select(kv => (kv.Key, kv.Value.Sum / kv.Value.Count)).ToList();
+        _costs.Clear();
+        return list;
+    }
+
+    /// <summary>
+    /// <see cref="TakeCosts"/> as one line: each section's name and milliseconds.
+    /// </summary>
+    public string DescribeCosts()
+    {
+        var sb = new StringBuilder();
+        foreach (var (name, ms) in TakeCosts()) sb.Append(sb.Length > 0 ? ", " : "").Append(name).Append(' ').Append(ms.ToString("0.00",
+                System.Globalization.CultureInfo.InvariantCulture));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Stamps the end of the scene's own passes (the opaque geometry, the water): once a frame, by the caller before <see cref="RunFogVolumes"/>
+    /// and the particles, else by <see cref="End"/>. Not inside an open scene rendering.
+    /// </summary>
+    public void MarkScene()
+    {
+        if (_sceneMarked) return;
+        _sceneMarked = true;
+        Stamp("scene");
+    }
+
+    /// <summary>
+    /// Stamps the end of the particles drawn after the fog volumes (the caller's, between <see cref="RunFogVolumes"/> and <see cref="End"/>).
+    /// </summary>
+    public void MarkParticles() => Stamp("particles");
+
+    /// <summary>
+    /// Stamps the end of the low-resolution particles' own draws (before their composite), so the cost of the draws and of the composite are told
+    /// apart.
+    /// </summary>
+    public void MarkParticleDraws() => Stamp("particle draws");
 
     /// <summary>
     /// Adds the sections of every frame whose timestamps have been collected (a frame ring after it); drops frames too old to arrive.
@@ -635,30 +1094,56 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// Takes in every timing that has arrived. No longer waits (since phase 8 stage 2): a frame's timestamps arrive when its slot of the
-    /// frame ring comes round, so the frames still in flight are counted later.
+    /// One frame's timestamps: the slots, the sections' names, the frame and its cost tag.
     /// </summary>
-    public void Flush() => Collect();
+    sealed class StampSet
+    {
+        /// <summary>
+        /// The timestamp slots (the first <see cref="Count"/>).
+        /// </summary>
+        public readonly QuerySlot[] Slots = new QuerySlot[MaxStamps];
+        /// <summary>
+        /// The section each stamp ends.
+        /// </summary>
+        public readonly string[] Names = new string[MaxStamps];
+        /// <summary>
+        /// How many stamps are written.
+        /// </summary>
+        public int Count;
+        /// <summary>
+        /// The GPU frame the stamps were written in.
+        /// </summary>
+        public long Frame;
+        /// <summary>
+        /// The frame's <see cref="CostTag"/>.
+        /// </summary>
+        public long Tag;
+    }
+
+    #endregion
+
+    #region Frame and composite chain
 
     /// <summary>
-    /// Average GPU milliseconds per section since the last call ("scene" is the frame before post-processing), then resets.
+    /// Frames begun (the jitter's sequence).
     /// </summary>
-    public IReadOnlyList<(string Name, double Ms)> TakeCosts()
-    {
-        var list = _costs.Select(kv => (kv.Key, kv.Value.Sum / kv.Value.Count)).ToList();
-        _costs.Clear();
-        return list;
-    }
-
-    public string DescribeCosts()
-    {
-        var sb = new StringBuilder();
-        foreach (var (name, ms) in TakeCosts()) sb.Append(sb.Length > 0 ? ", " : "").Append(name).Append(' ').Append(ms.ToString("0.00",
-                System.Globalization.CultureInfo.InvariantCulture));
-        return sb.ToString();
-    }
-
-    // ---- frame ----
+    long _frameIndex;
+    /// <summary>
+    /// The composite's LDR picture that FXAA or the heat haze reads, and FXAA's (or SMAA's) when the heat haze follows it.
+    /// </summary>
+    Target2D? _ldr, _ldrFxaa;
+    /// <summary>
+    /// SMAA's edges and blending weights.
+    /// </summary>
+    Target2D? _smaaEdges, _smaaWeights;
+    /// <summary>
+    /// The bloom's pyramid and passes (<see cref="Bloom"/>).
+    /// </summary>
+    readonly Bloom _bloom;
+    /// <summary>
+    /// The display-size picture the chain reads after the upscaler (the scene colour without one).
+    /// </summary>
+    Target2D _postColour = null!;
 
     /// <summary>
     /// Binds the scene framebuffer (recreating it when the size or the upscaler changed) and clears nothing: the caller does.
@@ -690,236 +1175,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
     }
 
-    // ---- temporal upscaling ----
-
-    /// <summary>
-    /// The size the scene is drawn at this frame (valid after <see cref="Begin"/>): the display size, or less with an upscaler.
-    /// </summary>
-    public int RenderWidth => _width;
-    public int RenderHeight => _height;
-    /// <summary>
-    /// Whether frames are jittered and reconstructed over time (an upscaler is on).
-    /// </summary>
-    public bool Temporal => _allocatedKind != UpscalerKind.Off;
-    /// <summary>
-    /// The offset to move this frame's projection by, in render pixels (<see cref="Jitter.Apply"/>); zero without an upscaler.
-    /// </summary>
-    public Vector2 JitterPixels { get; private set; }
-    public int JitterPhases => Jitter.PhaseCount(_width, _displayWidth);
-    /// <summary>
-    /// Frames a still picture needs before the history has converged (screenshots).
-    /// </summary>
-    public int WarmupFrames => Options.Upscale.Temporal ? Math.Max(32, 2 * Jitter.PhaseCount(Options.Upscale.RenderSize(1000, 1000).Width, 1000)) : 0;
-    /// <summary>
-    /// The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.
-    /// </summary>
-    public IUpscaler? External { get; set; }
-
-    /// <summary>
-    /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
-    /// only red and green written (B and A, depth and reactivity, stay), no depth test, culling or blending.
-    /// </summary>
-    public Action<MotionTargets>? ObjectMotion { get; set; }
-
-    /// <summary>
-    /// This frame's volumetric clouds, whose sky pixels get the clouds' motion (<see cref="UpscaleShaders.CloudMotion"/>); null: the sky's.
-    /// </summary>
-    public CloudMotion? CloudMotion { get; set; }
-
-    void IWorldPostChain.SetCloudMotion(CloudMotion? clouds) => CloudMotion = clouds;
-
-    /// <summary>
-    /// The volumetric clouds' motion over the sky's in the motion target (red and green), by the clouds' opacity.
-    /// </summary>
-    void RunCloudMotion(CloudMotion clouds)
-    {
-        var c = _cloudMotionPass;
-        Bind(c.P, c.NearDepth, _sceneDepth);
-        if (c.Clouds.IsValid) c.P.Bind(c.Clouds, clouds.Clouds);
-        if (c.Distance.IsValid) c.P.Bind(c.Distance, clouds.Distance);
-        c.P.Set(c.ToPrev, _toPrevious);
-        c.P.Set(c.Planes, _planes.X, _planes.Y);
-        c.P.Set(c.JitterNdc, 2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
-        float tanY = MathF.Tan(_fovNow * 0.5f);
-        c.P.Set(c.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
-        var r = _viewRotation;
-        c.P.Set(c.Right, r.M11, r.M21, r.M31);
-        c.P.Set(c.Up, r.M12, r.M22, r.M32);
-        c.P.Set(c.Back, ViewWindow.BackFor(r, _fovNow, _aspectNow));
-        c.P.Set(c.Wind, clouds.Wind.X, clouds.Wind.Y);
-        c.P.Set(c.Sun, _sunMotion.Sun);
-        c.P.Set(c.SunMotion, _sunMotion.Motion);
-        Draw(c.P, _motion!.Attachment, _motion.Format, _width, _height, _width, _height,
-            PassState with { Blend = new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha),
-                    ColourMask = ColorMask.R | ColorMask.G });
-        CloseSegment();
-    }
-    /// <summary>
-    /// Makes the vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/> when it is first asked for (null: not
-    /// available).
-    /// </summary>
-    public Func<UpscalerKind, IUpscaler?>? UpscalerFactory { get; set; }
-    readonly HashSet<UpscalerKind> _unavailable = [];
-
-    /// <summary>
-    /// The vendor upscaler for <paramref name="kind"/>; DLSS where it is missing (not an NVIDIA card) is FSR, then TAA.
-    /// </summary>
-    IUpscaler? ExternalFor(UpscalerKind kind)
-    {
-        if (kind is not (UpscalerKind.Fsr or UpscalerKind.Dlss)) return null;
-        var external = Create(kind);
-        if (external is null && kind == UpscalerKind.Dlss && (external = Create(UpscalerKind.Fsr)) is not null && !_warnedFallback)
-        {
-            Console.WriteLine("upscaler  DLSS is not available here; using FSR");
-            _warnedFallback = true;
-        }
-        return external;
-    }
-
-    IUpscaler? Create(UpscalerKind kind)
-    {
-        if (External?.Kind == kind) return External;
-        if (_unavailable.Contains(kind) || UpscalerFactory is null) return null;
-        External?.Dispose();
-        External = UpscalerFactory(kind);
-        if (External is null) _unavailable.Add(kind);
-        else _historyValid = false;
-        return External;
-    }
-    /// <summary>
-    /// The upscaler that ran last frame (for the overlay).
-    /// </summary>
-    public string ActiveUpscaler { get; private set; } = "off";
-
-    // The camera this frame and last (eye-relative views), and the scene's reprojection and planes.
-    Matrix4x4 _viewRotation, _previousRotation;
-    Vector3 _eyeNow, _previousEye;
-    // What the float eyes leave out of the eye the scene is drawn from (WorldCamera.EyeResidual), and the eye's step since the previous frame with it.
-    Vector3 _eyeRestNow, _previousRest;
-    Vector3 EyeStep => (_eyeNow - _previousEye) + (_eyeRestNow - _previousRest);
-    float _fovNow, _aspectNow, _previousFov, _previousAspect;
-    bool _previousValid;
-    Matrix4x4 _toPrevious;
-    Vector2 _planes;
-    readonly System.Diagnostics.Stopwatch _frameClock = new();
-
-    /// <summary>
-    /// The main camera of this frame, before <see cref="BeginScene"/>: for the motion vectors (reprojection into the previous frame).
-    /// </summary>
-    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio, Vector3 eyeResidual = default)
-    {
-        _eyeNow = eye;
-        _eyeRestNow = eyeResidual;
-        _viewRotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-        (_fovNow, _aspectNow) = (fieldOfView, aspectRatio);
-    }
-
-    /// <summary>
-    /// The matrix from this frame's jittered clip space of the scene to the previous frame's unjittered clip space. Both views are taken
-    /// relative to this frame's eye (the previous one shifted by the eye's step), so no 10⁵-unit translations meet in float.
-    /// Both projections are the scene's (<see cref="DepthConvention.Perspective"/>), so a stored depth is the clip z.
-    /// </summary>
-    Matrix4x4 ToPrevious(float near, float far)
-    {
-        if (!_previousValid) return Matrix4x4.Identity;
-        var standard = Matrix4x4.CreatePerspectiveFieldOfView(_fovNow, _aspectNow, near, far);
-        var now = DepthConvention.Apply(Jitter.Apply(standard, JitterPixels, _width, _height));
-        var previous = DepthConvention.Perspective(_previousFov, _previousAspect, near, far);
-        return Reprojection.ClipToPrevious(_viewRotation, EyeStep, now, _previousRotation, previous);
-    }
-
-    /// <summary>
-    /// The scene's projection (call after <see cref="SetCamera"/>): sets <see cref="SceneTargets"/>, the planes and the reprojection.
-    /// </summary>
-    public void BeginScene(float near, float far, float fieldOfView, float aspectRatio)
-    {
-        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
-        _nearPlane = near; _farPlane = far; _fovY = fieldOfView; _aspect = aspectRatio;
-        _planes = new Vector2(near, far);
-        if (Temporal) _toPrevious = ToPrevious(near, far);
-        _haveScene = true;
-    }
-
-    // ---- native passes ----
-
-    IGpuCommandList? _segment;
-
-    /// <summary>
-    /// The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).
-    /// </summary>
-    IGpuCommandList Segment() => _segment ??= Gpu.BeginNative("post");
-
-    /// <summary>
-    /// Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).
-    /// </summary>
-    void CloseSegment()
-    {
-        if (_segment is null) return;
-        Gpu.EndNative(_segment);
-        _segment = null;
-    }
-
-    /// <summary>
-    /// One full-screen triangle with <paramref name="p"/> into <paramref name="target"/> (its uniforms and samplers set before), in a
-    /// rendering of its own, followed by a full barrier (VkGl barriered before every pass).
-    /// </summary>
-    readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
-
-    void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
-        target.Height);
-
-    void Draw(LegacyProgram p, RenderTarget colour, InternalFormat format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight,
-        DrawState? state = null)
-    {
-        DrawPass(p, colour, format, default, InternalFormat.None, targetWidth, targetHeight, viewportWidth, viewportHeight, state);
-    }
-
-    /// <summary>
-    /// As <see cref="Draw(LegacyProgram, RenderTarget, InternalFormat, int, int, int, int, DrawState?)"/>, with an optional depth attachment (the
-    /// pipeline is cached per program and attachment formats: one state each).
-    /// </summary>
-    void DrawPass(LegacyProgram p, RenderTarget colour, InternalFormat format, RenderTarget depth, InternalFormat depthFormat, int targetWidth,
-        int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
-    {
-        var cmd = Segment();
-        cmd.BeginLabel(p.Name);   // each pass its own range in a GPU trace (the segment is "post")
-        cmd.BeginRendering(new RenderingDesc(colour, depth, targetWidth, targetHeight));
-        var s = state ?? PassState;
-        cmd.SetViewport(new PixelViewport(0, 0, viewportWidth, viewportHeight, 0, 1));
-        cmd.SetScissor(new PixelRect(0, 0, (uint)targetWidth, (uint)targetHeight));
-        cmd.SetRaster(s.Cull, s.Front);
-        cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
-        cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
-        if (!_pipelines.TryGetValue((p, format, depthFormat, s), out var pipeline))
-            _pipelines[(p, format, depthFormat, s)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles,
-                new AttachmentFormats(format, depthFormat), p.Name));
-        cmd.BindPipeline(pipeline);
-        p.Flush(cmd);
-        cmd.Draw(3);
-        cmd.EndRendering();
-        cmd.EndLabel();
-        cmd.Barrier([GpuDependency.Full]);
-    }
-
-    /// <summary>
-    /// A target as its GL texture was sampled: its filters, clamped, the upscaler's LOD bias on a mipmapped filter (VkGl's rule,
-    /// <see cref="SamplerDesc.FromGl"/>, with the bias as it is now).
-    /// </summary>
-    SampledTexture Sampled(Target2D t) => Sampled(t.Texture, t.Min, t.Mag, TextureWrapMode.ClampToEdge, 1);
-
-    SampledTexture Sampled(GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, float anisotropy) =>
-        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, false,
-                Gpu.LodBias)),
-            t.View());
-
-    /// <summary>
-    /// Binds a target (null: the stand-in VkGl bound for nothing). Call where the GL code bound the unit: the sampler depends on the LOD bias then.
-    /// </summary>
-    void Bind(LegacyProgram p, SamplerSlot slot, Target2D? target)
-    {
-        if (slot.IsValid) p.Bind(slot, target is null ? Gpu.Dummy(p.SamplerInfo(slot)) : Sampled(target));
-    }
-
     /// <summary>
     /// The depth pyramid of this frame's scene (the next frame's foliage cull reads it; the lamps' shadows read it in this frame, so they build it once the opaque
     /// scene is drawn: then the frame's end finds it built). False: no pyramid this frame (the occlusion cull off, a view window, no scene).
@@ -948,7 +1203,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var final = PassTargets.Of(Target ?? throw new InvalidOperationException("PostProcess.Target is not set"), null);
         bool needDepth = o.Ssao && _haveScene;
         // a caller that drew the layers without ApplySsao: the occlusion stays the composite's
-        if (_shaftsPending || _fogPending) ApplyLayers(false);
+        if (_shafts.Pending || _fogPending) ApplyLayers(false);
 
         bool ao = needDepth;
         if (ao && !_aoApplied)
@@ -959,22 +1214,68 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (ao && !_aoApplied) Stamp("ssao");
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         _postColour = _sceneColour!;
-        if (Temporal) { _postColour = RunUpscale(); Stamp("upscale"); }
+        if (Temporal)
+        {
+            _postColour = RunUpscale();
+            Stamp("upscale");
+        }
         else ActiveUpscaler = "off";
         _postColour = RunDepthOfField(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
-        var bloom = RunBloom(_postColour);
+        var bloom = _bloom.Run(_postColour);
 
+        RunCompositeChain(o, final, ao, auto, bloom);
+        CloseSegment();
+        if (!BuildHiz()) Hiz?.Invalidate();
+        QueueStamps();
+        (_previousRotation, _previousEye, _previousRest, _previousFov, _previousAspect, _previousValid) =
+            (_viewRotation, _eyeNow, _eyeRestNow, _fovNow, _aspectNow, Temporal);
+    }
+
+    /// <summary>
+    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// </summary>
+    void RunCompositeChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
+    {
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         MakeLdrTargets(o.Smaa && !Temporal, o.Fxaa && !Temporal, HeatHazeWanted);
         bool smaa = o.Smaa && !Temporal && _smaaWeights is not null;
         bool fxaa = o.Fxaa && !smaa && !Temporal && _ldr is not null;
         bool haze = HeatHazeRuns && (!(fxaa || smaa) || _ldrFxaa is not null);
         var c = _compositePass;
+        SetComposite(o, ao, auto, bloom);
+        if (fxaa || smaa || haze) Draw(c.P, _ldr!);
+        else DrawFinal(c.P, final);
+        Stamp("composite");
+        var picture = _ldr;
+        if (fxaa)
+        {
+            var f = _fxaaPass;
+            Bind(f.P, f.Image, _ldr);
+            f.P.Set(f.Texel, 1f / _displayWidth, 1f / _displayHeight);
+            if (haze) Draw(f.P, _ldrFxaa!);
+            else DrawFinal(f.P, final);
+            Stamp("fxaa");
+            picture = _ldrFxaa;
+        }
+        if (smaa)
+        {
+            RunSmaa(haze, final);
+            picture = _ldrFxaa;
+        }
+        if (haze) RunHeatHaze(picture!, final);
+    }
+
+    /// <summary>
+    /// Binds the composite's inputs and sets its uniforms: the scale, sharpening, exposure, occlusion, tone map, grade and bloom.
+    /// </summary>
+    void SetComposite(PostOptions o, bool ao, bool auto, Target2D? bloom)
+    {
+        var c = _compositePass;
         Bind(c.P, c.Scene, _postColour);
-        Bind(c.P, c.Ao, _aoB);
+        Bind(c.P, c.Ao, _occlusion.B);
         Bind(c.P, c.Adapted, auto ? _adaptB : null);
 
         // Without an upscaler the scene may still be smaller than the display (the render scale): the composite then resamples it (Catmull-Rom).
@@ -995,36 +1296,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Balance, o.Balance);
         Bind(c.P, c.Bloom, bloom);
         c.P.Set(c.BloomStrength, bloom is null ? 0f : Math.Clamp(o.BloomAmount, 0, 1));
-        if (fxaa || smaa || haze) Draw(c.P, _ldr!); else DrawFinal(c.P, final);
-        Stamp("composite");
-        var picture = _ldr;
-        if (fxaa)
-        {
-            var f = _fxaaPass;
-            Bind(f.P, f.Image, _ldr);
-            f.P.Set(f.Texel, 1f / _displayWidth, 1f / _displayHeight);
-            if (haze) Draw(f.P, _ldrFxaa!); else DrawFinal(f.P, final);
-            Stamp("fxaa");
-            picture = _ldrFxaa;
-        }
-        if (smaa)
-        {
-            RunSmaa(haze, final);
-            picture = _ldrFxaa;
-        }
-        if (haze) RunHeatHaze(picture!, final);
-        CloseSegment();
+    }
 
-        // The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it).
-        if (!BuildHiz()) Hiz?.Invalidate();
-
+    /// <summary>
+    /// Queues this frame's GPU time stamps (if it took any) to be read once the frame has finished.
+    /// </summary>
+    void QueueStamps()
+    {
         if (_stamps is { } set)
         {
             set.Frame = Gpu.Frame.Number;
             _pendingStamps.Enqueue(set);
             _stamps = null;
         }
-        (_previousRotation, _previousEye, _previousRest, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _eyeRestNow, _fovNow, _aspectNow, Temporal);
     }
 
     /// <summary>
@@ -1071,41 +1355,727 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Draw(s.Weights, _smaaWeights!);
         Bind(s.Blend, s.BlendImage, _ldr);
         Bind(s.Blend, s.BlendWeights, _smaaWeights);
-        if (haze) Draw(s.Blend, _ldrFxaa!); else DrawFinal(s.Blend, final);
+        if (haze) Draw(s.Blend, _ldrFxaa!);
+        else DrawFinal(s.Blend, final);
         Stamp("smaa");
     }
 
-    // ---- fog volumes ----
+    #endregion
 
-    bool _sceneMarked, _giResolved;
+    #region Camera
 
     /// <summary>
-    /// Stamps the end of the scene's own passes (the opaque geometry, the water): once a frame, by the caller before <see cref="RunFogVolumes"/>
-    /// and the particles, else by <see cref="End"/>. Not inside an open scene rendering.
+    /// The scene projection's near and far planes, vertical field of view and aspect (<see cref="BeginScene"/>).
     /// </summary>
-    public void MarkScene()
+    float _nearPlane = 1, _farPlane = 1000, _fovY = 0.87f, _aspect = 1;
+    /// <summary>
+    /// Whether a scene was drawn this frame (<see cref="BeginScene"/>).
+    /// </summary>
+    bool _haveScene;
+    // The camera this frame and last (eye-relative views), and the scene's reprojection and planes.
+    /// <summary>
+    /// The view's rotation this frame and last.
+    /// </summary>
+    Matrix4x4 _viewRotation, _previousRotation;
+    /// <summary>
+    /// The eye this frame and last.
+    /// </summary>
+    Vector3 _eyeNow, _previousEye;
+    /// <summary>
+    /// What the float eyes leave out of the eye the scene is drawn from (WorldCamera.EyeResidual) this frame and last.
+    /// </summary>
+    Vector3 _eyeRestNow, _previousRest;
+    /// <summary>
+    /// The eye's step since the previous frame, its residual included.
+    /// </summary>
+    Vector3 EyeStep => (_eyeNow - _previousEye) + (_eyeRestNow - _previousRest);
+    /// <summary>
+    /// The field of view and aspect this frame and last.
+    /// </summary>
+    float _fovNow, _aspectNow, _previousFov, _previousAspect;
+    /// <summary>
+    /// Whether last frame's camera is set.
+    /// </summary>
+    bool _previousValid;
+    /// <summary>
+    /// The scene's reprojection to last frame's clip space.
+    /// </summary>
+    Matrix4x4 _toPrevious;
+    /// <summary>
+    /// The scene's near and far planes.
+    /// </summary>
+    Vector2 _planes;
+    /// <summary>
+    /// Times the frames, for the upscalers' frame time.
+    /// </summary>
+    readonly System.Diagnostics.Stopwatch _frameClock = new();
+    /// <summary>
+    /// This frame's view rotation (<see cref="SetCamera"/>), for the passes kept in classes of their own.
+    /// </summary>
+    internal Matrix4x4 ViewRotation => _viewRotation;
+    /// <summary>
+    /// This frame's eye (<see cref="SetCamera"/>).
+    /// </summary>
+    internal Vector3 EyeNow => _eyeNow;
+    /// <summary>
+    /// This frame's vertical field of view (<see cref="SetCamera"/>).
+    /// </summary>
+    internal float FovNow => _fovNow;
+    /// <summary>
+    /// This frame's aspect ratio (<see cref="SetCamera"/>).
+    /// </summary>
+    internal float AspectNow => _aspectNow;
+    /// <summary>
+    /// The scene's depth planes as the passes rebuild distance from depth.
+    /// </summary>
+    internal Vector2 Planes => _planes;
+    /// <summary>
+    /// The scene projection's near plane (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float NearPlane => _nearPlane;
+    /// <summary>
+    /// The scene projection's far plane (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float FarPlane => _farPlane;
+    /// <summary>
+    /// The scene projection's vertical field of view (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float FovY => _fovY;
+    /// <summary>
+    /// The scene projection's aspect ratio (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float Aspect => _aspect;
+    /// <summary>
+    /// Whether a scene was drawn this frame (<see cref="BeginScene"/>).
+    /// </summary>
+    internal bool HaveScene => _haveScene;
+    /// <summary>
+    /// The scene colour target (null before the targets are made).
+    /// </summary>
+    internal Target2D? SceneColourTarget => _sceneColour;
+    /// <summary>
+    /// The scene depth target (null before the targets are made).
+    /// </summary>
+    internal Target2D? SceneDepthTarget => _sceneDepth;
+    /// <summary>
+    /// The motion target (null before the targets are made).
+    /// </summary>
+    internal Target2D? MotionTarget => _motion;
+    /// <summary>
+    /// This frame's reprojection into the previous frame (<see cref="SetCamera"/>, with the scene's planes).
+    /// </summary>
+    internal Matrix4x4 PreviousReprojection => _toPrevious;
+
+    /// <summary>
+    /// The main camera of this frame, before <see cref="BeginScene"/>: for the motion vectors (reprojection into the previous frame).
+    /// </summary>
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio, Vector3 eyeResidual = default)
     {
-        if (_sceneMarked) return;
-        _sceneMarked = true;
-        Stamp("scene");
+        _eyeNow = eye;
+        _eyeRestNow = eyeResidual;
+        _viewRotation = view with { M41 = 0, M42 = 0, M43 = 0 };
+        (_fovNow, _aspectNow) = (fieldOfView, aspectRatio);
     }
 
     /// <summary>
-    /// Stamps the end of the particles drawn after the fog volumes (the caller's, between <see cref="RunFogVolumes"/> and <see cref="End"/>).
+    /// The scene's projection (call after <see cref="SetCamera"/>): sets <see cref="SceneTargets"/>, the planes and the reprojection.
     /// </summary>
-    public void MarkParticles() => Stamp("particles");
+    public void BeginScene(float near, float far, float fieldOfView, float aspectRatio)
+    {
+        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
+        _nearPlane = near;
+        _farPlane = far;
+        _fovY = fieldOfView;
+        _aspect = aspectRatio;
+        _planes = new Vector2(near, far);
+        if (Temporal) _toPrevious = ToPrevious(near, far);
+        _haveScene = true;
+    }
 
     /// <summary>
-    /// Stamps the end of the low-resolution particles' own draws (before their composite), so the cost of the draws and of the composite are told
-    /// apart.
+    /// The matrix from this frame's jittered clip space of the scene to the previous frame's unjittered clip space. Both views are taken
+    /// relative to this frame's eye (the previous one shifted by the eye's step), so no 10⁵-unit translations meet in float.
+    /// Both projections are the scene's (<see cref="DepthConvention.Perspective"/>), so a stored depth is the clip z.
     /// </summary>
-    public void MarkParticleDraws() => Stamp("particle draws");
+    Matrix4x4 ToPrevious(float near, float far)
+    {
+        if (!_previousValid) return Matrix4x4.Identity;
+        var standard = Matrix4x4.CreatePerspectiveFieldOfView(_fovNow, _aspectNow, near, far);
+        var now = DepthConvention.Apply(Jitter.Apply(standard, JitterPixels, _width, _height));
+        var previous = DepthConvention.Perspective(_previousFov, _previousAspect, near, far);
+        return Reprojection.ClipToPrevious(_viewRotation, EyeStep, now, _previousRotation, previous);
+    }
+
+
+    #endregion
+
+    #region Temporal upscaling
+
+    /// <summary>
+    /// The planes of the upscalers' depth: fixed, not the camera's (its near plane follows the eye's height above the ground and the far one the
+    /// haze), because FSR decodes last frame's depth with this frame's planes: changing planes read as a disocclusion everywhere.
+    /// </summary>
+    public const float UpscaleNear = 1, UpscaleFar = 1_000_000;
+    /// <summary>
+    /// How much the upscalers trust the current frame on water (FSR's reactive mask; TAA takes half).
+    /// </summary>
+    public const float WaterReactive = 0.5f;
+    /// <summary>
+    /// Temporal upscaling: the motion and depth targets, the display-size history (ping-pong).
+    /// </summary>
+    Target2D? _motion, _upscaleDepth, _reactive, _historyA, _historyB;
+    /// <summary>
+    /// <c>_historyValid</c>: the history holds a frame; <c>_warnedFallback</c>: the DLSS-to-FSR fallback has been logged.
+    /// </summary>
+    bool _historyValid, _warnedFallback;
+    /// <summary>
+    /// DLSS's 1 x 1 exposure and its kernel (<see cref="UpscaleExposure"/>).
+    /// </summary>
+    readonly UpscaleExposure _upscaleExposure;
+    /// <summary>
+    /// The vendor upscalers that could not be made (not asked for again).
+    /// </summary>
+    readonly HashSet<UpscalerKind> _unavailable = [];
+    /// <summary>
+    /// Whether the composite sharpens the upscaled picture (<see cref="UpscaleOptions.Sharpness"/>): after TAA and DLSS, which leave it soft.
+    /// </summary>
+    bool _sharpenAfter;
+    /// <summary>
+    /// The size the scene is drawn at this frame (valid after <see cref="Begin"/>): the display size, or less with an upscaler.
+    /// </summary>
+    public int RenderWidth => _width;
+    /// <summary>
+    /// See <see cref="RenderWidth"/>.
+    /// </summary>
+    public int RenderHeight => _height;
+    /// <summary>
+    /// Whether frames are jittered and reconstructed over time (an upscaler is on).
+    /// </summary>
+    public bool Temporal => _allocatedKind != UpscalerKind.Off;
+    /// <summary>
+    /// The offset to move this frame's projection by, in render pixels (<see cref="Jitter.Apply"/>); zero without an upscaler.
+    /// </summary>
+    public Vector2 JitterPixels { get; private set; }
+    /// <summary>
+    /// How many jitter phases the sequence has for the render and display sizes.
+    /// </summary>
+    public int JitterPhases => Jitter.PhaseCount(_width, _displayWidth);
+    /// <summary>
+    /// Frames a still picture needs before the history has converged (screenshots).
+    /// </summary>
+    public int WarmupFrames => Options.Upscale.Temporal ? Math.Max(32, 2 * Jitter.PhaseCount(Options.Upscale.RenderSize(1000, 1000).Width, 1000)) : 0;
+    /// <summary>
+    /// The vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/>; without one (or on failure) TAA runs.
+    /// </summary>
+    public IUpscaler? External { get; set; }
+    /// <summary>
+    /// Draws motion of moving geometry over the camera motion (the swaying grass), called after the velocity pass with the motion target bound,
+    /// only red and green written (B and A, depth and reactivity, stay), no depth test, culling or blending.
+    /// </summary>
+    public Action<MotionTargets>? ObjectMotion { get; set; }
+    /// <summary>
+    /// This frame's volumetric clouds, whose sky pixels get the clouds' motion (<see cref="UpscaleShaders.CloudMotion"/>); null: the sky's.
+    /// </summary>
+    public CloudMotion? CloudMotion { get; set; }
+
+    /// <inheritdoc/>
+    void IWorldPostChain.SetCloudMotion(CloudMotion? clouds) => CloudMotion = clouds;
+
+    /// <summary>
+    /// Makes the vendor upscaler for <see cref="UpscalerKind.Fsr"/> / <see cref="UpscalerKind.Dlss"/> when it is first asked for (null: not
+    /// available).
+    /// </summary>
+    public Func<UpscalerKind, IUpscaler?>? UpscalerFactory { get; set; }
+    /// <summary>
+    /// The upscaler that ran last frame (for the overlay).
+    /// </summary>
+    public string ActiveUpscaler { get; private set; } = "off";
+    /// <summary>
+    /// Frame generation (the Frame generation setting, FSR 3's or DLSS's, where it runs): the host sets it each frame; the chain hands it the depth
+    /// and the motion.
+    /// </summary>
+    public Upscalers.IFrameGenerator? FrameGen { get; set; }
+    /// <summary>
+    /// The water plane's height when water is drawn (for the upscalers' reactive mask), else null.
+    /// </summary>
+    public float? WaterHeight { get; set; }
+    /// <summary>
+    /// The weather's particles, which add their coverage to the upscalers' reactive mask (<see cref="ParticleRenderer.DrawCoverage"/>) so thin fast
+    /// ones (rain) keep their strength under the temporal history.
+    /// </summary>
+    public ParticleRenderer? Particles { get; set; }
+
+    /// <summary>
+    /// Forgets what the temporal passes kept (the upscaler's history, the shafts' history, the previous camera): the next frame starts afresh. A
+    /// tiled screenshot calls it between tiles.
+    /// </summary>
+    public void ResetHistory()
+    {
+        (_historyValid, _previousValid) = (false, false);
+        _shafts.ResetHistory();
+    }
+
+    /// <summary>
+    /// The volumetric clouds' motion over the sky's in the motion target (red and green), by the clouds' opacity.
+    /// </summary>
+    void RunCloudMotion(CloudMotion clouds)
+    {
+        var c = _cloudMotionPass;
+        Bind(c.P, c.NearDepth, _sceneDepth);
+        if (c.Clouds.IsValid) c.P.Bind(c.Clouds, clouds.Clouds);
+        if (c.Distance.IsValid) c.P.Bind(c.Distance, clouds.Distance);
+        c.P.Set(c.ToPrev, _toPrevious);
+        c.P.Set(c.Planes, _planes.X, _planes.Y);
+        c.P.Set(c.JitterNdc, 2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        c.P.Set(c.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
+        var r = _viewRotation;
+        c.P.Set(c.Right, r.M11, r.M21, r.M31);
+        c.P.Set(c.Up, r.M12, r.M22, r.M32);
+        c.P.Set(c.Back, ViewWindow.BackFor(r, _fovNow, _aspectNow));
+        c.P.Set(c.Wind, clouds.Wind.X, clouds.Wind.Y);
+        c.P.Set(c.Sun, _sunMotion.Sun);
+        c.P.Set(c.SunMotion, _sunMotion.Motion);
+        Draw(c.P, _motion!.Attachment, _motion.Format, _width, _height, _width, _height,
+            PassState with { Blend = new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha),
+                    ColourMask = ColorMask.R | ColorMask.G });
+        CloseSegment();
+    }
+
+    /// <summary>
+    /// The vendor upscaler for <paramref name="kind"/>; DLSS where it is missing (not an NVIDIA card) is FSR, then TAA.
+    /// </summary>
+    IUpscaler? ExternalFor(UpscalerKind kind)
+    {
+        if (kind is not (UpscalerKind.Fsr or UpscalerKind.Dlss)) return null;
+        var external = Create(kind);
+        if (external is null && kind == UpscalerKind.Dlss && (external = Create(UpscalerKind.Fsr)) is not null && !_warnedFallback)
+        {
+            Console.WriteLine("upscaler  DLSS is not available here; using FSR");
+            _warnedFallback = true;
+        }
+        return external;
+    }
+
+    /// <summary>
+    /// The vendor upscaler of <paramref name="kind"/>: the current one, else a new one from <see cref="UpscalerFactory"/>; null when it cannot be
+    /// made.
+    /// </summary>
+    IUpscaler? Create(UpscalerKind kind)
+    {
+        if (External?.Kind == kind) return External;
+        if (_unavailable.Contains(kind) || UpscalerFactory is null) return null;
+        External?.Dispose();
+        External = UpscalerFactory(kind);
+        if (External is null) _unavailable.Add(kind);
+        else _historyValid = false;
+        return External;
+    }
+
+    /// <summary>
+    /// The one projection the upscalers' depth is written for (camera near .. view distance, unjittered). Standard 0..1 depth, not the
+    /// scene's reversed convention: nothing is drawn with it; the velocity pass re-encodes the scene depth into it and DLSS gets it as
+    /// <c>ViewToClip</c> (depth not inverted).
+    /// </summary>
+    Matrix4x4 FullProjection(float fov, float aspectRatio) =>
+        ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
+
+    /// <summary>
+    /// A vendor upscaler that failed last frame, freed at the start of this one (the frame that failed still held its commands).
+    /// </summary>
+    IUpscaler? _retired;
+
+    /// <summary>
+    /// Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.
+    /// </summary>
+    Target2D RunUpscale()
+    {
+        if (_retired is not null)
+        {
+            _retired.Dispose();
+            _retired = null;
+        }
+
+        bool reset = !_historyValid || !_previousValid || Vector3.Distance(_eyeNow, _previousEye) > 5000;
+        float dt = (float)_frameClock.Elapsed.TotalSeconds;
+        _frameClock.Restart();
+
+        // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only
+        // the motion target). The depth image is made with TAA too (one more R32F store per pixel; the kernel has the value already): frame
+        // generation takes motion and depth whatever upscales.
+        var external = ExternalFor(Options.Upscale.Kind);
+        bool merged = MergeVelocity && MergeSupported;
+        PrepareSunMotion();
+        RunVelocity(external, merged);
+        if (ObjectMotion is { } objectMotion) RunObjectMotion(objectMotion);
+        if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
+        if (_historyA is not null) (_historyA, _historyB) = (_historyB, _historyA);
+        var output = _historyB!;
+        bool done = false;
+        _sharpenAfter = true;
+        if (external is not null) done = RunExternalUpscaler(external, merged, output, reset, dt);
+        if (!done) reset = RunTaa(output, reset);
+
+        // The vendor upscaler's output (not a history Meitou keeps): the fog volumes' shadow kept out of what was upscaled
+        // (FogShadowAfterUpscale), then the low-resolution particles over it, through their own temporal filter.
+        output = CompositeLateFogShadow(output, _displayWidth, _displayHeight, reset);
+        _lateParticles.CompositeFiltered(_lowTargets[0], _lowTargets[1], output, _displayWidth, _displayHeight, reset);
+        _historyValid = true;
+
+        // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no
+        // segment is open.
+        if (FrameGen is { Wanted: true } frameGen && _upscaleDepth is not null && _motion is not null) PrepareFrameGen(frameGen, reset, dt);
+        return output;
+    }
+
+    /// <summary>
+    /// The motion target, and the upscalers' depth and the water's reactivity where the merged kernel makes them with it.
+    /// </summary>
+    void RunVelocity(IUpscaler? external, bool merged)
+    {
+        if (merged)
+        {
+            _merged.Velocity(_motion!, _upscaleDepth!, external is null || WaterHeight is null ? null : _reactive!,
+                    cleanColour: external is not null);
+        }
+        else
+        {
+            Velocity(_motion!, 0);
+            if (external is null) Velocity(_upscaleDepth!, 1);
+        }
+    }
+
+    /// <summary>
+    /// The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
+    /// </summary>
+    void RunObjectMotion(Action<MotionTargets> objectMotion)
+    {
+        CloseSegment();
+        var targets = PassTargets.Of(_motion!.Texture, null);
+        var cmd = Gpu.BeginNative("object motion");
+        cmd.BeginRendering(targets.Rendering);
+        Gpu.BeginHostPass((CommandList)cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
+            mask: ColorMask.R | ColorMask.G));
+        var jitterNdc = new Vector2(2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
+        objectMotion(new MotionTargets(Sampled(_sceneDepth!), _planes, jitterNdc, _height / (2 * MathF.Tan(_fovNow * 0.5f))));
+        cmd.EndRendering();
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The vendor upscaler into <paramref name="output"/>; false when it failed (it is dropped for TAA from then on).
+    /// </summary>
+    bool RunExternalUpscaler(IUpscaler external, bool merged, Target2D output, bool reset, float dt)
+    {
+        if (!merged) Velocity(_upscaleDepth!, 1);
+        if (!merged && WaterHeight is not null) Velocity(_reactive!, 2);
+        bool covered = Particles is { HasCoverage: true };
+        if (covered) Stamp("velocity");
+        if (covered) RunCoverage(_reactive!, ColorMask.R, clear: WaterHeight is null);
+        bool adaptedOn = AutoExposure is not null && _adaptedValid;
+        var exposure = external.Kind == UpscalerKind.Dlss ? _upscaleExposure.Write(_adaptB, adaptedOn) : null;
+        CloseSegment();   // the vendor upscaler records its own segment
+        if (covered) Stamp("particle coverage");
+        bool done = external.Dispatch(UpscaleInputsFor(output, covered, exposure, reset, dt));
+        if (done) (ActiveUpscaler, _sharpenAfter) = (external.Name, external.Kind != UpscalerKind.Fsr);   // FSR sharpens itself (RCAS)
+        else
+        {
+            Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
+            _unavailable.Add(external.Kind);
+            _retired = external;   // not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one
+            External = null;
+            _warnedFallback = true;
+        }
+        return done;
+    }
+
+    /// <summary>
+    /// What the vendor upscaler reads this frame: the scene, its depth, motion and reactivity, and the camera now and last frame.
+    /// </summary>
+    UpscaleInputs UpscaleInputsFor(Target2D output, bool covered, Target2D? exposure, bool reset, float dt) => new()
+    {
+        Colour = _sceneColour!.Texture,
+        Depth = _upscaleDepth!.Texture,
+        Motion = _motion!.Texture,
+        Output = output.Texture,
+        Reactive = WaterHeight is null && !covered ? null : _reactive!.Texture,
+        Exposure = exposure?.Texture,
+        Preset = Options.Upscale.DlssPreset,
+        RenderWidth = _width,
+        RenderHeight = _height,
+        DisplayWidth = _displayWidth,
+        DisplayHeight = _displayHeight,
+        JitterPixels = JitterPixels,
+        Near = UpscaleNear,
+        Far = UpscaleFar,
+        FieldOfView = ViewWindow.FieldOfView(_fovNow),
+        DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
+        Sharpness = Options.Upscale.Sharpness,
+        Reset = reset,
+        ViewToClip = FullProjection(_fovNow, _aspectNow),
+        ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+        Eye = _eyeNow,
+        Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
+        Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
+        Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
+        Aspect = _aspectNow,
+    };
+
+    /// <summary>
+    /// TAA into <paramref name="output"/> (no vendor upscaler, or it failed this frame); returns the reset flag, set on the TAA's first frame.
+    /// </summary>
+    bool RunTaa(Target2D output, bool reset)
+    {
+        if (Options.Upscale.Kind is UpscalerKind.Fsr or UpscalerKind.Dlss or UpscalerKind.MetalFx && !_warnedFallback)
+        {
+            Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
+            _warnedFallback = true;
+        }
+
+        // A vendor upscaler that failed this frame left its late particles undrawn: into the scene before the TAA (its output is its next
+        // history).
+        CompositeLateParticles(_sceneColour!, _width, _height);
+
+        // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
+        if (Particles is { HasCoverage: true }) RunCoverage(_motion!, ColorMask.A, clear: false);
+        if (_historyA is null)
+        {
+            // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
+            using (var batch = Gpu.Uploads.Begin())
+                _historyA = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
+            reset = true;
+        }
+
+        var t = _taaPass;
+        Bind(t.P, t.Colour, _sceneColour);
+        Bind(t.P, t.Motion, _motion);
+        Bind(t.P, t.History, _historyA);
+        t.P.Set(t.RenderSize, (float)_width, (float)_height);
+        t.P.Set(t.DisplaySize, (float)_displayWidth, (float)_displayHeight);
+        t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
+        t.P.Set(t.Blend, 0.1f);
+        t.P.Set(t.Reset, reset ? 1 : 0);
+        Draw(t.P, output);
+        ActiveUpscaler = _width == _displayWidth && _height == _displayHeight ? "taa" : $"taa {_width}x{_height}";
+        return reset;
+    }
+
+    /// <summary>
+    /// Hands frame generation this frame's depth and motion and the camera now and last frame.
+    /// </summary>
+    void PrepareFrameGen(Upscalers.IFrameGenerator frameGen, bool reset, float dt)
+    {
+        CloseSegment();
+        frameGen.Prepare(new Upscalers.FrameGenInputs
+        {
+            Depth = _upscaleDepth!.Texture,
+            Motion = _motion!.Texture,
+            RenderWidth = _width,
+            RenderHeight = _height,
+            JitterPixels = JitterPixels,
+            Near = UpscaleNear,
+            Far = UpscaleFar,
+            FieldOfView = ViewWindow.FieldOfView(_fovNow),
+            DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
+            Reset = reset,
+            Eye = _eyeNow,
+            Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
+            Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
+            Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
+            Aspect = _aspectNow,
+            ViewToClip = FullProjection(_fovNow, _aspectNow),
+            ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                    _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+        });
+    }
+
+    /// <summary>
+    /// The velocity pass into <paramref name="target"/> in <paramref name="mode"/> (0 motion, 1 depth, 2 reactive).
+    /// </summary>
+    void Velocity(Target2D target, int mode)
+    {
+        var v = _velocityPass;
+        Bind(v.P, v.NearDepth, _sceneDepth);
+        v.P.Set(v.NearToPrev, _toPrevious);
+        v.P.Set(v.NearPlanes, _planes.X, _planes.Y);
+        v.P.Set(v.FullPlanes, UpscaleNear, UpscaleFar);
+        v.P.Set(v.JitterNdc, 2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
+        v.P.Set(v.Mode, mode);
+        v.P.Set(v.FlipDepthY, Gpu.RenderTargetsBottomUp ? 0 : 1);
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        v.P.Set(v.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
+        var r = _viewRotation;
+        v.P.Set(v.Right, r.M11, r.M21, r.M31);
+        v.P.Set(v.Up, r.M12, r.M22, r.M32);
+        v.P.Set(v.Back, ViewWindow.BackFor(r, _fovNow, _aspectNow));
+        v.P.Set(v.EyeY, _eyeNow.Y);
+        v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
+        v.P.Set(v.WaterReactive, WaterReactive);
+        v.P.Set(v.Sun, _sunMotion.Sun);
+        v.P.Set(v.SunMotionUniform, _sunMotion.Motion);
+        Draw(v.P, target);
+    }
+
+    /// <summary>
+    /// The particles' coverage into <paramref name="target"/>'s channels <paramref name="mask"/>, added to what is there (or onto zero when
+    /// <paramref name="clear"/>).
+    /// </summary>
+    void RunCoverage(Target2D target, ColorMask mask, bool clear)
+    {
+        CloseSegment();
+
+        // Tested against the scene's depth as the particles' colour is, so a fire behind a wall does not mark the wall.
+        var targets = PassTargets.Of(target.Texture, _sceneDepth!.Texture);
+        if (clear) targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
+        var cmd = Gpu.BeginNative("particle coverage");
+        cmd.BeginRendering(targets.Rendering);
+        var state = DrawState.For(targets.Formats, Gpu.Device.DepthClamp, depthTest: true, depthWrite: false,
+            compare: DepthConvention.SceneCompare, mask: mask);
+        Gpu.BeginHostPass((CommandList)cmd, targets, state);
+        Particles!.DrawCoverage(mask, depthTest: true, SoftParticleDepth(1));
+        cmd.EndRendering();
+        Gpu.EndHostPass(cmd);
+        Gpu.EndNative(cmd);
+        foreach (var low in _lowTargets)
+        {
+            if (!low.Drawn || low.Late) continue;   // blended after the upscaler: not in what it sees
+            // The low-resolution particles' share: from their accumulation, added to what is there (the full-size ones drew theirs above).
+            var c = _particleCoveragePass;
+            Bind(c.P, c.Accum, low.Accum);
+            Bind(c.P, c.LowDepth, low.Depth);
+            Bind(c.P, c.AccumFar, low.AccumFar);
+            Bind(c.P, c.LowDepthFar, low.DepthFar);
+            Bind(c.P, c.Depth, _sceneDepth);
+            c.P.Set(c.LowSize, (float)low.Accum!.Width, (float)low.Accum.Height);
+            c.P.Set(c.NearPlanes, _planes.X, _planes.Y);
+            c.P.Set(c.Div, (float)low.Divisor);
+            c.P.Set(c.FullSize, (float)_width, (float)_height);
+            c.P.Set(c.Limit, mask == ColorMask.A ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
+            Draw(c.P, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height,
+                PassState with
+                {
+                    // The FSR/MetalFX reactive mask is a confidence in [0, 1]; overlap must not add past 1.
+                    Blend = mask == ColorMask.R
+                        ? new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max, BlendOperation.Max)
+                        : new BlendState(true, BlendingFactor.One, BlendingFactor.One),
+                    ColourMask = mask,
+                });
+        }
+        CloseSegment();
+    }
+
+    #endregion
+
+    #region Native passes
+
+    /// <summary>
+    /// The open native segment (null: none).
+    /// </summary>
+    IGpuCommandList? _segment;
+    /// <summary>
+    /// The pass pipelines made so far, by program, colour and depth format and state.
+    /// </summary>
+    readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
+
+    /// <summary>
+    /// The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).
+    /// </summary>
+    internal IGpuCommandList Segment() => _segment ??= Gpu.BeginNative("post");
+
+    /// <summary>
+    /// Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).
+    /// </summary>
+    internal void CloseSegment()
+    {
+        if (_segment is null) return;
+        Gpu.EndNative(_segment);
+        _segment = null;
+    }
+
+    /// <summary>
+    /// One full-screen triangle with <paramref name="p"/> into <paramref name="target"/> (its uniforms and samplers set before), in a
+    /// rendering of its own, followed by a full barrier (VkGl barriered before every pass).
+    /// </summary>
+    internal void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
+        target.Height);
+
+    /// <summary>
+    /// As <see cref="Draw(LegacyProgram, Target2D)"/> into <paramref name="colour"/>, with a viewport and an optional state.
+    /// </summary>
+    internal void Draw(LegacyProgram p, RenderTarget colour, InternalFormat format, int targetWidth, int targetHeight, int viewportWidth,
+        int viewportHeight, DrawState? state = null)
+    {
+        DrawPass(p, colour, format, default, InternalFormat.None, targetWidth, targetHeight, viewportWidth, viewportHeight, state);
+    }
+
+    /// <summary>
+    /// A target as its GL texture was sampled: its filters, clamped, the upscaler's LOD bias on a mipmapped filter (VkGl's rule,
+    /// <see cref="SamplerDesc.FromGl"/>, with the bias as it is now).
+    /// </summary>
+    internal SampledTexture Sampled(Target2D t) => Sampled(t.Texture, t.Min, t.Mag, TextureWrapMode.ClampToEdge, 1);
+
+    /// <summary>
+    /// Binds a target (null: the stand-in VkGl bound for nothing). Call where the GL code bound the unit: the sampler depends on the LOD bias then.
+    /// </summary>
+    internal void Bind(LegacyProgram p, SamplerSlot slot, Target2D? target)
+    {
+        if (slot.IsValid) p.Bind(slot, target is null ? Gpu.Dummy(p.SamplerInfo(slot)) : Sampled(target));
+    }
+
+    /// <summary>
+    /// Draws into the final target with the display-size viewport.
+    /// </summary>
+    void DrawFinal(LegacyProgram p, PassTargets final) =>
+        Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, _displayWidth, _displayHeight);
+
+    /// <summary>
+    /// As <see cref="Draw(LegacyProgram, RenderTarget, InternalFormat, int, int, int, int, DrawState?)"/>, with an optional depth attachment (the
+    /// pipeline is cached per program and attachment formats: one state each).
+    /// </summary>
+    void DrawPass(LegacyProgram p, RenderTarget colour, InternalFormat format, RenderTarget depth, InternalFormat depthFormat, int targetWidth,
+        int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
+    {
+        var cmd = Segment();
+        cmd.BeginLabel(p.Name);   // each pass its own range in a GPU trace (the segment is "post")
+        cmd.BeginRendering(new RenderingDesc(colour, depth, targetWidth, targetHeight));
+        var s = state ?? PassState;
+        cmd.SetViewport(new PixelViewport(0, 0, viewportWidth, viewportHeight, 0, 1));
+        cmd.SetScissor(new PixelRect(0, 0, (uint)targetWidth, (uint)targetHeight));
+        cmd.SetRaster(s.Cull, s.Front);
+        cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
+        cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
+        if (!_pipelines.TryGetValue((p, format, depthFormat, s), out var pipeline))
+        {
+            _pipelines[(p, format, depthFormat, s)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles,
+                new AttachmentFormats(format, depthFormat), p.Name));
+        }
+        cmd.BindPipeline(pipeline);
+        p.Flush(cmd);
+        cmd.Draw(3);
+        cmd.EndRendering();
+        cmd.EndLabel();
+        cmd.Barrier([GpuDependency.Full]);
+    }
+
+    /// <summary>
+    /// A texture with the GL sampler state and the current LOD bias.
+    /// </summary>
+    SampledTexture Sampled(GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, float anisotropy) =>
+        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, false,
+                Gpu.LodBias)),
+            t.View());
+
+    #endregion
+
+    #region Fog volumes
 
     /// <summary>
     /// Blends the volumes' accumulated (colour, transmittance) over the scene: source one, destination the source alpha; red, green and
     /// blue only, so the alpha (the characters' SSAO mask) stays.
     /// </summary>
-    static readonly DrawState FogState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
+    internal static readonly DrawState FogState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
         ColourMask = DrawState.Rgb };
 
     /// <summary>
@@ -1121,7 +2091,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (MergeLayers)
         {
             PrepareFogLayer();
-            _shaftFrame.Darkening = 0;
+            _shafts.Frame.Darkening = 0;
             Stamp("fog");
             CloseSegment();
             return;
@@ -1138,26 +2108,103 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         f.P.Set(f.WaterY, WaterHeight ?? float.MinValue);
 
         // The light shafts' grid of this frame, if they ran (darkening 0: the volumes as the game draws them).
-        var shaft = _shaftFrame;
-        Bind(f.P, f.ShaftInjected, shaft.Darkening > 0 ? _shaftInjected : null);
+        var shaft = _shafts.Frame;
+        Bind(f.P, f.ShaftInjected, shaft.Darkening > 0 ? _shafts.Injected : null);
         f.P.Set(f.ShaftGrid, shaft.Grid);
         f.P.Set(f.ShaftRange, shaft.Range);
         f.P.Set(f.ShaftTan, shaft.Tan);
         f.P.Set(f.ShaftRight, r.M11, r.M21, r.M31);
         f.P.Set(f.ShaftUp, r.M12, r.M22, r.M32);
         f.P.Set(f.ShaftBack, r.M13, r.M23, r.M33);
-        f.P.Set(f.ShaftFog, shaft.Darkening, _shaftInjected?.Width ?? 1, _shaftInjected?.Height ?? 1, 0);
-        _shaftFrame.Darkening = 0;   // the next frame sets it again if the shafts run
+        f.P.Set(f.ShaftFog, shaft.Darkening, _shafts.Injected?.Width ?? 1, _shafts.Injected?.Height ?? 1, 0);
+        _shafts.Frame.Darkening = 0;   // the next frame sets it again if the shafts run
         f.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(f.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, FogState);
         Stamp("fog");
         CloseSegment();
     }
 
-    // ---- occlusion before the particles ----
+    #endregion
 
+    #region Light shafts (LightShafts)
+
+    /// <summary>
+    /// The light shafts' grid, atlases and passes (<see cref="RunLightShafts"/>).
+    /// </summary>
+    readonly LightShafts _shafts;
+    /// <summary>
+    /// The light shafts' scan kernel (<see cref="LightShafts.Scan"/>; <c>--ab shafts-scan</c>).
+    /// </summary>
+    public bool ShaftScan { get => _shafts.Scan; set => _shafts.Scan = value; }
+    /// <summary>
+    /// Whether the device can run the light shafts' scan kernel (<see cref="LightShafts.ScanSupported"/>).
+    /// </summary>
+    public bool ShaftScanSupported => _shafts.ScanSupported;
+    /// <summary>
+    /// What the light shafts did in the last frame (the stats line).
+    /// </summary>
+    public string ShaftsDescribe => _shafts.Describe;
+
+    /// <summary>
+    /// Darkens the haze where the sun is shadowed along the view ray (<see cref="LightShafts.Run"/>; call after the GI resolve, before
+    /// <see cref="RunFogVolumes"/>).
+    /// </summary>
+    public void RunLightShafts(float darkening, float far, float groundY, float airByTime = 1) => _shafts.Run(darkening, far, groundY, airByTime);
+
+    #endregion
+
+    #region Fog shading rate (FogRateImage)
+
+    /// <summary>
+    /// The fog shading rate's images, passes and tile count (<see cref="BuildShadingRate"/>).
+    /// </summary>
+    readonly FogRateImage _fogRate;
+    /// <summary>
+    /// The user's switch for the fog shading rate (default off; <see cref="FogRateImage.Enabled"/>). It does nothing where the device lacks
+    /// VK_KHR_fragment_shading_rate (<see cref="FogVrsSupported"/>).
+    /// </summary>
+    public bool FogVrs { get => _fogRate.Enabled; set => _fogRate.Enabled = value; }
+    /// <summary>
+    /// The device can shade several pixels with one fragment from an attachment image.
+    /// </summary>
+    public bool FogVrsSupported => _fogRate.Supported;
+    /// <summary>
+    /// Counting the tiles of each rate (the bench's report): a readback of the rate image every frame.
+    /// </summary>
+    public bool FogVrsStats { get => _fogRate.Stats; set => _fogRate.Stats = value; }
+    /// <summary>
+    /// The share of the screen's tiles shaded 1 x 1, 2 x 2 and 4 x 4 over the frames counted (<see cref="FogVrsStats"/>), and how many frames were
+    /// counted.
+    /// </summary>
+    public (double One, double Two, double Four, long Frames) FogVrsShare => _fogRate.Share;
+
+    /// <summary>
+    /// Starts the count of <see cref="FogVrsShare"/> afresh.
+    /// </summary>
+    public void ResetFogVrsStats() => _fogRate.ResetStats();
+
+    /// <summary>
+    /// <paramref name="targets"/> with this frame's fog shading rate attachment (<see cref="FogRateImage.WithShadingRate"/>).
+    /// </summary>
+    public PassTargets WithShadingRate(PassTargets targets) => _fogRate.WithShadingRate(targets);
+
+    /// <summary>
+    /// Builds the fog shading rate for the next frame from this frame's depth (<see cref="FogRateImage.Build"/>; call after the scene's passes).
+    /// </summary>
+    public void BuildShadingRate(Vector3 eye) => _fogRate.Build(eye);
+
+    #endregion
+
+    #region Ambient occlusion
+
+    /// <summary>
+    /// The SSAO's passes and half-size targets (<see cref="RunSsao"/>).
+    /// </summary>
+    readonly AmbientOcclusion _occlusion;
+    /// <summary>
+    /// Whether the occlusion has gone onto the scene this frame (<see cref="ApplySsao"/>).
+    /// </summary>
     bool _aoApplied;
-
     /// <summary>
     /// The occlusion multiplied in: the scene colour kept by the factor; red, green and blue only (the alpha is the characters' mask).
     /// </summary>
@@ -1248,60 +2295,116 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         if (MergeLayers)
         {
-            ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _aoA is not null);
+            ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _occlusion.A is not null);
             return;
         }
-        if (!Options.Ssao || !_haveScene || _sceneColour is null || _aoA is null) return;
+        if (!Options.Ssao || !_haveScene || _sceneColour is null || _occlusion.A is null) return;
         RunSsao();
         var p = _aoApplyPass ??= new AoApplyPass(Gpu);
-        Bind(p.P, p.Ao, _aoB);
+        Bind(p.P, p.Ao, _occlusion.B);
         Draw(p.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, AoMultiplyState);
         Stamp("ssao");
         CloseSegment();
         _aoApplied = true;
     }
 
-    // ---- GI resolve (docs/render-gi.md "Resolve") ----
+    /// <summary>
+    /// Whether any character was drawn into the scene this frame (<see cref="AmbientOcclusion.CharactersDrawn"/>).
+    /// </summary>
+    public bool CharactersDrawn { get => _occlusion.CharactersDrawn; set => _occlusion.CharactersDrawn = value; }
+    /// <summary>
+    /// Meitou: the SSAO blur's read of the character mask left out when no character was drawn (<see cref="AmbientOcclusion.MaskSkip"/>).
+    /// </summary>
+    public bool MaskSkip { get => _occlusion.MaskSkip; set => _occlusion.MaskSkip = value; }
 
+    /// <summary>
+    /// The SSAO of this frame (<see cref="AmbientOcclusion.Run"/>).
+    /// </summary>
+    void RunSsao() => _occlusion.Run();
+
+    #endregion
+
+    #region GI resolve (docs/render-gi.md "Resolve")
+
+    /// <summary>
+    /// The GI resolve (docs/render-gi.md "Resolve"): the lit fragments' albedo, the probes' light at 1/giDivisor of the render size.
+    /// </summary>
+    Target2D? _giAlbedo, _giLow;
+    /// <summary>
+    /// The divisor the GI targets were made for.
+    /// </summary>
+    int _giDivisor;
+    /// <summary>
+    /// The resolve added to the scene: source one, destination one; red, green and blue only (the alpha is the characters' SSAO mask).
+    /// </summary>
+    static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One),
+        ColourMask = DrawState.Rgb };
+
+    // Here and not in PostProcess.LampShadows.cs: static fields initialise in textual order only within one file, and these read PassState.
+    /// <summary>
+    /// Scene minus source; red, green and blue only (the alpha is the characters' SSAO mask).
+    /// </summary>
+    static readonly DrawState LampShadowState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract), ColourMask = DrawState.Rgb,
+    };
+
+    /// <summary>
+    /// The larger of the scene and the source; red, green and blue only.
+    /// </summary>
+    static readonly DrawState LampShadowFloorState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max), ColourMask = DrawState.Rgb,
+    };
     /// <summary>
     /// The GI resolve's divisor of the render size (0: off, the lit fragments read the probes themselves; 1 full size; 2 half). Set before
     /// <see cref="Begin"/>: while it is above 0 the scene targets carry the albedo target.
     /// </summary>
     public int GiResolve { get; set; }
-
+    /// <summary>
+    /// The albedo target the scene writes while the GI resolve is on, else null.
+    /// </summary>
     GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces ? _giAlbedo?.Texture : null;
 
-    /// <summary>The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c> switch's <c>cache</c> part).</summary>
+    /// <summary>
+    /// The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c>
+    /// switch's <c>cache</c> part).
+    /// </summary>
     internal Gi.GiCache? GiCache { get; set; }
 
-    /// <summary>The radiance cache for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.</summary>
+    /// <summary>
+    /// The radiance cache for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.
+    /// </summary>
     GpuTexture? RunGiCache()
     {
         if (GiCache is not { } cache) return null;
         CloseSegment();
         float tanY = MathF.Tan(_fovNow * 0.5f);
         var rot = _viewRotation;
-        var view = new Gi.GiCache.View(_eyeNow, new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, _fovNow, _aspectNow),
-            ViewWindow.Tan(tanY * _aspectNow, tanY), _planes, _giLow!.Width, _giLow.Height, _giDivisor, _width, _height, tanY);
+        var right = new Vector3(rot.M11, rot.M21, rot.M31);
+        var up = new Vector3(rot.M12, rot.M22, rot.M32);
+        var view = new Gi.GiCache.View(_eyeNow, right, up, ViewWindow.BackFor(rot, _fovNow, _aspectNow), ViewWindow.Tan(tanY * _aspectNow, tanY),
+            _planes, _giLow!.Width, _giLow.Height, _giDivisor, _width, _height, tanY);
         return cache.Run(_sceneDepth!.Texture, _giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
     }
 
     /// <summary>
-    /// Makes the albedo and low targets for <see cref="GiResolve"/> (again when its divisor or the render size changed).
+    /// What a pass over the GI surfaces needs of the depth, the surface target and the camera.
     /// </summary>
-    void EnsureGi()
+    void SetGiView(GiPass g)
     {
-        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
-        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
-        _giAlbedo?.Texture.Dispose();
-        _giLow?.Texture.Dispose();
-        _giDivisor = divisor;
-        using var batch = Gpu.Uploads.Begin();
-        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
-        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
-            TextureMinFilter.Nearest, TextureMagFilter.Nearest);
-        _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
-            TextureMinFilter.Nearest, "post gi resolve");
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        var rot = _viewRotation;
+        Bind(g.P, g.NearDepth, _sceneDepth);
+        Bind(g.P, g.Albedo, _giAlbedo);
+        g.P.Set(g.NearPlanes, _planes.X, _planes.Y);
+        g.P.Set(g.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
+        g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
+        g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
+        g.P.Set(g.Back, ViewWindow.BackFor(rot, _fovNow, _aspectNow));
+        g.P.Set(g.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
+        g.P.Set(g.FullSize, (float)_width, (float)_height);
+        g.P.Set(g.Div, (float)_giDivisor);
     }
 
     /// <summary>
@@ -1332,68 +2435,53 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         CloseSegment();
     }
 
-    /// <summary>The depth reconstruction and the surface target of a pass over the GI surfaces.</summary>
-    /// <summary>What a pass over the scene needs of the depth, the surface target and the camera.</summary>
-    void SetGiView(GiPass g)
+    /// <summary>
+    /// Makes the albedo and low targets for <see cref="GiResolve"/> (again when its divisor or the render size changed).
+    /// </summary>
+    void EnsureGi()
     {
-        float tanY = MathF.Tan(_fovNow * 0.5f);
-        var rot = _viewRotation;
-        Bind(g.P, g.NearDepth, _sceneDepth);
-        Bind(g.P, g.Albedo, _giAlbedo);
-        g.P.Set(g.NearPlanes, _planes.X, _planes.Y);
-        g.P.Set(g.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
-        g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
-        g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
-        g.P.Set(g.Back, ViewWindow.BackFor(rot, _fovNow, _aspectNow));
-        g.P.Set(g.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
-        g.P.Set(g.FullSize, (float)_width, (float)_height);
-        g.P.Set(g.Div, (float)_giDivisor);
+        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
+        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
+        _giAlbedo?.Texture.Dispose();
+        _giLow?.Texture.Dispose();
+        _giDivisor = divisor;
+        using var batch = Gpu.Uploads.Begin();
+        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
+        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+            TextureMinFilter.Nearest, TextureMagFilter.Nearest);
+        _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
+            TextureMinFilter.Nearest, "post gi resolve");
     }
 
-    /// <summary>The resolve added to the scene: source one, destination one; red, green and blue only (the alpha is the characters' SSAO mask).</summary>
-    static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One), ColourMask = DrawState.Rgb };
+    #endregion
 
-    // Here and not in PostProcess.LampShadows.cs: static fields initialise in textual order only within one file, and these read PassState.
-    /// <summary>Scene minus source; red, green and blue only (the alpha is the characters' SSAO mask).</summary>
-    static readonly DrawState LampShadowState = PassState with
-    {
-        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract), ColourMask = DrawState.Rgb,
-    };
-
-    /// <summary>The larger of the scene and the source; red, green and blue only.</summary>
-    static readonly DrawState LampShadowFloorState = PassState with
-    {
-        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max), ColourMask = DrawState.Rgb,
-    };
-
-    // ---- low-resolution particles (Meitou) ----
+    #region Low-resolution particles (Meitou)
 
     /// <summary>
-    /// One low-resolution size's accumulation target (RGBA16F: colour added, opacity) and depth, at 1/<see cref="Divisor"/> of the render size.
+    /// The low-resolution particles' filter after the vendor upscaler (<see cref="LateParticles"/>).
     /// </summary>
-    sealed class LowTarget(int divisor)
-    {
-        public readonly int Divisor = divisor;
-        /// <summary>
-        /// The draw tested against each block's nearest depth (<see cref="Depth"/>), and the one tested against its farthest
-        /// (<see cref="DepthFar"/>).
-        /// </summary>
-        public Target2D? Accum, Depth, AccumFar, DepthFar;
-        /// <summary>
-        /// The depths the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.
-        /// </summary>
-        public Target2D? Soft, SoftFar;
-        public bool Drawn;
-        /// <summary>
-        /// Drawn this frame but blended after the upscaler (<see cref="ParticlesAfterUpscale"/>), not yet.
-        /// </summary>
-        public bool Late;
-        public PassTargets Targets = null!, TargetsFar = null!;
-    }
-
+    readonly LateParticles _lateParticles;
+    /// <summary>
+    /// The two sizes' targets: half and quarter.
+    /// </summary>
     readonly LowTarget[] _lowTargets = [new(2), new(4)];
-
-    LowTarget LowFor(int divisor) => divisor >= 4 ? _lowTargets[1] : _lowTargets[0];
+    /// <summary>
+    /// The scene depth as a colour for the soft fade (<see cref="PrepareSoftParticleDepth"/>).
+    /// </summary>
+    Target2D? _softDepth;
+    /// <summary>
+    /// Whether <see cref="_softDepth"/> holds this frame's depth.
+    /// </summary>
+    bool _softDepthReady;
+    /// <summary>
+    /// Premultiplied "over": the accumulation's colour added, the scene kept by one minus its opacity; red, green and blue only (the alpha is the
+    /// characters' mask).
+    /// </summary>
+    internal static readonly DrawState ParticleLowState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
+        ColourMask = DrawState.Rgb,
+    };
 
     /// <summary>
     /// The render size in pixels of one world unit at distance 1 (vertical): what the particles use to tell big sprites from small ones; 0 when the
@@ -1411,6 +2499,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// and its depth.
     /// </summary>
     public PassTargets ParticleTargets(int divisor) => LowFor(divisor).Targets;
+
     /// <summary>
     /// The second draw of the same particles: tested against each block's farthest depth (<see cref="PostProcessShaders.ParticleUpsample"/>).
     /// </summary>
@@ -1459,9 +2548,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var far = PassTargets.Of(low.AccumFar!.Texture, low.DepthFar!.Texture);
         low.TargetsFar = far with { Colour = far.Colour with { Load = LoadOp.Clear, Clear = default } };
     }
-
-    Target2D? _softDepth;
-    bool _softDepthReady;
 
     /// <summary>
     /// With the Meitou <c>fog</c> switch, copies the scene's depth into a colour target for the full-size particles' soft fade (they test against the
@@ -1515,10 +2601,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void CompositeParticlesLow(int divisor)
     {
         var low = LowFor(divisor);
-        if (ParticlesAfterUpscale) { low.Drawn = low.Late = true; return; }
+        if (ParticlesAfterUpscale)
+        {
+            low.Drawn = low.Late = true;
+            return;
+        }
         CompositeLow(low, _sceneColour!, _width, _height);
         low.Drawn = true;
     }
+
+    /// <summary>
+    /// The targets of <paramref name="divisor"/>: quarter for 4 and above, else half.
+    /// </summary>
+    LowTarget LowFor(int divisor) => divisor >= 4 ? _lowTargets[1] : _lowTargets[0];
 
     /// <summary>
     /// The low-resolution particles kept for after the upscaler, half size then quarter (the order the scene gets them in), over
@@ -1527,9 +2622,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void CompositeLateParticles(Target2D target, int targetWidth, int targetHeight)
     {
         foreach (var low in _lowTargets)
-            if (low.Late) { CompositeLow(low, target, targetWidth, targetHeight); low.Late = false; }
+            if (low.Late)
+            {
+                CompositeLow(low, target, targetWidth, targetHeight);
+                low.Late = false;
+            }
     }
 
+    /// <summary>
+    /// Blends a size's accumulation over <paramref name="target"/> (<see cref="ParticleLowState"/>).
+    /// </summary>
     void CompositeLow(LowTarget low, Target2D target, int targetWidth, int targetHeight)
     {
         var c = _particleCompositePass;
@@ -1549,359 +2651,45 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// Premultiplied "over": the accumulation's colour added, the scene kept by one minus its opacity; red, green and blue only (the alpha is the
-    /// characters' mask).
+    /// One low-resolution size's accumulation target (RGBA16F: colour added, opacity) and depth, at 1/<see cref="Divisor"/> of the render size.
     /// </summary>
-    static readonly DrawState ParticleLowState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
-        ColourMask = DrawState.Rgb };
-
-    void DrawFinal(LegacyProgram p, PassTargets final) =>
-        Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, _displayWidth, _displayHeight);
-
-    Target2D _postColour = null!;
-
-    /// <summary>
-    /// The one projection the upscalers' depth is written for (camera near .. view distance, unjittered). Standard 0..1 depth, not the
-    /// scene's reversed convention: nothing is drawn with it; the velocity pass re-encodes the scene depth into it and DLSS gets it as
-    /// <c>ViewToClip</c> (depth not inverted).
-    /// </summary>
-    Matrix4x4 FullProjection(float fov, float aspectRatio) =>
-        ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
-
-    /// <summary>
-    /// The planes of the upscalers' depth: fixed, not the camera's (its near plane follows the eye's height above the ground and the far one the
-    /// haze), because FSR decodes last frame's depth with this frame's planes: changing planes read as a disocclusion everywhere.
-    /// </summary>
-    public const float UpscaleNear = 1, UpscaleFar = 1_000_000;
-
-    /// <summary>
-    /// Whether the composite sharpens the upscaled picture (<see cref="UpscaleOptions.Sharpness"/>): after TAA and DLSS, which leave it soft.
-    /// </summary>
-    bool _sharpenAfter;
-
-    /// <summary>Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.</summary>
-    IUpscaler? _retired;
-
-    Target2D RunUpscale()
+    internal sealed class LowTarget(int divisor)
     {
-        if (_retired is not null) { _retired.Dispose(); _retired = null; }
-        bool reset = !_historyValid || !_previousValid || Vector3.Distance(_eyeNow, _previousEye) > 5000;
-        float dt = (float)_frameClock.Elapsed.TotalSeconds;
-        _frameClock.Restart();
-        // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only the motion target).
-        // The depth image is made with TAA too (one more R32F store per pixel; the kernel has the value already): frame generation takes motion and depth whatever upscales.
-        var external = ExternalFor(Options.Upscale.Kind);
-        bool merged = MergeVelocity && MergeSupported;
-        PrepareSunMotion();
-        if (merged) VelocityMerged(_motion!, _upscaleDepth!, external is null || WaterHeight is null ? null : _reactive!,
-                cleanColour: external is not null);
-        else { Velocity(_motion!, 0); if (external is null) Velocity(_upscaleDepth!, 1); }
-        if (ObjectMotion is { } objectMotion)
-        {
-            // The guests' host (the grass's motion): the motion target loaded, red and green written, no depth, culling or blending.
-            CloseSegment();
-            var targets = PassTargets.Of(_motion!.Texture, null);
-            var cmd = Gpu.BeginNative("object motion");
-            cmd.BeginRendering(targets.Rendering);
-            Gpu.BeginHostPass((CommandList)cmd, targets, DrawState.For(targets.Formats, Gpu.Device.DepthClamp,
-                mask: ColorMask.R | ColorMask.G));
-            var jitterNdc = new Vector2(2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
-            objectMotion(new MotionTargets(Sampled(_sceneDepth!), _planes, jitterNdc, _height / (2 * MathF.Tan(_fovNow * 0.5f))));
-            cmd.EndRendering();
-            Gpu.EndHostPass(cmd);
-            Gpu.EndNative(cmd);
-        }
-        if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
-        if (_historyA is not null) (_historyA, _historyB) = (_historyB, _historyA);
-        var output = _historyB!;
-        bool done = false;
-        _sharpenAfter = true;
-        if (external is not null)
-        {
-            if (!merged) Velocity(_upscaleDepth!, 1);
-            if (!merged && WaterHeight is not null) Velocity(_reactive!, 2);
-            bool covered = Particles is { HasCoverage: true };
-            if (covered) Stamp("velocity");
-            if (covered) RunCoverage(_reactive!, ColorMask.R, clear: WaterHeight is null);
-            var exposure = external.Kind == UpscalerKind.Dlss ? WriteUpscaleExposure() : null;
-            CloseSegment();   // the vendor upscaler records its own segment
-            if (covered) Stamp("particle coverage");
-            done = external.Dispatch(new UpscaleInputs
-            {
-                Colour = _sceneColour!.Texture,
-                Depth = _upscaleDepth!.Texture,
-                Motion = _motion!.Texture,
-                Output = output.Texture,
-                Reactive = WaterHeight is null && !covered ? null : _reactive!.Texture,
-                Exposure = exposure?.Texture,
-                Preset = Options.Upscale.DlssPreset,
-                RenderWidth = _width,
-                RenderHeight = _height,
-                DisplayWidth = _displayWidth,
-                DisplayHeight = _displayHeight,
-                JitterPixels = JitterPixels,
-                Near = UpscaleNear,
-                Far = UpscaleFar,
-                FieldOfView = ViewWindow.FieldOfView(_fovNow),
-                DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
-                Sharpness = Options.Upscale.Sharpness,
-                Reset = reset,
-                ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
-                Eye = _eyeNow,
-                Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
-                Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
-                Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
-                Aspect = _aspectNow,
-            });
-            if (done) (ActiveUpscaler, _sharpenAfter) = (external.Name, external.Kind != UpscalerKind.Fsr);   // FSR sharpens itself (RCAS)
-            else
-            {
-                Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
-                _unavailable.Add(external.Kind);
-                _retired = external;   // not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one
-                External = null;
-                _warnedFallback = true;
-            }
-        }
-        if (!done)
-        {
-            if (Options.Upscale.Kind is UpscalerKind.Fsr or UpscalerKind.Dlss or UpscalerKind.MetalFx && !_warnedFallback)
-            {
-                Console.WriteLine($"upscaler  {Options.Upscale.Kind.ToString().ToUpperInvariant()} is not available here; using TAA");
-                _warnedFallback = true;
-            }
-
-            // A vendor upscaler that failed this frame left its late particles undrawn: into the scene before the TAA (its output is its next
-            // history).
-            CompositeLateParticles(_sceneColour!, _width, _height);
-
-            // The particles' coverage into the motion target's alpha (the TAA's reactive channel; the water's analytic value is there already).
-            if (Particles is { HasCoverage: true }) RunCoverage(_motion!, ColorMask.A, clear: false);
-            if (_historyA is null)
-            {
-                // The TAA's first frame on these targets: the history it reads (nothing in it yet, so it starts over).
-                using (var batch = Gpu.Uploads.Begin())
-                    _historyA = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
-                reset = true;
-            }
-            var t = _taaPass;
-            Bind(t.P, t.Colour, _sceneColour);
-            Bind(t.P, t.Motion, _motion);
-            Bind(t.P, t.History, _historyA);
-            t.P.Set(t.RenderSize, (float)_width, (float)_height);
-            t.P.Set(t.DisplaySize, (float)_displayWidth, (float)_displayHeight);
-            t.P.Set(t.Jitter, JitterPixels.X, JitterPixels.Y);
-            t.P.Set(t.Blend, 0.1f);
-            t.P.Set(t.Reset, reset ? 1 : 0);
-            Draw(t.P, output);
-            ActiveUpscaler = _width == _displayWidth && _height == _displayHeight ? "taa" : $"taa {_width}x{_height}";
-        }
-
-        // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it, through their own temporal filter.
-        // The fog volumes' shadow kept out of what was upscaled (FogShadowAfterUpscale), then the low-resolution particles over it.
-        output = CompositeLateFogShadow(output, _displayWidth, _displayHeight, reset);
-        CompositeLateParticlesFiltered(output, _displayWidth, _displayHeight, reset);
-        _historyValid = true;
-        // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no segment is open.
-        if (FrameGen is { Wanted: true } frameGen && _upscaleDepth is not null && _motion is not null)
-        {
-            CloseSegment();
-            frameGen.Prepare(new Upscalers.FrameGenInputs
-            {
-                Depth = _upscaleDepth.Texture,
-                Motion = _motion.Texture,
-                RenderWidth = _width,
-                RenderHeight = _height,
-                JitterPixels = JitterPixels,
-                Near = UpscaleNear,
-                Far = UpscaleFar,
-                FieldOfView = ViewWindow.FieldOfView(_fovNow),
-                DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f),
-                Reset = reset,
-                Eye = _eyeNow,
-                Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
-                Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
-                Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
-                Aspect = _aspectNow,
-                ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
-            });
-        }
-        return output;
+        /// <summary>
+        /// The divisor of the render size.
+        /// </summary>
+        public readonly int Divisor = divisor;
+        /// <summary>
+        /// The draw tested against each block's nearest depth (<see cref="Depth"/>), and the one tested against its farthest
+        /// (<see cref="DepthFar"/>).
+        /// </summary>
+        public Target2D? Accum, Depth, AccumFar, DepthFar;
+        /// <summary>
+        /// The depths the draws are tested against, as a colour (R32F): what the Meitou fog's soft fade reads.
+        /// </summary>
+        public Target2D? Soft, SoftFar;
+        /// <summary>
+        /// Drawn this frame.
+        /// </summary>
+        public bool Drawn;
+        /// <summary>
+        /// Drawn this frame but blended after the upscaler (<see cref="ParticlesAfterUpscale"/>), not yet.
+        /// </summary>
+        public bool Late;
+        /// <summary>
+        /// The pass targets of the near and far draws.
+        /// </summary>
+        public PassTargets Targets = null!, TargetsFar = null!;
     }
 
-    /// <summary>
-    /// Frame generation (the Frame generation setting, FSR 3's or DLSS's, where it runs): the host sets it each frame; the chain hands it the depth
-    /// and the motion.
-    /// </summary>
-    public Upscalers.IFrameGenerator? FrameGen { get; set; }
+    #endregion
+
+    #region Heat haze
 
     /// <summary>
-    /// The water plane's height when water is drawn (for the upscalers' reactive mask), else null.
+    /// The heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze).
     /// </summary>
-    public float? WaterHeight { get; set; }
-    /// <summary>
-    /// How much the upscalers trust the current frame on water (FSR's reactive mask; TAA takes half).
-    /// </summary>
-    public const float WaterReactive = 0.5f;
-
-    void Velocity(Target2D target, int mode)
-    {
-        var v = _velocityPass;
-        Bind(v.P, v.NearDepth, _sceneDepth);
-        v.P.Set(v.NearToPrev, _toPrevious);
-        v.P.Set(v.NearPlanes, _planes.X, _planes.Y);
-        v.P.Set(v.FullPlanes, UpscaleNear, UpscaleFar);
-        v.P.Set(v.JitterNdc, 2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height);
-        v.P.Set(v.Mode, mode);
-        v.P.Set(v.FlipDepthY, Gpu.RenderTargetsBottomUp ? 0 : 1);
-        float tanY = MathF.Tan(_fovNow * 0.5f);
-        v.P.Set(v.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
-        var r = _viewRotation;
-        v.P.Set(v.Right, r.M11, r.M21, r.M31);
-        v.P.Set(v.Up, r.M12, r.M22, r.M32);
-        v.P.Set(v.Back, ViewWindow.BackFor(r, _fovNow, _aspectNow));
-        v.P.Set(v.EyeY, _eyeNow.Y);
-        v.P.Set(v.WaterY, WaterHeight ?? float.MinValue);
-        v.P.Set(v.WaterReactive, WaterReactive);
-        v.P.Set(v.Sun, _sunMotion.Sun);
-        v.P.Set(v.SunMotionUniform, _sunMotion.Motion);
-        Draw(v.P, target);
-    }
-
-    /// <summary>
-    /// The weather's particles, which add their coverage to the upscalers' reactive mask (<see cref="ParticleRenderer.DrawCoverage"/>) so thin fast
-    /// ones (rain) keep their strength under the temporal history.
-    /// </summary>
-    public ParticleRenderer? Particles { get; set; }
-
-    /// <summary>
-    /// The particles' coverage into <paramref name="target"/>'s channels <paramref name="mask"/>, added to what is there (or onto zero when
-    /// <paramref name="clear"/>).
-    /// </summary>
-    void RunCoverage(Target2D target, ColorMask mask, bool clear)
-    {
-        CloseSegment();
-
-        // Tested against the scene's depth as the particles' colour is, so a fire behind a wall does not mark the wall.
-        var targets = PassTargets.Of(target.Texture, _sceneDepth!.Texture);
-        if (clear) targets = targets with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = default } };
-        var cmd = Gpu.BeginNative("particle coverage");
-        cmd.BeginRendering(targets.Rendering);
-        var state = DrawState.For(targets.Formats, Gpu.Device.DepthClamp, depthTest: true, depthWrite: false,
-            compare: DepthConvention.SceneCompare, mask: mask);
-        Gpu.BeginHostPass((CommandList)cmd, targets, state);
-        Particles!.DrawCoverage(mask, depthTest: true, SoftParticleDepth(1));
-        cmd.EndRendering();
-        Gpu.EndHostPass(cmd);
-        Gpu.EndNative(cmd);
-        foreach (var low in _lowTargets)
-        {
-            if (!low.Drawn || low.Late) continue;   // blended after the upscaler: not in what it sees
-            // The low-resolution particles' share: from their accumulation, added to what is there (the full-size ones drew theirs above).
-            var c = _particleCoveragePass;
-            Bind(c.P, c.Accum, low.Accum);
-            Bind(c.P, c.LowDepth, low.Depth);
-            Bind(c.P, c.AccumFar, low.AccumFar);
-            Bind(c.P, c.LowDepthFar, low.DepthFar);
-            Bind(c.P, c.Depth, _sceneDepth);
-            c.P.Set(c.LowSize, (float)low.Accum!.Width, (float)low.Accum.Height);
-            c.P.Set(c.NearPlanes, _planes.X, _planes.Y);
-            c.P.Set(c.Div, (float)low.Divisor);
-            c.P.Set(c.FullSize, (float)_width, (float)_height);
-            c.P.Set(c.Limit, mask == ColorMask.A ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
-            Draw(c.P, target.Attachment, target.Format, target.Width, target.Height, target.Width, target.Height,
-                PassState with
-                {
-                    // The FSR/MetalFX reactive mask is a confidence in [0, 1]; overlap must not add past 1.
-                    Blend = mask == ColorMask.R
-                        ? new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max, BlendOperation.Max)
-                        : new BlendState(true, BlendingFactor.One, BlendingFactor.One),
-                    ColourMask = mask,
-                });
-        }
-        CloseSegment();
-    }
-
-    /// <summary>
-    /// Whether any character was drawn into the scene this frame (set by the world frame after the scene's characters): none means the scene colour's
-    /// alpha, the SSAO's character mask, is 0 everywhere, so with <see cref="MaskSkip"/> the blur does not read it.
-    /// </summary>
-    public bool CharactersDrawn { get; set; } = true;
-    /// <summary>
-    /// Meitou: the SSAO blur's read of the character mask left out when no character was drawn (<c>--ab ssao-mask-skip</c>).
-    /// </summary>
-    public bool MaskSkip { get; set; } = true;
-
-    static readonly bool SsaoStamps = Environment.GetEnvironmentVariable("MEITOU_SSAO_STAMPS") == "1";
-
-    void RunSsao()
-    {
-        var a = _aoA!; var b = _aoB!;
-        float tanY = MathF.Tan(_fovY * 0.5f);
-        var s = _ssao;
-        Bind(s.P, s.Depth, _sceneDepth);
-
-        // Characters count less as occluders (the mask, as the blur's below): a body lying on the ground darkened a halo round it as wide as itself.
-        bool characters = _sceneColour is not null && (CharactersDrawn || !MaskSkip);
-        if (characters)
-        {
-            // The characters' mask at this half size first (PostProcessShaders.SsaoMask): the taps below read it instead of the scene colour.
-            Bind(_ssaoMask.P, _ssaoMask.Scene, _sceneColour);
-            Draw(_ssaoMask.P, _aoMask!);
-        }
-        Bind(s.P, s.Mask, characters ? _aoMask : null);
-        s.P.Set(s.CharacterOccluder, characters ? PostOptions.SsaoCharacterOccluder : 1f);
-        s.P.Set(s.Tan, ViewWindow.Tan(tanY * _aspect, tanY));
-        s.P.Set(s.NearFar, _nearPlane, _farPlane);
-        s.P.Set(s.Size, (float)_width, (float)_height);
-        s.P.Set(s.Radius, PostOptions.SsaoRadius);
-        s.P.Set(s.Strength, PostOptions.SsaoStrength);
-
-        // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
-        s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);
-        s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
-
-        // The air in front of each surface (haze, weather fog, fog volumes) hides its occlusion: the shader evaluates it at the world position
-        // rebuilt from depth.
-        var r = _viewRotation;
-        s.P.Set(s.Right, r.M11, r.M21, r.M31);
-        s.P.Set(s.Up, r.M12, r.M22, r.M32);
-        s.P.Set(s.Back, ViewWindow.BackFor(r, _fovY, _aspect));
-        s.P.Set(s.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
-        s.P.Set(s.WaterY, WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
-        s.P.Set(s.Contact, default(System.Numerics.Vector4));   // the contact shadows are their own pass (ApplyContactShadows)
-        s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
-        Draw(s.P, a);
-        if (SsaoStamps) Stamp("ssao gen");
-
-        var bl = _blur;
-        Bind(bl.P, bl.Ao, a);
-        Bind(bl.P, bl.Mask, null);
-        bl.P.Set(bl.Step, 1f / a.Width, 0f);
-        bl.P.Set(bl.CharacterAo, 1f);
-        Draw(bl.P, b);
-        if (SsaoStamps) Stamp("ssao blur x");
-
-        // The second pass also takes the occlusion off the characters' pixels (the scene colour's alpha; only they write it), by
-        // SsaoCharacterStrength.
-        bool mask = _sceneColour is not null && (CharactersDrawn || !MaskSkip);
-        Bind(bl.P, bl.Ao, b);
-        Bind(bl.P, bl.Mask, mask ? _sceneColour : null);
-        bl.P.Set(bl.Step, 0f, 1f / a.Height);
-        bl.P.Set(bl.CharacterAo, mask ? PostOptions.SsaoCharacterStrength : 1f);
-        Draw(bl.P, a);
-        if (SsaoStamps) Stamp("ssao blur y");
-
-        // The composite reads aoB: swap so the finished result is there.
-        (_aoA, _aoB) = (_aoB, _aoA);
-    }
-
-    // ---- heat haze ----
-
+    GpuTexture? _flowTexture, _perturbationTexture;
     /// <summary>
     /// The game's shared <c>heatHaze</c> this frame (the caller moves it towards the weather's target, <see cref="Meitou.Data.World.HeatHaze"/>); 0
     /// skips the pass.
@@ -1923,6 +2711,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// Whether this frame ends with the heat haze: it is on, has its textures and an amount.
     /// </summary>
     public bool HeatHazeRuns => HeatHazeWanted && _ldr is not null;
+    /// <summary>
+    /// The options want the haze, its textures are loaded and there is some haze.
+    /// </summary>
     bool HeatHazeWanted => Options.HeatHaze && HasHeatHaze && HeatHazeAmount * Options.HeatHazeScale > 0;
 
     /// <summary>
@@ -2003,6 +2794,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Stamp("heathaze");
     }
 
+    #endregion
+
+    #region Exposure
+
+    /// <summary>
+    /// The luminance measure's side, in pixels.
+    /// </summary>
     const int LuminanceSize = 256;
     /// <summary>
     /// The luminance's whole mip chain: 256 down to 1.
@@ -2012,7 +2810,30 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s).
     /// </summary>
     const float AdaptationRate = 0.5f;
-
+    /// <summary>
+    /// Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong).
+    /// </summary>
+    Target2D? _luminance, _adaptA, _adaptB;
+    /// <summary>
+    /// Whether the adapted target holds a value.
+    /// </summary>
+    bool _adaptedValid;
+    /// <summary>
+    /// Exposure passes since the targets were made (up to 2: both ping-pong targets seeded).
+    /// </summary>
+    int _adaptedFrames;
+    /// <summary>
+    /// Times the exposure passes for the smoothing.
+    /// </summary>
+    readonly System.Diagnostics.Stopwatch _adaptClock = new();
+    /// <summary>
+    /// The adapted luminance pinned by <see cref="HoldExposure"/> (null: none).
+    /// </summary>
+    float? _exposureHold;
+    /// <summary>
+    /// Exposure passes the pin still lasts.
+    /// </summary>
+    int _exposureHoldFrames;
     /// <summary>
     /// The game's exposure: when set, the composite scales by 0.55 over the scene's mean luminance, smoothed over time and clamped to the band
     /// (`MIN_LUMINANCE`, `MAX_LUMINANCE`; docs/formats/lighting.md); null keeps the plain <see cref="PostOptions.Exposure"/>, which multiplies either
@@ -2024,28 +2845,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     public bool InstantAdaptation { get; set; }
 
-    float? _exposureHold;
-    int _exposureHoldFrames;
-
-    /// <summary>
-    /// Forgets what the temporal passes kept (the upscaler's history, the shafts' history, the previous camera): the next frame starts afresh. A
-    /// tiled screenshot calls it between tiles.
-    /// </summary>
-    public void ResetHistory() => (_historyValid, _previousValid, _shaftHistoryValid) = (false, false, false);
-
     /// <summary>
     /// Pins the adapted luminance to <paramref name="adapted"/> for the next <paramref name="frames"/> exposure passes (the band collapses to it), so
     /// a picture drawn at another size (the size change drops the adaptation history) keeps the exposure of the live view: the original's tiled
     /// screenshot zeroes the adaptation rate for the same reason.
     /// </summary>
     public void HoldExposure(float adapted, int frames) => (_exposureHold, _exposureHoldFrames) = (adapted, frames);
-
-    (float Min, float Max) ExposureBand()
-    {
-        if (_exposureHold is not { } held) return AutoExposure!.Value;
-        if (--_exposureHoldFrames <= 0) _exposureHold = null;
-        return (held, held);
-    }
 
     /// <summary>
     /// The last frame's adapted luminance and measured mean (the composite's scale is 0.55 / adapted; the mean is smoothed at the same rate, without
@@ -2059,6 +2864,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         return (v[0], v[1]);
     }
 
+    /// <summary>
+    /// The exposure band: the pinned value while <see cref="HoldExposure"/> lasts, else <see cref="AutoExposure"/>.
+    /// </summary>
+    (float Min, float Max) ExposureBand()
+    {
+        if (_exposureHold is not { } held) return AutoExposure!.Value;
+        if (--_exposureHoldFrames <= 0) _exposureHold = null;
+        return (held, held);
+    }
+
+    /// <summary>
+    /// The adapted luminance this frame: the merged kernel, else the luminance pass, its mips and the adaptation pass.
+    /// </summary>
     void RunExposure()
     {
         if (MergeExposure && MergeSupported)
@@ -2069,7 +2887,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             // Seed both ping-pong targets before smoothing; the next frame reads the other one.
             float mblend = InstantAdaptation || !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-mdt * AdaptationRate);
             (_adaptA, _adaptB) = (_adaptB, _adaptA);
-            ExposureMerged(mblend, ExposureBand());
+            _merged.Exposure(mblend, ExposureBand(), _postColour, _adaptA!, _adaptB!);
             _adaptedValid = true;
             _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);
             return;
@@ -2099,30 +2917,5 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);
     }
 
-    public void Dispose()
-    {
-        External?.Dispose();
-        _retired?.Dispose();
-        Free();
-        DisposeShadingRate();
-        DisposeShafts();
-        DisposeSceneLayers();
-        DisposeReflections();
-        DisposeLateParticles();
-        DisposeLateFogShadow();
-        DisposeMerged();
-        DisposeUpscaleExposure();
-        DisposeBloom();
-        DisposeDepthOfField();
-        DisposeGtao();
-        DisposeLampShadows();
-        Hiz?.Dispose();
-        foreach (var p in new FullscreenProgram[] { _ssao, _ssaoMask, _blur, _luminancePass, _adaptPass, _compositePass, _fxaaPass, _hazePass, _velocityPass, _cloudMotionPass, _taaPass, _fogPass, _particleDepthPass, _particleSoftDepthPass, _particleCompositePass, _particleCoveragePass }) p.P.Dispose();
-        _smaaPasses.Dispose();
-        foreach (var pass in _giResolvePasses) pass?.P.Dispose();
-        _giApplyPass?.P.Dispose();
-        _aoApplyPass?.P.Dispose();
-        _flowTexture?.Dispose();
-        _perturbationTexture?.Dispose();
-    }
+    #endregion
 }

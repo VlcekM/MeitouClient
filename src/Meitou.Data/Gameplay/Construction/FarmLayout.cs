@@ -18,6 +18,9 @@ public sealed record FarmPart(
     /// </summary>
     public bool Static => ScaleStart == ScaleEnd && OffsetStart == OffsetEnd;
 
+    /// <summary>
+    /// A plant part from its FARM_PART record, its group (v0) and weight (v1), its material resolved through its MATERIAL_SPEC.
+    /// </summary>
     public static FarmPart From(GameDatabase db, GameRecord part, int group, int weight) => new(
         part, part.Filenames.GetValueOrDefault("mesh") ?? "",
         part.GetReferences("material") is [var m, ..]
@@ -56,6 +59,9 @@ public static class FarmLayout
         return across * (farm.Plants / across);
     }
 
+    /// <summary>
+    /// A grid's column count: round(sqrt(amount) x aspect), at least 1.
+    /// </summary>
     static int Across(FarmData farm) => Math.Max(1, (int)(MathF.Sqrt(farm.Plants) * farm.Aspect + 0.5));
 
     /// <summary>

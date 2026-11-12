@@ -35,6 +35,10 @@ Algorithm verification does not establish screenshot parity for complete generat
   distance alone. The town list is the live one, so it includes towns the player founded or took, and the test runs when the zone is paged. Not modelled: Meitou places a zone
   from the level's towns only and caches the layout by content, so ownership (and the player's own towns) never changes a layout; a town the player owns in a loaded save keeps
   its rocks away. Wiring it needs the layout cache key to carry which towns the player owns.
+  A town with range 0 keeps nothing away (**Observed**: Newwworld's The Hub `18919-Newwworld.mod`, so its trees grow among the buildings, issue #522).
+- **No building test** (**Verified (decompiled)**, `FUN_1406d2410`): the mesh placer rejects by slope, zone, town range, altitude and the overlay's road
+  channel only (the grid test there is the overlay A byte, `FUN_1406d82d0`); nothing checks buildings, so a tree can stand in a building's yard or room.
+  Whether anything removes foliage under buildings after placement is **Unknown** (no such caller found).
 
 ## Randomness, noise and ground
 
@@ -62,10 +66,14 @@ XZ, distance5..radius. Slope/altitude failures end cluster; out-of-zone skips.
 
 Per member: slope → zone → town rejection (still consume later draws) → altitude → floating
 Y=max(Y,100) → random scale → vertical-offset*scale → road perimeter rejection → yaw0..360 →
-add if accepted. Original scale/yaw quantized8-bit; Meitou keeps floats. Spawn children even
+add if accepted. Scale and yaw are kept in 8 bits (TreeLoader3D), as in Meitou. Spawn children even
 for rejected parents, recursively, then stamp grass-spot disc into G (<=96). Slope-align rotates
 up after yaw; otherwise keep-upright yaw only, or CRT random axis seeded by positional noise.
 Resource rocks create/find their building after ordinary placement.
+Position snap (**Verified**, decompile and disassembly): the instance's point goes through TreeLoader3D's add (`FUN_140a46970`) before
+its transform: per axis, 16 bits across a page of half a zone (2304, `FUN_1406d3e30` 0x1406d4bae) from the zone's edge, then floored. The
+orientation hash reads the snapped point, so a fraction just above a whole unit moves the seed: Tower of Abuse's boulder cluster at
+23862.03,18520.018 snaps to 23862,18519 and turns (issue #406; unsnapped, it blocked the ramp foot the shipped tile and the game keep open).
 
 ## Materials, sizes and grass
 

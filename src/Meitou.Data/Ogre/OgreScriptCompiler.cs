@@ -5,18 +5,57 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public enum OgreScriptError
 {
+    /// <summary>
+    /// CE_STRINGEXPECTED: an <c>import</c> or <c>set</c> has too few values.
+    /// </summary>
     StringExpected,
+    /// <summary>
+    /// CE_NUMBEREXPECTED: a number was expected; not raised by Meitou's compiler.
+    /// </summary>
     NumberExpected,
+    /// <summary>
+    /// CE_FEWERPARAMETERSEXPECTED: an <c>import</c>, <c>set</c> or variable access has too many values.
+    /// </summary>
     FewerParametersExpected,
+    /// <summary>
+    /// CE_VARIABLEEXPECTED: a <c>set</c> whose first value is not a <c>$variable</c>.
+    /// </summary>
     VariableExpected,
+    /// <summary>
+    /// CE_UNDEFINEDVARIABLE: a <c>$variable</c> no enclosing object or top-level <c>set</c> defines.
+    /// </summary>
     UndefinedVariable,
+    /// <summary>
+    /// CE_OBJECTNAMEEXPECTED: an object needs a name (a material without one).
+    /// </summary>
     ObjectNameExpected,
+    /// <summary>
+    /// CE_OBJECTALLOCATIONERROR: the translator could not make the object; not raised by Meitou.
+    /// </summary>
     ObjectAllocationError,
+    /// <summary>
+    /// CE_INVALIDPARAMETERS: a property's values are invalid; not raised by Meitou.
+    /// </summary>
     InvalidParameters,
+    /// <summary>
+    /// CE_DUPLICATEOVERRIDE: an inherited child object was overridden twice.
+    /// </summary>
     DuplicateOverride,
+    /// <summary>
+    /// CE_UNEXPECTEDTOKEN: a token that does not fit; not raised by Meitou.
+    /// </summary>
     UnexpectedToken,
+    /// <summary>
+    /// CE_OBJECTBASENOTFOUND: a <c>:</c> base object that neither the file nor its imports define.
+    /// </summary>
     ObjectBaseNotFound,
+    /// <summary>
+    /// CE_UNSUPPORTEDBYRENDERSYSTEM: the render system lacks a feature; not raised by Meitou.
+    /// </summary>
     UnsupportedByRenderSystem,
+    /// <summary>
+    /// CE_REFERENCETOANONEXISTINGOBJECT: a reference to an undefined object; not raised by Meitou.
+    /// </summary>
     ReferenceToANonExistingObject,
 
     /// <summary>
@@ -45,6 +84,9 @@ public enum OgreScriptError
     Fatal,
 }
 
+/// <summary>
+/// A compile diagnostic: its code, the file and line it was found at, and an optional detail.
+/// </summary>
 public sealed record OgreScriptDiagnostic(OgreScriptError Code, string File, int Line, string Message = "")
 {
     public override string ToString() => $"{File}({Line}): {Code}{(Message.Length > 0 ? ": " + Message : "")}";
@@ -55,8 +97,17 @@ public sealed record OgreScriptDiagnostic(OgreScriptError Code, string File, int
 /// </summary>
 public sealed class OgreScriptFile
 {
+    /// <summary>
+    /// The compiled file's name.
+    /// </summary>
     public string Name { get; init; } = "";
+    /// <summary>
+    /// The file's top-level nodes after imports, inheritance and variables.
+    /// </summary>
     public List<OgreScriptNode> Nodes { get; init; } = [];
+    /// <summary>
+    /// Everything the compiler reported for the file, in the order found.
+    /// </summary>
     public List<OgreScriptDiagnostic> Diagnostics { get; init; } = [];
 
     /// <summary>
@@ -72,15 +123,20 @@ public sealed class OgreScriptFile
 /// </summary>
 public sealed class OgreScriptCompiler
 {
-    readonly Func<string, string?> _importResolver;
-    readonly List<OgreScriptDiagnostic> _errors = [];
-    readonly Dictionary<string, string> _env = [];
+    #region Compiling
 
-    // Ogre keeps imports in a std::map (sorted by source name, byte order) and requests in a multimap.
-    readonly SortedDictionary<string, List<OgreScriptNode>> _imports = new(StringComparer.Ordinal);
-    readonly SortedDictionary<string, List<string>> _importRequests = new(StringComparer.Ordinal);
-    readonly List<OgreScriptNode> _importTable = [];
-    readonly HashSet<string> _loading = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Returns the text of a script by bare file name; null when there is none.
+    /// </summary>
+    readonly Func<string, string?> _importResolver;
+    /// <summary>
+    /// The diagnostics so far, in the order found.
+    /// </summary>
+    readonly List<OgreScriptDiagnostic> _errors = [];
+    /// <summary>
+    /// The top-level <c>set</c> variables of the file; the first set of a name wins.
+    /// </summary>
+    readonly Dictionary<string, string> _env = [];
 
     /// <param name="importResolver">Returns the text of a script by bare file name, or null if there is none.</param>
     OgreScriptCompiler(Func<string, string?> importResolver) => this._importResolver = importResolver;
@@ -99,10 +155,18 @@ public sealed class OgreScriptCompiler
         return new OgreScriptFile { Name = file, Nodes = ast, Diagnostics = compiler._errors };
     }
 
+    /// <summary>
+    /// Reports a diagnostic.
+    /// </summary>
     void AddError(OgreScriptError code, string file, int line, string message = "") => _errors.Add(new(code, file, line, message));
 
-    // ---------------------------------------------------------------- concrete tree to objects and properties
+    #endregion
 
+    #region Concrete tree to objects and properties
+
+    /// <summary>
+    /// Turns a parsed file's concrete tree into objects, properties, imports and variables, after reporting brace errors.
+    /// </summary>
     List<OgreScriptNode> ConvertToAst(List<OgreConcreteNode> nodes)
     {
         CheckBraces(nodes);
@@ -111,6 +175,9 @@ public sealed class OgreScriptCompiler
         return result;
     }
 
+    /// <summary>
+    /// Reports a <c>}</c> outside every block and a <c>{</c> whose block is not closed, throughout the tree.
+    /// </summary>
     void CheckBraces(List<OgreConcreteNode> nodes)
     {
         foreach (var node in nodes)
@@ -128,99 +195,15 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// Turns <paramref name="node"/> into AST and adds it to <paramref name="current"/> (a property's values, an object's children) or to
+    /// <paramref name="top"/>.
+    /// </summary>
     void Visit(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
     {
-        OgreScriptNode? created = null;
-
-        if (node.Type == OgreConcreteNodeType.Import && current is null)
-        {
-            if (node.Children.Count > 2)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children.Count < 2)
-            {
-                AddError(OgreScriptError.StringExpected, node.File, node.Line);
-                return;
-            }
-            created = new OgreScriptImport(node.Children[0].Token, node.Children[1].Token) { File = node.File, Line = node.Line };
-        }
-        else if (node.Type == OgreConcreteNodeType.VariableAssign)
-        {
-            if (node.Children.Count > 2)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children.Count < 2)
-            {
-                AddError(OgreScriptError.StringExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children[0].Type != OgreConcreteNodeType.Variable)
-            {
-                AddError(OgreScriptError.VariableExpected, node.Children[0].File, node.Children[0].Line);
-                return;
-            }
-            string name = node.Children[0].Token, value = node.Children[1].Token;
-            if (current is OgreScriptObject obj) obj.Variables[name] = value;
-            else _env.TryAdd(name, value); // std::map::insert: the first top-level set wins
-        }
-        else if (node.Type == OgreConcreteNodeType.Variable)
-        {
-            if (node.Children.Count > 0)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            created = new OgreScriptVariableAccess(node.Token) { File = node.File, Line = node.Line, Parent = current };
-        }
-        else if (node.Children.Count > 0)
-        {
-            var last = node.Children[^1];
-            var beforeLast = node.Children.Count >= 2 ? node.Children[^2] : null;
-            if (last.Type == OgreConcreteNodeType.RightBrace && beforeLast?.Type == OgreConcreteNodeType.LeftBrace)
-            {
-                var parts = new List<OgreConcreteNode>();
-                bool isAbstract = node.Token == "abstract";
-                if (!isAbstract) parts.Add(node);
-                parts.AddRange(node.Children);
-
-                int i = 0;
-                var obj = new OgreScriptObject(parts[i++].Token) { File = node.File, Line = node.Line, Parent = current, IsAbstract = isAbstract };
-                if (i < parts.Count && parts[i].Type is OgreConcreteNodeType.Word or OgreConcreteNodeType.Quote &&
-                    !IsNameExcluded(obj.Class, current))
-                    obj.Name = parts[i++].Token;
-                for (; i < parts.Count && parts[i].Type is not (OgreConcreteNodeType.Colon or OgreConcreteNodeType.LeftBrace); i++)
-                {
-                    OgreScriptNode value = parts[i].Type == OgreConcreteNodeType.Variable
-                        ? new OgreScriptVariableAccess(parts[i].Token)
-                        : new OgreScriptAtom(parts[i].Token);
-                    value.File = parts[i].File;
-                    value.Line = parts[i].Line;
-                    value.Parent = obj;
-                    obj.Values.Add(value);
-                }
-                if (i < parts.Count && parts[i].Type == OgreConcreteNodeType.Colon)
-                    obj.Bases.AddRange(parts[i].Children.Select(c => c.Token));
-
-                foreach (var child in beforeLast.Children) Visit(child, obj, top);
-                created = obj;
-            }
-            else
-            {
-                var prop = new OgreScriptProperty(node.Token) { File = node.File, Line = node.Line, Parent = current };
-                foreach (var child in node.Children) Visit(child, prop, top);
-                created = prop;
-            }
-        }
-        else
-        {
-            created = new OgreScriptAtom(node.Token) { File = node.File, Line = node.Line, Parent = current };
-        }
-
+        var created = Create(node, current, top);
         if (created is null) return;
+
         switch (current)
         {
             case OgreScriptProperty p:
@@ -233,6 +216,126 @@ public sealed class OgreScriptCompiler
                 top.Add(created);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The AST node of a concrete node, its children visited; null when it makes none (an error, or a variable assignment).
+    /// </summary>
+    OgreScriptNode? Create(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        if (node.Type == OgreConcreteNodeType.Import && current is null) return CreateImport(node);
+        if (node.Type == OgreConcreteNodeType.VariableAssign)
+        {
+            AssignVariable(node, current);
+            return null;
+        }
+        if (node.Type == OgreConcreteNodeType.Variable) return CreateVariableAccess(node, current);
+        if (node.Children.Count > 0) return CreateObjectOrProperty(node, current, top);
+
+        return new OgreScriptAtom(node.Token) { File = node.File, Line = node.Line, Parent = current };
+    }
+
+    /// <summary>
+    /// An <c>import</c> at the top level: its target and source, or null with an error when it has not exactly two.
+    /// </summary>
+    OgreScriptNode? CreateImport(OgreConcreteNode node)
+    {
+        if (node.Children.Count > 2)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return null;
+        }
+        if (node.Children.Count < 2)
+        {
+            AddError(OgreScriptError.StringExpected, node.File, node.Line);
+            return null;
+        }
+        return new OgreScriptImport(node.Children[0].Token, node.Children[1].Token) { File = node.File, Line = node.Line };
+    }
+
+    /// <summary>
+    /// A <c>set $name value</c>: stored on the enclosing object, or in the file's environment at the top level.
+    /// </summary>
+    void AssignVariable(OgreConcreteNode node, OgreScriptNode? current)
+    {
+        if (node.Children.Count > 2)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return;
+        }
+        if (node.Children.Count < 2)
+        {
+            AddError(OgreScriptError.StringExpected, node.File, node.Line);
+            return;
+        }
+        if (node.Children[0].Type != OgreConcreteNodeType.Variable)
+        {
+            AddError(OgreScriptError.VariableExpected, node.Children[0].File, node.Children[0].Line);
+            return;
+        }
+        string name = node.Children[0].Token, value = node.Children[1].Token;
+        if (current is OgreScriptObject obj) obj.Variables[name] = value;
+        else _env.TryAdd(name, value); // std::map::insert: the first top-level set wins
+    }
+
+    /// <summary>
+    /// A <c>$variable</c> access, or null with an error when it has children.
+    /// </summary>
+    OgreScriptNode? CreateVariableAccess(OgreConcreteNode node, OgreScriptNode? current)
+    {
+        if (node.Children.Count > 0)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return null;
+        }
+        return new OgreScriptVariableAccess(node.Token) { File = node.File, Line = node.Line, Parent = current };
+    }
+
+    /// <summary>
+    /// A node with children: an object when they end in a <c>{ }</c> block, else a property whose children are its values.
+    /// </summary>
+    OgreScriptNode CreateObjectOrProperty(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        var last = node.Children[^1];
+        var beforeLast = node.Children.Count >= 2 ? node.Children[^2] : null;
+        if (last.Type == OgreConcreteNodeType.RightBrace && beforeLast?.Type == OgreConcreteNodeType.LeftBrace)
+            return CreateObject(node, beforeLast, current, top);
+
+        var prop = new OgreScriptProperty(node.Token) { File = node.File, Line = node.Line, Parent = current };
+        foreach (var child in node.Children) Visit(child, prop, top);
+        return prop;
+    }
+
+    /// <summary>
+    /// An object: its class (the node's word, or the first child after <c>abstract</c>), name, values and bases, then its block's children.
+    /// </summary>
+    OgreScriptObject CreateObject(OgreConcreteNode node, OgreConcreteNode block, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        var parts = new List<OgreConcreteNode>();
+        bool isAbstract = node.Token == "abstract";
+        if (!isAbstract) parts.Add(node);
+        parts.AddRange(node.Children);
+
+        int i = 0;
+        var obj = new OgreScriptObject(parts[i++].Token) { File = node.File, Line = node.Line, Parent = current, IsAbstract = isAbstract };
+        if (i < parts.Count && parts[i].Type is OgreConcreteNodeType.Word or OgreConcreteNodeType.Quote &&
+            !IsNameExcluded(obj.Class, current))
+            obj.Name = parts[i++].Token;
+        for (; i < parts.Count && parts[i].Type is not (OgreConcreteNodeType.Colon or OgreConcreteNodeType.LeftBrace); i++)
+        {
+            OgreScriptNode value = parts[i].Type == OgreConcreteNodeType.Variable
+                ? new OgreScriptVariableAccess(parts[i].Token)
+                : new OgreScriptAtom(parts[i].Token);
+            value.File = parts[i].File;
+            value.Line = parts[i].Line;
+            value.Parent = obj;
+            obj.Values.Add(value);
+        }
+        if (i < parts.Count && parts[i].Type == OgreConcreteNodeType.Colon)
+            obj.Bases.AddRange(parts[i].Children.Select(c => c.Token));
+
+        foreach (var child in block.Children) Visit(child, obj, top);
+        return obj;
     }
 
     /// <summary>
@@ -253,8 +356,32 @@ public sealed class OgreScriptCompiler
         return false;
     }
 
-    // ---------------------------------------------------------------- imports
+    #endregion
 
+    #region Imports
+
+    /// <summary>
+    /// Each imported file's processed nodes, by source name. Ogre keeps imports in a std::map (sorted by source name, byte order) and
+    /// requests in a multimap.
+    /// </summary>
+    readonly SortedDictionary<string, List<OgreScriptNode>> _imports = new(StringComparer.Ordinal);
+    /// <summary>
+    /// What each import asked for, by source name: object names, or just <c>*</c> for the whole file.
+    /// </summary>
+    readonly SortedDictionary<string, List<string>> _importRequests = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The objects imports make visible to <c>:</c> inheritance, searched after the file itself.
+    /// </summary>
+    readonly List<OgreScriptNode> _importTable = [];
+    /// <summary>
+    /// The imports being loaded now, so a cyclic import is read once.
+    /// </summary>
+    readonly HashSet<string> _loading = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Loads the imports of <paramref name="nodes"/> (each source once, processed for its own imports and inheritance), removes them, then puts each
+    /// imported file's requested objects at the front of the import table, files in source name order.
+    /// </summary>
     void ProcessImports(List<OgreScriptNode> nodes)
     {
         for (int i = 0; i < nodes.Count;)
@@ -308,6 +435,9 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// The nodes of the imported script; null, with an error, when the resolver does not find it.
+    /// </summary>
     List<OgreScriptNode>? LoadImport(OgreScriptImport import)
     {
         var text = _importResolver(import.Source);
@@ -325,8 +455,14 @@ public sealed class OgreScriptCompiler
     static OgreScriptObject? LocateTarget(List<OgreScriptNode> nodes, string name) =>
         nodes.OfType<OgreScriptObject>().LastOrDefault(o => o.Name == name);
 
-    // ---------------------------------------------------------------- inheritance
+    #endregion
 
+    #region Inheritance
+
+    /// <summary>
+    /// Applies the <c>:</c> bases of every object in <paramref name="nodes"/>, depth first; a base is searched in <paramref name="top"/>, then the
+    /// import table.
+    /// </summary>
     void ProcessObjects(List<OgreScriptNode> nodes, List<OgreScriptNode> top)
     {
         for (int n = 0; n < nodes.Count; n++)
@@ -530,8 +666,14 @@ public sealed class OgreScriptCompiler
         return p == pattern.Length;
     }
 
-    // ---------------------------------------------------------------- variables
+    #endregion
 
+    #region Variables
+
+    /// <summary>
+    /// Replaces every <c>$variable</c> in <paramref name="nodes"/> by its value (the nearest enclosing object's, else the file's), parsed as script;
+    /// abstract objects are left alone.
+    /// </summary>
     void ProcessVariables(List<OgreScriptNode> nodes)
     {
         for (int i = 0; i < nodes.Count;)
@@ -580,8 +722,13 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// The nodes above <paramref name="node"/>, nearest first.
+    /// </summary>
     static IEnumerable<OgreScriptNode> Ancestors(OgreScriptNode node)
     {
         for (var p = node.Parent; p is not null; p = p.Parent) yield return p;
     }
+
+    #endregion
 }

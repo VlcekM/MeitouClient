@@ -7,13 +7,49 @@ namespace Meitou.Game.Rendering.Post;
 /// How the scene gets from its render size to the display: drawn at full size, edges smoothed by FXAA (off), or temporally reconstructed from
 /// jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".
 /// </summary>
-public enum UpscalerKind { Off, Taa, Fsr, Dlss, MetalFx }
+public enum UpscalerKind
+{
+    /// <summary>
+    /// No temporal upscaler: the full render scale, edges smoothed by FXAA.
+    /// </summary>
+    Off,
+    /// <summary>
+    /// The built-in TAA.
+    /// </summary>
+    Taa,
+    /// <summary>
+    /// AMD FSR.
+    /// </summary>
+    Fsr,
+    /// <summary>
+    /// NVIDIA DLSS.
+    /// </summary>
+    Dlss,
+    /// <summary>
+    /// Apple MetalFX (the Metal backend).
+    /// </summary>
+    MetalFx
+}
 
 /// <summary>
 /// The Frame generation setting: off, AMD's FSR 3 frame-interpolation swapchain, or NVIDIA's DLSS frame generation through Streamline
 /// (docs/render-post.md).
 /// </summary>
-public enum FrameGenerationMethod { Off, Fsr, Dlss }
+public enum FrameGenerationMethod
+{
+    /// <summary>
+    /// No frame generation.
+    /// </summary>
+    Off,
+    /// <summary>
+    /// AMD's FSR 3 frame-interpolation swapchain.
+    /// </summary>
+    Fsr,
+    /// <summary>
+    /// NVIDIA's DLSS frame generation through Streamline.
+    /// </summary>
+    Dlss
+}
 
 /// <summary>
 /// The upscaler options of <see cref="PostOptions"/>: which one, the render scale (per axis) and the sharpening.
@@ -36,6 +72,9 @@ public sealed class UpscaleOptions
     /// The Meitou default with an upscaler: Quality (the High preset's).
     /// </summary>
     public const float DefaultScale = 1 / 1.5f;
+    /// <summary>
+    /// The ultra-quality mode's render scale.
+    /// </summary>
     public const float UltraQualityScale = 0.83f;
     /// <summary>
     /// 0..1: FSR's own sharpening (RCAS); after TAA and DLSS the composite's (PostProcessShaders.Composite).
@@ -62,6 +101,9 @@ public sealed class UpscaleOptions
     public static readonly (string Name, float Scale)[] Modes =
         [("native", 1f), ("ultra-quality", UltraQualityScale), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
+    /// <summary>
+    /// Whether an upscaler is on (not <see cref="UpscalerKind.Off"/>).
+    /// </summary>
     public bool Temporal => Kind != UpscalerKind.Off;
     /// <summary>
     /// The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).
@@ -94,6 +136,9 @@ public sealed class UpscaleOptions
         return (Math.Max((int)MathF.Round(width * s), 1), Math.Max((int)MathF.Round(height * s), 1));
     }
 
+    /// <summary>
+    /// Copies the kind, the preferred kind, the scale, the sharpness and the DLSS preset from <paramref name="other"/>.
+    /// </summary>
     public void CopyFrom(UpscaleOptions other)
     {
         (Kind, Preferred, Scale, Sharpness, DlssPreset) = (other.Kind, other.Preferred, other.Scale, other.Sharpness, other.DlssPreset);
@@ -117,6 +162,9 @@ public sealed class UpscaleOptions
 /// </summary>
 public static class Jitter
 {
+    /// <summary>
+    /// The Halton sequence's <paramref name="index"/>th value in base <paramref name="radix"/>, in [0, 1).
+    /// </summary>
     public static float Halton(int index, int radix)
     {
         float result = 0, f = 1;
@@ -128,6 +176,9 @@ public static class Jitter
         return result;
     }
 
+    /// <summary>
+    /// The jitter sequence's length: 8 × the upscale ratio squared, at least 8.
+    /// </summary>
     public static int PhaseCount(int renderWidth, int displayWidth)
     {
         float ratio = displayWidth / (float)Math.Max(renderWidth, 1);
@@ -165,22 +216,46 @@ public static class Jitter
 /// </summary>
 public sealed record UpscaleInputs
 {
+    /// <summary>
+    /// The scene colour, the depth, the motion and the output.
+    /// </summary>
     public required Gpu.GpuTexture Colour, Depth, Motion, Output;
+    /// <summary>
+    /// The reactive mask and the exposure (null: none).
+    /// </summary>
     public Gpu.GpuTexture? Reactive, Exposure;
     /// <summary>
     /// DLSS's render preset (<see cref="UpscaleOptions.DlssPreset"/>).
     /// </summary>
     public uint Preset;
+    /// <summary>
+    /// The render and display sizes.
+    /// </summary>
     public required int RenderWidth, RenderHeight, DisplayWidth, DisplayHeight;
+    /// <summary>
+    /// The jitter, in render pixels.
+    /// </summary>
     public required Vector2 JitterPixels;
+    /// <summary>
+    /// The depth's planes, the vertical field of view, the frame time in seconds and the sharpening.
+    /// </summary>
     public required float Near, Far, FieldOfView, DeltaSeconds, Sharpness;
+    /// <summary>
+    /// The history is to be dropped (a cut).
+    /// </summary>
     public required bool Reset;
     /// <summary>
     /// The camera, for upscalers that want matrices (DLSS): the unjittered projection of <see cref="Depth"/> (eye-relative view to clip), this
     /// frame's clip space to the previous frame's for that projection (<see cref="Reprojection.ClipToPrevious"/>), the eye and its axes.
     /// </summary>
     public Matrix4x4 ViewToClip, ClipToPreviousClip;
+    /// <summary>
+    /// The eye and its axes.
+    /// </summary>
     public Vector3 Eye, Right, Up, Forward;
+    /// <summary>
+    /// The aspect ratio.
+    /// </summary>
     public float Aspect;
 }
 
@@ -189,7 +264,13 @@ public sealed record UpscaleInputs
 /// </summary>
 public interface IUpscaler : IDisposable
 {
+    /// <summary>
+    /// The upscaler this is.
+    /// </summary>
     UpscalerKind Kind { get; }
+    /// <summary>
+    /// Its name for the log.
+    /// </summary>
     string Name { get; }
     /// <summary>
     /// Upscales <see cref="UpscaleInputs.Colour"/> into <see cref="UpscaleInputs.Output"/> (RGBA16F, display size), recorded in the frame; false on

@@ -14,6 +14,9 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
 {
+    /// <summary>
+    /// The rows the lock system handles.
+    /// </summary>
     static readonly TaskType[] Rows =
     [
         TaskType.PickLock, TaskType.PickLockOnShackles, TaskType.CutShackles, TaskType.BruteForceShackles, TaskType.None, TaskType.ReleasePrisoner,
@@ -23,6 +26,9 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         TaskType.BashDoorPlayerOrder,
     ];
 
+    /// <summary>
+    /// Registers the lock system's rows.
+    /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         foreach (var row in Rows) tasks.Register(row, this);
@@ -107,12 +113,17 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     /// </summary>
     sealed record LockWork(CharacterTask Task, object? Detail);
 
-    // Saved: 1 a walk to the work, 2 in place (kind 0, the original's, is a walk). The work's parameter is the row's own: a shackle job and a forced
-    // lock are told by their rows (RowOf).
+    /// <summary>
+    /// Saved: 1 a walk to the work, 2 in place (kind 0, the original's, is a walk). The work's parameter is the row's own: a shackle job and a forced
+    /// lock are told by their rows (RowOf).
+    /// </summary>
     int IOrderOwner.SaveKind(OrderEntry order) =>
         order.Detail is LockWork { Task: CharacterTask.GoTo or CharacterTask.Idle, Detail: null or ShackleWork or LockForce } work
                 ? work.Task == CharacterTask.Idle ? 2 : 1 : -1;
 
+    /// <summary>
+    /// The order detail of a saved kind: in place or a walk, with the work its row names.
+    /// </summary>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
         new LockWork(kind == 2 ? CharacterTask.Idle : CharacterTask.GoTo, row switch
         {
@@ -137,10 +148,14 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         if (!c.IsPlayer || order.Site is { } site && world.Fixtures.Find(site) is null || !order.Target.IsNone
                 && !table.TryResolveNext(order.Target, out _))
             return OrderCheck.Gone;
+
         bool inPlace = ((LockWork)order.Detail!).Task == CharacterTask.Idle;
         return c.Medical is not { Incapacitated: true } && c.CarriedBy.IsNone && (inPlace || !c.IsImprisoned) ? OrderCheck.Run : OrderCheck.Blocked();
     }
 
+    /// <summary>
+    /// Starts the order's lock work.
+    /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var work = (LockWork)order.Detail!;
@@ -148,6 +163,9 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 new TaskRequest(work.Task, order.Row, TaskSource.Order) { Site = order.Site, Target = order.Target, Detail = work.Detail });
     }
 
+    /// <summary>
+    /// Starts a lock task: a round's next target, or the work its request names.
+    /// </summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
         var table = world.Characters;
@@ -157,6 +175,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
             StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!);
             return;
         }
+
         switch (request.Row)
         {
             case TaskType.PickLock or TaskType.OpenDoor
@@ -167,8 +186,8 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.PickingLock = cage.Id;
                 c.Shackles = null;
                 c.DoorJob = null;
-                if (!c.IsImprisoned)
-                    MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), c.RunSpeed);
+                if (!c.IsImprisoned) MovementSystem.GoToFloor(world, slot, cage.Position, c.RunSpeed);   // the cage's floor, not the one under it (#432)
+
                 break;
             case TaskType.PickLock:
                 // Another faction's locked container, with Alt (the original's FUN_1407fc6e0).
@@ -182,6 +201,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.Shackles = new ShackleJob(request.Target, (ShackleWork)request.Detail!);
                 if (request.Target != table.IdOf(slot) && table.TryResolveNext(request.Target, out int w))
                     MovementSystem.GoTo(table, slot, Flat(table.Next[w].Position), c.RunSpeed);
+
                 break;
             case TaskType.ReleasePrisoner:
                 ClearWork(c);

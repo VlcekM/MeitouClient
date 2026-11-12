@@ -5,6 +5,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's order checks: whether an order could start, and the system that owns its row.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>
@@ -52,7 +55,7 @@ public sealed partial class World
         TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.UseTrainingDummy
             or TaskType.UseTurret or TaskType.Prospecting => SystemOf<Production.ProductionSystem>(),
         TaskType.FirstAidOrder or TaskType.SplintOrder or TaskType.Rest => SystemOf<FirstAid.FirstAidSystem>(),
-        TaskType.Pickup => SystemOf<PlayerSystem>(),
+        TaskType.Pickup => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.UseBed or TaskType.PutSomeoneInBed => SystemOf<Locks.BedSystem>(),
         TaskType.PutInCage => SystemOf<Crime.ArrestSystem>(),
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,

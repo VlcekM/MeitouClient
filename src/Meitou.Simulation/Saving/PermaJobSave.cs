@@ -9,20 +9,29 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// A character's job list and jobs switch in its GAMESTATE_AI record <c>ai</c> (<b>Verified</b>, <c>OrdersReceiver</c> vfuncs 1 and 2 and 4122 sampled records;
-/// docs/game/ai-tasks.md "Perma-jobs"): bool <c>jobs</c>, and per job i from 0 the int <c>pjob&lt;i&gt;</c> (task type) and the handle <c>pjobT&lt;i&gt;</c>
-/// (target). Meitou's own string <c>meitou pjob&lt;i&gt;</c> (the <see cref="BuildSite.Id"/>) names a building the handle cannot (one without a saved state, or
-/// a rock's natural site) and wins on load.
+/// A character's job list and jobs switch in its GAMESTATE_AI record <c>ai</c> (<b>Verified</b>, <c>OrdersReceiver</c> vfuncs 1 and 2 and 4122
+/// sampled records; docs/game/ai-tasks.md "Perma-jobs"): bool <c>jobs</c>, and per job i from 0 the int <c>pjob&lt;i&gt;</c> (task type) and the
+/// handle <c>pjobT&lt;i&gt;</c> (target). Meitou's own string <c>meitou pjob&lt;i&gt;</c> (the <see cref="BuildSite.Id"/>) names a building the
+/// handle cannot (one without a saved state, or a rock's natural site) and wins on load.
 /// </summary>
 public static class PermaJobSave
 {
+    /// <summary>
+    /// The GAMESTATE_AI key prefixes of a job (task type, target handle, Meitou's site id) and the jobs switch key.
+    /// </summary>
     const string Type = "pjob", Target = "pjobT", MeitouSite = "meitou pjob", Switch = "jobs";
+
+    /// <summary>
+    /// The handle key of job <paramref name="i"/>'s target.
+    /// </summary>
+    public static string TargetKey(int i) => Target + i;
 
     /// <summary>
     /// Writes the list (the old entries are cleared first) and the switch.
     /// </summary>
     public static void Write(
-        FcsRecord ai, CharacterCold cold, BuildingRegistry sites, IReadOnlyDictionary<string, FcsRecord> buildings, Func<CharacterId, Hand>? handleOf = null)
+        FcsRecord ai, CharacterCold cold, BuildingRegistry sites, IReadOnlyDictionary<string, FcsRecord> buildings,
+        Func<CharacterId, Hand>? handleOf = null)
     {
         foreach (var key in ai.Ints.Keys.Where(k => k.StartsWith(Type, StringComparison.Ordinal)).ToList())
             ai.Ints.Remove(key);
@@ -57,17 +66,19 @@ public static class PermaJobSave
     /// <c>jobs</c>).
     /// </summary>
     public static void Read(
-        FcsRecord ai, FcsRecord? state, CharacterCold cold, BuildingRegistry sites, SaveHandles handles, IReadOnlyDictionary<FcsRecord, string> instanceOf,
+        FcsRecord ai, FcsRecord? state, CharacterCold cold, BuildingRegistry sites, SaveHandles handles,
+        IReadOnlyDictionary<FcsRecord, string> instanceOf,
         IReadOnlySet<string> instances)
     {
         for (int i = 0; ai.Ints.TryGetValue(Type + i, out int type); i++)
         {
             var hand = Hand.Read(ai, Target + i);
 
-            // A rock's natural id and a town dummy's are kept as they are: the site is found from the id once its town has registered
-            // (ProductionSystem.Natural, TownDummy).
+            // A rock's natural id, a town dummy's and a town turret's are kept as they are: the site is found from the id once its town has
+            // registered (ProductionSystem.Natural, TownDummy) or its machine is read back (TownMachineSave).
             string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id)
-                && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id))
+                && (sites.Find(id) is not null || instances.Contains(id) || ProductionSystem.IsNatural(id) || Locks.FixtureRegistry.IsDummy(id)
+                    || ProductionSystem.IsTownWork(id))
                 ? id
                 : handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var key) && key.IndexOf(':') is var colon and >= 0
                     && sites.Find(key[(colon + 1)..]) is not null

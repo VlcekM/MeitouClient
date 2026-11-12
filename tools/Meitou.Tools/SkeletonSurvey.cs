@@ -6,6 +6,9 @@ using Meitou.Data.Ogre;
 /// </summary>
 static class SkeletonSurvey
 {
+    /// <summary>
+    /// Reads every skeleton and prints the failures, the versions and the animation blend modes; returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install)
     {
         var files = Directory.EnumerateFiles(install.DataDirectory, "*.skeleton", SearchOption.AllDirectories).ToList();
@@ -48,7 +51,8 @@ static class SkeletonSurvey
                     }
                 }
                 links += skeleton.AnimationLinks.Count;
-                foreach (var l in skeleton.AnimationLinks) linkTargets[l.SkeletonName] = linkTargets.GetValueOrDefault(l.SkeletonName) + 1;
+                foreach (var l in skeleton.AnimationLinks)
+                    linkTargets[l.SkeletonName] = linkTargets.GetValueOrDefault(l.SkeletonName) + 1;
                 lengthMismatches += skeleton.ChunkLengthMismatches;
                 if (skeleton.ChunkLengthMismatches > 0) mismatchFiles++;
             }

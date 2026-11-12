@@ -3,15 +3,30 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// What a medical tick or hit reports (<see cref="MedicalEvent"/>), for the caller to act on.
+/// </summary>
 public enum MedicalEventKind
 {
+    /// <summary>
+    /// The character was knocked out.
+    /// </summary>
     KnockedOut,
+    /// <summary>
+    /// The character woke up.
+    /// </summary>
     WokeUp,
     /// <summary>
     /// A part went below zero (<see cref="MedicalEvent.Part"/>); a vital one has already knocked the character out.
     /// </summary>
     PartDown,
+    /// <summary>
+    /// A part was cut off (<see cref="MedicalEvent.Part"/>).
+    /// </summary>
     PartSevered,
+    /// <summary>
+    /// The character died (<see cref="MedicalEvent.Cause"/>).
+    /// </summary>
     Died,
     /// <summary>
     /// The blow that killed the character cut its head off (<see cref="MedicalState.Decapitated"/>; after <see cref="Died"/>).
@@ -19,8 +34,14 @@ public enum MedicalEventKind
     Decapitated,
 }
 
+/// <summary>
+/// Why a character died.
+/// </summary>
 public enum DeathCause
 {
+    /// <summary>
+    /// Not dead.
+    /// </summary>
     None,
     /// <summary>
     /// A vital part destroyed.

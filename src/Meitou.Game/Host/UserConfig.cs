@@ -10,33 +10,86 @@ namespace Meitou.Game.Host;
 /// <summary>
 /// The unit the run speed is shown in.
 /// </summary>
-enum SpeedUnit { Mph, Kmh }
+enum SpeedUnit
+{
+    /// <summary>
+    /// Miles per hour, as the game shows it (the default).
+    /// </summary>
+    Mph,
+    /// <summary>
+    /// Kilometres per hour.
+    /// </summary>
+    Kmh
+}
 
 /// <summary>
 /// Whose frame generation the Frame generation setting turns on (<see cref="UserConfig.FrameGenerationVendor"/>): AMD's FSR 3 or NVIDIA's DLSS.
 /// </summary>
-enum FrameGenerationVendor { Fsr, Dlss }
+enum FrameGenerationVendor
+{
+    /// <summary>
+    /// AMD's FSR 3 frame-interpolation swapchain (the default).
+    /// </summary>
+    Fsr,
+    /// <summary>
+    /// NVIDIA's DLSS frame generation through Streamline.
+    /// </summary>
+    Dlss
+}
 
 /// <summary>
 /// When the next world tick runs during the world draw (<see cref="UserConfig.TickAhead"/>): never (Faithful), while ticks are expensive (Meitou),
 /// always.
 /// </summary>
-enum TickAheadMode { Faithful, Dynamic, Always }
+enum TickAheadMode
+{
+    /// <summary>
+    /// Never: the world tick, then the draw, as the game does.
+    /// </summary>
+    Faithful,
+    /// <summary>
+    /// While a tick is expensive (Meitou, the default).
+    /// </summary>
+    Dynamic,
+    /// <summary>
+    /// Every frame.
+    /// </summary>
+    Always
+}
 
 /// <summary>
 /// The Metal display path: native at full size, MetalFX temporal at any preset scale, MetalFX spatial as an alternative, or TAA.
 /// </summary>
-enum MetalUpscalerMode { Native, Temporal, Spatial, Taa }
+enum MetalUpscalerMode
+{
+    /// <summary>
+    /// Native rendering at full size (used when MetalFX is unavailable).
+    /// </summary>
+    Native,
+    /// <summary>
+    /// MetalFX temporal upscaling at any preset scale (the default).
+    /// </summary>
+    Temporal,
+    /// <summary>
+    /// MetalFX spatial upscaling, as an alternative.
+    /// </summary>
+    Spatial,
+    /// <summary>
+    /// TAA.
+    /// </summary>
+    Taa
+}
 
 /// <summary>
 /// The player's settings, kept in <c>meitou.user.json</c> (git-ignored) in the working directory, else next to the executable:
 /// the frame limit, vsync, full screen, the simulation tick rate, the graphics sliders of the Tab panel (by label) and key bindings
-/// (action name to comma-separated keys, as <see cref="Input.InputBindings.Apply"/> reads them). Written back on exit.
+/// (those that differ from the defaults, action name to comma-separated keys, as <see cref="Input.InputBindings.Apply"/> reads them). Written
+/// back on exit.
 /// One file is shared by every installed version (the launcher's data folder) and edited by the launcher too: docs/launcher.md "Graphics".
 /// </summary>
 sealed class UserConfig
 {
-    public const string FileName = "meitou.user.json";
+    #region Settings
 
     /// <summary>
     /// The layout of this file, its <c>version</c> key; a file without one (written before it existed) is 1. Raise it when a key is renamed,
@@ -44,6 +97,32 @@ sealed class UserConfig
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
     public const int CurrentVersion = 2;
+    /// <summary>
+    /// The default of <see cref="CharacterFlightSeconds"/>, and the distance from the view a squad member must be past for a double click to
+    /// fly there.
+    /// </summary>
+    public const float DefaultFlightSeconds = 2, FlightDistance = 10000;
+    /// <summary>
+    /// <see cref="AttackSlots"/>'s Faithful value (the game's 1) and its Meitou value.
+    /// </summary>
+    public const int FaithfulAttackSlots = 1, MeitouAttackSlots = 3;
+    /// <summary>
+    /// The Controls slider's range of <see cref="CameraRotateSpeed"/> (the original's 2 … 50).
+    /// </summary>
+    public const float MinCameraRotateSpeed = 2, MaxCameraRotateSpeed = 50;
+    /// <summary>
+    /// The range of <see cref="FontSize"/> (the original's slider -10 … 32).
+    /// </summary>
+    public const float MinFontSize = -10, MaxFontSize = 32;
+    /// <summary>
+    /// The range of <see cref="InterfaceScale"/> (50 … 200%).
+    /// </summary>
+    public const float MinInterfaceScale = 0.5f, MaxInterfaceScale = 2;
+    /// <summary>
+    /// The ranges of <see cref="CameraMoveSpeed"/> (150 … 1000) and <see cref="CameraZoomSpeed"/> (10 … 200), the original's.
+    /// </summary>
+    public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
+
     /// <summary>
     /// The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that release does not
     /// convert its own keys again).
@@ -59,6 +138,9 @@ sealed class UserConfig
     /// Frames per second when vsync is off; 0 = unlimited. Engine default 150.
     /// </summary>
     public int FpsLimit { get; set; } = 150;
+    /// <summary>
+    /// Vsync on: the frames follow the display and <see cref="FpsLimit"/> is not applied; <c>--vsync</c> / <c>--no-vsync</c> override it for one run.
+    /// </summary>
     public bool VSync { get; set; }
     /// <summary>
     /// Frame generation: a generated frame between each two rendered ones, by <see cref="FrameGenerationVendor"/>: FSR 3's frame-interpolation
@@ -117,11 +199,19 @@ sealed class UserConfig
     /// The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.
     /// </summary>
     public float MetalRenderScale { get; set; } = 0.5f;
+    /// <summary>
+    /// The interface style: Meitou (the default) or Faithful, the game's.
+    /// </summary>
     public Meitou.Data.Ui.UiMode UiMode { get; set; } = Data.Ui.UiMode.Meitou;
     /// <summary>
     /// The unit of the run speed in the information panel (Interface settings): mph as the game, or km/h.
     /// </summary>
     public SpeedUnit SpeedUnit { get; set; } = SpeedUnit.Mph;
+    /// <summary>
+    /// The Interface scale (Interface settings, Meitou's own; 1 = 100%): the whole UI, its text, skins and layout-sized windows, is this much
+    /// larger than the window height alone makes it.
+    /// </summary>
+    public float InterfaceScale { get; set; } = 1;
     /// <summary>
     /// The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a
     /// player character that heals.
@@ -146,9 +236,25 @@ sealed class UserConfig
     /// soon as the game has loaded.
     /// </summary>
     public bool SplashScreens { get; set; }
+    /// <summary>
+    /// The sky arrival's flight over a load from the title (Meitou main menu only; <see cref="Title.SkyArrival"/>), on by default.
+    /// </summary>
     public bool MainMenuTransitions { get; set; } = true;
+    /// <summary>
+    /// The title screen (Interface settings), independent of <see cref="UiMode"/>: on, Meitou's menu over the staged world scene; off, the original's picture.
+    /// </summary>
+    public bool MeitouMainMenu { get; set; } = true;
+    /// <summary>
+    /// The sky arrival's flight over a load during play (Meitou UI only), on by default.
+    /// </summary>
     public bool InGameTransitions { get; set; } = true;
+    /// <summary>
+    /// The speed of the sky arrival from the title (1.5 by default; <see cref="Title.SkyArrival"/> clamps it to 0.25 … 4).
+    /// </summary>
     public float MainMenuTransitionSpeed { get; set; } = 1.5f;
+    /// <summary>
+    /// The speed of the sky arrival during play (1.5 by default; clamped as <see cref="MainMenuTransitionSpeed"/>).
+    /// </summary>
     public float InGameTransitionSpeed { get; set; } = 1.5f;
     /// <summary>
     /// A double click (or double tap) on a squad member farther than <see cref="FlightDistance"/> from the view flies the camera there in an arc
@@ -168,11 +274,13 @@ sealed class UserConfig
     /// Seconds a character flight (and each squad tour hop, numpad /) takes.
     /// </summary>
     public float CharacterFlightSeconds { get; set; } = DefaultFlightSeconds;
-    public const float DefaultFlightSeconds = 2, FlightDistance = 10000;
     /// <summary>
     /// Borderless full screen (the Tab panel, Alt+Enter); <c>--windowed</c> starts in a window for one run.
     /// </summary>
     public bool FullScreen { get; set; } = true;
+    /// <summary>
+    /// World ticks per second, 30 by default (the session's fixed-step clock).
+    /// </summary>
     public int TickRate { get; set; } = 30;
     /// <summary>
     /// The next world tick run during the world draw (Display settings, docs/simulation.md "Tick ahead"): Faithful never (the world, then the draw,
@@ -184,7 +292,6 @@ sealed class UserConfig
     /// default), Meitou 3.
     /// </summary>
     public int AttackSlots { get; set; } = FaithfulAttackSlots;
-    public const int FaithfulAttackSlots = 1, MeitouAttackSlots = 3;
 
     /// <summary>
     /// The setting for the combat system: null (the loaded CONSTANTS <c>max num attack slots</c>, 1 in the base game) at the Faithful value, else the
@@ -201,7 +308,13 @@ sealed class UserConfig
     /// characters off screen, hostile squads that meet off screen fight it out, a squad coming back has healed for the time away.
     /// </summary>
     public bool KeepRoamers { get; set; } = true;
+    /// <summary>
+    /// Hostile squads that meet off screen fight it out (see <see cref="KeepRoamers"/>).
+    /// </summary>
     public bool OffscreenFights { get; set; } = true;
+    /// <summary>
+    /// A squad coming back has healed for the time away (see <see cref="KeepRoamers"/>).
+    /// </summary>
     public bool OffscreenHealing { get; set; } = true;
     /// <summary>
     /// Campaign data counts each <c>inherits from</c> ancestor once (Fixes settings; Faithful off: twice, as the game does, doubling inherited squad
@@ -253,7 +366,13 @@ sealed class UserConfig
     /// entered before its bank loads gets the right day or night ambience, and the wind bed stops when the wind does.
     /// </summary>
     public bool FixDoorBreak { get; set; } = true;
+    /// <summary>
+    /// A biome entered before its bank loads gets the right day or night ambience (see <see cref="FixDoorBreak"/>).
+    /// </summary>
     public bool FixAmbienceSuffix { get; set; } = true;
+    /// <summary>
+    /// The wind bed stops when the wind does (see <see cref="FixDoorBreak"/>).
+    /// </summary>
     public bool FixWindStop { get; set; } = true;
     /// <summary>
     /// The Faithful load window's Load button waits for a readable save (Fixes settings; off: always live, as in the game).
@@ -282,7 +401,6 @@ sealed class UserConfig
     /// <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.
     /// </summary>
     public float CameraRotateSpeed { get; set; } = Data.World.KenshiCamera.DefaultRotateSpeed;
-    public const float MinCameraRotateSpeed = 2, MaxCameraRotateSpeed = 50;
     /// <summary>
     /// The pointer at the screen's edge pans the strategy camera (the original's <c>Edge scrolling</c>, default on; Controls settings); null until
     /// first used, then taken from the install's settings.cfg.
@@ -298,6 +416,9 @@ sealed class UserConfig
     /// settings.cfg.
     /// </summary>
     public bool? InvertX { get; set; }
+    /// <summary>
+    /// The original's <c>invert Y</c> (default on); see <see cref="InvertX"/>.
+    /// </summary>
     public bool? InvertY { get; set; }
     /// <summary>
     /// The original's `swap mouse buttons` (default off; Controls settings): the left and right buttons trade places in the GUI and the game view.
@@ -314,35 +435,10 @@ sealed class UserConfig
     /// then taken from the install's settings.cfg.
     /// </summary>
     public float? CameraMoveSpeed { get; set; }
+    /// <summary>
+    /// The original's <c>camera zoom</c> (10 … 200, default 125); see <see cref="CameraMoveSpeed"/>.
+    /// </summary>
     public float? CameraZoomSpeed { get; set; }
-    public const float MinFontSize = -10, MaxFontSize = 32;
-    public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
-
-    /// <summary>
-    /// Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).
-    /// </summary>
-    public void SeedCamera(Content.GameInstall install)
-    {
-        InvertX ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
-        InvertY ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
-        SwapMouseButtons ??= Meitou.Game.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
-        FontSize ??= Meitou.Game.Audio.AudioSystem.Setting(install, "font size2", Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
-        CameraMoveSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera speed", Data.World.KenshiCamera.DefaultMoveSpeed,
-            MinCameraMoveSpeed, MaxCameraMoveSpeed);
-        CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Data.World.KenshiCamera.DefaultZoomSpeed,
-            MinCameraZoomSpeed, MaxCameraZoomSpeed);
-    }
-
-    /// <summary>
-    /// Hands the camera options to the strategy camera's settings (unset ones keep the camera's own defaults, which are the original's).
-    /// </summary>
-    public void ApplyCamera(Cameras.CameraSettings camera)
-    {
-        camera.InvertX = InvertX ?? camera.InvertX;
-        camera.InvertY = InvertY ?? camera.InvertY;
-        camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
-        camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
-    }
     /// <summary>
     /// The green marker where a move order was given (the original's `Movement marker`, default on; Interface settings); null until first used, then
     /// taken from the install's settings.cfg.
@@ -390,6 +486,9 @@ sealed class UserConfig
     /// cref="Meitou.Simulation.Session.SimulationClock.SetFastSpeeds"/>).
     /// </summary>
     public double FastSpeed { get; set; } = Simulation.Session.SimulationClock.DefaultSpeeds[1];
+    /// <summary>
+    /// The third speed button's (and key's) game speed (the game's 5 by default); see <see cref="FastSpeed"/>.
+    /// </summary>
     public double FastestSpeed { get; set; } = Simulation.Session.SimulationClock.DefaultSpeeds[2];
     /// <summary>
     /// How many items dropped in play stay on the ground before the oldest goes (Advanced settings; <see
@@ -425,6 +524,9 @@ sealed class UserConfig
     /// The feedback form's ticks and Discord name, as last used; null until the form first opens.
     /// </summary>
     public FeedbackSettings? Feedback { get; set; }
+    /// <summary>
+    /// The Tab panel's graphics sliders, by label.
+    /// </summary>
     public Dictionary<string, float> Graphics { get; set; } = [];
     /// <summary>
     /// The Graphics quality preset (Low, Medium, High, Ultra, Custom): the game saves the one its settings sit at; one the launcher chose is applied
@@ -445,17 +547,64 @@ sealed class UserConfig
     /// The costly look switches kept on at Low quality (their labels); at Low the others are held off.
     /// </summary>
     public List<string> KeepAtLow { get; set; } = [];
+    /// <summary>
+    /// The key bindings that differ from the defaults (the engine's and the install's controls.cfg): action name to comma-separated keys, as
+    /// <see cref="Input.InputBindings.Apply"/> reads them; an empty value unbinds.
+    /// </summary>
     public Dictionary<string, string> Bindings { get; set; } = [];
     /// <summary>
     /// The Meitou skin per race, where chosen against the default (RACE string id to on or off; Graphics > Skin): <c>CharacterRenderer.SkinRaces</c>.
     /// </summary>
     public Dictionary<string, bool> SkinRaces { get; set; } = [];
 
+    /// <summary>
+    /// Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).
+    /// </summary>
+    public void SeedCamera(Content.GameInstall install)
+    {
+        InvertX ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
+        InvertY ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
+        SwapMouseButtons ??= Meitou.Game.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
+        FontSize ??= Meitou.Game.Audio.AudioSystem.Setting(install, "font size2", Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
+        CameraMoveSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera speed", Data.World.KenshiCamera.DefaultMoveSpeed,
+            MinCameraMoveSpeed, MaxCameraMoveSpeed);
+        CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Data.World.KenshiCamera.DefaultZoomSpeed,
+            MinCameraZoomSpeed, MaxCameraZoomSpeed);
+    }
+
+    /// <summary>
+    /// Hands the camera options to the strategy camera's settings (unset ones keep the camera's own defaults, which are the original's).
+    /// </summary>
+    public void ApplyCamera(Cameras.CameraSettings camera)
+    {
+        camera.InvertX = InvertX ?? camera.InvertX;
+        camera.InvertY = InvertY ?? camera.InvertY;
+        camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
+        camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
+    }
+
+    #endregion
+
+    #region File
+
+    /// <summary>
+    /// The file's name, looked for in the working directory, then next to the executable.
+    /// </summary>
+    public const string FileName = "meitou.user.json";
+    /// <summary>
+    /// The file's JSON form: indented, camelCase keys.
+    /// </summary>
+    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    /// <summary>
+    /// The file this config was read from and is written back to; for a config made new, the working directory's.
+    /// </summary>
     [JsonIgnore]
     public string Path { get; private set; } = FileName;
 
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
+    /// <summary>
+    /// Reads the config from the working directory, else from next to the executable; without either file, the defaults, for the working directory.
+    /// </summary>
     public static UserConfig Load()
     {
         foreach (var dir in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
@@ -612,10 +761,13 @@ sealed class UserConfig
                 : parent is JsonObject o ? o[(string)segment] : null;
         switch (parent, segments[^1])
         {
-            case (JsonObject o, string key): return o.Remove(key);
-            case (JsonArray a, int index) when index < a.Count: a.RemoveAt(index);
-            return true;
-            default: return false;
+            case (JsonObject o, string key):
+                return o.Remove(key);
+            case (JsonArray a, int index) when index < a.Count:
+                a.RemoveAt(index);
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -633,13 +785,24 @@ sealed class UserConfig
             if (saved is null) ModSettings.Remove(mod);
     }
 
+    /// <summary>
+    /// Writes the config back to <see cref="Path"/>; a write that fails (I/O, access) is logged.
+    /// </summary>
     public void Save()
     {
         try
         {
             File.WriteAllText(Path, JsonSerializer.Serialize(this, Json));
         }
-        catch (IOException e) { Console.Error.WriteLine($"config    could not write {Path}: {e.Message}"); }
-        catch (UnauthorizedAccessException e) { Console.Error.WriteLine($"config    could not write {Path}: {e.Message}"); }
+        catch (IOException e)
+        {
+            Console.Error.WriteLine($"config    could not write {Path}: {e.Message}");
+        }
+        catch (UnauthorizedAccessException e)
+        {
+            Console.Error.WriteLine($"config    could not write {Path}: {e.Message}");
+        }
     }
+
+    #endregion
 }

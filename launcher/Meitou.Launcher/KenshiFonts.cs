@@ -10,6 +10,9 @@ namespace Meitou.Launcher;
 /// </summary>
 sealed class KenshiFonts : FontCollectionBase
 {
+    /// <summary>
+    /// The collection's key in font URIs (<c>fonts:Kenshi</c>).
+    /// </summary>
     public static readonly Uri CollectionKey = new("fonts:Kenshi");
 
     /// <summary>
@@ -17,6 +20,7 @@ sealed class KenshiFonts : FontCollectionBase
     /// </summary>
     public static readonly FontFamily Family = new("fonts:Kenshi#Exo 2, $Default");
 
+    /// <inheritdoc/>
     public override Uri Key => CollectionKey;
 
     /// <summary>
@@ -38,7 +42,9 @@ sealed class KenshiFonts : FontCollectionBase
                 {
                     fonts.TryAddGlyphTypeface(new MemoryStream(File.ReadAllBytes(path)), out _);
                 }
-                catch (IOException) { }
+                catch (IOException)
+                {
+                }
             }
         }
         FontManager.Current.AddFontCollection(fonts);

@@ -5,12 +5,13 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// Makes the zone file of a zone the save has none of from the level data (docs/formats/save.md "Zone files"), the way the original's zone save writes a zone whose buildings
-/// stand as the level files place them: a <c>0-buildinglist</c> with every placed building of the merged level zone (id, target, position and rotation as the level list has
-/// them) and an empty-target entry for each id a layer removes, and a GAMESTATE_BUILDING per building made from its level state with the key set the original writes. What
-/// the original would write from its own runtime state and Meitou does not model is left for the original to make again: <c>serialised interior</c> is not written, so the
-/// original generates each interior as for a fresh zone (no furniture records, no inventories, no loose items are written); a building's level inventory state is named only
-/// when it holds items (the level files provide it on load).
+/// Makes the zone file of a zone the save has none of from the level data (docs/formats/save.md "Zone files"), the way the original's zone save
+/// writes a zone whose buildings stand as the level files place them: a <c>0-buildinglist</c> with every placed building of the merged level zone
+/// (id, target, position and rotation as the level list has them) and an empty-target entry for each id a layer removes, and a GAMESTATE_BUILDING per
+/// building made from its level state with the key set the original writes. What the original would write from its own runtime state and Meitou does
+/// not model is left for the original to make again: <c>serialised interior</c> is not written, so the original generates each interior as for a
+/// fresh zone (no furniture records, no inventories, no loose items are written); a building's level inventory state is named only when it holds
+/// items (the level files provide it on load).
 /// </summary>
 public static partial class SaveZoneBuilder
 {
@@ -20,8 +21,9 @@ public static partial class SaveZoneBuilder
     public const int StateVersion = 270;
 
     /// <summary>
-    /// The zone file, or null when the level zone places no building (the original deletes a zone file with no records). <paramref name="gameData"/> resolves the targets: an entry
-    /// whose target is no BUILDING (undefined, or a record of the zone file) is left out, as the original does not make it.
+    /// The zone file, or null when the level zone places no building (the original deletes a zone file with no records). <paramref name="gameData"/>
+    /// resolves the targets: an entry whose target is no BUILDING (undefined, or a record of the zone file) is left out, as the original does not
+    /// make it.
     /// </summary>
     public static SaveZone? FromLevel(ZoneCoordinate zone, GameDatabase? levelZone, ZoneLevelInfo? info, GameDatabase gameData)
     {
@@ -30,7 +32,8 @@ public static partial class SaveZoneBuilder
         int nextId = Math.Max(info?.NextId ?? 0, 0);
         var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
 
-        // The handles of the zone's level buildings: an `internalbuildings-<k>` handle is kept only when it names one of them (most name generated furniture that is not written).
+        // The handles of the zone's level buildings: an `internalbuildings-<k>` handle is kept only when it names one of them (most name generated
+        // furniture that is not written).
         var handles = new HashSet<(int I, int S)>();
         foreach (var s in levelZone.OfType(FcsRecordType.GamestateBuilding))
             if (s.Ints.ContainsKey("handleI")) handles.Add((s.GetInt("handleI"), s.GetInt("handleS")));
@@ -71,11 +74,12 @@ public static partial class SaveZoneBuilder
     }
 
     /// <summary>
-    /// A building's saved state from its level state (<b>Observed</b>, census of 6743 base-building states in the owner's saves against the level files): every level key, without
-    /// <c>is public night</c> (never written) and the old <c>is outside</c> (folded into <c>flags</c> bit 0, <c>foliage</c> bit 1, when the state has no <c>flags</c>), with the keys the
-    /// original always writes added when missing (<c>pause</c>, <c>destroyed</c> false, <c>name</c> the record's name, <c>residents template</c> and <c>squad template</c> empty,
-    /// <c>version</c>; a lock's and each door's <c>hardness</c>, a door's <c>pause&lt;i&gt;</c>), and only the <c>internalbuildings-&lt;k&gt;</c> handles that name a building of the zone,
-    /// renumbered from 0.
+    /// A building's saved state from its level state (<b>Observed</b>, census of 6743 base-building states in the owner's saves against the level
+    /// files): every level key, without <c>is public night</c> (never written) and the old <c>is outside</c> (folded into <c>flags</c> bit 0,
+    /// <c>foliage</c> bit 1, when the state has no <c>flags</c>), with the keys the original always writes added when missing (<c>pause</c>,
+    /// <c>destroyed</c> false, <c>name</c> the record's name, <c>residents template</c> and <c>squad template</c> empty, <c>version</c>; a lock's and
+    /// each door's <c>hardness</c>, a door's <c>pause&lt;i&gt;</c>), and only the <c>internalbuildings-&lt;k&gt;</c> handles that name a building of
+    /// the zone, renumbered from 0.
     /// </summary>
     public static FcsRecord StateFromLevel(GameRecord level, GameRecord building, IReadOnlySet<(int I, int S)> zoneHandles, int id)
     {
@@ -93,7 +97,8 @@ public static partial class SaveZoneBuilder
         {
             string p = $"internalbuildings-{k}";
             if (!zoneHandles.Contains((level.GetInt(p + "I"), level.GetInt(p + "S")))) continue;
-            new Hand(level.GetInt(p + "TYPE"), level.GetInt(p + "C"), level.GetInt(p + "CS"), level.GetInt(p + "I"), level.GetInt(p + "S")).Write(r, $"internalbuildings-{kept++}");
+            var hand = new Hand(level.GetInt(p + "TYPE"), level.GetInt(p + "C"), level.GetInt(p + "CS"), level.GetInt(p + "I"), level.GetInt(p + "S"));
+            hand.Write(r, $"internalbuildings-{kept++}");
         }
         foreach (var (k, v) in level.Vector3S) r.Vector3S[k] = v;
         foreach (var (k, v) in level.Vector4S) r.Vector4S[k] = v;
@@ -109,7 +114,8 @@ public static partial class SaveZoneBuilder
         r.Strings.TryAdd("name", building.Name);
         r.Strings.TryAdd("residents template", "");
         r.Strings.TryAdd("squad template", "");
-        // Locks: a building's own lock and each door i carry the building record's `hardness`, a door its `pause<i>` (Observed: 3093 of 3093 own locks, 614 of 614 doors).
+        // Locks: a building's own lock and each door i carry the building record's `hardness`, a door its `pause<i>` (Observed: 3093 of 3093 own
+        // locks, 614 of 614 doors).
         float hardness = building.GetFloat("hardness");
         if (r.Ints.ContainsKey("lock lvl")) r.Floats.TryAdd("hardness", hardness);
         for (int i = 0; r.Ints.ContainsKey($"state{i}"); i++)
@@ -121,6 +127,9 @@ public static partial class SaveZoneBuilder
         return r;
     }
 
+    /// <summary>
+    /// Matches the five int keys of an <c>internalbuildings-&lt;k&gt;</c> handle.
+    /// </summary>
     [GeneratedRegex(@"^internalbuildings-\d+(TYPE|C|CS|I|S)$")]
     private static partial Regex InternalBuilding();
 }

@@ -21,6 +21,9 @@ public enum ShaderModel
     /// Explicit sets, push constants, bindless (step O and new code).
     /// </summary>
     Native,
+    /// <summary>
+    /// A compute program: set 0 from the reflection (pushed when it fits) and a push-constant range.
+    /// </summary>
     Compute,
 }
 
@@ -41,6 +44,7 @@ public static class SpirvPatch
         var pointers = new HashSet<uint>();
         var variables = new HashSet<uint>();
         for (int pass = 0; pass < 3; pass++)
+        {
             for (int i = 5; i < w.Length;)
             {
                 uint op = w[i] & 0xFFFF, count = w[i] >> 16;
@@ -58,6 +62,7 @@ public static class SpirvPatch
 
                 i += (int)count;
             }
+        }
 
         if (structId == 0 || variables.Count == 0)
             throw new InvalidOperationException("SPIR-V: gl_DefaultUniformBlock not found");
@@ -87,6 +92,7 @@ public static class SpirvPatch
         var sets = new Dictionary<uint, uint>();
         var storage = new Dictionary<uint, uint>();
         var bindings = new List<(int At, uint Variable)>();
+
         // Two passes: SPIR-V's annotations (the decorations) come before the global variables in the binary, so the
         // variables' storage classes must be known before the first decoration is remapped.
         for (int i = 5; i < w.Length;)
@@ -120,286 +126,8 @@ public static class SpirvPatch
     /// <paramref name="set"/> is the table's set; <paramref name="samplerOffset"/> is where the sampler arrays' bindings begin above the
     /// texture arrays' (the backend's table total).
     /// </summary>
-    public static byte[] BindlessFetchImages(byte[] spirv, uint set, uint samplerOffset)
-    {
-        var copy = (byte[])spirv.Clone();
-        var w = MemoryMarshal.Cast<byte, uint>(copy.AsSpan());
-        var sets = new Dictionary<uint, uint>();                  // decorations
-        var bindings = new Dictionary<uint, uint>();
-        var intScalars = new HashSet<uint>();                     // OpTypeInt ids
-        var images = new Dictionary<uint, (uint Scalar, uint Dim, uint Depth)>(); // OpTypeImage: sampled type, dim, depth
-        var sampledImages = new Dictionary<uint, uint>();         // sampled image id -> image
-        var arrayElem = new Dictionary<uint, (uint Elem, uint Len)>(); // array id -> element, length (a constant id, copied verbatim)
-        var pointerAt = new Dictionary<uint, uint>();             // pointer id -> pointee
-        var variables = new Dictionary<uint, uint>();             // variable id -> pointer
-        var chains = new Dictionary<uint, uint>();                // access chain result -> base variable
-        var chainIndex = new Dictionary<uint, uint>();            // access chain result -> its index operand
-        for (int i = 5; i < w.Length;)
-        {
-            uint op = w[i] & 0xFFFF, count = w[i] >> 16;
-            if (count == 0) break;
-            var a = w.Slice(i + 1, (int)count - 1);
-            if (op == 71 && count == 4)
-            {
-                if (a[1] == 34) sets[a[0]] = a[2];
-                else if (a[1] == 33) bindings[a[0]] = a[2];
-            }
-            else if (op == 21) intScalars.Add(a[0]);
-            else if (op == 25 && count >= 8) images[a[0]] = (a[1], a[2], a[3]);
-            else if (op == 27 && count == 3) sampledImages[a[0]] = a[1];
-            else if (op == 28 && count == 4) arrayElem[a[0]] = (a[1], a[2]);
-            else if (op == 32 && count == 4) pointerAt[a[0]] = a[2];
-            else if (op == 59) variables[a[1]] = a[0];
-            else if (op == 65 && count >= 5)
-            {
-                chains[a[1]] = a[2];
-                chainIndex[a[1]] = a[3];
-            }
-
-            i += (int)count;
-        }
-
-        // The arrays to split: the set's array variables whose element is a sampled image. The integer kinds' images get no sampler.
-        uint next = w[3];                                     // fresh ids above the module's bound (word 3 = max id + 1)
-        uint samplerType = 0;
-        var ours = new Dictionary<uint, Made>();                 // old array pointer -> the new ids
-        var oursByElem = new Dictionary<uint, Made>();           // the old sampled image type -> the new ids
-        foreach (var (id, ptr) in variables)
-        {
-            if (sets.GetValueOrDefault(id) != set) continue;
-            if (!pointerAt.TryGetValue(ptr, out uint arr) || !arrayElem.TryGetValue(arr, out var shape)) continue;
-            if (!sampledImages.TryGetValue(shape.Elem, out uint image) || !images.TryGetValue(image, out var format))
-                continue;
-            bool integer = intScalars.Contains(format.Scalar);
-            if (!integer && samplerType == 0) samplerType = next++;
-            var made = new Made
-            {
-                OldPtr = ptr,
-                ArrayPtr = next++,
-                ElemPtr = next++,
-                Array = next++,
-                Image = image,
-                Sampled = shape.Elem,
-                Length = shape.Len,
-                Integer = integer,
-                Binding = bindings.GetValueOrDefault(id) + samplerOffset,
-            };
-            if (!integer)
-            {
-                made.SamplerArray = next++;
-                made.SamplerArrayPtr = next++;
-                made.SamplerElemPtr = next++;
-                made.SamplerVar = next++;
-            }
-
-            ours[ptr] = made;
-            oursByElem[shape.Elem] = made;
-        }
-
-        if (ours.Count == 0) return copy;
-        var oursVars = new Dictionary<uint, uint>();              // ours' variable id -> old array pointer
-        foreach (var (id, ptr) in variables)
-            if (ours.ContainsKey(ptr)) oursVars[id] = ptr;
-        var oursPointers = new Dictionary<uint, Made>();          // pointer to one of ours' sampled images -> the array
-        foreach (var (ptr, pointee) in pointerAt)
-            if (oursByElem.TryGetValue(pointee, out var pointed)) oursPointers[ptr] = pointed;
-        var pointerParams = new Dictionary<uint, uint>();         // a function parameter of pointer type -> its sampler parameter
-        var pointerMade = new Dictionary<uint, Made>();           // the same -> the array it points into
-        var chainMade = new Dictionary<uint, Made>();             // access chain result -> the array it indexes
-        var imagesDone = new Dictionary<uint, (Made Array, uint Sampler)>(); // image value (load, parameter) -> its array, its sampler value
-        var loadIndex = new Dictionary<uint, uint>();             // image load result -> the index operand it used
-        bool decorated = false;
-
-        // Pass 2: the rewrite and the rebuild — the new types go in right after each old array pointer, before every use.
-        var list = new List<uint>(w.Length + 128) { w[0], w[1], w[2], w[3], w[4] };
-        for (int i = 5; i < w.Length;)
-        {
-            uint op = w[i] & 0xFFFF, count = w[i] >> 16;
-            if (count == 0) break;
-            var a = w.Slice(i + 1, (int)count - 1);
-
-            // The new sampler type and the sampler variables' decorations go into the annotations section, before the first type.
-            if (!decorated && op is >= 19 and <= 39)
-            {
-                decorated = true;
-                foreach (var made2 in ours.Values)
-                {
-                    if (made2.Integer) continue;
-                    list.AddRange([71u | (4u << 16), made2.SamplerVar, 34u, set]);          // DescriptorSet
-                    list.AddRange([71u | (4u << 16), made2.SamplerVar, 33u, made2.Binding]);  // Binding
-                }
-
-                if (samplerType != 0) list.AddRange([26u | (2u << 16), samplerType]);          // OpTypeSampler
-            }
-            if (op == 15)
-            {
-                // OpEntryPoint lists every global variable the entry point uses: the new sampler variables are such.
-                var entry = w.Slice(i, (int)count).ToArray().ToList();
-                foreach (var extra in ours.Values)
-                    if (!extra.Integer) entry.Add(extra.SamplerVar);
-                entry[0] = 15u | ((uint)entry.Count << 16);
-                list.AddRange(entry);
-            }
-            else if (op == 32 && ours.TryGetValue(a[0], out var declared))
-            {
-                // The old array pointer as-is, then the array of the image (the length's constant id copied), its pointer, the
-                // element's pointer, and (every kind but the integer ones) its sampler array, pointer and variable.
-                list.AddRange(w.Slice(i, (int)count).ToArray());
-                list.AddRange([28u | (4u << 16), declared.Array, declared.Image, declared.Length]);
-                list.AddRange([32u | (4u << 16), declared.ArrayPtr, 0u, declared.Array]);
-                list.AddRange([32u | (4u << 16), declared.ElemPtr, 0u, declared.Image]);
-                if (!declared.Integer)
-                {
-                    list.AddRange([28u | (4u << 16), declared.SamplerArray, samplerType, declared.Length]);
-                    list.AddRange([32u | (4u << 16), declared.SamplerArrayPtr, 0u, declared.SamplerArray]);
-                    list.AddRange([32u | (4u << 16), declared.SamplerElemPtr, 0u, samplerType]);
-                    list.AddRange([59u | (4u << 16), declared.SamplerArrayPtr, declared.SamplerVar, 0u]);   // OpVariable, UniformConstant
-                }
-            }
-            else if (op == 33)
-            {
-                // OpTypeFunction: a parameter of a split sampled image type takes the image and its sampler.
-                var types = new List<uint> { 33u, a[0], a[1] };
-                for (int k = 2; k < a.Length; k++)
-                {
-                    // A sampled image parameter becomes the image (and its sampler); a pointer to one becomes a pointer to the image.
-                    if (oursByElem.TryGetValue(a[k], out var byValue))
-                    {
-                        types.Add(byValue.Image);
-                        types.Add(samplerType);
-                    }
-                    else if (oursPointers.TryGetValue(a[k], out var byPointer))
-                    {
-                        types.Add(byPointer.ElemPtr);
-                        types.Add(samplerType);
-                    }
-                    else types.Add(a[k]);
-                }
-                types[0] = 33u | ((uint)types.Count << 16);
-                list.AddRange(types);
-            }
-            else if (op == 55 && oursByElem.TryGetValue(a[0], out var parameter))
-            {
-                uint sampler = next++;
-                imagesDone[a[1]] = (parameter, sampler);
-                list.AddRange([55u | (3u << 16), parameter.Image, a[1]]);                     // OpFunctionParameter: the image
-                list.AddRange([55u | (3u << 16), samplerType, sampler]);                       // and its sampler
-            }
-            else if (op == 55 && oursPointers.TryGetValue(a[0], out var pointed))
-            {
-                // A sampler the GLSL passes to a function comes as a pointer to the sampled image; the callee loads it. It takes
-                // the image's pointer and the sampler itself.
-                uint sampler = next++;
-                pointerParams[a[1]] = sampler;
-                pointerMade[a[1]] = pointed;
-                list.AddRange([55u | (3u << 16), pointed.ElemPtr, a[1]]);
-                list.AddRange([55u | (3u << 16), samplerType, sampler]);
-            }
-            else if (op == 57)
-            {
-                // OpFunctionCall: every image argument brings its sampler right after it (a load's from the parallel array here, a
-                // parameter's own otherwise).
-                var args = new List<uint> { 57u, a[0], a[1], a[2] };
-                var before = new List<uint>();
-                var samplers = new uint[a.Length];
-                for (int k = 3; k < a.Length; k++)
-                {
-                    Made value;
-                    uint index, beside = 0;
-                    if (imagesDone.TryGetValue(a[k], out var loaded))
-                    {
-                        value = loaded.Array;
-                        index = loadIndex.GetValueOrDefault(a[k]);
-                        beside = loaded.Sampler;
-                    }
-                    else if (chainMade.TryGetValue(a[k], out var chainArray))
-                    {
-                        value = chainArray;
-                        index = chainIndex.GetValueOrDefault(a[k]);
-                    }
-                    else continue;
-                    if (beside != 0)
-                    {
-                        samplers[k] = beside;
-                        continue;
-                    }
-
-                    uint chain = next++, load = next++;
-                    before.AddRange([65u | (5u << 16), value.SamplerElemPtr, chain, value.SamplerVar, index]);
-                    before.AddRange([61u | (4u << 16), samplerType, load, chain]);
-                    samplers[k] = load;
-                }
-                list.AddRange(before);
-                for (int k = 3; k < a.Length; k++)
-                {
-                    args.Add(a[k]);
-                    if (samplers[k] != 0) args.Add(samplers[k]);
-                }
-                args[0] = 57u | ((uint)args.Count << 16);
-                list.AddRange(args);
-            }
-            else if (op == 59 && oursVars.TryGetValue(a[1], out uint varPtr))
-            {
-                var words = w.Slice(i, (int)count).ToArray();
-                words[1] = ours[varPtr].ArrayPtr;                  // the variable's declared type
-                list.AddRange(words);
-            }
-            else
-            {
-                var words = w.Slice(i, (int)count).ToArray();
-                if (op == 65 && pointerAt.TryGetValue(a[0], out uint pointee) && oursByElem.TryGetValue(pointee, out var chainArray))
-                {
-                    words[1] = chainArray.ElemPtr;                 // the chain's result type: pointer to the plain image
-                    chainMade[a[1]] = chainArray;
-                }
-                else if (op == 61 && a[2] != 0 && chainMade.TryGetValue(a[2], out var loadArray))
-                {
-                    words[1] = loadArray.Image;                    // the load dereferences the pointer: the image itself
-                    imagesDone[a[1]] = (loadArray, 0);
-                    loadIndex[a[1]] = chainIndex.GetValueOrDefault(a[2]);
-                }
-                else if (op == 61 && a[2] != 0 && pointerParams.TryGetValue(a[2], out uint samplerParam)
-                    && pointerMade.TryGetValue(a[2], out var loadMade))
-                {
-                    words[1] = loadMade.Image;
-                    imagesDone[a[1]] = (loadMade, samplerParam);
-                }
-                else if (op == 100 && a.Length > 2 && imagesDone.TryGetValue(a[2], out var imageOnly) && imageOnly.Array.Integer)
-                    words[0] = 83u | (count << 16);                // OpImage -> OpCopyObject: the operand is already the image
-                else if (a.Length > 2 && imagesDone.TryGetValue(a[2], out var sampled) && !sampled.Array.Integer)
-                {
-                    // A sample needs the pair: the image is at hand, the sampler is loaded (from the parallel array with the
-                    // same index) or is the function's own parameter.
-                    uint pair = next++, sampler;
-                    if (sampled.Sampler != 0) sampler = sampled.Sampler;
-                    else
-                    {
-                        uint index = loadIndex.GetValueOrDefault(a[2]), chain = next++, load = next++;
-                        list.AddRange([65u | (5u << 16), sampled.Array.SamplerElemPtr, chain, sampled.Array.SamplerVar, index]);
-                        list.AddRange([61u | (4u << 16), samplerType, load, chain]);
-                        sampler = load;
-                    }
-                    list.AddRange([86u | (5u << 16), sampled.Array.Sampled, pair, a[2], sampler]);   // OpSampledImage
-                    words[3] = pair;
-                }
-                list.AddRange(words);
-            }
-            i += (int)count;
-        }
-        uint[] outWords = [.. list];
-        outWords[3] = next;                                    // the id bound grew with what the rewrite made
-        return MemoryMarshal.AsBytes(outWords.AsSpan()).ToArray();
-    }
-
-    /// <summary>
-    /// One combined array's split: the old array pointer, the plain image array's ids, and (not for the integer kinds) its sampler array's.
-    /// </summary>
-    sealed class Made
-    {
-        public uint OldPtr, ArrayPtr, ElemPtr, Array, Image, Sampled, Length, Binding;
-        public bool Integer;
-        public uint SamplerArray, SamplerArrayPtr, SamplerElemPtr, SamplerVar;
-    }
+    public static byte[] BindlessFetchImages(byte[] spirv, uint set, uint samplerOffset) =>
+        new BindlessImageSplit(spirv, set, samplerOffset).Run();
 }
 
 /// <summary>
@@ -411,13 +139,22 @@ internal sealed unsafe class VulkanProgram : IDisposable
 {
     #region State
 
+    /// <summary>
+    /// The device the modules and layouts are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The set layouts made for this program alone, destroyed with it (shared ones are the library's).
+    /// </summary>
     readonly DescriptorSetLayout[] _ownedSetLayouts;
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// Wraps the layouts and makes a shader module for each stage the program has.
+    /// </summary>
     internal VulkanProgram(VulkanDevice device, ProgramInfo info, DescriptorSetLayout[] setLayouts, DescriptorSetLayout[] ownedSetLayouts,
         PipelineLayout layout, bool pushDescriptors, ShaderStageFlags pushConstantStages)
     {
@@ -441,15 +178,45 @@ internal sealed unsafe class VulkanProgram : IDisposable
 
 
 
+    /// <summary>
+    /// The engine's compile result.
+    /// </summary>
     public ProgramInfo Info { get; }
+    /// <summary>
+    /// <see cref="ProgramInfo.Index"/>.
+    /// </summary>
     public int Index => Info.Index;
+    /// <summary>
+    /// <see cref="ProgramInfo.Name"/>.
+    /// </summary>
     public string Name => Info.Name;
+    /// <summary>
+    /// <see cref="ProgramInfo.Model"/>.
+    /// </summary>
     public ShaderModel Model => Info.Model;
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexCode"/>.
+    /// </summary>
     public byte[]? VertexCode => Info.VertexCode;
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentCode"/>.
+    /// </summary>
     public byte[]? FragmentCode => Info.FragmentCode;
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeCode"/>.
+    /// </summary>
     public byte[]? ComputeCode => Info.ComputeCode;
+    /// <summary>
+    /// The vertex stage's module (0 without the stage).
+    /// </summary>
     public ShaderModule VertexModule { get; }
+    /// <summary>
+    /// The fragment stage's module (0 without the stage).
+    /// </summary>
     public ShaderModule FragmentModule { get; }
+    /// <summary>
+    /// The compute stage's module (0 for a graphics program).
+    /// </summary>
     public ShaderModule ComputeModule { get; }
     #endregion
 
@@ -460,29 +227,56 @@ internal sealed unsafe class VulkanProgram : IDisposable
     /// draw patch lists of three control points.
     /// </summary>
     public ShaderModule TessControlModule { get; }
+    /// <summary>
+    /// The tessellation evaluation stage's module (0 without tessellation).
+    /// </summary>
     public ShaderModule TessEvaluationModule { get; }
+    /// <summary>
+    /// Whether the program has tessellation stages.
+    /// </summary>
     public bool Tessellated => TessEvaluationModule.Handle != 0;
 
     /// <summary>
     /// The legacy compile result (reflection of both stages, default blocks), null for other models.
     /// </summary>
     public CompiledProgram? Compiled => Info.Compiled;
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexReflection"/>.
+    /// </summary>
     public ShaderReflection? VertexReflection => Info.VertexReflection;
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentReflection"/>.
+    /// </summary>
     public ShaderReflection? FragmentReflection => Info.FragmentReflection;
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeReflection"/>.
+    /// </summary>
     public ShaderReflection? ComputeReflection => Info.ComputeReflection;
+    /// <summary>
+    /// The Vulkan set layouts, one per set.
+    /// </summary>
     public DescriptorSetLayout[] SetLayouts { get; }
 
     /// <summary>
     /// The program's sets in the engine's words (the layout the backend made).
     /// </summary>
     public GpuSetLayout[] NeutralSets => Info.NeutralSets;
+    /// <summary>
+    /// The pipeline layout.
+    /// </summary>
     public PipelineLayout Layout { get; }
 
     /// <summary>
     /// Set 0 is a push-descriptor set.
     /// </summary>
     public bool PushDescriptors { get; }
+    /// <summary>
+    /// <see cref="ProgramInfo.PushConstantBytes"/>.
+    /// </summary>
     public uint PushConstantBytes => Info.PushConstantBytes;
+    /// <summary>
+    /// The stages the push-constant range covers.
+    /// </summary>
     public ShaderStageFlags PushConstantStages { get; }
 
     /// <summary>
@@ -512,6 +306,9 @@ internal sealed unsafe class VulkanProgram : IDisposable
         }
     }
 
+    /// <summary>
+    /// Destroys the modules, the pipeline layout and the program's own set layouts once the frames in flight are done.
+    /// </summary>
     public void Dispose()
     {
         var (vk, dev) = (_device.Vk, _device.Device);
@@ -540,7 +337,13 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 {
     #region State
 
+    /// <summary>
+    /// The device the programs are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The programs by handle index.
+    /// </summary>
     readonly List<VulkanProgram> _programs = [];
 
     /// <summary>
@@ -552,6 +355,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 
     #region Programs
 
+    /// <summary>
+    /// A library on the device, compiling with reversed scene depth (<c>DepthReversed</c>).
+    /// </summary>
     public ShaderLibrary(VulkanDevice device)
     {
         this._device = device;
@@ -917,6 +723,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         set == 0 && program.Model is ShaderModel.Legacy or ShaderModel.Compute ? program.PushDescriptors
             : set < program.NeutralSets.Length && !program.NeutralSets[set].IsBindless && CanPush(program.NeutralSets[set]);
 
+    /// <summary>
+    /// The Vulkan descriptor type of a slot (a uniform buffer offset at bind is a dynamic one).
+    /// </summary>
     static DescriptorType VkDescriptorType(GpuSlot slot) => slot.Kind switch
     {
         GpuSlotKind.UniformBuffer => slot.OffsetAtBind ? DescriptorType.UniformBufferDynamic : DescriptorType.UniformBuffer,
@@ -925,6 +734,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         _ => DescriptorType.StorageImage,
     };
 
+    /// <summary>
+    /// The Vulkan shader stage flags of engine stages.
+    /// </summary>
     static ShaderStageFlags VkStageFlags(GpuStage stages)
     {
         var f = ShaderStageFlags.None;
@@ -955,6 +767,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 
     #region Layouts
 
+    /// <summary>
+    /// A descriptor set layout of the bindings with the creation flags.
+    /// </summary>
     internal DescriptorSetLayout CreateSetLayout(DescriptorSetLayoutBinding[] bindings, DescriptorSetLayoutCreateFlags flags)
     {
         fixed (DescriptorSetLayoutBinding* pb = bindings)
@@ -971,6 +786,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         }
     }
 
+    /// <summary>
+    /// A pipeline layout of the sets and one push-constant range (none when <paramref name="pushBytes"/> is 0).
+    /// </summary>
     PipelineLayout CreateLayout(DescriptorSetLayout[] sets, uint pushBytes, ShaderStageFlags pushStages)
     {
         var range = new PushConstantRange(pushStages, 0, pushBytes);

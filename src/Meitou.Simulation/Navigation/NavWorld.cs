@@ -8,6 +8,9 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 public readonly record struct NavRef(int Zone, int Polygon)
 {
+    /// <summary>
+    /// The polygon's key, unique in the world: the zone slot in the high 32 bits, the polygon index in the low.
+    /// </summary>
     public long Key => ((long)Zone << 32) | (uint)Polygon;
 }
 
@@ -27,10 +30,22 @@ public sealed class NavWorld
     /// </summary>
     public static readonly NavWorld Empty = new([], [], []);
 
+    /// <summary>
+    /// The meshes by slot.
+    /// </summary>
     readonly ZoneNavMesh[] _meshes;
+    /// <summary>
+    /// The slot of each loaded zone.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, int> _slots;
+    /// <summary>
+    /// The border links by the key of the polygon they leave from.
+    /// </summary>
     readonly Dictionary<long, NavLink[]> _links;
 
+    /// <summary>
+    /// A world of <paramref name="meshes"/> with their slots and links, made by <see cref="Empty"/> and the add and remove snapshots.
+    /// </summary>
     NavWorld(ZoneNavMesh[] meshes, Dictionary<ZoneCoordinate, int> slots, Dictionary<long, NavLink[]> links)
     {
         this._meshes = meshes;
@@ -38,16 +53,34 @@ public sealed class NavWorld
         this._links = links;
     }
 
+    /// <summary>
+    /// The number of loaded zones (slots).
+    /// </summary>
     public int ZoneCount => _meshes.Length;
 
+    /// <summary>
+    /// The mesh in slot <paramref name="slot"/>.
+    /// </summary>
     public ZoneNavMesh Mesh(int slot) => _meshes[slot];
 
+    /// <summary>
+    /// The loaded zones.
+    /// </summary>
     public IEnumerable<ZoneCoordinate> Zones => _slots.Keys;
 
+    /// <summary>
+    /// Whether <paramref name="zone"/> is loaded.
+    /// </summary>
     public bool Contains(ZoneCoordinate zone) => _slots.ContainsKey(zone);
 
+    /// <summary>
+    /// The slot of <paramref name="zone"/>; false when it is not loaded.
+    /// </summary>
     public bool TryGetSlot(ZoneCoordinate zone, out int slot) => _slots.TryGetValue(zone, out slot);
 
+    /// <summary>
+    /// The mesh of <paramref name="zone"/>, or null when it is not loaded.
+    /// </summary>
     public ZoneNavMesh? Find(ZoneCoordinate zone) => _slots.TryGetValue(zone, out var s) ? _meshes[s] : null;
 
     /// <summary>
@@ -56,8 +89,8 @@ public sealed class NavWorld
     public ReadOnlySpan<NavLink> LinksOf(NavRef p) => _links.TryGetValue(p.Key, out var l) ? l : [];
 
     /// <summary>
-    /// A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours where the borders' heights differ by at most
-    /// <paramref name="maxStep"/> (engine choice: the builder's <c>MaxClimb</c> 5 plus half a unit, as between tiles).
+    /// A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours where the borders' heights differ by
+    /// at most <paramref name="maxStep"/> (engine choice: the builder's <c>MaxClimb</c> 5 plus half a unit, as between tiles).
     /// </summary>
     public NavWorld With(ZoneNavMesh mesh, float maxStep = 5.5f)
     {
@@ -153,12 +186,18 @@ public sealed class NavWorld
         }
     }
 
+    /// <summary>
+    /// The extent of polygon edge <paramref name="e"/> along the border line (X when <paramref name="alongX"/>, else Z) and its heights at both ends.
+    /// </summary>
     static (float From, float To, float YFrom, float YTo) Span(ZoneNavMesh m, (int Polygon, int Edge) e, bool alongX)
     {
         var poly = m.Polygons[e.Polygon];
         return NavGeometry.Span(m.Vertices[poly[e.Edge]], m.Vertices[poly[(e.Edge + 1) % poly.Length]], alongX);
     }
 
+    /// <summary>
+    /// Adds a border link to the polygon <paramref name="from"/>'s links.
+    /// </summary>
     void Add(NavRef from, NavLink link)
     {
         var existing = _links.TryGetValue(from.Key, out var l) ? l : [];
@@ -180,12 +219,14 @@ public sealed class NavWorld
     }
 
     /// <summary>
-    /// The walkable collision surface of the zone at (x, z) nearest to <paramref name="y"/> within <paramref name="range"/> (<see cref="NavSurfaces"/>).
+    /// The walkable collision surface of the zone at (x, z) nearest to <paramref name="y"/> within
+    /// <paramref name="range"/> (<see cref="NavSurfaces"/>).
     /// </summary>
     public bool TrySurfaceNear(float x, float z, float y, float range, out float height) => TrySurfaceNear(x, z, y, range, out height, out _);
 
     /// <inheritdoc cref="TrySurfaceNear(float, float, float, float, out float)"/>
-    /// <param name="beside">The height is a surface's edge beside the point (<see cref="NavSurfaces.TryNear(float, float, float, float, out float, out bool)"/>).</param>
+    /// <param name="beside">The height is a surface's edge beside the point
+    /// (<see cref="NavSurfaces.TryNear(float, float, float, float, out float, out bool)"/>).</param>
     public bool TrySurfaceNear(float x, float z, float y, float range, out float height, out bool beside)
     {
         height = y;
@@ -225,18 +266,28 @@ public sealed class NavWorld
     }
 
     /// <summary>
-    /// The height, at its nearest point, of the polygon within <paramref name="edge"/> of (x, z) nearest to it (picked by <paramref name="nearY"/>, see
-    /// <see cref="ZoneNavMesh.Nearest"/>).
+    /// The height, at its nearest point, of the polygon within <paramref name="edge"/> of (x, z) nearest to it (picked by <paramref name="nearY"/>,
+    /// see <see cref="ZoneNavMesh.Nearest"/>).
     /// </summary>
     public bool TryEdgeHeight(float x, float z, float nearY, float edge, out float height)
     {
-        height = 0;
+        bool found = TryEdgePoint(x, z, nearY, edge, out var point);
+        height = point.Y;
+        return found;
+    }
+
+    /// <summary>
+    /// The nearest point of the polygon <see cref="TryEdgeHeight"/> picks, with the polygon's height there.
+    /// </summary>
+    public bool TryEdgePoint(float x, float z, float nearY, float edge, out Vector3 point)
+    {
+        point = default;
         if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
 
         var m = _meshes[slot];
         if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0)) return false;
 
-        height = ClosestPoint(m, p, new Vector3(x, nearY, z)).Y;
+        point = ClosestPoint(m, p, new Vector3(x, nearY, z));
         return true;
     }
 

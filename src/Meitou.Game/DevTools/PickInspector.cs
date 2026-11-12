@@ -17,14 +17,17 @@ sealed class PickInspector(PlayerInterface player)
     /// Show the text panel.
     /// </summary>
     public bool InspectorPanel { get; set; }
+
     /// <summary>
     /// Draw the pick hull (the merged one a click is tested against) of the buildings along the ray.
     /// </summary>
     public bool InspectorHull { get; set; }
+
     /// <summary>
     /// Draw each collision shape's own convex hull.
     /// </summary>
     public bool InspectorShapes { get; set; }
+
     /// <summary>
     /// Draw the real collision triangles of the building a click would select.
     /// </summary>
@@ -34,6 +37,7 @@ sealed class PickInspector(PlayerInterface player)
     /// True while anything of the inspector is on (the world is searched under the cursor every frame then).
     /// </summary>
     public bool InspectorOn => InspectorPanel || InspectorDrawing;
+
     /// <summary>
     /// True while something is drawn on the world.
     /// </summary>
@@ -50,6 +54,9 @@ sealed class PickInspector(PlayerInterface player)
     /// </summary>
     public (Vector3 Origin, float[] Fill, float[] Edges) InspectorGeometry { get; private set; } = (Vector3.Zero, [], []);
 
+    /// <summary>
+    /// The key of what was last drawn (the switches, the picked building and those along the ray); empty to rebuild.
+    /// </summary>
     string _inspectorKey = "";
 
     /// <summary>
@@ -58,10 +65,19 @@ sealed class PickInspector(PlayerInterface player)
     public void InspectorChanged()
     {
         _inspectorKey = "";
-        if (!InspectorDrawing) { InspectorGeometry = (Vector3.Zero, [], []); InspectorRevision++; }
+        if (!InspectorDrawing)
+        {
+            InspectorGeometry = (Vector3.Zero, [], []);
+            InspectorRevision++;
+        }
     }
 
-    sealed record InspectedBuilding(string Name, string? Record, string Key, float? Hit, Vector2[] Hull, IReadOnlyList<Vector2[]> Shapes, float Y, float YMin, float YMax, Vector3 Position, Quaternion Rotation);
+    /// <summary>
+    /// A building a click may choose: name, record, key, where the ray meets its hull prism (null: it does not), hull, shapes, ground height, the
+    /// prism's span, position and rotation.
+    /// </summary>
+    sealed record InspectedBuilding(string Name, string? Record, string Key, float? Hit, Vector2[] Hull, IReadOnlyList<Vector2[]> Shapes, float Y,
+        float YMin, float YMax, Vector3 Position, Quaternion Rotation);
 
     /// <summary>
     /// The buildings a click at <paramref name="ray"/> chooses from: the level data's, with where the ray meets each one's hull prism (null: it does
@@ -77,8 +93,10 @@ sealed class PickInspector(PlayerInterface player)
             float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
             var hull = candidate.Footprint.Place(b.Position, b.Rotation);
             var info = host.WorldInfo(b);
-            result.Add(new(info.Name, b.BuildingId, b.Key, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax),
-                hull, [.. candidate.Footprint.PlaceShapes(b.Position, b.Rotation)], y, candidate.Footprint.YMin, candidate.Footprint.YMax, b.Position, b.Rotation));
+            result.Add(new(info.Name, b.BuildingId, b.Key, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + candidate.Footprint.YMin,
+                y + candidate.Footprint.YMax),
+                hull, [.. candidate.Footprint.PlaceShapes(b.Position, b.Rotation)], y, candidate.Footprint.YMin, candidate.Footprint.YMax,
+                    b.Position, b.Rotation));
         }
         // The player's own sites (what the hammer pointer and a click on a site test): hull prism from the site's position, turned by its yaw.
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
@@ -86,18 +104,34 @@ sealed class PickInspector(PlayerInterface player)
             if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
             var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
             var hull = footprint.Place(site.Position, rotation);
-            result.Add(new("[site] " + player.Build.SiteName(site), site.Record, site.Id, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, site.Position.Y + footprint.YMin, site.Position.Y + footprint.YMax),
+            result.Add(new("[site] " + player.Build.SiteName(site), site.Record, site.Id,
+                BuildMode.RayPrism(ray.Origin, ray.Direction, hull, site.Position.Y + footprint.YMin, site.Position.Y + footprint.YMax),
                 hull, [.. footprint.PlaceShapes(site.Position, rotation)], site.Position.Y, footprint.YMin, footprint.YMax, site.Position, rotation));
         }
         return result;
     }
 
+    /// <summary>
+    /// <paramref name="v"/> as invariant text in <paramref name="format"/>.
+    /// </summary>
     static string N(float v, string format = "0") => v.ToString(format, CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The area of <paramref name="polygon"/>, summed from its first vertex (world coordinates in float would round it by hundreds).
+    /// </summary>
     static float Area(Vector2[] polygon)
     {
+        if (polygon.Length < 3) return 0;
+
         float a = 0;
-        for (int i = 0; i < polygon.Length; i++) a += polygon[i].X * polygon[(i + 1) % polygon.Length].Y - polygon[(i + 1) % polygon.Length].X * polygon[i].Y;
+        var origin = polygon[0];
+        for (int i = 1; i + 1 < polygon.Length; i++)
+        {
+            var p = polygon[i] - origin;
+            var q = polygon[i + 1] - origin;
+            a += p.X * q.Y - q.X * p.Y;
+        }
+
         return MathF.Abs(a) / 2;
     }
 
@@ -126,13 +160,20 @@ sealed class PickInspector(PlayerInterface player)
         if (picked is not null)
         {
             var (min, max) = (new Vector2(float.MaxValue), new Vector2(float.MinValue));
-            foreach (var p in picked.Hull) { min = Vector2.Min(min, p); max = Vector2.Max(max, p); }
+            foreach (var p in picked.Hull)
+            {
+                min = Vector2.Min(min, p);
+                max = Vector2.Max(max, p);
+            }
+
             float shapeArea = picked.Shapes.Sum(Area);
             lines.Add(new("Record", picked.Record ?? "?"));
             lines.Add(new("Instance", picked.Key));
             lines.Add(new("Hit distance", N(picked.Hit!.Value)));
             lines.Add(new("Hull", $"{picked.Hull.Length} corners, {N(max.X - min.X)} x {N(max.Y - min.Y)}, area {N(Area(picked.Hull))}"));
-            lines.Add(new("Shapes", picked.Shapes.Count == 0 ? "none read" : $"{picked.Shapes.Count} hulls, area {N(shapeArea)} (the merged hull is {N(Area(picked.Hull) / Math.Max(shapeArea, 1), "0.0")}x)"));
+            lines.Add(new("Shapes", picked.Shapes.Count == 0
+                ? "none read"
+                : $"{picked.Shapes.Count} hulls, area {N(shapeArea)} (the merged hull is {N(Area(picked.Hull) / Math.Max(shapeArea, 1), "0.0")}x)"));
             lines.Add(new("Height", $"{N(picked.Y + picked.YMin)} to {N(picked.Y + picked.YMax)}"));
         }
         if (hits.Count > 1)
@@ -140,27 +181,38 @@ sealed class PickInspector(PlayerInterface player)
             lines.Add(new("Also on the ray", ""));
             foreach (var other in hits.Skip(1).Take(4)) lines.Add(new("  " + other.Name, N(other.Hit!.Value)));
         }
-        if (buildings.Count - hits.Count > 0) lines.Add(new("Near, not hit", buildings.Count - hits.Count + " buildings"));
-        // Resource rocks (hand mining): a rock is hit as a sphere of its radius, looked for within 200 of the ground point; each line is how far the ray passes from its centre against its radius.
+        if (buildings.Count - hits.Count > 0)
+            lines.Add(new("Near, not hit", buildings.Count - hits.Count + " buildings"));
+        // Resource rocks (hand mining): a rock is hit as a sphere of its radius, looked for within 200 of the ground point; each line is how far the
+        // ray passes from its centre against its radius.
         if (player.Furniture.Rocks?.Invoke() is { } rocks && ground is { } rockGround)
         {
             var near = rocks.Near(0, rockGround.X, rockGround.Z, 200);
             var picked2 = player.Furniture.PickRockAt(player.Mouse);
-            lines.Add(new("Rock a click mines", picked2 is { } r ? $"{r.Rock.Record} (hit {N(r.T)})" : near.Count == 0 ? "none (no rocks within 200)" : "none"));
+            lines.Add(new("Rock a click "
+                + "mines", picked2 is { } r ? $"{r.Rock.Record} (hit {N(r.T)})" : near.Count == 0 ? "none (no rocks within 200)" : "none"));
             foreach (var rock in near.OrderBy(r => Vector3.Cross(r.Position - ray.Origin, ray.Direction).Length()).Take(3))
-                lines.Add(new("  " + rock.Record, $"misses by {N(Vector3.Cross(rock.Position - ray.Origin, ray.Direction).Length())}, radius {N(rock.Radius)}"));
+            {
+                lines.Add(new("  " + rock.Record,
+                    $"misses by {N(Vector3.Cross(rock.Position - ray.Origin, ray.Direction).Length())}, radius {N(rock.Radius)}"));
+            }
         }
         else lines.Add(new("Rocks", player.Furniture.Rocks is null ? "no rock source" : "none loaded"));
         if (player.BuildingSelection.Selected is { } sel) lines.Add(new("Selected building", sel.Name));
         lines.Add(new("Selected characters", player.SelectedIds().Count.ToString(CultureInfo.InvariantCulture)));
         if (InspectorPanel)
         {
-            float scale = player.InventoryScale, row = 20 * scale, width = Math.Min(player.Width * 0.5f, 430 * scale), height = 16 * scale + row * (lines.Count + 1);
+            float scale = player.UiScale, row = 20 * scale, width = Math.Min(player.Width * 0.5f, 430 * scale),
+                height = 16 * scale + row * (lines.Count + 1);
             var box = new UiRect(player.Width - width - 8 * scale, 40 * scale, width, height);
-            controls.Add(new("inspector", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
-            controls.Add(new("inspector-title", "TextBox", new(box.X + 8 * scale, box.Y + 6 * scale, box.Width - 16 * scale, row), "PICK & COLLISION INSPECTOR", "", "", true,
-                new Dictionary<string, string> { ["TextAlign"] = "Left Top", ["TextColour"] = PlayerInterface.TitleColour, ["WordWrap"] = "false" }, Vector4.Zero, Pickable: false));
-            controls.Add(new("inspector-rows", "Widget", new(box.X + 4 * scale, box.Y + 6 * scale + row, box.Width - 8 * scale, row * lines.Count), "", "", "", true,
+            controls.Add(new("inspector", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(),
+                Vector4.Zero, Pickable: false));
+            controls.Add(new("inspector-title", "TextBox", new(box.X + 8 * scale, box.Y + 6 * scale, box.Width - 16 * scale, row),
+                "PICK & COLLISION INSPECTOR", "", "", true,
+                new Dictionary<string, string> { ["TextAlign"] = "Left Top", ["TextColour"] = PlayerInterface.TitleColour, ["WordWrap"] = "false" },
+                    Vector4.Zero, Pickable: false));
+            controls.Add(new("inspector-rows", "Widget", new(box.X + 4 * scale, box.Y + 6 * scale + row, box.Width - 8 * scale,
+                row * lines.Count), "", "", "", true,
                 new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
             player.AddLines(controls, "inspector-rows", lines, row);
         }
@@ -172,7 +224,8 @@ sealed class PickInspector(PlayerInterface player)
     /// </summary>
     void UpdateInspectorGeometry(List<InspectedBuilding> buildings, InspectedBuilding? picked, Vector3? ground)
     {
-        string key = (InspectorHull ? "h" : "") + (InspectorShapes ? "s" : "") + (InspectorMesh ? "m" : "") + "|" + (picked?.Key ?? "") + "|" + string.Join(',', buildings.Select(b => b.Key));
+        string key = (InspectorHull ? "h" : "") + (InspectorShapes ? "s" : "") + (InspectorMesh ? "m" : "") + "|" + (picked?.Key ?? "") + "|"
+            + string.Join(',', buildings.Select(b => b.Key));
         if (key == _inspectorKey) return;
         _inspectorKey = key;
         var origin = picked is { } p ? new Vector3(MathF.Round(p.Hull[0].X), p.Y, MathF.Round(p.Hull[0].Y)) : ground ?? Vector3.Zero;
@@ -188,11 +241,13 @@ sealed class PickInspector(PlayerInterface player)
                 if (isPicked) HullFloor(fill, b.Hull, b.Y + b.YMin + 2, origin, new Vector4(1f, 0.15f, 0.1f, 0.18f));
             }
             if (InspectorShapes)
+            {
                 foreach (var shape in b.Shapes)
                 {
                     Prism(edges, shape, b.Y + b.YMin, b.Y + b.YMax, origin, new Vector4(0.2f, 1f, 0.3f, 0.9f));
                     if (isPicked) HullFloor(fill, shape, b.Y + b.YMin + 3, origin, new Vector4(0.2f, 1f, 0.3f, 0.12f));
                 }
+            }
             if (InspectorMesh && isPicked && player.Build.Services is { } host && b.Record is { } record)
                 CollisionEdges(edges, host.Placement.CollisionMesh(record), b, origin, new Vector4(0.3f, 0.8f, 1f, 0.9f));
         }
@@ -203,7 +258,8 @@ sealed class PickInspector(PlayerInterface player)
     /// <summary>
     /// The collision triangles of a building as lines (every triangle's three edges), placed as the building is; at most 20000 triangles.
     /// </summary>
-    static void CollisionEdges(List<float> edges, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, InspectedBuilding b, Vector3 origin, Vector4 colour)
+    static void CollisionEdges(List<float> edges, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, InspectedBuilding b,
+        Vector3 origin, Vector4 colour)
     {
         int budget = 20000;
         var q = b.Rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(b.Rotation);
@@ -224,9 +280,19 @@ sealed class PickInspector(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Adds one vertex: position and colour.
+    /// </summary>
     static void Vertex(List<float> data, Vector3 p, Vector4 colour) => data.AddRange([p.X, p.Y, p.Z, colour.X, colour.Y, colour.Z, colour.W]);
 
-    static void Segment(List<float> edges, Vector3 a, Vector3 b, Vector4 colour) { Vertex(edges, a, colour); Vertex(edges, b, colour); }
+    /// <summary>
+    /// Adds a line from <paramref name="a"/> to <paramref name="b"/>.
+    /// </summary>
+    static void Segment(List<float> edges, Vector3 a, Vector3 b, Vector4 colour)
+    {
+        Vertex(edges, a, colour);
+        Vertex(edges, b, colour);
+    }
 
     /// <summary>
     /// A convex polygon's outline at the bottom and the top of its prism, and a post at each corner.
@@ -250,6 +316,9 @@ sealed class PickInspector(PlayerInterface player)
     static void HullFloor(List<float> fill, Vector2[] hull, float y, Vector3 origin, Vector4 colour)
     {
         for (int i = 1; i + 1 < hull.Length; i++)
-            foreach (var v in new[] { hull[0], hull[i], hull[i + 1] }) Vertex(fill, new Vector3(v.X, y, v.Y) - origin, colour);
+        {
+            foreach (var v in new[] { hull[0], hull[i], hull[i + 1] })
+                Vertex(fill, new Vector3(v.X, y, v.Y) - origin, colour);
+        }
     }
 }

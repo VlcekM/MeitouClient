@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public readonly record struct QuerySlot(long Frame, int Slot, uint Index)
 {
+    /// <summary>
+    /// Whether the slot was handed out (frame numbers start at 1).
+    /// </summary>
     public bool IsValid => Frame > 0;
 }
 
@@ -19,18 +22,51 @@ public readonly record struct QuerySlot(long Frame, int Slot, uint Index)
 /// </summary>
 public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
 {
+    /// <summary>
+    /// Timestamps per frame slot's pool (4096).
+    /// </summary>
     public const uint Capacity = 4096;
 
+    /// <summary>
+    /// The device the pools are on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// One timestamp pool per frame slot.
+    /// </summary>
     readonly QueryPool[] _pools;
-    readonly long[] _poolFrame;      // the frame whose timestamps a pool holds (or held, when collected)
-    readonly int[] _poolCount;       // timestamps recorded into it
-    readonly long[] _collectedFrame; // the frame whose results are in results[]
-    readonly ulong[][] _results;     // collected, in nanoseconds; 0 = not written
+    /// <summary>
+    /// The frame whose timestamps each pool holds (or held, when collected).
+    /// </summary>
+    readonly long[] _poolFrame;
+    /// <summary>
+    /// The timestamps recorded into each pool.
+    /// </summary>
+    readonly int[] _poolCount;
+    /// <summary>
+    /// The frame whose results are in each slot's <see cref="_results"/>.
+    /// </summary>
+    readonly long[] _collectedFrame;
+    /// <summary>
+    /// The collected results per slot, in nanoseconds; 0 = not written.
+    /// </summary>
+    readonly ulong[][] _results;
+    /// <summary>
+    /// The next index in the current pool (interlocked: any recording thread takes one).
+    /// </summary>
     int _cursor;
+    /// <summary>
+    /// The current frame's slot; -1 before the first frame.
+    /// </summary>
     int _slot = -1;
+    /// <summary>
+    /// The current frame's number.
+    /// </summary>
     long _frame;
 
+    /// <summary>
+    /// One pool of <see cref="Capacity"/> timestamps per frame slot, reset from the host.
+    /// </summary>
     public QueryArena(VulkanDevice device)
     {
         this._device = device;
@@ -73,11 +109,17 @@ public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
         _cursor = 0;
     }
 
+    /// <summary>
+    /// At the end of a frame: records how many timestamps its pool got.
+    /// </summary>
     internal void End()
     {
         if (_slot >= 0) _poolCount[_slot] = Math.Min(_cursor, (int)Capacity);
     }
 
+    /// <summary>
+    /// Reads a slot's pool into its results (in nanoseconds, by the device's timestamp period; unavailable ones stay 0).
+    /// </summary>
     void Collect(int s)
     {
         Array.Clear(_results[s]);
@@ -112,6 +154,9 @@ public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
         return new QuerySlot(_frame, _slot, (uint)i);
     }
 
+    /// <summary>
+    /// The pool a timestamp is in.
+    /// </summary>
     internal QueryPool Pool(in QuerySlot q) => _pools[q.Slot];
 
     /// <summary>
@@ -126,6 +171,9 @@ public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
         return nanoseconds != 0;
     }
 
+    /// <summary>
+    /// Destroys the pools.
+    /// </summary>
     public void Dispose()
     {
         foreach (var p in _pools) _device.Vk.DestroyQueryPool(_device.Device, p, null);
@@ -137,27 +185,55 @@ public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
 /// </summary>
 public sealed class GpuStats
 {
+    /// <summary>
+    /// Draws recorded.
+    /// </summary>
     public int Draws;
 
+    /// <summary>
+    /// Indirect draws recorded (each call, not each draw in it).
+    /// </summary>
     public int IndirectDraws;
 
+    /// <summary>
+    /// Compute dispatches recorded.
+    /// </summary>
     public int Dispatches;
 
+    /// <summary>
+    /// Pipeline binds recorded (a bind the redundancy filter skips is not counted).
+    /// </summary>
     public int PipelinesBound;
 
+    /// <summary>
+    /// Descriptor pushes recorded.
+    /// </summary>
     public int DescriptorPushes;
 
+    /// <summary>
+    /// Native segments recorded (prepared jobs and inline secondaries).
+    /// </summary>
     public int NativeSegments;
 
+    /// <summary>
+    /// Bytes written into the frame's constants.
+    /// </summary>
     public long ConstantBytes;
 
+    /// <summary>
+    /// Bytes uploaded.
+    /// </summary>
     public long UploadBytes;
 
     /// <summary>
     /// The counters <see cref="Running"/> gives, in its order.
     /// </summary>
-    public static readonly string[] CounterNames = ["draws", "indirect", "dispatches", "pipelines", "pushes", "segments", "constantBytes", "uploadBytes"];
+    public static readonly string[] CounterNames =
+        ["draws", "indirect", "dispatches", "pipelines", "pushes", "segments", "constantBytes", "uploadBytes"];
 
+    /// <summary>
+    /// The running totals of every frame before this one, in <see cref="CounterNames"/> order.
+    /// </summary>
     readonly long[] _carried = new long[8];
 
     /// <summary>

@@ -95,6 +95,9 @@ once, only when above 0 and not 1, and the weapon skill is read raw).
 ## Hunger, blood and parts
 
 **Verified** hunger thresholds: starts3, >=2 unpenalized, <2 penalized, <1 starving, <=0 death.
+**Observed** (1.0.68 `FUN_140581770`, fresh-character factory): a squad template's `malnourished` flag sets an organic member's initial hunger to
+1.7 (170 on the HUD, constant `0x3fd9999a`), separately from its later free-food floor. `startoff- rebirth` (`1532935-rebirth.mod`) has the flag;
+The Slaves starts at 170. Changing between organic races in the creator keeps hunger; robots are reset to 3 (`FUN_14064e410`, `FUN_1405e9f40`).
 **Observed** tick: T=starvation-time*HungerTime (base60 hours per level). Empty stomach drains
 dt/T*rate; fed stomach converts buffer into hunger, capped3. Rate includes race, rest/KO/dead
 bed factor0.33, active encumbrance factor and situation terms. Zero hunger-rate races do not

@@ -36,35 +36,63 @@ sealed class DuelScenario(GameHost host)
     /// The two start this far apart along Z (across the sun), facing each other, and charge on <see cref="DuelOrderTick"/>.
     /// </summary>
     const float DuelGap = 40;
+    /// <summary>
+    /// The tick the pair is ordered to fight.
+    /// </summary>
     const int DuelOrderTick = 45;
 
     /// <summary>
-    /// Two Samurai of the same record are evenly matched: in the built-in duel the first one goes down after 165 s (28 hits, 61 blocks). A lap is the
-    /// last <see cref="DuelLeadTicks"/> (40 s) before that and <see cref="DuelHoldTicks"/> (4 s) after; the fight before the lap is run headless at
-    /// each restart (about 0.06 ms a tick). A duel with nobody down in <see cref="DuelMaxTicks"/> (5 min) loops its first <see cref="DuelOpenTicks"/>
-    /// (60 s).
+    /// The duel's spot on the ground (the chosen one, at the terrain's height).
     /// </summary>
-    const int DuelLeadTicks = 1200, DuelHoldTicks = 120, DuelMaxTicks = 9000, DuelOpenTicks = 1800;
-
     Vector3 _duelSpot;
+    /// <summary>
+    /// The spawn's shift from the spot, so the middle of the lap's fight is on it (<see cref="CentreOnSpot"/>).
+    /// </summary>
     Vector2 _duelShift;
+    /// <summary>
+    /// The CHARACTER record's string id both fighters are made from.
+    /// </summary>
     string _duelRecord = "";
+    /// <summary>
+    /// The faction whose looks they get; null when the data has none of that name.
+    /// </summary>
     int? _duelFaction;
+    /// <summary>
+    /// The two fighters; none before the first lap.
+    /// </summary>
     CharacterId _duelA = CharacterId.None, _duelB = CharacterId.None;
 
-    // The lap: the world's ticks from duelSkipTicks (run headless at the restart) to duelEndTick.
-    long _duelSkipTicks, _duelEndTick = DuelOpenTicks;
-    ulong _duelEndHash;
+    /// <summary>
+    /// The lap, measured at the start.
+    /// </summary>
+    readonly DuelLap _lap = new();
+
+    /// <summary>
+    /// The laps started.
+    /// </summary>
     int _duelLaps;
 
-    // The looks (SpawnSandbox's variant numbers): the first two whose rolled clothing has a helmet.
+    /// <summary>
+    /// The looks (SpawnSandbox's variant numbers): the first two whose rolled clothing has a helmet.
+    /// </summary>
     (int A, int B) _duelVariants = (1, 2);
 
-    // The hour a lap starts at: --time, or what the Tab panel's time of day slider last set (it would snap back at the next lap otherwise).
+    /// <summary>
+    /// The hour a lap starts at: --time, or what the Tab panel's time of day slider last set (it would snap back at the next lap otherwise).
+    /// </summary>
     internal float HeldHour;
+    /// <summary>
+    /// The world settings each lap's world is made with.
+    /// </summary>
     internal WorldSettings WorldSettings = null!;
+    /// <summary>
+    /// A restart was asked for (Backspace).
+    /// </summary>
     internal bool DuelRestartRequested;
 
+    /// <summary>
+    /// Whether this run is a <c>--duel</c> (the sandbox wins when both are given).
+    /// </summary>
     internal bool IsDuel => host.GameOptions.Duel && !host.Sandbox.IsSandbox;
 
     /// <summary>
@@ -104,7 +132,8 @@ sealed class DuelScenario(GameHost host)
         {
             if (!host.SimWalkability!.IsWalkable(spot.X + _duelShift.X, spot.Y + _duelShift.Y + z))
             {
-                Console.Error.WriteLine($"duel      {spot.X + _duelShift.X:0}, {spot.Y + _duelShift.Y + z:0} is under water: pick another spot with --duel x,z");
+                Console.Error.WriteLine($"duel      {spot.X + _duelShift.X:0}, {spot.Y + _duelShift.Y + z:0} is under water: "
+                    + "pick another spot with --duel x,z");
             }
         }
     }
@@ -157,27 +186,7 @@ sealed class DuelScenario(GameHost host)
         {
             DuelSetup(world, built.Population!);
             var combat = built.Combat!;
-            long down = -1;
-            var middles = new List<Vector2>();   // the pair's middle after each tick
-            string winner = "";
-            ulong openHash = 0;
-
-            // On past the knockout to the lap's end, for the state hash every lap must reach.
-            while (world.Tick < DuelMaxTicks && (down < 0 || world.Tick < down + DuelHoldTicks))
-            {
-                world.RunTick();
-                var (pa, pb) = (world.Characters.Previous[_duelA.Slot].Position, world.Characters.Previous[_duelB.Slot].Position);
-                middles.Add(new Vector2(pa.X + pb.X, pa.Z + pb.Z) / 2);
-                bool a = combat.StateOf(_duelA).Down, b = combat.StateOf(_duelB).Down;
-                if (world.Tick == DuelOpenTicks) openHash = world.StateHash();
-                if (down < 0 && (a || b))
-                    (down, winner) = (world.Tick, a && b ? "both down" : a ? "the one that started at +Z wins" : "the one that started at -Z wins");
-            }
-
-            (_duelSkipTicks, _duelEndTick) = down < 0 ? (0, DuelOpenTicks) : (Math.Max(down - DuelLeadTicks, 0), down + DuelHoldTicks);
-            var lap = middles.Skip((int)_duelSkipTicks).Take((int)(Math.Min(_duelEndTick, world.Tick) - _duelSkipTicks)).ToList();
-            var centre = lap.Count == 0 ? new Vector2(_duelSpot.X, _duelSpot.Z) : lap.Aggregate(Vector2.Zero, (s, p) => s + p) / lap.Count;
-            _duelEndHash = down < 0 ? openHash : world.StateHash();
+            var (down, winner, centre) = _lap.Measure(world, combat, _duelA, _duelB, new Vector2(_duelSpot.X, _duelSpot.Z));
             if (!report) return centre;
 
             ReportLap(combat, down, winner, centre);
@@ -201,8 +210,8 @@ sealed class DuelScenario(GameHost host)
         string kos = string.Join(" ", log.Where(e => e.Knockout).Select(e => (e.Tick / 30.0).ToString("0.0")));
         Console.WriteLine($"duel      blows: {blows}; first hit {firstHit:0.0} s; KO at {kos}");
         Console.WriteLine($"duel      {DuelRecord} vs {DuelRecord} at {_duelSpot.X:0}, {_duelSpot.Z:0}: " +
-            (down < 0 ? $"nobody down in {DuelMaxTicks / 30} s" : $"first down after {down / 30.0:0.0} s, {winner}") +
-            $"; a lap is {_duelSkipTicks / 30.0:0.0} s to {_duelEndTick / 30.0:0.0} s ({(_duelEndTick - _duelSkipTicks) / 30.0:0.0} s)");
+            (down < 0 ? $"nobody down in {DuelLap.DuelMaxTicks / 30} s" : $"first down after {down / 30.0:0.0} s, {winner}") +
+            $"; a lap is {_lap.SkipTicks / 30.0:0.0} s to {_lap.EndTick / 30.0:0.0} s ({(_lap.EndTick - _lap.SkipTicks) / 30.0:0.0} s)");
         Console.WriteLine($"duel      the spawn is moved {_duelShift.X:0}, {_duelShift.Y:0} so the lap's fight is round {centre.X:0}, {centre.Y:0}");
     }
 
@@ -224,7 +233,7 @@ sealed class DuelScenario(GameHost host)
         {
             host.Session.World.RunTick();
         }
-        while (host.Session.World.Tick <= _duelSkipTicks);
+        while (host.Session.World.Tick <= _lap.SkipTicks);
 
         host.Session.Clock.Advance(host.Session.Simulation.TickSeconds);
         host.AnimSeconds = 0;
@@ -251,23 +260,12 @@ sealed class DuelScenario(GameHost host)
         if (!IsDuel) return;
 
         var world = host.Session.World;
-        if (!DuelRestartRequested && !flightStarted && world.Tick < _duelEndTick) return;
+        if (!DuelRestartRequested && !flightStarted && world.Tick < _lap.EndTick) return;
 
         // A lap that ran to its end on the tick must be the measured one (a frame that ran past it has nothing to compare).
-        if (world.Tick == _duelEndTick) ReportLapEnd(world.StateHash());
+        if (world.Tick == _lap.EndTick) _lap.ReportLapEnd(_duelLaps, world.StateHash());
         DuelRestart();
         if (DuelRestartRequested) host.Player.Notice("Duel restarted (Backspace)");
         DuelRestartRequested = false;
-    }
-
-    /// <summary>
-    /// Prints whether a lap ended in the measured run's state, by its state hash.
-    /// </summary>
-    void ReportLapEnd(ulong hash)
-    {
-        bool same = hash == _duelEndHash;
-        Console.WriteLine(same
-            ? $"duel      lap {_duelLaps} ended as measured (state hash {hash:x16})"
-            : $"duel      lap {_duelLaps} DIFFERS from the measured run: state hash {hash:x16}, measured {_duelEndHash:x16}");
     }
 }

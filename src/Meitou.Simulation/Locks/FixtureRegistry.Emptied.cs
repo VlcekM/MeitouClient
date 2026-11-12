@@ -9,7 +9,13 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed partial class FixtureRegistry
 {
+    /// <summary>
+    /// Counts changes of <see cref="PublishedEmptied"/>.
+    /// </summary>
     long _emptiedRevision;
+    /// <summary>
+    /// The cache of <see cref="PublishedEmptied"/> and the revision it was made at.
+    /// </summary>
     (long Revision, TownBuilding[] List) _publishedEmptied = (-1, []);
 
     /// <summary>
@@ -64,6 +70,7 @@ public sealed partial class FixtureRegistry
             _all.Remove(f);
             _byId.Remove(f.Id);
         }
+
         _containerSpots = null;
         _bedSpots = null;
         _cageList = null;
@@ -71,6 +78,9 @@ public sealed partial class FixtureRegistry
         _dummySpots = null;
     }
 
+    /// <summary>
+    /// Lets the fixture's occupant out of its bed or cage.
+    /// </summary>
     void LetOut(World world, Fixture f)
     {
         if (f.Occupant.IsNone) return;
@@ -79,6 +89,9 @@ public sealed partial class FixtureRegistry
         f.Occupant = CharacterId.None;
     }
 
+    /// <summary>
+    /// Drops the box's items on the ground at the fixture.
+    /// </summary>
     static void Spill(World world, Fixture f, Items.Inventory box)
     {
         foreach (var item in box.Items.ToArray())

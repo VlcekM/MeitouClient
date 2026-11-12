@@ -13,9 +13,22 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalSamplers : IGpuSamplers
 {
+    /// <summary>
+    /// The device the sampler states are made on.
+    /// </summary>
     readonly MTLDevice _device;
+    /// <summary>
+    /// The made sampler states and their indices (the order they were made in), by their capped description.
+    /// </summary>
     readonly Dictionary<SamplerDesc, (MTLSamplerState State, int Index)> _samplers = [];
+    /// <summary>
+    /// Backs <see cref="MaxAnisotropy"/>.
+    /// </summary>
+    int _maxAnisotropy = 16;
 
+    /// <summary>
+    /// An empty cache on <paramref name="device"/>.
+    /// </summary>
     public MetalSamplers(MTLDevice device) => this._device = device;
 
     /// <summary>
@@ -25,9 +38,16 @@ public sealed class MetalSamplers : IGpuSamplers
     public int MaxAnisotropy
     {
         get => _maxAnisotropy;
-        set { value = Math.Clamp(value, 1, 16); if (value != _maxAnisotropy) (_maxAnisotropy, Generation) = (value, Generation + 1); }
+        set
+        {
+            value = Math.Clamp(value, 1, 16);
+            if (value != _maxAnisotropy) (_maxAnisotropy, Generation) = (value, Generation + 1);
+        }
     }
-    int _maxAnisotropy = 16;
+
+    /// <summary>
+    /// Bumped by every change of <see cref="MaxAnisotropy"/>.
+    /// </summary>
     public int Generation { get; private set; }
 
     /// <summary>
@@ -40,6 +60,10 @@ public sealed class MetalSamplers : IGpuSamplers
     /// </summary>
     internal static float LodBias(in GpuSampler sampler) => sampler.Desc.LodBias;
 
+    /// <summary>
+    /// The sampler for <paramref name="desc"/> with its anisotropy capped by <see cref="MaxAnisotropy"/>; its state made on first use (usable in
+    /// argument buffers).
+    /// </summary>
     public GpuSampler Get(in SamplerDesc desc)
     {
         var key = desc with { Anisotropy = Math.Min(desc.Anisotropy, _maxAnisotropy) };

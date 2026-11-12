@@ -31,12 +31,20 @@ const team = await Promise.all(core.map(async l => byLogin.get(l.toLowerCase()) 
 const others = listed.filter(c => !core.some(l => l.toLowerCase() === c.login.toLowerCase()))
   .sort((a, b) => b.contributions - a.contributions || a.login.localeCompare(b.login));
 
-// Two or three words on what each contributor outside the core team worked on, by Claude Haiku from their commit subjects. Saved in
-// contributors.json and asked again only when someone's commit count changed; without ANTHROPIC_API_KEY the saved ones are drawn.
+// At most five words on what each contributor outside the core team worked on, by Claude Haiku from their commit subjects. Saved in
+// contributors.json and asked again when someone's commit count changed or their saved areas run longer; without ANTHROPIC_API_KEY the
+// saved ones are drawn, cut to whole areas within the limit.
 const areasFile = new URL('../../assets/branding/contributors.json', import.meta.url);
 const saved = existsSync(areasFile) ? JSON.parse(readFileSync(areasFile, 'utf8')) : {};
 const key = u => u.login.toLowerCase();
-const stale = others.filter(u => !roles[key(u)] && saved[key(u)]?.commits !== u.contributions);
+const maxWords = 5;
+const words = s => s.split(/[\s,]+/).filter(Boolean).length;
+// The leading comma-separated areas that fit within maxWords, the first one always kept.
+const fit = s => s.split(',').map(a => a.trim()).filter(Boolean)
+  .reduce((kept, a) => kept.length && words([...kept, a].join(' ')) > maxWords ? kept : [...kept, a], [])
+  .join(', ');
+const isStale = u => saved[key(u)]?.commits !== u.contributions || words(saved[key(u)].areas) > maxWords;
+const stale = others.filter(u => !roles[key(u)] && isStale(u));
 if (stale.length && process.env.ANTHROPIC_API_KEY) {
   const work = await Promise.all(stale.map(async u => [`## ${u.login}`,
     ...(await all(`/repos/{repo}/commits?author=${u.login}`)).slice(0, 80).map(c => `- ${c.commit.message.split('\n')[0]}`)].join('\n')));
@@ -45,19 +53,20 @@ if (stale.length && process.env.ANTHROPIC_API_KEY) {
     model: 'claude-haiku-5-5',
     max_tokens: 4000,
     system: 'MeitouClient is a C# reimplementation of the game Kenshi\'s engine. For each contributor below, name the areas of the project '
-      + 'their commits worked on in 2 or 3 words, at most 24 characters, comma-separated where it lists several, e.g. "Navmesh, Metal" '
-      + 'or "Linux packaging". Merge overlapping areas into one ("Navmesh, Navmesh tool" is "Navmesh"). Plain and factual: no praise, no verbs, no "fixes".',
+      + 'their commits worked on in at most 5 words in total, comma-separated where it lists several, e.g. "Navmesh, Metal" '
+      + 'or "Linux packaging"; name only the main areas, never a list of every feature. Merge overlapping areas into one ("Navmesh, Navmesh tool" is "Navmesh"). '
+      + 'Scattered bug fixes across unrelated features are one area, "General bugfixing". Plain and factual: no praise, no verbs, no other "fixes".',
     messages: [{ role: 'user', content: work.join('\n\n') }],
     output_config: { format: betaZodOutputFormat(Areas) },
   }).finalMessage();
   const answer = Areas.parse(JSON.parse(response.content.filter(b => b.type === 'text').map(b => b.text).join('')));
   for (const u of stale) {
     const a = answer.contributors.find(c => c.login.toLowerCase() === key(u));
-    if (a) saved[key(u)] = { commits: u.contributions, areas: a.areas.trim() };
+    if (a) saved[key(u)] = { commits: u.contributions, areas: fit(a.areas) };
   }
   await writeFile(areasFile, `${JSON.stringify(saved, null, 2)}\n`);
 }
-const areas = u => roles[key(u)] ?? saved[key(u)]?.areas;
+const areas = u => roles[key(u)] ?? (saved[key(u)] && fit(saved[key(u)].areas));
 
 async function avatar(user, size) {
   const r = await fetch(`${user.avatar_url}${user.avatar_url.includes('?') ? '&' : '?'}s=${size * 2}`);

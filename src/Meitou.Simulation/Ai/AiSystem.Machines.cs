@@ -3,9 +3,11 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Ai;
 
-// The NPC workers of the town machines (docs/game/buildings-production.md "NPC town machines"): goal 189 is real work, its plan's step
-// Task_OperateMachine (87), Task_EmptyMachine (92) or Task_FillMachine (93) at a town building; goal 190 pretends (221). The production system
-// applies what the think leaves in AiMind.WorkOperate / CollectFrom / FillTo.
+/// <summary>
+/// The NPC workers of the town machines (docs/game/buildings-production.md "NPC town machines"): goal 189 is real work, its plan's step
+/// Task_OperateMachine (87), Task_EmptyMachine (92) or Task_FillMachine (93) at a town building; goal 190 pretends (221). The production system
+/// applies what the think leaves in AiMind.WorkOperate / CollectFrom / FillTo.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>

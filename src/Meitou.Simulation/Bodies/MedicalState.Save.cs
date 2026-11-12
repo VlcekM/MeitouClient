@@ -3,10 +3,16 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// The save: the MEDICAL_STATE fields written and read, the limb bits and the blood each part shows on the body.
+/// </summary>
 public sealed partial class MedicalState
 {
     // ------------------------------------------------------------------ save keys
 
+    /// <summary>
+    /// The save key of <see cref="Decapitated"/> (a Meitou key).
+    /// </summary>
     const string DecapitatedKey = "meitou decapitated";
 
     /// <summary>
@@ -43,9 +49,6 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The int <c>limbs</c> (<c>FUN_1400cfb50</c>, docs/formats/save.md "Limbs"): the <see cref="LimbState"/> of limb slot k in bits 2k..2k+1.
-    /// </summary>
-    /// <summary>
     /// The blood each of the first 8 parts shows on the body (<c>FUN_140530b30</c>, docs/game/blood-decals.md): 1 - clamp((flesh - stun + bandage) /
     /// (base x multiplier x scale - wear), 0, 1), byte k = part k scaled to 0..255 (a part with no maximum shows none).
     /// </summary>
@@ -63,6 +66,9 @@ public sealed partial class MedicalState
         return bits;
     }
 
+    /// <summary>
+    /// The int <c>limbs</c> (<c>FUN_1400cfb50</c>, docs/formats/save.md "Limbs"): the <see cref="LimbState"/> of limb slot k in bits 2k..2k+1.
+    /// </summary>
     public int LimbBits
     {
         get

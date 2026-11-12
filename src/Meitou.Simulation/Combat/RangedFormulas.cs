@@ -10,6 +10,9 @@ namespace Meitou.Simulation.Combat;
 /// </summary>
 public sealed class CrossbowInstance(CrossbowData data, float quality, CrossbowStats stats)
 {
+    /// <summary>
+    /// The CROSSBOW record's data.
+    /// </summary>
     public CrossbowData Data { get; } = data;
 
     /// <summary>
@@ -17,6 +20,9 @@ public sealed class CrossbowInstance(CrossbowData data, float quality, CrossbowS
     /// </summary>
     public float Quality { get; } = quality;
 
+    /// <summary>
+    /// The crossbow's numbers at <see cref="Quality"/>.
+    /// </summary>
     public CrossbowStats Stats { get; } = stats;
 
     /// <summary>
@@ -85,7 +91,8 @@ public static class RangedFormulas
     public const float Grazing = 0.1f;
 
     /// <summary>
-    /// XP rates of the ranged controller (<c>FUN_1408c7250</c>'s per-stat amounts, x dt): crossbows 1.2, perception 3.0, dexterity 0.5 while reloading.
+    /// XP rates of the ranged controller (<c>FUN_1408c7250</c>'s per-stat amounts, x dt): crossbows 1.2, perception 3.0, dexterity 0.5
+    /// while reloading.
     /// </summary>
     public const float CrossbowXp = 1.2f, PerceptionXp = 3f, DexterityReloadXp = 0.5f;
 
@@ -117,11 +124,13 @@ public static class RangedFormulas
     /// The half-angle of the deviation cone in degrees (<c>FUN_14043a730</c>, the same <c>0.005 x (skill + perception)</c> as <c>FUN_140435160</c>
     /// and the turret tooltip, <b>Verified</b>): max(0, deviation x (1 - t)), t = 0.005 (skill + perception). 0 at skill + perception 200.
     /// </summary>
-    public static float Deviation(float deviationAtZero, float skill, float perception) => MathF.Max(0, Lerp(0.005f * (skill + perception), deviationAtZero, 0));
+    public static float Deviation(float deviationAtZero, float skill, float perception) =>
+        MathF.Max(0, Lerp(0.005f * (skill + perception), deviationAtZero, 0));
 
     /// <summary>
-    /// The height factor (<c>FUN_140435f60</c>): f = (|dy| - 20) / 280 capped at 1 (not floored, so a small |dy| gives a small negative f); above the target
-    /// (dy &gt; 0) 1 + 0.5 f, level or below 1 - 0.4 f; 1 for a target at height exactly 0 (a guard in the code). dy = barrel height - target height.
+    /// The height factor (<c>FUN_140435f60</c>): f = (|dy| - 20) / 280 capped at 1 (not floored, so a small |dy| gives a small negative f); above
+    /// the target (dy &gt; 0) 1 + 0.5 f, level or below 1 - 0.4 f; 1 for a target at height exactly 0 (a guard in the code). dy = barrel height -
+    /// target height.
     /// </summary>
     public static float HeightFactor(float barrelY, float targetY)
     {
@@ -134,7 +143,8 @@ public static class RangedFormulas
     }
 
     /// <summary>
-    /// In range (<c>FUN_140436860</c>): squared distance &lt; h x range^2 (the factor multiplies the squared range, unlike the bolt's own range: a quirk kept).
+    /// In range (<c>FUN_140436860</c>): squared distance &lt; h x range^2 (the factor multiplies the squared range, unlike the bolt's own range: a
+    /// quirk kept).
     /// </summary>
     public static bool InRange(float distanceSquared, float range, float heightFactor) => distanceSquared < heightFactor * range * range;
 
@@ -169,6 +179,9 @@ public static class RangedFormulas
         return Vector3.Normalize(Vector3.Transform(dir, Quaternion.CreateFromAxisAngle(axis, degrees * (MathF.PI / 180))));
     }
 
+    /// <summary>
+    /// The game's <c>lerp(t, a, b)</c>: the parameter first.
+    /// </summary>
     static float Lerp(float t, float a, float b) => a + (b - a) * t;
 }
 
@@ -205,7 +218,8 @@ public static class TurretFormulas
     public static float PowerFactor(float efficiency) => efficiency * 0.8f + 0.2f;
 
     /// <summary>
-    /// The mount bonus (gun slot 18 <c>FUN_1404353b0</c>): 1 + 0.01 x the output value of the building the turret is mounted on (a wall's 10 to 30); 1 unmounted.
+    /// The mount bonus (gun slot 18 <c>FUN_1404353b0</c>): 1 + 0.01 x the output value of the building the turret is mounted on (a wall's 10 to 30);
+    /// 1 unmounted.
     /// </summary>
     public static float MountFactor(float mountOutput) => mountOutput * 0.01f + 1;
 
@@ -240,7 +254,8 @@ public static class TurretFormulas
 
     /// <summary>
     /// A candidate's score before the turret's own weights (<c>FUN_140435d70</c>): (f x g)², g = 1 - d / (<paramref name="rangeFactor"/> x range),
-    /// <paramref name="f"/> the posture factor (0.1 crippled, x0.1 not upright); a target out of that range scores 0.001 (it may still be chosen, never fired at).
+    /// <paramref name="f"/> the posture factor (0.1 crippled, x0.1 not upright); a target out of that range scores 0.001 (it may still be chosen,
+    /// never fired at).
     /// </summary>
     public static float Closeness(float distance, float range, float rangeFactor, float f)
     {

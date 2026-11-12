@@ -202,12 +202,14 @@ public class RealDuelTests(ITestOutputHelper output)
         CharacterId Spawn(string name, float skill, ArmourData? worn, float x)
         {
             var stats = new CharacterStats();
-            foreach (var s in new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity, StatsEnumerated.Strength, StatsEnumerated.Toughness })
-                stats[s] = skill;
+            var skills = new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity,
+                StatsEnumerated.Strength, StatsEnumerated.Toughness };
+            foreach (var s in skills) stats[s] = skill;
 
             var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants),
                 worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
-            var cold = new CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
+            var cold = new CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength),
+                Fighter = fighter };
             return world.Characters.Spawn(new CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
         }
 
@@ -238,7 +240,8 @@ public class RealDuelTests(ITestOutputHelper output)
             {
                 int ticks = 0;
 
-                while (ticks < 20000 && !world.Characters.Cold(a.Slot)!.Medical!.Incapacitated && !world.Characters.Cold(b.Slot)!.Medical!.Incapacitated)
+                while (ticks < 20000 && !world.Characters.Cold(a.Slot)!.Medical!.Incapacitated
+                    && !world.Characters.Cold(b.Slot)!.Medical!.Incapacitated)
                 {
                     world.RunTick();
                     ticks++;
@@ -246,7 +249,9 @@ public class RealDuelTests(ITestOutputHelper output)
 
                 var sa = combat.StateOf(a);
                 var sb = combat.StateOf(b);
-                output.WriteLine($"threads {threads}: {ticks} ticks ({ticks / 30f:0.0} s); plated thrown {sa.Thrown} landed {sa.Landed} taken {sa.Taken}; bare thrown {sb.Thrown} landed {sb.Landed} taken {sb.Taken}");
+                output.WriteLine($"threads {threads}: {ticks} ticks ({ticks / 30f:0.0} s); "
+                    + $"plated thrown {sa.Thrown} landed {sa.Landed} taken {sa.Taken}; bare thrown {sb.Thrown} landed {sb.Landed} taken {sb.Taken}");
+
                 Assert.True(world.Characters.Cold(a.Slot)!.Medical!.Incapacitated != world.Characters.Cold(b.Slot)!.Medical!.Incapacitated);
 
                 if (first is null)

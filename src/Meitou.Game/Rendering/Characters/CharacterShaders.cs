@@ -29,7 +29,11 @@ static class CharacterShaders
     /// </summary>
     public const int TextureSlotCount = 20;
 
-    // Material flags (CharacterMaterialRecord.Flags).
+    /// <summary>
+    /// Material flags (<see cref="CharacterMaterialRecord.Flags"/>): which textures are resident, the normal map's swizzle, the cut-out on the
+    /// normal's alpha, the dye and the vest layers' colour maps, worn clothing, textures still streaming in, the Meitou skin, an icon's vertex
+    /// colours, blood and the neck cap's wound.
+    /// </summary>
     public const uint HasDiffuse = 1 << 0, HasNormal = 1 << 1, NormalSwizzled = 1 << 2, HasHead = 1 << 3, HasHeadNormal = 1 << 4, HasHeadMask = 1 << 5,
         HasBodyMask = 1 << 6, HasHair = 1 << 7, HasBeard = 1 << 8, ClipNormalAlpha = 1 << 9, Dyed = 1 << 10, Vest0Coloured = 1 << 11,
         // 1 << 12 and 1 << 13 are the second and third vest layers' Vest0Coloured.
@@ -54,25 +58,49 @@ static class CharacterShaders
         Scabbard = 1 << 25,
         // A held item whose material names a metalness map (objects.hlsl, red channel), in the colour map's slot: a held item is never dyed.
         HasMetalMap = 1 << 26,
-        // A worn chain or plate item (ARMOUR material type, CharacterContent.ArmourMetal): what has no colour of its own is bare metal, as on a held item.
+        // A worn chain or plate item (ARMOUR material type, CharacterContent.ArmourMetal): what has no colour of its own is bare metal, as on a held
+        // item.
         ArmourMetal = 1 << 27,
-        // A prosthetic (LIMB_REPLACEMENT with its own material): judged as a held item, by colour and its painted gloss, so a wooden or organic limb stays as it is.
+        // A prosthetic (LIMB_REPLACEMENT with its own material): judged as a held item, by colour and its painted gloss, so a wooden or organic limb
+        // stays as it is.
         LimbMetal = 1 << 28,
-        // Blood on a worn item (drawn from the race's blood and the body part under each vertex) or on a held weapon's blade (from the instance; Meitou, optional: docs/game/blood-decals.md "On weapons and gear").
+        // Blood on a worn item (drawn from the race's blood and the body part under each vertex) or on a held weapon's blade (from the instance;
+        // Meitou, optional: docs/game/blood-decals.md "On weapons and gear").
         GearBloody = 1 << 29;
-    // Instance flag (CharInstance.Flags; bit 0 interior, 1-11 the water's mark (CharacterRenderer.SoakBits), 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
-    // vertices (CharacterContent.HeadBit) are hidden.
+    /// <summary>
+    /// Instance flag (CharInstance.Flags; bit 0 interior, 1-11 the water's mark (CharacterRenderer.SoakBits), 12-15 hidden limbs, 16-17 the boots'
+    /// side, 18-27 hidden parts): a headless body (Meitou decapitation): its head vertices (CharacterContent.HeadBit) are hidden.
+    /// </summary>
     public const uint Headless = 1u << 28;
-    // A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
+
+    /// <summary>
+    /// A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
+    /// </summary>
     public const uint HeadOnly = 1u << 29;
-    // A weapon that carries blood (GearBlood): the w of the instance matrix's first two rows hold its colour and amounts instead of the body's blood amounts.
+
+    /// <summary>
+    /// A weapon that carries blood (GearBlood): the w of the instance matrix's first two rows hold its colour and amounts instead of the body's
+    /// blood amounts.
+    /// </summary>
     public const uint WeaponBlood = 1u << 30;
-    // Shading modes.
+
+    /// <summary>
+    /// The shading modes (<see cref="CharacterMaterialRecord.Shading"/>): an item, a body, a hair card.
+    /// </summary>
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
-    // Texture slots (CharacterMaterialRecord.Tex).
+
+    /// <summary>
+    /// The texture slots (<see cref="CharacterMaterialRecord.Tex"/>): the part's own maps, the body's head maps, body mask and hair and beard
+    /// overlays, three vest layers of three maps each from <c>SlotVest</c>, the muscle blend's normal map and the blood splatter; <c>Slots</c> of
+    /// them.
+    /// </summary>
     public const int SlotDiffuse = 0, SlotNormal = 1, SlotColourMap = 2, SlotHeadDiffuse = 3, SlotHeadNormal = 4, SlotHeadMask = 5, SlotBodyMask = 6,
         SlotHairOverlay = 7, SlotBeardOverlay = 8, SlotVest = 9, SlotBlendNormal = 18, SlotBlood = 19, Slots = 20;
 
+    /// <summary>
+    /// The push block's members (<see cref="CharacterPush"/>): the flat colour, the motion pass's depth index, the fill light and the skin table's
+    /// index.
+    /// </summary>
     const string PushMembers = """
             vec3 flatColour;
             uint depthIndex;
@@ -80,6 +108,10 @@ static class CharacterShaders
             uint skinLut;       // the skin scattering table's bindless index (SkinScattering), 0: the switch is off
         """;
 
+    /// <summary>
+    /// The material record (<c>CharMaterial</c>, <see cref="CharacterMaterialRecord"/>) and its storage buffer at binding
+    /// <see cref="MaterialsBinding"/>.
+    /// </summary>
     static readonly string Structs = $$"""
         struct CharMaterial
         {
@@ -102,14 +134,24 @@ static class CharacterShaders
         layout(std430, set = 0, binding = {{MaterialsBinding}}) readonly buffer Materials { CharMaterial items[]; } materials;
         """;
 
+    /// <summary>
+    /// A program's head: the version, the native prelude with the push block and the material structs, before <paramref name="stage"/>.
+    /// </summary>
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
 
+    /// <summary>
+    /// The colour and depth passes' vertex program (no motion).
+    /// </summary>
     public static string Vertex() => VertexSource(false);
     /// <summary>
     /// The vertex program for the motion vectors: also skins with last frame's palette (binding 9) and model matrix (locations 12 to 15).
     /// </summary>
     public static string MotionVertex() => VertexSource(true);
 
+    /// <summary>
+    /// The vertex program: morph, skin and place the vertex relative to the eye, hide limbs, parts and the head by the instance flags;
+    /// <paramref name="motion"/>: also last frame's position for the motion vectors.
+    /// </summary>
     static string VertexSource(bool motion) => ("#version 450\n" + NativeShaders.Prelude(PushMembers) + $$"""
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
@@ -215,15 +257,24 @@ static class CharacterShaders
         """).Replace("//MOTION_IN", motion ? MotionIn : "").Replace("//MOTION_BUF", motion ? MotionBuf : "")
           .Replace("//MOTION_OUT", motion ? "out vec4 vNow;\nout vec4 vPrevious;" : "").Replace("//MOTION_BODY", motion ? MotionBody : "");
 
+    /// <summary>
+    /// The motion vertex program's inputs: last frame's model matrix rows (locations 12 to 15).
+    /// </summary>
     const string MotionIn = """
         layout(location = 12) in vec4 aPrev0;
         layout(location = 13) in vec4 aPrev1;
         layout(location = 14) in vec4 aPrev2;
         layout(location = 15) in vec4 aPrev3;
         """;
+    /// <summary>
+    /// The motion vertex program's last-frame bone palettes (binding <see cref="PreviousBonesBinding"/>).
+    /// </summary>
     static readonly string MotionBuf = $$"""
         layout(std430, set = 0, binding = {{PreviousBonesBinding}}) readonly buffer PreviousSkin { mat4 bones[]; } previousSkin;
         """;
+    /// <summary>
+    /// The motion vertex program's step: the vertex skinned with last frame's palette and placed with last frame's model matrix.
+    /// </summary>
     const string MotionBody = """
             mat4 previousSk = mat4(1.0);
             if (dot(aWeights, vec4(1.0)) > 0.0)
@@ -237,8 +288,11 @@ static class CharacterShaders
             vPrevious = view.previousViewProjection * (previousModel * previousSk * vec4(local, 1.0));
         """;
 
-    // The texture lookups are non-uniform across a draw (the instances differ in material) but constant over a primitive, so the
-    // derivatives of the quad are fine. The cut-outs discard after every lookup (no derivatives after an OpKill).
+    /// <summary>
+    /// The texture lookups (<c>tex</c>, and <c>hairTex</c> with the attachment's mipmap bias). The texture lookups are non-uniform across a draw (the
+    /// instances differ in material) but constant over a primitive, so the derivatives of the quad are fine. The cut-outs discard after every lookup
+    /// (no derivatives after an OpKill).
+    /// </summary>
     const string Lookup = """
         vec4 tex(uint i, vec2 uv) { return texture(textures2D[nonuniformEXT(i)], uv); }
         vec4 hairTex(CharMaterial m, vec2 uv) { return texture(textures2D[nonuniformEXT(m.tex[0])], uv, m.hairColour.w); }
@@ -257,9 +311,18 @@ static class CharacterShaders
     /// </summary>
     const float SkinCurvatureScale = SkinScatterScale / (100f * SkinScattering.MaxInverseRadiusMm);
 
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + $$"""
+    /// <summary>
+    /// The colour pass's fragment program: the material's textures, the body's vest, hair and beard layers, blood and the neck cap's wound, the
+    /// cut-outs, the Meitou skin, then lit as the world's meshes are, or as the editor's stage, an icon or a portrait; <paramref name="lateDepth"/>:
+    /// writes the rasterized depth itself (the backend's discard workaround, <c>DiscardNeedsLateDepth</c>).
+    /// </summary>
+    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n"
+        + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + $$"""
         in vec3 vWorld;
         in float vCurvature;
         in float vThickness;
@@ -715,6 +778,9 @@ static class CharacterShaders
         """;
     }
 
+    /// <summary>
+    /// The depth passes' vertex program: the colour pass's.
+    /// </summary>
     public static string DepthVertex() => Vertex();
 
     /// <summary>
@@ -758,15 +824,37 @@ struct CharacterMaterialRecord
     /// <see cref="VestCount"/> is a mask: bit i, vest layer i's textures are resident.
     /// </summary>
     public uint Shading, Flags, VestCount;
+    /// <summary>
+    /// A hair card's cut-out threshold (<see cref="PartMaterial.AlphaThreshold"/>).
+    /// </summary>
     public float AlphaThreshold;
+    /// <summary>
+    /// The textures' bindless indices by slot (<see cref="CharacterShaders.TextureSlotCount"/>; the unused ones hold the stand-in).
+    /// </summary>
     public TextureSlots Tex;
+    /// <summary>
+    /// The colours and channel selectors (<see cref="PartMaterial"/>); <c>ShirtColour.w</c> the gloss multiplier, <c>SkinTone.w</c> the muscle blend
+    /// weight, <c>HairColour.w</c> the mipmap bias.
+    /// </summary>
     public Vector4 ShirtColour, SkinTone, HairColour, HairAlpha, HairMult, BeardAlpha, DiffuseChannel, AlphaChannel, Colour1, Colour2;
 
+    /// <summary>
+    /// The record's size in bytes (std430).
+    /// </summary>
     public const int Size = 256;
 }
 
+/// <summary>
+/// The record's texture indices, <see cref="CharacterShaders.TextureSlotCount"/> uints inline (<c>uint tex[]</c> in the shader).
+/// </summary>
 [InlineArray(CharacterShaders.TextureSlotCount)]
-struct TextureSlots { uint _first; }
+struct TextureSlots
+{
+    /// <summary>
+    /// The first element of the inline array.
+    /// </summary>
+    uint _first;
+}
 
 /// <summary>
 /// The C# side of the push block (<c>flatColour</c>, <c>depthIndex</c>, <c>fill</c>, <c>skinLut</c>): 36 bytes. <c>DepthIndex</c> is the scene depth
@@ -775,7 +863,13 @@ struct TextureSlots { uint _first; }
 [StructLayout(LayoutKind.Sequential)]
 struct CharacterPush
 {
+    /// <summary>
+    /// The flat colour (<c>flatColour</c>), which the colour program writes unshaded when <c>depthIndex</c> is not 0.
+    /// </summary>
     public Vector3 FlatColour;
+    /// <summary>
+    /// The scene depth texture's bindless index in the motion pass, 0 otherwise.
+    /// </summary>
     public uint DepthIndex;
     /// <summary>
     /// The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w the <c>chars2</c> switch's parts, <see cref="CharacterRenderer.SurfaceParts"/>, 0 while it is off).
@@ -794,12 +888,22 @@ struct CharacterPush
 [StructLayout(LayoutKind.Sequential)]
 struct CharInstance
 {
+    /// <summary>
+    /// The model matrix relative to the eye, whose rows the vertex program reads; the w column may carry the body's blood amounts.
+    /// </summary>
     public Matrix4x4 Model;
+    /// <summary>
+    /// The palette's first bone, the material record's slot, the instance flags (<see cref="CharacterShaders.Headless"/> and the hide bits) and the
+    /// morph base.
+    /// </summary>
     public uint BoneBase, Material, Flags, MorphBase;
     /// <summary>
     /// Last frame's model matrix (the motion vectors' pass).
     /// </summary>
     public Matrix4x4 PreviousModel;
 
+    /// <summary>
+    /// The instance's size in bytes.
+    /// </summary>
     public const int Size = 144;
 }

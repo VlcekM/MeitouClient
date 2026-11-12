@@ -20,7 +20,10 @@ public sealed record ConsoleCommand(string Name, string Usage, string Help, Acti
     /// <summary>
     /// The <c>--flags</c> the usage text names, in order (what Tab offers for a word starting with a dash, and what help lists).
     /// </summary>
-    public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*").Select(m => m.Value).Distinct().ToList();
+    public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*")
+        .Select(m => m.Value)
+        .Distinct()
+        .ToList();
 }
 
 /// <summary>
@@ -30,26 +33,90 @@ public sealed record ConsoleCommand(string Name, string Usage, string Help, Acti
 /// </summary>
 public sealed class DevConsole
 {
-    public enum Kind { Input, Info, Error }
+    /// <summary>
+    /// A scrollback line's kind.
+    /// </summary>
+    public enum Kind
+    {
+        /// <summary>
+        /// A line the player submitted.
+        /// </summary>
+        Input,
 
+        /// <summary>
+        /// Output.
+        /// </summary>
+        Info,
+
+        /// <summary>
+        /// An error.
+        /// </summary>
+        Error,
+    }
+
+    /// <summary>
+    /// A scrollback line and its kind.
+    /// </summary>
     public readonly record struct Line(string Text, Kind Kind);
 
+    /// <summary>
+    /// The scrollback's and the history's lengths.
+    /// </summary>
     const int MaxLines = 100, MaxHistory = 50;
 
+    /// <summary>
+    /// The commands by name (case-insensitive).
+    /// </summary>
     readonly Dictionary<string, ConsoleCommand> _commands = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The scrollback, oldest first.
+    /// </summary>
     readonly List<Line> _lines = [];
+
+    /// <summary>
+    /// The lines submitted, oldest first.
+    /// </summary>
     readonly List<string> _history = [];
+
+    /// <summary>
+    /// The history line shown; -1 while the input is the player's own.
+    /// </summary>
     int _historyAt = -1;
+
+    /// <summary>
+    /// The input typed before the history was walked.
+    /// </summary>
     string _draft = "";
 
+    /// <summary>
+    /// The console is open.
+    /// </summary>
     public bool Open { get; set; }
+
+    /// <summary>
+    /// The input line.
+    /// </summary>
     public string Input { get; private set; } = "";
+
+    /// <summary>
+    /// The caret's place in the input line.
+    /// </summary>
     public int Caret { get; private set; }
+
     /// <summary>
     /// How many visual lines the scrollback is scrolled up from the newest.
     /// </summary>
     public int Scroll { get; set; }
+
+    /// <summary>
+    /// The scrollback, oldest first.
+    /// </summary>
     public IReadOnlyList<Line> Lines => _lines;
+
+    /// <summary>
+    /// The commands, by name.
+    /// </summary>
     public IEnumerable<ConsoleCommand> Commands => _commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
 
     /// <summary>
@@ -57,6 +124,9 @@ public sealed class DevConsole
     /// </summary>
     public Action<string, Kind>? Tap { get; set; }
 
+    /// <summary>
+    /// Adds <paramref name="command"/>, replacing one of its name.
+    /// </summary>
     public void Register(ConsoleCommand command) => _commands[command.Name] = command;
 
     /// <summary>
@@ -92,35 +162,63 @@ public sealed class DevConsole
         Scroll = 0;
     }
 
+    /// <summary>
+    /// Prints <paramref name="text"/> as an error.
+    /// </summary>
     public void Error(string text) => Print(text, Kind.Error);
 
-    public void Clear() { _lines.Clear(); Scroll = 0; }
+    /// <summary>
+    /// Empties the scrollback.
+    /// </summary>
+    public void Clear()
+    {
+        _lines.Clear();
+        Scroll = 0;
+    }
 
     // ---- editing
 
+    /// <summary>
+    /// Types <paramref name="c"/> at the caret (not a control character or the toggle key's own).
+    /// </summary>
     public void Type(char c)
     {
         if (char.IsControl(c) || c == '`') return;   // the toggle key's own character
         Input = Input.Insert(Caret++, c.ToString());
     }
 
+    /// <summary>
+    /// Types <paramref name="text"/>, line ends as spaces.
+    /// </summary>
     public void Paste(string text)
     {
         foreach (char c in text.ReplaceLineEndings(" ")) Type(c);
     }
 
+    /// <summary>
+    /// Deletes the character before the caret.
+    /// </summary>
     public void Backspace()
     {
         if (Caret > 0) Input = Input.Remove(--Caret, 1);
     }
 
+    /// <summary>
+    /// Deletes the character after the caret.
+    /// </summary>
     public void Delete()
     {
         if (Caret < Input.Length) Input = Input.Remove(Caret, 1);
     }
 
+    /// <summary>
+    /// Puts the caret at <paramref name="to"/>, within the input.
+    /// </summary>
     public void MoveCaret(int to) => Caret = Math.Clamp(to, 0, Input.Length);
 
+    /// <summary>
+    /// Walks the history up (-1) or down (+1); past the newest the typed input comes back.
+    /// </summary>
     public void HistoryStep(int direction)
     {
         if (_history.Count == 0) return;
@@ -131,11 +229,20 @@ public sealed class DevConsole
             _historyAt = _history.Count;
         }
         _historyAt += direction;
-        if (_historyAt >= _history.Count) { _historyAt = -1; SetInput(_draft); return; }
+        if (_historyAt >= _history.Count)
+        {
+            _historyAt = -1;
+            SetInput(_draft);
+            return;
+        }
+
         _historyAt = Math.Max(_historyAt, 0);
         SetInput(_history[_historyAt]);
     }
 
+    /// <summary>
+    /// Sets the input line with the caret at its end.
+    /// </summary>
     void SetInput(string text) => (Input, Caret) = (text, text.Length);
 
     /// <summary>
@@ -162,9 +269,20 @@ public sealed class DevConsole
         Print(line, Kind.Input);
         var tokens = Tokenize(line, out _);
         if (tokens.Count == 0) return;
-        if (!_commands.TryGetValue(tokens[0].Text, out var command)) { Error(UnknownCommand(tokens[0].Text)); return; }
-        try { command.Run([.. tokens.Skip(1).Select(t => t.Text)], this); }
-        catch (Exception e) { Error($"{command.Name} failed: {e.Message}"); }
+        if (!_commands.TryGetValue(tokens[0].Text, out var command))
+        {
+            Error(UnknownCommand(tokens[0].Text));
+            return;
+        }
+
+        try
+        {
+            command.Run([.. tokens.Skip(1).Select(t => t.Text)], this);
+        }
+        catch (Exception e)
+        {
+            Error($"{command.Name} failed: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -173,7 +291,8 @@ public sealed class DevConsole
     string UnknownCommand(string typed)
     {
         string low = typed.ToLowerInvariant();
-        var close = _commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase) || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
+        var close = _commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase)
+            || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
             .OrderBy(n => EditDistance(n, low)).ThenBy(n => n, StringComparer.Ordinal).Take(5).ToList();
         return $"unknown command '{typed}'" + (close.Count > 0 ? "; did you mean: " + string.Join(", ", close) + "?" : " (help lists them)");
     }
@@ -198,6 +317,9 @@ public sealed class DevConsole
         return row[b.Length];
     }
 
+    /// <summary>
+    /// The command named <paramref name="name"/>; null for none.
+    /// </summary>
     public ConsoleCommand? Find(string name) => _commands.GetValueOrDefault(name);
 
     /// <summary>
@@ -213,10 +335,22 @@ public sealed class DevConsole
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            if (c == '"') { if (start < 0) start = i; quoted = !quoted; continue; }
+            if (c == '"')
+            {
+                if (start < 0) start = i;
+                quoted = !quoted;
+                continue;
+            }
+
             if (char.IsWhiteSpace(c) && !quoted)
             {
-                if (start >= 0) { list.Add((word.ToString(), start)); word.Clear(); start = -1; }
+                if (start >= 0)
+                {
+                    list.Add((word.ToString(), start));
+                    word.Clear();
+                    start = -1;
+                }
+
                 continue;
             }
             if (start < 0) start = i;
@@ -241,21 +375,29 @@ public sealed class DevConsole
         int index = tokens.Count - 1;
         var (typed, start) = tokens[index];
         IEnumerable<string> found;
-        if (index == 0) found = _commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
+        if (index == 0)
+            found = _commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
         else
         {
             var command = _commands.GetValueOrDefault(tokens[0].Text);
             CompletionArgs = [.. tokens.Skip(1).Take(index - 1).Select(t => t.Text)];
             string previous = index >= 2 ? tokens[index - 1].Text : "";
             if (command is null) found = [];
-            else if (typed.StartsWith('-')) found = command.Flags.Where(f => f.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
-            else if (previous.StartsWith("--", StringComparison.Ordinal) && FlagValues?.Invoke(previous, typed) is { } values && values.Any()) found = values;
+            else if (typed.StartsWith('-'))
+                found = command.Flags.Where(f => f.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
+            else if (previous.StartsWith("--", StringComparison.Ordinal) && FlagValues?.Invoke(previous, typed) is { } values && values.Any())
+                found = values;
             else found = command.Complete?.Invoke(index - 1, typed) ?? [];
             found = found.ToList();
             CompletionArgs = [];
         }
         var candidates = found.Distinct().Take(500).ToList();
-        if (candidates.Count == 0) { Print(typed.Length == 0 ? "no completions here" : $"no matches for '{typed}'"); return; }
+        if (candidates.Count == 0)
+        {
+            Print(typed.Length == 0 ? "no completions here" : $"no matches for '{typed}'");
+            return;
+        }
+
         string fill;
         if (candidates.Count == 1) fill = Quote(candidates[0], close: true) + " ";
         else
@@ -268,8 +410,14 @@ public sealed class DevConsole
         Caret = start + fill.Length;
     }
 
+    /// <summary>
+    /// <paramref name="word"/> in double quotes when it holds a space (the closing quote with <paramref name="close"/>).
+    /// </summary>
     static string Quote(string word, bool close) => word.Contains(' ') ? $"\"{word}{(close ? "\"" : "")}" : word;
 
+    /// <summary>
+    /// The longest common prefix of <paramref name="a"/> and <paramref name="b"/>, ignoring case.
+    /// </summary>
     static string CommonPrefix(string a, string b)
     {
         int n = 0;

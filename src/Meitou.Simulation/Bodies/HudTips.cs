@@ -15,18 +15,167 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 static class HudTips
 {
+    /// <summary>
+    /// The exe's inline colour tags: Bad, Good, Main and the text default (Ink).
+    /// </summary>
     const string Bad = "#59231a", Good = "#a8b774", Main = "#afa68b", Ink = "#140806";
+    /// <summary>
+    /// What a row that does not apply shows.
+    /// </summary>
     const string None = "-";
+
+    /// <summary>
+    /// One character's inputs to <see cref="Lines"/>, with the values and helpers its rows share.
+    /// </summary>
+    readonly struct StatPanel
+    {
+        /// <summary>
+        /// The character.
+        /// </summary>
+        public readonly CharacterCold Cold;
+
+        /// <summary>
+        /// Its medical state.
+        /// </summary>
+        public readonly MedicalState Med;
+
+        /// <summary>
+        /// Its stored stats.
+        /// </summary>
+        public readonly CharacterStats Stats;
+
+        /// <summary>
+        /// Its combat numbers, when it has them.
+        /// </summary>
+        public readonly HudCombat? Hc;
+
+        /// <summary>
+        /// The game constants, when loaded.
+        /// </summary>
+        public readonly GameConstants? Constants;
+
+        /// <summary>
+        /// In a building at all, on top included.
+        /// </summary>
+        public readonly bool InBuilding;
+
+        /// <summary>
+        /// In a building's indoor volume.
+        /// </summary>
+        public readonly bool Inside;
+
+        /// <summary>
+        /// Its fighter, when it has one.
+        /// </summary>
+        public readonly Fighter? Fighter;
+
+        /// <summary>
+        /// The gear's stat factors with the dust stun factor.
+        /// </summary>
+        public readonly StatFactors Factors;
+
+        /// <summary>
+        /// The encumbrance factor, 1 without a fighter.
+        /// </summary>
+        public readonly float E;
+
+        /// <summary>
+        /// The dust penalty in whole points.
+        /// </summary>
+        public readonly int Dust;
+
+        /// <summary>
+        /// In defensive (block) mode.
+        /// </summary>
+        public readonly bool Defensive;
+
+        /// <summary>
+        /// Its animal data, null for a person.
+        /// </summary>
+        public readonly AnimalData? Animal;
+
+        /// <summary>
+        /// The age factor of its fighting numbers, 1 for a person.
+        /// </summary>
+        public readonly float Age;
+
+        /// <summary>
+        /// The weapon in hand's numbers, when it has one.
+        /// </summary>
+        public readonly WeaponStats? Weapon;
+
+        /// <summary>
+        /// The weapon's indoors modifier, 0 without one.
+        /// </summary>
+        public readonly int IndoorsMod;
+
+        /// <summary>
+        /// Reads the character's inputs.
+        /// </summary>
+        public StatPanel(
+            CharacterCold cold, MedicalState med, CharacterStats stats, HudCombat? hc, GameConstants? constants, bool inBuilding, bool inside)
+        {
+            Cold = cold;
+            Med = med;
+            Stats = stats;
+            Hc = hc;
+            Constants = constants;
+            InBuilding = inBuilding;
+            Inside = inside;
+            Fighter = cold.Fighter;
+            Factors = (Fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
+            E = Fighter?.EncumbranceFactor ?? 1;
+            Dust = (int)(med.DustInEffect * 10);
+            Defensive = (cold.Orders & CharacterOrders.Block) != 0;
+
+            // An animal's age (slot 0x398) scales its fighting numbers, Strength, Dexterity and Toughness (the stats multiplier, already in Stored),
+            // but not its Dodge (Observed, docs/game/ui-screens.md "Stats lines"); a person's is 1.
+            Animal = cold.Animal;
+            Age = Animal is null ? 1 : stats.Scale;
+            Weapon = Fighter?.Weapon?.Stats;
+            IndoorsMod = Weapon?.IndoorsMod ?? 0;
+        }
+
+        /// <summary>
+        /// A stat's stored value times the stats scale.
+        /// </summary>
+        public float Stored(StatsEnumerated stat) => Stats[stat] * Stats.Scale;
+
+        /// <summary>
+        /// A stat's effective value under the multiplier terms of <paramref name="use"/>.
+        /// </summary>
+        public float Eff(StatsEnumerated stat, StatUse use = StatUse.All) => Stored(stat) * Med.StatMultiplier(stat, use, Factors);
+
+        /// <summary>
+        /// A stat's line: the stored value plus the gear bonus, times the stat multiplier and <paramref name="factor"/>.
+        /// </summary>
+        public HudStatLine Line(string label, StatsEnumerated stat, float factor = 1) =>
+            new(label, (Stored(stat) + CombatSystem.GearBonus(Cold, stat)) * Med.StatMultiplier(stat) * factor, Stored(stat));
+
+        /// <summary>
+        /// The equipment bonus indoors: a positive bonus is dropped under an indoors penalty, then the modifier is added.
+        /// </summary>
+        public int Indoors(int bonus, int mod) => !Inside ? bonus : (bonus > 0 && mod < 0 ? 0 : bonus) + mod;
+    }
 
     /// <summary>
     /// A signed whole number in its sign's colour (<c>FUN_140889320</c>): <c>+N</c> Good, <c>-N</c> Bad, <c>0</c> in the text default.
     /// </summary>
     static string Signed(int n) => (n < 0 ? Bad : n > 0 ? Good : Ink) + Loc.Tr(n > 0 ? "+{1,num}" : "{1,num}", n);
 
+    /// <summary>
+    /// A penalty <c>-N%</c> in the Bad colour.
+    /// </summary>
     static string Penalty(int percent) => Bad + "-" + Loc.Tr("{1,num}%", percent);
 
+    /// <summary>
+    /// A whole number, truncated.
+    /// </summary>
     static string Int(float v) => Loc.Tr("{1,num}", (int)v);
 
+    /// <summary>
+    /// <paramref name="v"/> rounded half up to a whole number.
+    /// </summary>
     static int Round(float v) => (int)MathF.Floor(v + 0.5f);
 
     /// <summary>
@@ -44,120 +193,149 @@ static class HudTips
         CharacterCold cold, MedicalState med, CharacterStats stats, HudCombat? hc, GameConstants? constants, bool inBuilding, bool inside,
         int displayMode)
     {
-        var fighter = cold.Fighter;
-        var factors = (fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
-        float e = fighter?.EncumbranceFactor ?? 1;
-        float Stored(StatsEnumerated stat) => stats[stat] * stats.Scale;
-        float Eff(StatsEnumerated stat, StatUse use = StatUse.All) => Stored(stat) * med.StatMultiplier(stat, use, factors);
-        int dust = (int)(med.DustInEffect * 10);
-        bool defensive = (cold.Orders & CharacterOrders.Block) != 0;
-        HudStatLine Line(string label, StatsEnumerated stat, float factor = 1) =>
-            new(label, (stats[stat] + CombatSystem.GearBonus(cold, stat)) * med.StatMultiplier(stat) * factor, stats[stat]);
-
-        // An animal's age (slot 0x398) scales its fighting numbers (the stats multiplier, already in Stored); a person's is 1.
-        var animal = cold.Animal;
-        float age = animal is null ? 1 : stats.Scale;
-        var weapon = fighter?.Weapon?.Stats;
-        int indoorsMod = weapon?.IndoorsMod ?? 0;
+        var p = new StatPanel(cold, med, stats, hc, constants, inBuilding, inside);
 
         var lines = new List<HudStatLine>(7);
-        if (animal is not null)
-            lines.Add(new HudStatLine("Age:", age, age)
-            {
-                Text = Loc.Tr(AnimalData.AgeWord(age)),
-                Tip = [(Loc.Tr("Stat Multiplier:"), Loc.Tr("{1,num=fix,p=2}x", age))],
-            });
-        bool ranged = displayMode == 2 && fighter?.Crossbow is not null;
-        if (ranged)
-        {
-            // The gear's ranged factor as the breakdown's Total has it.
-            lines.Add(Line("Crossbows:", StatsEnumerated.Crossbows, factors.Ranged) with
-            {
-                Tip = Breakdown(med, stats, factors, StatsEnumerated.Crossbows, "Crossbows"),
-            });
-            lines.Add(Line("Precision:", StatsEnumerated.FriendlyFire, factors.Ranged) with
-            {
-                Tip = Breakdown(med, stats, factors, StatsEnumerated.FriendlyFire, "Careful Shooting"),
-            });
-            lines.Add(Line("Perception:", StatsEnumerated.Perception) with
-            {
-                Tip = Breakdown(med, stats, factors, StatsEnumerated.Perception, "Perception",
-                CombatSystem.GearBonus(cold, StatsEnumerated.Perception))
-            });
-        }
-        else if (displayMode == 1 && animal is null)
-        {
-            // FUN_140884e00 and FUN_140884680: the value lerp(e, 0.2, 1) x (bonus + skill), the change the bonus less 0.8 (1 - e) x skill. The bonus
-            // (FUN_140884580) takes the weapon's indoors field like Attack's (the fists item's: 8), while the row shows a flat +8 in any building.
-            float ma = Eff(StatsEnumerated.MartialArts);
-            int gear = (int)(fighter?.UnarmedBonus ?? 0);
-            int bonus = Indoors(gear, fighter?.FistsItem?.Stats.IndoorsMod ?? 8) - dust;
-            int encumbrance = (int)-(0.8f * (1 - e) * ma);
-            int value = (int)((0.2f + 0.8f * e) * (bonus + ma)), change = bonus + encumbrance;
+        if (p.Animal is not null) AddAge(p, lines);
+        bool ranged = displayMode == 2 && p.Fighter?.Crossbow is not null;
+        if (ranged) AddRanged(p, lines);
+        else if (displayMode == 1 && p.Animal is null) AddMartialArts(p, lines);
+        else AddAttackAndDefense(p, lines);
 
-            // The original labels the encumbrance row of this tooltip "Strength XP:".
-            var tip = new List<(string, string)>
-            {
+        AddStrength(p, lines);
+        AddDexterity(p, lines);
+        AddToughness(p, lines);
+        if (!ranged) AddDodge(p, lines);
+        return lines;
+    }
+
+    /// <summary>
+    /// An animal's Age line.
+    /// </summary>
+    static void AddAge(in StatPanel p, List<HudStatLine> lines)
+    {
+        lines.Add(new HudStatLine("Age:", p.Age, p.Age)
+        {
+            Text = Loc.Tr(AnimalData.AgeWord(p.Age)),
+            Tip = [(Loc.Tr("Stat Multiplier:"), Loc.Tr("{1,num=fix,p=2}x", p.Age))],
+        });
+    }
+
+    /// <summary>
+    /// The crossbow lines: Crossbows, Precision and Perception.
+    /// </summary>
+    static void AddRanged(in StatPanel p, List<HudStatLine> lines)
+    {
+        // The gear's ranged factor as the breakdown's Total has it.
+        lines.Add(p.Line("Crossbows:", StatsEnumerated.Crossbows, p.Factors.Ranged) with
+        {
+            Tip = Breakdown(p.Med, p.Stats, p.Factors, StatsEnumerated.Crossbows, "Crossbows"),
+        });
+        lines.Add(p.Line("Precision:", StatsEnumerated.FriendlyFire, p.Factors.Ranged) with
+        {
+            Tip = Breakdown(p.Med, p.Stats, p.Factors, StatsEnumerated.FriendlyFire, "Careful Shooting"),
+        });
+        lines.Add(p.Line("Perception:", StatsEnumerated.Perception) with
+        {
+            Tip = Breakdown(p.Med, p.Stats, p.Factors, StatsEnumerated.Perception, "Perception",
+            CombatSystem.GearBonus(p.Cold, StatsEnumerated.Perception))
+        });
+    }
+
+    /// <summary>
+    /// The Martial Arts line.
+    /// </summary>
+    static void AddMartialArts(in StatPanel p, List<HudStatLine> lines)
+    {
+        // FUN_140884e00 and FUN_140884680: the value lerp(e, 0.2, 1) x (bonus + skill), the change the bonus less 0.8 (1 - e) x skill. The bonus
+        // (FUN_140884580) takes the weapon's indoors field like Attack's (the fists item's: 8), while the row shows a flat +8 in any building.
+        float e = p.E;
+        float ma = p.Eff(StatsEnumerated.MartialArts);
+        int gear = (int)(p.Fighter?.UnarmedBonus ?? 0);
+        int bonus = p.Indoors(gear, p.Fighter?.FistsItem?.Stats.IndoorsMod ?? 8) - p.Dust;
+        int encumbrance = (int)-(0.8f * (1 - e) * ma);
+        int value = (int)((0.2f + 0.8f * e) * (bonus + ma)), change = bonus + encumbrance;
+
+        // The original labels the encumbrance row of this tooltip "Strength XP:".
+        var tip = new List<(string, string)>
+        {
+            (Loc.Tr("Total equipment bonuses:"), Signed(gear)),
+            (Loc.Tr("Indoors bonus:"), p.InBuilding ? Signed(8) : None),
+            (Loc.Tr("Weather penalty:"), p.Dust != 0 ? Signed(-p.Dust) : None),
+            (Loc.Tr("Encumbrance penalty:"), Signed(encumbrance)),
+            (Loc.Tr("Strength XP:"), Loc.Tr("{1,num}%", (int)((1 - e) * 100))),
+        };
+        if (p.Hc is { } fists) tip.Add((Loc.Tr("Damage:"), Int(fists.UnarmedDamage)));
+        lines.Add(new HudStatLine("Martial Arts:", value, value - change) { Tip = tip });
+    }
+
+    /// <summary>
+    /// The Attack line, and a person's Defense line.
+    /// </summary>
+    static void AddAttackAndDefense(in StatPanel p, List<HudStatLine> lines)
+    {
+        // FUN_1408844c0 / FUN_140884e80: the equipment bonus (indoors with the weapon's indoors modifier) less the dust penalty, then the
+        // effective skill, times the age; the change is the bonus. An animal always shows Attack, and no Defense.
+        int gear = (int)((p.Fighter?.AttackBonus ?? 0) + (p.Weapon?.AttackMod ?? 0));
+        int change = p.Indoors(gear, p.IndoorsMod) - p.Dust;
+        int value = (int)(change * p.Age + p.Eff(StatsEnumerated.MeleeAttack));
+        lines.Add(new HudStatLine("Attack:", value, value - change)
+        {
+            Tip =
+            [
                 (Loc.Tr("Total equipment bonuses:"), Signed(gear)),
-                (Loc.Tr("Indoors bonus:"), inBuilding ? Signed(8) : None),
-                (Loc.Tr("Weather penalty:"), dust != 0 ? Signed(-dust) : None),
-                (Loc.Tr("Encumbrance penalty:"), Signed(encumbrance)),
-                (Loc.Tr("Strength XP:"), Loc.Tr("{1,num}%", (int)((1 - e) * 100))),
-            };
-            if (hc is { } fists) tip.Add((Loc.Tr("Damage:"), Int(fists.UnarmedDamage)));
-            lines.Add(new HudStatLine("Martial Arts:", value, value - change) { Tip = tip });
-        }
-        else
-        {
-            // FUN_1408844c0 / FUN_140884e80: the equipment bonus (indoors with the weapon's indoors modifier) less the dust penalty, then the
-            // effective skill, times the age; the change is the bonus. An animal always shows Attack, and no Defense.
-            int gear = (int)((fighter?.AttackBonus ?? 0) + (weapon?.AttackMod ?? 0));
-            int change = Indoors(gear, indoorsMod) - dust;
-            int value = (int)(change * age + Eff(StatsEnumerated.MeleeAttack));
-            lines.Add(new HudStatLine("Attack:", value, value - change)
-            {
-                Tip =
-                [
-                    (Loc.Tr("Total equipment bonuses:"), Signed(gear)),
-                    (Loc.Tr("Weapon indoors penalty:"), inside ? Signed(indoorsMod) : None),
-                    (Loc.Tr("Weather penalty:"), dust != 0 ? Signed(-dust) : None),
-                    (Loc.Tr("Base hit chance:"), Loc.Tr("{1,num}%", value)),
-                ],
-            });
-            if (animal is null)
-            {
-                // FUN_140884710 / FUN_140884f50: the defence bonus (+ the indoors modifier inside), +20 in defensive mode, then the effective skill
-                // on top.
-                int def = (int)((fighter?.DefenceBonus ?? 0) + (weapon?.DefenceMod ?? 0));
-                int defChange = def + (inside ? indoorsMod : 0) + (defensive ? 20 : 0);
-                int defValue = (int)(defChange + Eff(StatsEnumerated.MeleeDefence));
-                var defTip = new List<(string, string)> { (Loc.Tr("Total equipment bonuses:"), Signed(def)) };
-                if (defensive) defTip.Add((Loc.Tr("Defensive combat mode:"), Good + "+20"));
-                defTip.Add((Loc.Tr("Weapon indoors penalty:"), inBuilding ? Signed(indoorsMod) : None));
-                defTip.Add((Loc.Tr("Your defense skill is your chance of blocking enemy attacks."), ""));
-                lines.Add(new HudStatLine("Defense:", defValue, defValue - defChange) { Tip = defTip });
-            }
-        }
+                (Loc.Tr("Weapon indoors penalty:"), p.Inside ? Signed(p.IndoorsMod) : None),
+                (Loc.Tr("Weather penalty:"), p.Dust != 0 ? Signed(-p.Dust) : None),
+                (Loc.Tr("Base hit chance:"), Loc.Tr("{1,num}%", value)),
+            ],
+        });
+        if (p.Animal is null) AddDefense(p, lines);
+    }
 
-        // The equipment bonus indoors: a positive bonus is dropped under an indoors penalty, then the modifier is added.
-        int Indoors(int bonus, int mod) => !inside ? bonus : (bonus > 0 && mod < 0 ? 0 : bonus) + mod;
+    /// <summary>
+    /// A person's Defense line.
+    /// </summary>
+    static void AddDefense(in StatPanel p, List<HudStatLine> lines)
+    {
+        // FUN_140884710 / FUN_140884f50: the defence bonus (+ the indoors modifier inside), +20 in defensive mode, then the effective skill
+        // on top.
+        int def = (int)((p.Fighter?.DefenceBonus ?? 0) + (p.Weapon?.DefenceMod ?? 0));
+        int defChange = def + (p.Inside ? p.IndoorsMod : 0) + (p.Defensive ? 20 : 0);
+        int defValue = (int)(defChange + p.Eff(StatsEnumerated.MeleeDefence));
+        var defTip = new List<(string, string)> { (Loc.Tr("Total equipment bonuses:"), Signed(def)) };
+        if (p.Defensive) defTip.Add((Loc.Tr("Defensive combat mode:"), Good + "+20"));
+        defTip.Add((Loc.Tr("Weapon indoors penalty:"), p.InBuilding ? Signed(p.IndoorsMod) : None));
+        defTip.Add((Loc.Tr("Your defense skill is your chance of blocking enemy attacks."), ""));
+        lines.Add(new HudStatLine("Defense:", defValue, defValue - defChange) { Tip = defTip });
+    }
 
+    /// <summary>
+    /// The Strength line.
+    /// </summary>
+    static void AddStrength(in StatPanel p, List<HudStatLine> lines)
+    {
         var strengthTip = new List<(string, string)>();
-        if (cold.Extended is { } x) strengthTip.Add((Loc.Tr("Strength XP rate:"), Loc.Tr("{1,num}%", (int)(x.StrengthXp * 100))));
+        if (p.Cold.Extended is { } x) strengthTip.Add((Loc.Tr("Strength XP rate:"), Loc.Tr("{1,num}%", (int)(x.StrengthXp * 100))));
 
         // FUN_140892120 writes the carry weight with a '%' (the inventory's own line says kg).
-        if (constants is not null)
+        if (p.Constants is { } constants)
         {
-            float carryStrength = Eff(StatsEnumerated.Strength, StatUse.Hunger | StatUse.Limbs | StatUse.DamageState | StatUse.LimbItems);
+            float carryStrength = p.Eff(StatsEnumerated.Strength, StatUse.Hunger | StatUse.Limbs | StatUse.DamageState | StatUse.LimbItems);
             int carryWeight = (int)(carryStrength + constants.EncumbranceBase);
             strengthTip.Add((Loc.Tr("Max carry weight:"), Loc.Tr("{1,num}%", carryWeight)));
         }
-        if (hc is { } c) strengthTip.Add((Loc.Tr("Blunt weapon damage:"), Int(c.Blunt)));
-        strengthTip.AddRange(Breakdown(med, stats, factors, StatsEnumerated.Strength, "Strength"));
-        lines.Add(Line("Strength:", StatsEnumerated.Strength) with { Tip = strengthTip });
+        if (p.Hc is { } c) strengthTip.Add((Loc.Tr("Blunt weapon damage:"), Int(c.Blunt)));
+        strengthTip.AddRange(Breakdown(p.Med, p.Stats, p.Factors, StatsEnumerated.Strength, "Strength"));
+        lines.Add(p.Line("Strength:", StatsEnumerated.Strength) with { Tip = strengthTip });
+    }
 
+    /// <summary>
+    /// The Dexterity line.
+    /// </summary>
+    static void AddDexterity(in StatPanel p, List<HudStatLine> lines)
+    {
         var dexterityTip = new List<(string, string)>();
-        if (hc is { } d)
+        if (p.Hc is { } d)
         {
             dexterityTip.AddRange([
                 (Loc.Tr("Attack speed:"), Loc.Tr("{1,num=fix,p=2}x", d.AttackRate)),
@@ -165,39 +343,52 @@ static class HudTips
                 (Loc.Tr("Weapon cutting damage:"), Loc.Tr("{1,num=fix,p=2}", d.Cut)),
             ]);
         }
-        dexterityTip.AddRange(Breakdown(med, stats, factors, StatsEnumerated.Dexterity, "Dexterity"));
-        lines.Add(Line("Dexterity:", StatsEnumerated.Dexterity, fighter?.DexterityMult ?? 1) with { Tip = dexterityTip });
+        dexterityTip.AddRange(Breakdown(p.Med, p.Stats, p.Factors, StatsEnumerated.Dexterity, "Dexterity"));
+        lines.Add(p.Line("Dexterity:", StatsEnumerated.Dexterity, p.Fighter?.DexterityMult ?? 1) with { Tip = dexterityTip });
+    }
 
+    /// <summary>
+    /// The Toughness line.
+    /// </summary>
+    static void AddToughness(in StatPanel p, List<HudStatLine> lines)
+    {
+        var med = p.Med;
+        var stats = p.Stats;
         var toughnessTip = new List<(string, string)> { (Loc.Tr("Toughness XP rate:"), Loc.Tr("{1,num}x", (int)XpService.ToughnessFactor(med))) };
         float tough = stats.ScaledToughness;
-        if (constants is not null)
+        if (p.Constants is { } constants)
+        {
             toughnessTip.AddRange([(Loc.Tr("Health KO point:"), Int(MedicalState.KoPoint(constants, stats.ScaledToughness))),
                 (Loc.Tr("Wound degeneration speed:"), Loc.Tr("{1,num=fix,p=2}x", MedicalState.DegenerationMult(constants, tough)))]);
-        if (hc is { } r) toughnessTip.Add((Loc.Tr("Damage resistance:"), Loc.Tr("{1,num}%", (int)(r.Resistance * 100))));
-        lines.Add(new HudStatLine("Toughness:", stats.Toughness, stats.Toughness) { Tip = toughnessTip });
-
-        if (!ranged)
-        {
-            // FUN_140885190: the dodge skill less the encumbrance and leg terms plus the gear's, +20 in defensive mode with fists (CharStats +0x1f0,
-            // the current weapon type, is 5).
-            float dodge = Stored(StatsEnumerated.Dodge);
-            float encumbrance = -(1 - Math.Clamp(e, 0.4f, 1)) * dodge;
-            float legs = -(1 - Math.Clamp(Speed.LegFactor(med), 0.5f, 1)) * dodge;
-            float gear = dodge * (fighter?.DodgeMult ?? 1) - dodge;
-            float total = dodge + encumbrance + legs + gear + (defensive && (fighter is null || fighter.Unarmed) ? 20 : 0);
-            int value = (int)total, change = Round(total - dodge);
-            var dodgeTip = new List<(string, string)>
-            {
-                (Loc.Tr("Dodge skill:"), Signed(Round(dodge))),
-                (Loc.Tr("Encumbrance penalty:"), Signed(Round(encumbrance))),
-                (Loc.Tr("Leg injury penalty:"), Signed(Round(legs))),
-                (Loc.Tr("Equipment penalty:"), Signed(Round(gear))),
-            };
-            if (defensive) dodgeTip.Add((Loc.Tr("Defensive mode:"), Signed(20)));
-            dodgeTip.Add((Loc.Tr("-End total:"), Signed(Round(total))));
-            lines.Add(new HudStatLine("Dodge:", value, value - change) { Tip = dodgeTip });
         }
-        return lines;
+        if (p.Hc is { } r) toughnessTip.Add((Loc.Tr("Damage resistance:"), Loc.Tr("{1,num}%", (int)(r.Resistance * 100))));
+        lines.Add(new HudStatLine("Toughness:", tough, tough) { Tip = toughnessTip });
+    }
+
+    /// <summary>
+    /// The Dodge line.
+    /// </summary>
+    static void AddDodge(in StatPanel p, List<HudStatLine> lines)
+    {
+        // FUN_140885190: the dodge skill less the encumbrance and leg terms plus the gear's, +20 in defensive mode with fists (CharStats +0x1f0,
+        // the current weapon type, is 5).
+        var fighter = p.Fighter;
+        float dodge = p.Stats[StatsEnumerated.Dodge];
+        float encumbrance = -(1 - Math.Clamp(p.E, 0.4f, 1)) * dodge;
+        float legs = -(1 - Math.Clamp(Speed.LegFactor(p.Med), 0.5f, 1)) * dodge;
+        float gear = dodge * (fighter?.DodgeMult ?? 1) - dodge;
+        float total = dodge + encumbrance + legs + gear + (p.Defensive && (fighter is null || fighter.Unarmed) ? 20 : 0);
+        int value = (int)total, change = Round(total - dodge);
+        var dodgeTip = new List<(string, string)>
+        {
+            (Loc.Tr("Dodge skill:"), Signed(Round(dodge))),
+            (Loc.Tr("Encumbrance penalty:"), Signed(Round(encumbrance))),
+            (Loc.Tr("Leg injury penalty:"), Signed(Round(legs))),
+            (Loc.Tr("Equipment penalty:"), Signed(Round(gear))),
+        };
+        if (p.Defensive) dodgeTip.Add((Loc.Tr("Defensive mode:"), Signed(20)));
+        dodgeTip.Add((Loc.Tr("-End total:"), Signed(Round(total))));
+        lines.Add(new HudStatLine("Dodge:", value, value - change) { Tip = dodgeTip });
     }
 
     /// <summary>
@@ -214,8 +405,24 @@ static class HudTips
     {
         float e = cold.Fighter?.EncumbranceFactor ?? 1;
         var factors = (cold.Fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
+        var result = AttributeReadouts(cold, med, stats, hc, constants, e, factors);
+        AddMovementReadouts(result, cold, med, race, stats, hc, e);
+        AddSkillReadouts(result, med, stats, hc, constants, factors, db);
+        return result;
+    }
+
+    /// <summary>
+    /// The game's <c>lerp(t, a, b)</c>.
+    /// </summary>
+    static float Lerp(float t, float a, float b) => (b - a) * t + a;
+
+    /// <summary>
+    /// The Strength and Toughness readouts of <see cref="StatsWindow"/>.
+    /// </summary>
+    static Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>> AttributeReadouts(
+        CharacterCold cold, MedicalState med, CharacterStats stats, HudCombat? hc, GameConstants? constants, float e, StatFactors factors)
+    {
         float t = stats.ScaledToughness * 0.01f;
-        static float Lerp(float t, float a, float b) => (b - a) * t + a;
         var strength = new List<StatReadout>();
         if (constants is not null)
         {
@@ -250,11 +457,20 @@ static class HudTips
             strength.Add(new("Strength XP rate (combat):", Loc.Tr("{1,num}%", combatRate)));
         }
         if (hc is { } s) toughness.Add(new("Amount of damage it takes to stagger you:", Int(s.Stagger)));
-        var result = new Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>>
+        return new Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>>
         {
             [StatsEnumerated.Strength] = strength,
             [StatsEnumerated.Toughness] = toughness,
         };
+    }
+
+    /// <summary>
+    /// The Dexterity, Dodge, Athletics and Swimming readouts of <see cref="StatsWindow"/>.
+    /// </summary>
+    static void AddMovementReadouts(
+        Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>> result, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats,
+        HudCombat? hc, float e)
+    {
         if (hc is { } d)
         {
             result[StatsEnumerated.Dexterity] =
@@ -274,7 +490,15 @@ static class HudTips
         }
         result[StatsEnumerated.Swimming] =
         [new("Max swim speed:", Int(Speed.SwimBase(race, stats))), new("Current swim speed:", Int(Speed.Swim(race, stats, med, e))),];
+    }
 
+    /// <summary>
+    /// The skills' readouts of <see cref="StatsWindow"/>.
+    /// </summary>
+    static void AddSkillReadouts(
+        Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>> result, MedicalState med, CharacterStats stats, HudCombat? hc,
+        GameConstants? constants, StatFactors factors, Data.GameDatabase? db)
+    {
         // The skills, from the effective level L: work rates lerp(L/100, 0.5, 1.4) (FUN_1408852a0), aim (L + perception) x 0.5% (FUN_140435160).
         float Eff(StatsEnumerated s) => stats[s] * stats.Scale * med.StatMultiplier(s, factors: factors);
         string Rate(StatsEnumerated s) => Loc.Tr("{1,num,p=2}x", Lerp(Eff(s) * 0.01f, 0.5f, 1.4f));
@@ -282,8 +506,10 @@ static class HudTips
         string Grade(StatsEnumerated s) => "[" + Loc.Tr(ArmourTooltip.GradeNames[CraftTier((int)Eff(s))]) + "]";
         if (hc is { } m) result[StatsEnumerated.MartialArts] = [new("Affects damage", Int(m.UnarmedDamage))];
         if (constants is not null)
+        {
             result[StatsEnumerated.Medic] =
             [new("First aid skills:", Loc.Tr("{1,num,p=2}x", Lerp(Eff(StatsEnumerated.Medic) * 0.01f, 1, 15) * constants.MedicSpeedMult)),];
+        }
         result[StatsEnumerated.Turrets] = [new("Accuracy:", Aim(StatsEnumerated.Turrets)), new("Rate of fire:", Aim(StatsEnumerated.Turrets))];
         result[StatsEnumerated.Crossbows] = [new("Accuracy:", Aim(StatsEnumerated.Crossbows)), new("Rate of fire:", Aim(StatsEnumerated.Crossbows))];
         result[StatsEnumerated.FriendlyFire] =
@@ -309,7 +535,6 @@ static class HudTips
             new("Crafting crossbow bolts (speed):", Rate(StatsEnumerated.SmithingBow)),
             new("Crossbow quality:", Grade(StatsEnumerated.SmithingBow)),
         ];
-        return result;
     }
 
     /// <summary>

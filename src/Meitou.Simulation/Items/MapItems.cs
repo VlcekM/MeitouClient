@@ -18,6 +18,10 @@ public sealed record ReadMapItem(CharacterId Character, InventoryItemToken Item)
 /// </summary>
 public static class MapItems
 {
+    /// <summary>
+    /// The placed town sites reading <paramref name="map"/> reveals to a player who knows <paramref name="known"/>, drawn from
+    /// <paramref name="seed"/> and the record.
+    /// </summary>
     public static List<int> Reveals(PopulationData data, GameRecord map, IReadOnlyList<TownKnowledge> known, ulong seed)
     {
         ulong key = Rng.StableHash(map.StringId);

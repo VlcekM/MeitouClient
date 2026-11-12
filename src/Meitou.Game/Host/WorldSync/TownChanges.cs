@@ -9,10 +9,18 @@ namespace Meitou.Game.Host.WorldSync;
 /// </summary>
 sealed class TownChanges(GameHost host)
 {
+    #region Emptied houses
+
     // The town houses the player bought (WorldSnapshot.EmptiedHouses, docs/simulation.md "Town house purchases"): the purchase destroyed their
     // furniture, so each replaces its level placement in the renderer's runtime placements, the navmesh overlay and the lamps, by its key, as
     // standing and with BuildingPlacement.WithoutInterior set. A bought ruin is a construction site instead, whose own placement says it.
+    /// <summary>
+    /// The snapshot's <see cref="WorldSnapshot.EmptiedHousesRevision"/> last diffed; -1 diffs the next snapshot.
+    /// </summary>
     long _emptiedRevision = -1;
+    /// <summary>
+    /// The keys of the bought houses shown.
+    /// </summary>
     readonly HashSet<string> _shownEmptied = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -29,6 +37,10 @@ sealed class TownChanges(GameHost host)
             if (!_shownEmptied.Contains(b.Key)) ShowEmptied(b);
     }
 
+    /// <summary>
+    /// Shows a bought house: its placement standing and without interior to the renderer, the navmesh (when its <c>path mode</c> is not 0) and
+    /// the lamps.
+    /// </summary>
     void ShowEmptied(TownBuilding building)
     {
         if (building.Resolved is not { } resolved) return;
@@ -42,6 +54,9 @@ sealed class TownChanges(GameHost host)
         _shownEmptied.Add(building.Key);
     }
 
+    /// <summary>
+    /// Takes a bought house out of the renderer, the navmesh and the lamps, unless a player site or a ruin now draws it.
+    /// </summary>
     void HideEmptied(string key)
     {
         if (!_shownEmptied.Remove(key)) return;
@@ -61,13 +76,25 @@ sealed class TownChanges(GameHost host)
         _emptiedRevision = -1;
     }
 
+    #endregion
+
+    #region Ruins
+
     // The town buildings a town override ruined or stood up again, or that were laid out afresh (WorldSnapshot.Ruins,
     // docs/game/buildings-production.md "Ruined by residents", docs/game/factions-squads-towns.md "Town residents"): each replaces its level
     // placement in the renderer's runtime placements, the navmesh overlay and the lamps, by its key, with BuildingPlacement.DestroyedOverride set and
     // its layout names; a ruin's particle effects go, a standing one's come.
+    /// <summary>
+    /// The snapshot's <see cref="WorldSnapshot.RuinsRevision"/> last diffed; -1 diffs the next snapshot.
+    /// </summary>
     long _ruinsRevision = -1;
+    /// <summary>
+    /// The ruined or stood-up town buildings shown, by key.
+    /// </summary>
     internal readonly Dictionary<string, RuinedBuilding> ShownRuins = new(StringComparer.Ordinal);
-    // Set while the world's building effects are still being read: they would put a ruin's back, so the ruins' are set again once they are in.
+    /// <summary>
+    /// Set while the world's building effects are still being read: they would put a ruin's back, so the ruins' are set again once they are in.
+    /// </summary>
     bool _ruinEffectsPending;
 
     /// <summary>
@@ -93,6 +120,10 @@ sealed class TownChanges(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Shows a ruined or stood-up town building: its placement with <c>DestroyedOverride</c> to the renderer, the navmesh (when its <c>path mode</c>
+    /// is not 0) and the lamps, and its effects.
+    /// </summary>
     void ShowRuin(RuinedBuilding ruin)
     {
         if (ruin.Building.Resolved is not { } resolved) return;
@@ -109,6 +140,10 @@ sealed class TownChanges(GameHost host)
         ShownRuins[key] = ruin;
     }
 
+    /// <summary>
+    /// Takes a ruin out of the renderer, the navmesh and the lamps and gives back the level's effects, unless a player site or a bought house now
+    /// draws it.
+    /// </summary>
     void HideRuin(string key)
     {
         if (!ShownRuins.Remove(key, out var ruin)) return;
@@ -153,4 +188,6 @@ sealed class TownChanges(GameHost host)
     internal bool LevelDestroyed(BuildingPlacement placement) =>
         host.Scene.Objects?.Levels is { } levels && placement.StateId is { } id && levels.Zones.TryGetValue(placement.Zone, out var zone)
             && zone.Find(id)?.GetBool("destroyed") == true;
+
+    #endregion
 }

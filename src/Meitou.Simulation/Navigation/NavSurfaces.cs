@@ -26,8 +26,17 @@ public sealed class NavSurfaces
     /// </summary>
     public Vector3[] Corners { get; }
 
+    /// <summary>
+    /// The index grid's corner (X, Z): the smallest X and Z of the triangles.
+    /// </summary>
     readonly Vector2 _min;
+    /// <summary>
+    /// The index grid's columns (along X) and rows (along Z) of <see cref="Cell"/> units.
+    /// </summary>
     readonly int _columns, _rows;
+    /// <summary>
+    /// The triangle indices whose box meets each grid cell (row-major: z x columns + x).
+    /// </summary>
     readonly int[][] _cells;
 
     /// <summary>
@@ -35,8 +44,14 @@ public sealed class NavSurfaces
     /// </summary>
     readonly Box[] _boxes;
 
+    /// <summary>
+    /// A triangle's bounds on each axis.
+    /// </summary>
     readonly record struct Box(float X0, float X1, float Y0, float Y1, float Z0, float Z1);
 
+    /// <summary>
+    /// Indexes the triangles of <paramref name="corners"/> (three corners each) into the grid; an empty array gives an empty index.
+    /// </summary>
     public NavSurfaces(Vector3[] corners)
     {
         Corners = corners;
@@ -80,8 +95,14 @@ public sealed class NavSurfaces
         _cells = [.. lists.Select(l => l is null ? [] : l.ToArray())];
     }
 
+    /// <summary>
+    /// The number of triangles.
+    /// </summary>
     public int TriangleCount => Corners.Length / 3;
 
+    /// <summary>
+    /// The grid columns and rows triangle <paramref name="t"/>'s plan bounds cover.
+    /// </summary>
     (int X0, int X1, int Z0, int Z1) Range(int t)
     {
         var a = Corners[t * 3];
@@ -94,13 +115,20 @@ public sealed class NavSurfaces
             Row(MathF.Max(a.Z, MathF.Max(b.Z, c.Z))));
     }
 
+    /// <summary>
+    /// The grid column of world X <paramref name="x"/>, clamped into the grid.
+    /// </summary>
     int Col(float x) => Math.Clamp((int)((x - _min.X) / Cell), 0, _columns - 1);
 
+    /// <summary>
+    /// The grid row of world Z <paramref name="z"/>, clamped into the grid.
+    /// </summary>
     int Row(float z) => Math.Clamp((int)((z - _min.Y) / Cell), 0, _rows - 1);
 
     /// <summary>
-    /// The height of the surface at (x, z) nearest to <paramref name="y"/>, when one is within <paramref name="range"/>. A surface beside the point within
-    /// <see cref="EdgeReach"/> counts with its edge height, its distance added to the difference (a steep side under the point loses to the top beside it).
+    /// The height of the surface at (x, z) nearest to <paramref name="y"/>, when one is within <paramref name="range"/>. A surface beside the point
+    /// within <see cref="EdgeReach"/> counts with its edge height, its distance added to the difference (a steep side under the point loses to the
+    /// top beside it).
     /// </summary>
     public bool TryNear(float x, float z, float y, float range, out float height) => TryNear(x, z, y, range, out height, out _);
 
@@ -137,7 +165,8 @@ public sealed class NavSurfaces
                     var a = Corners[t * 3];
                     var b = Corners[t * 3 + 1];
                     var c = Corners[t * 3 + 2];
-                    if (NavGeometry.Barycentric(x, z, a, b, c, out float l1, out float l2, out float l3) && l1 >= -1e-4f && l2 >= -1e-4f && l3 >= -1e-4f)
+                    if (NavGeometry.Barycentric(x, z, a, b, c, out float l1, out float l2, out float l3) && l1 >= -1e-4f
+                        && l2 >= -1e-4f && l3 >= -1e-4f)
                     {
                         float h = l1 * a.Y + l2 * b.Y + l3 * c.Y;
                         float d = MathF.Abs(h - y);
@@ -249,7 +278,7 @@ public sealed class NavSurfaces
 
     /// <summary>
     /// Adds the parts of a convex polygon outside the solid to <paramref name="output"/> (convex pieces). Inside means as in the builder: below every
-    /// face, by more than <see cref="ZoneNavMeshBuilder.SolidTopInset"/> under the upward ones, so the solid's own top stays.
+    /// face, by more than <see cref="NavSolidCarving.SolidTopInset"/> under the upward ones, so the solid's own top stays.
     /// </summary>
     static void Outside(List<Vector3> polygon, NavSolid solid, List<List<Vector3>> output)
     {
@@ -257,7 +286,7 @@ public sealed class NavSurfaces
         foreach (var plane in solid.Planes)
         {
             var n = new Vector3(plane.X, plane.Y, plane.Z);
-            float d = plane.W + (plane.Y > 0 ? ZoneNavMeshBuilder.SolidTopInset : 0);
+            float d = plane.W + (plane.Y > 0 ? NavSolidCarving.SolidTopInset : 0);
             bool all = true;
             foreach (var p in polygon)
             {
@@ -279,7 +308,7 @@ public sealed class NavSurfaces
         foreach (var plane in solid.Planes)
         {
             var n = new Vector3(plane.X, plane.Y, plane.Z);
-            float d = plane.W + (plane.Y > 0 ? ZoneNavMeshBuilder.SolidTopInset : 0);
+            float d = plane.W + (plane.Y > 0 ? NavSolidCarving.SolidTopInset : 0);
             List<Vector3> outside = [];
             List<Vector3> inside = [];
             for (int i = 0; i < rest.Count; i++)

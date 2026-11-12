@@ -12,6 +12,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class FactionWindow(PlayerInterface player)
 {
+    /// <summary>
+    /// The Faction tab's index in the overview's tabs.
+    /// </summary>
     internal const int FactionTab = 1;
 
     #region Info panel lines
@@ -59,9 +62,19 @@ sealed class FactionWindow(PlayerInterface player)
     /// </summary>
     public Func<(IReadOnlyList<FactionInfoLine> Contracts, IReadOnlyList<FactionInfoLine> Events)>? FactionInfo { get; set; }
 
+    /// <summary>
+    /// The relations line layout; null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? RelationsLineLayout;
+
+    /// <summary>
+    /// How far the relations list is scrolled, pixels.
+    /// </summary>
     float _relationsScroll;
 
+    /// <summary>
+    /// The overview is open on its Faction tab.
+    /// </summary>
     bool FactionShown => player.FaithfulScreens.IsOpen("overview") && player.FaithfulScreens.GetTab("overview", "TabsMain") == FactionTab;
 
     /// <summary>
@@ -73,7 +86,7 @@ sealed class FactionWindow(PlayerInterface player)
     {
         if (!FactionShown) return;
 
-        var scale = player.Height / 1080f;
+        var scale = player.UiScale;
         if (controls.FirstOrDefault(c => c.Name == "FactionInfoPanel") is { } info) AddFactionInfo(controls, info, scale);
         if (RelationsLineLayout is not { } layout || controls.FirstOrDefault(c => c.Name == "RelationsPanel") is not { } panel) return;
 
@@ -166,7 +179,7 @@ sealed class FactionWindow(PlayerInterface player)
         if (player.FaithfulScreens.HitTest(p) is not { Screen: "overview" } hit) return false;
         if (hit.Control.Name != "RelationsPanel" && !hit.Control.Properties.ContainsKey("FactionLine")) return false;
 
-        _relationsScroll -= steps * 44 * (player.Height / 1080f);   // clamped when the list is laid out
+        _relationsScroll -= steps * 44 * player.UiScale;   // clamped when the list is laid out
         return true;
     }
 
@@ -174,6 +187,9 @@ sealed class FactionWindow(PlayerInterface player)
 
     #region Faction name
 
+    /// <summary>
+    /// The faction name edit box.
+    /// </summary>
     internal const string FactionNameBox = "FactionNameText";
 
     /// <summary>
@@ -194,7 +210,8 @@ sealed class FactionWindow(PlayerInterface player)
     internal void BindFactionTab(UiBindings b)
     {
         string name = player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "Nameless";
-        if (player.FaithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox }) player.FaithfulScreens.SetText("overview", FactionNameBox, name);
+        if (player.FaithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox })
+            player.FaithfulScreens.SetText("overview", FactionNameBox, name);
         b.Text[FactionNameBox] = name;
     }
 

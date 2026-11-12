@@ -526,3 +526,6 @@ __tutorials.data
 
 # Visual Studio launch profiles (machine-local ports)
 launchSettings.json
+
+# Native libraries built for older macOS releases
+macos-runtime/

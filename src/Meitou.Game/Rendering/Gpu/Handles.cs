@@ -6,12 +6,56 @@ namespace Meitou.Game.Rendering.Gpu;
 /// <summary>
 /// What a view covers (the engine's words; the backend maps it to its own).
 /// </summary>
-public enum GpuViewType { Texture2D, Texture2DArray, Cube }
+public enum GpuViewType
+{
+    /// <summary>
+    /// One 2D layer.
+    /// </summary>
+    Texture2D,
+    /// <summary>
+    /// A range of layers as a 2D array.
+    /// </summary>
+    Texture2DArray,
+    /// <summary>
+    /// Six layers as a cube.
+    /// </summary>
+    Cube
+}
 
 /// <summary>
 /// Which component a texel reads (the swizzle of a sampled view). The default is the identity.
 /// </summary>
-public enum GpuSwizzleComponent { Identity, R, G, B, A, One, Zero }
+public enum GpuSwizzleComponent
+{
+    /// <summary>
+    /// The view's own component.
+    /// </summary>
+    Identity,
+    /// <summary>
+    /// The red channel.
+    /// </summary>
+    R,
+    /// <summary>
+    /// The green channel.
+    /// </summary>
+    G,
+    /// <summary>
+    /// The blue channel.
+    /// </summary>
+    B,
+    /// <summary>
+    /// The alpha channel.
+    /// </summary>
+    A,
+    /// <summary>
+    /// Constant 1.
+    /// </summary>
+    One,
+    /// <summary>
+    /// Constant 0.
+    /// </summary>
+    Zero
+}
 
 /// <summary>
 /// The swizzle of a sampled view (the engine's words; the backend maps it). The default is the identity.
@@ -41,6 +85,9 @@ public readonly record struct GpuSampler(int Index, SamplerDesc Desc)
     /// </summary>
     public static GpuSampler Null => new(0, default);
 
+    /// <summary>
+    /// Whether this is the null sampler (index 0).
+    /// </summary>
     public bool IsNull => Index == 0;
 }
 
@@ -55,6 +102,9 @@ public readonly record struct GpuView(int Index)
     /// </summary>
     public static GpuView Null => new(0);
 
+    /// <summary>
+    /// Whether this is the null view (index 0).
+    /// </summary>
     public bool IsNull => Index == 0;
 }
 
@@ -65,20 +115,44 @@ public readonly record struct GpuView(int Index)
 /// </summary>
 public sealed class ProgramInfo
 {
+    /// <summary>
+    /// The program's index in the backend's programs.
+    /// </summary>
     public int Index { get; init; }
 
+    /// <summary>
+    /// The program's name (diagnostics, the shader cache).
+    /// </summary>
     public required string Name { get; init; }
 
+    /// <summary>
+    /// The shader model it was compiled for (<see cref="ShaderModel"/>: GL-shaped legacy or native).
+    /// </summary>
     public ShaderModel Model { get; init; }
 
+    /// <summary>
+    /// The vertex stage's SPIR-V; null when the program has none.
+    /// </summary>
     public byte[]? VertexCode { get; init; }
 
+    /// <summary>
+    /// The fragment stage's SPIR-V; null when the program has none.
+    /// </summary>
     public byte[]? FragmentCode { get; init; }
 
+    /// <summary>
+    /// The tessellation control stage's SPIR-V; null when the program has none.
+    /// </summary>
     public byte[]? TessControlCode { get; init; }
 
+    /// <summary>
+    /// The tessellation evaluation stage's SPIR-V; null when the program has none.
+    /// </summary>
     public byte[]? TessEvaluationCode { get; init; }
 
+    /// <summary>
+    /// The compute stage's SPIR-V; null for a graphics program.
+    /// </summary>
     public byte[]? ComputeCode { get; init; }
 
     /// <summary>
@@ -86,10 +160,19 @@ public sealed class ProgramInfo
     /// </summary>
     public CompiledProgram? Compiled { get; init; }
 
+    /// <summary>
+    /// The reflection of the vertex SPIR-V; null without that stage.
+    /// </summary>
     public ShaderReflection? VertexReflection { get; init; }
 
+    /// <summary>
+    /// The reflection of the fragment SPIR-V; null without that stage.
+    /// </summary>
     public ShaderReflection? FragmentReflection { get; init; }
 
+    /// <summary>
+    /// The reflection of the compute SPIR-V; null for a graphics program.
+    /// </summary>
     public ShaderReflection? ComputeReflection { get; init; }
 
     /// <summary>
@@ -97,6 +180,9 @@ public sealed class ProgramInfo
     /// </summary>
     public GpuSetLayout[] NeutralSets { get; init; } = [];
 
+    /// <summary>
+    /// The size of the program's push constant block in bytes (0 for none).
+    /// </summary>
     public uint PushConstantBytes { get; init; }
 
     /// <summary>
@@ -117,21 +203,45 @@ public readonly record struct GpuProgram(int Index, ProgramInfo Info)
     /// </summary>
     public static GpuProgram Null => default;
 
+    /// <summary>
+    /// Whether this is the null program.
+    /// </summary>
     public bool IsNull => Info is null;
 
     // The engine's own surface of the program (no backend object behind these).
+    /// <summary>
+    /// <see cref="ProgramInfo.Name"/>.
+    /// </summary>
     public string Name => Info.Name;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.Model"/>.
+    /// </summary>
     public ShaderModel Model => Info.Model;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexCode"/>.
+    /// </summary>
     public byte[]? VertexCode => Info.VertexCode;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentCode"/>.
+    /// </summary>
     public byte[]? FragmentCode => Info.FragmentCode;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.TessControlCode"/>.
+    /// </summary>
     public byte[]? TessControlCode => Info.TessControlCode;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.TessEvaluationCode"/>.
+    /// </summary>
     public byte[]? TessEvaluationCode => Info.TessEvaluationCode;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeCode"/>.
+    /// </summary>
     public byte[]? ComputeCode => Info.ComputeCode;
 
     /// <summary>
@@ -139,18 +249,39 @@ public readonly record struct GpuProgram(int Index, ProgramInfo Info)
     /// </summary>
     public bool Tessellated => Info.TessEvaluationCode is not null;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.Compiled"/>.
+    /// </summary>
     public CompiledProgram? Compiled => Info.Compiled;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexReflection"/>.
+    /// </summary>
     public ShaderReflection? VertexReflection => Info.VertexReflection;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentReflection"/>.
+    /// </summary>
     public ShaderReflection? FragmentReflection => Info.FragmentReflection;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeReflection"/>.
+    /// </summary>
     public ShaderReflection? ComputeReflection => Info.ComputeReflection;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.NeutralSets"/>.
+    /// </summary>
     public GpuSetLayout[] NeutralSets => Info.NeutralSets;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.PushConstantBytes"/>.
+    /// </summary>
     public uint PushConstantBytes => Info.PushConstantBytes;
 
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentSource"/>.
+    /// </summary>
     public string? FragmentSource => Info.FragmentSource;
 }
 
@@ -167,6 +298,9 @@ public readonly record struct GpuPipeline(GraphicsPipelineDesc Desc, ulong Nativ
     /// </summary>
     public static GpuPipeline Null => default;
 
+    /// <summary>
+    /// Whether this is the null pipeline (its program is null).
+    /// </summary>
     public bool IsNull => Desc.Program.IsNull;
 }
 
@@ -180,6 +314,9 @@ public readonly record struct GpuComputePipeline(ComputePipelineDesc Desc, ulong
     /// </summary>
     public static GpuComputePipeline Null => default;
 
+    /// <summary>
+    /// Whether this is the null pipeline (its program is null).
+    /// </summary>
     public bool IsNull => Desc.Program.IsNull;
 }
 
@@ -191,7 +328,17 @@ public readonly record struct GpuBufferCopy(ulong SourceOffset, ulong Destinatio
 /// <summary>
 /// Which pipeline a command belongs to (the stages it runs in).
 /// </summary>
-public enum GpuBindPoint { Graphics, Compute }
+public enum GpuBindPoint
+{
+    /// <summary>
+    /// Draws (vertex, tessellation and fragment stages).
+    /// </summary>
+    Graphics,
+    /// <summary>
+    /// Dispatches (the compute stage).
+    /// </summary>
+    Compute
+}
 
 /// <summary>
 /// A set of resources the renderers bind to a program: the backend's identity (the index into the backend's sets) (docs/resource-layer.md). The set
@@ -204,6 +351,9 @@ public readonly record struct GpuSet(int Index)
     /// </summary>
     public static GpuSet Null => new(0);
 
+    /// <summary>
+    /// Whether this is the null set (index 0).
+    /// </summary>
     public bool IsNull => Index == 0;
 }
 
@@ -218,5 +368,8 @@ public readonly record struct GpuBuffer(int Index, ulong Size)
     /// </summary>
     public static GpuBuffer Null => new(0, 0);
 
+    /// <summary>
+    /// Whether this is the null buffer (index 0).
+    /// </summary>
     public bool IsNull => Index == 0;
 }

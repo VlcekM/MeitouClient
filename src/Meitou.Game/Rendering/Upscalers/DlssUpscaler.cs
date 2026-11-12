@@ -15,14 +15,40 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class DlssUpscaler : IUpscaler
 {
+    /// <summary>
+    /// The Streamline instance DLSS runs through.
+    /// </summary>
     readonly Streamline _sl;
+
+    /// <summary>
+    /// The device context the evaluation is recorded on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The upscale viewport (<see cref="Streamline.UpscaleViewport"/>), in native memory for Streamline's calls.
+    /// </summary>
     readonly ViewportHandle* _viewport;
 
+    /// <summary>
+    /// The options last set: the DLSS mode, the display size, the preset and whether DLSS measures the exposure (mode <see cref="uint.MaxValue"/>:
+    /// none yet).
+    /// </summary>
     (uint Mode, int Width, int Height, uint Preset, bool AutoExposure) _options = (uint.MaxValue, 0, 0, 0, false);
+
+    /// <summary>
+    /// The render size <see cref="Name"/> was last made for.
+    /// </summary>
     (int Width, int Height) _named;
+
+    /// <summary>
+    /// A call failed: DLSS is off for the rest of the run.
+    /// </summary>
     bool _failed;
 
+    /// <summary>
+    /// Allocates the upscale viewport.
+    /// </summary>
     DlssUpscaler(Streamline sl, GpuContext ctx)
     {
         this._sl = sl;
@@ -31,10 +57,19 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         *_viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.UpscaleViewport };
     }
 
+    /// <summary>
+    /// The upscaler's kind, for the post chain's choice and the statistics.
+    /// </summary>
     public UpscalerKind Kind => UpscalerKind.Dlss;
 
+    /// <summary>
+    /// The upscaler's name with the render size of the last frame.
+    /// </summary>
     public string Name { get; private set; } = "dlss";
 
+    /// <summary>
+    /// The upscaler on <paramref name="sl"/>, or null with the reason (Streamline not loaded, or DLSS not supported on the device).
+    /// </summary>
     public static DlssUpscaler? TryCreate(Streamline? sl, GpuContext ctx, out string? reason)
     {
         if (sl is null)
@@ -66,6 +101,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         _ => 4,          // eUltraPerformance
     };
 
+    /// <inheritdoc/>
     public bool Dispatch(UpscaleInputs i)
     {
         if (_failed || !SetOptions(i)) return false;
@@ -80,6 +116,9 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         return Evaluate(i);
     }
 
+    /// <summary>
+    /// Frees DLSS's resources for the viewport (after the device has gone idle) and the viewport.
+    /// </summary>
     public void Dispose()
     {
         _ctx.Device.WaitIdle();
@@ -124,6 +163,9 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Sets this frame's constants, tags its images and records the evaluation; false (logged, DLSS off) when a call fails.
+    /// </summary>
     bool Evaluate(UpscaleInputs i)
     {
         // Our images are bottom-up: the constants describe them as stored.
@@ -186,12 +228,24 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     /// </summary>
     const int WarnOutOfVram = 39;
 
+    /// <summary>
+    /// <c>MEITOU_DLSS_FAIL_AT=n</c>: the n-th evaluation fails after it was recorded (to test the fallback; 0: never).
+    /// </summary>
     static readonly int FailAt = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_FAIL_AT"), out int failAt) ? failAt : 0;
+
+    /// <summary>
+    /// The evaluations recorded so far (for <see cref="FailAt"/>).
+    /// </summary>
     int _evaluated;
+
+    /// <summary>
+    /// The out-of-memory warning was logged once.
+    /// </summary>
     bool _warnedVram;
 
     /// <summary>
-    /// A Streamline result that is not a failure: ok, or the out-of-memory warning (the evaluation was recorded and runs; counting it a failure dropped DLSS and freed its resources under the recorded frame).
+    /// A Streamline result that is not a failure: ok, or the out-of-memory warning (the evaluation was recorded and runs; counting it a failure
+    /// dropped DLSS and freed its resources under the recorded frame).
     /// </summary>
     bool Succeeded(int result)
     {
@@ -206,6 +260,9 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Logs <paramref name="message"/> and turns DLSS off for the rest of the run; false.
+    /// </summary>
     bool Fail(string message)
     {
         Console.WriteLine($"upscaler  {message}");

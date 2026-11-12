@@ -1,87 +1,17 @@
 [
-  {
-    "name": "bug",
-    "color": "d73a4a",
-    "description": "Something does not work"
-  },
-  {
-    "name": "parity",
-    "color": "c5def5",
-    "description": "Differs from the original game"
-  },
-  {
-    "name": "confirmed-works",
-    "color": "0e8a16",
-    "description": "Seen working in play"
-  },
-  {
-    "name": "roadmap-drift",
-    "color": "fbca04",
-    "description": "The roadmap no longer matches GitHub"
-  },
-  {
-    "name": "feedback",
-    "color": "bfd4f2",
-    "description": "Sent with the in-game feedback button"
-  },
-  {
-    "name": "area:startup",
-    "color": "ededed",
-    "description": "Roadmap category: Startup and saves"
-  },
-  {
-    "name": "area:characters",
-    "color": "ededed",
-    "description": "Roadmap category: Characters"
-  },
-  {
-    "name": "area:movement",
-    "color": "ededed",
-    "description": "Roadmap category: Movement and control"
-  },
-  {
-    "name": "area:combat",
-    "color": "ededed",
-    "description": "Roadmap category: Combat"
-  },
-  {
-    "name": "area:economy",
-    "color": "ededed",
-    "description": "Roadmap category: Economy"
-  },
-  {
-    "name": "area:squads",
-    "color": "ededed",
-    "description": "Roadmap category: Squads and jobs"
-  },
-  {
-    "name": "area:buildings",
-    "color": "ededed",
-    "description": "Roadmap category: Buildings"
-  },
-  {
-    "name": "area:world",
-    "color": "ededed",
-    "description": "Roadmap category: World"
-  },
-  {
-    "name": "area:factions",
-    "color": "ededed",
-    "description": "Roadmap category: Factions and events"
-  },
-  {
-    "name": "area:audio",
-    "color": "ededed",
-    "description": "Roadmap category: Audio"
-  },
-  {
-    "name": "area:interface",
-    "color": "ededed",
-    "description": "Roadmap category: Interface"
-  },
-  {
-    "name": "area:platform",
-    "color": "ededed",
-    "description": "Roadmap category: Platform and performance"
-  }
+  { "name": "bug", "color": "d73a4a", "description": "Something does not work" },
+  { "name": "parity", "color": "c5def5", "description": "Differs from the original game" },
+  { "name": "feedback", "color": "bfd4f2", "description": "Sent with the in-game feedback button" },
+  { "name": "area:startup", "color": "ededed", "description": "Startup and saves: new games, the main menu, loading and saving" },
+  { "name": "area:characters", "color": "ededed", "description": "Characters: health, needs, stats, equipment and the character editor" },
+  { "name": "area:movement", "color": "ededed", "description": "Movement and control: selection, pathfinding, right-click orders, stairs and roofs" },
+  { "name": "area:combat", "color": "ededed", "description": "Combat: fights and who joins or ignores them, melee, ranged weapons, stealth and turrets" },
+  { "name": "area:economy", "color": "ededed", "description": "Economy: mining, trade, looting, theft, locks and bounties" },
+  { "name": "area:squads", "color": "ededed", "description": "Squads and jobs: recruiting, squads, orders and jobs" },
+  { "name": "area:buildings", "color": "ededed", "description": "Buildings: entering, building, research, production, storage and power" },
+  { "name": "area:world", "color": "ededed", "description": "World: towns, crime, guards, prisons and jail, dialogue, animals, raids, roads and the map" },
+  { "name": "area:factions", "color": "ededed", "description": "Factions and events: unique characters, faction relations, towns changing after events" },
+  { "name": "area:audio", "color": "ededed", "description": "Audio: sound and music" },
+  { "name": "area:interface", "color": "ededed", "description": "Interface: windows, tooltips, pause, text and input" },
+  { "name": "area:platform", "color": "ededed", "description": "Platform and performance: rendering and graphics glitches, crashes, platforms, install, speed" }
 ]

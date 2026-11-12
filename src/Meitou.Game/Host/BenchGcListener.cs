@@ -9,13 +9,36 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class BenchGcListener : EventListener
 {
+    /// <summary>
+    /// A collection: when the runtime was suspended for it (ms, <see cref="NowMs"/>'s clock), its generation and reason, and the pause until
+    /// restarted (ms).
+    /// </summary>
     public readonly record struct Collection(double AtMs, int Generation, int Reason, double PauseMs);
 
+    /// <summary>
+    /// Guards the samples and collections: the runtime's events arrive on its own thread.
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// The bytes allocated by type name, summed from the allocation samples.
+    /// </summary>
     readonly Dictionary<string, long> _allocated = [];
+    /// <summary>
+    /// The collections, in order.
+    /// </summary>
     readonly List<Collection> _collections = [];
+    /// <summary>
+    /// When the runtime was last suspended (ms); -1 when no suspension is open.
+    /// </summary>
     double _suspendAt = -1;
+    /// <summary>
+    /// The generation and reason of the collection in progress; -1 when none.
+    /// </summary>
     int _depth = -1, _reason = -1;
+    /// <summary>
+    /// When the listener started, the clock's zero.
+    /// </summary>
+    readonly DateTime _started = DateTime.UtcNow;
 
     /// <summary>
     /// Milliseconds since the listener started (the collections' <see cref="Collection.AtMs"/>).
@@ -56,13 +79,20 @@ sealed class BenchGcListener : EventListener
         }
     }
 
-    // The event's own time (the runtime's events reach the listener in batches, later), in this clock.
+    /// <summary>
+    /// The event's own time (the runtime's events reach the listener in batches, later), in this clock.
+    /// </summary>
     double Ms(EventWrittenEventArgs e) => (e.TimeStamp.ToUniversalTime() - _started).TotalMilliseconds;
-    readonly DateTime _started = DateTime.UtcNow;
 
+    /// <summary>
+    /// A payload field of an event by name, converted to <typeparamref name="T"/>; default when the event has no such field.
+    /// </summary>
     static T Payload<T>(EventWrittenEventArgs e, string name) =>
         e.PayloadNames is { } n && n.IndexOf(name) is var i and >= 0 ? (T)Convert.ChangeType(e.Payload![i]!, typeof(T)) : default!;
 
+    /// <summary>
+    /// A copy of the allocations and collections so far.
+    /// </summary>
     public (Dictionary<string, long> Allocated, List<Collection> Collections) Take()
     {
         lock (_gate) return (new(_allocated), [.. _collections]);

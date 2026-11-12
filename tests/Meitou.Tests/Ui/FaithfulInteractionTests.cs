@@ -90,7 +90,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Equal(selectedHunger, ui.AdvancedOptions.NewGameOptions[0]);
             // kept between openings, as the original's globals
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Fact, Slow]
@@ -140,7 +143,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Click(ui, "ButtonA");
             Assert.Equal("main-menu", request.Action);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Fact, Slow]
@@ -173,7 +179,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Equal((2, 1), (item.X, item.Y));
             Assert.False(ui.UiCapturesPointer);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Theory, Slow]
@@ -215,7 +224,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "backpack_content");
             Assert.Contains(ui.UiFrame, c => c.Name == "main");
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Fact, Slow]
@@ -252,7 +264,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.False(ui.ContextMenuWindow.ContextMenuOpen);
             Assert.Contains(session.World.Commands.TakeDue(long.MaxValue), c => c is Meitou.Simulation.Combat.AttackOrder a && a.Target == other);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Fact, Slow]
@@ -279,7 +294,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             session.World.RunTick();
             Assert.Equal([second], session.World.Player.Selection);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     /// <summary>
@@ -362,7 +380,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
                         output.WriteLine($"{id}: {w.Type} {w.Name} keeps its caption \"{w.Properties["Caption"]}\"");
             }
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
         Assert.True(missing.Count == 0, "bound to widgets the original layouts lack: " + string.Join(", ", missing));
     }
 }

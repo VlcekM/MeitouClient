@@ -36,7 +36,7 @@
     <PackageReference Include="Silk.NET.Shaderc" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Shaderc.Native" Version="2.23.0" />
     <!-- The one Harmony every code mod patches through (docs/modding.md "Loading"): 0Harmony.dll with MonoMod merged in. -->
-    <PackageReference Include="Lib.Harmony" Version="2.4.3" />
+    <PackageReference Include="Lib.Harmony" Version="3.0.0-rc.5" />
   </ItemGroup>
 
   <!-- The Metal backend (Rendering/Metal): the engine's GLSL through shaderc to SPIR-V and spirv-cross to MSL; compiled where MeitouMetal is set

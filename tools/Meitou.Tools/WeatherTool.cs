@@ -10,6 +10,10 @@ using Meitou.Data.World;
 /// </summary>
 static class WeatherTool
 {
+    /// <summary>
+    /// <c>meitou-tools weather</c>: parses the options (<c>--region</c>, <c>--at</c>, <c>--days</c>, <c>--seed</c>, <c>--list</c>, <c>--extents</c>)
+    /// and prints the region list, the regions' extents or a region's timeline. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -42,7 +46,8 @@ static class WeatherTool
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
         var data = WeatherData.Load(db);
         var areas = WeatherAreas.Load(install);
-        Console.WriteLine($"{data.Weathers.Count} weathers, {data.Seasons.Count} seasons, {data.Regions.Count} regions, {data.DaysPerYear} days per year");
+        Console.WriteLine($"{data.Weathers.Count} weathers, {data.Seasons.Count} seasons, "
+            + $"{data.Regions.Count} regions, {data.DaysPerYear} days per year");
         if (extents)
             return PrintExtents(data, areas);
 
@@ -71,20 +76,28 @@ static class WeatherTool
         return 0;
     }
 
+    /// <summary>
+    /// Every region's zone cells, by region name.
+    /// </summary>
     static Dictionary<string, List<(int X, int Z)>> CellsByRegion(WeatherData data, WeatherAreas areas)
     {
         var byRegion = new Dictionary<string, List<(int X, int Z)>>();
         for (int cz = 0; cz < WeatherAreas.Cells; cz++)
+        {
             for (int cx = 0; cx < WeatherAreas.Cells; cx++)
             {
                 var r = areas.RegionOf(data, cx, cz);
                 if (!byRegion.TryGetValue(r.Name, out var l)) byRegion[r.Name] = l = [];
                 l.Add((cx, cz));
             }
+        }
 
         return byRegion;
     }
 
+    /// <summary>
+    /// Prints a region's cell count, its x and z extent in cells and the centre of its most central cell.
+    /// </summary>
     static void PrintRegionExtent(string name, List<(int X, int Z)> cells)
     {
         float mx = (float)cells.Average(c => c.X), mz = (float)cells.Average(c => c.Z);
@@ -95,6 +108,9 @@ static class WeatherTool
         Console.WriteLine($"  {name,-24} {cells.Count,4} cells  x {xs}  z {zs}  central cell centre at {(x0 + x1) / 2:0},{(z0 + z1) / 2:0}");
     }
 
+    /// <summary>
+    /// Prints every region with its seasons and their weathers; returns 0.
+    /// </summary>
     static int PrintRegionList(WeatherData data)
     {
         foreach (var r in data.Regions)
@@ -102,13 +118,18 @@ static class WeatherTool
         return 0;
     }
 
+    /// <summary>
+    /// Prints the region's seasons and weather changes from day <paramref name="from"/> to day <paramref name="to"/>, the scheduler seeded with
+    /// <paramref name="seed"/>.
+    /// </summary>
     static void PrintTimeline(WeatherData data, RegionDef region, int seed, int from, int to)
     {
         Console.WriteLine($"Region {region.Name}, seed {seed}, days {from}..{to}");
         foreach (var s in region.Seasons)
         {
             string weathers = string.Join(", ", s.Season.Weathers.Select(w => $"{w.Weather.Name} x{w.Weight} ({w.MinMinutes}-{w.MaxMinutes} min)"));
-            Console.WriteLine($"  season {s.Season.Name}: {s.Days} days, strength {s.Season.StrengthLimitMin:0.##}..{s.Season.StrengthLimitMax:0.##}, " + weathers);
+            Console.WriteLine($"  season {s.Season.Name}: {s.Days} days, "
+                + $"strength {s.Season.StrengthLimitMin:0.##}..{s.Season.StrengthLimitMax:0.##}, " + weathers);
         }
 
         int index = data.Regions.ToList().IndexOf(region);
@@ -133,6 +154,9 @@ static class WeatherTool
         }
     }
 
+    /// <summary>
+    /// Prints one weather change: the weather, how long it lasts, the wind and the fog.
+    /// </summary>
     static void PrintWeatherChange(WeatherRegion sim, WeatherTime time)
     {
         double endMinute = sim.WeatherEndMinute;

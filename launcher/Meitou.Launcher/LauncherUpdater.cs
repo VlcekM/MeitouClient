@@ -5,14 +5,24 @@ namespace Meitou.Launcher;
 
 /// <summary>
 /// Self-update through Velopack (docs/launcher.md, "Self-update"): the feed of each <c>launcher-v*</c> release, one Velopack channel
-/// per runtime (<see cref="Releases.Rid"/>). Only a launcher installed by its Setup or AppImage can update itself; a build run from
+/// per build family (<see cref="Releases.Channel"/>). Only a launcher installed by its Setup or AppImage can update itself; a build run from
 /// anywhere else reports <see cref="IsInstalled"/> false.
 /// </summary>
 public sealed class LauncherUpdater(Releases releases, bool prereleases)
 {
-    readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Rid });
+    /// <summary>
+    /// Velopack's update manager over the launcher releases of this repository, on this runtime's channel.
+    /// </summary>
+    readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Channel });
+
+    /// <summary>
+    /// The update found by the last check, downloaded and waiting to be applied; null when none.
+    /// </summary>
     UpdateInfo? _pending;
 
+    /// <summary>
+    /// Whether the launcher was installed by its Setup or AppImage, so it can update itself.
+    /// </summary>
     public bool IsInstalled => _manager.IsInstalled;
 
     /// <summary>
@@ -47,14 +57,25 @@ public sealed class LauncherUpdater(Releases releases, bool prereleases)
             var (list, _) = await releases.FetchAsync();
             return [.. list
                 .Where(r => r.Kind == ReleaseKind.Launcher && (includePrereleases || !r.Prerelease))
-                .Select(r => new GithubRelease
-                {
-                    Name = r.Title,
-                    Prerelease = r.Prerelease,
-                    PublishedAt = r.Published.UtcDateTime,
-                    Assets = [.. r.Assets.Select(a => new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url,
-                            ContentType = "application/octet-stream" })],
-                })];
+                .Select(ToGithubRelease)];
         }
+
+        /// <summary>
+        /// <paramref name="r"/> as Velopack's GitHub source lists a release.
+        /// </summary>
+        static GithubRelease ToGithubRelease(Release r) =>
+            new GithubRelease
+            {
+                Name = r.Title,
+                Prerelease = r.Prerelease,
+                PublishedAt = r.Published.UtcDateTime,
+                Assets = [.. r.Assets.Select(ToGithubAsset)],
+            };
+
+        /// <summary>
+        /// <paramref name="a"/> as Velopack's GitHub source lists a release's file.
+        /// </summary>
+        static GithubReleaseAsset ToGithubAsset(ReleaseAsset a) =>
+            new GithubReleaseAsset { Name = a.Name, BrowserDownloadUrl = a.Url, Url = a.Url, ContentType = "application/octet-stream" };
     }
 }

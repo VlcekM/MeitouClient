@@ -10,8 +10,14 @@ namespace Meitou.Data.Physics;
 /// </summary>
 public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vector3 Translation)
 {
+    /// <summary>
+    /// The pose that changes nothing.
+    /// </summary>
     public static readonly Pose Identity = new(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, Vector3.Zero);
 
+    /// <summary>
+    /// The point <paramref name="p"/> moved by the pose: <c>R · p + T</c>.
+    /// </summary>
     public Vector3 Apply(Vector3 p) =>
         new(Vector3.Dot(Row0, p) + Translation.X, Vector3.Dot(Row1, p) + Translation.Y, Vector3.Dot(Row2, p) + Translation.Z);
 
@@ -53,13 +59,47 @@ public readonly record struct Pose(Vector3 Row0, Vector3 Row1, Vector3 Row2, Vec
 /// <summary>
 /// PhysX 2.8 shape types as the game's triangulation knows them (docs/formats/collision.md).
 /// </summary>
-public enum CollisionShapeKind { Plane, Sphere, Box, Capsule, Convex, TriangleMesh }
+public enum CollisionShapeKind
+{
+    /// <summary>
+    /// An infinite plane (<c>NxPlaneShapeDesc</c>).
+    /// </summary>
+    Plane,
+
+    /// <summary>
+    /// A sphere of <see cref="CollisionShape.Radius"/> (<c>NxSphereShapeDesc</c>).
+    /// </summary>
+    Sphere,
+
+    /// <summary>
+    /// A box of <see cref="CollisionShape.HalfExtents"/> (<c>NxBoxShapeDesc</c>).
+    /// </summary>
+    Box,
+
+    /// <summary>
+    /// A capsule of <see cref="CollisionShape.Radius"/> and <see cref="CollisionShape.Height"/> (<c>NxCapsuleShapeDesc</c>).
+    /// </summary>
+    Capsule,
+
+    /// <summary>
+    /// A convex hull of <see cref="CollisionShape.Mesh"/>'s vertices (<c>NxConvexShapeDesc</c>).
+    /// </summary>
+    Convex,
+
+    /// <summary>
+    /// A triangle mesh, <see cref="CollisionShape.Mesh"/> (<c>NxTriangleMeshShapeDesc</c>).
+    /// </summary>
+    TriangleMesh
+}
 
 /// <summary>
 /// A decoded cooked mesh: convex hull vertices (no indices) or triangle mesh vertices and indices.
 /// </summary>
 public sealed class CookedMesh(Vector3[] vertices, int[] indices)
 {
+    /// <summary>
+    /// The mesh's vertices in the shape's local space.
+    /// </summary>
     public Vector3[] Vertices { get; } = vertices;
 
     /// <summary>
@@ -73,22 +113,43 @@ public sealed class CookedMesh(Vector3[] vertices, int[] indices)
 /// </summary>
 public sealed class CollisionShape
 {
+    /// <summary>
+    /// The PhysX shape type.
+    /// </summary>
     public required CollisionShapeKind Kind { get; init; }
+    /// <summary>
+    /// The shape's pose in the file's space: its actor's global pose applied after the shape's local pose.
+    /// </summary>
     public required Pose Pose { get; init; }
+    /// <summary>
+    /// Box: half the size along each local axis (the <c>dimensions</c> attribute); zero for other kinds.
+    /// </summary>
     public Vector3 HalfExtents { get; init; }
+    /// <summary>
+    /// Sphere and capsule: the radius (the <c>radius</c> attribute); 0 when absent.
+    /// </summary>
     public float Radius { get; init; }
 
     /// <summary>
     /// Capsule: distance between the two sphere centres, along the local Y axis.
     /// </summary>
     public float Height { get; init; }
+    /// <summary>
+    /// Convex and triangle-mesh shapes: the decoded mesh their <c>meshData</c> names; null for the other kinds.
+    /// </summary>
     public CookedMesh? Mesh { get; init; }
+    /// <summary>
+    /// The shape's <c>name</c> attribute in its <c>NxShapeDesc</c>; empty when it has none.
+    /// </summary>
     public string Name { get; init; } = "";
 
     /// <summary>
     /// The file's own PhysX group of the shape (the game assigns its own per placed object).
     /// </summary>
     public int Group { get; init; }
+    /// <summary>
+    /// Whether the shape's actor has <c>hasBody="true"</c> (a dynamic body) rather than being static.
+    /// </summary>
     public bool ActorHasBody { get; init; }
 }
 
@@ -98,16 +159,32 @@ public sealed class CollisionShape
 /// </summary>
 public sealed partial class CollisionFile
 {
+    /// <summary>
+    /// The shapes of every actor of every scene, in file order.
+    /// </summary>
     public List<CollisionShape> Shapes { get; } = [];
+    /// <summary>
+    /// How many convex mesh descriptions (<c>NxConvexMeshDesc</c>) the file has.
+    /// </summary>
     public int ConvexMeshCount { get; private set; }
+    /// <summary>
+    /// How many triangle mesh descriptions (<c>NxTriangleMeshDesc</c>) the file has.
+    /// </summary>
     public int TriangleMeshCount { get; private set; }
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>.
+    /// </summary>
     public static CollisionFile ReadFile(string path)
     {
         using var s = File.OpenRead(path);
         return Read(s);
     }
 
+    /// <summary>
+    /// Reads an NxuStream2 XML file: its mesh descriptions, then every actor's shapes. <see cref="InvalidDataException"/> when it is not one or
+    /// is malformed.
+    /// </summary>
     public static CollisionFile Read(Stream stream)
     {
         // A few files carry a bare "&" in a file name attribute; escape such ampersands so the XML parses.
@@ -192,11 +269,20 @@ public sealed partial class CollisionFile
             }
     }
 
+    /// <summary>
+    /// An <c>&amp;</c> that does not start an XML entity or character reference.
+    /// </summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"&(?!(amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")]
     private static partial System.Text.RegularExpressions.Regex BareAmpersand();
 
+    /// <summary>
+    /// The attribute's value as an invariant float; 0 when it is absent.
+    /// </summary>
     static float Float(XAttribute? a) => a is null ? 0 : float.Parse(a.Value, CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Three whitespace-separated numbers as a vector; <see cref="InvalidDataException"/> when there are not exactly three.
+    /// </summary>
     static Vector3 ParseVector(string? text)
     {
         var parts = (text ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);

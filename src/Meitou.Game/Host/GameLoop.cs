@@ -40,22 +40,52 @@ sealed class GameLoop(GameHost host)
     // The display and its window (none headless: --headless draws into an offscreen picture), and the frame rate as this run started.
     #region State
 
+    /// <summary>
+    /// The Vulkan display (the device, the window's swapchain or the headless target), made by <see cref="OpenDisplay"/>.
+    /// </summary>
     VulkanDisplay _display = null!;
+    /// <summary>
+    /// The game window; null headless.
+    /// </summary>
     IWindow? _window;
+    /// <summary>
+    /// A run without a window (<c>--headless</c>), and vsync as the run started.
+    /// </summary>
     bool _headless, _vsync;
+    /// <summary>
+    /// The frame limit in use (0 = unlimited), and the one the run started with.
+    /// </summary>
     int _fpsLimit, _initialFpsLimit;
+    /// <summary>
+    /// Vsync and full screen as last written to the config: a change is saved at the end.
+    /// </summary>
     bool _savedVSync, _savedFullScreen;
 
     /// <summary>
     /// Read at start-up only: a change in the settings waits for a restart.
     /// </summary>
     FrameGenerationMethod _frameGenerationAtStart;
+    /// <summary>
+    /// Whether the run draws in HDR (read at start-up only).
+    /// </summary>
     bool _hdrAtStart;
 
     // The debug overlay the interface draws through, the Faithful / Meitou switches and the settings panel (null without an overlay).
+    /// <summary>
+    /// The debug overlay.
+    /// </summary>
     DebugOverlay? _overlay;
+    /// <summary>
+    /// The Faithful / Meitou switches of the look (<see cref="WorldFrame.LiveSwitches"/>).
+    /// </summary>
     IReadOnlyList<Enhancement> _switches = [];
+    /// <summary>
+    /// F1's switch of every look switch between Faithful and Meitou.
+    /// </summary>
     MeitouToggle _meitou = null!;
+    /// <summary>
+    /// The settings panel; null without an overlay.
+    /// </summary>
     SettingsMenu? _panel;
 
     /// <summary>
@@ -70,27 +100,60 @@ sealed class GameLoop(GameHost host)
     HashSet<string> _runOnly = [];
 
     // The cinematic camera and the squad tour; while either holds the drawn camera the rig's state is not applied.
+    /// <summary>
+    /// The cinematic camera.
+    /// </summary>
     Cinema _cinema = null!;
-
-    /// <summary>The settings window, once made (the agent channel's <c>gfx</c>).</summary>
+    /// <summary>
+    /// The settings window, once made (the agent channel's <c>gfx</c>).
+    /// </summary>
     internal SettingsMenu? Panel => _panel;
 
+    /// <summary>
+    /// The cinema (or the tour) holds the drawn camera: the rig's state is not applied until a camera input takes it back.
+    /// </summary>
     bool _cinemaHolds;
-
     /// <summary>
     /// Photo mode (docs/viewer.md "Photo mode"): while it is on it owns the camera, the interface's visibility and the pause.
     /// </summary>
     PhotoMode _photo = null!;
+    /// <summary>
+    /// The squad tour (numpad /) and the character flights.
+    /// </summary>
     SquadTour _tour = null!;
+    /// <summary>
+    /// The tour's character is followed once it ends (a double-clicked member).
+    /// </summary>
     bool _tourFollows;
+    /// <summary>
+    /// The cinema's playing and recording state last frame, for the duel's start.
+    /// </summary>
     bool _cinemaWasPlaying, _cinemaWasRecording;
 
     // The keyboards and mice (none headless), and the pointer's state between their events.
+    /// <summary>
+    /// The input context.
+    /// </summary>
     Silk.NET.Input.IInputContext? _silkInput;
+    /// <summary>
+    /// The keyboards; none headless.
+    /// </summary>
     IReadOnlyList<Silk.NET.Input.IKeyboard> _keyboards = [];
+    /// <summary>
+    /// The mice; none headless.
+    /// </summary>
     IReadOnlyList<Silk.NET.Input.IMouse> _mice = [];
+    /// <summary>
+    /// The headless run's clipboard (no keyboard to hold one).
+    /// </summary>
     string? _headlessClipboard;
+    /// <summary>
+    /// The pointer's last position (window units); null before the first move or after the window lost it.
+    /// </summary>
     Vector2? _lastMouse;
+    /// <summary>
+    /// The headless pointer last applied from the dev console.
+    /// </summary>
     Vector2? _appliedHeadlessMouse;
 
     /// <summary>
@@ -100,11 +163,29 @@ sealed class GameLoop(GameHost host)
     /// 2026-10-25). While locked, the game treats the pointer as at <see cref="_orbitAnchor"/>.
     /// </summary>
     bool _lockOrbit;
+    /// <summary>
+    /// The pointer's position while the orbit locks it (Linux); null when not locked.
+    /// </summary>
     Vector2? _orbitAnchor;
+    /// <summary>
+    /// The window's cursor mode as last set.
+    /// </summary>
     Silk.NET.Input.CursorMode _windowCursor = Silk.NET.Input.CursorMode.Normal;
+    /// <summary>
+    /// The cursor mode before the orbit locked it, put back after.
+    /// </summary>
     Silk.NET.Input.CursorMode _cursorBeforeOrbit = Silk.NET.Input.CursorMode.Normal;
+    /// <summary>
+    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler (its release is not the game's).
+    /// </summary>
     bool _panelDrag, _shiftDown, _profilerClick;
+    /// <summary>
+    /// The highlight key (Alt) is held, as of the last control tick.
+    /// </summary>
     bool _highlightHeld;
+    /// <summary>
+    /// The window has the focus: the highlight shows only then.
+    /// </summary>
     bool _windowFocused = true;
 
     /// <summary>
@@ -114,28 +195,82 @@ sealed class GameLoop(GameHost host)
     (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldEditKey;
 
     // The loop's clock and end.
+    /// <summary>
+    /// A <see cref="Stopwatch"/> from the first frame.
+    /// </summary>
     Stopwatch _frame = null!;
+    /// <summary>
+    /// The time of the last frame (seconds of <see cref="_frame"/>).
+    /// </summary>
     double _last;
+    /// <summary>
+    /// The frames drawn so far.
+    /// </summary>
     int _totalFrames;
+    /// <summary>
+    /// The loop ends after this frame.
+    /// </summary>
     bool _quit;
 
     // What a frame draws into: the interface's layer, frame generation (made on the first frame), the headless backbuffer.
+    /// <summary>
+    /// The interface's layer.
+    /// </summary>
     UiLayer? _uiLayer;
+    /// <summary>
+    /// The frame generator; null when off or not made.
+    /// </summary>
     IFrameGenerator? _frameGen;
+    /// <summary>
+    /// The pointer the window system draws while frame generation is on.
+    /// </summary>
     readonly FrameGenerationSetup.SystemPointer _systemPointer = new();
+    /// <summary>
+    /// Frame generation was tried (on the first frame).
+    /// </summary>
     bool _frameGenTried;
+    /// <summary>
+    /// The headless run's backbuffer.
+    /// </summary>
     GpuTexture? _headlessTarget;
 
     // The fps counter (the mean over a tenth of a second) and F11's statistics (once a second); the triangle counts summed over the statistics'
     // second.
+    /// <summary>
+    /// F11's statistics lines.
+    /// </summary>
     readonly List<string> _stats = [];
+    /// <summary>
+    /// The fps counter's text.
+    /// </summary>
     string _fpsText = "";
+    /// <summary>
+    /// The fps counter's window (seconds), reset every tenth of a second.
+    /// </summary>
     double _fpsWindow;
+    /// <summary>
+    /// The frames in the fps counter's window.
+    /// </summary>
     int _fpsWindowFrames;
+    /// <summary>
+    /// The statistics second's summed draw time (ms) and GPU time (ms), and its length so far (seconds).
+    /// </summary>
     double _drawTotal, _gpuSum, _statsTimer;
+    /// <summary>
+    /// The statistics second's GPU samples and frames.
+    /// </summary>
     int _gpuSamples, _statsFrames;
+    /// <summary>
+    /// The world ticks run before the statistics second.
+    /// </summary>
     long _statsTicks;
+    /// <summary>
+    /// The statistics second's summed terrain and character triangles and grass blades.
+    /// </summary>
     double _terrainTris, _characterTris, _grassBlades;
+    /// <summary>
+    /// The object triangles counted before the statistics second.
+    /// </summary>
     long _objectTris0;
 
     #endregion
@@ -153,6 +288,10 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     Task<WorldScene?>? _sceneRead;
 
+    /// <summary>
+    /// Runs the game: opens the display, shows the window, loads the world, sets up the tools, settings and input, then draws frames until the window
+    /// closes; returns the exit code.
+    /// </summary>
     internal int Run()
     {
         using var owned = OpenDisplay();
@@ -169,7 +308,9 @@ sealed class GameLoop(GameHost host)
         SetUpCameraFlights();
         ConnectInput();
         Console.WriteLine(GameOptions.Usage[GameOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
-        Console.WriteLine($"display   vsync {(_vsync ? "on" : "off")}, frame limit {(_vsync || _fpsLimit <= 0 ? "none" : _fpsLimit + " fps")}, control tick {host.Session.Ticks.TickRate:0} Hz, world tick {SimulationClock.TickRate:0} per game second; settings in {host.Config.Path}");
+        Console.WriteLine($"display   vsync {(_vsync ? "on" : "off")}, frame limit {(_vsync || _fpsLimit <= 0 ? "none" : _fpsLimit + " fps")}, "
+            + $"control tick {host.Session.Ticks.TickRate:0} Hz, world tick {SimulationClock.TickRate:0} per game second; "
+            + $"settings in {host.Config.Path}");
 
         _frame = Stopwatch.StartNew();
         ConnectGameEvents();
@@ -325,7 +466,11 @@ sealed class GameLoop(GameHost host)
         if (_overlay is null) return;
         var values = WorldFrame.CreateSettingsPanel(_overlay, host.Gpu, host.Render,
             getHour: () => (float)host.Session.Clock.HourOfDay,
-            setHour: v => { host.Session.Clock.SetHourOfDay(v); if (host.Duel.IsDuel) host.Duel.HeldHour = v; },
+            setHour: v =>
+            {
+                host.Session.Clock.SetHourOfDay(v);
+                if (host.Duel.IsDuel) host.Duel.HeldHour = v;
+            },
             getVSync: () => _display.VSync, setVSync: v => _display.VSync = v, switches: _switches,
             getFullScreen: FullScreenOn, setFullScreen: _ => ToggleFullScreen(),
             extraChoices: [new PanelChoice(() => $"UI mode: {host.Player.UiMode}", () => ["Faithful", "Meitou"], () => (int)host.Player.UiMode,
@@ -335,7 +480,8 @@ sealed class GameLoop(GameHost host)
                         _ => throw new ArgumentOutOfRangeException(nameof(index)) });
                     return $"UI mode: {host.Player.UiMode}";
                 })]);
-        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0", Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
+        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+            Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
         _panel = new SettingsMenu(host.Player, values, host.Session.Bindings, SaveSettings, frameLimit, host.Config)
         {
             UpscalerStatus = () => host.Gpu.Post?.ActiveUpscaler ?? "Off",
@@ -364,6 +510,9 @@ sealed class GameLoop(GameHost host)
         };
     }
 
+    /// <summary>
+    /// Runs <paramref name="act"/> on each of the world's systems of type <typeparamref name="T"/>.
+    /// </summary>
     void EachSystem<T>(Action<T> act)
     {
         foreach (var system in host.Session.World.Systems.OfType<T>()) act(system);
@@ -376,13 +525,19 @@ sealed class GameLoop(GameHost host)
     {
         foreach (var population in host.Session.World.Systems.OfType<Simulation.Population.PopulationSystem>())
         {
-            (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing) = (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing);
-            (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) = (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
+            (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing) =
+                (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing);
+            (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
+                (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
         }
 
-        foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>()) production.UnloadedProduction = host.Config.UnloadedProduction;
+        foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>())
+            production.UnloadedProduction = host.Config.UnloadedProduction;
     }
 
+    /// <summary>
+    /// The strategy camera's turn and tilt rate (degrees per second per unit of input), clamped to the Controls slider's range.
+    /// </summary>
     void ApplyCameraRotateSpeed(float speed) => host.Session.Camera.Settings.RotateSpeedX = host.Session.Camera.Settings.RotateSpeedY =
         Math.Clamp(speed, UserConfig.MinCameraRotateSpeed, UserConfig.MaxCameraRotateSpeed);
 
@@ -398,6 +553,7 @@ sealed class GameLoop(GameHost host)
         host.Config.ApplyCamera(host.Session.Camera.Settings);
         KeyMap.SwapButtons = host.Config.SwapMouseButtons == true;
         host.Player.FontSize = host.Config.FontSize ?? Data.Ui.KenshiFontSize.DefaultSetting;
+        host.Player.InterfaceScale = Math.Clamp(host.Config.InterfaceScale, UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale);
         host.Config.MovementMarker ??= Audio.AudioSystem.Setting(host.Install, "Movement marker", 1) != 0;
         host.Config.RotationMarker ??= Audio.AudioSystem.Setting(host.Install, "Rotation marker", 1) != 0;
         (host.Player.MovementMarker, host.Player.RotationMarker) = (host.Config.MovementMarker == true, host.Config.RotationMarker == true);
@@ -488,8 +644,15 @@ sealed class GameLoop(GameHost host)
     bool PhotoAllowed() => !host.Covered && !host.TitleScreen.TitleVisible && !host.Duel.IsDuel && host.SkyArrival is null
         && !host.GameOptions.NoPopulation && !_cinema.Playing && !_cinema.Recording && !_tour.Active;
 
-    Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? host.TrackedPosition(c) : null;
+    /// <summary>
+    /// Where a character is drawn now (the tracked position, which photo mode freezes); null when it is not in the snapshot.
+    /// </summary>
+    Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c
+        ? host.TrackedPosition(c) : null;
 
+    /// <summary>
+    /// Ends the tour or flight: the rig takes the drawn camera back (as the strategy camera), and a flown-to member is followed.
+    /// </summary>
     void EndTour()
     {
         _tour.Stop();
@@ -513,7 +676,11 @@ sealed class GameLoop(GameHost host)
         _keyboards = _silkInput is null ? [] : _silkInput.Keyboards;
         _mice = _silkInput is null ? [] : _silkInput.Mice;
         host.Player.ClipboardRead = () => _keyboards.Count > 0 ? ClipboardText.Read(_keyboards[0]) : _headless ? _headlessClipboard : null;
-        host.Player.ClipboardWrite = text => { if (_keyboards.Count > 0) _keyboards[0].ClipboardText = text; else if (_headless) _headlessClipboard = text; };
+        host.Player.ClipboardWrite = text =>
+        {
+            if (_keyboards.Count > 0) _keyboards[0].ClipboardText = text;
+            else if (_headless) _headlessClipboard = text;
+        };
         _lockOrbit = OperatingSystem.IsLinux();
         foreach (var kb in _keyboards) ConnectKeyboard(kb);
         foreach (var mouse in _mice) ConnectMouse(mouse);
@@ -537,6 +704,9 @@ sealed class GameLoop(GameHost host)
         host.Session.Ticked += OnTicked;
     }
 
+    /// <summary>
+    /// An action of the game's screens: save, load, import and new game requests, the feedback form, the main menu, the options and exit buttons.
+    /// </summary>
     void OnScreenAction(MyGuiEvent e)
     {
         if (e.Action == "save") host.Saves.SaveRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, e.Text);
@@ -549,6 +719,10 @@ sealed class GameLoop(GameHost host)
         else if (e.Widget == "ExitGameButton") _quit = true;
     }
 
+    /// <summary>
+    /// After each control tick, its actions: the highlight key, Esc, the settings, screenshot, statistics, quicksave and quickload, floor and
+    /// profiler keys, and a camera input taking the camera back from the tour or the cinema.
+    /// </summary>
     void OnTicked(ActionState actions)
     {
         _highlightHeld = actions.Held(InputAction.Highlight);
@@ -590,16 +764,28 @@ sealed class GameLoop(GameHost host)
 
     // ---- the window and the pointer ----
 
+    /// <summary>
+    /// The framebuffer's size: the window's, or the headless run's size.
+    /// </summary>
     Vector2D<int> FramebufferSizeNow() => _window is null
         ? new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height) : _window.FramebufferSize;
 
+    /// <summary>
+    /// Whether the window is borderless full screen.
+    /// </summary>
     bool FullScreenOn() => _window is not null && BorderlessFullScreen.IsOn(_window);
 
+    /// <summary>
+    /// Switches the window between borderless full screen and windowed.
+    /// </summary>
     void ToggleFullScreen()
     {
         if (_window is not null) BorderlessFullScreen.Toggle(_window);
     }
 
+    /// <summary>
+    /// A position in window units as framebuffer pixels.
+    /// </summary>
     Vector2 Pixels(Vector2 p) => _window is null ? p
         : p * new Vector2(_window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1),
             _window.FramebufferSize.Y / (float)Math.Max(_window.Size.Y, 1));
@@ -609,8 +795,14 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     bool PanelLive() => !host.AgentChannel.InterfaceHidden && !_cinema.Clean;
 
+    /// <summary>
+    /// Whether either of two keys is held on any keyboard.
+    /// </summary>
     bool Held(SilkKey a, SilkKey b) => _keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
 
+    /// <summary>
+    /// Whether a Ctrl key is held on the keyboard.
+    /// </summary>
     static bool CtrlDown(Silk.NET.Input.IKeyboard keyboard) => keyboard.IsKeyPressed(SilkKey.ControlLeft)
         || keyboard.IsKeyPressed(SilkKey.ControlRight);
 
@@ -621,8 +813,15 @@ sealed class GameLoop(GameHost host)
 
     // ---- keyboard ----
 
+    /// <summary>
+    /// Whether a text field takes the keys (the settings panel, the debug menu, the dev console, an edited UI field).
+    /// </summary>
     bool TextFieldFocused() => _panel?.Visible == true || host.DebugMenu.DebugMenuOpen || host.DevConsoleHost.ConsoleOpen || host.Player.UiEditing;
 
+    /// <summary>
+    /// Repeats a held erase or caret key in a text field (<see cref="_heldEditKey"/>): when its time has come, again 30 times a second; a release or
+    /// the field closing stops it.
+    /// </summary>
     void RepeatEditKey()
     {
         if (_heldEditKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
@@ -635,6 +834,9 @@ sealed class GameLoop(GameHost host)
         OnKeyDown(held.Keyboard, held.Key);
     }
 
+    /// <summary>
+    /// Hooks a keyboard's key down (with the edit-key repeat), key up (Shift, the session's keys, the build mode's) and typed characters.
+    /// </summary>
     void ConnectKeyboard(Silk.NET.Input.IKeyboard kb)
     {
         kb.KeyDown += (keyboard, k, _) =>
@@ -652,11 +854,19 @@ sealed class GameLoop(GameHost host)
                 _shiftDown = false;
                 host.Player.SlowModifier = false;
             }
-            if (KeyMap.Map(k) is { } key) { host.Session.Input.SetKey(key, false); host.Player.Build.BuildKeyUp(key); }
+            if (KeyMap.Map(k) is { } key)
+            {
+                host.Session.Input.SetKey(key, false);
+                host.Player.Build.BuildKeyUp(key);
+            }
         };
         kb.KeyChar += (_, value) => OnKeyChar(value);
     }
 
+    /// <summary>
+    /// A typed character to the first that takes text: the dev console, the settings panel, the sandbox picker, the debug menu, else the
+    /// game's interface.
+    /// </summary>
     void OnKeyChar(char value)
     {
         if (host.Covered) return;
@@ -915,6 +1125,9 @@ sealed class GameLoop(GameHost host)
 
     // ---- mouse ----
 
+    /// <summary>
+    /// Hooks a mouse's buttons (a press under the loading screen skips the splash), moves and wheel.
+    /// </summary>
     void ConnectMouse(Silk.NET.Input.IMouse mouse)
     {
         mouse.MouseDown += (m, b) =>
@@ -956,21 +1169,34 @@ sealed class GameLoop(GameHost host)
         }
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
         bool select = physical is { } pressed && host.PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
-        if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true) { _panelDrag = true; return; }
+        if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true)
+        {
+            _panelDrag = true;
+            return;
+        }
         if (PanelLive() && _panel?.Contains(at) == true) return;
         if (select && PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true) return;
         if (select && PanelLive() && host.Sandbox.SandboxToggleClick(at)) return;
-        if (select && host.DebugMenu.Profiler?.Click(at) == true) { _profilerClick = true; return; }   // F12's legend opens and closes rows
-        if (select && host.DebugOverlays.StatsToggleClick(at)) { _profilerClick = true; return; }   // F11's character boxes and paths
+        // F12's legend opens and closes rows
+        if (select && host.DebugMenu.Profiler?.Click(at) == true)
+        {
+            _profilerClick = true;
+            return;
+        }
+        // F11's character boxes and paths
+        if (select && host.DebugOverlays.StatsToggleClick(at))
+        {
+            _profilerClick = true;
+            return;
+        }
         // The cinema's editor: its clicks never select or move characters.
         if (select && _cinema.MouseDown(at)) return;
         if (_cinema.Contains(at)) return;
         if (physical is { } button)
         {
-            // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
-            if (host.Player.MouseDown(host.PlayerButton(button), at, _shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight),
-                    Held(SilkKey.AltLeft, SilkKey.AltRight)))
-                return;
+            // Ctrl and Highlight (Alt) with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
+            bool ctrl = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
+            if (host.Player.MouseDown(host.PlayerButton(button), at, _shiftDown, ctrl, host.HighlightHeld())) return;
             host.Session.Input.SetMouseButton(button, true);
         }
     }
@@ -1019,6 +1245,9 @@ sealed class GameLoop(GameHost host)
         if (physical is { } button) host.Session.Input.SetMouseButton(button, false);
     }
 
+    /// <summary>
+    /// A pointer move: the orbit's drag (locked or held), the settings panel's drag, the interface's hover and the camera's mouse input.
+    /// </summary>
     void OnMouseMove(Silk.NET.Input.IMouse m, Vector2 p)
     {
         if (_orbitAnchor is not null)
@@ -1109,10 +1338,10 @@ sealed class GameLoop(GameHost host)
         KeepEyeAboveGround();
         var size = FramebufferSizeNow();
         // Until the warm-up's frames run smoothly the water reflection draws everything and the sky its cloud volume, so their pipelines are made
-        // under the cover (ReflectionPass.Warm, SkyRenderer.Warm).
+        // under the cover (ReflectionPass.Warm, SkyClouds.Warm).
         bool warmPasses = host.Warming && host.SmoothSeconds == 0;
         if (host.Gpu.Reflection is { } reflection) reflection.Warm = warmPasses;
-        host.Gpu.Sky.Warm = warmPasses;
+        host.Gpu.Sky.Clouds.Warm = warmPasses;
         host.UpdateView(size.X, size.Y);
         var pointer = PreparePointer(takeFile);
         host.PlayBench.BenchLap(5);
@@ -1121,7 +1350,11 @@ sealed class GameLoop(GameHost host)
             host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
         UpdateStats(dt);
         _totalFrames++;
-        if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter) { PrintRunSummary(now); _quit = true; }
+        if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter)
+        {
+            PrintRunSummary(now);
+            _quit = true;
+        }
         // The limit is on presented frames: with frame generation on every rendered frame brings a generated one, so the render rate is half of it.
         if (!_display.VSync && _fpsLimit > 0) GameHost.Limit(_frame, now, (_frameGen is { Enabled: true } ? 2.0 : 1.0) / _fpsLimit);
         return true;
@@ -1190,7 +1423,7 @@ sealed class GameLoop(GameHost host)
         double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
         host.AdvanceTotal += advanceMs;
         host.PlayBench.PlayBenchUpdated(advanceMs);   // before SimProfile, which clears the world's tick profile
-        if (host.DebugMenu.Profiler is not null) SimProfile(host.DebugMenu.Profiler, advanceMs);   // F12's sim row and its parts
+        if (host.DebugMenu.Profiler is not null) _simProfile.SimProfile(host.DebugMenu.Profiler, advanceMs);   // F12's sim row and its parts
         host.PlayBench.BenchLap(1);
         host.WorldNews();
         host.Saves.HandleSaves(frameDt);   // a quicksave or quickload asked for by a key, the autosave: between ticks, none in flight
@@ -1245,6 +1478,9 @@ sealed class GameLoop(GameHost host)
         if (!_cinemaHolds) host.TitleScreen.ApplyTitleCamera();
     }
 
+    /// <summary>
+    /// The title's battle and the sky arrival advance by the frame; during the arrival the camera follows it.
+    /// </summary>
     void AdvanceTitleAndArrival(double frameDt)
     {
         if (host.TitleScreen.TitleVisible && !host.Warming) host.TitleScreen.TitleBattle?.Advance(frameDt);
@@ -1295,7 +1531,7 @@ sealed class GameLoop(GameHost host)
             : Pixels(_orbitAnchor ?? pointerMouse.Position);
         host.DevConsoleHost.ConsolePointer = pointerAt;
         host.Player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
-        host.Player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
+        host.Player.AltHeld = host.HighlightHeld();
         host.ScreenshotRequested = host.Player.GateScreenshot(host.ScreenshotRequested);
         bool highlighting = Highlight(takeFile);
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered
@@ -1431,7 +1667,11 @@ sealed class GameLoop(GameHost host)
         host.Gpu.Post.Options.HdrPeak = _display.HdrActive ? PostOptions.HdrPeakFor(host.Config.HdrPeakNits, host.Config.HdrPaperNitsNow) : 0;
         // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
         if (_frameGen is FrameGeneration && _display.FrameGenerationLayer is null)
-        { _frameGen.Dispose(); _frameGen = null; }   // the layer fell back to the plain swapchain
+                {
+                    // the layer fell back to the plain swapchain
+                    _frameGen.Dispose();
+                    _frameGen = null;
+                }
         if (!_frameGenTried)
         {
             _frameGenTried = true;
@@ -1580,6 +1820,10 @@ sealed class GameLoop(GameHost host)
         return y + h - 8;
     }
 
+    /// <summary>
+    /// The loading screen over the frame while covered (with the sky arrival: only once it is at the stars, or exiting), else it frees its pictures
+    /// once gone.
+    /// </summary>
     void DrawLoadingCover(Vector2D<int> size, bool covered, GpuTexture uiTarget)
     {
         if (covered && host.Loading is not null && host.LoadingOverlay is not null)
@@ -1646,25 +1890,10 @@ sealed class GameLoop(GameHost host)
 
     #region Statistics and profiling
 
-    World? _simNamesFor;
-
-    string[] _simNames = [];
-
-    double[] _simMs = [];
-
-    const double SimWindowSeconds = 5;
-
-    readonly Dictionary<string, double> _simWindowMs = [];
-
-    double _simWindowStart = -1, _simWindowMain, _simWindowAhead;
-
-    long _simWindowTicks;
-
-    int _simWindowFrames;
-
-    long _simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowCarried, _simWindowWhole, _simWindowLimbs;
-
-    int _simWindowStepping;
+    /// <summary>
+    /// F12's simulation row and --log-spikes' steady simulation cost.
+    /// </summary>
+    readonly SimProfileWindow _simProfile = new(host);
 
     /// <summary>
     /// The graphics card's time and the drawn triangles, summed for F11's statistics.
@@ -1721,10 +1950,12 @@ sealed class GameLoop(GameHost host)
         _stats.Add("Performance");
         string limit = _display.VSync ? "vsync" : _fpsLimit > 0 ? $"limit {_fpsLimit}" : "uncapped";
         string gpuMs = _gpuSamples > 0 ? $"{_gpuSum / _gpuSamples:0.0}" : "-";
-        _stats.Add($"  frame rate    {_statsFrames / _statsTimer:0} fps{FrameGenerationSetup.FrameGenerationShown(_frameGen)}, {limit}; graphics card {gpuMs} ms a frame");
+        _stats.Add($"  frame rate    {_statsFrames / _statsTimer:0} fps{FrameGenerationSetup.FrameGenerationShown(_frameGen)}, {limit}; "
+            + $"graphics card {gpuMs} ms a frame");
         long ticks = host.Session.Simulation.TotalTicks - _statsTicks;
         _statsTicks = host.Session.Simulation.TotalTicks;
-        _stats.Add($"  simulation    {ticks / _statsTimer:0} ticks/s, {host.Session.CurrentSnapshot.Characters.Count} characters, {host.Session.Simulation.DroppedTicks} ticks dropped since the start");
+        _stats.Add($"  simulation    {ticks / _statsTimer:0} ticks/s, {host.Session.CurrentSnapshot.Characters.Count} characters, "
+            + $"{host.Session.Simulation.DroppedTicks} ticks dropped since the start");
         long objectTris = host.Gpu.Objects?.Totals[0, 1] ?? 0;
         int frames = Math.Max(_statsFrames, 1);
         var triangles = new WorldStats.Triangles(_terrainTris / frames, (objectTris - _objectTris0) / (double)frames,
@@ -1744,15 +1975,28 @@ sealed class GameLoop(GameHost host)
     {
         var snapshot = host.Session.CurrentSnapshot;
         string characters = host.Gpu.Characters is { } chars ? chars.Statistics() : "no characters";
-        Console.WriteLine($"profile   {snapshot.Characters.Count} characters in the snapshot, {snapshot.Characters.Count(c => c.Appearance is not null)} drawable; per frame: simulation advance {host.AdvanceTotal / Math.Max(_totalFrames, 1):0.000} ms ({host.Session.Simulation.TotalTicks} ticks, {host.AdvanceTotal / Math.Max(host.Session.Simulation.TotalTicks, 1):0.000} ms per tick), host draw-list fill {host.FillTotal / Math.Max(host.FillCalls, 1):0.000} ms, world draw cpu {_drawTotal / Math.Max(_totalFrames, 1):0.00} ms, {characters}");
+        Console.WriteLine($"profile   {snapshot.Characters.Count} characters in the snapshot, "
+            + $"{snapshot.Characters.Count(c => c.Appearance is not null)} drawable; "
+            + $"per frame: simulation advance {host.AdvanceTotal / Math.Max(_totalFrames, 1):0.000} ms ({host.Session.Simulation.TotalTicks} ticks, "
+            + $"{host.AdvanceTotal / Math.Max(host.Session.Simulation.TotalTicks, 1):0.000} ms per tick), "
+            + $"host draw-list fill {host.FillTotal / Math.Max(host.FillCalls, 1):0.000} ms, "
+            + $"world draw cpu {_drawTotal / Math.Max(_totalFrames, 1):0.00} ms, "
+            + $"{characters}");
         if (host.Sound.Audio is not null)
         {
             Console.WriteLine($"audio     {host.Sound.Audio.StatsLine()}");
-            Console.WriteLine($"audio     world: {host.Sound.WorldAudioStats()}");
-            Console.WriteLine($"audio     characters: {host.Sound.CharacterAudioStats()}, {host.Sound.UiAudioStats()}");
+            Console.WriteLine($"audio     world: {host.Sound.World.Stats()}");
+            Console.WriteLine($"audio     characters: {host.Sound.Characters.Stats()}, {host.Sound.Ui.Stats()}");
         }
-        if (host.MenuFrames > 0) Console.WriteLine($"menu      {host.MenuFrames} visible frames in {host.MenuFrameSeconds:0.0} s: {host.MenuFrames / host.MenuFrameSeconds:0} fps, {host.MenuSlowFrames} frames over 100 ms, longest {host.MenuLongestFrame * 1000:0.0} ms");
-        Console.WriteLine($"smoke     {_totalFrames} frames in {now:0.0} s: {_totalFrames / now:0} fps on average, {host.Session.Ticks.TotalTicks} control ticks, {host.Session.Simulation.TotalTicks} simulation ticks, game time {host.Session.Clock.TimeText}");
+        if (host.MenuFrames > 0)
+        {
+            Console.WriteLine($"menu      {host.MenuFrames} visible frames in {host.MenuFrameSeconds:0.0} s: "
+                + $"{host.MenuFrames / host.MenuFrameSeconds:0} fps, "
+                + $"{host.MenuSlowFrames} frames over 100 ms, longest {host.MenuLongestFrame * 1000:0.0} ms");
+        }
+        Console.WriteLine($"smoke     {_totalFrames} frames in {now:0.0} s: {_totalFrames / now:0} fps on average, "
+            + $"{host.Session.Ticks.TotalTicks} control ticks, "
+            + $"{host.Session.Simulation.TotalTicks} simulation ticks, game time {host.Session.Clock.TimeText}");
     }
 
     // ---- pictures and profiles ----
@@ -1776,6 +2020,9 @@ sealed class GameLoop(GameHost host)
         return (given, faithful);
     }
 
+    /// <summary>
+    /// Saves a picture as the next screenshot in the install's <c>_screens</c> folder.
+    /// </summary>
     void SaveScreenshot(GpuContext context, GpuTexture picture, int width, int height, bool topDown = false)
     {
         var file = GameScreenshots.Next(host.Install.Root);
@@ -1794,6 +2041,9 @@ sealed class GameLoop(GameHost host)
     void SaveSupersampled(GpuContext context, int n, int width, int height) => SaveTiles(context, n, width, height,
         GameScreenshots.Next(host.Install.Root));
 
+    /// <summary>
+    /// Draws and saves the tiled shot (<see cref="SaveSupersampled"/>) into <paramref name="file"/>.
+    /// </summary>
     void SaveTiles(GpuContext context, int n, int width, int height, string file)
     {
         var post = host.Gpu.Post!;
@@ -1822,7 +2072,12 @@ sealed class GameLoop(GameHost host)
                         column * width, row * height, width, height);
                 }
         }
-        finally { ViewWindow.Current = ViewWindow.Whole; post.Target = live; post.ResetHistory(); }
+        finally
+        {
+            ViewWindow.Current = ViewWindow.Whole;
+            post.Target = live;
+            post.ResetHistory();
+        }
         var dir = Path.GetDirectoryName(Path.GetFullPath(file));
         if (dir is not null) Directory.CreateDirectory(dir);
         Data.Textures.PngWriter.Write(file, n * width, n * height, picture);
@@ -1851,8 +2106,12 @@ sealed class GameLoop(GameHost host)
     {
         var (allocated, collections) = gc.Take();
         long total = allocated.Values.Sum();
-        Console.WriteLine($"spikes    allocated {total / 1048576.0:0} MB over the run (sampled); collections {string.Join(", ", collections.GroupBy(c => c.Generation).OrderBy(g => g.Key)
-            .Select(g => $"gen{g.Key} x{g.Count()} {g.Sum(c => c.PauseMs):0} ms"))}; the most allocated types (MB):");
+        var generations = collections
+            .GroupBy(c => c.Generation)
+            .OrderBy(g => g.Key)
+            .Select(g => $"gen{g.Key} x{g.Count()} {g.Sum(c => c.PauseMs):0} ms");
+        Console.WriteLine($"spikes    allocated {total / 1048576.0:0} MB over the run (sampled); collections {string.Join(", ", generations)}; "
+            + "the most allocated types (MB):");
         foreach (var (type, bytes) in allocated.OrderByDescending(p => p.Value).Take(30))
             Console.WriteLine($"spikes      {type,-90} {bytes / 1048576.0,9:0}");
     }
@@ -1866,103 +2125,26 @@ sealed class GameLoop(GameHost host)
         string path = Path.Combine(AppContext.BaseDirectory, $"vram-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
         void Caches(TextWriter w)
         {
-            if (host.Gpu.Guard is { } guard) { w.WriteLine(guard.Status); w.WriteLine(); }
+            if (host.Gpu.Guard is { } guard)
+            {
+                w.WriteLine(guard.Status);
+                w.WriteLine();
+            }
             host.Gpu.Objects?.WriteViewReport(w);
             host.Gpu.Objects?.Textures.WriteReport(w);
             host.Gpu.Foliage?.Textures.WriteReport(w);
             host.Gpu.Characters?.Textures.WriteReport(w);
         }
-        try { profiler.DumpVram(path, Caches); Console.WriteLine($"vram      dumped to {path}"); }
-        catch (IOException e) { Console.WriteLine($"vram      dump failed: {e.Message}"); }
-    }
-
-    // F12's sim parts: the names (the tick phases, the time outside the world's ticks, the world's systems), made again when the world is, and the
-    // frame's ms.
-
-    /// <summary>
-    /// Hands the frame's <paramref name="advanceMs"/> to the profiler with the world's tick profile split into phases and systems, and clears the
-    /// profile.
-    /// </summary>
-    internal void SimProfile(FrameProfiler profiler, double advanceMs)
-    {
-        var world = host.Session.World;
-        var profile = world.Profile;
-        int phases = TickProfile.PhaseNames.Length;
-        int systems = world.Systems.Count, parts = phases + 1 + systems;
-        if (_simNamesFor != world || _simNames.Length != parts + profile.Parts.Count + 1)
+        try
         {
-            _simNamesFor = world;
-            _simNames =
-            [
-                .. TickProfile.PhaseNames,
-                "outside ticks",
-                .. world.Systems.Select(s => s.GetType().Name is var n && n.EndsWith("System", StringComparison.Ordinal) && n.Length > 6 ? n[..^6] : n),
-                .. profile.Parts.Select(p => p.Name),
-                "tick ahead",
-            ];
-            _simMs = new double[_simNames.Length];
+            profiler.DumpVram(path, Caches);
+            Console.WriteLine($"vram      dumped to {path}");
         }
-        Array.Clear(_simMs);
-        double inTicks = 0, ahead = host.Session.TakeAheadMs();
-        for (int p = 0; p < phases; p++) inTicks += _simMs[p] = profile.PhaseMs[p];
-        // The phases also hold the tick run ahead during the last draw (docs/simulation.md "Tick ahead"), which is not in this frame's advance.
-        _simMs[phases] = Math.Max(0, advanceMs - Math.Max(0, inTicks - ahead));
-        for (int k = 0; k < profile.SystemMs.Length && phases + 1 + k < parts; k++) _simMs[phases + 1 + k] = profile.SystemMs[k];
-        for (int k = 0; k < profile.Parts.Count && parts + k < _simMs.Length; k++) _simMs[parts + k] = profile.Parts[k].Ms;
-        _simMs[^1] = ahead;
-        int paths = world.Systems.OfType<MovementSystem>().FirstOrDefault()?.Paths.Pending ?? 0;
-        profiler.Outside(advanceMs, profile.Ticks, _simNames, _simMs, phases + 1, systems, paths);
-        // --log-spikes: a slow frame's simulation by system and part (the phases only add up what these hold).
-        if (SpikeLog.Enabled && advanceMs > GameHost.SpikeSimMs)
-            for (int k = phases + 1; k < _simMs.Length; k++)
-                if (_simMs[k] >= 2) SpikeLog.Note($"sim {_simNames[k]}", ms: _simMs[k]);
-        if (SpikeLog.Enabled) SimWindow(profile, advanceMs, ahead, phases + 1, parts);
-        profile.Clear();
-    }
-
-    // --log-spikes: the simulation's steady cost, summed over a window of real time (the spike notes only see frames over SpikeSimMs).
-    // The ragdolls sampled once a frame: in play, moving, the physics' awake bodies, frames with any moving.
-
-    /// <summary>
-    /// --log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame, then ms a tick by phase, by
-    /// system, by system in the slow world phase and by part, biggest first. Keys carry their list's prefix: '#' phase, '~' slow world, '.' part.
-    /// </summary>
-    void SimWindow(TickProfile profile, double advanceMs, double ahead, int firstSystem, int firstPart)
-    {
-        double now = host.RealTime.Elapsed.TotalSeconds;
-        if (_simWindowStart < 0) _simWindowStart = now;
-        (_simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (_simWindowTicks + profile.Ticks, _simWindowMain + advanceMs, _simWindowAhead + ahead, _simWindowFrames + 1);
-        void Add(string key, double ms) => _simWindowMs[key] = _simWindowMs.GetValueOrDefault(key) + ms;
-        for (int p = 0; p < firstSystem - 1; p++) Add("#" + _simNames[p], _simMs[p]);
-        for (int k = firstSystem; k < _simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + _simNames[k], _simMs[k]);
-        for (int k = 0; k < profile.SystemMs.Length && firstSystem + k < firstPart; k++)
-            Add("~" + _simNames[firstSystem + k], profile.Ms(TickProfile.SlowWorld, k));
-        if (host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
+        catch (IOException e)
         {
-            (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping) = (_simWindowRagdolls + rag.Count, _simWindowMoving + rag.Moving, _simWindowAwake + rag.AwakeBodies, _simWindowStepping + (rag.Moving > 0 ? 1 : 0));
-            (_simWindowCarried, _simWindowWhole, _simWindowLimbs) = (_simWindowCarried + rag.MovingCarried, _simWindowWhole + rag.MovingWhole, _simWindowLimbs + rag.MovingLimbs);
+            Console.WriteLine($"vram      dump failed: {e.Message}");
         }
-        double seconds = now - _simWindowStart;
-        if (seconds < SimWindowSeconds) return;
-        if (_simWindowTicks > 0)
-        {
-            var inv = CultureInfo.InvariantCulture;
-            string Top(char kind, int count) => string.Join(", ",
-                _simWindowMs.Where(p => (p.Key[0] is '#' or '~' or '.' ? p.Key[0] : ' ') == kind && p.Value / _simWindowTicks >= 0.01)
-                .OrderByDescending(p => p.Value).Take(count)
-                .Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / _simWindowTicks:0.00}")));
-            double tickMs = _simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / _simWindowTicks;
-            Console.WriteLine(string.Create(inv, $"simprof   {host.Session.Simulation.Speed:0}x {_simWindowFrames / seconds:0} fps, {_simWindowTicks / seconds:0} ticks/s, {host.Session.World.Snapshot.Characters.Count} characters; ") +
-                string.Create(inv, $"ms a frame: in frame {_simWindowMain / _simWindowFrames:0.00}, ahead {_simWindowAhead / _simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
-                $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}; " +
-                string.Create(inv, $"ragdolls {(double)_simWindowRagdolls / _simWindowFrames:0.0}, moving {(double)_simWindowMoving / _simWindowFrames:0.0} (carried {(double)_simWindowCarried / _simWindowFrames:0.0}, whole {(double)_simWindowWhole / _simWindowFrames:0.0}, limbs {(double)_simWindowLimbs / _simWindowFrames:0.0}), awake bodies {(double)_simWindowAwake / _simWindowFrames:0}, stepping {100.0 * _simWindowStepping / _simWindowFrames:0}% of frames"));
-        }
-        _simWindowMs.Clear();
-        (_simWindowStart, _simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (now, 0, 0, 0, 0);
-        (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping, _simWindowCarried, _simWindowWhole, _simWindowLimbs) = (0, 0, 0, 0, 0, 0, 0);
     }
-
-    // ---- shut-down ----
 
     #endregion
 
@@ -1990,7 +2172,10 @@ sealed class GameLoop(GameHost host)
         if (SpikeLog.Enabled) SpikeLog.PrintSummary();
         if (spikeGc is not null) PrintAllocations(spikeGc);
         if (Simulation.Navigation.NavQuery.Stats is { Searches: > 0 } paths)
-            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, {paths.Exhausted} ran to the limit of {Simulation.Navigation.NavQuery.MaxIterations}");
+        {
+            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, "
+                + $"{paths.Exhausted} ran to the limit of {Simulation.Navigation.NavQuery.MaxIterations}");
+        }
         host.DebugMenu.Profiler?.Dispose();
         host.Player.DisposeUi();
         host.EndLoadingScreen();
@@ -2029,6 +2214,9 @@ sealed class GameLoop(GameHost host)
         host.Config.Save();
     }
 
+    /// <summary>
+    /// The config key of a look switch's label.
+    /// </summary>
     static string SwitchKey(string label) => SettingsMenu.SwitchKeyPrefix + label;
     #endregion
 

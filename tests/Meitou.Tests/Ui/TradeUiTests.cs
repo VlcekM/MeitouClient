@@ -47,7 +47,8 @@ public class TradeUiTests
         session.World.Player.Faction = 0;
         session.World.Player.Selection.Add(hero);
         stock.Trade = new(hero, new CharacterId(1, 0), "Armour King", 1000, 1000, 20, 100,
-            [new(0, "top", "Top", "main", 0, 0, 1, 1, 1, 1, 1, 1, false), new(1, "bottom", "Bottom", "main", 0, 99, 1, 1, 1, 1, 1, 1, false)], [], false);
+            [new(0, "top", "Top", "main", 0, 0, 1, 1, 1, 1, 1, 1, false), new(1, "bottom", "Bottom", "main", 0, 99, 1, 1, 1, 1, 1, 1, false)],
+            [], false);
         session.World.RunTick();
         var resources = OgreScriptResources.ForInstall(install!, LoadOrder.FromInstall(install!));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900 };
@@ -71,7 +72,10 @@ public class TradeUiTests
             Assert.Equal(ItemHolder.Character, Assert.Single(sent.OfType<PlaceHeld>()).Into.Holder);
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "trade-item-1" && c.Caption.Contains("c.", StringComparison.Ordinal));
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 
     [Theory, Slow]
@@ -138,6 +142,9 @@ public class TradeUiTests
             world.RunTicks(2);
             Assert.Null(world.Snapshot.Trade);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 }

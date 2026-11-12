@@ -8,12 +8,15 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// A blow's attack zone (<c>attackImpactCheck</c>): the characters and the walls and doors a swing hits besides its target.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
     /// The most characters a blow's zone holds (FUN_1407862e0's limit of 20).
     /// </summary>
-    const int ZoneCapacity = 20;
+    internal const int ZoneCapacity = 20;
 
     /// <summary>
     /// The <see cref="Effect.Kind"/> of the walls and doors a blow's zone may still hit: the target is the attacker, <c>Arg</c> the blow (+0x100 when
@@ -21,116 +24,109 @@ public sealed partial class CombatSystem
     /// </summary>
     public const int ZoneBuildingsEffect = 4;
 
+    /// <summary>
+    /// The characters a zone scan found, nearest first (<see cref="ZoneCapacity"/> at most).
+    /// </summary>
     [InlineArray(ZoneCapacity)]
-    struct ZoneSlots
+    internal struct ZoneSlots
     {
+        /// <summary>
+        /// The first slot (the inline array's element).
+        /// </summary>
         int _first;
     }
 
+    /// <summary>
+    /// The keys <see cref="ZoneSlots"/> is sorted by (the target -1, else the squared distance from the attacker), kept on the stack.
+    /// </summary>
     [InlineArray(ZoneCapacity)]
     struct ZoneKeys
     {
+        /// <summary>
+        /// The first key (the inline array's element).
+        /// </summary>
         float _first;
     }
 
+    /// <summary>
+    /// The state of <see cref="Scan"/>'s grid query: the attacker's side, the zone and the characters found.
+    /// </summary>
     struct ZoneScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The last tick's fight states (the down test).
+        /// </summary>
         public CombatSlot[] Read;
+        /// <summary>
+        /// The faction relations; null: no slave or enemy test.
+        /// </summary>
         public FactionRelations? Relations;
+        /// <summary>
+        /// The attacker's slot, its target's, faction and squad, and how many characters are found.
+        /// </summary>
         public int Self, Target, Faction, Squad, Count;
+        /// <summary>
+        /// Whether the attacker's zone takes slaves that are not its allies (an attacker neither of the player's faction nor anti-slavery).
+        /// </summary>
         public bool HitsSlaves;
+        /// <summary>
+        /// The zone's start, centre and heading (X/Z).
+        /// </summary>
         public Vector2 From, Centre, Forward;
+        /// <summary>
+        /// The attacker's feet height, the zone's half width, the half height test and the half depth.
+        /// </summary>
         public float Y, Half, High, Deep;
+        /// <summary>
+        /// The characters found, in key order.
+        /// </summary>
         public ZoneSlots Slots;
+        /// <summary>
+        /// The keys of <see cref="Slots"/>.
+        /// </summary>
         public ZoneKeys Keys;
     }
 
     /// <summary>
-    /// A blow's attack zone on the ground: the box's centre and heading (X/Z), half width, half depth, the attacker's feet height and the half height test.
+    /// A blow's attack zone on the ground: the box's centre and heading (X/Z), half width, half depth, the attacker's feet height and the half
+    /// height test.
     /// </summary>
-    readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
-
-    #region Zone lists
+    internal readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
 
     /// <summary>
-    /// The characters each fighter's attack zone held when it last looked (the original's list +0x1e0, <c>calculateTargetsInAttackZone</c>
-    /// FUN_1406087a0: built at the attack start and at each blow's impact), <see cref="ZoneCapacity"/> slots per fighter and a count; double-buffered
-    /// like the slots, so a defender reads the attacker's list of the last tick.
+    /// The characters each fighter's attack zone held when it last looked, double-buffered.
     /// </summary>
-    int[] _zoneRead = [], _zoneWrite = [];
-    byte[] _zoneCountRead = [], _zoneCountWrite = [];
-
-    /// <summary>
-    /// Whether <paramref name="defender"/> is in <paramref name="attacker"/>'s attack zone list (<c>FUN_140608460</c>), as of the last tick.
-    /// </summary>
-    bool InZone(int attacker, int defender)
-    {
-        int at = attacker * ZoneCapacity;
-        for (int n = 0; n < _zoneCountRead[attacker]; n++)
-            if (_zoneRead[at + n] == defender) return true;
-
-        return false;
-    }
-
-    /// <summary>
-    /// Builds fighter <paramref name="i"/>'s attack zone list for blow <paramref name="blow"/> (its own slot of the write buffer: partition-safe).
-    /// </summary>
-    void RecordZone(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow) =>
-        Keep(i, Scan(world, i, s, cold, tech, blow));
-
-    void Keep(int i, in ZoneScan scan)
-    {
-        int at = i * ZoneCapacity;
-        for (int n = 0; n < scan.Count; n++) _zoneWrite[at + n] = scan.Slots[n];
-
-        _zoneCountWrite[i] = (byte)scan.Count;
-    }
-
-    void ResizeZones(int size)
-    {
-        Array.Resize(ref _zoneRead, size * ZoneCapacity);
-        Array.Resize(ref _zoneWrite, size * ZoneCapacity);
-        Array.Resize(ref _zoneCountRead, size);
-        Array.Resize(ref _zoneCountWrite, size);
-    }
-
-    void CopyZones(int highWater)
-    {
-        Array.Copy(_zoneRead, _zoneWrite, highWater * ZoneCapacity);
-        Array.Copy(_zoneCountRead, _zoneCountWrite, highWater);
-    }
-
-    void SwapZones()
-    {
-        (_zoneRead, _zoneWrite) = (_zoneWrite, _zoneRead);
-        (_zoneCountRead, _zoneCountWrite) = (_zoneCountWrite, _zoneCountRead);
-    }
-
-    void HashZone(ref StateHasher hasher, int i)
-    {
-        hasher.Add(_zoneCountRead[i]);
-        for (int n = 0; n < _zoneCountRead[i]; n++) hasher.Add(_zoneRead[i * ZoneCapacity + n]);
-    }
-
-    #endregion
+    readonly AttackZoneLists _zones = new();
 
     #region Attack zone
 
     /// <summary>
+    /// Builds fighter <paramref name="i"/>'s attack zone list for blow <paramref name="blow"/> (its own slot of the write buffer: partition-safe).
+    /// </summary>
+    void RecordZone(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow)
+    {
+        var scan = Scan(world, i, s, cold, tech, blow);
+        _zones.Keep(i, in scan.Slots, scan.Count);
+    }
+
+    /// <summary>
     /// Emits blow <paramref name="blow"/> of fighter <paramref name="i"/>'s attack to everyone in its attack zone (<b>Verified</b>,
-    /// <c>calculateTargetsInAttackZone</c> FUN_1406087a0 and <c>attackImpactCheck</c> FUN_14060a2f0, docs/game/combat.md "Attack zone"), at most the technique's
-    /// <c>max simultaneous hits</c>; nobody in it is a whiff and the swing keeps its 0.5 s pause. The zone is a box ahead along the heading, k the fighter's
-    /// size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance − the distance moved since
-    /// the swing started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h = max(0, (offset − k r)
-    /// / 2) moves the centre back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an enemy that is not an
-    /// ally. Engine readings: a body counts when its footprint circle (size-scaled) meets the box, the height test is the box's half-height plus 9
-    /// from the fighter's feet, and the order is the target first, then by distance (the original's is the physics query's).
+    /// <c>calculateTargetsInAttackZone</c> FUN_1406087a0 and <c>attackImpactCheck</c> FUN_14060a2f0, docs/game/combat.md "Attack zone"), at most the
+    /// technique's <c>max simultaneous hits</c>; nobody in it is a whiff and the swing keeps its 0.5 s pause. The zone is a box ahead along the
+    /// heading, k the fighter's size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance −
+    /// the distance moved since the swing started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h
+    /// = max(0, (offset − k r) / 2) moves the centre back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an
+    /// enemy that is not an ally. Engine readings: a body counts when its footprint circle (size-scaled) meets the box, the height test is the box's
+    /// half-height plus 9 from the fighter's feet, and the order is the target first, then by distance (the original's is the physics query's).
     /// </summary>
     void Strike(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow, EffectBuffer effects)
     {
         var scan = Scan(world, i, s, cold, tech, blow);
-        Keep(i, in scan);
+        _zones.Keep(i, in scan.Slots, scan.Count);
         int hits = Math.Min(scan.Count, Math.Max(1, tech.MaxSimultaneousHits));
         for (int n = 0; n < hits; n++)
             effects.Emit(i, scan.Slots[n], BlowEffect, s.AttackSeq, new Vector3(s.AttackTech, 0, 0), blow);
@@ -212,7 +208,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The attack zone of blow <paramref name="blow"/> (<see cref="Strike"/>), from the last tick's positions, so the act and the apply see the same box.
+    /// The attack zone of blow <paramref name="blow"/> (<see cref="Strike"/>), from the last tick's positions, so the act and the apply see the
+    /// same box.
     /// </summary>
     static Zone ZoneOf(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow)
     {
@@ -247,7 +244,13 @@ public sealed partial class CombatSystem
     #region Buildings in the zone
 
     /// <summary>
-    /// The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit no wall.
+    /// The doors and walls a blow's zone reaches (<see cref="ZoneBuildings.Collect"/>).
+    /// </summary>
+    readonly ZoneBuildings _zoneBuildings = new();
+
+    /// <summary>
+    /// The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit
+    /// no wall.
     /// </summary>
     public Construction.ConstructionSystem? Construction { get; set; }
 
@@ -256,15 +259,13 @@ public sealed partial class CombatSystem
     /// </summary>
     public Locks.LockSystem? Locks { get; set; }
 
-    readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> _buildingScratch = [];
-
     /// <summary>
-    /// The walls and doors in a blow's zone (<c>attackImpactCheck</c>: <c>WallBuilding</c> and <c>DoorStuff</c> are the buildings whose <c>hitByMeleeAttack</c>
-    /// does anything, docs/game/combat.md "Attack zone"), up to the hits the characters left, nearest first: the attacker's damage packet (times the blow's power)
-    /// gives f = 2 blunt + 0.5 cut; a door takes clamp(f, 20, 60) (<see cref="Locks.LockSystem.Strike"/>), a wall clamp(f / 2, 10, 60) x 0.003 off its progress
-    /// (its wall line's for an attached piece), destroyed at 0. A broken door takes nothing. Engine readings: a wall counts when its footprint hull is within the
-    /// box's half width of its axis's three points (near end, centre, far end), a door when its leaf's centre is in the box widened by the leaf's half width;
-    /// the walls and doors come after the characters.
+    /// The walls and doors in a blow's zone (<c>attackImpactCheck</c>: <c>WallBuilding</c> and <c>DoorStuff</c> are the buildings whose
+    /// <c>hitByMeleeAttack</c> does anything, docs/game/combat.md "Attack zone"), up to the hits the characters left, nearest first: the attacker's
+    /// damage packet (times the blow's power) gives f = 2 blunt + 0.5 cut; a door takes clamp(f, 20, 60) (<see cref="Locks.LockSystem.Strike"/>), a
+    /// wall clamp(f / 2, 10, 60) x 0.003 off its progress (its wall line's for an attached piece), destroyed at 0. A broken door takes nothing.
+    /// Engine readings: a wall counts when its footprint hull is within the box's half width of its axis's three points (near end, centre, far end),
+    /// a door when its leaf's centre is in the box widened by the leaf's half width; the walls and doors come after the characters.
     /// </summary>
     void ApplyZoneBuildings(World world, in Effect e)
     {
@@ -278,20 +279,18 @@ public sealed partial class CombatSystem
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var raw = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str,
+                fighter.FistsItem, TargetKind.None,
                 null, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None,
+            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str,
+                fighter.Weapon!, TargetKind.None,
                 null, fighter.DamageOutput, _combat);
         var packet = Powered(raw, tech, blow);
         float f = 2 * packet.Blunt + 0.5f * packet.Cut;
 
-        var found = _buildingScratch;
-        found.Clear();
-        CollectDoors(world, zone, found);
-        CollectWalls(world, zone, found);
+        var found = _zoneBuildings.Collect(world, zone, Locks, Construction);
         if (found.Count == 0) return;
 
-        found.Sort(static (x, y) => x.Key.CompareTo(y.Key));
         for (int n = 0; n < found.Count && n < left; n++)
         {
             var (_, doorId, wall) = found[n];
@@ -301,53 +300,6 @@ public sealed partial class CombatSystem
         }
 
         if ((e.Arg & 0x100) == 0 && aSlot.AttackSeq == (int)e.Amount && aSlot.AttackTech >= 0) aSlot.LastOutcome = BlowOutcome.Hit;
-    }
-
-    /// <summary>
-    /// Adds the doors of the level's fixtures that the zone reaches and that are not broken (<see cref="ApplyZoneBuildings"/>).
-    /// </summary>
-    void CollectDoors(World world, Zone zone, List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
-    {
-        if (Locks is null) return;
-
-        foreach (var pick in world.Fixtures.DoorPicks)
-        {
-            var d = new Vector2(pick.Position.X, pick.Position.Z) - zone.Centre;
-            float reach = zone.Deep + zone.Half + 30;
-            if (d.LengthSquared() > reach * reach || MathF.Abs(pick.Position.Y - zone.Y) > zone.High + 20) continue;
-            if (world.Fixtures.Find(pick.Id) is not { DoorBroken: false } door || world.Fixtures.DoorSpotOf(door) is not { } spot) continue;
-
-            float along = MathF.Abs(Vector2.Dot(d, zone.Forward));
-            float across = MathF.Abs(d.X * zone.Forward.Y - d.Y * zone.Forward.X);
-            if (MathF.Max(0, across - zone.Half) > spot.HalfWidth || MathF.Max(0, along - zone.Deep) > spot.HalfWidth) continue;
-
-            found.Add((d.LengthSquared(), pick.Id, null));
-        }
-    }
-
-    /// <summary>
-    /// Adds the walls of the construction system that the zone reaches (<see cref="ApplyZoneBuildings"/>).
-    /// </summary>
-    void CollectWalls(World world, Zone zone, List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
-    {
-        if (Construction is not { } construction) return;
-
-        foreach (var site in world.Buildings.All)
-        {
-            if (site.Destroyed || site.Progress <= 0 || construction.Data(site.Record) is not { LinksTogether: true }) continue;
-
-            float best = float.MaxValue;
-            for (int n = -1; n <= 1; n++)
-            {
-                var at = zone.Centre + zone.Forward * (n * zone.Deep);
-                float gap = construction.Settings.EdgeGap?.Invoke(site, at) ?? Vector2.Distance(at, new Vector2(site.Position.X, site.Position.Z));
-                best = MathF.Min(best, gap);
-            }
-
-            if (best > zone.Half) continue;
-
-            found.Add((Vector2.DistanceSquared(new Vector2(site.Position.X, site.Position.Z), zone.From), null, site));
-        }
     }
 
     /// <summary>

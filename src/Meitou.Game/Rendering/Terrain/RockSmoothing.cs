@@ -117,7 +117,11 @@ public static class RockSmoothing
             for (int i = 0; i < vid.Length; i++)
             {
                 var n = part.Vertices[i].Normal;
-                if (!Usable(n)) { agree[vid[i]] = false; continue; }
+                if (!Usable(n))
+                {
+                    agree[vid[i]] = false;
+                    continue;
+                }
                 n = Vector3.Normalize(n);
                 if (first[vid[i]] is not { } f) first[vid[i]] = n;
                 else if (Vector3.Dot(f, n) < 0.9995f) agree[vid[i]] = false;
@@ -163,5 +167,8 @@ public static class RockSmoothing
             }
     }
 
+    /// <summary>
+    /// A normal that can be normalised (not zero, not infinite or NaN).
+    /// </summary>
     static bool Usable(Vector3 n) => n.LengthSquared() is > 1e-12f and < float.PositiveInfinity;
 }

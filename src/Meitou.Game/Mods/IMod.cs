@@ -21,6 +21,9 @@ public interface IMod
 /// </summary>
 public interface IModSaveData
 {
+    /// <summary>
+    /// Writes the system's state for the save (its own format; the game stores the bytes as they are).
+    /// </summary>
     void Write(Stream stream);
 
     /// <summary>
@@ -52,6 +55,9 @@ public static class ModApi
     /// </summary>
     public const int DependenciesVersion = Content.CodeModApi.Dependencies;
 
+    /// <summary>
+    /// Whether the game runs a manifest of this <c>apiVersion</c> (<see cref="MinimumVersion"/>..<see cref="Version"/>).
+    /// </summary>
     public static bool Supports(int apiVersion) => apiVersion is >= MinimumVersion and <= Version;
 }
 
@@ -63,5 +69,8 @@ public static class ModApi
 /// </summary>
 public interface IModDependents
 {
+    /// <summary>
+    /// A dependent of this framework failed in <see cref="IMod.Initialize"/>: drop what it registered with the framework, by its manifest id.
+    /// </summary>
     void DependentFailed(string modId);
 }

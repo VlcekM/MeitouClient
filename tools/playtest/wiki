@@ -144,7 +144,7 @@ def need_data():
         sys.exit('wiki: no data. Looked in %s (your export), %s (shipped clean wiki) and %s (observed). %s' % (GEN, CLEAN, OBS, export_hint()))
 def gen_missing(): return not has_json(GEN) and not has_json(CLEAN)
 def native_exe():
-    for cand in (os.path.join(os.path.dirname(HERE), 'MeitouClient'), os.path.join(ROOT, 'src', 'Meitou.Game', 'bin', 'Release', 'net10.0', 'MeitouClient')):
+    for cand in (os.path.join(os.path.dirname(HERE), 'MeitouClient'), os.path.join(ROOT, 'src', 'Meitou.Game', 'bin', 'Release', 'net11.0', 'MeitouClient')):
         if os.path.exists(cand): return cand
     return None
 def export_hint():

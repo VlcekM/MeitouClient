@@ -17,7 +17,8 @@ public class BindlessTests
         {
             return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
         }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }

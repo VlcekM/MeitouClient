@@ -17,8 +17,15 @@ public class NativeShaderTests
 {
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { return null; }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true });
+        }
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            return null;
+        }
     }
 
     static readonly Dictionary<string, string> Model = new() { ["uModel"] = "mat4(1.0)" };
@@ -86,8 +93,9 @@ public class NativeShaderTests
                             "FrameConstants" => typeof(FrameConstants), "ViewConstants" => typeof(ViewConstants), "Push" => pushType,
                             "TerrainConstants" => typeof(TerrainConstants), _ => null,
                         };
-                        if (b.Name is "FrameConstants" or "ViewConstants" or "MeshBones" or "KenshiShadowReceiver" or "KenshiShadowCaster" or "MeitouShadowReceiver")
-                            Assert.Equal(NativeShaders.FrameSet, b.Set);
+                        bool frameSet = b.Name is "FrameConstants" or "ViewConstants" or "MeshBones" or "KenshiShadowReceiver" or "KenshiShadowCaster"
+                            or "MeitouShadowReceiver";
+                        if (frameSet) Assert.Equal(NativeShaders.FrameSet, b.Set);
                         if (b.Name is "TerrainConstants") Assert.Equal(TerrainShaders.ConstantsSet, b.Set);
                         if (type is null) continue;
                         foreach (var m in b.Members)

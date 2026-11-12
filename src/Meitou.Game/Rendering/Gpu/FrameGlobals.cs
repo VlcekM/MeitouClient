@@ -15,9 +15,21 @@ public sealed class FrameGlobals
 {
     #region Publishing
 
+    /// <summary>
+    /// The published texture getters, by GLSL sampler name.
+    /// </summary>
     readonly Dictionary<string, Func<SampledTexture>> _textures = [];
+    /// <summary>
+    /// The published uniform block getters, by GLSL block name.
+    /// </summary>
     readonly Dictionary<string, Func<GpuBufferBinding>> _blocks = [];
+    /// <summary>
+    /// The published loose uniforms, by GLSL uniform name.
+    /// </summary>
     readonly Dictionary<string, Uniform> _uniforms = [];
+    /// <summary>
+    /// The block getters that replace published ones while set (<see cref="OverrideBlock"/>).
+    /// </summary>
     readonly Dictionary<string, Func<GpuBufferBinding>> _blockOverrides = [];
 
     /// <summary>
@@ -31,12 +43,18 @@ public sealed class FrameGlobals
     /// </summary>
     public int Version { get; private set; }
 
+    /// <summary>
+    /// Publishes a texture getter under a sampler name (replacing an earlier one).
+    /// </summary>
     public void Publish(string name, Func<SampledTexture> texture)
     {
         _textures[name] = texture;
         Version++;
     }
 
+    /// <summary>
+    /// Publishes a uniform block getter under a block name (replacing an earlier one).
+    /// </summary>
     public void Publish(string name, Func<GpuBufferBinding> block)
     {
         _blocks[name] = block;
@@ -76,8 +94,14 @@ public sealed class FrameGlobals
 
     #region Lookup
 
+    /// <summary>
+    /// The texture getter published under <paramref name="name"/>, or null.
+    /// </summary>
     public Func<SampledTexture>? Texture(string name) => _textures.GetValueOrDefault(name);
 
+    /// <summary>
+    /// A getter for the block published under <paramref name="name"/> that applies its override while one is set, or null when none is published.
+    /// </summary>
     public Func<GpuBufferBinding>? Block(string name)
     {
         var published = _blocks.GetValueOrDefault(name);
@@ -97,12 +121,24 @@ public sealed class FrameGlobals
         else _blockOverrides[name] = getter;
     }
 
+    /// <summary>
+    /// The loose uniform published under <paramref name="name"/>, or null.
+    /// </summary>
     public Uniform? UniformValue(string name) => _uniforms.GetValueOrDefault(name);
 
+    /// <summary>
+    /// The published texture names.
+    /// </summary>
     public IEnumerable<string> TextureNames => _textures.Keys;
 
+    /// <summary>
+    /// The published block names.
+    /// </summary>
     public IEnumerable<string> BlockNames => _blocks.Keys;
 
+    /// <summary>
+    /// The published loose uniform names.
+    /// </summary>
     public IEnumerable<string> UniformNames => _uniforms.Keys;
 
     #endregion
@@ -114,6 +150,9 @@ public sealed class FrameGlobals
     /// </summary>
     public abstract class Uniform
     {
+        /// <summary>
+        /// Sets the value on <paramref name="program"/>'s uniform, unless the owner would not set it now.
+        /// </summary>
         internal abstract void Write(LegacyProgram program, UniformHandle handle);
 
         /// <summary>
@@ -123,6 +162,9 @@ public sealed class FrameGlobals
         internal abstract bool TryRead(Span<byte> destination);
     }
 
+    /// <summary>
+    /// A loose uniform of one value type, with an optional condition for writing it.
+    /// </summary>
     sealed class Uniform<T>(Func<T> get, Func<bool>? when) : Uniform where T : unmanaged
     {
         internal override void Write(LegacyProgram program, UniformHandle handle)

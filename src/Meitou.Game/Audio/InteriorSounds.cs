@@ -22,6 +22,9 @@ public sealed class InteriorSounds(WwisePlayer player)
     /// </summary>
     public static readonly string[] Names = ["None", "Metal", "Stone", "Wicker", "Wood"];
 
+    /// <summary>
+    /// The instance id of the building under the pivot at the last update; null outside.
+    /// </summary>
     string? _last;
 
     /// <summary>

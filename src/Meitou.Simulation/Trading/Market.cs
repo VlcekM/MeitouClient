@@ -54,14 +54,35 @@ public sealed class Market
     /// </summary>
     public const float UniformPriceMult = 0.3f;
 
+    /// <summary>
+    /// The world's data: items, towns, factions and the game database.
+    /// </summary>
     readonly PopulationData _data;
+    /// <summary>
+    /// The base value of each record, quality and manufacturer asked for so far.
+    /// </summary>
     readonly ConcurrentDictionary<(string Record, float Quality, string Company), int> _baseValues = new();
+    /// <summary>
+    /// The trade culture of each placed town and of each faction (null: none).
+    /// </summary>
     readonly TradeCulture?[] _siteCultures, _factionCultures;
+    /// <summary>
+    /// The towns' market factors, rolled on first use.
+    /// </summary>
     readonly Lazy<MarketFactors> _factors;
 
+    /// <summary>
+    /// The CONSTANTS the prices read.
+    /// </summary>
     public PriceConstants Constants { get; }
+    /// <summary>
+    /// The item factory of the world's data.
+    /// </summary>
     public ItemFactory Items => _data.Items;
 
+    /// <summary>
+    /// Prices for <paramref name="data"/>'s items, towns and factions; the market factors are rolled from <paramref name="seed"/> when first read.
+    /// </summary>
     public Market(PopulationData data, ulong seed)
     {
         this._data = data;
@@ -183,7 +204,8 @@ public sealed class Market
             case FcsRecordType.Weapon or FcsRecordType.Crossbow:
                 {
                     int stored = BaseValue(item);
-                    return sell ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
+                    return sell
+                        ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
                 }
             case FcsRecordType.Armour:
                 {
@@ -196,7 +218,8 @@ public sealed class Market
                 }
             case FcsRecordType.MapItem or FcsRecordType.Blueprint:
                 {
-                    int value = item.Type == FcsRecordType.Blueprint ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
+                    int value = item.Type == FcsRecordType.Blueprint
+                        ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
                     if (!sell) return (int)(t * value);
 
                     return (int)(t * value * (item.Type == FcsRecordType.MapItem ? k.LootPriceMult : k.LootPriceMultGear));
@@ -239,20 +262,38 @@ public sealed class Market
 /// </summary>
 sealed class MarketFactors
 {
+    /// <summary>
+    /// The position of each <c>all trade goods</c> item in a town's factor list, by record id.
+    /// </summary>
     readonly Dictionary<string, int> _itemIndex;
+    /// <summary>
+    /// Each placed town's factors (null: no market).
+    /// </summary>
     readonly float[]?[] _bySite;
 
+    /// <summary>
+    /// The factors of the items in <paramref name="itemIndex"/> per town in <paramref name="bySite"/>.
+    /// </summary>
     MarketFactors(Dictionary<string, int> itemIndex, float[]?[] bySite)
     {
         this._itemIndex = itemIndex;
         this._bySite = bySite;
     }
 
+    /// <summary>
+    /// The market factor of <paramref name="record"/> in town <paramref name="site"/>; 1 when it has none.
+    /// </summary>
     public float Of(int site, string record) =>
         (uint)site < (uint)_bySite.Length && _bySite[site] is { } f && _itemIndex.TryGetValue(record, out int i) ? f[i] : 1;
 
+    /// <summary>
+    /// Whether a town of <paramref name="type"/> has market factors (not a nest, nest marker, point of interest or null town).
+    /// </summary>
     public static bool HasMarket(TownType type) => type is not (TownType.Nest or TownType.NestMarker or TownType.PointOfInterest or TownType.Null);
 
+    /// <summary>
+    /// Rolls every market town's factors in placed-site order (see the class summary).
+    /// </summary>
     public static MarketFactors Roll(PopulationData data, float margin, ulong seed)
     {
         var list = data.Db.OfType(FcsRecordType.VendorList).FirstOrDefault(r => r.Name == Market.AllTradeGoods);

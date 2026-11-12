@@ -3,6 +3,7 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
 
@@ -59,6 +60,7 @@ public static class SavedKit
 
             if (s.Contents is { } contents && item.Contents is { } bag)
                 Fill(bag, contents, factory, notes, "backpack_content");
+
             if (Fits(inventory, item)) inventory.Items.Add(item);
             else (rejected ??= []).Add(item);
         }
@@ -69,7 +71,9 @@ public static class SavedKit
         {
             string from = $"{item.Section} {item.X},{item.Y}";
             bool added = gridSection == "main" ? inventory.Add(item) : inventory.AddTo(gridSection, item);
-            notes?.Add(added ? $"item {item.Record} did not fit at {from}; auto-added at {item.Section} {item.X},{item.Y}" : $"item {item.Record} did not fit at {from} and found no room; left out");
+            notes?.Add(added
+                ? $"item {item.Record} did not fit at {from}; auto-added at {item.Section} {item.X},{item.Y}"
+                : $"item {item.Record} did not fit at {from} and found no room; left out");
         }
     }
 
@@ -99,8 +103,12 @@ public static class SavedKit
     {
         // A blueprint is saved as its look record with the RESEARCH as company and material (Verified, the owner's saves); the factory makes it from
         // the research.
-        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.Research } c ? c : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.Research } m ? m : null;
-        if ((research is not null ? factory.Blueprint(research, s.Quantity, s.Quality) : factory.Create(s.BaseId, s.Quantity, s.Quality)) is not { } item)
+        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.Research } c
+            ? c
+            : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.Research } m ? m : null;
+        if ((research is not null
+            ? factory.Blueprint(research, s.Quantity, s.Quality)
+            : factory.Create(s.BaseId, s.Quantity, s.Quality)) is not { } item)
             return null;
 
         item.Section = s.Section;
@@ -142,6 +150,9 @@ public static class SavedKit
     public static List<SaveItem> FromInventory(Inventory inventory) =>
         [.. inventory.Items.Where(i => !InventoryCommands.IsLimbSection(i.Section)).Select(FromItem)];
 
+    /// <summary>
+    /// The saved item of <paramref name="i"/>, under its own section.
+    /// </summary>
     internal static SaveItem FromItem(ItemInstance i) => FromItem(i, i.Section);
 
     /// <summary>
@@ -151,8 +162,14 @@ public static class SavedKit
     [ThreadStatic] internal static List<(SaveItem Item, CharacterId Owner)>? OwnerNotes;
 
     /// <summary>
+    /// The factions by index while a save is captured, to name a stolen mark's faction (<see cref="SaveItem.StolenFrom"/>; null: not capturing).
+    /// </summary>
+    [ThreadStatic] internal static IReadOnlyList<Data.Gameplay.FactionData>? Factions;
+
+    /// <summary>
     /// A saved item written under <paramref name="section"/> (a machine grid whose original section name is not Meitou's <c>main</c>). Its
-    /// <c>ownedby</c> is the robbed character's handle, the null handle when the owner read from the save was cleared since, else the record's own.
+    /// <c>ownedby</c> is the robbed character's handle, the null handle when the owner read from the save was cleared since, else the record's own;
+    /// a stolen one also names the robbed faction.
     /// </summary>
     internal static SaveItem FromItem(ItemInstance i, string section)
     {
@@ -181,11 +198,18 @@ public static class SavedKit
             Lock = i.Lock is { } l ? new SaveItemLock(l.Level, l.EffectivelyLocked, l.Broken, l.Hardness) : null,
             Contents = i.Contents is { } bag ? FromInventory(bag) : null,
             OwnedBy = !i.Owner.IsNone || i.OwnerFromSave ? Hand.Null : null,
+            StolenFrom = (uint)i.StolenFrom < (uint)(Factions?.Count ?? 0) ? Factions![i.StolenFrom].Id : null,
         };
         if (!i.Owner.IsNone) OwnerNotes?.Add((saved, i.Owner));
 
         return saved;
     }
+
+    /// <summary>
+    /// The faction a saved item's <see cref="SaveItem.StolenFromKey"/> names (-1: none, or not in the data).
+    /// </summary>
+    internal static int StolenFrom(FcsRecord item, PopulationData data) =>
+        item.Strings.GetValueOrDefault(SaveItem.StolenFromKey) is { Length: > 0 } id ? data.FactionIndex(id) : -1;
 
     /// <summary>
     /// Puts the non-natural limbs of <paramref name="medical"/> (stumps, prosthetics, crushed) and a cut-off head into <paramref name="loadout"/>.
@@ -216,7 +240,9 @@ public static class SavedKit
         for (int k = 0; k < loadout.Limbs.Length; k++)
         {
             int state = SaveLimbs.StateOf(bits, k);
-            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LimbReplacement } record ? record : null;
+            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LimbReplacement } record
+                ? record
+                : null;
             loadout.Limbs[k] = state switch
             {
                 0 => null,
@@ -334,7 +360,8 @@ public static class SavedKit
                 loadout.Carried.Add(new LoadoutItem(record) { Colour = Find(s.ColourId) });
             else if (s.Section is "hip" or "back" && record.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
             {
-                var weapon = new LoadoutWeapon(record) { Section = s.Section, Row = s.Y, Level = s.Level, Manufacturer = Find(s.CompanyId), Model = Find(s.MaterialId) };
+                var weapon = new LoadoutWeapon(record) { Section = s.Section, Row = s.Y, Level = s.Level, Manufacturer = Find(s.CompanyId),
+                    Model = Find(s.MaterialId) };
                 if (record.Type == FcsRecordType.Crossbow) loadout.Crossbow ??= weapon;
                 else loadout.Weapons.Add(weapon);
             }

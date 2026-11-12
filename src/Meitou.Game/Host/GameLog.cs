@@ -8,17 +8,35 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class GameLog : TextWriter
 {
+    /// <summary>
+    /// Past 10 MiB the log is cut down to its last 8 MiB.
+    /// </summary>
     const long Cap = 10 << 20, Keep = 8 << 20;
 
+    /// <summary>
+    /// The log file, opened for appending.
+    /// </summary>
     readonly FileStream _file;
+    /// <summary>
+    /// The file's UTF-8 writer, flushed per write.
+    /// </summary>
     readonly StreamWriter _writer;
     /// <summary>
     /// The output and the error both write here, each through its own synchronised writer; the flushing thread too.
     /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// Set at each line's end, waking <see cref="FlushToDisk"/>.
+    /// </summary>
     readonly AutoResetEvent _lineEnded = new(false);
+    /// <summary>
+    /// Set on dispose: the flushing thread ends.
+    /// </summary>
     bool _disposed;
 
+    /// <summary>
+    /// A log writing to <paramref name="file"/>, with its flushing thread started.
+    /// </summary>
     GameLog(FileStream file)
     {
         this._file = file;
@@ -55,6 +73,7 @@ sealed class GameLog : TextWriter
         }
     }
 
+    /// <inheritdoc/>
     public override Encoding Encoding => _writer.Encoding;
 
     /// <summary>
@@ -76,8 +95,24 @@ sealed class GameLog : TextWriter
         }
     }
 
-    public override void Write(char value) { lock (_gate) { _writer.Write(value); Trim(value == '\n'); } }
-    public override void Write(string? value) { lock (_gate) { _writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
+    public override void Write(char value)
+    {
+        lock (_gate)
+        {
+            _writer.Write(value);
+            Trim(value == '\n');
+        }
+    }
+
+    public override void Write(string? value)
+    {
+        lock (_gate)
+        {
+            _writer.Write(value);
+            Trim(value is { Length: > 0 } && value[^1] == '\n');
+        }
+    }
+
     public override void Write(char[] buffer, int index, int count)
     {
         lock (_gate)
@@ -86,8 +121,19 @@ sealed class GameLog : TextWriter
             Trim(count > 0 && buffer[index + count - 1] == '\n');
         }
     }
-    public override void WriteLine(string? value) { lock (_gate) { _writer.WriteLine(value); Trim(true); } }
 
+    public override void WriteLine(string? value)
+    {
+        lock (_gate)
+        {
+            _writer.WriteLine(value);
+            Trim(true);
+        }
+    }
+
+    /// <summary>
+    /// Wakes the flushing thread at a line's end, and past <see cref="Cap"/> keeps only the last <see cref="Keep"/> bytes from a whole line.
+    /// </summary>
     void Trim(bool lineEnd)
     {
         if (lineEnd) _lineEnded.Set();   // FlushToDisk
@@ -103,6 +149,7 @@ sealed class GameLog : TextWriter
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             lock (_gate)
             {
                 _disposed = true;
@@ -111,6 +158,7 @@ sealed class GameLog : TextWriter
                 _writer.Dispose();
                 _lineEnded.Set();
             }
+        }
         base.Dispose(disposing);
     }
 }
@@ -120,6 +168,7 @@ sealed class GameLog : TextWriter
 /// </summary>
 sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
+    /// <inheritdoc/>
     public override Encoding Encoding => second.Encoding;
     public override void Write(char value) { first.Write(value); second.Write(value); }
     public override void Write(string? value) { first.Write(value); second.Write(value); }

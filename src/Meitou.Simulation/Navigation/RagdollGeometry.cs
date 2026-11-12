@@ -25,20 +25,39 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     const float Reach = 600;
 
     /// <summary>
-    /// Heightmap samples along a block of the ground cache, and blocks kept at most (65 × 65 samples each, about 8 KB; a block is 1152 units across).
+    /// Gathers the zones' building and feature collision (foliage left out); used under <see cref="_gatherLock"/>.
     /// </summary>
-    const int BlockSamples = 64, MaxBlocks = 256;
-
     readonly ZoneGeometryGatherer _gatherer;
-    readonly Func<float, float, float> _terrain;
+    /// <summary>
+    /// Each zone's gathered triangles by 32-unit cell, buildings and roofs apart, as the task of a worker's gather; dropped by a run-time building
+    /// change and by <see cref="Evict"/>.
+    /// </summary>
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), Task<Dictionary<(int, int), List<Vector3>>>> _zones = new();
+    /// <summary>
+    /// One gather at a time: the gatherer is not thread-safe.
+    /// </summary>
     readonly object _gatherLock = new();
+    /// <summary>
+    /// When each gathered zone was last asked for (a tick of <see cref="_clock"/>), for <see cref="Evict"/>.
+    /// </summary>
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), long> _used = new();
+    /// <summary>
+    /// Counts the asks; the newest has the highest number.
+    /// </summary>
     long _clock;
+    /// <summary>
+    /// The buildings placed at run time, whose changes drop the zones they touch; null: none.
+    /// </summary>
     readonly NavRuntimeBuildings? _runtime;
+    /// <summary>
+    /// The counter behind <see cref="Generation"/>, bumped by every run-time building change.
+    /// </summary>
     int _generation;
-    readonly TerrainHeightmap? _map;
-    readonly Dictionary<(int, int), HeightWindow> _blocks = [];
+
+    /// <summary>
+    /// The terrain bodies land on.
+    /// </summary>
+    readonly RagdollGround _ground;
 
     /// <param name="terrainHeight">
     /// The simulation's ground height, used only where the full heightmap cannot be opened: it is the coarse world grid away from the loaded area.
@@ -47,25 +66,22 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// The buildings placed at run time (built, bought or ruined houses), which the zones' collision includes as the navmesh does; a change drops the
     /// zone's gathered collision and bumps <see cref="Generation"/>.
     /// </param>
-    public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight, NavRuntimeBuildings? runtime = null)
+    public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight,
+        NavRuntimeBuildings? runtime = null)
     {
         _gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install), runtime) { IncludeFoliage = false };
         this._runtime = runtime;
         if (runtime is not null) runtime.Changed += Changed;
 
-        _terrain = terrainHeight;
-        try
-        {
-            _map = TerrainHeightmap.Open(install);
-        }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            // No heightmap: the coarse grid stands in.
-        }
+        _ground = new RagdollGround(install, terrainHeight);
     }
 
+    /// <inheritdoc/>
     public int Generation => Volatile.Read(ref _generation);
 
+    /// <summary>
+    /// Drops a changed zone's gathered triangles (both kinds) and bumps <see cref="Generation"/>.
+    /// </summary>
     void Changed(ZoneCoordinate zone)
     {
         _zones.TryRemove((zone, false), out _);
@@ -74,28 +90,11 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     }
 
     /// <summary>
-    /// The terrain at full resolution, from blocks of the heightmap read as they are needed (the simulation's own height is the coarse grid, a sample
-    /// in every 144 units, outside the area the game loaded at the start: a body would meet a ground metres off the one the character stands on and
-    /// drawn terrain). Called from the simulation thread only.
+    /// The terrain at full resolution (<see cref="RagdollGround.HeightAt"/>). Called from the simulation thread only.
     /// </summary>
-    public float GroundHeight(float x, float z, float nearY)
-    {
-        if (_map is null) return _terrain(x, z);
+    public float GroundHeight(float x, float z, float nearY) => _ground.HeightAt(x, z);
 
-        var (column, row) = WorldLayout.ToSample(x, z);
-        int bx = (int)Math.Floor(column / BlockSamples);
-        int bz = (int)Math.Floor(row / BlockSamples);
-        if (!_blocks.TryGetValue((bx, bz), out var block))
-        {
-            if (_blocks.Count >= MaxBlocks) _blocks.Clear();
-
-            block = _map.ReadWindow(bx * BlockSamples, bz * BlockSamples, BlockSamples + 1, BlockSamples + 1);
-            _blocks[(bx, bz)] = block;
-        }
-
-        return block.TryHeightAt(x, z, out float height) ? height : _terrain(x, z);
-    }
-
+    /// <inheritdoc/>
     public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles) => Collect(min, max, triangles, roofs: false);
 
     /// <summary>
@@ -103,6 +102,10 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Collect(min, max, triangles, roofs: true);
 
+    /// <summary>
+    /// Adds the gathered triangles of the cells between the corners, from every zone within <see cref="Reach"/> of them, starting a gather for a zone
+    /// not asked for yet; false while one of those zones is still being gathered.
+    /// </summary>
     bool Collect(Vector3 min, Vector3 max, List<Vector3> triangles, bool roofs)
     {
         bool ready = true;
@@ -111,7 +114,8 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         int cz0 = Cell(min.Z);
         int cz1 = Cell(max.Z - 1e-3f);
 
-        // A building's triangles are kept with the zone it is placed in and may reach into the next one: the zones within a building's reach of the box.
+        // A building's triangles are kept with the zone it is placed in and may reach into the next one: the zones within a building's reach of the
+        // box.
         var first = WorldLayout.ZoneOf(min.X - Reach, min.Z - Reach);
         var last = WorldLayout.ZoneOf(max.X + Reach, max.Z + Reach);
         for (int zy = first.Y; zy <= last.Y; zy++)
@@ -152,8 +156,14 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         }
     }
 
+    /// <summary>
+    /// The 32-unit cell (<see cref="RagdollSystem.TileSize"/>) of a world X or Z.
+    /// </summary>
     static int Cell(float v) => (int)MathF.Floor(v / RagdollSystem.TileSize);
 
+    /// <summary>
+    /// Gathers one zone's ragdoll or roof triangles and files each under every cell its plan bounds cover.
+    /// </summary>
     Dictionary<(int, int), List<Vector3>> Gather(ZoneCoordinate zone, bool roofs)
     {
         var all = new List<Vector3>();
@@ -189,6 +199,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         return cells;
     }
 
+    /// <summary>
+    /// Drops the least recently asked for gathered zones past <see cref="MaxZones"/> (only finished ones).
+    /// </summary>
     void Evict()
     {
         if (_zones.Count <= MaxZones) return;
@@ -200,6 +213,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         }
     }
 
+    /// <summary>
+    /// Unhooks from the run-time buildings and waits for the gathers still running.
+    /// </summary>
     public void Dispose()
     {
         if (_runtime is not null) _runtime.Changed -= Changed;
@@ -216,7 +232,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
             }
         }
 
-        _map?.Dispose();
+        _ground.Dispose();
         lock (_gatherLock)
             _gatherer.Dispose();
     }

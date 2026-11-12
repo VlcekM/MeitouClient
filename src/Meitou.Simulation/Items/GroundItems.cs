@@ -34,8 +34,9 @@ public sealed record GroundItem(int Id, ItemInstance Item, Vector3 Position, Qua
     /// </summary>
     public string? Slot { get; init; }
     /// <summary>
-    /// The faction of its saved <c>ownedby</c> owner (-1: none, or a <c>not real</c> faction; <see cref="Saving.GroundItemSave"/>): taking it is
-    /// stealing for another faction (label red, pick-up "Steal", the item marked stolen).
+    /// The faction owning it (-1: none, or a <c>not real</c> faction): its saved <c>ownedby</c> owner's (<see cref="Saving.GroundItemSave"/>), its
+    /// slot's building's, or for an item dropped in play the one it was stolen from. Taking it is stealing for another faction (label red, pick-up
+    /// "Steal", the item marked stolen).
     /// </summary>
     public int OwnedBy { get; init; } = -1;
     /// <summary>
@@ -61,6 +62,9 @@ public sealed class GroundItems
     /// </summary>
     public const int DefaultLimit = 1024, MaxLimit = 4096;
 
+    /// <summary>
+    /// The limit's value (<see cref="Limit"/>).
+    /// </summary>
     int _limit = DefaultLimit;
 
     /// <summary>
@@ -70,10 +74,22 @@ public sealed class GroundItems
     /// </summary>
     public int Limit { get => _limit; set => _limit = Math.Clamp(value, 1, MaxLimit); }
 
+    /// <summary>
+    /// The items on the ground, oldest first.
+    /// </summary>
     readonly List<GroundItem> _items = [];
+    /// <summary>
+    /// The id the next item gets.
+    /// </summary>
     int _nextId = 1;
 
+    /// <summary>
+    /// How many items lie on the ground.
+    /// </summary>
     public int Count => _items.Count;
+    /// <summary>
+    /// The items on the ground, oldest first.
+    /// </summary>
     public IReadOnlyList<GroundItem> All => _items;
     /// <summary>
     /// Bumped when an item is dropped, loaded or goes: the host diffs <see cref="Published"/> by id when it changes.
@@ -81,15 +97,21 @@ public sealed class GroundItems
     public long Revision { get; private set; }
 
     /// <summary>
-    /// Drops an item made in play, turned <paramref name="yaw"/> about Y; <paramref name="fall"/> is the stump a severed limb falls from.
+    /// Drops an item made in play, turned <paramref name="yaw"/> about Y; <paramref name="fall"/> is the stump a severed limb falls from. A stolen
+    /// item lies owned by the faction it was stolen from: the original keeps the item's <c>ownedby</c> on the ground (<b>Observed</b>,
+    /// docs/game/ui-input.md "Ground item labels").
     /// </summary>
     public void Drop(ItemInstance item, Vector3 position, float yaw, FallSource? fall = null)
     {
-        _items.Add(new GroundItem(_nextId++, item, position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)) { Dropped = true, Fall = fall });
+        var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw);
+        _items.Add(new GroundItem(_nextId++, item, position, rotation) { Dropped = true, Fall = fall, OwnedBy = item.Mark.Faction });
         for (int extra = _items.Count(Capped) - _limit; extra > 0; extra--) _items.RemoveAt(_items.FindIndex(Capped));
         Revision++;
     }
 
+    /// <summary>
+    /// Whether the item counts against <see cref="Limit"/>: dropped in play, kept by no slot and no camp.
+    /// </summary>
     static bool Capped(GroundItem i) => i.Item.Saved is null && i.Slot is null && i.Camp is null;
 
     /// <summary>
@@ -127,6 +149,9 @@ public sealed class GroundItems
         Revision++;
     }
 
+    /// <summary>
+    /// The item of <paramref name="id"/>; null when it is gone.
+    /// </summary>
     public GroundItem? Find(int id) => _items.Find(i => i.Id == id);
 
     /// <summary>
@@ -154,9 +179,18 @@ public sealed class GroundItems
                                     i.Item.Quality, i.OwnedBy, i.Fall, i.Item.MaterialId))], Revision);
         return _published;
     }
+    /// <summary>
+    /// The last published list.
+    /// </summary>
     IReadOnlyList<GroundItemSnapshot> _published = [];
+    /// <summary>
+    /// The <see cref="Revision"/> <see cref="_published"/> was made at.
+    /// </summary>
     long _publishedAt;
 
+    /// <summary>
+    /// Adds each item (id, record, quantity, position, rotation; its slot, camp and owner when set) to the world hash.
+    /// </summary>
     public void Hash(ref StateHasher h)
     {
         h.Add(_items.Count);

@@ -14,19 +14,32 @@ sealed class PointerView(PlayerInterface player)
 {
     #region State
 
-    // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
+    /// <summary>
+    /// Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
+    /// </summary>
     internal bool PointerOverUi;
 
-    // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced
-    // Hardware mouse's hand.
+    /// <summary>
+    /// Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced
+    /// Hardware mouse's hand.
+    /// </summary>
     internal bool PointerOverButton;
 
-    // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
-    // every RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer =
-        (-1, default, false, false, "arrow", null, null);
+    /// <summary>
+    /// The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
+    /// every RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
+    /// </summary>
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+        (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer = (-1, default, false, false, "arrow", null, null);
 
+    /// <summary>
+    /// The view the pointer was last picked under.
+    /// </summary>
     Matrix4x4 _pointerView;
+
+    /// <summary>
+    /// The ticks a pointer pick holds while only the world moves.
+    /// </summary>
     const long RepickTicks = 3;
 
     /// <summary>
@@ -39,6 +52,9 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     public const float HighlightRadius = 500;
 
+    /// <summary>
+    /// The hover outline of a character or building no order applies to.
+    /// </summary>
     internal static readonly Vector4 WhiteOutline = new(0.95f, 0.93f, 0.85f, 0.85f);
 
     /// <summary>
@@ -68,8 +84,12 @@ sealed class PointerView(PlayerInterface player)
     /// would act on, in the colour of that order (attack red, treat green, talk gold, carry or loot blue), else any character under the cursor in
     /// white; null over the interface or nobody.
     /// </summary>
-    public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
+    public (CharacterId Id, Vector4 Colour)? HoverTarget =>
+        Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
 
+    /// <summary>
+    /// Whether character <paramref name="id"/> is within <see cref="OutlineReach"/> of the eye.
+    /// </summary>
     bool WithinOutlineReach(CharacterId id)
     {
         if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return false;
@@ -97,7 +117,12 @@ sealed class PointerView(PlayerInterface player)
         _ => WhiteOutline,
     };
 
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
+    /// <summary>
+    /// The pointer, its character and building: the map's hand while it pans, the arrow over the interface and the windows, the build pointer, else
+    /// the last pick while it holds, or a new one (a standing hostile shows attk with nobody selected).
+    /// </summary>
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+        (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
     {
         if (player.WorldMap.MapDrag is not null) return (-1, player.Mouse, player.CtrlHeld, player.AltHeld, "hand", null, null);   // the map's pan
         if (player.UiVisible && PointerOverUi || player.UiCapturesPointer || player.ContextMenuWindow.ContextMenuOpen || player.ModalOpen
@@ -130,6 +155,9 @@ sealed class PointerView(PlayerInterface player)
         && _pointer.Mouse == player.Mouse && _pointer.Ctrl == player.CtrlHeld && _pointer.Alt == player.AltHeld
         && _pointerView == player.ViewProjection;
 
+    /// <summary>
+    /// The pointer with characters selected (<see cref="PickWithSelection"/>), else the quick order's under the mouse, else the arrow.
+    /// </summary>
     (string Name, CharacterId? Target) ChoosePointer()
     {
         if (player.SelectedIds().Count > 0) return PickWithSelection();
@@ -140,6 +168,10 @@ sealed class PointerView(PlayerInterface player)
         return ("arrow", null);
     }
 
+    /// <summary>
+    /// The pointer for what a right click would act on with characters selected: lift or search over a downed one with Ctrl or Alt, else the nearest
+    /// target's (character, item, container, door, furniture, rock, site).
+    /// </summary>
     (string Name, CharacterId? Target) PickWithSelection()
     {
         if ((player.CtrlHeld || player.AltHeld) && player.Picking.PickDowned(player.Mouse) is { } downed)
@@ -156,8 +188,9 @@ sealed class PointerView(PlayerInterface player)
                 return (player.Furniture.ContainerPointer(container), null);
             case WorldPicking.Picked.Door when player.Furniture.PickDoor(player.Mouse) is { } door:
                 return (player.Furniture.DoorPointer(door), null);
-            // a bed's slot 130 pointer (UseableStuff, no inventory)
-            case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat:
+            // a bed's slot 130 pointer (UseableStuff, no inventory); a town turret's (TurretBuilding, as Storage)
+            case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat
+                or WorldPicking.Picked.TownTurret:
                 return ("use", null);
             // a resource rock a right click would mine (the original's `mine` pointer)
             case WorldPicking.Picked.Rock:
@@ -175,6 +208,9 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     bool Hostile(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
 
+    /// <summary>
+    /// Whether <paramref name="c"/> is hostile to the player.
+    /// </summary>
     internal bool Hostile(CharacterSnapshot c) => c.HostileToPlayer;
 
     /// <summary>
@@ -227,9 +263,9 @@ sealed class PointerView(PlayerInterface player)
         var width = UiTooltips.Arrange(lines, TooltipKind.Floating, player.Width, player.Height, player.Mouse, null,
             (text, wrap) => painter.MeasureText(TooltipRuntime.TooltipFont, text, player.Height, wrap, minimum) is var s
                 ? new(s.Width, s.Height)
-                : default).Panel.Width;
+                : default, player.InterfaceScale).Panel.Width;
 
-        var bottomRight = new Vector2(player.Mouse.X + width / 2, player.Mouse.Y - PointerChanceRise * player.Height / 1080f);
+        var bottomRight = new Vector2(player.Mouse.X + width / 2, player.Mouse.Y - PointerChanceRise * player.UiScale);
         player.TooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
     }
 
@@ -238,7 +274,8 @@ sealed class PointerView(PlayerInterface player)
     /// selected character sneaks), the pick chance under <c>lockpick</c> (<see cref="PointedLockChance"/>); null for any other pointer.
     /// </summary>
     float? PointerChance(
-        (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) p) =>
+        (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+            (BuildingSelection.SelectedBuilding Building, float T)? Building) p) =>
         p.Name switch
         {
             "knockout" when p.Target is { } id => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance * 0.01f,
@@ -282,7 +319,7 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     public void DrawPointerBeside(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
-        if (name != "arrow") player.UiPainter?.DrawPointerBeside(name, at + BesideOffset * (height / 1080f), width, height, pass);
+        if (name != "arrow") player.UiPainter?.DrawPointerBeside(name, at + BesideOffset * player.UiScale, width, height, pass);
     }
 
     /// <summary>

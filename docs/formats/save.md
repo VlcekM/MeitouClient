@@ -57,6 +57,9 @@ scratch harness; pinned by `SaveReadTests`); with `Blood` off the loaded record 
 **Player-built buildings** (Meitou `Saving/BuildingSave`): an instance in the zone's `0-buildinglist` with id `<n>-zone<X>.<Y>-INGAME` and a
 GAMESTATE_BUILDING `<id>-S23` carrying `name`, `owner faction ID`, `floornum`, `destroyed`, `flags`, `is complete`, `pause`, `construction progress`,
 `<i>construction mats`, `world Y pos`, `handle`, `isInsideBuilding` (key set from the original's writer `FUN_1405547f0`, **Verified** by code).
+The list is not always the position's zone: a vanilla save listed a building in the zone of its id (20.32) while it stood in 20.33 (**Observed**,
+#493). Meitou writes each site in its position's zone and drops its entry from any other; on load a copy outside the position's zone loses
+to one inside it.
 **Observed**, native 1.0.68 authored-fixture load/save: an outdoor player placement's raw instance Y is a terrain offset (0 places it on
 the ground), while `world Y pos` is absolute; supplying the terrain height in both fields doubles its loaded height.
 Indoors, `player furniture Y offset` is child world Y minus the parent's origin Y (**Verified**, native writer; **Observed**, 185 saved
@@ -336,7 +339,7 @@ character that changed squads is written anew in its new platoon and leaves the 
 
 ### NPC platoons (Meitou mapping)
 
-Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped); town-bound ones (template does not travel) are pinned to their town, and a town holding any
+Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped); town-bound ones (an `sqt` 1 platoon, or a template that does not travel) are pinned to their town, and a town holding any
 is made of them alone: it makes no residents, default residents, housemates or bar squads (**engine rule**, after the original's: a zone with a save file makes no town
 population, [Zone files](#zone-files) Load; Meitou keys it on the saved platoons). A town Meitou made and unloaded before saving keeps its squads as stored
 platoons, which the save writes like the town's squads in the world, so a Meitou save holds the residents of every town it made a zone file for
@@ -410,7 +413,11 @@ platoons with `persistent` true (as the original's dismissed platoon; engine cho
 (counted among its squads); a save's platoon with `persistent` set is never despawned off screen (`PopulationRoaming.Kept`, as the original keeps persistent platoons).
 **Observed** (headless, saves 2, wade, 1, the player moved next to each wild platoon): 41 of 49, 10 of 10, 67 of 67 saved wild characters made (the rest dead in the
 save), each at its saved position (0 units off); a held nest or sector made only its remainder; a Meitou save → load gives the same wild characters at the same places
-(78, 10, 96) and no fresh wild squads.
+(78, 10, 96) and no fresh wild squads. A wild platoon with no file, `never been activated` and a `char count` (`SaveLoader.UnmadeWild`) is a stand-in the same way, made
+from its template into the platoon when it activates, at load wherever it is wanted (`FUN_1404ffad0`, above; `PopulationSystem.ActivatesAtLoad`).
+Meitou keeps the generated characters in `Platoon.Stored` when unloaded and writes them into the original platoon with
+`never been activated` false, retaining its nest or homeless metadata; later loads restore those characters instead of rolling the template.
+**Observed** (a save at Sho-Battai): 12 such `sqt` 2 platoons in the desert round the town, which the original makes at their saved places.
 
 ### Nests (town list)
 
@@ -467,7 +474,8 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a
   full (physics-settled) quaternion, target an ITEM record (type 4, name "0", flags 0) of the same file, id `<n>-zone<X>.<Y>-INGAME` of the zone it was made in (an item
   moved to another zone keeps it). Its keys are INVENTORY_ITEM_STATE's with `in inventory` false and `section` "": `base data sid`, `material sid`, `company sid`,
-  `color sid`, `item function`, `level`, `quantity`, `charges`, `quality`, `inventory x/y` 0, `death` ([death item](../game/animals.md#death-items)), null-able `ownedby` and `insideBuilding` handles; `uniform` on 49, a
+  `color sid`, `item function`, `level`, `quantity`, `charges`, `quality`, `inventory x/y` 0, `death` ([death item](../game/animals.md#death-items)), null-able `ownedby` and `insideBuilding` handles (Meitou adds string `meitou stolen from` on any INVENTORY_ITEM_STATE: the FACTION id a stolen item was stolen from, also
+  for marks naming no character; absent: not stolen); `uniform` on 49, a
   `persist` handle (type 85, a town container) on 284 (the nest debris). The one severed limb (`limbs.mod`, `item function` 17) has no `persist` and adds `skin` and `blood`
   ints, a `scale` vector and a `timeout` float (131.7; meaning, units and whether it removes the item **Unknown**).
 
@@ -524,7 +532,8 @@ and again when a saved or stored platoon comes in, since a town's saved platoons
 the original keys as read; a changed one without a building handle writes `in something` 0 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 
 Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs`, `pjob<i>`, `pjobT<i>` ([perma-jobs](../game/ai-tasks.md#perma-jobs)), plus
-Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle). The squad AI options are CAMERA bools (**Verified**, writer
+Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle); a job on a character writes that character's handle once
+every character has one, as `tjobT<i>`, so one new to the save is named too. The squad AI options are CAMERA bools (**Verified**, writer
 `FUN_1403eb710`; the key of each option and new-game values in [squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine
 (not `stay`, `eject`), an absent one keeps its default.
 
@@ -691,7 +700,7 @@ yet, is left out. Round trip checked with a throwaway probe (write, read, clear)
 | `SaveFile` | One file: an FCS file (any type, strings lossless) and its slot lists; writes back the same bytes |
 | `Hand` | `{Type, C, CS, I, S}` by key prefix; `Null` is type 11 and `IsNull` tests the type only; `Prefixes` finds the handles of a record |
 | `SaveFolder` | The layered lookup (a later layer hides an earlier one), names with `/`, the `platoon/` and `zone/` listing, zone file names |
-| `SaveGame` | `Load(folder)`: `quick.save`, the platoon files named by the PLATOON records, every zone file, the portrait atlas; typed views (`SaveCamera`, `SaveFaction` with its war record and relation table, `SaveTown`, `SavePlatoon` with its `SaveCharacter`s and their six state records, `SaveZone` with `Overlay`), the zone-file check as `Problems`, `BuildHandles()` (`SaveHandles`: platoon, character, town and building lookups), `Clone()`, `UpdateDerived()` and `Write(folder)` |
+| `SaveGame` | `Load(folder)`: `quick.save`, the platoon files named by the PLATOON records, every zone file, the portrait atlas; typed views (`SaveCamera`, `SaveFaction` with its war record and relation table, `SaveTown`, `SavePlatoon` with its `SaveCharacter`s and their six state records, `SaveZone` with `Overlay`), the zone-file check as `Problems`, `BuildHandles()` (`SaveHandles`: platoon, character, town and building lookups), `Clone()`, `UpdateDerived()` and `Write(folder)` (`SaveWriter`) |
 | `SaveBuilder` | Makes the records of a new save (CAMERA, factions with war state, towns, platoons, characters with their six states) with the key sets above, the id patterns and seeded random serials; can also add to an existing save; `RemoveCharacter` |
 | `SavePortraits` | The blank 2048 x 2048 atlas of a new save |
 

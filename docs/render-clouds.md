@@ -1,7 +1,7 @@
 # Volumetric clouds
 
 Meitou `clouds`: `VolumetricClouds`, `VolumetricCloudShaders`, `VolumetricCloudRenderer`,
-`SkyRenderer.Clouds.cs`. Faithful retains [original planar clouds](formats/clouds.md);
+`SkyClouds`. Faithful retains [original planar clouds](formats/clouds.md);
 `cloudshadows` is independent. Direct sky callers without a volume use the lit-layer fallback.
 
 ## Density and light

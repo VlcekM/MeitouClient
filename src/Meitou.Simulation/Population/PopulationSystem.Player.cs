@@ -12,18 +12,22 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population's player squads: the squad a new game starts with.
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
-    /// The squad a new game starts with when its start-off makes nobody: the SQUAD_TEMPLATE "startoff- Wanderer squad", whose id is a constant of the executable.
+    /// The squad a new game starts with when its start-off makes nobody: the SQUAD_TEMPLATE "startoff- Wanderer squad", whose id is a constant of
+    /// the executable.
     /// </summary>
     public const string WandererSquadId = "45550-gamedata.base";
 
     /// <summary>
     /// Where a new game of <paramref name="start"/> with <paramref name="seed"/> stands its squad (docs/game/ui-screens.md "New game"):
-    /// <see cref="NewGameStart.ForceStartPos"/>'s place, else a placement drawn among the start's towns, else among the fallback towns, else (-43500, -6625);
-    /// <c>Town</c> is the drawn placement. <c>Missing</c>: the start lists towns and none of them is placed. The host loads the world round it before
-    /// <see cref="StartPlayer"/>, which draws the same.
+    /// <see cref="NewGameStart.ForceStartPos"/>'s place, else a placement drawn among the start's towns, else among the fallback towns, else (-43500,
+    /// -6625); <c>Town</c> is the drawn placement. <c>Missing</c>: the start lists towns and none of them is placed. The host loads the world round
+    /// it before <see cref="StartPlayer"/>, which draws the same.
     /// </summary>
     public static (Vector2 Centre, TownSite? Town, bool Missing) StartPlace(PopulationData data, ulong seed, NewGameStart start)
     {
@@ -39,7 +43,8 @@ public sealed partial class PopulationSystem
             ApplyStartRelations(relations, start);
             candidates = [.. data.Sites.Where(site => site.Town.Type is TownType.Town or TownType.Village && site.Index < data.SiteFactions.Count
                 && data.SiteFactions[site.Index] is var f and >= 0 && !data.Factions[f].NotReal
-                && data.Factions[f].FundamentalType != FundamentalType.Bandit && relations.Get(f, data.PlayerFaction) > FactionRelations.HostileThreshold)];
+                && data.Factions[f].FundamentalType != FundamentalType.Bandit
+                && relations.Get(f, data.PlayerFaction) > FactionRelations.HostileThreshold)];
         }
 
         if (candidates.Count == 0) return (new Vector2(-43500, -6625), null, missing);
@@ -50,8 +55,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A new game's relations: back to the FACTION records' values, as the original builds every faction anew for a new game; then each entry of the start-off's
-    /// <c>faction relations</c> sets that faction's relation with the player to its v0.
+    /// A new game's relations: back to the FACTION records' values, as the original builds every faction anew for a new game; then each entry of the
+    /// start-off's <c>faction relations</c> sets that faction's relation with the player to its v0.
     /// </summary>
     static void ApplyStartRelations(FactionRelations relations, NewGameStart start)
     {
@@ -68,10 +73,10 @@ public sealed partial class PopulationSystem
     /// squad, made from the start-off's <c>squad</c> list (a SQUAD_TEMPLATE is planned by the squad factory, a CHARACTER makes v0 members) as one
     /// squad of the player's faction, standing idle, selected for them, at <see cref="NewGameStart.ForceStartPos"/>'s place or a town drawn from the
     /// start's list (<see cref="StartPlace"/>). The start research is applied
-    /// (<see cref="Meitou.Data.Gameplay.Construction.ResearchGate.StartResearch"/>) and the start-off's
-    /// <c>faction relations</c>, whose factions are known with <see cref="PopulationData.KnownAtNewGame"/>'s; <c>force race</c> is kept as the races the
-    /// character creation offers (<see cref="PlayerState.CreationRaces"/>). The characters' items are what the generator rolls for their look; their
-    /// inventory is built like everybody's (<see cref="CharacterAssembly"/>).
+    /// (<see cref="Meitou.Data.Gameplay.Construction.ResearchGate.StartResearch"/>) and the start-off's <c>faction relations</c>, whose factions are
+    /// known with <see cref="PopulationData.KnownAtNewGame"/>'s; <c>force race</c> is kept as the races the character creation offers
+    /// (<see cref="PlayerState.CreationRaces"/>). The characters' items are what the generator rolls for their look; their inventory is built like
+    /// everybody's (<see cref="CharacterAssembly"/>).
     /// </summary>
     public Squad StartPlayer(World world, NewGameStart start)
     {
@@ -95,7 +100,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The place a new game's squad stands at: the place itself when walkable, else a walkable spot near it (the original stands the squad at the place itself).
+    /// The place a new game's squad stands at: the place itself when walkable, else a walkable spot near it (the original stands the squad at the
+    /// place itself).
     /// </summary>
     Vector2 StandingPlace(World world, Vector2 centre, ulong key)
     {
@@ -138,7 +144,9 @@ public sealed partial class PopulationSystem
     {
         var members = new List<BuiltMember>();
         var first = new List<MemberPlan>();
-        var fromTemplate = new HashSet<int>();   // the members the squad templates made: they go through the unique gate, the CHARACTER entries do not (FUN_140583a10)
+
+        // the members the squad templates made: they go through the unique gate, the CHARACTER entries do not (FUN_140583a10)
+        var fromTemplate = new HashSet<int>();
         SquadTemplate? template = null;
         void AddTemplate(GameRecord record)
         {
@@ -172,7 +180,8 @@ public sealed partial class PopulationSystem
 
         if (first.Count == 0 && _data.Db.Find(WandererSquadId) is { } wanderer && SquadFactory.IsTemplate(wanderer)) AddTemplate(wanderer);
 
-        // Renumber in creation order and make the first the leader when none is; each template keeps its own layout (in the original, a squad of its own).
+        // Renumber in creation order and make the first the leader when none is; each template keeps its own layout (in the original, a squad of
+        // its own).
         bool hasLeader = first.Any(m => m.Role == SquadRole.Leader);
         for (int i = 0; i < first.Count; i++)
             first[i] = first[i] with { Index = i, Role = !hasLeader && i == 0 ? SquadRole.Leader : first[i].Role };
@@ -182,7 +191,11 @@ public sealed partial class PopulationSystem
         {
             CharacterAppearance? look = null;
             if (_data.Appearances is { } source)   // an animal gets its species' shared look (GeneratedAppearances)
-                look = source.Create(m.RecordId, factionId, (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook + (ulong)m.Index) & 0x7FFFFFFF));
+            {
+                look = source.Create(m.RecordId, factionId,
+                    (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook + (ulong)m.Index) & 0x7FFFFFFF));
+            }
+
             members.Add(new BuiltMember(m, look));
         }
 

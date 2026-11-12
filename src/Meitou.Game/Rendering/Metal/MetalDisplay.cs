@@ -15,6 +15,73 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed unsafe class MetalDisplay : IDisposable
 {
+    #region Window and layer
+
+    /// <summary>
+    /// The layer on the window's content view (backs <see cref="Layer"/>).
+    /// </summary>
+    CAMetalLayer _layer;
+
+    /// <summary>
+    /// The window size in points and the framebuffer size in pixels the layer was last fitted to.
+    /// </summary>
+    int _layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight;
+    /// <summary>
+    /// The window's NSWindow (from GLFW).
+    /// </summary>
+    readonly IntPtr _nsWindow;
+    /// <summary>
+    /// The content view the layer is attached to (replaced when AppKit swaps the view).
+    /// </summary>
+    IntPtr _contentView;
+
+    /// <summary>
+    /// The <c>valueForKey:</c> selector.
+    /// </summary>
+    static readonly Selector ValueForKey = new("valueForKey:");
+
+    /// <summary>
+    /// The <c>setDrawableSize:</c> selector.
+    /// </summary>
+    static readonly Selector DrawableSizeSelector = new("setDrawableSize:");
+
+    /// <summary>
+    /// The <c>toggleFullScreen:</c> selector.
+    /// </summary>
+    static readonly Selector ToggleFullScreenSelector = new("toggleFullScreen:");
+
+    /// <summary>
+    /// The <c>setCollectionBehavior:</c> selector.
+    /// </summary>
+    static readonly Selector CollectionBehaviorSelector = new("setCollectionBehavior:");
+
+    /// <summary>
+    /// NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorFullScreenPrimary: the window may take a full-screen Space of its own (the
+    /// green button, Ctrl+Cmd+F, <see cref="SetFullScreen"/>).
+    /// </summary>
+    const ulong FullScreenPrimaryBehavior = (1UL << 2) | (1UL << 7);
+
+    /// <summary>
+    /// NSWindowStyleMaskFullScreen: set in the style mask while the window is in its full-screen Space.
+    /// </summary>
+    const ulong FullScreenStyleMask = 1UL << 14;
+
+    /// <summary>
+    /// How long the state last asked for is reported in place of AppKit's: the change into or out of the Space is animated, and the style mask
+    /// follows only during it, so a setting read every frame would otherwise ask again.
+    /// </summary>
+    static readonly TimeSpan FullScreenTransition = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The full-screen state last asked for through <see cref="SetFullScreen"/>.
+    /// </summary>
+    bool _fullScreenWanted;
+
+    /// <summary>
+    /// When <see cref="_fullScreenWanted"/> was asked for (Stopwatch ticks; 0 before any request).
+    /// </summary>
+    long _fullScreenAskedStamp;
+
     /// <summary>
     /// The window the game draws into.
     /// </summary>
@@ -30,13 +97,15 @@ public sealed unsafe class MetalDisplay : IDisposable
     /// </summary>
     public MTLCommandQueue Queue { get; }
 
-    CAMetalLayer _layer;
-
     /// <summary>
     /// The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).
     /// </summary>
     public CAMetalLayer Layer => _layer;
 
+    /// <summary>
+    /// Creates the window, the system default device and its queue, and a CAMetalLayer (BGRA8, three drawables, display sync as
+    /// <paramref name="vsync"/>) filling the window's content view.
+    /// </summary>
     public MetalDisplay(WindowOptions options, bool vsync = true)
     {
         ObjectiveC.LinkMetal();
@@ -51,6 +120,7 @@ public sealed unsafe class MetalDisplay : IDisposable
         var getCocoaWindow = (delegate* unmanaged<WindowHandle*, IntPtr>)NativeLibrary.GetExport(glfw, "glfwGetCocoaWindow");
         var nsWindow = getCocoaWindow((WindowHandle*)Window.Native!.Glfw!.Value);
         this._nsWindow = nsWindow;
+        SendUInteger(nsWindow, CollectionBehaviorSelector.SelPtr, FullScreenPrimaryBehavior);
 
         // The layer has to fill the view (NSViewWidthSizable | NSViewHeightSizable) or the drawable covers only part of
         // the window; its drawable size then follows the view's bounds times the scale factor, retina included.
@@ -79,15 +149,6 @@ public sealed unsafe class MetalDisplay : IDisposable
         SyncLayer();
     }
 
-    int _layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight;
-    readonly IntPtr _nsWindow;
-    IntPtr _contentView;
-
-    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
-    static extern IntPtr MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
-
-    static readonly Selector ValueForKey = new("valueForKey:");
-
     /// <summary>
     /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW reporting a framebuffer size.
     /// </summary>
@@ -105,15 +166,6 @@ public sealed unsafe class MetalDisplay : IDisposable
         return $"view {(view == _contentView ? "same" : "CHANGED")}, layer {(layer == Layer.NativePtr ? "same" : "CHANGED")}, " +
             $"frame {frame}, zoomed {zoomed}, visible {visible}, style 0x{style:X}";
     }
-
-    /// <summary>
-    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
-    /// setter is called directly with the two doubles the ABI passes for the struct.
-    /// </summary>
-    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
-    static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
-
-    static readonly Selector DrawableSizeSelector = new("setDrawableSize:");
 
     /// <summary>
     /// Fits the layer to the window: its frame in points and its contents scale from the framebuffer's pixels. The window can
@@ -163,22 +215,66 @@ public sealed unsafe class MetalDisplay : IDisposable
     }
 
     /// <summary>
-    /// Borderless full screen still leaves the macOS menu bar and the Dock above the window. Hide both while the game is
-    /// full screen (the window itself already covers the monitor's video mode); restore them for the windowed mode and on exit.
+    /// Whether the window is in native macOS full screen, its own Space: the state last asked for while the animation into or out of it runs,
+    /// then AppKit's, which the green button and Ctrl+Cmd+F also change.
     /// </summary>
-    public void SetFullScreenPresentation(bool fullScreen)
-    {
-        var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
+    public bool FullScreen => _fullScreenAskedStamp != 0 && Stopwatch.GetElapsedTime(_fullScreenAskedStamp) < FullScreenTransition
+        ? _fullScreenWanted
+        : (ObjectiveC.ulong_objc_msgSend(_nsWindow, "styleMask") & FullScreenStyleMask) != 0;
 
-        // NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar.
-        SetPresentationOptions(app, PresentationOptionsSelector.SelPtr, fullScreen ? 10UL : 0UL);
+    /// <summary>
+    /// Enters or leaves native macOS full screen. A Space of its own, not a window covering the monitor: Cmd+Tab and Ctrl+Left/Right switch
+    /// away from it, and AppKit hides the menu bar and the Dock itself. A window that is not shown yet ignores the request.
+    /// </summary>
+    public void SetFullScreen(bool on)
+    {
+        if (on == FullScreen) return;
+        _fullScreenWanted = on;
+        _fullScreenAskedStamp = Stopwatch.GetTimestamp();
+        MsgSendPtr(_nsWindow, ToggleFullScreenSelector.SelPtr, IntPtr.Zero);
+        Console.WriteLine($"window    {(on ? "entering" : "leaving")} native full screen");
     }
 
+    /// <summary>
+    /// The layer's actual display-sync state (diagnostic and the game's settings).
+    /// </summary>
+    public bool VSync
+    {
+        get => _layer.DisplaySyncEnabled;
+        set => _layer.DisplaySyncEnabled = value;
+    }
+
+    /// <summary>
+    /// Disposes the window.
+    /// </summary>
+    public void Dispose() => Window.Dispose();
+
+    /// <summary>
+    /// <c>objc_msgSend</c> with one pointer argument, returning a pointer.
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
-    static extern void SetPresentationOptions(IntPtr receiver, IntPtr selector, ulong options);
+    static extern IntPtr MsgSendPtr(IntPtr receiver, IntPtr selector, IntPtr arg);
 
-    static readonly Selector PresentationOptionsSelector = new("setPresentationOptions:");
+    /// <summary>
+    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
+    /// setter is called directly with the two doubles the ABI passes for the struct.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
 
+    /// <summary>
+    /// <c>objc_msgSend</c> with one NSUInteger argument (for <c>setCollectionBehavior:</c>).
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern void SendUInteger(IntPtr receiver, IntPtr selector, ulong value);
+
+    #endregion
+
+    #region Frames
+
+    /// <summary>
+    /// When "no drawable" was last logged (Stopwatch ticks): it is logged at most once a second.
+    /// </summary>
     long _noDrawableStamp;
 
     /// <summary>
@@ -204,22 +300,14 @@ public sealed unsafe class MetalDisplay : IDisposable
             if (now - _noDrawableStamp > Stopwatch.Frequency)
             {
                 _noDrawableStamp = now;
-                Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
+                Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, " +
+                    $"framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
             }
             return false;
         }
         drawable = next;
         command = Queue.CommandBuffer();
         return true;
-    }
-
-    /// <summary>
-    /// The layer's actual display-sync state (diagnostic and the game's settings).
-    /// </summary>
-    public bool VSync
-    {
-        get => _layer.DisplaySyncEnabled;
-        set => _layer.DisplaySyncEnabled = value;
     }
 
     /// <summary>
@@ -251,5 +339,5 @@ public sealed unsafe class MetalDisplay : IDisposable
         command.Commit();
     }
 
-    public void Dispose() => Window.Dispose();
+    #endregion
 }

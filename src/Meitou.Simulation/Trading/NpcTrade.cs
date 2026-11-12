@@ -98,6 +98,10 @@ public static class NpcTrade
         return NpcSale.NoItem;
     }
 
+    /// <summary>
+    /// Whether the item is offered in an NPC trade: not unique, no full bag, inside <paramref name="region"/> when one is given, and of item
+    /// function <paramref name="function"/>.
+    /// </summary>
     static bool Offered(Market market, ItemInstance item, GridRegion? region, int function) =>
         !item.Unique && item.Contents is not { Items.Count: > 0 } && (region is not { } r || r.Holds(item))
         && market.Items.Info(item.Record)?.Function == function;

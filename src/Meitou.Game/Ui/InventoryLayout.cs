@@ -13,22 +13,28 @@ sealed class InventoryLayout(PlayerInterface player)
 {
     #region Window placement
 
+    /// <summary>
+    /// A window's geometry at the inventory scale: a bag window sized to its bag, the trader's own.
+    /// </summary>
     internal void BindInventoryGeometry(string id, UiBindings b)
     {
-        b.TemplateScale = player.InventoryScale;
-        if (id is "bag" or "loot-bag")
+        b.TemplateScale = player.UiScale;
+        if (InventoryWindows.ScreenKind(id) is "bag" or "loot-bag")
         {
-            var owner = id == "bag" ? player.InventoryWindows.InventoryOwner() : player.TradeWindows.LootBody();
+            var owner = player.InventoryWindows.WindowCharacter(id);
             if (owner?.ItemGrid is { } bag)
             {
-                b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.InventoryScale,
-                    Math.Min(player.Height * 0.8f, bag.BagHeight * player.InventoryCell + 108 * player.InventoryScale));
+                b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.UiScale,
+                    Math.Min(player.Height * 0.8f, bag.BagHeight * player.InventoryCell + 108 * player.UiScale));
             }
         }
 
         if (id == "trader") player.TradeWindows.BindTraderGeometry(b);
     }
 
+    /// <summary>
+    /// Places the bag window: in the window row while a loot window is open, else beside the inventory on its left.
+    /// </summary>
     internal void PlaceBagWindow()
     {
         if (player.FaithfulScreens.IsOpen("loot"))
@@ -43,7 +49,9 @@ sealed class InventoryLayout(PlayerInterface player)
     Dictionary<string, UiRect> WindowRoots()
     {
         var roots = new Dictionary<string, UiRect>(StringComparer.Ordinal);
-        foreach (var f in player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent))
+        var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen,
+            player.ScreenRouter.AddFaithfulContent);
+        foreach (var f in frames)
         {
             if (f.Controls.FirstOrDefault(c => c.Type == "Window") is { } window) roots[f.Id] = window.Bounds;
         }
@@ -63,7 +71,7 @@ sealed class InventoryLayout(PlayerInterface player)
         var row = new[] { "limbs", "bag", "inventory", "loot", "loot-bag" }.Where(roots.ContainsKey).ToArray();
         if (row.Length < 2) return;
 
-        float gap = 6 * player.InventoryScale;
+        float gap = 6 * player.UiScale;
         float total = row.Sum(s => roots[s].Width) + gap * (row.Length - 1);
         if (total > player.Width)
         {
@@ -77,7 +85,8 @@ sealed class InventoryLayout(PlayerInterface player)
         foreach (string screen in row)
         {
             var r = roots[screen];
-            player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y));
+            var move = new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y);
+            player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + move);
             x += r.Width + gap;
         }
     }
@@ -105,7 +114,8 @@ sealed class InventoryLayout(PlayerInterface player)
         {
             foreach (string screen in new[] { "inventory", "bag" })
             {
-                if (player.FaithfulScreens.IsOpen(screen)) player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
+                if (player.FaithfulScreens.IsOpen(screen))
+                    player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
             }
 
             x = 0;
@@ -123,9 +133,10 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
 
-        player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y));
+        var move = new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y);
+        player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
         float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
-        float push = window.Width + 6 * player.InventoryScale - left;
+        float push = window.Width + 6 * player.UiScale - left;
         if (push <= 0) return;
 
         foreach (string screen in new[] { "inventory", "bag" })
@@ -142,7 +153,7 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
 
-        float gap = 6 * player.InventoryScale;
+        float gap = 6 * player.UiScale;
         float x = left ? own.X - other.Width - gap : own.X + own.Width + gap;
 
         // Make room for the pair before the screen host clamps either window to the viewport.
@@ -205,6 +216,9 @@ sealed class InventoryLayout(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Sizes the equipment slots and the main grid in cells, with their tile size.
+    /// </summary>
     internal void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid)
     {
         foreach (string section in new[] { "main", "backpack_attach", "back", "hip", "shirt", "head", "legs", "boots", "armour", "belt" })
@@ -229,6 +243,29 @@ sealed class InventoryLayout(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The player's own animal's inventory window ends where its "-INVENTORY-" label would start, with no main grid, so its death items stay out of
+    /// sight (<b>Observed</b>, original: a bought Garru with meat and skins in its save, and a dog). The loot window keeps the grid.
+    /// </summary>
+    internal static void TrimAnimalWindow(List<UiControl> controls)
+    {
+        var window = controls.FirstOrDefault(c => c.Type == "Window");
+        var label = controls.FirstOrDefault(c => c.Name == "MainSectionName");
+        if (window is null || label is null) return;
+
+        // The frame's pieces under the cut move up with the bottom edge; those crossing it (the sides, the panel, the window) shorten.
+        float cut = label.Bounds.Y, shrink = window.Bounds.Y + window.Bounds.Height - cut;
+        controls.RemoveAll(c => c.Name is "main" or "MainSectionName");
+        for (int i = 0; i < controls.Count; i++)
+        {
+            var r = controls[i].Bounds;
+            if (r.Y >= cut)
+                controls[i] = controls[i] with { Bounds = r with { Y = r.Y - shrink } };
+            else if (r.Y + r.Height > cut)
+                controls[i] = controls[i] with { Bounds = r with { Height = Math.Max(0, r.Height - shrink) } };
+        }
+    }
+
     #endregion
 
     #region Grids
@@ -243,7 +280,7 @@ sealed class InventoryLayout(PlayerInterface player)
         var root = controls.FirstOrDefault(c => c.Type == "Window");
         if (index < 0 || root is null) return;
 
-        float scale = player.InventoryScale;
+        float scale = player.UiScale;
         float cell = player.InventoryCell;
         var r = root.Bounds;
         float top = above * scale;
@@ -283,15 +320,16 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Data panel
 
     /// <summary>
-    /// The data panel's lines; an animal's window shows only the weight and burden rows (the original's animal inventory, observed).
+    /// The data panel's lines (<see cref="InventorySummaryLines"/>): the player's own animals show the Disguise and slave rows too
+    /// (<b>Observed</b>, original: a Garru, a Pack Beast, an Iron Spider and a Bonedog of the player's squad).
     /// </summary>
-    internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead, bool animal = false)
+    internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead)
     {
         string weight = ((int)(lead.ItemGrid?.TotalWeight ?? 0)).ToString(CultureInfo.InvariantCulture);   // truncated, as the original prints it
         if (lead.ItemGrid?.CarryCapacity is { } capacity) weight += "/" + ((int)capacity).ToString(CultureInfo.InvariantCulture);
 
         var (burdenWord, burdenColour) = BurdenText(lead.Hud?.Encumbrance ?? lead.ItemGrid?.Burden ?? 1);
-        player.AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour, animal), 20 * player.InventoryScale);
+        player.AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour), 20 * player.UiScale);
     }
 
     /// <summary>
@@ -301,10 +339,10 @@ sealed class InventoryLayout(PlayerInterface player)
     /// slave or escaped slave: its owner faction's name in Bad, no line without an owner) and Looks like slave (free: "-" greyed; else the level in
     /// percent, Bad above 10 %). A character of another faction has only the weight rows (and, for a trader, its money lines, not built).
     /// </summary>
-    List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour, bool animal)
+    List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour)
     {
         var lines = new List<PlayerInterface.HudLine> { new(Loc.Tr("Total Weight:"), weight), new("", burdenWord, ValueColour: burdenColour) };
-        if (animal || !lead.IsPlayer) return lines;
+        if (!lead.IsPlayer) return lines;
 
         lines.AddRange(DisguiseLines(lead.Disguise));
         if (lead.Slave is not { } slave)
@@ -318,8 +356,8 @@ sealed class InventoryLayout(PlayerInterface player)
             lines.Add(new(Loc.Tr("Slave of:"), slave.Owner, ValueColour: PlayerInterface.BadColour, Tooltip: Loc.Tr("The faction that owns you.")));
 
         string? looksColour = slave.Looks > 0.1f ? PlayerInterface.BadColour : null;
-        string looksTip = Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. "
-            + "Try to avoid hanging around too long near people who may recognise you.");
+        string looksTip = Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. "
+            + "Wearing shackles and rags is a big giveaway. Try to avoid hanging around too long near people who may recognise you.");
         lines.Add(new(Loc.Tr("Looks like slave:"), Loc.Tr("{1,num}%", (int)(slave.Looks * 100)), ValueColour: looksColour, Tooltip: looksTip));
         return lines;
     }

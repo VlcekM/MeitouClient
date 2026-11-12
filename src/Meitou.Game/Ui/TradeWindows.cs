@@ -22,10 +22,16 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class TradeWindows(PlayerInterface player)
 {
+    #region Trader
+
     /// <summary>
     /// The trader whose window the interface opened (none: no trade shown) and whether its closing was already sent.
     /// </summary>
     internal CharacterId ShownTrader = CharacterId.None;
+
+    /// <summary>
+    /// The shown trade's closing was already sent.
+    /// </summary>
     bool _tradeCloseSent;
 
     /// <summary>
@@ -102,7 +108,15 @@ sealed class TradeWindows(PlayerInterface player)
             .OrderByDescending(c => c.Bounds.Width * c.Bounds.Height)
             .FirstOrDefault()?.Name;
 
-    string? TraderGrid(string screen) => GridIn(player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent).First(f => f.Id == screen).Controls);
+    /// <summary>
+    /// The trader window's item grid widget, from an arrangement of the open screens.
+    /// </summary>
+    string? TraderGrid(string screen)
+    {
+        var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen,
+            player.ScreenRouter.AddFaithfulContent);
+        return GridIn(frames.First(f => f.Id == screen).Controls);
+    }
 
     /// <summary>
     /// The trader's name in the caption, its ARRANGE button; the money line is added after arranging.
@@ -133,6 +147,9 @@ sealed class TradeWindows(PlayerInterface player)
         return (side - grid.Position.Width * content.Position.Width * r.Width, side - grid.Position.Height * content.Position.Height * r.Height);
     }
 
+    /// <summary>
+    /// The trader window's geometry while a trade is shown.
+    /// </summary>
     internal void BindTraderGeometry(UiBindings b)
     {
         var layout = player.FaithfulScreens.Layout("trader");
@@ -148,7 +165,8 @@ sealed class TradeWindows(PlayerInterface player)
             // generic ScrollView draws the template's bars.
             if (layout.Find("Content") is { } content && layout.Find("scrollview_backpack_content") is { } view)
             {
-                float contentW = content.Position.Width * (r.Width + dx), contentH = content.Position.Height * (r.Height + dy), w0 = content.Position.Width * r.Width, h0 = content.Position.Height * r.Height;
+                float contentW = content.Position.Width * (r.Width + dx), contentH = content.Position.Height * (r.Height + dy);
+                float w0 = content.Position.Width * r.Width, h0 = content.Position.Height * r.Height;
                 b.RelativePositions[view] = new(view.Position.X * w0 / contentW, view.Position.Y * h0 / contentH,
                     (view.Position.Width * w0 + dx) / contentW, (view.Position.Height * h0 + dy) / contentH);
                 b.Canvas[view.Name] = (columns * player.InventoryCell, rows * player.InventoryCell);
@@ -202,7 +220,7 @@ sealed class TradeWindows(PlayerInterface player)
         // The scroll view (the generic ScrollView, bars and offset included) has the canvas where it put it; the grid is that canvas, so it draws
         // over the view's frame, under its bars.
         var scrollView = controls[viewIndex];
-        var client = controls.FirstOrDefault(x => x.Properties.GetValueOrDefault("TemplateOwner") == scrollView.Name && x.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? scrollView.Bounds;
+        var client = controls.FirstOrDefault(x => IsTemplateClient(x, scrollView.Name))?.Bounds ?? scrollView.Bounds;
         int gridIndex = controls.FindIndex(x => x.Name == "backpack_content");
         if (gridIndex < 0) return;
 
@@ -211,11 +229,18 @@ sealed class TradeWindows(PlayerInterface player)
         viewIndex = controls.FindIndex(x => x.Name == "scrollview_backpack_content");
         controls.Insert(viewIndex + 1, slot with
         {
-            Bounds = new(MyGuiPresentation.Num(scrollView.Properties, "CanvasX", client.X), MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * cell),
+            Bounds = new(MyGuiPresentation.Num(scrollView.Properties, "CanvasX", client.X),
+                MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * cell),
             Clip = client.Intersect(slot.Clip ?? client),
             Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {cell}") },
         });
     }
+
+    /// <summary>
+    /// The Client part of a scroll view's template (the area its canvas shows).
+    /// </summary>
+    static bool IsTemplateClient(UiControl c, string owner) =>
+        c.Properties.GetValueOrDefault("TemplateOwner") == owner && c.Properties.GetValueOrDefault("TemplatePart") == "Client";
 
     /// <summary>
     /// The money line and the stock in the trader window's grid.
@@ -224,7 +249,7 @@ sealed class TradeWindows(PlayerInterface player)
     {
         if (player.Session.CurrentSnapshot.Trade is not { } trade || GridIn(controls) is not { } gridName) return;
 
-        player.AddLines(controls, "datapanel", [new("Money:", "c." + Money(trade.ShopMoney))], 20 * player.InventoryScale);
+        player.AddLines(controls, "datapanel", [new("Money:", "c." + Money(trade.ShopMoney))], 20 * player.UiScale);
         var slot = controls.First(c => c.Name == gridName);
         int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
         var area = slot.Bounds;
@@ -233,7 +258,8 @@ sealed class TradeWindows(PlayerInterface player)
         foreach (var (r, k) in trade.Unused.Select((r, k) => (r, k)))
         {
             controls.Add(new($"trade-unused-{k}", "Widget",
-                new(area.X + r.X * area.Width / columns, area.Y + r.Y * area.Height / rows, r.Width * area.Width / columns, r.Height * area.Height / rows),
+                new(area.X + r.X * area.Width / columns, area.Y + r.Y * area.Height / rows,
+                    r.Width * area.Width / columns, r.Height * area.Height / rows),
                 "", "", "", true, new Dictionary<string, string>(), new Vector4(0, 0, 0, 0.65f), Pickable: false, Clip: slot.Clip));
         }
 
@@ -255,7 +281,9 @@ sealed class TradeWindows(PlayerInterface player)
     /// who cannot take the trade.
     /// </summary>
     internal TradeItemView? SellTip(CharacterId owner, int index) =>
-        player.Session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
+        player.Session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods)
+            ? goods.FirstOrDefault(g => g.Index == index)
+            : null;
 
     /// <summary>
     /// The fencing prompt beside a seller's item (<see cref="TradeView.GoodsOf"/>) held over the stock (<c>FUN_140712920</c>, <b>Observed</b> by
@@ -265,19 +293,21 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void AddFencePrompt(List<UiControl> controls)
     {
-        if (player.InventoryWindows.Held is not { } item || player.Session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
+        if (player.InventoryWindows.Held is not { } item || player.Session.CurrentSnapshot.Trade is not { } trade
+            || item.From.Holder != ItemHolder.Character
             || player.FaithfulScreens.HitTest(player.Mouse) is not { Screen: "trader" } || trade.Held is not { } goods)
         {
             return;
         }
 
-        (string Label, string Value, string Colour)? prompt = goods.Illegal ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
+        (string Label, string Value, string Colour)? prompt = goods.Illegal
+            ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
             : !goods.Stolen ? null
             : goods.FenceChance is { } chance ? ("Fencing chance:", $"{(int)(chance * 100)}%", PlayerInterface.BadColour)
             : trade.BuysStolen ? ("Stolen goods?", "No problem!", PlayerInterface.GoodColour) : null;
         if (prompt is not { } p) return;
 
-        float scale = player.InventoryScale, width = 240 * scale, height = 34 * scale;
+        float scale = player.UiScale, width = 240 * scale, height = 34 * scale;
         var box = new UiRect(Math.Clamp(player.Mouse.X + 18 * scale, 0, player.Width - width),
             Math.Clamp(player.Mouse.Y - height - 8 * scale, 0, player.Height - height), width, height);
         controls.Add(new("fence-prompt", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), Vector4.Zero,
@@ -320,26 +350,49 @@ sealed class TradeWindows(PlayerInterface player)
         return Loc.Tr("You have a {1}% chance of getting caught selling this stolen item.\nFence it anyway?", caught);
     }
 
+    /// <summary>
+    /// <paramref name="cats"/> with thousands separators.
+    /// </summary>
     internal static string Money(long cats) => cats.ToString("N0", CultureInfo.InvariantCulture);
+
+    #endregion
+
+    #region Character trading
 
     // The character trading window (docs/game/ui-screens.md "Character trading", DA 41 / 42), shown while the world publishes one
     // (CharacterTradeView), the same in both UI modes: <c>Kenshi_CharacterSelectionWindow</c> with a <c>Kenshi_CharacterSelectionBox</c> row per
     // character stacked in its scroll view. A row's tick box selects it; the total, the selected count and the buyer's money are kept up to date; the
     // confirm button is enabled while a row is ticked and the total is within the buyer's money (<c>FUN_1407281c0</c>), else the total shows in the
     // Bad colour. Confirm sends the ticked characters and closes the window; cancel, Esc or closing it sends the close.
+    /// <summary>
+    /// The character trading window's screen id.
+    /// </summary>
     internal const string CharacterTradeScreen = "character-trade";
+
     /// <summary>
     /// A row's height: the row layout's own (<c>Kenshi_CharacterSelectionBox</c> root, 0.180556 of the screen's height); its width is the scroll
     /// view's (engine choice).
     /// </summary>
     const float CharacterRowShare = 0.180556f;
 
+    /// <summary>
+    /// The row layout (<c>Kenshi_CharacterSelectionBox</c>); null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? CharacterRowLayout;
+
     /// <summary>
     /// The window on show (its <see cref="CharacterTradeView.Id"/>; 0 none), whether its closing was sent, and the ticked rows' characters.
     /// </summary>
     long _shownCharacterTrade;
+
+    /// <summary>
+    /// The shown window's closing was already sent.
+    /// </summary>
     bool _characterTradeCloseSent;
+
+    /// <summary>
+    /// The ticked rows' characters.
+    /// </summary>
     readonly HashSet<CharacterId> _characterTradeTicked = [];
 
     /// <summary>
@@ -400,8 +453,15 @@ sealed class TradeWindows(PlayerInterface player)
         return (count, total);
     }
 
+    /// <summary>
+    /// A row's height in pixels.
+    /// </summary>
     float CharacterRowHeight => player.Height * CharacterRowShare;
 
+    /// <summary>
+    /// The window's bindings: title, confirm caption, the ticked count and total (in the Bad colour when over the buyer's money), and Confirm while a
+    /// row is ticked and affordable.
+    /// </summary>
     internal void BindCharacterTradeScreen(UiBindings b)
     {
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
@@ -440,7 +500,7 @@ sealed class TradeWindows(PlayerInterface player)
             return;
         }
 
-        var client = controls.FirstOrDefault(x => x.Properties.GetValueOrDefault("TemplateOwner") == view.Name && x.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? view.Bounds;
+        var client = controls.FirstOrDefault(x => IsTemplateClient(x, view.Name))?.Bounds ?? view.Bounds;
         var clip = view.Clip is { } outer ? client.Intersect(outer) : client;
         float x0 = MyGuiPresentation.Num(view.Properties, "CanvasX", client.X), y0 = MyGuiPresentation.Num(view.Properties, "CanvasY", client.Y);
         float rowHeight = CharacterRowHeight;
@@ -457,11 +517,15 @@ sealed class TradeWindows(PlayerInterface player)
 
             bool ticked = _characterTradeTicked.Contains(row.Character);
             string prefix = "character-row-" + i.ToString(CultureInfo.InvariantCulture) + "-";
-            var b = new UiBindings { TemplateScale = player.InventoryScale };
+            var b = new UiBindings { TemplateScale = player.UiScale };
             b.Text["NameTextBox"] = row.Name;
             b.Text["PriceTextBox"] = "c." + Money(row.Price);
             b.Actions["CheckBox"] = "character-tick:" + i.ToString(CultureInfo.InvariantCulture);
-            b.Properties["CheckBox"] = new Dictionary<string, string> { ["Checked"] = ticked ? "true" : "false", ["StateSelected"] = ticked ? "true" : "false" };
+            b.Properties["CheckBox"] = new Dictionary<string, string>
+            {
+                ["Checked"] = ticked ? "true" : "false",
+                ["StateSelected"] = ticked ? "true" : "false",
+            };
 
             foreach (var c in MyGuiPresentation.Arrange(CharacterRowLayout, (int)MathF.Round(box.Width / rootShare.Item1),
                 (int)MathF.Round(box.Height / rootShare.Item2), b, player.UiResources.Layers))
@@ -474,7 +538,12 @@ sealed class TradeWindows(PlayerInterface player)
                 if (c.Name == "Portrait" && cells.TryGetValue(row.Character, out int cell))
                 {
                     controls.Add(new(prefix + "portrait", "ImageBox", bounds, "", "", "", true,
-                        new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.PortraitBar.PortraitRect(cell) },
+                        new Dictionary<string, string>
+                        {
+                            ["ImageTexture"] = PortraitBar.PortraitTexture,
+                            ["ImageFlipV"] = "true",
+                            ["ImageRect"] = player.PortraitBar.PortraitRect(cell),
+                        },
                         Vector4.Zero, Pickable: false, Clip: own));
                 }
             }
@@ -485,11 +554,14 @@ sealed class TradeWindows(PlayerInterface player)
                     continue;
 
                 player.AddLines(controls, prefix + panel, [.. lines.Select(l => new PlayerInterface.HudLine(l.Label, l.Value))],
-                    host.Bounds.Height / 5, PlayerInterface.StandardTextPixels * player.InventoryScale);
+                    host.Bounds.Height / 5, PlayerInterface.StandardTextPixels * player.UiScale);
             }
         }
     }
 
+    /// <summary>
+    /// A window event: a row's tick flipped, Confirm (sends the ticked characters), or Cancel (sends the close).
+    /// </summary>
     internal void CharacterTradeAction(MyGuiEvent e)
     {
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
@@ -505,7 +577,10 @@ sealed class TradeWindows(PlayerInterface player)
             var (count, total) = TickedRows(trade);
             if (count == 0 || total > trade.BuyerMoney) return;
 
-            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(_characterTradeTicked.Contains)]) { Tick = player.Session.World.Tick });
+            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(_characterTradeTicked.Contains)])
+            {
+                Tick = player.Session.World.Tick,
+            });
             _characterTradeCloseSent = true;
             player.FaithfulScreens.Close(CharacterTradeScreen);
         }
@@ -521,7 +596,8 @@ sealed class TradeWindows(PlayerInterface player)
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade || !player.FaithfulScreens.IsOpen(CharacterTradeScreen))
             return [];
 
-        int next = player.PortraitBar.PortraitMembers().Count, end = player.Session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
+        int next = player.PortraitBar.PortraitMembers().Count;
+        int end = player.Session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
         var list = new List<(CharacterId, int)>();
 
         foreach (var row in trade.Rows)
@@ -534,26 +610,48 @@ sealed class TradeWindows(PlayerInterface player)
         return list;
     }
 
+    #endregion
+
+    #region Loot
+
     // The loot window (docs/simulation.md "Carrying, rescue and looting", engine choice: the original's is <b>Unknown</b>): a downed character's
     // whole inventory in a second character window (<c>loot</c>, <c>Kenshi_InventoryCharacterWindow</c>) beside the looter's, its worn gear in the
     // equipment slots, and its bag in <c>loot-bag</c> (the generic window, OPEN BAG). Items are held with the mouse between the two characters'
     // windows (InventoryWindows) or moved with a right click (TakeLootItem, PutLootItem); closing it closes the loot (CloseContainer).
     /// <summary>
+    /// The character and the animal inventory window layouts; null before the UI is read.
+    /// </summary>
+    internal MyGuiLayout? CharacterInventoryLayout, AnimalInventoryLayout;
+
+    /// <summary>
+    /// Whether each inventory or loot window shows the animal layout now.
+    /// </summary>
+    internal readonly Dictionary<string, bool> AnimalWindow = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The body whose loot window is shown, and one whose window the player closed (not reopened while the sim still has it open).
     /// </summary>
     CharacterId _shownLoot = CharacterId.None, _closedLoot = CharacterId.None;
+
     /// <summary>
     /// The loot's bag window is wanted (OPEN BAG in the loot window toggles it).
     /// </summary>
     internal bool LootBagOpen = true;
+
     /// <summary>
     /// The character whose bag the loot window opened (not left open with OPEN BAG): it closes again with the loot window unless OPEN BAG was pressed
     /// meanwhile.
     /// </summary>
     internal CharacterId LootOpenedBag = CharacterId.None;
 
+    /// <summary>
+    /// Whether <paramref name="c"/> is an animal.
+    /// </summary>
     internal static bool IsAnimal(CharacterSnapshot? c) => c is { Animal: true };
 
+    /// <summary>
+    /// Whether <paramref name="screen"/> is the loot window or its bag's.
+    /// </summary>
     internal static bool IsLootScreen(string screen) => screen is "loot" or "loot-bag";
 
     /// <summary>
@@ -564,9 +662,6 @@ sealed class TradeWindows(PlayerInterface player)
         var id = player.Session.CurrentSnapshot.OpenLoot;
         return id.IsNone ? null : player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
     }
-
-    internal MyGuiLayout? CharacterInventoryLayout, AnimalInventoryLayout;
-    internal readonly Dictionary<string, bool> AnimalWindow = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Once a frame, before the windows are arranged: the inventory and loot windows take the original's animal window
@@ -651,10 +746,16 @@ sealed class TradeWindows(PlayerInterface player)
         player.InventoryLayout.PlaceWindowRow();
     }
 
+    /// <summary>
+    /// The loot window's (or its bag's) bindings: the caption (the body's or its bag's name), OPEN BAG with a bag and LIMBS with a limb window.
+    /// </summary>
     internal void BindLootScreen(string id, UiBindings b)
     {
         var body = LootBody();
-        b.Text["Root"] = (id == "loot-bag" ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name ?? "BACKPACK" : body?.Name ?? "INVENTORY").ToUpperInvariant();
+        string caption = id == "loot-bag"
+            ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name ?? "BACKPACK"
+            : body?.Name ?? "INVENTORY";
+        b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "loot-bag")
         {
@@ -678,4 +779,6 @@ sealed class TradeWindows(PlayerInterface player)
             b.Actions["LimbsButton"] = "LimbsButton";
         }
     }
+
+    #endregion
 }

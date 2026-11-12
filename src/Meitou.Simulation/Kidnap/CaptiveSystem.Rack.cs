@@ -5,7 +5,9 @@ using Meitou.Simulation.Locks;
 
 namespace Meitou.Simulation.Kidnap;
 
-// Torture racks: docs/game/locks.md "Torture racks".
+/// <summary>
+/// Torture racks: docs/game/locks.md "Torture racks".
+/// </summary>
 public sealed partial class CaptiveSystem
 {
     /// <summary>
@@ -28,6 +30,10 @@ public sealed partial class CaptiveSystem
             if (rack.Rack) StepRack(world, rack, world.TickSeconds);
     }
 
+    /// <summary>
+    /// One tick of a torture rack: with its occupant on it, the armour comes off by its timer and the machine runs; empty, the rack and
+    /// machine reset.
+    /// </summary>
     void StepRack(World world, Fixture rack, float dt)
     {
         var table = world.Characters;
@@ -38,6 +44,7 @@ public sealed partial class CaptiveSystem
             if (machine is not null) machine.Status = 0;
             return;
         }
+
         world.Defer(new Dialogue.DialogueEvent(rack.Occupant, CharacterId.None, ScreamingTorture) { Tick = world.Tick + 1 });
         bool busy;
         if (StripArmour(world, rack, c, cc, dt))
@@ -59,6 +66,7 @@ public sealed partial class CaptiveSystem
                 if (machine is not null) machine.Status = 1;
             }
         }
+
         rack.RackBusy = busy;
     }
 
@@ -83,12 +91,14 @@ public sealed partial class CaptiveSystem
         if (cc.Inventory is not { } inventory
                 || inventory.Items.FirstOrDefault(i => i.Type == FcsRecordType.Armour && i.Section == "armour") is not { } piece)
             return false;
+
         rack.RackTimer += dt;
         if (data.Combat.Armour(piece.Record) is { } armour)
         {
             var p = ArmourPiece.Create(armour, ArmourPiece.QualityOf(armour, piece.Level), ArmourPiece.Graded(armour, piece.Level));
             if (p.CutDefence + p.BluntDefence >= rack.RackTimer * ArmourStripRate) return true;
         }
+
         inventory.Items.Remove(piece);
         _assembly.RefreshEquipment(cc);
         rack.RackTimer = 0;

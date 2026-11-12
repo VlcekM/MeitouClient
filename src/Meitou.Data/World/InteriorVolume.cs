@@ -7,8 +7,9 @@ using Meitou.Data.Physics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The indoor volume of a placed building (docs/formats/zones.md, "Interior view"): the collision of its <c>interior mask</c> parts placed with the building's
-/// node (position, rotation, <c>scale</c>), kept as the convex footprint of the hull on the ground plane and its height range. A point inside is indoors.
+/// The indoor volume of a placed building (docs/formats/zones.md, "Interior view"): the collision of its <c>interior mask</c> parts placed with the
+/// building's node (position, rotation, <c>scale</c>), kept as the convex footprint of the hull on the ground plane and its height range. A point
+/// inside is indoors.
 /// </summary>
 /// <param name="PlacementId">The building's <see cref="BuildingKey"/> (what <see cref="PlacedMesh.PlacementId"/> carries for its parts).</param>
 /// <param name="Footprint">Convex polygon of the hull in world X/Z, counter-clockwise.</param>
@@ -47,8 +48,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public Matrix4x4 Node { get; init; } = Matrix4x4.Identity;
 
     /// <summary>
-    /// Whether the volume is straight below or above the ground point (<paramref name="x"/>, <paramref name="z"/>): its footprint contains it, whatever the height.
-    /// What a ray cast down from far above hits (the game's building test for the interior ambience).
+    /// Whether the volume is straight below or above the ground point (<paramref name="x"/>, <paramref name="z"/>): its footprint contains it,
+    /// whatever the height. What a ray cast down from far above hits (the game's building test for the interior ambience).
     /// </summary>
     public bool ContainsGround(float x, float z)
     {
@@ -93,19 +94,33 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    // Contains's footprint, worked out once: the most asked of it (every character and furniture piece near a building, each frame) are far outside.
+    /// <summary>
+    /// Contains's footprint, worked out once: the most asked of it (every character and furniture piece near a building, each frame) are far outside.
+    /// </summary>
     readonly FootprintEdges _edges = FootprintEdges.Of(Footprint);
 
     /// <summary>
-    /// The footprint's edges that are not degenerate (a point on each and its inward unit normal), their box, and how far past the box the footprint widened
-    /// by a margin reaches, per unit of margin: the most a corner moves (1 / cos of half the turn between the normals; √2 at a right angle).
+    /// The footprint's edges that are not degenerate (a point on each and its inward unit normal), their box, and how far past the box the footprint
+    /// widened by a margin reaches, per unit of margin: the most a corner moves (1 / cos of half the turn between the normals; √2 at a right angle).
     /// </summary>
     sealed class FootprintEdges
     {
+        /// <summary>
+        /// Per edge, a point on it and its inward unit normal.
+        /// </summary>
         public required Vector2[] Points, Normals;
+        /// <summary>
+        /// The footprint's box.
+        /// </summary>
         public Vector2 Min, Max;
+        /// <summary>
+        /// How far past the box the footprint widened by a margin reaches, per unit of margin.
+        /// </summary>
         public float Reach;
 
+        /// <summary>
+        /// The edges of <paramref name="footprint"/>, their box and reach.
+        /// </summary>
         public static FootprintEdges Of(Vector2[] footprint)
         {
             var points = new List<Vector2>();
@@ -121,7 +136,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             }
             var edges = new FootprintEdges { Points = [.. points], Normals = [.. normals] };
             // Fewer than three edges bound nothing (every point passes them), so the box may not either.
-            if (points.Count < 3 || footprint.Length < 3) (edges.Min, edges.Max, edges.Reach) = (new(float.NegativeInfinity), new(float.PositiveInfinity), 0);
+            if (points.Count < 3 || footprint.Length < 3)
+                (edges.Min, edges.Max, edges.Reach) = (new(float.NegativeInfinity), new(float.PositiveInfinity), 0);
             else
             {
                 (edges.Min, edges.Max) = (footprint[0], footprint[0]);
@@ -137,6 +153,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         }
     }
 
+    /// <summary>
+    /// The building's floor, roof and underside surfaces, made the first time they are asked for; null for a volume made by hand.
+    /// </summary>
     Lazy<FloorSurfaces>? _floors;
 
     /// <summary>
@@ -145,9 +164,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public const float CoverClearance = 5;
 
     /// <summary>
-    /// Whether <paramref name="p"/> has the building over it: a floor, stairs or roof part of its collision straight above, from <see cref="CoverClearance"/> up
-    /// (<see cref="FloorSurfaces.LowestAbove"/>). False on a walkable roof and in a roofless part, which the hull's height range still holds: Meitou's indoor
-    /// lighting asks this, the floor view and the sounds ask <see cref="Contains"/> as the game does.
+    /// Whether <paramref name="p"/> has the building over it: a floor, stairs or roof part of its collision straight above, from
+    /// <see cref="CoverClearance"/> up (<see cref="FloorSurfaces.LowestAbove"/>). False on a walkable roof and in a roofless part, which the hull's
+    /// height range still holds: Meitou's indoor lighting asks this, the floor view and the sounds ask <see cref="Contains"/> as the game does.
     /// </summary>
     public bool Covered(Vector3 p, int maxFloor = int.MaxValue) => _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance, maxFloor) is not null;
 
@@ -158,17 +177,19 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public float? CeilingAbove(Vector3 p) => _floors?.Value.CeilingAbove(p.X, p.Z, p.Y + CoverClearance);
 
     /// <summary>
-    /// The floor (0..3) a character standing at <paramref name="feet"/> in this building is on, from the building's floor collision under it (made on first use;
-    /// 0 when nothing is hit). See <see cref="FloorSurfaces.FloorAt"/>.
+    /// The floor (0..3) a character standing at <paramref name="feet"/> in this building is on, from the building's floor collision under it (made on
+    /// first use; 0 when nothing is hit). See <see cref="FloorSurfaces.FloorAt"/>.
     /// </summary>
     public int FloorAt(Vector3 feet) => _floors?.Value.FloorAt(feet) ?? 0;
 
-    // The interior mask collision's triangles in world space (three corners each): the indoor space itself, concave where the building is.
+    /// <summary>
+    /// The interior mask collision's triangles in world space (three corners each): the indoor space itself, concave where the building is.
+    /// </summary>
     Vector3[] _maskCorners = [];
 
     /// <summary>
-    /// Where a ray first meets the indoor space (the <c>interior mask</c> collision) within <paramref name="maxDistance"/>, or null: what hides the characters and
-    /// items inside or behind a building seen from outside from the pointer.
+    /// Where a ray first meets the indoor space (the <c>interior mask</c> collision) within <paramref name="maxDistance"/>, or null: what hides the
+    /// characters and items inside or behind a building seen from outside from the pointer.
     /// </summary>
     public float? MaskHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
@@ -178,10 +199,19 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         if (!FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)) return null;
         float? best = null;
         for (int i = 0; i + 2 < _maskCorners.Length; i += 3)
-            if (FloorSurfaces.RayTriangle(origin, direction, _maskCorners[i], _maskCorners[i + 1], _maskCorners[i + 2]) is { } t && t <= maxDistance && (best is null || t < best))
+        {
+            if (FloorSurfaces.RayTriangle(origin, direction, _maskCorners[i], _maskCorners[i + 1], _maskCorners[i + 2]) is { } t && t <= maxDistance
+                && (best is null || t < best))
                 best = t;
+        }
         return best;
     }
+
+    /// <summary>
+    /// Whether the building's own collision (its floors, stairs, walls, roofs and slab undersides, <see cref="FloorSurfaces.Cuts"/>) cuts into
+    /// <paramref name="prism"/> by more than <paramref name="tolerance"/>; false for a volume made by hand.
+    /// </summary>
+    public bool StructureCuts(FootprintPrism prism, float tolerance) => _floors?.Value.Cuts(prism, tolerance) == true;
 
     /// <summary>
     /// The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/>
@@ -202,10 +232,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
-    /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part with a
-    /// readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
+    /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part
+    /// with a readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but
+    /// its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
     /// </summary>
-    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, InteriorCollisions collision, bool gateways = false)
+    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation,
+        InteriorCollisions collision, bool gateways = false)
     {
         bool gateway = building.GetBool("is gateway");
         if (gateway && !gateways) return null;
@@ -270,8 +302,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
 }
 
 /// <summary>
-/// The floor collision of a building in the interior view, in world space, to tell which floor a character stands on (docs/formats/zones.md "Interior view"):
-/// the shapes of its ordinary parts (collision groups 9..12, floor 0..3) and its stairs (15..18), the groups the game's downward ray tests.
+/// The floor collision of a building in the interior view, in world space, to tell which floor a character stands on (docs/formats/zones.md "Interior
+/// view"): the shapes of its ordinary parts (collision groups 9..12, floor 0..3) and its stairs (15..18), the groups the game's downward ray tests.
 /// </summary>
 public sealed partial class FloorSurfaces
 {
@@ -281,9 +313,15 @@ public sealed partial class FloorSurfaces
     /// </summary>
     sealed record Surface(int Floor, bool Stairs, Vector3[] Corners, float YMin, float YMax, Vector2 Min, Vector2 Max)
     {
+        /// <summary>
+        /// The part's triangles binned by X/Z.
+        /// </summary>
         public TriangleGrid Grid { get; } = new(Corners, Min, Max);
     }
 
+    /// <summary>
+    /// The floor parts.
+    /// </summary>
     readonly List<Surface> _surfaces = [];
     /// <summary>
     /// The <c>is unwalkable roof</c> parts: no floor, only cover (<see cref="LowestAbove"/>).
@@ -305,22 +343,28 @@ public sealed partial class FloorSurfaces
     public const float StairsTop = 0.3f;
 
     /// <summary>
-    /// The surfaces of a building placed with <paramref name="node"/> (position, rotation, scale; part collision is in building space): its parts with
-    /// their <c>interior</c> list, leaving out doors, <c>passable</c> parts, <c>is unwalkable roof</c> parts, a <c>path mode</c> IGNORE building's parts and
-    /// furniture (the groups the ray does not test). Parts without a mesh are not laid out, so their collision is missing (engine limit).
+    /// The surfaces of a building placed with <paramref name="node"/> (position, rotation, scale; part collision is in building space): its parts
+    /// with their <c>interior</c> list, leaving out doors, <c>passable</c> parts, <c>is unwalkable roof</c> parts, a <c>path mode</c> IGNORE
+    /// building's parts and furniture (the groups the ray does not test). Parts without a mesh are not laid out, so their collision is missing
+    /// (engine limit). A <paramref name="destroyed"/> building (a ruin) is laid out as the navmesh lays it out: its parts' <c>destroyed collision</c>
+    /// where they have one, no <c>interior</c> list.
     /// </summary>
     public static FloorSurfaces For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, Matrix4x4 node,
-        InteriorCollisions collision)
+        InteriorCollisions collision, bool destroyed = false)
     {
         var result = new FloorSurfaces();
-        if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture")) return result;   // IGNORE: no floor groups
+        // IGNORE: no floor groups
+        if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture"))
+            return result;
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState { WithInterior = true }))
+        var state = new BuildingState(destroyed) { WithInterior = !destroyed };
+        foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, state))
         {
             var part = p.Source;
             if (p.Owner != building || part.GetBool("passable") || !seen.Add(part.StringId)) continue;
-            if (collision.Mesh(part.GetPath("xml collision")) is not { } mesh) continue;
-            // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal under the building.
+            if (collision.Mesh(p.CollisionPath(destroyed)) is not { } mesh) continue;
+            // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal
+            // under the building.
             bool roof = part.GetBool("is unwalkable roof");
             var kept = new List<Vector3>(mesh.Indices.Length);
             var under = new List<Vector3>();
@@ -341,6 +385,9 @@ public sealed partial class FloorSurfaces
         return result;
     }
 
+    /// <summary>
+    /// The surface of <paramref name="kept"/>'s triangles (three corners each) with its height range and X/Z box; null when there are none.
+    /// </summary>
     static Surface? Of(int floor, bool stairs, List<Vector3> kept)
     {
         if (kept.Count == 0) return null;
@@ -351,9 +398,9 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
-    /// The floor under <paramref name="feet"/>: a ray from <see cref="RayStart"/> above straight down, the highest hit. An ordinary part gives its floor; stairs
-    /// give the floor above theirs when the hit is in their top <see cref="StairsTop"/>, else their own (game: hits on stairs lower down give nothing and the
-    /// character keeps its floor; here, without a kept floor, their own). Nothing hit: 0.
+    /// The floor under <paramref name="feet"/>: a ray from <see cref="RayStart"/> above straight down, the highest hit. An ordinary part gives its
+    /// floor; stairs give the floor above theirs when the hit is in their top <see cref="StairsTop"/>, else their own (game: hits on stairs lower
+    /// down give nothing and the character keeps its floor; here, without a kept floor, their own). Nothing hit: 0.
     /// </summary>
     public int FloorAt(Vector3 feet)
     {
@@ -375,6 +422,23 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
+    /// Whether a triangle of the parts (ordinary, stairs, unwalkable roof or a slab's underside: every part with its walls) cuts into
+    /// <paramref name="prism"/> by more than <paramref name="tolerance"/> (<see cref="FootprintPrism.Cuts"/>).
+    /// </summary>
+    public bool Cuts(FootprintPrism prism, float tolerance)
+    {
+        foreach (var s in _surfaces.Concat(_roofs).Concat(_undersides))
+        {
+            if (!prism.Reaches(s.Min, s.Max, s.YMin, s.YMax)) continue;
+
+            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+                if (prism.Cuts(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], tolerance)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// The height of triangle (a, b, c) above <paramref name="q"/> (X/Z), or null when q is outside it or the triangle is vertical.
     /// </summary>
     static float? HeightAt(Vector3 a, Vector3 b, Vector3 c, Vector2 q)
@@ -391,8 +455,9 @@ public sealed partial class FloorSurfaces
 }
 
 /// <summary>
-/// A collision file's shapes triangulated in Kenshi's Y-up building space: vertices and three indices per triangle. <paramref name="Outward"/> per triangle: wound
-/// outward (a box, capsule or convex hull, <see cref="CollisionTriangulator"/>); a triangle mesh's keeps the file's winding and is false.
+/// A collision file's shapes triangulated in Kenshi's Y-up building space: vertices and three indices per triangle. <paramref name="Outward"/> per
+/// triangle: wound outward (a box, capsule or convex hull, <see cref="CollisionTriangulator"/>); a triangle mesh's keeps the file's winding and
+/// is false.
 /// </summary>
 public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Outward);
 
@@ -402,6 +467,9 @@ public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Out
 /// </summary>
 public sealed class InteriorCollisions(GameInstall install)
 {
+    /// <summary>
+    /// The collision files read, by record path (null for a missing or unreadable one).
+    /// </summary>
     readonly ConcurrentDictionary<string, CollisionMesh?> _files = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -415,6 +483,10 @@ public sealed class InteriorCollisions(GameInstall install)
     public CollisionMesh? Mesh(string recordPath) =>
         string.IsNullOrWhiteSpace(recordPath) ? null : _files.GetOrAdd(recordPath, Load);
 
+    /// <summary>
+    /// Every triangulated vertex of the file's shapes in world axes, with each triangle's outward flag (true for all but triangle meshes); null when
+    /// the path does not resolve, the file does not read or it has no triangles.
+    /// </summary>
     CollisionMesh? Load(string recordPath)
     {
         if (CollisionPaths.Resolve(install, recordPath) is not { } path) return null;

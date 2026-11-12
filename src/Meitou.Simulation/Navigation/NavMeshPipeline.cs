@@ -40,9 +40,10 @@ internal static class NavMeshPipeline
 
         var watch = Stopwatch.StartNew();
 
-        // An interior is one tile: a stair across a tile line inside a building came out cut (the two tiles' contours put their vertices at different heights
-        // along a steep ramp, docs/game/pathfinding.md "Interiors"), and the boxes are small. Its regions stay monotone with edges of at most InteriorEdgeCells:
-        // watershed regions covered fewer of the original's interior faces (World's End 26.13: 89.6 % for 92.2 %), and an interior has few polygons to save.
+        // An interior is one tile: a stair across a tile line inside a building came out cut (the two tiles' contours put their vertices at different
+        // heights along a steep ramp, docs/game/pathfinding.md "Interiors"), and the boxes are small. Its regions stay monotone with edges of at most
+        // InteriorEdgeCells: watershed regions covered fewer of the original's interior faces (World's End 26.13: 89.6 % for 92.2 %), and an interior
+        // has few polygons to save.
         var geometries = GatherInteriors(gatherer, geometry, settings);
         var built = new ZoneNavMesh[geometries.Count];
         Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
@@ -116,16 +117,22 @@ internal static class NavMeshPipeline
         return settings with { Threads = 1, TileCells = side, Watershed = false, MaxEdgeLength = InteriorEdgeCells };
     }
 
+    /// <summary>
+    /// Logs one built interior: its polygon, kept and seed counts, door polygons, painters and hull heights, then its twelve largest connected
+    /// components (neighbours only, not links) with their kept state and bounds.
+    /// </summary>
     internal static void DescribeInterior(ZoneGeometry g, ZoneNavMesh m, Action<string> log)
     {
         string seeds = string.Join(" ", g.Seeds.Select(s => $"{s.X:0},{s.Y:0},{s.Z:0}"));
         int doorPolygons = m.Areas.Count(a => a == NavArea.Door);
         string doorless = g.InteriorDoorless ? ", doorless" : "";
         string destroyed = g.InteriorDestroyed ? ", destroyed" : "";
-        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, {g.Seeds.Count} seeds ({seeds}), {doorPolygons} door polygons, " +
+        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, " +
+            $"{g.Seeds.Count} seeds ({seeds}), {doorPolygons} door polygons, " +
             $"{g.Painters.Count} painters{doorless}{destroyed}, hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull!.YMax:0}");
 
-        // Its connected components (neighbours only, not links), largest first: a stair or upper floor the seed did not reach shows up as an unkept one.
+        // Its connected components (neighbours only, not links), largest first: a stair or upper floor the seed did not reach shows up as an
+        // unkept one.
         var component = LabelComponents(m);
         foreach (var group in Enumerable.Range(0, m.PolygonCount).GroupBy(p => component[p]).OrderByDescending(c => c.Count()).Take(12))
         {

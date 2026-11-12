@@ -15,13 +15,27 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public sealed class UploadQueue
 {
+    /// <summary>
+    /// The queued steps with their labels.
+    /// </summary>
     readonly Queue<(Action Step, string Label)> _steps = new();
+
+    /// <summary>
+    /// What each label's steps have cost lately.
+    /// </summary>
     readonly StepCosts _costs = new();
+
+    /// <summary>
+    /// The clock in milliseconds.
+    /// </summary>
     readonly Func<double> _clock;
 
     /// <param name="clockMs">Milliseconds on any scale that only moves forward (tests pass their own); the real time by default.</param>
     public UploadQueue(Func<double>? clockMs = null) => _clock = clockMs ?? (() => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
 
+    /// <summary>
+    /// The steps queued.
+    /// </summary>
     public int Count => _steps.Count;
 
     /// <summary>
@@ -34,6 +48,9 @@ public sealed class UploadQueue
     /// </summary>
     public double ExpectedMs(string label) => _costs.Expected(label);
 
+    /// <summary>
+    /// Queues a step under <paramref name="label"/> (the label its cost is learnt by).
+    /// </summary>
     public void Add(Action step, string label = "step") => _steps.Enqueue((step, label));
 
     /// <summary>
@@ -77,21 +94,36 @@ public sealed class TerrainStreamer : IDisposable
     /// <summary>
     /// The eye may drift this fraction of the window's width from its centre before a new window is read.
     /// </summary>
-    const double RecentreFraction = 0.15;
+    internal const double RecentreFraction = 0.15;
 
     /// <summary>
-    /// A kept point this near the drawn window's centre (a fraction of its width) needs no standby: a jump there keeps the window's fine heights in
-    /// view while the window moves.
+    /// The renderer whose fine window is replaced.
     /// </summary>
-    const double CoverFraction = 0.3;
-
-    const int StandbyCeiling = 8;
-
     readonly TerrainRenderer _terrain;
+
+    /// <summary>
+    /// The biome and overlay/colour windows (null without textures).
+    /// </summary>
     readonly TerrainTextures? _textures;
+
+    /// <summary>
+    /// The upload steps of the windows and textures.
+    /// </summary>
     readonly UploadQueue _uploads = new();
+
+    /// <summary>
+    /// The worker's own handle on <c>fullmap.tif</c>.
+    /// </summary>
     readonly TerrainHeightmap _map;
+
+    /// <summary>
+    /// Cells per side of a window, and the heightmap's sample step it is read at (1: every sample).
+    /// </summary>
     readonly int _cells, _step;
+
+    /// <summary>
+    /// The window read running on the worker, with its bounds (null: none).
+    /// </summary>
     Task<(HeightWindow Window, TerrainHeightBounds.Patch Bounds)>? _job;
 
     /// <summary>
@@ -99,19 +131,26 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     bool _jobStandby;
 
-    bool _swapping, _standbyUploading;
+    /// <summary>
+    /// The drawn window's upload is under way (until its swap).
+    /// </summary>
+    bool _swapping;
 
     /// <summary>
     /// Uploaded windows round kept points far from the eye's window (<see cref="Kept"/>), swapped in when the eye arrives.
     /// </summary>
-    readonly List<TerrainRenderer.FineStandby> _standbys = [];
+    readonly HeightStandbys _standbys;
 
+    /// <summary>
+    /// Opens <paramref name="install"/>'s heightmap again for the worker; windows are read every <paramref name="step"/> samples.
+    /// </summary>
     public TerrainStreamer(GameInstall install, TerrainRenderer terrain, TerrainTextures? textures, int step)
     {
         this._terrain = terrain;
         this._textures = textures;
         this._step = Math.Max(step, 1);
         _cells = Math.Max(WindowCells, terrain.Fine.Columns - 1);
+        _standbys = new HeightStandbys(this, terrain);
 
         // A second handle on the file: the worker must not share the render thread's stream.
         _map = TerrainHeightmap.Open(install);
@@ -132,8 +171,14 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     public double BudgetMs { get; set; } = 2;
 
+    /// <summary>
+    /// Height windows swapped in so far.
+    /// </summary>
     public int HeightWindows { get; private set; }
 
+    /// <summary>
+    /// Milliseconds the last window read took on the worker.
+    /// </summary>
     public double LastWindowMs { get; private set; }
 
     /// <summary>
@@ -141,6 +186,9 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     public double LastUpdateMs { get; private set; }
 
+    /// <summary>
+    /// The labels of the upload steps the last update ran.
+    /// </summary>
     public string LastSteps => _uploads.LastRun;
 
     /// <summary>
@@ -149,7 +197,8 @@ public sealed class TerrainStreamer : IDisposable
     public Vector3? Ahead { get; set; }
 
     /// <summary>
-    /// Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at characters").
+    /// Points whose surrounding biome textures, colour and overlay windows and fine heights stay loaded besides the eye's ("Keep textures at
+    /// characters").
     /// </summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
 
@@ -164,12 +213,8 @@ public sealed class TerrainStreamer : IDisposable
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
     /// <summary>
-    /// At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place (<see cref="Areas"/> less
-    /// the eye's), at least 3, at most <see cref="StandbyCeiling"/>.
+    /// Nothing is being read, uploaded or swapped (a standby's read is not waited for: a far squad member does not hold up the loading screen).
     /// </summary>
-    int MaxStandbys => Math.Clamp(Areas - 1, 3, StandbyCeiling);
-
-    // A standby's read is not waited for (a far squad member does not hold up the loading screen).
     public bool Idle => (_job is null || _jobStandby) && !_swapping && _uploads.Count == 0 && (_textures?.Idle ?? true);
 
     /// <summary>
@@ -186,6 +231,9 @@ public sealed class TerrainStreamer : IDisposable
         return $"height windows {HeightWindows}{textures}";
     }
 
+    /// <summary>
+    /// Streams round <paramref name="eye"/> within <see cref="BudgetMs"/>, timed into <see cref="LastUpdateMs"/>.
+    /// </summary>
     public void Update(Vector3 eye)
     {
         var watch = Stopwatch.StartNew();
@@ -211,6 +259,9 @@ public sealed class TerrainStreamer : IDisposable
         Console.WriteLine($"warning   streaming did not finish in {timeoutMs / 1000} s");
     }
 
+    /// <summary>
+    /// Waits up to 5 s for a window read still running, then drops the standbys and closes the heightmap.
+    /// </summary>
     public void Dispose()
     {
         try
@@ -221,11 +272,13 @@ public sealed class TerrainStreamer : IDisposable
         {
         }
 
-        foreach (var s in _standbys) _terrain.DropFine(s);
-        _standbys.Clear();
+        _standbys.DropAll();
         _map.Dispose();
     }
 
+    /// <summary>
+    /// The biomes resident and the overlay/colour maps' state, for <see cref="Describe"/>.
+    /// </summary>
     static string TextureSummary(TerrainTextures textures)
     {
         string resident = string.Join(", ", textures.Resident.Select(b => b.Name.Trim()));
@@ -233,6 +286,9 @@ public sealed class TerrainStreamer : IDisposable
         return $", biomes {textures.ResidentBiomes}/{textures.TotalBiomes} resident ({resident}), overlay/colour maps {maps}";
     }
 
+    /// <summary>
+    /// Takes a finished window, starts the next one the eye needs, streams the textures and runs the upload steps within <paramref name="budgetMs"/>.
+    /// </summary>
     void Update(Vector3 eye, double budgetMs)
     {
         ApplyFinishedJob();
@@ -256,12 +312,7 @@ public sealed class TerrainStreamer : IDisposable
             var (window, bounds) = done.Result;
             if (_jobStandby)
             {
-                _standbyUploading = true;
-                _terrain.BeginFineStandby(window, bounds, _uploads, s =>
-                {
-                    _standbys.Add(s);
-                    _standbyUploading = false;
-                });
+                _standbys.BeginUpload(window, bounds, _uploads);
             }
             else
             {
@@ -284,14 +335,13 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     void RequestWindow(Vector3 eye)
     {
-        bool idle = _job is null && !_swapping && !_standbyUploading;
+        bool idle = _job is null && !_swapping && !_standbys.Uploading;
         if (idle && NeedsWindow(_terrain.Fine, eye, out int column0, out int row0))
         {
-            // A standby round where the eye now is (it jumped to a kept character): drawn at once, the window it replaces kept as a standby for where the eye was.
-            int ready = _standbys.FindIndex(s => !NeedsWindow(s.Window, eye, out _, out _));
-            if (ready >= 0)
+            // A standby round where the eye now is (it jumped to a kept character): drawn at once, the window it replaces kept as a standby for where
+            // the eye was.
+            if (_standbys.TrySwapIn(s => !NeedsWindow(s.Window, eye, out _, out _)))
             {
-                _standbys[ready] = _terrain.SwapFine(_standbys[ready]);
                 HeightWindows++;
             }
             else
@@ -305,6 +355,9 @@ public sealed class TerrainStreamer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads the window from (<paramref name="column0"/>, <paramref name="row0"/>) on the worker, with its bounds: the drawn window, or a standby.
+    /// </summary>
     void Read(int column0, int row0, bool standby)
     {
         var watch = Stopwatch.StartNew();
@@ -319,30 +372,19 @@ public sealed class TerrainStreamer : IDisposable
     }
 
     /// <summary>
-    /// Starts reading a standby window for the first kept point that is neither near the drawn window's centre nor inside a standby's middle, in place of
-    /// a standby no kept point is in the middle of (or a new one, up to <see cref="MaxStandbys"/>).
+    /// Starts reading a standby window for the first kept point that needs one (<see cref="HeightStandbys.TryPickPoint"/>).
     /// </summary>
     void PrepareStandby()
     {
-        foreach (var point in Kept)
-        {
-            if (Within(_terrain.Fine, point, CoverFraction) || _standbys.Any(s => Within(s.Window, point, RecentreFraction))) continue;
+        if (!_standbys.TryPickPoint(out var point)) return;
 
-            if (_standbys.Count >= MaxStandbys)
-            {
-                int idle = _standbys.FindIndex(s => !Kept.Any(k => Within(s.Window, k, RecentreFraction)));
-                if (idle < 0) return;
-
-                _terrain.DropFine(_standbys[idle]);
-                _standbys.RemoveAt(idle);
-            }
-
-            if (NeedsWindow(_terrain.Fine, point, out int column0, out int row0)) Read(column0, row0, standby: true);
-            return;
-        }
+        if (NeedsWindow(_terrain.Fine, point, out int column0, out int row0)) Read(column0, row0, standby: true);
     }
 
-    static bool Within(HeightWindow w, Vector3 p, double fraction)
+    /// <summary>
+    /// Whether <paramref name="p"/> lies within <paramref name="fraction"/> of <paramref name="w"/>'s width of its centre (horizontally).
+    /// </summary>
+    internal static bool Within(HeightWindow w, Vector3 p, double fraction)
     {
         var (x0, z0) = w.WorldOf(0, 0);
         double width = (w.Columns - 1) * (double)w.Spacing;

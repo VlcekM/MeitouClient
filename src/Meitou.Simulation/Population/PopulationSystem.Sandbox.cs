@@ -5,6 +5,9 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population's debug spawns (the F10 menu).
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
@@ -127,8 +130,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The game's <c>--battle</c> side: one NPC squad of characters made from <paramref name="recordId"/>, one at <paramref name="at"/> plus each of
-    /// <paramref name="offsets"/> (the first leads), standing idle facing <paramref name="yaw"/>; member i has the look <see cref="SpawnSandbox"/> gives
-    /// <paramref name="firstVariant"/> + i, the faction as it picks one for an NPC. Before the first tick. Returns the members in order.
+    /// <paramref name="offsets"/> (the first leads), standing idle facing <paramref name="yaw"/>; member i has the look <see cref="SpawnSandbox"/>
+    /// gives <paramref name="firstVariant"/> + i, the faction as it picks one for an NPC. Before the first tick. Returns the members in order.
     /// </summary>
     public IReadOnlyList<CharacterId> SpawnSandboxSquad(
         World world, string recordId, Vector2 at, IReadOnlyList<Vector2> offsets, float yaw, int firstVariant, int? faction)
@@ -144,7 +147,8 @@ public sealed partial class PopulationSystem
         }
 
         var template = new SquadTemplate { Id = "sandbox " + recordId, Name = _data.Db.Find(recordId)?.Name ?? recordId };
-        var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true, yaw: yaw);
+        var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true,
+            yaw: yaw);
         return squad.Members;
     }
 }

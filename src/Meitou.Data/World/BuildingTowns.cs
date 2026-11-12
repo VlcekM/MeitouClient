@@ -15,11 +15,26 @@ public sealed class BuildingTowns
     /// </summary>
     public const int NestMarkerType = 8;
 
+    /// <summary>
+    /// The game database the town records are found in.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// Each town placement by its GAMESTATE_TOWN's handle (C, CS).
+    /// </summary>
     readonly Dictionary<(int C, int CS), TownPlacement> _byHandle = [];
+    /// <summary>
+    /// The towns of the nearest-town lookup (not nest markers), with their X/Z.
+    /// </summary>
     readonly List<(TownPlacement Town, Vector2 At)> _towns = [];
+    /// <summary>
+    /// Each town's material by placement instance id (null when it has none).
+    /// </summary>
     readonly Dictionary<string, GameRecord?> _materials = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Indexes the towns of <paramref name="world"/> by handle and by position.
+    /// </summary>
     public BuildingTowns(GameDatabase db, WorldLevelData world)
     {
         this._db = db;

@@ -208,7 +208,11 @@ public class WildTests(ITestOutputHelper output)
         using var _ = world;
         pop.KeepWild = false;
         world.RunTicks(32);
-        var squad = pop.WildSites.Where(s => s.Kind == WildKind.Sector).SelectMany(s => pop.WildSquadsOf(s.Index)).Select(id => world.Squads.Find(id)!).First(s => s.TemplateId == "10-t");
+        var squad = pop.WildSites
+            .Where(s => s.Kind == WildKind.Sector)
+            .SelectMany(s => pop.WildSquadsOf(s.Index))
+            .Select(id => world.Squads.Find(id)!)
+            .First(s => s.TemplateId == "10-t");
         // It took an outpost round where it stands (an occupation only follows an assault; its state is set as the start would).
         var town = world.Buildings.AddTown(squad.Position, data.PlayerFaction);
         var board = squad.Ai!;

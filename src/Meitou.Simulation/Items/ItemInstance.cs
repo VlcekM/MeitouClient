@@ -14,8 +14,17 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public sealed class ItemInstance
 {
+    /// <summary>
+    /// The item's record id (the save's <c>base data sid</c>).
+    /// </summary>
     public required string Record { get; init; }
+    /// <summary>
+    /// The record's name.
+    /// </summary>
     public string Name { get; init; } = "";
+    /// <summary>
+    /// The item's type: its record's, or <see cref="FcsRecordType.Blueprint"/> for a blueprint.
+    /// </summary>
     public FcsRecordType Type { get; init; }
     /// <summary>
     /// The armour section allowed by the record's slot; empty for other items.
@@ -30,11 +39,17 @@ public sealed class ItemInstance
     /// The record's race limits (<see cref="ItemInfo.WornOnlyBy"/>, <see cref="ItemInfo.WornNeverBy"/>): who may put it in an equipment section.
     /// </summary>
     public string[] WornOnlyBy { get; init; } = [];
+    /// <summary>
+    /// The races that may not wear it (<see cref="ItemInfo.WornNeverBy"/>).
+    /// </summary>
     public string[] WornNeverBy { get; init; } = [];
     /// <summary>
     /// Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer, no limit).
     /// </summary>
     public bool WearableBy(string? race, bool animal = false) => Wearable(WornOnlyBy, WornNeverBy, race, animal);
+    /// <summary>
+    /// Whether a wearer of <paramref name="race"/> passes the only and never lists (<see cref="RaceLimiter.Allows"/>).
+    /// </summary>
     internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => RaceLimiter.Allows(only, never, race, animal);
     /// <summary>
     /// Shackles' lock (level = ARMOUR <c>lock level</c> clamped 0..100, its <c>hardness</c>, locked when made: <c>FUN_14089a440</c>); null for other
@@ -45,16 +60,34 @@ public sealed class ItemInstance
     /// Worn and effectively locked: the item cannot be taken off, sold or moved (LockedArmour's tooltip: "locked in place and cannot be removed").
     /// </summary>
     public bool LockedOn => Lock is { EffectivelyLocked: true } && InventoryCommands.IsEquipmentSection(Section);
+    /// <summary>
+    /// The material record (the save's <c>material sid</c>; a blueprint's research); empty: none.
+    /// </summary>
     public string MaterialId { get; set; } = "";
+    /// <summary>
+    /// The manufacturer record (the save's <c>company sid</c>; a blueprint's research); empty: none.
+    /// </summary>
     public string CompanyId { get; set; } = "";
     /// <summary>
     /// Where it is: <c>main</c>, <c>shirt</c>, <c>head</c>, <c>boots</c>, <c>armour</c>, <c>legs</c>, <c>hip</c>, <c>back</c>, <c>backpack_attach</c>
     /// (a worn backpack), <c>backpack_content</c> (inside it).
     /// </summary>
     public string Section { get; set; } = "main";
+    /// <summary>
+    /// The cell column in its section's grid (the save's <c>inventory x</c>).
+    /// </summary>
     public int X { get; set; }
+    /// <summary>
+    /// The cell row (the save's <c>inventory y</c>).
+    /// </summary>
     public int Y { get; set; }
+    /// <summary>
+    /// The units in the stack.
+    /// </summary>
     int _quantity = 1;
+    /// <summary>
+    /// The units in the stack (the save's <c>quantity</c>); fewer drop that many from the buy-back receipt, more drop the receipt.
+    /// </summary>
     public int Quantity
     {
         get => _quantity;
@@ -65,12 +98,21 @@ public sealed class ItemInstance
             _quantity = value;
         }
     }
+    /// <summary>
+    /// The receipt of the trade that bought the stack; read only while its trade window is open.
+    /// </summary>
     TradeReceipt? _buyback;
+    /// <summary>
+    /// The receipt of the trade that bought the stack, for undoing it at the same coins; null once its trade window has closed.
+    /// </summary>
     internal TradeReceipt? Buyback
     {
         get => _buyback is { Session.Active: true } ? _buyback : null;
         set => _buyback = value;
     }
+    /// <summary>
+    /// The level (the save's <c>level</c>).
+    /// </summary>
     public int Level { get; set; }
     /// <summary>
     /// The level the original's item vfunc 0x2b8 reports, which its item price (<c>FUN_1407a8f90</c>) takes as the quality and its grade colour reads
@@ -98,6 +140,9 @@ public sealed class ItemInstance
     /// wearer (<see cref="Meitou.Data.Gameplay.ItemColours"/>).
     /// </summary>
     public string ColourId { get; set; } = "";
+    /// <summary>
+    /// The item function (the save's <c>item function</c>, <see cref="ItemInfo.Function"/> when made).
+    /// </summary>
     public int ItemFunction { get; set; }
     /// <summary>
     /// Quality 0 to 100 (clothing from the character's armour grade).
@@ -118,21 +163,42 @@ public sealed class ItemInstance
     /// (<see cref="Bodies.MedicalState.FitReplacement"/>); 0 for other items.
     /// </summary>
     public float LimbDamage { get; set; }
+    /// <summary>
+    /// A prosthetic's wear while not fitted (the save's <c>wear</c>).
+    /// </summary>
     public float LimbWear { get; set; }
+    /// <summary>
+    /// A prosthetic's stun while not fitted (the save's <c>stun</c>).
+    /// </summary>
     public float LimbStun { get; set; }
+    /// <summary>
+    /// Its width in inventory cells.
+    /// </summary>
     public int Width { get; init; } = 1;
+    /// <summary>
+    /// Its height in inventory cells.
+    /// </summary>
     public int Height { get; init; } = 1;
     /// <summary>
     /// Weight of one unit in kg as it counts in the inventory total (weapons already scaled by <c>weapon inventory weight mult</c>).
     /// </summary>
     public float UnitWeight { get => DynamicWeight is null ? _baseWeight : WorkedWeight(); init => _baseWeight = value; }
+    /// <summary>
+    /// The record weight of one unit.
+    /// </summary>
     float _baseWeight;
     /// <summary>
     /// <see cref="DynamicWeight"/>'s answer for the inputs it was asked with (the inventory total reads it every tick); one object, so a reader on
     /// another thread sees a whole one.
     /// </summary>
     sealed record WeightMemo(int Level, string Material, string Company, float Weight);
+    /// <summary>
+    /// The last <see cref="DynamicWeight"/> answer and its inputs.
+    /// </summary>
     WeightMemo? _weightMemo;
+    /// <summary>
+    /// The <see cref="DynamicWeight"/> weight, asked again only when the level, material or manufacturer changed.
+    /// </summary>
     float WorkedWeight()
     {
         if (_weightMemo is { } m && m.Level == Level && m.Material == MaterialId && m.Company == CompanyId)
@@ -156,11 +222,14 @@ public sealed class ItemInstance
     /// (<see cref="Inventory.LimitOf"/>).
     /// </summary>
     public int StackLimit { get; init; } = 1;
+    /// <summary>
+    /// The item is food (<see cref="ItemInfo.IsFood"/>).
+    /// </summary>
     public bool IsFood { get; init; }
     /// <summary>
     /// The faction the item was stolen from (-1: none), the faction of the item's "taken from" owner (docs/game/carry-loot.md 4.4): set when the
     /// player's looting is a theft (<see cref="Carrying.CarrySystem"/>). The item counts as stolen while its holder is of another faction
-    /// (<see cref="IsStolenFor"/>). Setting it alone leaves no owner character (a container's or the ground's mark); <see cref="Mark"/> sets both.
+    /// (<see cref="IsStolenFor"/>). Setting it alone leaves no owner character (a faction with no known owner); <see cref="Mark"/> sets both.
     /// </summary>
     public int StolenFrom { get => Mark.Faction; set => Mark = StolenMark.OfFaction(value); }
     /// <summary>
@@ -258,7 +327,14 @@ public sealed class ItemInstance
     /// The weight this item and what is in it add to the load: a bag's contents count times its <see cref="ContentsFactor"/> only while it is worn,
     /// in full anywhere else (<c>FUN_140749160</c>, docs/game/ui-screens.md "Backpack rows").
     /// </summary>
-    public float Weight => UnitWeight * Quantity + (Contents?.ContentWeight() ?? 0) * (Section == "backpack_attach" ? ContentsFactor : 1);
+    public float Weight => WeightOf(skipDeath: false);
+
+    /// <summary>
+    /// <see cref="Weight"/>; with <paramref name="skipDeath"/> the death items among its contents weigh nothing
+    /// (<see cref="Inventory.ContentWeight(bool)"/>).
+    /// </summary>
+    public float WeightOf(bool skipDeath) =>
+        UnitWeight * Quantity + (Contents?.ContentWeight(skipDeath) ?? 0) * (Section == "backpack_attach" ? ContentsFactor : 1);
 
     /// <summary>
     /// How full the item (a stack's partly used unit) is, 0 to 1, for the inventory cell's charge bar, whose width is charges / maximum
@@ -278,6 +354,9 @@ public sealed class ItemInstance
 /// </summary>
 public readonly record struct StolenMark(int Faction, CharacterId Owner, int Squad)
 {
+    /// <summary>
+    /// Not stolen.
+    /// </summary>
     public static readonly StolenMark None = new(-1, CharacterId.None, -1);
     /// <summary>
     /// A mark naming only a faction (-1: none).

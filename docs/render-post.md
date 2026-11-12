@@ -57,7 +57,7 @@ K for Quality, M for Performance, L for Ultra Performance: each headless screens
 that preset set and differs from K's (repeat runs are identical).
 The Display page's "DLSS preset" (under Anti-aliasing/upscaling, shown only while that is DLSS) picks Default, J, K, L or M (Streamline/NGX 0, 10..13; `UpscaleOptions.DlssPresets`), applied at once
 (Streamline: options set again; NGX: feature remade); `MEITOU_DLSS_PRESET` overrides it. DLSS gets our exposure, not its own measure: a 1 x 1
-R32F (`PostProcess.UpscaleExposure.cs`) holding the composite's scale, `Exposure` x 0.55 / last frame's adapted luminance (the adaptation runs
+R32F (`UpscaleExposure.cs`) holding the composite's scale, `Exposure` x 0.55 / last frame's adapted luminance (the adaptation runs
 after the upscaler), tagged as Streamline's exposure buffer (13) / NGX's `ExposureTexture`, auto exposure off. NVIDIA's guide names auto exposure
 as a cause of ghosting in high-contrast scenes; the effect on foliage ghosting here is **Unknown** (not yet compared in play).
 
@@ -269,7 +269,7 @@ blended over its output instead of the scene it upscales (`PostProcess.Particles
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
 DLSS took drifting see-through dust as standing still (its default preset ignores the reactive mask) and trailed it in rows of streaks
 (motion vectors for the dust left about half of them). Over the output both sizes go in one pass with their own temporal filter
-(`CompositeLateParticlesFiltered`, `ParticleLate`): each display pixel takes the particles at the surfaces of the four render pixels round
+(`LateParticles.CompositeFiltered`, `ParticleLate`): each display pixel takes the particles at the surfaces of the four render pixels round
 it (the jitter undone), weighted bilinearly, then last frame's result (reprojected by the closest surface's motion, kept within the four
 values, widened by the layer at the nearest and farthest surface of the 3 x 3 render pixels round them) blended in at 0.1. From the four
 alone, a pixel beside an outline whose four all fell on one side (as the jitter decides) clamped its history to that side and the outline
@@ -305,7 +305,7 @@ without its gain rain's streaks fade; a distant torch a few pixels high flickers
 An optional effect (`PostOptions.Bloom`, Off | On), off in the Meitou look as in the game (magnitude 0), with its strength under it, 0..0.25 (0.13 by
 default; KenshiNative's 0.04); the example look "Hot and dry" turns it on. `--bloom <s>` sets the strength and turns it on for one run.
 Port of KenshiNative's `docs/features/bloom-rewrite.md`, which has the derivation and its checks.
-`PostProcess.Bloom.cs` runs after the upscaler on the picture the composite reads; no history.
+`Bloom.cs` runs after the upscaler on the picture the composite reads; no history.
 The composite mixes, `lerp(scene, psf ⊗ scene, strength)`, in linear light before exposure, so a
 uniform image is unchanged. The scene is gamma-encoded (no sRGB step), so the prefilter decodes
 each texel (power 2.2) before a 4x4 box to 1/2, with a firefly ceiling of 64 linear units

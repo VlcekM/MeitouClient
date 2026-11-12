@@ -18,83 +18,32 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer : IDisposable
 {
+    #region Banks and commands
+
+    /// <summary>
+    /// The Vorbis codebooks the banks' WEMs are converted with.
+    /// </summary>
     readonly WwiseCodebookLibrary _library;
+    /// <summary>
+    /// The install's <c>data/audio</c>, where the banks are read from.
+    /// </summary>
     readonly string _bankDirectory;
+    /// <summary>
+    /// The output's sample rate, in Hz.
+    /// </summary>
     readonly int _outputRate;
+    /// <summary>
+    /// Commands queued from any thread, run by <see cref="Mix"/> on the audio thread before it mixes.
+    /// </summary>
     readonly ConcurrentQueue<Action> _commands = new();
+    /// <summary>
+    /// The bank loads asked for, by normalized name: loaded or loading.
+    /// </summary>
     readonly ConcurrentDictionary<string, Task> _loading = new(StringComparer.OrdinalIgnoreCase);
-    readonly Random _random = new();
-
-    // Owned by the audio thread.
-    readonly Dictionary<uint, WwiseObject> _objects = [];
-    readonly Dictionary<uint, MediaClip> _media = [];
-    readonly PcmCache _pcm = new();
-    readonly Dictionary<uint, float> _parameters = [];
-    readonly Dictionary<uint, uint> _states = [];
-    readonly Dictionary<uint, List<uint>> _history = [];
-    readonly List<Instance> _roots = [];
-    readonly List<SoundInstance> _sounds = [];
-    readonly List<(double At, uint EventId, ulong Object, double Expires)> _pending = [];
-    readonly List<(double At, WwiseAction Action, ulong Object)> _delayed = [];
-    readonly Dictionary<string, (WwiseObject[] Objects, uint[] Media)> _bankContents = new(StringComparer.OrdinalIgnoreCase);
-    // The block being mixed covers [blockStart, time); runTime is when the action being run takes effect (music starts at that point).
-    double _time, _blockStart, _runTime;
-
     /// <summary>
-    /// Overall gain, linear (the ambience slider's).
+    /// The banks read and handed to the audio thread, by normalized name (<see cref="IsBankLoaded"/>).
     /// </summary>
-    public float Gain { get; set; } = 1;
-
-    /// <summary>
-    /// Instances and voices last mixed, banks loaded (for the overlay).
-    /// </summary>
-    public (int Instances, int Voices, int Banks, int Clips) Stats { get; private set; }
-
-    /// <summary>
-    /// The voices of music clips last mixed (part of <see cref="Stats"/>' voices).
-    /// </summary>
-    public int MusicVoices { get; private set; }
-
-    /// <summary>
-    /// Meitou's voice cap (docs/audio.md "Voice cap", the Audio settings' Sound voices slider, <see cref="AudioSettings.VoiceCap"/>): at most this
-    /// many sounds besides the music are mixed in a block, the loudest at the listener; the others run on silently (no decoding) and come back in
-    /// place when they are among the loudest again. 0: every sound is mixed. Set from any thread.
-    /// </summary>
-    public int VoiceCap { get; set; } = AudioSettings.MeitouVoices;
-
-    /// <summary>
-    /// Meitou's hearing range (docs/audio.md "Hearing range", the Audio settings' Sound range slider): every attenuation curve and every game-side
-    /// distance limit is read at the distance divided by this, so 2 hears everything twice as far. 1 is the original. Set from any thread.
-    /// </summary>
-    public float Reach { get; set; } = 1;
-
-    /// <summary>
-    /// The squared distance from <paramref name="eye"/> as the game's distance limits see it under <see cref="Reach"/>.
-    /// </summary>
-    public float HeardDistanceSquared(Vector3 at, Vector3 eye) => Vector3.DistanceSquared(at, eye) / (Reach * Reach);
-
-    /// <summary>
-    /// The sounds the cap left silent in the last block.
-    /// </summary>
-    public int Silenced { get; private set; }
-
-    /// <summary>
-    /// How much louder a sound mixed in the last block counts for the cap (a factor on its level).
-    /// </summary>
-    const float CapHysteresis = 1.5f;
-
-    float[] _loudness = new float[64];
-    int[] _order = new int[64];
-    readonly HashSet<int> _silenced = [];
-
-    /// <summary>
-    /// True once the bank has been read and handed to the audio thread (and not unloaded since).
-    /// </summary>
-    public bool IsBankLoaded(string name) => _loadedBanks.ContainsKey(Normalize(name));
-
     readonly ConcurrentDictionary<string, bool> _loadedBanks = new(StringComparer.OrdinalIgnoreCase);
-
-    static string Normalize(string name) => name.EndsWith(".bnk", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
 
     /// <summary>
     /// <paramref name="bankDirectory"/>: the install's <c>data/audio</c>. Reads <c>Init.bnk</c> at once for the game parameter defaults and
@@ -113,6 +62,16 @@ public sealed partial class WwisePlayer : IDisposable
             foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
         }
     }
+
+    /// <summary>
+    /// True once the bank has been read and handed to the audio thread (and not unloaded since).
+    /// </summary>
+    public bool IsBankLoaded(string name) => _loadedBanks.ContainsKey(Normalize(name));
+
+    /// <summary>
+    /// A bank name without its <c>.bnk</c> extension.
+    /// </summary>
+    static string Normalize(string name) => name.EndsWith(".bnk", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
 
     /// <summary>
     /// Reads a bank and converts its WEMs on a worker thread, then hands the objects and clips to the audio thread. Loading a bank that is
@@ -166,16 +125,147 @@ public sealed partial class WwisePlayer : IDisposable
     /// Posts an event on the default game object (0); see the overloads with a game object.
     /// </summary>
     public void Post(string eventName) => Post(WwiseHash.Id(eventName), 0);
+    /// <summary>
+    /// Posts an event by id on the default game object (0).
+    /// </summary>
     public void Post(uint eventId) => Post(eventId, 0);
+    /// <summary>
+    /// Sets a global game parameter by name (any thread; applied at the next block).
+    /// </summary>
     public void SetParameter(string name, float value) => SetParameter(WwiseHash.Id(name), value);
+    /// <summary>
+    /// Sets a global game parameter by id (any thread; applied at the next block).
+    /// </summary>
     public void SetParameter(uint id, float value) => _commands.Enqueue(() => _parameters[id] = value);
+    /// <summary>
+    /// Sets a state group to a state by name (any thread; applied at the next block).
+    /// </summary>
     public void SetState(string group, string state) => SetState(WwiseHash.Id(group), WwiseHash.Id(state));
+    /// <summary>
+    /// Sets a state group to a state by id (any thread; applied at the next block).
+    /// </summary>
     public void SetState(uint group, uint state) => _commands.Enqueue(() => ChangeState(group, state));
 
     /// <summary>
     /// Sets a switch group (<c>Biomes</c>, <c>General</c>): switches and states share the ids of their groups, so it is a state change.
     /// </summary>
     public void SetSwitch(string group, string value) => SetState(group, value);
+
+    #endregion
+
+    #region Mixing
+
+    /// <summary>
+    /// Random draws of the audio thread: picks, random property ranges, path choices.
+    /// </summary>
+    readonly Random _random = new();
+
+    // Owned by the audio thread.
+    /// <summary>
+    /// The bank objects (events, actions, nodes, attenuations) by id, from <c>Init.bnk</c> and every loaded bank.
+    /// </summary>
+    readonly Dictionary<uint, WwiseObject> _objects = [];
+    /// <summary>
+    /// The loaded banks' clips, converted to Ogg Vorbis, by media id.
+    /// </summary>
+    readonly Dictionary<uint, MediaClip> _media = [];
+    /// <summary>
+    /// The short clips' decoded samples, shared by their voices.
+    /// </summary>
+    readonly PcmCache _pcm = new();
+    /// <summary>
+    /// The game parameters' values by id (<c>Init.bnk</c>'s defaults, then what is set); a missing one reads 0.
+    /// </summary>
+    readonly Dictionary<uint, float> _parameters = [];
+    /// <summary>
+    /// Each state group's current state, by group id.
+    /// </summary>
+    readonly Dictionary<uint, uint> _states = [];
+    /// <summary>
+    /// The last picks of each random container (by node id), for its <c>avoid repeat</c>.
+    /// </summary>
+    readonly Dictionary<uint, List<uint>> _history = [];
+    /// <summary>
+    /// The instances played by events, each the root of its instance tree.
+    /// </summary>
+    readonly List<Instance> _roots = [];
+    /// <summary>
+    /// Every sound instance with a voice, mixed each block.
+    /// </summary>
+    readonly List<SoundInstance> _sounds = [];
+    /// <summary>
+    /// Events whose bank is still loading: when they were posted, on which object, and until when they are retried.
+    /// </summary>
+    readonly List<(double At, uint EventId, ulong Object, double Expires)> _pending = [];
+    /// <summary>
+    /// Actions waiting for their delay: when they run, and on which object.
+    /// </summary>
+    readonly List<(double At, WwiseAction Action, ulong Object)> _delayed = [];
+    /// <summary>
+    /// Each loaded bank's objects and media ids, so that unloading drops only its own.
+    /// </summary>
+    readonly Dictionary<string, (WwiseObject[] Objects, uint[] Media)> _bankContents = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The player's time in seconds: the block being mixed covers [<see cref="_blockStart"/>, <see cref="_time"/>); <see cref="_runTime"/> is when
+    /// the action being run takes effect (music starts at that point).
+    /// </summary>
+    double _time, _blockStart, _runTime;
+
+    /// <summary>
+    /// How much louder a sound mixed in the last block counts for the cap (a factor on its level).
+    /// </summary>
+    const float CapHysteresis = 1.5f;
+
+    /// <summary>
+    /// Scratch for the voice cap: the cappable sounds' negated loudness, sorted with <see cref="_order"/>; grown as needed, never shrunk.
+    /// </summary>
+    float[] _loudness = new float[64];
+    /// <summary>
+    /// Scratch for the voice cap: the sound indices sorted by loudness, loudest first.
+    /// </summary>
+    int[] _order = new int[64];
+    /// <summary>
+    /// The sound indices the cap leaves silent this block.
+    /// </summary>
+    readonly HashSet<int> _silenced = [];
+
+    /// <summary>
+    /// Overall gain, linear (the ambience slider's).
+    /// </summary>
+    public float Gain { get; set; } = 1;
+
+    /// <summary>
+    /// Instances and voices last mixed, banks loaded (for the overlay).
+    /// </summary>
+    public (int Instances, int Voices, int Banks, int Clips) Stats { get; private set; }
+
+    /// <summary>
+    /// The voices of music clips last mixed (part of <see cref="Stats"/>' voices).
+    /// </summary>
+    public int MusicVoices { get; private set; }
+
+    /// <summary>
+    /// Meitou's voice cap (docs/audio.md "Voice cap", the Audio settings' Sound voices slider, <see cref="AudioSettings.VoiceCap"/>): at most this
+    /// many sounds besides the music are mixed in a block, the loudest at the listener; the others run on silently (no decoding) and come back in
+    /// place when they are among the loudest again. 0: every sound is mixed. Set from any thread.
+    /// </summary>
+    public int VoiceCap { get; set; } = AudioSettings.MeitouVoices;
+
+    /// <summary>
+    /// Meitou's hearing range (docs/audio.md "Hearing range", the Audio settings' Sound range slider): every attenuation curve and every game-side
+    /// distance limit is read at the distance divided by this, so 2 hears everything twice as far. 1 is the original. Set from any thread.
+    /// </summary>
+    public float Reach { get; set; } = 1;
+
+    /// <summary>
+    /// The squared distance from <paramref name="eye"/> as the game's distance limits see it under <see cref="Reach"/>.
+    /// </summary>
+    public float HeardDistanceSquared(Vector3 at, Vector3 eye) => Vector3.DistanceSquared(at, eye) / (Reach * Reach);
+
+    /// <summary>
+    /// The sounds the cap left silent in the last block.
+    /// </summary>
+    public int Silenced { get; private set; }
 
     /// <summary>
     /// Called by the output: runs the queued commands, advances every instance and adds the voices to <paramref name="mix"/>.
@@ -219,7 +309,11 @@ public sealed partial class WwisePlayer : IDisposable
         {
             // A sound heard last block counts half as loud again: one at the cap's edge must get clearly quieter to give way, not flip every block.
             float heard = _sounds[i].Prepare(Gain) * (_sounds[i].Heard ? CapHysteresis : 1);
-            if (cap > 0 && _sounds[i].Cappable) { _loudness[cappable] = -heard; _order[cappable++] = i; }
+            if (cap > 0 && _sounds[i].Cappable)
+            {
+                _loudness[cappable] = -heard;
+                _order[cappable++] = i;
+            }
         }
         if (cap > 0 && cappable > cap)
         {
@@ -249,6 +343,22 @@ public sealed partial class WwisePlayer : IDisposable
         MusicVoices = music;
     }
 
+    /// <summary>
+    /// Frees every sound's voice.
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var s in _sounds) s.Dispose();
+        _sounds.Clear();
+    }
+
+    #endregion
+
+    #region Events
+
+    /// <summary>
+    /// Posts again the events that waited for a bank (a bank has just arrived); those still missing wait on until they expire.
+    /// </summary>
     void RetryPending()
     {
         var waiting = _pending.ToList();
@@ -256,6 +366,10 @@ public sealed partial class WwisePlayer : IDisposable
         foreach (var p in waiting) PostNow(p.EventId, p.Object, p.Expires);
     }
 
+    /// <summary>
+    /// Runs an event's actions on <paramref name="gameObject"/> (a delayed one later); an event not loaded yet waits in <see cref="_pending"/> until
+    /// <paramref name="expires"/>.
+    /// </summary>
     void PostNow(uint eventId, ulong gameObject, double expires)
     {
         if (!_objects.TryGetValue(eventId, out var o) || o is not WwiseEvent e)
@@ -281,6 +395,10 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     static bool ObjectScoped(WwiseAction action) => action.Scope is 3 or 5 or 7;
 
+    /// <summary>
+    /// Runs one action on <paramref name="gameObject"/>: plays a node, stops instances, sets a state, sets or resets a volume, pitch, low-pass or bus
+    /// volume offset, or bypasses a bus's effects.
+    /// </summary>
     void Run(WwiseAction action, ulong gameObject)
     {
         float fade = action.Properties.Int(WwisePropertyId.FadeTime) / 1000f;
@@ -298,7 +416,10 @@ public sealed partial class WwisePlayer : IDisposable
                         instance.Start();
                     }
                 }
-                finally { _postingObject = 0; }
+                finally
+                {
+                    _postingObject = 0;
+                }
                 break;
             case WwiseActionKind.Stop:
                 foreach (var r in _roots) r.StopMatching(action.Target, fade, ObjectScoped(action) ? gameObject : null);
@@ -336,6 +457,9 @@ public sealed partial class WwisePlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sets a state group's state; on a change every instance tree hears of it (switch containers swap their children).
+    /// </summary>
     void ChangeState(uint group, uint state)
     {
         if (_states.TryGetValue(group, out var old) && old == state) return;
@@ -343,6 +467,9 @@ public sealed partial class WwisePlayer : IDisposable
         foreach (var r in _roots) r.StateChanged(group);
     }
 
+    /// <summary>
+    /// The instance for a played node; null for a node that cannot play.
+    /// </summary>
     Instance? Create(WwiseObject node, Instance? parent) => node switch
     {
         WwiseSound s => new SoundInstance(this, s, parent),
@@ -356,6 +483,9 @@ public sealed partial class WwisePlayer : IDisposable
         _ => null,
     };
 
+    /// <summary>
+    /// The node properties of a bank object; null for an object without them.
+    /// </summary>
     static WwiseNodeBase? NodeOf(WwiseObject o) => o switch
     {
         WwiseSound s => s.Node,
@@ -383,31 +513,53 @@ public sealed partial class WwisePlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// A global game parameter's value; 0 when never set.
+    /// </summary>
     float Parameter(uint id) => _parameters.TryGetValue(id, out var v) ? v : 0;
 
-    public void Dispose()
-    {
-        foreach (var s in _sounds) s.Dispose();
-        _sounds.Clear();
-    }
+    #endregion
+
+    #region Instances
 
     /// <summary>
     /// A played node. Gains multiply down the instance tree (fades); a stopped instance fades out and ends.
     /// </summary>
     abstract class Instance(WwisePlayer player, WwiseObject node, Instance? parent)
     {
+        /// <summary>
+        /// The player this instance runs in.
+        /// </summary>
         protected readonly WwisePlayer _player = player;
+        /// <summary>
+        /// The bank node this instance plays.
+        /// </summary>
         public readonly WwiseObject Node = node;
+        /// <summary>
+        /// The instance that played this one; null for a root.
+        /// </summary>
         public readonly Instance? Parent = parent;
 
         /// <summary>
         /// The game object this plays on: the one the event was posted on (inherited from the parent).
         /// </summary>
         public readonly ulong GameObject = parent?.GameObject ?? player._postingObject;
+        /// <summary>
+        /// The instances this one played and that still run.
+        /// </summary>
         protected readonly List<Instance> _children = [];
+        /// <summary>
+        /// This instance's own fade (0..1), where it ramps to, and how fast (per second; 0 at once).
+        /// </summary>
         float _fade = 1, _fadeTarget = 1, _fadeRate;
+        /// <summary>
+        /// Whether a stop is fading this instance out; it ends when the fade reaches 0.
+        /// </summary>
         bool _stopping;
 
+        /// <summary>
+        /// The instance has ended; its owner drops it.
+        /// </summary>
         public bool Done { get; protected set; }
 
         /// <summary>
@@ -415,6 +567,9 @@ public sealed partial class WwisePlayer : IDisposable
         /// </summary>
         public double StartTime = player._runTime;
 
+        /// <summary>
+        /// Whether a stop is fading this instance out.
+        /// </summary>
         protected bool Stopping => _stopping;
 
         /// <summary>
@@ -422,6 +577,9 @@ public sealed partial class WwisePlayer : IDisposable
         /// </summary>
         public float Fade => _fade * (Parent?.Fade ?? 1);
 
+        /// <summary>
+        /// Starts this instance silent and ramps it in over <paramref name="seconds"/> (nothing at 0).
+        /// </summary>
         public void FadeIn(float seconds)
         {
             if (seconds <= 0) return;
@@ -430,8 +588,14 @@ public sealed partial class WwisePlayer : IDisposable
             _fadeRate = 1 / seconds;
         }
 
+        /// <summary>
+        /// Starts playing: a container plays its children, a sound joins the mix.
+        /// </summary>
         public abstract void Start();
 
+        /// <summary>
+        /// Advances the fades and the children by <paramref name="dt"/> seconds; ends this instance when its stop has faded out.
+        /// </summary>
         public virtual void Advance(double dt)
         {
             if (_fade != _fadeTarget)
@@ -456,11 +620,17 @@ public sealed partial class WwisePlayer : IDisposable
             }
         }
 
+        /// <summary>
+        /// A child ended: by default this instance ends with its last child.
+        /// </summary>
         protected virtual void ChildEnded(Instance child)
         {
             if (_children.Count == 0) End();
         }
 
+        /// <summary>
+        /// Ends this instance and its children at once.
+        /// </summary>
         public virtual void End()
         {
             if (Done) return;
@@ -469,6 +639,9 @@ public sealed partial class WwisePlayer : IDisposable
             _children.Clear();
         }
 
+        /// <summary>
+        /// Stops this instance, fading out over <paramref name="seconds"/> (at once at 0).
+        /// </summary>
         public void Stop(float seconds)
         {
             if (seconds <= 0)
@@ -496,11 +669,17 @@ public sealed partial class WwisePlayer : IDisposable
             foreach (var c in _children) c.StopMatching(target, seconds, onlyObject);
         }
 
+        /// <summary>
+        /// A state group changed: by default passed on to the children.
+        /// </summary>
         public virtual void StateChanged(uint group)
         {
             foreach (var c in _children) c.StateChanged(group);
         }
 
+        /// <summary>
+        /// Plays the bank object <paramref name="childId"/> as a child of this instance.
+        /// </summary>
         protected void Play(uint childId)
         {
             if (_player._objects.TryGetValue(childId, out var o) && _player.Create(o, this) is { } child)
@@ -529,13 +708,25 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     sealed class RandomSequenceInstance(WwisePlayer player, WwiseRandomSequence node, Instance? parent) : Instance(player, node, parent)
     {
+        /// <summary>
+        /// The next sequence index, and how many children have been played.
+        /// </summary>
         int _index, _played;
+        /// <summary>
+        /// Seconds until the next child is tried (the transition wait, or 0.1 when a child could not play); negative when none is due.
+        /// </summary>
         double _wait = -1;
 
+        /// <summary>
+        /// Whether the container plays its children one after another (flags bit 3) rather than one per play.
+        /// </summary>
         bool Continuous => (node.Flags & 0x08) != 0;
 
         public override void Start() => Next();
 
+        /// <summary>
+        /// Plays the next child (by sequence, or by weighted random avoiding the recent picks) or ends the container when its loops ran out.
+        /// </summary>
         void Next()
         {
             var list = node.Playlist.Length > 0 ? node.Playlist : node.Children.Select(c => (c, 50000)).ToArray();
@@ -604,6 +795,9 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     sealed class SwitchInstance(WwisePlayer player, WwiseSwitchContainer node, Instance? parent) : Instance(player, node, parent)
     {
+        /// <summary>
+        /// The switch value whose children play.
+        /// </summary>
         uint _current;
 
         public override void Start()
@@ -612,6 +806,9 @@ public sealed partial class WwisePlayer : IDisposable
             if (!node.ContinuousValidation && _children.Count == 0) End();
         }
 
+        /// <summary>
+        /// Plays the children of the current switch value (the object's, else the default) with their fade-ins.
+        /// </summary>
         void Switch()
         {
             _current = _player.TryGetGroupValue(node.GroupId, GameObject, out var s) ? s : node.DefaultSwitch;
@@ -649,23 +846,68 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     sealed class SoundInstance : Instance, IDisposable
     {
+        /// <summary>
+        /// The voice that plays the clip; null when the clip is missing (the instance then ends at its start).
+        /// </summary>
         readonly Voice? _voice;
+        /// <summary>
+        /// The node and its parents up the hierarchy.
+        /// </summary>
         readonly WwiseObject[] _chain;
+        /// <summary>
+        /// The random parts of volume, pitch and low-pass, rolled once along the chain.
+        /// </summary>
         readonly float _rolledVolume, _rolledPitch, _rolledLowPass;
+        /// <summary>
+        /// The positioning whose paths move the sound around the listener; null when the sound is not on a path.
+        /// </summary>
         readonly WwisePositioning? _path;
+        /// <summary>
+        /// The path picked at random.
+        /// </summary>
         readonly int _pathIndex;
-        // 3D by the game object's place (no paths): the attenuation, if the positioning names one.
+        /// <summary>
+        /// Whether the sound is 3D by its game object's place (no paths); <see cref="_attenuation"/> is the positioning's attenuation, if it names
+        /// one.
+        /// </summary>
         readonly bool _placed3D;
+        /// <summary>
+        /// The attenuation that shapes the placed sound by distance; null for none.
+        /// </summary>
         readonly WwiseAttenuation? _attenuation;
+        /// <summary>
+        /// The game object's place and switches; null when it is not registered.
+        /// </summary>
         readonly GameObjectState? _objectState;
+        /// <summary>
+        /// The output bus overridden by the nearest node in the chain; 0 for the default.
+        /// </summary>
         readonly uint _outputBus;
+        /// <summary>
+        /// The auxiliary buses the sound sends to (at most <see cref="Voice.MaxSends"/>).
+        /// </summary>
         readonly AuxBusState[] _sends = [];
+        /// <summary>
+        /// This block's sends for the voice, one per <see cref="_sends"/> entry.
+        /// </summary>
         readonly VoiceSend[] _targets = new VoiceSend[Voice.MaxSends];
+        /// <summary>
+        /// Seconds since the sound started (where it is on its path).
+        /// </summary>
         double _age;
+        /// <summary>
+        /// Output frames left before a music clip starts.
+        /// </summary>
         double _delayFrames;
 
+        /// <summary>
+        /// Whether this is a clip of a music track rather than a sound.
+        /// </summary>
         public bool IsMusic { get; }
 
+        /// <summary>
+        /// A sound node: plays its source the node's loop count (absent: once; 0 forever).
+        /// </summary>
         public SoundInstance(WwisePlayer player, WwiseSound sound, Instance? parent) : this(player, sound, parent, sound.Source,
             sound.Node.Properties.Values.ContainsKey(WwisePropertyId.Loop) ? sound.Node.Properties.Int(WwisePropertyId.Loop) : 1, null, 0)
         {
@@ -679,6 +921,10 @@ public sealed partial class WwisePlayer : IDisposable
         {
         }
 
+        /// <summary>
+        /// Reads the node chain once: the output bus, the rolled random ranges, the positioning (a path, or the game object with its attenuation),
+        /// the sends and the voice (a music clip trimmed and placed in the block).
+        /// </summary>
         SoundInstance(
             WwisePlayer player,
             WwiseObject node,
@@ -743,9 +989,15 @@ public sealed partial class WwisePlayer : IDisposable
             }
         }
 
+        /// <summary>
+        /// A random value in the property's range (0 without one).
+        /// </summary>
         float Roll((IReadOnlyDictionary<byte, uint> Values, IReadOnlyDictionary<byte, (float Min, float Max)> Ranges) props, byte id) =>
             props.Ranges.TryGetValue(id, out var r) ? r.Min + (float)_player._random.NextDouble() * (r.Max - r.Min) : 0;
 
+        /// <summary>
+        /// A random value in the property's range (0 without one).
+        /// </summary>
         float Roll(WwiseProperties props, byte id) => Roll((props.Values, props.Ranges), id);
 
         public override void Start()
@@ -761,8 +1013,13 @@ public sealed partial class WwisePlayer : IDisposable
             if (_voice is { Ended: true }) End();
         }
 
-        // This block's gains, from Prepare: the level, the dry and send attenuations, the pan, the low-pass coefficient and the resampling rate.
+        /// <summary>
+        /// This block's gains, from <see cref="Prepare"/>: the level, the dry and send attenuations, the pan and the low-pass coefficient.
+        /// </summary>
         float _level, _dry, _send, _panLeft, _panRight, _lowPassCoefficient;
+        /// <summary>
+        /// This block's resampling rate: source frames per output frame.
+        /// </summary>
         double _rate;
 
         /// <summary>
@@ -953,6 +1210,11 @@ public sealed partial class WwisePlayer : IDisposable
             return (vertices[^1].X, vertices[^1].Z);
         }
 
+        /// <summary>
+        /// Frees the voice.
+        /// </summary>
         public void Dispose() => _voice?.Dispose();
     }
+
+    #endregion
 }

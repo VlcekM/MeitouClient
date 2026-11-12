@@ -16,6 +16,9 @@ static class KeyMap
     /// </summary>
     public static bool SwapButtons { get; set; }
 
+    /// <summary>
+    /// A mouse button as the engine's, the left and right swapped with <see cref="SwapButtons"/>; null for one the engine has no name for.
+    /// </summary>
     public static EngineButton? Map(SilkButton b) => b switch
     {
         SilkButton.Left => SwapButtons ? EngineButton.Right : EngineButton.Left,
@@ -26,6 +29,9 @@ static class KeyMap
         _ => null,
     };
 
+    /// <summary>
+    /// A key as the engine's; null for one the engine has no name for.
+    /// </summary>
     public static EngineKey? Map(SilkKey k) => k switch
     {
         >= SilkKey.A and <= SilkKey.Z => EngineKey.A + (k - SilkKey.A),

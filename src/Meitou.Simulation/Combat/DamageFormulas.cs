@@ -8,9 +8,21 @@ namespace Meitou.Simulation.Combat;
 /// </summary>
 public enum TargetKind
 {
+    /// <summary>
+    /// A human (the weapon's <c>human damage mult</c>).
+    /// </summary>
     Human,
+    /// <summary>
+    /// An animal (<c>animal damage mult</c>).
+    /// </summary>
     Animal,
+    /// <summary>
+    /// A robot (<c>robot damage mult</c>).
+    /// </summary>
     Robot,
+    /// <summary>
+    /// No character: a wall, a door or the HUD's figure; multiplier 1.
+    /// </summary>
     None,
 }
 
@@ -20,13 +32,17 @@ public enum TargetKind
 /// </summary>
 public readonly record struct DamagePacket(float Cut, float Blunt, float Pierce, float Stun, float BleedMultiplier, float ArmourPenetration)
 {
+    /// <summary>
+    /// The packet's cut, blunt, pierce and stun added up.
+    /// </summary>
     public float Sum => Cut + Blunt + Pierce + Stun;
 }
 
 /// <summary>
 /// The damage of a blow from the wielder's stats and the weapon (docs/game/combat.md "Damage per blow", all <b>Observed</b>: <c>FUN_140883ba0</c>,
-/// <c>FUN_140883c60</c>, <c>FUN_140883d10</c>, <c>FUN_140884020</c>). Every stat passed in is the <i>effective</i> stat: the stat times the injury and hunger
-/// multiplier of <c>Bodies.StatMultiplier</c> (and the race scale slot, 1 for humans). <c>lerp(t, a, b)</c> is the game's, parameter first, and is not clamped.
+/// <c>FUN_140883c60</c>, <c>FUN_140883d10</c>, <c>FUN_140884020</c>). Every stat passed in is the <i>effective</i> stat: the stat times the injury
+/// and hunger multiplier of <c>Bodies.StatMultiplier</c> (and the race scale slot, 1 for humans). <c>lerp(t, a, b)</c> is the game's, parameter
+/// first, and is not clamped.
 /// </summary>
 public static class DamageFormulas
 {
@@ -36,8 +52,9 @@ public static class DamageFormulas
     public static bool IsBluntDominant(in WeaponStats w) => w.CutMultiplier < w.BluntMultiplier;
 
     /// <summary>
-    /// cut = lerp((skill + dex) x cutMult / 200, cutBase, cut99), cutBase the stored <c>cut damage 1</c> (13) or, for a blunt-dominant weapon, 0.4 x the stored
-    /// <c>blunt damage 1</c>. There is no floor: the weapon's <c>min cut damage</c> fields are read by no hit code (docs/game/combat.md "Weapons and damage").
+    /// cut = lerp((skill + dex) x cutMult / 200, cutBase, cut99), cutBase the stored <c>cut damage 1</c> (13) or, for a blunt-dominant weapon, 0.4 x
+    /// the stored <c>blunt damage 1</c>. There is no floor: the weapon's <c>min cut damage</c> fields are read by no hit code (docs/game/combat.md
+    /// "Weapons and damage").
     /// </summary>
     public static float Cut(float skill, float dexterity, in WeaponStats w, CombatConstants c)
     {
@@ -47,8 +64,8 @@ public static class DamageFormulas
 
     /// <summary>
     /// blunt = lerp((0.5 skill + 1.5 strength) x bluntMult / 200, bluntBase, blunt99). The blunt base of a blunt-dominant weapon is the stored
-    /// <c>blunt damage 1</c> (13); the base of the other weapons is 0 (<b>Verified</b>: the stats constructor <c>FUN_140897f30</c> zeroes it and sets it only for
-    /// a blunt-dominant weapon), so a katana (blunt multiplier 0) does not stun with every cut.
+    /// <c>blunt damage 1</c> (13); the base of the other weapons is 0 (<b>Verified</b>: the stats constructor <c>FUN_140897f30</c> zeroes it and sets
+    /// it only for a blunt-dominant weapon), so a katana (blunt multiplier 0) does not stun with every cut.
     /// </summary>
     public static float Blunt(float skill, float strength, in WeaponStats w, CombatConstants c)
     {
@@ -57,7 +74,8 @@ public static class DamageFormulas
     }
 
     /// <summary>
-    /// pierce = the stored pierce multiplier x (skill + dex) x pierceMult + 10 x pierceMult (0 for every sword, club and fist; creature weapons have it).
+    /// pierce = the stored pierce multiplier x (skill + dex) x pierceMult + 10 x pierceMult (0 for every sword, club and fist; creature weapons
+    /// have it).
     /// </summary>
     public static float Pierce(float skill, float dexterity, float weaponPierceMultiplier, CombatConstants c) =>
         c.PierceDamageMultiplier * (skill + dexterity) * weaponPierceMultiplier + 10 * weaponPierceMultiplier;
@@ -86,7 +104,8 @@ public static class DamageFormulas
     }
 
     /// <summary>
-    /// The stumble threshold (<c>FUN_140884020</c>): toughness x scale x 0.01 x the stored <c>stumble damage max</c> (0.65 x 80), i.e. toughness x 0.52.
+    /// The stumble threshold (<c>FUN_140884020</c>): toughness x scale x 0.01 x the stored <c>stumble damage max</c> (0.65 x 80), i.e. toughness
+    /// x 0.52.
     /// </summary>
     public static float StumbleThreshold(float toughness, CombatConstants c) => toughness * 0.01f * c.StumbleDamageMax;
 
@@ -129,11 +148,15 @@ public static class DamageFormulas
         CombatConstants c)
     {
         var (cut, blunt) = Unarmed(rating, toughness, strength, c);
-        float scale = GeneralMultiplier(damageOutput) * (fists is null ? 1 : KindMultiplier(fists.Data, kind) * RaceMultiplier(fists.Data, targetRace));
+        float scale =
+            GeneralMultiplier(damageOutput) * (fists is null ? 1 : KindMultiplier(fists.Data, kind) * RaceMultiplier(fists.Data, targetRace));
 
         return new DamagePacket(cut * scale, blunt * scale, 0, 0, fists?.Data.BleedMult ?? 1, fists?.Data.ArmourPenetration ?? 0);
     }
 
+    /// <summary>
+    /// The weapon's damage multiplier against <paramref name="kind"/>: the robot, animal or human multiplier, 1 for none.
+    /// </summary>
     public static float KindMultiplier(WeaponData weapon, TargetKind kind) => kind switch
     {
         TargetKind.Robot => weapon.RobotDamageMult,
@@ -142,6 +165,9 @@ public static class DamageFormulas
         _ => weapon.HumanDamageMult,
     };
 
+    /// <summary>
+    /// The weapon's per-race damage (per cent) against <paramref name="targetRace"/> as a factor; 1 when it names none for that race.
+    /// </summary>
     public static float RaceMultiplier(WeaponData weapon, string? targetRace) =>
         targetRace is not null && weapon.RaceDamage.TryGetValue(targetRace, out int percent) ? percent * 0.01f : 1;
 
@@ -151,5 +177,8 @@ public static class DamageFormulas
     /// </summary>
     static float GeneralMultiplier(float damageOutput) => damageOutput > 0 ? damageOutput : 1;
 
+    /// <summary>
+    /// The game's <c>lerp(t, a, b)</c>: the parameter first.
+    /// </summary>
     static float Lerp(float t, float a, float b) => a + (b - a) * t;
 }

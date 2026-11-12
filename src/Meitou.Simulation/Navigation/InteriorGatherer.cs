@@ -16,6 +16,9 @@ internal sealed record InteriorSite(BuildingPlacement Placement, GameRecord Reco
 /// </summary>
 sealed record InteriorContext(string InstanceId, bool Destroyed, uint Mask, bool Own);
 
+/// <summary>
+/// The interior side of the gatherer: whether a building is a shell with an interior, the interior's hull, mask, shapes, seeds and door painters.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
@@ -77,7 +80,21 @@ internal sealed partial class ZoneGeometryGatherer
     /// <summary>
     /// What a building's <c>interior</c> list makes of it (docs/game/pathfinding.md, "Generator", building shapes).
     /// </summary>
-    public enum InteriorKind { None, Blank, Real }
+    public enum InteriorKind
+    {
+        /// <summary>
+        /// The building has no <c>interior</c> list.
+        /// </summary>
+        None,
+        /// <summary>
+        /// Its <c>interior</c> list's first part is a blank interior (no <c>phs or mesh</c>, no <c>parts</c>).
+        /// </summary>
+        Blank,
+        /// <summary>
+        /// Its <c>interior</c> list names a real interior.
+        /// </summary>
+        Real
+    }
 
     /// <summary>
     /// None without an <c>interior</c> list; Blank when the list's first part has no <c>phs or mesh</c> and no <c>parts</c> (the "blank interior"
@@ -123,6 +140,9 @@ internal sealed partial class ZoneGeometryGatherer
         return points;
     }
 
+    /// <summary>
+    /// The building's <c>interior mask</c> parts that are BUILDING_PART records with an <c>xml collision</c>, with that path.
+    /// </summary>
     IEnumerable<(GameRecord Part, string Path)> MaskParts(GameRecord building)
     {
         foreach (var r in building.GetReferences("interior mask"))
@@ -148,35 +168,15 @@ internal sealed partial class ZoneGeometryGatherer
         float yMin = points.Min(p => p.Y), yMax = points.Max(p => p.Y);
         var hull = NavGeometry.Footprint(points, yMin, yMax, 0);
         if (hull.Polygon.Length < 3) return null;
+        if (InteriorBox(site, hull.Polygon, tileWorld, pad) is not { } box) return null;
+        var (boxMin, side, clipped) = box;
 
-        var lo = new Vector2(hull.Polygon.Min(p => p.X), hull.Polygon.Min(p => p.Y)) - new Vector2(pad);
-        var hi = new Vector2(hull.Polygon.Max(p => p.X), hull.Polygon.Max(p => p.Y)) + new Vector2(pad);
-        var (zx, zz) = WorldLayout.ZoneOrigin(site.Zone);
-        var zoneMin = new Vector2((float)zx, (float)zz);
-        var zoneMax = zoneMin + new Vector2(WorldLayout.ZoneSize);
-        bool crossLowX = lo.X < zoneMin.X, crossLowZ = lo.Y < zoneMin.Y, crossHighX = hi.X > zoneMax.X, crossHighZ = hi.Y > zoneMax.Y;
-        lo = Vector2.Max(lo, zoneMin);
-        hi = Vector2.Min(hi, zoneMax);
-        if (hi.X <= lo.X || hi.Y <= lo.Y) return null;
-        float side = MathF.Ceiling(MathF.Max(hi.X - lo.X, hi.Y - lo.Y) / tileWorld) * tileWorld;
-        // Over the high border the box is moved back to end on it (over the low one it starts on it already).
-        var boxMin = new Vector2(crossHighX && !crossLowX ? hi.X - side : lo.X, crossHighZ && !crossLowZ ? hi.Y - side : lo.Y);
         // A destroyed building's "destroyed boundary" (fcs.def: navmesh cutter for a destroyed interior) is a ring of walls round the ruin's floor,
         // its doorway and steps; cut halfway up, it outlines the floor.
         var boundary = site.Destroyed && site.Record.GetPath("destroyed boundary") is { Length: > 0 } boundaryPath
             ? _collision.Get(boundaryPath)
             : null;
-        List<(Vector2 A, Vector2 B)>? outline = null;
-        if (boundary is not null)
-        {
-            outline = [];
-            foreach (var shape in boundary.Shapes)
-            {
-                var pts = shape.Vertices.Select(v => Vector3.Transform(v, node)).ToArray();
-                outline.AddRange(NavGeometry.Slice(pts, shape.Indices, (pts.Min(p => p.Y) + pts.Max(p => p.Y)) / 2));
-            }
-            if (outline.Count < 3) outline = null;
-        }
+        var outline = boundary is null ? null : Outline(boundary, node);
         var g = new ZoneGeometry
         {
             Zone = site.Zone,
@@ -186,7 +186,7 @@ internal sealed partial class ZoneGeometryGatherer
             InteriorHull = hull,
             InteriorOf = site.Placement.Key,
             TrackParts = ownOnly || trackParts,
-            ClippedAtBorder = crossLowX || crossLowZ || crossHighX || crossHighZ,
+            ClippedAtBorder = clipped,
             InteriorDestroyed = site.Destroyed,
             DestroyedOutline = outline,
             InteriorDoorless = site.Destroyed || !site.Record.GetReferences("doors").Any(),
@@ -195,34 +195,97 @@ internal sealed partial class ZoneGeometryGatherer
         uint mask = site.Destroyed ? DestroyedInteriorGroupMask : InteriorGroupMask;
         AddBuilding(g, site.Record, site.Placement.Key, site.Position, site.Placement.Rotation, site.Destroyed,
                 new InteriorContext(site.Placement.Key, site.Destroyed, mask, Own: true));
-        // Its layouts' furniture: walkable pieces give floor, the rest cut. The first shopkeeper or general node is the seed when no door's is
-        // (SeedPruner).
-        foreach (var (item, at, rotation) in ownOnly ? [] : LayoutObjects(site.Placement, site.Record, site.Position, site.Destroyed))
+        if (!ownOnly) AddFurniture(g, site, mask);
+        if (!ownOnly) AddBuildingsInside(g, site, mask, hull.Polygon, yMin, yMax);
+
+        // Its walls cut the interior too.
+        if (boundary is not null)
+        {
+            foreach (var shape in boundary.Shapes) AddShape(g, shape, node, 0, carve: false);
+        }
+
+        AddOutsideCarvers(g, hull.Polygon);
+        PutSeedsOnFloor(g, yMin, yMax, agentHeight);
+
+        // No door and no node: the original drops a ray from above the building's origin onto its floor-0 part.
+        if (g.Seeds.Count == 0 && g.NodeSeeds.Count == 0 && OriginRaySeed(g, site.Position, site.Placement.Rotation, out var originSeed))
+            g.NodeSeeds.Add(originSeed);
+        return g;
+    }
+
+    /// <summary>
+    /// The interior mesh's box round <paramref name="hull"/> padded by <paramref name="pad"/>: a square of whole tiles, ending on the zone's border
+    /// where the hull crosses it (<c>Clipped</c>). Null when nothing of it is in the zone.
+    /// </summary>
+    static (Vector2 Min, float Side, bool Clipped)? InteriorBox(InteriorSite site, Vector2[] hull, float tileWorld, float pad)
+    {
+        var lo = new Vector2(hull.Min(p => p.X), hull.Min(p => p.Y)) - new Vector2(pad);
+        var hi = new Vector2(hull.Max(p => p.X), hull.Max(p => p.Y)) + new Vector2(pad);
+        var (zx, zz) = WorldLayout.ZoneOrigin(site.Zone);
+        var zoneMin = new Vector2((float)zx, (float)zz);
+        var zoneMax = zoneMin + new Vector2(WorldLayout.ZoneSize);
+        bool crossLowX = lo.X < zoneMin.X, crossLowZ = lo.Y < zoneMin.Y, crossHighX = hi.X > zoneMax.X, crossHighZ = hi.Y > zoneMax.Y;
+        lo = Vector2.Max(lo, zoneMin);
+        hi = Vector2.Min(hi, zoneMax);
+        if (hi.X <= lo.X || hi.Y <= lo.Y) return null;
+
+        float side = MathF.Ceiling(MathF.Max(hi.X - lo.X, hi.Y - lo.Y) / tileWorld) * tileWorld;
+
+        // Over the high border the box is moved back to end on it (over the low one it starts on it already).
+        var boxMin = new Vector2(crossHighX && !crossLowX ? hi.X - side : lo.X, crossHighZ && !crossLowZ ? hi.Y - side : lo.Y);
+        return (boxMin, side, crossLowX || crossLowZ || crossHighX || crossHighZ);
+    }
+
+    /// <summary>
+    /// The floor outline a ruin's boundary walls give, cut halfway up each shape; null with fewer than 3 segments.
+    /// </summary>
+    static List<(Vector2 A, Vector2 B)>? Outline(PreparedCollision boundary, Matrix4x4 node)
+    {
+        List<(Vector2 A, Vector2 B)>? outline = [];
+        foreach (var shape in boundary.Shapes)
+        {
+            var pts = shape.Vertices.Select(v => Vector3.Transform(v, node)).ToArray();
+            outline.AddRange(NavGeometry.Slice(pts, shape.Indices, (pts.Min(p => p.Y) + pts.Max(p => p.Y)) / 2));
+        }
+        if (outline.Count < 3) outline = null;
+        return outline;
+    }
+
+    /// <summary>
+    /// The interior's layouts' furniture: walkable pieces give floor, the rest cut. The first shopkeeper or general node is the seed when no
+    /// door's is (SeedPruner).
+    /// </summary>
+    void AddFurniture(ZoneGeometry g, InteriorSite site, uint mask)
+    {
+        foreach (var (item, at, rotation) in LayoutObjects(site.Placement, site.Record, site.Position, site.Destroyed))
         {
             if (g.NodeSeeds.Count == 0 && item.Building.GetBool("is node") && item.Building.GetInt("node type") is 0 or 1)
                 g.NodeSeeds.Add(at);
             AddBuilding(g, item.Building, $"{site.Placement.Key}/{item.InstanceId}", at, rotation, destroyed: false,
                     new InteriorContext(site.Placement.Key, false, mask, Own: false), item.Floor);
         }
+    }
 
-        // Other buildings standing inside the hull (furniture placed in the zone file): walkable ones give floor, the rest cut.
+    /// <summary>
+    /// Other buildings standing inside the hull (furniture placed in the zone file): walkable ones give floor, the rest cut.
+    /// </summary>
+    void AddBuildingsInside(ZoneGeometry g, InteriorSite site, uint mask, Vector2[] hull, float yMin, float yMax)
+    {
         var (ox, oz) = WorldLayout.ZoneOrigin(site.Placement.Zone);
         var zmin = new Vector2((float)ox, (float)oz);
-        foreach (var (b, record, position, destroyed) in ownOnly ? [] : NearBuildings(site.Placement.Zone, zmin,
-                zmin + new Vector2(WorldLayout.ZoneSize), 0))
+        foreach (var (b, record, position, destroyed) in NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.Key == site.Placement.Key || position.Y < yMin - 30 || position.Y > yMax + 30) continue;
-            if (!NavGeometry.InsideConvex(hull.Polygon, new Vector2(position.X, position.Z), 5)) continue;
+            if (!NavGeometry.InsideConvex(hull, new Vector2(position.X, position.Z), 5)) continue;
             AddBuilding(g, record, b.Key, position, b.Rotation, destroyed, new InteriorContext(site.Placement.Key, destroyed, mask, Own: false));
         }
+    }
 
-        // Its walls cut the interior too.
-        if (boundary is not null)
-            foreach (var shape in boundary.Shapes) AddShape(g, shape, node, 0, carve: false);
-
-        AddOutsideCarvers(g, hull.Polygon);
-
-        // The inner door markers were added without a height: put them on the floor.
+    /// <summary>
+    /// The inner door markers were added without a height: puts them on the floor, the lowest upward face with the agent's headroom.
+    /// </summary>
+    static void PutSeedsOnFloor(ZoneGeometry g, float yMin, float yMax, float agentHeight)
+    {
         for (int i = 0; i < g.Seeds.Count; i++)
         {
             var s = g.Seeds[i];
@@ -243,10 +306,6 @@ internal sealed partial class ZoneGeometryGatherer
             }
             g.Seeds[i] = new Vector3(s.X, height, s.Z);
         }
-        // No door and no node: the original drops a ray from above the building's origin onto its floor-0 part.
-        if (g.Seeds.Count == 0 && g.NodeSeeds.Count == 0 && OriginRaySeed(g, site.Position, site.Placement.Rotation, out var originSeed))
-            g.NodeSeeds.Add(originSeed);
-        return g;
     }
 
     /// <summary>
@@ -270,6 +329,11 @@ internal sealed partial class ZoneGeometryGatherer
         g.Stats.Carvers += poly.Length;
     }
 
+    /// <summary>
+    /// Adds one shape of an interior's collision: group 13 (the hull) is skipped, a door (group 5) of the building's own interior becomes a door
+    /// painter reaching into the hull and an inner door seed; other groups only when <paramref name="ctx"/>'s mask has them, walkable unless group 27
+    /// or neither its own interior nor <see cref="PathMode.Walkable"/>, a floor (group 9) also recorded in <see cref="ZoneGeometry.FloorRanges"/>.
+    /// </summary>
     void AddInteriorShape(ZoneGeometry g, GameRecord owner, int group, PathMode mode, PreparedShape shape, Matrix4x4 node, string instanceId,
             InteriorContext ctx)
     {

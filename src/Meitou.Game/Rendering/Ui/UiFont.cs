@@ -29,52 +29,157 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>
     /// One glyph: layout in output pixels (offsets from the pen and the baseline, quad size), and its rectangle in the atlas in texels.
     /// </summary>
-    internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth, ushort PixelHeight);
+    internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth,
+        ushort PixelHeight);
 
+    /// <summary>
+    /// The largest atlas side in texels; a full atlas of this size starts over.
+    /// </summary>
     const int MaxSide = 2048;
+
+    /// <summary>
+    /// The device the atlas texture is made on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The font file's shared face.
+    /// </summary>
     readonly FreeTypeFace _face;
+
+    /// <summary>
+    /// This font's FreeType size on the face (activated before each glyph is loaded).
+    /// </summary>
     readonly FT_SizeRec_* _size;
+
+    /// <summary>
+    /// Whether the font draws in MyGUI's own way (<see cref="UiFontOptions.Faithful"/>).
+    /// </summary>
     readonly bool _faithful;
+
+    /// <summary>
+    /// How many times larger glyphs are rasterised than drawn: 2 for oversampled Meitou fonts, else 1.
+    /// </summary>
     readonly int _oversample;
+
+    /// <summary>
+    /// The FreeType load flags (the hinting); weakened after repeated hinting failures (<see cref="LoadGlyph"/>).
+    /// </summary>
     FT_LOAD _loadFlags;
+
+    /// <summary>
+    /// How many glyph loads failed with the hinting asked for so far.
+    /// </summary>
     int _hintingFailures;
+
+    /// <summary>
+    /// The code points the font resource allows (Faithful only; null: any).
+    /// </summary>
     readonly MyGuiCodeRanges? _ranges;
+
+    /// <summary>
+    /// The resource's substitute code point (-1: none), its height offset (Faithful only) and the texels kept free around each glyph.
+    /// </summary>
     readonly int _substituteCode, _offsetHeight, _pad;
+
+    /// <summary>
+    /// The resource's tab width (0: eight spaces), and the scale from font units to output pixels for kerning (0 in Faithful mode).
+    /// </summary>
     readonly float _tabWidth, _kerningScale;
+
+    /// <summary>
+    /// The glyphs made, by code point.
+    /// </summary>
     readonly Dictionary<int, Glyph> _glyphs = [];
+
+    /// <summary>
+    /// The glyphs rasterised, by glyph index (code points that resolve to one glyph share it).
+    /// </summary>
     readonly Dictionary<uint, Glyph> _byIndex = [];
+
+    /// <summary>
+    /// The atlas's coverage texels, <see cref="Side"/> x <see cref="Side"/>.
+    /// </summary>
     byte[] _pixels;
+
+    /// <summary>
+    /// The buffers a glyph's bitmap and an atlas upload are copied through (grown as needed).
+    /// </summary>
     byte[] _scratch = new byte[1024], _uploadScratch = new byte[1024];
+
+    /// <summary>
+    /// Where the next glyph is packed in the atlas, and the height of the row being filled.
+    /// </summary>
     int _cursorX, _cursorY, _rowHeight;
+
+    /// <summary>
+    /// The atlas rectangle changed since the last upload.
+    /// </summary>
     int _dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1;
+
+    /// <summary>
+    /// Whether the atlas has changes not uploaded yet.
+    /// </summary>
     bool _dirty;
+
+    /// <summary>
+    /// The atlas on the GPU (null until <see cref="Prepare"/> and after it is retired).
+    /// </summary>
     GpuTexture? _texture;
+
+    /// <summary>
+    /// The atlas with the sampler it is drawn with.
+    /// </summary>
     SampledTexture _sampled;
+
+    /// <summary>
+    /// The tab's advance, measured on first use (-1: not yet).
+    /// </summary>
     float _tab = -1;
+
+    /// <summary>
+    /// Whether the font was disposed.
+    /// </summary>
     bool _disposed;
 
     /// <summary>
     /// The atlas side in texels.
     /// </summary>
     public int Side { get; private set; }
+
+    /// <summary>
+    /// Raised whenever glyph rectangles move (the atlas grew or started over).
+    /// </summary>
     public int Generation { get; private set; }
 
     /// <summary>
     /// Counts every font's <see cref="Generation"/> changes and atlas releases (render thread): recorded glyph quads are stale once it moves.
     /// </summary>
     public static int Changes { get; private set; }
+
     /// <summary>
     /// Glyphs are placed on whole pixels (Faithful, and Meitou fonts the original draws with <c>Antialias</c> false).
     /// </summary>
     public bool Snapped { get; }
+
     /// <summary>
-    /// The line's height and the distance from its top to the baseline, in pixels.
+    /// The line's height in pixels.
     /// </summary>
     public float LineHeight { get; }
+
+    /// <summary>
+    /// The distance from the line's top to the baseline, in pixels.
+    /// </summary>
     public float Baseline { get; }
+
+    /// <summary>
+    /// The advance of 'M' in pixels.
+    /// </summary>
     public float CharWidth { get; }
 
+    /// <summary>
+    /// Opens the face at the size, hinting and line metrics <paramref name="options"/> asks for and makes the usual glyphs.
+    /// </summary>
     public UiFont(IGpuContext gpu, UiFontOptions options)
     {
         this._gpu = gpu;
@@ -103,7 +208,8 @@ internal sealed unsafe class UiFont : IDisposable
             Check(FT_New_Size(_face.Face, &created), "FT_New_Size");
             _size = created;
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
-            if (_face.Scalable) Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
+            if (_face.Scalable)
+                Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
             else SelectStrike(ppem * _oversample);
             var metrics = _face.Face->size->metrics;
             if (_faithful)
@@ -155,6 +261,9 @@ internal sealed unsafe class UiFont : IDisposable
         for (int cp = 0xA0; cp < 0x100; cp++) Lookup(cp);
     }
 
+    /// <summary>
+    /// Throws when the FreeType call <paramref name="call"/> failed.
+    /// </summary>
     static void Check(FT_Error error, string call)
     {
         if (error != FT_Error.FT_Err_Ok)
@@ -216,6 +325,10 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     public float Kern(int left, int right) => _faithful ? 0 : _face.KerningUnits(left, right) * _kerningScale;
 
+    /// <summary>
+    /// The glyph of <paramref name="codePoint"/>: a tab's advance, nothing for control characters (and in Meitou mode zero-width marks), else the
+    /// face's glyph it resolves to.
+    /// </summary>
     Glyph Make(int codePoint)
     {
         if (codePoint == '\t')
@@ -223,6 +336,7 @@ internal sealed unsafe class UiFont : IDisposable
             if (_tab < 0) _tab = _tabWidth > 0 ? _tabWidth : 8 * Lookup(' ').Advance;
             return new Glyph(_tab, 0, 0, 0, 0, 0, 0, 0, 0);
         }
+
         // Line breaks are the text layout's; other C0 controls and (Meitou) zero-width marks have no glyph.
         if (codePoint < 0x20 || !_faithful && codePoint is >= 0x200B and <= 0x200F or 0xFEFF or >= 0xFE00 and <= 0xFE0F) return default;
         return ForIndex(Resolve(codePoint));
@@ -246,6 +360,9 @@ internal sealed unsafe class UiFont : IDisposable
         }
     }
 
+    /// <summary>
+    /// The glyph of face glyph <paramref name="index"/>, rasterised once.
+    /// </summary>
     Glyph ForIndex(uint index)
     {
         if (_byIndex.TryGetValue(index, out var known)) return known;
@@ -254,6 +371,10 @@ internal sealed unsafe class UiFont : IDisposable
         return made;
     }
 
+    /// <summary>
+    /// Loads and renders face glyph <paramref name="index"/>, packs its bitmap into the atlas and returns its layout; an empty glyph with only its
+    /// advance when it has no bitmap or does not fit.
+    /// </summary>
     Glyph Rasterise(uint index)
     {
         float advance, offsetX, offsetY;
@@ -263,6 +384,7 @@ internal sealed unsafe class UiFont : IDisposable
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
             if (LoadGlyph(index) != FT_Error.FT_Err_Ok) return default;
             var slot = _face.Face->glyph;
+
             // MyGUI advances by the hinted advance; Meitou by the unhinted one (light hinting leaves it alone), both in output pixels.
             advance = _faithful ? slot->advance.x / 64f
                 : (slot->linearHoriAdvance != 0 ? slot->linearHoriAdvance / 65536f : slot->advance.x / 64f) / _oversample;
@@ -275,6 +397,7 @@ internal sealed unsafe class UiFont : IDisposable
             }
 
             if (!CopyBitmap(bitmap, width, height)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
+
             // MyGUI places the bitmap at the metrics' bearing (floor(ascent - horiBearingY) from the line top, less OffsetHeight); for
             // hinted glyphs that is bitmap_left / bitmap_top, which are used here.
             offsetX = slot->bitmap_left / (float)_oversample;
@@ -283,7 +406,8 @@ internal sealed unsafe class UiFont : IDisposable
         if (!Pack(width, height, out int x0, out int y0)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
         for (int row = 0; row < height; row++) System.Buffer.BlockCopy(_scratch, row * width, _pixels, (y0 + row) * Side + x0, width);
         MarkDirty(x0, y0, x0 + width, y0 + height);
-        return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width, (ushort)height);
+        return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width,
+            (ushort)height);
     }
 
     /// <summary>
@@ -350,7 +474,13 @@ internal sealed unsafe class UiFont : IDisposable
         bool restarted = false;
         while (true)
         {
-            if (_cursorX > _pad && _cursorX + width + _pad > Side) { _cursorY += _rowHeight + _pad; _cursorX = _pad; _rowHeight = 0; }
+            if (_cursorX > _pad && _cursorX + width + _pad > Side)
+            {
+                _cursorY += _rowHeight + _pad;
+                _cursorX = _pad;
+                _rowHeight = 0;
+            }
+
             if (width + 2 * _pad <= Side && _cursorY + height + _pad <= Side)
             {
                 (x, y) = (_cursorX, _cursorY);
@@ -376,6 +506,9 @@ internal sealed unsafe class UiFont : IDisposable
         }
     }
 
+    /// <summary>
+    /// Grows the atlas rectangle waiting for upload to hold the one given.
+    /// </summary>
     void MarkDirty(int x0, int y0, int x1, int y1)
     {
         if (!_dirty)
@@ -455,17 +588,23 @@ internal sealed unsafe class UiFont : IDisposable
         }
     }
 
+    /// <summary>
+    /// Makes the GPU texture from the whole atlas.
+    /// </summary>
     void Create()
     {
         using var upload = _gpu.Uploads.Begin();
         var created = upload.Create(new TextureDesc(InternalFormat.R8, Side, Side, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "UI font"));
         upload.Write(created, 0, 0, new PixelRect(0, 0, (uint)Side, (uint)Side), _pixels);
         _texture = created;
-        _sampled = new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), created.View());
+        _sampled = new SampledTexture(_gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+            created.View());
         _dirty = false;
     }
 
+    /// <summary>
+    /// Uploads the atlas rectangle changed since the last upload.
+    /// </summary>
     void UploadDirty()
     {
         if (!_dirty || _texture is null)
@@ -482,6 +621,9 @@ internal sealed unsafe class UiFont : IDisposable
         _dirty = false;
     }
 
+    /// <summary>
+    /// Frees the FreeType size and the GPU texture.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;

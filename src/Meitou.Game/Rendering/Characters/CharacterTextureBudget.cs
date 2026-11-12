@@ -8,7 +8,13 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed class CharacterTextureBudget
 {
+    /// <summary>
+    /// The time between rebalances, in milliseconds (twice a second).
+    /// </summary>
     const long IntervalMs = 500;
+    /// <summary>
+    /// <see cref="Environment.TickCount64"/> at the last rebalance (0 before the first).
+    /// </summary>
     long _lastRebalance;
 
     /// <summary>

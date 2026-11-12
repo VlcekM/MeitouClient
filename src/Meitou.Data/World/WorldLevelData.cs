@@ -18,7 +18,13 @@ public sealed class WorldLevelData
     /// </summary>
     public const string RelativeDirectory = "newland/leveldata";
 
+    /// <summary>
+    /// The level file of towns and roads in each layer's folder.
+    /// </summary>
     public const string LevelFileName = "leveldata.level";
+    /// <summary>
+    /// The building layouts file in each layer's folder.
+    /// </summary>
     public const string InteriorsFileName = "interiors.level";
 
     /// <summary>
@@ -127,10 +133,16 @@ public sealed class WorldLevelData
     /// <summary>
     /// Loads the install's world with its outdoor buildings stood on the ground (<see cref="PlaceOnGround"/>).
     /// </summary>
-    public static WorldLevelData Load(GameInstall install, bool includeInteriors = false)
+    public static WorldLevelData Load(GameInstall install, bool includeInteriors = false) =>
+        Load(install, LoadOrder.FromInstall(install), includeInteriors);
+
+    /// <summary>
+    /// <see cref="Load(GameInstall, bool)"/> under another load order (a feedback report's, for the probe tools).
+    /// </summary>
+    public static WorldLevelData Load(GameInstall install, LoadOrder order, bool includeInteriors = false)
     {
         string directory = Path.Combine(install.DataDirectory, RelativeDirectory);
-        var world = Load(directory, LoadOrder.FromInstall(install).Entries, includeInteriors);
+        var world = Load(directory, order.Entries, includeInteriors);
         return OnGround(world, install);
     }
 
@@ -144,6 +156,10 @@ public sealed class WorldLevelData
         return OnGround(world, install);
     }
 
+    /// <summary>
+    /// <paramref name="world"/> with its buildings stood on the install's heightmap (<see cref="PlaceOnGround"/>); unchanged when the heightmap
+    /// is missing.
+    /// </summary>
     static WorldLevelData OnGround(WorldLevelData world, GameInstall install)
     {
         string path = GameFiles.Resolve(Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath));
@@ -226,6 +242,9 @@ public sealed class WorldLevelData
         if (Interiors is not null && File.Exists(interiors)) Apply(Interiors, interiors, layer);
     }
 
+    /// <summary>
+    /// Merges one level file of <paramref name="layer"/> into <paramref name="db"/>; a file the reader refuses is left out.
+    /// </summary>
     void Apply(GameDatabase db, string path, WorldLevelLayer layer, ZoneCoordinate? zone = null)
     {
         var name = layer.Name.Length == 0 ? Path.GetFileName(path) : $"{layer.Name}/{Path.GetFileName(path)}";
@@ -388,7 +407,13 @@ public sealed class WorldLevelLayer(string name, string directory)
     /// </summary>
     public string Name { get; } = name;
 
+    /// <summary>
+    /// The folder's path.
+    /// </summary>
     public string Directory { get; } = directory;
+    /// <summary>
+    /// How many level files the folder gave.
+    /// </summary>
     public int FileCount { get; internal set; }
 
     public override string ToString() => Name.Length == 0 ? "(base)" : Name;
@@ -432,6 +457,9 @@ public sealed record BuildingPlacement(
     /// </summary>
     public string? InteriorLayout { get; init; }
 
+    /// <summary>
+    /// See <see cref="InteriorLayout"/>.
+    /// </summary>
     public string? ExteriorLayout { get; init; }
 
     /// <summary>
@@ -450,6 +478,9 @@ public sealed record BuildingPlacement(
     /// </summary>
     public string? ItemMesh { get; init; }
 
+    /// <summary>
+    /// See <see cref="ItemMesh"/>.
+    /// </summary>
     public float ItemScale { get; init; } = 1;
 
     /// <summary>

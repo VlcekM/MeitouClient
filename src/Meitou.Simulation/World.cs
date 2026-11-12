@@ -66,6 +66,9 @@ public interface ITickSystem
 /// </summary>
 public interface IStateHashed
 {
+    /// <summary>
+    /// Adds the system's state to the world's state hash.
+    /// </summary>
     void Hash(ref StateHasher hasher);
 }
 
@@ -111,6 +114,9 @@ public sealed record WorldSettings
     /// The CONSTANTS <c>sunrise</c> and <c>sunset</c> (game hours) the daylight factor ramps at (<see cref="SightMap.Daylight"/>).
     /// </summary>
     public float Sunrise { get; init; } = 5;
+    /// <summary>
+    /// The CONSTANTS <c>sunset</c> (see <see cref="Sunrise"/>).
+    /// </summary>
     public float Sunset { get; init; } = 23;
     /// <summary>
     /// The far cadence (docs/simulation.md "Far cadence", engine choice): a character far from the camera and from every player character steps once
@@ -121,39 +127,100 @@ public sealed record WorldSettings
 }
 
 /// <summary>
-/// The simulated world: the character table, the systems and the tick (docs/simulation.md, "Threading"). It is headless and
-/// deterministic: the same settings, systems, setup, commands and tick count give the same <see cref="StateHash"/> at any
-/// <see cref="WorldSettings.Threads"/>. A tick is, in order: inputs, schedule, think, move, act (parallel), commit, slow world, publish.
-/// </summary>
-/// <summary>
 /// A line of the DIALOGUE log (<see cref="World.Said"/>): who said it, the text, and whether the player's side said it.
 /// </summary>
 public readonly record struct SaidLine(string Owner, string Text, bool Player);
 
+/// <summary>
+/// The simulated world: the character table, the systems and the tick (docs/simulation.md, "Threading"). It is headless and
+/// deterministic: the same settings, systems, setup, commands and tick count give the same <see cref="StateHash"/> at any
+/// <see cref="WorldSettings.Threads"/>. A tick is, in order: inputs, schedule, think, move, act (parallel), commit, slow world, publish.
+/// </summary>
 public sealed partial class World : IDisposable
 {
+    /// <summary>
+    /// The systems in tick order.
+    /// </summary>
     readonly List<ITickSystem> _systems;
+    /// <summary>
+    /// The worker threads of the parallel phases.
+    /// </summary>
     readonly WorkerPool _pool;
+    /// <summary>
+    /// The effect buffers, one per partition at most.
+    /// </summary>
     readonly EffectBuffer[] _buffers;
+    /// <summary>
+    /// The tick's effects, gathered from the buffers and sorted for the commit.
+    /// </summary>
     readonly List<Effect> _effects = [];
+    /// <summary>
+    /// The partitions of the slots the parallel phases run over.
+    /// </summary>
     Partition[] _partitions = [];
-    // The far cadence (RefreshCadence): per slot, the ticks this tick's step covers (0: skipped this tick) and the tick of its last step.
+
+    /// <summary>
+    /// The far cadence (RefreshCadence): per slot, the ticks this tick's step covers (0: skipped this tick) and the tick of its last step.
+    /// </summary>
     byte[] _stepTicks = [];
+    /// <summary>
+    /// The tick of each slot's last step (see <see cref="_stepTicks"/>).
+    /// </summary>
     long[] _lastStep = [];
+    /// <summary>
+    /// Where the player's characters are, for <see cref="NearPlayer"/>.
+    /// </summary>
     readonly List<System.Numerics.Vector3> _playerSpots = [];
-    // Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
+
+    /// <summary>
+    /// Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
+    /// </summary>
     readonly List<SystemPhases> _phases = [];
+    /// <summary>
+    /// The commands systems deferred for later ticks (<see cref="Defer"/>).
+    /// </summary>
     readonly List<SimCommand> _deferred = [];
+    /// <summary>
+    /// The messages posted since the host last took them (<see cref="TakeMessages"/>).
+    /// </summary>
     readonly List<string> _messages = [];
+    /// <summary>
+    /// The dialogue lines said since the host last took them (<see cref="TakeSaid"/>).
+    /// </summary>
     readonly List<SaidLine> _said = [];
+    /// <summary>
+    /// The lines over characters' heads and the tick each ends at (<see cref="Bark"/>).
+    /// </summary>
     readonly Dictionary<CharacterId, (string Text, long Until)> _barks = [];
+    /// <summary>
+    /// The animation system (null: none).
+    /// </summary>
     IAnimationSource? _animations;
+    /// <summary>
+    /// The projectile system (null: none).
+    /// </summary>
     IProjectileSource? _projectiles;
+    /// <summary>
+    /// The trade system (null: none).
+    /// </summary>
     Trading.ITradeSource? _trades;
+    /// <summary>
+    /// The production system (null: none).
+    /// </summary>
     readonly Production.ProductionSystem? _production;
+    /// <summary>
+    /// The dialogue system (null: none).
+    /// </summary>
     Dialogue.IDialogueSource? _dialogues;
+    /// <summary>
+    /// The ragdoll system (null: none).
+    /// </summary>
     Ragdolls.IRagdollSource? _ragdolls;
 
+    /// <summary>
+    /// A world of <paramref name="settings"/> over <paramref name="walkability"/> running <paramref name="systems"/> in order, on
+    /// <paramref name="characters"/> or a new table.
+    /// </summary>
     public World(WorldSettings settings, IWalkability walkability, IEnumerable<ITickSystem>? systems = null, CharacterTable? characters = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -184,7 +251,13 @@ public sealed partial class World : IDisposable
         for (int i = 0; i < _buffers.Length; i++) _buffers[i] = new EffectBuffer();
     }
 
+    /// <summary>
+    /// The world's settings.
+    /// </summary>
     public WorldSettings Settings { get; private set; }
+    /// <summary>
+    /// The world seed.
+    /// </summary>
     public ulong Seed => Settings.Seed;
 
     /// <summary>
@@ -199,8 +272,14 @@ public sealed partial class World : IDisposable
     /// that own them (<see cref="IDecisionOwner"/>; open to later additions).
     /// </summary>
     public DecisionSystem Decisions { get; } = new();
+    /// <summary>
+    /// The index of the last system the decisions run after (-1: none; see <see cref="Decisions"/>).
+    /// </summary>
     int _decideAfter = -1;
 
+    /// <summary>
+    /// Whether the decisions run after <paramref name="system"/>: retaliation, aggro or flight.
+    /// </summary>
     static bool DecidesAfter(ITickSystem system) => system is RetaliationSystem or AggroSystem or FleeSystem;
 
     /// <summary>
@@ -214,7 +293,13 @@ public sealed partial class World : IDisposable
         Settings = Settings with { Seed = seed };
     }
 
+    /// <summary>
+    /// The walkable ground.
+    /// </summary>
     public IWalkability Walkability { get; }
+    /// <summary>
+    /// The characters.
+    /// </summary>
     public CharacterTable Characters { get; }
     /// <summary>
     /// The neighbour grid of the last tick's positions (valid from the Schedule step of a tick on).
@@ -269,6 +354,9 @@ public sealed partial class World : IDisposable
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
 
+    /// <summary>
+    /// Whether any system is a goal source (<see cref="IGoalSource"/>).
+    /// </summary>
     readonly bool _hasGoalSources;
     /// <summary>
     /// The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.
@@ -323,6 +411,9 @@ public sealed partial class World : IDisposable
     /// The machines of the player's complete buildings: recipe slots, storage, farms (docs/simulation.md "Production").
     /// </summary>
     public Production.MachineRegistry Machines { get; } = new();
+    /// <summary>
+    /// The systems in tick order.
+    /// </summary>
     public IReadOnlyList<ITickSystem> Systems => _systems;
     /// <summary>
     /// The number of ticks run; during a tick, the number of the tick being run.
@@ -417,11 +508,17 @@ public sealed partial class World : IDisposable
     /// The integer hour of day, 0 to 23 (the game's sky controller hour that the AI compares windows with).
     /// </summary>
     public int Hour => Math.Clamp((int)(((GameHours % 24) + 24) % 24), 0, 23);
+    /// <summary>
+    /// The game seconds of one tick.
+    /// </summary>
     public float TickSeconds => Settings.TickSeconds;
     /// <summary>
     /// The snapshot the last tick published, and the one before it (for interpolating); <see cref="WorldSnapshot.Empty"/> before.
     /// </summary>
     public WorldSnapshot Snapshot { get; private set; } = WorldSnapshot.Empty;
+    /// <summary>
+    /// The snapshot before <see cref="Snapshot"/>.
+    /// </summary>
     public WorldSnapshot PreviousSnapshot { get; private set; } = WorldSnapshot.Empty;
 
     /// <summary>
@@ -456,10 +553,18 @@ public sealed partial class World : IDisposable
     public bool CanTalk(CharacterId id, CharacterId? talker = null) => _dialogues is not null && Characters.Phase == TablePhase.Outside
         && Characters.TryResolveNext(id, out int slot) && _dialogues.CanTalk(this, slot, talker);
 
-    // The profiled parallel phase (RunParallel): the body run, a timed wrapper made once, and each partition's Stopwatch ticks (a partition is one
-    // job, written by one thread).
+    /// <summary>
+    /// The profiled parallel phase (RunParallel): the body run, a timed wrapper made once, and each partition's Stopwatch ticks (a partition is one
+    /// job, written by one thread).
+    /// </summary>
     Action<int>? _timedBody;
+    /// <summary>
+    /// The timed wrapper of <see cref="_timedBody"/>, made once.
+    /// </summary>
     Action<int>? _timedRun;
+    /// <summary>
+    /// Each partition's Stopwatch ticks (see <see cref="_timedBody"/>).
+    /// </summary>
     long[] _jobTicks = [];
 
     /// <summary>
@@ -508,6 +613,38 @@ public sealed partial class World : IDisposable
         table.BeginTick();
 
         // 1. Inputs (serial).
+        RunInputs(table, prof);
+
+        // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
+        RunSchedule(table, prof);
+
+        // 3-5. Think, move, act (parallel; each system's phase is a barrier).
+        RunThinkMoveAct(table, prof);
+
+        // 6. Commit (serial): the effects in an order the partitioning cannot change.
+        Commit(table, prof);
+
+        // 7. Slow world (serial).
+        RunSlowWorld(prof);
+
+        // 8. Publish.
+        Squads.Refresh(table, Player.Faction);
+        Player.Prune(table);
+        table.Phase = TablePhase.Outside;
+        table.EndTick();
+        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
+        Tick++;
+        GameHours += TickSeconds / SecondsPerGameHour;
+        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
+
+        prof?.Lap(TickProfile.Publish);
+    }
+
+    /// <summary>
+    /// Phase 1: the due commands, then each system's inputs.
+    /// </summary>
+    void RunInputs(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Inputs;
         var due = TakeDue();
         prof?.Lap(TickProfile.Inputs);
@@ -517,8 +654,13 @@ public sealed partial class World : IDisposable
             _systems[k].Inputs(this, due);
             prof?.Lap(TickProfile.Inputs, k);
         }
+    }
 
-        // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
+    /// <summary>
+    /// Phase 2: the grid of the last tick's positions, the cadence, the dormant marks, the sight and the partitions, then the systems.
+    /// </summary>
+    void RunSchedule(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Schedule;
         Grid.Build(table.Previous);
         RefreshCadence();
@@ -534,8 +676,13 @@ public sealed partial class World : IDisposable
             _systems[k].Schedule(this);
             prof?.Lap(TickProfile.Schedule, k);
         }
+    }
 
-        // 3-5. Think, move, act (parallel; each system's phase is a barrier).
+    /// <summary>
+    /// Phases 3 to 5: think, move and act, each system's phase a barrier.
+    /// </summary>
+    void RunThinkMoveAct(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Parallel;
 
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
@@ -549,14 +696,21 @@ public sealed partial class World : IDisposable
         {
             if (p.BeforeAct is { } before) RunParallel(before, prof, TickProfile.Act, p.Index);
             if (p.Act is not { } act) continue;
-            foreach (var b in _buffers) b.BeginSystem(p.Index);   // Effect.System is the system's real index, so the commit order does not depend on which systems act
+
+            // Effect.System is the system's real index, so the commit order does not depend on which systems act
+            foreach (var b in _buffers) b.BeginSystem(p.Index);
 
             RunParallel(act, prof, TickProfile.Act, p.Index);
         }
+    }
 
+    /// <summary>
+    /// Phase 6: the effects sorted and applied, then the squads refreshed.
+    /// </summary>
+    void Commit(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Commit;
 
-        // 6. Commit (serial): the effects in an order the partitioning cannot change.
         _effects.Clear();
         for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
 
@@ -569,11 +723,16 @@ public sealed partial class World : IDisposable
             prof?.Lap(TickProfile.Commit, e.System);
         }
 
-        Squads.Refresh(table);
+        Squads.Refresh(table, Player.Faction);
         prof?.Lap(TickProfile.Commit);
         table.Phase = TablePhase.SlowWorld;
+    }
 
-        // 7. Slow world (serial).
+    /// <summary>
+    /// Phase 7: each system's slow world (the decisions after their system), the task starts and the squads' goals.
+    /// </summary>
+    void RunSlowWorld(TickProfile? prof)
+    {
         for (int k = 0; k < _systems.Count; k++)
         {
             _systems[k].SlowWorld(this);
@@ -588,18 +747,6 @@ public sealed partial class World : IDisposable
         Claims.Now = Tick;
         if (_hasGoalSources)
             SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
-
-        // 8. Publish.
-        Squads.Refresh(table);
-        Player.Prune(table);
-        table.Phase = TablePhase.Outside;
-        table.EndTick();
-        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
-        Tick++;
-        GameHours += TickSeconds / SecondsPerGameHour;
-        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
-
-        prof?.Lap(TickProfile.Publish);
     }
 
     /// <summary>
@@ -629,7 +776,9 @@ public sealed partial class World : IDisposable
         }
     }
 
-    // The decisions pass: its own part of the slow world phase, not the next system's.
+    /// <summary>
+    /// The decisions pass: its own part of the slow world phase, not the next system's.
+    /// </summary>
     void RunDecisions(TickProfile? prof)
     {
         Decisions.Run(this, paused: false);
@@ -652,6 +801,7 @@ public sealed partial class World : IDisposable
         ArgumentNullException.ThrowIfNull(command);
         if (Characters.Phase == TablePhase.Parallel)
             throw new InvalidOperationException("commands are deferred in serial phases only");
+
         if (command.Tick <= Tick)
             throw new ArgumentException("a deferred command is for a later tick", nameof(command));
 
@@ -663,6 +813,9 @@ public sealed partial class World : IDisposable
     /// </summary>
     public int DeferredCount => _deferred.Count;
 
+    /// <summary>
+    /// The commands due this tick: the deferred ones due, then the host's.
+    /// </summary>
     IReadOnlyList<SimCommand> TakeDue()
     {
         var external = Commands.TakeDue(Tick);
@@ -816,6 +969,9 @@ public sealed partial class World : IDisposable
         FarSkipped = skipped;
     }
 
+    /// <summary>
+    /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character.
+    /// </summary>
     bool NearPlayer(System.Numerics.Vector3 at)
     {
         const float r2 = PlayerNearRadius * PlayerNearRadius;
@@ -825,6 +981,9 @@ public sealed partial class World : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Splits the slots into partitions: as many as the buffers allow, each of at least <see cref="WorldSettings.MinPartitionSize"/>.
+    /// </summary>
     void MakePartitions()
     {
         int slots = Characters.HighWater;
@@ -849,12 +1008,16 @@ public sealed partial class World : IDisposable
         Player.Hash(ref h);
         if (Uniques.Count > 0)
             Uniques.Hash(ref h);   // only once a unique is tracked, so worlds without one hash as before
+
         if (Fixtures.Count > 0)
             Fixtures.Hash(ref h);   // only once a town with buildings registered, so worlds without them hash as before
+
         if (Buildings.Count > 0 || Buildings.Towns.Count > 0)
             Buildings.Hash(ref h);   // only once the player has a site, so worlds without one hash as before
+
         if (GroundItems.Count > 0)
             GroundItems.Hash(ref h);   // only once something lies on the ground, so worlds without hash as before
+
         if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
@@ -864,5 +1027,8 @@ public sealed partial class World : IDisposable
         return h.Value;
     }
 
+    /// <summary>
+    /// Stops the worker pool.
+    /// </summary>
     public void Dispose() => _pool.Dispose();
 }

@@ -22,7 +22,10 @@ internal static class KenshiLanguageSettings
             string text = encoding.GetString(bytes, preambleLength, bytes.Length - preambleLength);
             return FindLanguage(text, out int valueStart, out int contentEnd) ? text[valueStart..contentEnd].Trim() : null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -42,6 +45,9 @@ internal static class KenshiLanguageSettings
         File.WriteAllBytes(path, result);
     }
 
+    /// <summary>
+    /// <paramref name="text"/> with its <c>language</c> value replaced by <paramref name="code"/>, or the line appended when it has none.
+    /// </summary>
     static string ReplaceLanguage(string text, string code)
     {
         if (FindLanguage(text, out int valueStart, out int contentEnd))
@@ -75,6 +81,9 @@ internal static class KenshiLanguageSettings
         return false;
     }
 
+    /// <summary>
+    /// The text encoding of settings.cfg from its byte order mark (UTF-32, UTF-16 or UTF-8), and the mark's length; UTF-8 without one.
+    /// </summary>
     static (Encoding Encoding, int PreambleLength) DetectEncoding(byte[] bytes)
     {
         if (bytes.AsSpan().StartsWith(new byte[] { 0x00, 0x00, 0xFE, 0xFF }))

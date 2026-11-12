@@ -20,10 +20,14 @@ public sealed partial class AiSystem
 {
     #region State
 
-    // Resolved in the serial step, read by the think (null before the first tick: no finder finds anything).
+    /// <summary>
+    /// Resolved in the serial step, read by the think (null before the first tick: no finder finds anything).
+    /// </summary>
     AggroSystem? _aggro;
 
-    // Set by a think that asked for a fight (AiMind.FightTarget).
+    /// <summary>
+    /// Set by a think that asked for a fight (AiMind.FightTarget).
+    /// </summary>
     int _fighting;
 
     #endregion
@@ -99,8 +103,8 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// A combat goal's finder: its factor and the character it would fight (<see cref="CharacterId.None"/> with the factor 0). Attack goals:
-    /// <see cref="AggroSystem.FindFoe"/>, factor 1 with a pick. Protect goals: <see cref="ProtectPick"/>. <paramref name="pending"/>: the fights the serial
-    /// step started this tick, by target (<see cref="SendFights"/>). Reads only the last tick's state (any thread in the think).
+    /// <see cref="AggroSystem.FindFoe"/>, factor 1 with a pick. Protect goals: <see cref="ProtectPick"/>. <paramref name="pending"/>: the fights the
+    /// serial step started this tick, by target (<see cref="SendFights"/>). Reads only the last tick's state (any thread in the think).
     /// </summary>
     (float Factor, CharacterId Target) FightPick(World world, int slot, TaskType type, AiMind mind, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -151,11 +155,12 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Row 13 Attacking attackers of under 32 Self preservation (<c>AI::findAttackerOf</c> on the character itself, <c>FUN_14099c3b0</c>, <b>Verified</b>;
-    /// <see cref="Combat.CombatSystem.BestAttackerOf"/> with the character as both subject and looker: its attackers and its own target, at any distance,
-    /// best by the target score): the attacker it fights, <see cref="CharacterId.None"/> when none or when it cannot fight (no working fighter,
-    /// crawling). A turret's gunner takes no shooter (its turret row wants only a melee threat gone; <b>engine</b>, kept from the old answer).
-    /// <paramref name="pending"/>: the fights the serial step started this tick. Reads only the last tick's state (any thread in the think).
+    /// Row 13 Attacking attackers of under 32 Self preservation (<c>AI::findAttackerOf</c> on the character itself, <c>FUN_14099c3b0</c>,
+    /// <b>Verified</b>; <see cref="Combat.CombatSystem.BestAttackerOf"/> with the character as both subject and looker: its attackers and its own
+    /// target, at any distance, best by the target score): the attacker it fights, <see cref="CharacterId.None"/> when none or when it cannot fight
+    /// (no working fighter, crawling). A turret's gunner takes no shooter (its turret row wants only a melee threat gone; <b>engine</b>, kept from
+    /// the old answer). <paramref name="pending"/>: the fights the serial step started this tick. Reads only the last tick's state (any thread in
+    /// the think).
     /// </summary>
     internal CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -193,9 +198,9 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The state tests of the melee row's list B that can fail without a plan step in front of them (docs/game/ai-tasks.md, TaskData rows 4 and 227,
-    /// <b>Verified</b>; states 139 and 140 <c>FUN_140598e90</c> / <c>FUN_140598ec0</c>: water state 3 of the character, of the target): a person's row 4
-    /// needs neither itself nor its target deep in the water; an animal's row 227 has no swim test but refuses an imprisoned target (78) and needs it
-    /// within 500 (41). The accessibility and readiness states (27, 59, 60, 90, 37, 69) are the engine's own checks.
+    /// <b>Verified</b>; states 139 and 140 <c>FUN_140598e90</c> / <c>FUN_140598ec0</c>: water state 3 of the character, of the target): a person's
+    /// row 4 needs neither itself nor its target deep in the water; an animal's row 227 has no swim test but refuses an imprisoned target (78) and
+    /// needs it within 500 (41). The accessibility and readiness states (27, 59, 60, 90, 37, 69) are the engine's own checks.
     /// </summary>
     static bool AttackRowBlocked(World world, int slot, CharacterId foe)
     {
@@ -214,10 +219,10 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// State 12 <c>isAlliesFighting</c> (<c>FUN_14099a350</c>, <b>Verified</b>): any entry of the looker's senses tagged ALLY and not KO (sense filter 1, 8;
-    /// seen, heard or remembered) whose fight threat (<c>FUN_14099a190</c>, <see cref="Combat.CombatSystem.FightThreat"/>) is above 0. Row 244 Grabbing food
-    /// needs it false; only the food errand (<see cref="Kidnap.TownDutySystem"/>) asks it, the planner's rows 13, 15, 288 and 234 have their own finders
-    /// (<see cref="ProtectPick"/>), so <c>PlanContext.Holds</c> leaves the state false.
+    /// State 12 <c>isAlliesFighting</c> (<c>FUN_14099a350</c>, <b>Verified</b>): any entry of the looker's senses tagged ALLY and not KO (sense
+    /// filter 1, 8; seen, heard or remembered) whose fight threat (<c>FUN_14099a190</c>, <see cref="Combat.CombatSystem.FightThreat"/>) is above 0.
+    /// Row 244 Grabbing food needs it false; only the food errand (<see cref="Kidnap.TownDutySystem"/>) asks it, the planner's rows 13, 15, 288 and
+    /// 234 have their own finders (<see cref="ProtectPick"/>), so <c>PlanContext.Holds</c> leaves the state false.
     /// </summary>
     internal bool AlliesFighting(World world, int slot)
     {
@@ -349,8 +354,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether the character in <paramref name="owned"/> fights someone whose faction is the looker's or its ally (relation 50; <c>FUN_140998790</c> over
-    /// <c>FUN_1406b2630</c>).
+    /// Whether the character in <paramref name="owned"/> fights someone whose faction is the looker's or its ally (relation 50; <c>FUN_140998790</c>
+    /// over <c>FUN_1406b2630</c>).
     /// </summary>
     bool TargetsAnAlly(World world, int looker, int owned)
     {
@@ -369,11 +374,11 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The protect goals' finder factor and their plan row 13 (<see cref="ProtectScan"/> is the finder). The best's value, capped at 1.2, is the factor;
-    /// then row 13 (<c>AI::findAttackerOf</c>, <see cref="Combat.CombatSystem.BestAttackerOf"/>) takes that one's attacker within 150 of it that is not the
-    /// looker's ally, best by the target score; none fails the plan (factor 0). 143's fallback hand list (+0x2f8, x0.1) is not modelled; 15 / 288's is
-    /// <see cref="OwnedScan"/>. Without <paramref name="attacker"/> only the finder's value (row 13 not asked, the target none). Reads only the last tick's
-    /// state (any thread in the think).
+    /// The protect goals' finder factor and their plan row 13 (<see cref="ProtectScan"/> is the finder). The best's value, capped at 1.2, is the
+    /// factor; then row 13 (<c>AI::findAttackerOf</c>, <see cref="Combat.CombatSystem.BestAttackerOf"/>) takes that one's attacker within 150 of it
+    /// that is not the looker's ally, best by the target score; none fails the plan (factor 0). 143's fallback hand list (+0x2f8, x0.1) is not
+    /// modelled; 15 / 288's is <see cref="OwnedScan"/>. Without <paramref name="attacker"/> only the finder's value (row 13 not asked, the target
+    /// none). Reads only the last tick's state (any thread in the think).
     /// </summary>
     (float Factor, CharacterId Target) ProtectPick(
         World world, int slot, TaskType type, AiMind mind, bool attacker = true, IReadOnlyDictionary<int, int>? pending = null)
@@ -392,19 +397,21 @@ public sealed partial class AiSystem
 
     #region Starting and ending fights
 
-    // The targets of the fights SendFights started in its pass, with how many (derived, not hashed).
+    /// <summary>
+    /// The targets of the fights SendFights started in its pass, with how many (derived, not hashed).
+    /// </summary>
     readonly Dictionary<int, int> _pendingFights = [];
 
     /// <summary>
-    /// Starts the fights the thinks asked for (serial, slot order; docs/game/ai-tasks.md "Combat goals"): an attack goal's as a goal's attack (row 16),
-    /// a protect goal's and Self preservation's as a defence (row 13; a self-defence is not in the aggro log), both of the goal's provenance, for the next
-    /// tick; the fight is the AI's own (<see cref="AiMind.FightFrom"/>), so the character thinks in it. A character fighting by then, or whose pick is
-    /// gone or down, starts none (it thinks again). Each character asks for one fight at most, so none joins two in a tick. The squad mates of one that
-    /// starts are asked to think at the next tick, when its fight holds a target, so 143 finds it at once.
-    /// The original's choosers run one character after another, and a fight's start puts the fighter on its target's engaged list at once
-    /// (<c>setAttackTarget</c>), which the next chooser's target score reads (<c>FUN_14059e300</c>: minus the candidate's attackers; <b>Observed</b>);
-    /// the thinks here read the last tick's fights, so every mate picking from one sighting would take the same target. So once a fight is started here,
-    /// a later starter of this pass picks again with the fights started so far counted as attackers of their targets.
+    /// Starts the fights the thinks asked for (serial, slot order; docs/game/ai-tasks.md "Combat goals"): an attack goal's as a goal's attack (row
+    /// 16), a protect goal's and Self preservation's as a defence (row 13; a self-defence is not in the aggro log), both of the goal's provenance,
+    /// for the next tick; the fight is the AI's own (<see cref="AiMind.FightFrom"/>), so the character thinks in it. A character fighting by then, or
+    /// whose pick is gone or down, starts none (it thinks again). Each character asks for one fight at most, so none joins two in a tick. The squad
+    /// mates of one that starts are asked to think at the next tick, when its fight holds a target, so 143 finds it at once. The original's choosers
+    /// run one character after another, and a fight's start puts the fighter on its target's engaged list at once (<c>setAttackTarget</c>), which the
+    /// next chooser's target score reads (<c>FUN_14059e300</c>: minus the candidate's attackers; <b>Observed</b>); the thinks here read the last
+    /// tick's fights, so every mate picking from one sighting would take the same target. So once a fight is started here, a later starter of this
+    /// pass picks again with the fights started so far counted as attackers of their targets.
     /// </summary>
     void SendFights(World world)
     {
@@ -425,6 +432,7 @@ public sealed partial class AiSystem
             world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Source = TaskSource.Goal, Defensive = protects });
             mind.FightFrom = world.Tick + 1;
             _pendingFights[f] = _pendingFights.GetValueOrDefault(f) + 1;
+
             // A self-defence is no combat goal's fight: not in the aggro log.
             if (!self) _aggro?.GoalFight(world, s, f, voice: !protects);
             foreach (var m in mind.Squad.Members)

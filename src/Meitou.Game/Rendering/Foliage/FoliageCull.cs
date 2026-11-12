@@ -11,9 +11,18 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public sealed class FoliageCullView
 {
+    /// <summary>
+    /// The view's frustum planes (xyz normal, w offset).
+    /// </summary>
     public Vector4[] Planes { get; private set; } = [];
+    /// <summary>
+    /// Each plane's normal length.
+    /// </summary>
     public float[] NormalLengths { get; private set; } = [];
 
+    /// <summary>
+    /// Takes <paramref name="planes"/> and works out their normals' lengths; returns this view.
+    /// </summary>
     public FoliageCullView Set(Vector4[] planes)
     {
         if (NormalLengths.Length != planes.Length) NormalLengths = new float[planes.Length];
@@ -35,6 +44,9 @@ public sealed class FoliageCullView
 public readonly record struct FoliageGroupRange(float Range, float RangeSquared, float InverseBand, float Transition = float.PositiveInfinity,
     float InverseTransitionBand = 0)
 {
+    /// <summary>
+    /// A range of <paramref name="range"/> with a fade band of <paramref name="band"/>, without an impostor.
+    /// </summary>
     public static FoliageGroupRange Of(float range, float band) => new(range, range * range, 1 / band);
 
     /// <summary>
@@ -42,6 +54,9 @@ public readonly record struct FoliageGroupRange(float Range, float RangeSquared,
     /// </summary>
     public FoliageGroupRange WithTransition(float transition, float band) => this with { Transition = transition, InverseTransitionBand = 1 / band };
 
+    /// <summary>
+    /// Whether the range has an impostor transition.
+    /// </summary>
     public bool HasImpostor => Transition < float.PositiveInfinity;
 }
 
@@ -51,16 +66,34 @@ public readonly record struct FoliageGroupRange(float Range, float RangeSquared,
 /// </summary>
 public sealed class FoliageCullOutput
 {
+    /// <summary>
+    /// The visible instances' batch matrices (the first <see cref="Count"/>), grown as needed.
+    /// </summary>
     public Matrix4x4[] Visible = new Matrix4x4[64];
+    /// <summary>
+    /// How many visible instances.
+    /// </summary>
     public int Count;
+    /// <summary>
+    /// With record: each in-range instance's index in the group (the first <see cref="InRangeCount"/>).
+    /// </summary>
     public int[] InRange = new int[64];
+    /// <summary>
+    /// With record: each in-range instance's fade.
+    /// </summary>
     public float[] InRangeFade = new float[64];
+    /// <summary>
+    /// How many instances are in range.
+    /// </summary>
     public int InRangeCount;
     /// <summary>
     /// The visible impostors (<see cref="FoliageCull.CullGroup"/> with <see cref="FoliageCull.ImpostorPart"/>), fade in <c>M14</c> (negative in the
     /// crossfade band: the complement of the mesh's dither).
     /// </summary>
     public Matrix4x4[] ImpostorVisible = new Matrix4x4[64];
+    /// <summary>
+    /// How many visible impostors.
+    /// </summary>
     public int ImpostorCount;
     /// <summary>
     /// Instances the fog cull left out (<see cref="FoliageCull.CullGroup"/> with a fog).
@@ -115,6 +148,9 @@ public static class FoliageCull
     /// </summary>
     public const float RockThreshold = 0.5f;
 
+    /// <summary>
+    /// The range fade at <paramref name="distance"/>: 1 before the band, 0 from the range on.
+    /// </summary>
     public static float Fade(in FoliageGroupRange range, float distance) => Math.Clamp((range.Range - distance) * range.InverseBand, 0, 1);
 
     /// <summary>
@@ -148,8 +184,14 @@ public static class FoliageCull
     /// </summary>
     public static float Pack(float w) => w >= 0.999f ? 2 : w;
 
+    /// <summary>
+    /// <paramref name="t"/> with the packed fade (<see cref="Pack"/>) in <c>M14</c>.
+    /// </summary>
     public static Matrix4x4 Packed(in Matrix4x4 t, float w) { var m = t; m.M14 = Pack(w); return m; }
 
+    /// <summary>
+    /// Whether <paramref name="sphere"/> (centre, radius) is not wholly outside any of the view's planes.
+    /// </summary>
     public static bool SphereVisible(FoliageCullView view, Vector4 sphere)
     {
         var planes = view.Planes;
@@ -208,8 +250,11 @@ public static class FoliageCull
             if (fog is not null && (mesh > Hidden || impostor > Hidden))
             {
                 var s = r.Sphere;
-                if (fog.Covers(new Vector3(s.X - s.W, s.Y - s.W, s.Z - s.W), new Vector3(s.X + s.W, s.Y + s.W,
-                        s.Z + s.W))) { output.FogCulled++; continue; }
+                if (fog.Covers(new Vector3(s.X - s.W, s.Y - s.W, s.Z - s.W), new Vector3(s.X + s.W, s.Y + s.W, s.Z + s.W)))
+                {
+                    output.FogCulled++;
+                    continue;
+                }
             }
             if (mesh > Hidden)
             {

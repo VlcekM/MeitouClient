@@ -6,9 +6,15 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Production;
 
+/// <summary>
+/// The production's seats: the town and player chairs a character sits on as a machine.
+/// </summary>
 public sealed partial class ProductionSystem
 {
-    // Town-layout seats already carry their effective facing. A player-built chair must resolve its current house/outpost's furniture at use time.
+    /// <summary>
+    /// The facing a sitter takes on a seat site. Town-layout seats already carry their effective facing. A player-built chair must resolve its
+    /// current house/outpost's furniture at use time.
+    /// </summary>
     float SeatFacing(World world, BuildSite site, Machine m)
     {
         if (world.Fixtures.FindSeat(site.Id) is { } seat) return world.BenchFacingFix ? seat.Yaw : seat.FaithfulYaw;
@@ -27,7 +33,8 @@ public sealed partial class ProductionSystem
             foreach (var other in world.Buildings.All)
             {
                 if (other.Complete && !other.Destroyed && other.Parent == site.Parent && (site.Parent is not null || other.Town == site.Town)
-                    && Data(other.Record)?.Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction)
+                    && Data(other.Record)?.Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction
+                        or TownBuildings.RefineryFunction)
                 {
                     yield return other.Position;
                 }
@@ -35,6 +42,9 @@ public sealed partial class ProductionSystem
         }
     }
 
+    /// <summary>
+    /// Whether a character sits resting on the seat site's place.
+    /// </summary>
     static bool SeatOccupied(World world, BuildSite site)
     {
         var table = world.Characters;
@@ -48,8 +58,14 @@ public sealed partial class ProductionSystem
         return false;
     }
 
+    /// <summary>
+    /// The town seats' sites by fixture id, made again when the seat changes.
+    /// </summary>
     readonly Dictionary<string, (SeatSpot Source, BuildSite Site)> _seatSites = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The site of town seat <paramref name="id"/> (cached); null when no seat has the id.
+    /// </summary>
     BuildSite? Seat(World world, string id)
     {
         if (world.Fixtures.FindSeat(id) is not { } seat) return null;

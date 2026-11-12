@@ -18,19 +18,61 @@ public sealed unsafe class VulkanPresenter : IDisposable
 {
     #region State
 
+    /// <summary>
+    /// The device with the window's surface.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The context whose frame the present is recorded into.
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     readonly Vk _vk;
+    /// <summary>
+    /// The VK_KHR_swapchain functions.
+    /// </summary>
     readonly KhrSwapchain _khr;
+    /// <summary>
+    /// The swapchain; 0 before the first frame.
+    /// </summary>
     SwapchainKHR _swapchain;
+    /// <summary>
+    /// The swapchain's images.
+    /// </summary>
     Image[] _images = [];
+    /// <summary>
+    /// The swapchain images' format.
+    /// </summary>
     Format _format;
+    /// <summary>
+    /// The swapchain images' size.
+    /// </summary>
     Extent2D _extent;
-    readonly VkSemaphore[] _acquired;   // per frame slot
-    VkSemaphore[] _rendered = [];       // per swapchain image
+    /// <summary>
+    /// Signalled when the frame slot's image is acquired; one per frame slot.
+    /// </summary>
+    readonly VkSemaphore[] _acquired;
+    /// <summary>
+    /// Signalled when an image's rendering is done (the present waits on it); one per swapchain image.
+    /// </summary>
+    VkSemaphore[] _rendered = [];
+    /// <summary>
+    /// The swapchain image acquired for this frame.
+    /// </summary>
     uint _imageIndex;
+    /// <summary>
+    /// Whether an image is acquired and not yet presented.
+    /// </summary>
     bool _acquiredImage;
+    /// <summary>
+    /// The window size the swapchain was made for (another size recreates it).
+    /// </summary>
     int _wantWidth, _wantHeight;
+    /// <summary>
+    /// Vsync (FIFO), and whether the swapchain must be recreated at the next frame (true until the first).
+    /// </summary>
     bool _vsync, _stale = true;
 
     #endregion
@@ -74,19 +116,32 @@ public sealed unsafe class VulkanPresenter : IDisposable
     /// </summary>
     public GpuTexture? Backbuffer { get; private set; }
 
-    /// <summary>Asks for an HDR10 swapchain (read at each swapchain creation; needs VK_EXT_swapchain_colorspace, not with <see cref="FrameGeneration"/>).</summary>
+    /// <summary>
+    /// Asks for an HDR10 swapchain (read at each swapchain creation; needs VK_EXT_swapchain_colorspace, not with <see cref="FrameGeneration"/>).
+    /// </summary>
     public bool WantHdr { get; init; }
-    /// <summary>The swapchain is HDR10: the backbuffer is RGBA16F and the host presents PQ pictures (<see cref="UiLayer.CompositeHdr"/>).</summary>
+
+    /// <summary>
+    /// The swapchain is HDR10: the backbuffer is RGBA16F and the host presents PQ pictures (<see cref="UiLayer.CompositeHdr"/>).
+    /// </summary>
     public bool HdrActive { get; private set; }
 
-    /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting, since the presenter was made.</summary>
+    /// <summary>
+    /// Stopwatch ticks spent acquiring swapchain images, since the presenter was made.
+    /// </summary>
     public long AcquireTicks { get; private set; }
+    /// <summary>
+    /// Stopwatch ticks spent presenting, since the presenter was made.
+    /// </summary>
     public long PresentTicks { get; private set; }
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// A presenter for the context's device, which must have a surface; the swapchain is made at the first frame.
+    /// </summary>
     public VulkanPresenter(GpuContext ctx, bool vsync)
     {
         _device = ctx.Device;
@@ -100,6 +155,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
         for (int i = 0; i < _acquired.Length; i++) _acquired[i] = NewSemaphore();
     }
 
+    /// <summary>
+    /// A new binary semaphore.
+    /// </summary>
     VkSemaphore NewSemaphore()
     {
         var info = new SemaphoreCreateInfo { SType = StructureType.SemaphoreCreateInfo };
@@ -150,7 +208,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
             return true;   // draw anyway; nothing is shown
         }
 
-        if (r is not (Result.Success or Result.SuboptimalKhr)) VulkanException.Check(r, "vkAcquireNextImageKHR");
+        if (r is not (Result.Success or Result.SuboptimalKhr)) _device.Check(r, "vkAcquireNextImageKHR");
         if (r == Result.SuboptimalKhr) _stale = true;
         _acquiredImage = true;
         return true;
@@ -251,10 +309,13 @@ public sealed unsafe class VulkanPresenter : IDisposable
         PresentTicks += Stopwatch.GetTimestamp() - presentStart;
         StageClock.Lap(StageClock.DriverWait, gpuTimestamp: false);
         if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) _stale = true;
-        else VulkanException.Check(r, "vkQueuePresentKHR");
+        else _device.Check(r, "vkQueuePresentKHR");
         _acquiredImage = false;
     }
 
+    /// <summary>
+    /// Records one image barrier with a layout transition.
+    /// </summary>
     void Barrier(CommandBuffer cb, Image image, ImageLayout from, ImageLayout to, PipelineStageFlags2 srcStage, AccessFlags2 srcAccess,
         PipelineStageFlags2 dstStage, AccessFlags2 dstAccess)
     {
@@ -486,6 +547,10 @@ public sealed unsafe class VulkanPresenter : IDisposable
 
     #region Lifetime
 
+    /// <summary>
+    /// Waits for the device to go idle, then releases the backbuffer, the semaphores and the swapchain (through frame generation or Streamline when
+    /// they made it).
+    /// </summary>
     public void Dispose()
     {
         _device.WaitIdle();

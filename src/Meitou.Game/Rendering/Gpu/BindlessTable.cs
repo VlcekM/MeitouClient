@@ -10,7 +10,37 @@ namespace Meitou.Game.Rendering.Gpu;
 /// The arrays of the bindless set (set 0 of the native model, docs/renderer-native.md 2.6), by binding number. The integer arrays
 /// (<see cref="UintTexture2D"/>, <see cref="IntTexture2D"/>) take textures of UINT and SINT formats, which a float sampler may not read.
 /// </summary>
-public enum BindlessKind { Texture2D = 0, Texture2DArray = 1, Cube = 2, Shadow2D = 3, UintTexture2D = 4, IntTexture2D = 5, ShadowArray = 6 }
+public enum BindlessKind
+{
+    /// <summary>
+    /// Binding 0, <c>sampler2D textures2D[]</c>: 2D colour textures.
+    /// </summary>
+    Texture2D = 0,
+    /// <summary>
+    /// Binding 1, <c>sampler2DArray textures2DArray[]</c>: 2D array textures.
+    /// </summary>
+    Texture2DArray = 1,
+    /// <summary>
+    /// Binding 2, <c>samplerCube texturesCube[]</c>: cube maps.
+    /// </summary>
+    Cube = 2,
+    /// <summary>
+    /// Binding 3, <c>sampler2DShadow shadowTextures[]</c>: depth textures read with a compare.
+    /// </summary>
+    Shadow2D = 3,
+    /// <summary>
+    /// Binding 4, <c>usampler2D utextures2D[]</c>: 2D textures of UINT formats.
+    /// </summary>
+    UintTexture2D = 4,
+    /// <summary>
+    /// Binding 5, <c>isampler2D itextures2D[]</c>: 2D textures of SINT formats.
+    /// </summary>
+    IntTexture2D = 5,
+    /// <summary>
+    /// Binding 6, <c>sampler2DArrayShadow shadowArrays[]</c>: depth array textures read with a compare.
+    /// </summary>
+    ShadowArray = 6
+}
 
 /// <summary>
 /// An entry of the <see cref="BindlessTable"/>: the array and the index in it (what a shader reads through a push constant or a material table).
@@ -76,8 +106,11 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     public static void Check(SamplerInfo s, string program)
     {
         if (s.Binding < 0 || s.Binding >= ArrayCount)
+        {
             throw new InvalidOperationException($"{program}: sampler '{s.Name}' at binding {s.Binding} "
                 + $"of the bindless set (bindings 0 to {ArrayCount - 1})");
+        }
+
         var (dim, arrayed, depth, scalar) = (BindlessKind)s.Binding switch
         {
             BindlessKind.Texture2DArray => (SamplerDimension.Dim2D, true, false, ScalarKind.Float),
@@ -89,26 +122,62 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             _ => (SamplerDimension.Dim2D, false, false, ScalarKind.Float),
         };
         if (s.Dimension != dim || s.Arrayed != arrayed || s.Depth != depth || s.SampledKind != scalar || s.Multisampled || s.ArrayLength >= 0)
+        {
             throw new InvalidOperationException($"{program}: sampler '{s.Name}' at binding {s.Binding} of the bindless set must be " +
                 $"'{GlslTypes[s.Binding]} {GlslArrays[s.Binding]}[]' (got {s.SampledKind} {s.Dimension} "
                 + $"arrayed={s.Arrayed} depth={s.Depth} length={s.ArrayLength})");
+        }
     }
 
     #endregion
 
     #region Table state
 
+    /// <summary>
+    /// The device the set, pool and layout are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The update-after-bind pool the slots' sets come from.
+    /// </summary>
     readonly DescriptorPool _pool;
+    /// <summary>
+    /// One set per frame slot.
+    /// </summary>
     readonly DescriptorSet[] _sets;
+    /// <summary>
+    /// Each slot's set's index in the device's set table.
+    /// </summary>
     readonly int[] _setIndices;
-    readonly long[] _applied;   // per slot: journal entries replayed so far
+    /// <summary>
+    /// Per slot: the journal entries replayed so far.
+    /// </summary>
+    readonly long[] _applied;
+    /// <summary>
+    /// The registrations and rewrites in order, replayed into each slot's set (entries every slot has seen are dropped).
+    /// </summary>
     readonly List<(BindlessKind Kind, uint Index, SampledTexture GpuTexture)> _journal = [];
-    long _journalBase;          // number of entries dropped from the front of the journal
+    /// <summary>
+    /// The number of entries dropped from the front of the journal.
+    /// </summary>
+    long _journalBase;
+    /// <summary>
+    /// Per array: the indices freed and past the frames in flight, handed out again first.
+    /// </summary>
     readonly Stack<uint>[] _free = new Stack<uint>[ArrayCount];
+    /// <summary>
+    /// Per array: the next index never handed out.
+    /// </summary>
     readonly uint[] _next = new uint[ArrayCount];
-    bool _open;                 // between BeginFrame and EndFrame of the frame in currentSlot
+    /// <summary>
+    /// Between BeginFrame and EndFrame of the frame in <see cref="_currentSlot"/>.
+    /// </summary>
+    bool _open;
 
+    /// <summary>
+    /// The table for the device: the arrays sized from its update-after-bind limits (raised to 8192 on macOS), the layout, the pool and one set per
+    /// frame slot.
+    /// </summary>
     public BindlessTable(VulkanDevice device)
     {
         this._device = device;
@@ -116,10 +185,12 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         var props = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &props12 };
         device.Vk.GetPhysicalDeviceProperties2(device.PhysicalDevice, &props);
         uint limit = Math.Min(props12.MaxPerStageDescriptorUpdateAfterBindSamplers, props12.MaxDescriptorSetUpdateAfterBindSampledImages);
+
         // MoltenVK advertises only 1024 update-after-bind sampled images ("Metal caps the legacy path"), but its Metal
         // argument buffers on Tier 2 (Apple silicon) hold far more. The 512-slot 2D array overflows when 512+ unique
         // textures are resident (The Hub's foliage alone); Windows GPUs advertise 16k+ and never see this.
         if (OperatingSystem.IsMacOS() && limit < 8192) limit = 8192;
+
         // 2D textures get most of the room; the rest are few (terrain arrays, the atmosphere's cubes, shadow maps, integer lookup textures
         // such as the terrain's blend cells, the sun's cascade array). The shares add up to 31/32 of the limit.
         Capacity = [Math.Min(16384u, limit / 2), Math.Min(1024u, limit / 8), Math.Min(256u, limit / 16), Math.Min(256u, limit / 16),
@@ -165,6 +236,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         _sets = new DescriptorSet[slots];
         _setIndices = new int[slots];
         _applied = new long[slots];
+        _vacated = new List<(BindlessKind, uint)>[slots];
         for (int i = 0; i < slots; i++)
         {
             var ai = new DescriptorSetAllocateInfo
@@ -176,6 +248,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             VulkanException.Check(device.Vk.AllocateDescriptorSets(device.Device, &ai, &set), "vkAllocateDescriptorSets");
             _sets[i] = set;
             _setIndices[i] = device.AddSet(set);
+            _vacated[i] = [];
         }
     }
 
@@ -184,11 +257,18 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     #region Registration
 
     /// <summary>
+    /// The slot of the frame begun last.
+    /// </summary>
+    int _currentSlot;
+
+    /// <summary>
     /// Entries per array (<see cref="BindlessKind"/> order).
     /// </summary>
     public uint[] Capacity { get; }
+    /// <summary>
+    /// The table's descriptor set layout (set 0 of the native model).
+    /// </summary>
     public DescriptorSetLayout Layout { get; }
-    int _currentSlot;
 
     /// <summary>
     /// The set of the frame being recorded (bind once per command buffer).
@@ -199,6 +279,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// The set of the frame being recorded, as the renderers' handle (the index into the backend's sets).
     /// </summary>
     public int SetIndex => _setIndices[_currentSlot];
+    /// <inheritdoc/>
     public int Registered
     {
         get
@@ -242,24 +323,13 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// What a shader reads from a colour texture of <paramref name="format"/>: UInt for UINT formats, Int for SINT, Float otherwise (UNORM, SNORM,
     /// SFLOAT, SRGB, and depth: a depth-stencil format's stencil part is not sampled).
     /// </summary>
-    public static ScalarKind ScalarOf(InternalFormat format) => Scalars.TryGetValue(format, out var s) ? s : ScalarByName(format);
-
-    /// <summary>
-    /// <see cref="ScalarByName"/> of every named format, worked out once: <see cref="ScalarOf"/> runs for every texture registered, and the enum's
-    /// name is a string allocation and three searches (~0.1 us).
-    /// </summary>
-    static readonly System.Collections.Frozen.FrozenDictionary<InternalFormat, ScalarKind> Scalars =
-        System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(Enum.GetValues<InternalFormat>().Distinct(), f => f, ScalarByName);
-
-    static ScalarKind ScalarByName(InternalFormat format)
+    public static ScalarKind ScalarOf(InternalFormat format) => format switch
     {
-        // GL's names, in either case: an integer format ends in "ui" (R16Ui, Rgba8Ui) or "i" (R16I, Rgba32I); depth(-stencil) formats are read as float.
-        var name = format.ToString();
-        if (GlConventions.IsDepthFormat(format)) return ScalarKind.Float;
-        return name.EndsWith("ui", StringComparison.OrdinalIgnoreCase) ? ScalarKind.UInt
-            : name.EndsWith('i') || name.EndsWith('I') ? ScalarKind.Int
-            : ScalarKind.Float;
-    }
+        InternalFormat.R8Ui or InternalFormat.R16Ui or InternalFormat.R32Ui
+            or InternalFormat.Rgba8Ui or InternalFormat.Rgba16Ui or InternalFormat.Rgba32Ui => ScalarKind.UInt,
+        InternalFormat.R16I or InternalFormat.R32I or InternalFormat.Rgba32I => ScalarKind.Int,
+        _ => ScalarKind.Float,
+    };
 
     /// <summary>
     /// Adds a texture. Its index is valid in the frame that is open (when one is) and in every frame that begins after the call.
@@ -301,8 +371,8 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     public void Update(BindlessHandle handle, in SampledTexture texture) => Update(handle.Kind, handle.Index, texture);
 
     /// <summary>
-    /// Releases an index once the frames in flight are done with it. Draws recorded earlier in the open frame still read the entry; slots that have
-    /// not seen it yet skip it (its view may be destroyed before they replay the journal).
+    /// Releases an index once the frames in flight are done with it. Draws recorded earlier in the open frame still read the entry; the slots'
+    /// sets get the array's stand-in at their next begin (its view may be destroyed by then), or keep the old descriptor in an array without one.
     /// </summary>
     public void Free(BindlessKind kind, uint index)
     {
@@ -319,6 +389,32 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     #endregion
 
     #region Frame updates
+
+    /// <summary>
+    /// The (array, index) pairs already written in the current <see cref="Apply"/> (each is written once, the newest entry).
+    /// </summary>
+    readonly HashSet<(BindlessKind, uint)> _written = [];
+
+    /// <summary>
+    /// The descriptors the current <see cref="Apply"/> writes.
+    /// </summary>
+    readonly List<(BindlessKind Kind, uint Index, SampledTexture Texture)> _writes = [];
+
+    /// <summary>
+    /// Per array: what a freed index reads from the next begin of each slot on (<see cref="SetStandIn"/>; none: the old descriptor stays).
+    /// </summary>
+    readonly SampledTexture[] _standIns = new SampledTexture[ArrayCount];
+
+    /// <summary>
+    /// Per slot: the indices freed while its frame was open, given the stand-in at its next begin.
+    /// </summary>
+    readonly List<(BindlessKind Kind, uint Index)>[] _vacated;
+
+    /// <summary>
+    /// Sets what a freed index of <paramref name="kind"/> reads once the frames that could read its texture have finished, in place of a
+    /// descriptor whose view is destroyed: a draw that still holds the index samples the stand-in.
+    /// </summary>
+    public void SetStandIn(BindlessKind kind, in SampledTexture standIn) => _standIns[(int)kind] = standIn;
 
     /// <summary>
     /// At the start of a frame in <paramref name="slot"/> (the slot's previous frame has finished): the journal's new entries are written into the
@@ -342,63 +438,110 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         Apply(_currentSlot, endOfFrame: true);
     }
 
-    readonly HashSet<(BindlessKind, uint)> _written = [];
-
     /// <summary>
     /// Writes the journal's entries the slot has not seen, newest first, each (array, index) once: an entry overwritten later is skipped (its
-    /// view may be gone by now). At a frame's begin an index freed later is skipped too. At the end of the open frame it is still written:
-    /// the frame's draws may have read it before the free, and its view lives until the frame has finished (deferred deletion).
+    /// view may be gone by now). At a frame's begin an index freed since gets the array's stand-in (<see cref="SetStandIn"/>), so a draw that
+    /// still reads it samples that rather than a destroyed view (issue #319). At the end of the open frame a freed index is still written: the
+    /// frame's draws may have read it before the free, and its view lives until the frame has finished (deferred deletion); the stand-in follows
+    /// at the slot's next begin.
     /// </summary>
     void Apply(int slot, bool endOfFrame)
     {
         long end = _journalBase + _journal.Count;
         long from = Math.Max(_applied[slot], _journalBase);
-        int n = (int)(end - from);
-        if (n > 0)
-        {
-            var writes = new WriteDescriptorSet[n];
-            var infos = new DescriptorImageInfo[n];
-            int count = 0;
-            _written.Clear();
-            fixed (DescriptorImageInfo* pi = infos)
-            fixed (WriteDescriptorSet* pw = writes)
-            {
-                for (int i = n - 1; i >= 0; i--)
-                {
-                    var (kind, index, t) = _journal[(int)(from - _journalBase) + i];
-                    if (t.IsNull)
-                    {
-                        if (!endOfFrame) _written.Add((kind, index));
-                        continue;
-                    }
-                    if (!_written.Add((kind, index))) continue;
-                    pi[count] = new DescriptorImageInfo(_device.SamplerAt(t.Sampler.Index), _device.ViewAt(t.View.Index), ImageLayout.General);
-                    pw[count] = new WriteDescriptorSet
-                    {
-                        SType = StructureType.WriteDescriptorSet,
-                        DstSet = _sets[slot],
-                        DstBinding = (uint)kind,
-                        DstArrayElement = index,
-                        DescriptorCount = 1,
-                        DescriptorType = DescriptorType.CombinedImageSampler,
-                        PImageInfo = &pi[count],
-                    };
-                    count++;
-                }
-                if (count > 0) _device.Vk.UpdateDescriptorSets(_device.Device, (uint)count, pw, 0, null);
-            }
-        }
+        _written.Clear();
+        _writes.Clear();
+        Collect(slot, (int)(from - _journalBase), (int)(end - from), endOfFrame);
+        if (!endOfFrame) CollectVacated(slot);
+        Write(slot);
         _applied[slot] = end;
+
         // Drop what every slot has seen.
         long seen = _applied.Min();
         int drop = (int)(seen - _journalBase);
-        if (drop > 0) { _journal.RemoveRange(0, drop); _journalBase = seen; }
+        if (drop > 0)
+        {
+            _journal.RemoveRange(0, drop);
+            _journalBase = seen;
+        }
+    }
+
+    /// <summary>
+    /// Gathers the entries <paramref name="n"/> from <paramref name="first"/> of the journal, newest first, into <see cref="_writes"/>.
+    /// </summary>
+    void Collect(int slot, int first, int n, bool endOfFrame)
+    {
+        for (int i = n - 1; i >= 0; i--)
+        {
+            var (kind, index, t) = _journal[first + i];
+            if (t.IsNull)
+            {
+                if (endOfFrame) _vacated[slot].Add((kind, index));
+                else if (_written.Add((kind, index))) StandInAt(kind, index);
+                continue;
+            }
+
+            if (_written.Add((kind, index))) _writes.Add((kind, index, t));
+        }
+    }
+
+    /// <summary>
+    /// The stand-in for the indices freed while the slot's last frame was open, unless a newer entry took them.
+    /// </summary>
+    void CollectVacated(int slot)
+    {
+        foreach (var (kind, index) in _vacated[slot])
+            if (_written.Add((kind, index))) StandInAt(kind, index);
+        _vacated[slot].Clear();
+    }
+
+    /// <summary>
+    /// Queues the array's stand-in at a freed index (nothing for an array without one).
+    /// </summary>
+    void StandInAt(BindlessKind kind, uint index)
+    {
+        var standIn = _standIns[(int)kind];
+        if (!standIn.IsNull) _writes.Add((kind, index, standIn));
+    }
+
+    /// <summary>
+    /// Writes <see cref="_writes"/> into the slot's set.
+    /// </summary>
+    void Write(int slot)
+    {
+        int count = _writes.Count;
+        if (count == 0) return;
+        var writes = new WriteDescriptorSet[count];
+        var infos = new DescriptorImageInfo[count];
+        fixed (DescriptorImageInfo* pi = infos)
+        fixed (WriteDescriptorSet* pw = writes)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var (kind, index, t) = _writes[i];
+                pi[i] = new DescriptorImageInfo(_device.SamplerAt(t.Sampler.Index), _device.ViewAt(t.View.Index), ImageLayout.General);
+                pw[i] = new WriteDescriptorSet
+                {
+                    SType = StructureType.WriteDescriptorSet,
+                    DstSet = _sets[slot],
+                    DstBinding = (uint)kind,
+                    DstArrayElement = index,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    PImageInfo = &pi[i],
+                };
+            }
+            _device.Vk.UpdateDescriptorSets(_device.Device, (uint)count, pw, 0, null);
+        }
     }
 
     #endregion
 
     #region Disposal
 
+    /// <summary>
+    /// Destroys the pool (its sets go with it) and the layout.
+    /// </summary>
     public void Dispose()
     {
         _device.Vk.DestroyDescriptorPool(_device.Device, _pool, null);

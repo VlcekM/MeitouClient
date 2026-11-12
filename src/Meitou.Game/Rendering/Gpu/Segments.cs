@@ -7,13 +7,39 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
+    /// <summary>
+    /// The native segment open now (<see cref="BeginNative"/>): the frame's list.
+    /// </summary>
     CommandList? _segment;
 
-    // The guest segment open now: the host's list or an inline secondary.
+    /// <summary>
+    /// The pass marker of the open native segment (<see cref="Core.PassMarkers"/>; 0 when not tracking).
+    /// </summary>
+    uint _segmentMarker;
+
+    /// <summary>
+    /// The guest segment open now: the host's list or an inline secondary.
+    /// </summary>
     CommandList? _guest;
 
-    enum GuestKind { Host, Inline }
+    /// <summary>
+    /// Where the open guest segment records.
+    /// </summary>
+    enum GuestKind
+    {
+        /// <summary>
+        /// Into the host pass's own list.
+        /// </summary>
+        Host,
+        /// <summary>
+        /// Into an inline secondary of the host's rendering.
+        /// </summary>
+        Inline
+    }
 
+    /// <summary>
+    /// Where the open guest segment records.
+    /// </summary>
     GuestKind _guestKind;
 
     /// <summary>
@@ -36,10 +62,14 @@ public sealed unsafe partial class GpuContext
         Frame.States.AssumeFullBarrier();
         Frame.Stats.NativeSegments++;
         list.BeginLabel(label);
+        _segmentMarker = Device.Faults.Markers?.Begin(list.Handle, label) ?? 0;
         _segment = list;
         return list;
     }
 
+    /// <summary>
+    /// Closes the native segment <paramref name="cmd"/> (it must be the open one, with no host pass open) with a full barrier.
+    /// </summary>
     public void EndNative(IGpuCommandList cmd)
     {
         if (_segment is null || !ReferenceEquals(cmd, _segment))
@@ -48,6 +78,7 @@ public sealed unsafe partial class GpuContext
         if (PassOpen) throw new InvalidOperationException("EndNative with a host pass open");
 
         cmd.EndLabel();
+        Device.Faults.Markers?.End(_segment.Handle, _segmentMarker);
         FullBarrier(_segment.Handle);
         _segment = null;
     }
@@ -79,8 +110,12 @@ public sealed unsafe partial class GpuContext
         throw new InvalidOperationException("BeginGuest without a host pass");
     }
 
+    /// <inheritdoc/>
     IGpuCommandList IGpuContext.BeginGuest(string label) => BeginGuest(label);
 
+    /// <summary>
+    /// Closes the guest segment <paramref name="cmd"/> (it must be the open one): ends its inline secondary or its label.
+    /// </summary>
     public void EndGuest(IGpuCommandList cmd)
     {
         if (_guest is null || !ReferenceEquals(cmd, _guest))

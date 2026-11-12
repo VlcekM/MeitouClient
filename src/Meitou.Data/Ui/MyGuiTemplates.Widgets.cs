@@ -1,5 +1,8 @@
 namespace Meitou.Data.Ui;
 
+/// <summary>
+/// The run-time parts of templated widgets: a MultiListBox's column prototypes.
+/// </summary>
 public static partial class MyGuiTemplates
 {
     /// <summary>

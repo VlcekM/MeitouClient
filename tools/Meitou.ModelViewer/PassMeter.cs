@@ -20,56 +20,102 @@ namespace Meitou.ModelViewer;
 /// </summary>
 sealed class PassMeter : IDisposable
 {
+    #region Meter
+
+    /// <summary>
+    /// The frame slots of the GPU stamp ring, and the stamps one frame may take.
+    /// </summary>
     const int Slots = 4, MaxStamps = 192;
+
+    /// <summary>
+    /// How many native counters <see cref="GpuStats"/> keeps.
+    /// </summary>
     static readonly int Native = GpuStats.CounterNames.Length;
+
+    /// <summary>
+    /// The counter columns: the native ones and the four Stopwatch tick columns after them.
+    /// </summary>
     static readonly int N = Native + 4;
-    // The columns after the native counters: Stopwatch ticks.
+
+    /// <summary>
+    /// The columns after the native counters: Stopwatch ticks.
+    /// </summary>
     static readonly int Fence = Native, Submit = Native + 1, Acquire = Native + 2, Present = Native + 3;
+
+    /// <summary>
+    /// Milliseconds per Stopwatch tick.
+    /// </summary>
     static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
+
     /// <summary>
     /// Label of the final CPU lap that closes a frame.
     /// </summary>
     const string EndLabel = "gpu-wait";
 
+    /// <summary>
+    /// One row of the table: a stage or a part of one (its parent), with its summed render-thread time, GPU time and counter deltas.
+    /// </summary>
     sealed class Row(string key, string name, string? parent)
     {
+        /// <summary>
+        /// The row's key ("stage" or "stage/part") and its printed name.
+        /// </summary>
         public readonly string Key = key, Name = name;
+
+        /// <summary>
+        /// The stage a part belongs to; null for a stage.
+        /// </summary>
         public readonly string? Parent = parent;
+
+        /// <summary>
+        /// The summed render-thread and GPU milliseconds.
+        /// </summary>
         public double Cpu, Gpu;
+
+        /// <summary>
+        /// The summed counter deltas, one per column.
+        /// </summary>
         public readonly long[] C = new long[N];
+
+        /// <summary>
+        /// The frames whose GPU time went into <see cref="Gpu"/>.
+        /// </summary>
         public long GpuSamples;
     }
 
+    /// <summary>
+    /// The display whose acquire and present ticks are counted.
+    /// </summary>
     readonly VulkanDisplay _display;
+
+    /// <summary>
+    /// The context whose counters, fence waits, submits and timestamps are read.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The frames left out at the start (<c>MEITOU_PASS_STATS_SKIP</c>).
+    /// </summary>
     readonly int _skip;
+
+    /// <summary>
+    /// The label of the PASSCSV and PASSFRAME lines.
+    /// </summary>
     const string Tag = "run";
+
+    /// <summary>
+    /// Every row by key.
+    /// </summary>
     readonly Dictionary<string, Row> _rows = [];
+
+    /// <summary>
+    /// The rows in the order they first appeared.
+    /// </summary>
     readonly List<Row> _order = [];
 
-    // The frame being measured.
-    bool _inFrame;
-    int _frameIndex = -1;
-    long _tAny, _tMajor;
-    readonly long[] _sAny = new long[N], _sMajor = new long[N], _now = new long[N], _endOfLast = new long[N];
-    long _lastEnd;
-    readonly List<(string Label, double Cpu, long[] C)> _pendingSubs = [];
-    readonly List<(Row Row, double Cpu, long[] C)> _frameRows = [];
-    int _measuredFrames;
-    readonly List<double> _frameCpu = [], _betweenMs = [];
-    readonly Row _between = new("(between frames)", "(between frames)", null);
-
-    // GPU stamps: a ring of frame slots in the frames' timestamp arenas, read a few frames late without waiting.
-    readonly QuerySlot[,] _stamps = new QuerySlot[Slots, MaxStamps];
-    readonly string?[,] _stampLabel = new string?[Slots, MaxStamps];
-    readonly bool[,] _stampSub = new bool[Slots, MaxStamps];
-    readonly int[] _stampCount = new int[Slots];
-    readonly bool[] _pending = new bool[Slots];
-    readonly bool[] _pendingMeasured = new bool[Slots];
-    int _slot;
-    double _gpuFrameSum;
-    long _gpuFrames;
-
+    /// <summary>
+    /// Hooks the meter into <see cref="StageClock"/>'s stage starts and closes.
+    /// </summary>
     PassMeter(VulkanDisplay display)
     {
         this._display = display;
@@ -79,9 +125,79 @@ sealed class PassMeter : IDisposable
         StageClock.OnClose = OnClose;
     }
 
+    /// <summary>
+    /// A meter when <c>MEITOU_PASS_STATS=1</c>, else null.
+    /// </summary>
     public static PassMeter? TryCreate(VulkanDisplay display) =>
         Environment.GetEnvironmentVariable("MEITOU_PASS_STATS") == "1" ? new PassMeter(display) : null;
 
+    /// <summary>
+    /// Unhooks the meter from <see cref="StageClock"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        StageClock.OnStart = null;
+        StageClock.OnClose = null;
+    }
+
+    #endregion
+
+    #region Frame measuring
+
+    // The frame being measured.
+    /// <summary>
+    /// Inside a frame (between the frame's start and its end label).
+    /// </summary>
+    bool _inFrame;
+
+    /// <summary>
+    /// The frame's index since the meter started; -1 before the first.
+    /// </summary>
+    int _frameIndex = -1;
+
+    /// <summary>
+    /// The Stopwatch time of the last boundary (any) and of the last stage boundary.
+    /// </summary>
+    long _tAny, _tMajor;
+
+    /// <summary>
+    /// The counters at the last boundary (any) and at the last stage boundary, now, and at the end of the last frame.
+    /// </summary>
+    readonly long[] _sAny = new long[N], _sMajor = new long[N], _now = new long[N], _endOfLast = new long[N];
+
+    /// <summary>
+    /// The Stopwatch time the last frame ended.
+    /// </summary>
+    long _lastEnd;
+
+    /// <summary>
+    /// The parts closed since the last stage boundary: label, render-thread time and counter deltas.
+    /// </summary>
+    readonly List<(string Label, double Cpu, long[] C)> _pendingSubs = [];
+
+    /// <summary>
+    /// The rows the frame closed, with their time and deltas; added to the rows when the frame ends.
+    /// </summary>
+    readonly List<(Row Row, double Cpu, long[] C)> _frameRows = [];
+
+    /// <summary>
+    /// The frames measured (after the skipped ones).
+    /// </summary>
+    int _measuredFrames;
+
+    /// <summary>
+    /// Each measured frame's render-thread time over the top-level stages, and each gap between frames.
+    /// </summary>
+    readonly List<double> _frameCpu = [], _betweenMs = [];
+
+    /// <summary>
+    /// The row of the time between frames (the acquire, the wait for a free frame, the window's events).
+    /// </summary>
+    readonly Row _between = new("(between frames)", "(between frames)", null);
+
+    /// <summary>
+    /// Reads the native counters, the fence wait and submit ticks and the presenter's acquire and present ticks into <paramref name="into"/>.
+    /// </summary>
     void Snapshot(long[] into)
     {
         _ctx.Frame.Stats.Running(into);
@@ -91,26 +207,10 @@ sealed class PassMeter : IDisposable
         into[Present] = _display.PresentTicks;
     }
 
-    void Stamp(string label, bool sub)
-    {
-        int n = _stampCount[_slot];
-        if (n >= MaxStamps) return;
-        var arena = _ctx.Frame.Timestamps;
-        // Taken inside the callback: Interleave opens the frame when none is (the benchmark starts its clock before), and an index taken
-        // before that would belong to the previous frame's pool.
-        QuerySlot q = default;
-        _ctx.Interleave(cmd =>
-        {
-            q = arena.Allocate();
-            if (q.IsValid) cmd.Timestamp(arena, q);
-        });
-        if (!q.IsValid) return;
-        _stamps[_slot, n] = q;
-        _stampLabel[_slot, n] = label;
-        _stampSub[_slot, n] = sub;
-        _stampCount[_slot] = n + 1;
-    }
-
+    /// <summary>
+    /// A frame's first stage starts: books the gap since the last frame, resets the boundaries, collects the finished GPU slots and opens the next
+    /// slot with a stamp.
+    /// </summary>
     void OnStart()
     {
         long t = Stopwatch.GetTimestamp();
@@ -138,6 +238,10 @@ sealed class PassMeter : IDisposable
         Stamp("start", false);
     }
 
+    /// <summary>
+    /// A stage (or a part, <paramref name="sub"/>) closes: its render-thread time and counter deltas go to its row (a stage's parts with its "rest"),
+    /// with a GPU stamp; the end label ends the frame.
+    /// </summary>
     void OnClose(string label, bool sub)
     {
         if (!_inFrame) return;
@@ -181,6 +285,9 @@ sealed class PassMeter : IDisposable
         if (end) EndFrame(t);
     }
 
+    /// <summary>
+    /// The row of <paramref name="key"/>, made (and listed) on first use.
+    /// </summary>
     Row GetRow(string key, string? parent, string? name = null)
     {
         if (!_rows.TryGetValue(key, out var r))
@@ -192,6 +299,9 @@ sealed class PassMeter : IDisposable
         return r;
     }
 
+    /// <summary>
+    /// Ends a frame: marks its stamp slot pending and, once past the skipped frames, adds the frame's rows to the sums.
+    /// </summary>
     void EndFrame(long t)
     {
         _inFrame = false;
@@ -211,6 +321,83 @@ sealed class PassMeter : IDisposable
         _frameCpu.Add(cpu);
     }
 
+    #endregion
+
+    #region GPU stamps
+
+    // GPU stamps: a ring of frame slots in the frames' timestamp arenas, read a few frames late without waiting.
+    /// <summary>
+    /// The stamps of each slot, in order.
+    /// </summary>
+    readonly QuerySlot[,] _stamps = new QuerySlot[Slots, MaxStamps];
+
+    /// <summary>
+    /// Each stamp's stage or part label.
+    /// </summary>
+    readonly string?[,] _stampLabel = new string?[Slots, MaxStamps];
+
+    /// <summary>
+    /// Whether each stamp closes a part (else a stage).
+    /// </summary>
+    readonly bool[,] _stampSub = new bool[Slots, MaxStamps];
+
+    /// <summary>
+    /// The stamps each slot holds.
+    /// </summary>
+    readonly int[] _stampCount = new int[Slots];
+
+    /// <summary>
+    /// Whether a slot waits to be read.
+    /// </summary>
+    readonly bool[] _pending = new bool[Slots];
+
+    /// <summary>
+    /// Whether a slot's frame counts (past the skipped ones).
+    /// </summary>
+    readonly bool[] _pendingMeasured = new bool[Slots];
+
+    /// <summary>
+    /// The slot the frame records into.
+    /// </summary>
+    int _slot;
+
+    /// <summary>
+    /// The summed GPU time of the read frames, first stamp to last, milliseconds.
+    /// </summary>
+    double _gpuFrameSum;
+
+    /// <summary>
+    /// The frames <see cref="_gpuFrameSum"/> holds.
+    /// </summary>
+    long _gpuFrames;
+
+    /// <summary>
+    /// Writes a GPU timestamp for <paramref name="label"/> into the frame's slot (nothing when the slot is full or the arena has no room).
+    /// </summary>
+    void Stamp(string label, bool sub)
+    {
+        int n = _stampCount[_slot];
+        if (n >= MaxStamps) return;
+        var arena = _ctx.Frame.Timestamps;
+        // Taken inside the callback: Interleave opens the frame when none is (the benchmark starts its clock before), and an index taken
+        // before that would belong to the previous frame's pool.
+        QuerySlot q = default;
+        _ctx.Interleave(cmd =>
+        {
+            q = arena.Allocate();
+            if (q.IsValid) cmd.Timestamp(arena, q);
+        });
+        if (!q.IsValid) return;
+        _stamps[_slot, n] = q;
+        _stampLabel[_slot, n] = label;
+        _stampSub[_slot, n] = sub;
+        _stampCount[_slot] = n + 1;
+    }
+
+    /// <summary>
+    /// Reads slot <paramref name="s"/> once its last stamp is available: each stage's and part's GPU time goes to its row (a stage with parts also
+    /// gets its "rest").
+    /// </summary>
     void Collect(int s)
     {
         if (!_pending[s]) return;
@@ -264,6 +451,13 @@ sealed class PassMeter : IDisposable
         _gpuFrames++;
     }
 
+    #endregion
+
+    #region Report
+
+    /// <summary>
+    /// <paramref name="v"/> with two decimals.
+    /// </summary>
     static string Fmt(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>
@@ -272,21 +466,29 @@ sealed class PassMeter : IDisposable
     public void Report(TextWriter output)
     {
         for (int s = 0; s < Slots; s++) Collect(s);
-        if (_measuredFrames == 0) { output.WriteLine($"passes    no frames measured (the first {_skip} are skipped)"); return; }
+        if (_measuredFrames == 0)
+        {
+            output.WriteLine($"passes    no frames measured (the first {_skip} are skipped)");
+            return;
+        }
         double f = _measuredFrames;
         // Per frame, like the CPU column: a stage that runs more than once (a capture splitting the scene pass) or a cascade drawn every
         // second frame is summed over the frame, not averaged per run (until 2026-10-07 it was divided by its runs, which under-counted the
         // slices' stages: docs/render-distance-benchmark.md).
         double Gpu(Row r) => r.GpuSamples > 0 && _gpuFrames > 0 ? r.Gpu / _gpuFrames : double.NaN;
         var sb = new StringBuilder();
-        sb.AppendLine($"passes    {Tag}: means per frame over {_measuredFrames} frames (first {_skip} skipped), {_gpuFrames} with GPU times; Stopwatch CPU ms of the render thread; GPU ms between timestamps");
-        sb.AppendLine($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"draws",7}{"indir",6}{"disp",6}{"pipes",6}{"push",6}{"segs",6}{"constKB",8}{"uplKB",7}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
+        sb.AppendLine($"passes    {Tag}: means per frame over {_measuredFrames} frames (first {_skip} skipped), "
+            + $"{_gpuFrames} with GPU times; Stopwatch CPU ms of the render thread; GPU ms between timestamps");
+        sb.Append($"passes    {"row",-28}{"cpu",7}{"gpu",7}{"draws",7}{"indir",6}{"disp",6}{"pipes",6}{"push",6}{"segs",6}");
+        sb.AppendLine($"{"constKB",8}{"uplKB",7}{"fence",7}{"submit",7}{"acq",6}{"pres",6}");
         void Line(Row r, string prefix)
         {
             var c = r.C;
             double g = Gpu(r);
-            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}{c[0] / f,7:0}{c[1] / f,6:0}{c[2] / f,6:0}{c[3] / f,6:0}{c[4] / f,6:0}{c[5] / f,6:0}" +
-                $"{c[6] / 1024.0 / f,8:0.0}{c[7] / 1024.0 / f,7:0.0}{Fmt(c[Fence] * TickMs / f),7}{Fmt(c[Submit] * TickMs / f),7}{Fmt(c[Acquire] * TickMs / f),6}{Fmt(c[Present] * TickMs / f),6}");
+            sb.AppendLine($"passes    {prefix + r.Name,-28}{Fmt(r.Cpu / f),7}{(double.IsNaN(g) ? "-" : Fmt(g)),7}"
+                + $"{c[0] / f,7:0}{c[1] / f,6:0}{c[2] / f,6:0}{c[3] / f,6:0}{c[4] / f,6:0}{c[5] / f,6:0}"
+                + $"{c[6] / 1024.0 / f,8:0.0}{c[7] / 1024.0 / f,7:0.0}{Fmt(c[Fence] * TickMs / f),7}{Fmt(c[Submit] * TickMs / f),7}"
+                + $"{Fmt(c[Acquire] * TickMs / f),6}{Fmt(c[Present] * TickMs / f),6}");
         }
         foreach (var r in _order.Where(r => r.Parent is null))
         {
@@ -295,12 +497,19 @@ sealed class PassMeter : IDisposable
         }
         if (_between.Cpu > 0) Line(_between, "");
         var total = new Row("TOTAL", "TOTAL", null);
-        foreach (var r in _order.Where(r => r.Parent is null)) { total.Cpu += r.Cpu; for (int i = 0; i < N; i++) total.C[i] += r.C[i]; if (!double.IsNaN(Gpu(r))) total.Gpu += Gpu(r) * f; }
+        foreach (var r in _order.Where(r => r.Parent is null))
+        {
+            total.Cpu += r.Cpu;
+            for (int i = 0; i < N; i++) total.C[i] += r.C[i];
+            if (!double.IsNaN(Gpu(r))) total.Gpu += Gpu(r) * f;
+        }
         total.GpuSamples = (long)f;
         Line(total, "");
         var sorted = _frameCpu.OrderBy(x => x).ToList();
         double gpuFrame = _gpuFrames > 0 ? _gpuFrameSum / _gpuFrames : double.NaN;
-        sb.AppendLine($"passes    frame render-thread cpu (rows except {EndLabel} and driver-wait): mean {Fmt(_frameCpu.Average())}, p50 {Fmt(sorted[sorted.Count / 2])}, p95 {Fmt(sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)])} ms; gpu frame (first to last timestamp) {Fmt(gpuFrame)} ms");
+        sb.AppendLine($"passes    frame render-thread cpu (rows except {EndLabel} and driver-wait): mean {Fmt(_frameCpu.Average())}, "
+            + $"p50 {Fmt(sorted[sorted.Count / 2])}, p95 {Fmt(sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)])} ms; "
+            + $"gpu frame (first to last timestamp) {Fmt(gpuFrame)} ms");
         output.Write(sb.ToString());
         // For scripts: PASSCSV|tag|row|parent|cpu|gpu|counters... (per-frame means; the tick columns in ms).
         output.WriteLine($"PASSCSVHEAD|{string.Join("|", GpuStats.CounterNames)}|fenceMs|submitMs|acquireMs|presentMs");
@@ -310,12 +519,14 @@ sealed class PassMeter : IDisposable
             for (int i = 0; i < N; i++)
                 parts[i] = (i >= Fence ? r.C[i] * TickMs / f : r.C[i] / f).ToString("0.###", CultureInfo.InvariantCulture);
             double g = Gpu(r);
-            output.WriteLine($"PASSCSV|{Tag}|{r.Key}|{r.Parent}|{r.Cpu / f:0.####}|{(double.IsNaN(g) ? "" : g.ToString("0.####", CultureInfo.InvariantCulture))}|{string.Join("|", parts)}");
+            output.WriteLine($"PASSCSV|{Tag}|{r.Key}|{r.Parent}|{r.Cpu / f:0.####}|"
+                + $"{(double.IsNaN(g) ? "" : g.ToString("0.####", CultureInfo.InvariantCulture))}|{string.Join("|", parts)}");
         }
         foreach (var r in _order) Csv(r);
         if (_between.Cpu > 0) Csv(_between);
-        output.WriteLine($"PASSFRAME|{Tag}|{_measuredFrames}|{_frameCpu.Average():0.####}|{sorted[sorted.Count / 2]:0.####}|{sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)]:0.####}|{gpuFrame:0.####}");
+        output.WriteLine($"PASSFRAME|{Tag}|{_measuredFrames}|{_frameCpu.Average():0.####}|{sorted[sorted.Count / 2]:0.####}|"
+            + $"{sorted[Math.Min((int)(sorted.Count * 0.95), sorted.Count - 1)]:0.####}|{gpuFrame:0.####}");
     }
 
-    public void Dispose() { StageClock.OnStart = null; StageClock.OnClose = null; }
+    #endregion
 }

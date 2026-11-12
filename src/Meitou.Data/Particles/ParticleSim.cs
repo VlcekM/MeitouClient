@@ -9,16 +9,37 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public struct ParticleInstance
 {
+    /// <summary>
+    /// The particle's position in the caller's world frame.
+    /// </summary>
     public Vector3 Position;
+    /// <summary>
+    /// The texture rotation in radians.
+    /// </summary>
     public float Rotation;
     /// <summary>
     /// The unit direction of travel (oriented_self / perpendicular_self); zero when the particle does not move.
     /// </summary>
     public Vector3 Direction;
+    /// <summary>
+    /// The billboard's width.
+    /// </summary>
     public float Width;
+    /// <summary>
+    /// The colour, tinted by the caller; alpha is the particle's.
+    /// </summary>
     public Vector4 Colour;
+    /// <summary>
+    /// The billboard's height.
+    /// </summary>
     public float Height;
+    /// <summary>
+    /// The particle's depth size.
+    /// </summary>
     public float Depth;
+    /// <summary>
+    /// Unused; they make the struct four vec4 long.
+    /// </summary>
     public float Pad0, Pad1;
 }
 
@@ -28,6 +49,9 @@ public struct ParticleInstance
 public readonly record struct ParticleEnvironment(
     Vector2 Wind, float WindSpeedMultiplier, float EmissionScale, bool WindAffected, bool WindDirectionEmission)
 {
+    /// <summary>
+    /// No wind and every emission at its script rate.
+    /// </summary>
     public static readonly ParticleEnvironment None = new(Vector2.Zero, 1, 1, false, false);
 }
 
@@ -54,9 +78,18 @@ public sealed class ParticleSimulation
     /// </summary>
     public const float MaxStep = 1f / 20;
 
+    /// <summary>
+    /// The seeded random source of the emissions.
+    /// </summary>
     readonly Random _random;
+    /// <summary>
+    /// Each technique's particles and emitter state, in the system's technique order.
+    /// </summary>
     readonly TechniqueState[] _techniques;
 
+    /// <summary>
+    /// The system being simulated.
+    /// </summary>
     public PuSystemDef Definition { get; }
     /// <summary>
     /// The system's place in the world: the emitters' origin and the frame the observers compare positions in. Set it before <see cref="Advance"/>.
@@ -75,6 +108,9 @@ public sealed class ParticleSimulation
     /// Multiplies the particles' sizes and the scale affectors' growth, and their lives (1 for every effect but the host's one-shot bursts).
     /// </summary>
     public float Size { get; set; } = 1;
+    /// <summary>
+    /// See <see cref="Size"/>.
+    /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
     /// The system was stopped (an effect whose life is over): the emitters make nothing more and the particles live out.
@@ -84,9 +120,18 @@ public sealed class ParticleSimulation
     /// Seconds since the system started.
     /// </summary>
     public float Time { get; private set; }
+    /// <summary>
+    /// How many particles all techniques hold now.
+    /// </summary>
     public int ParticleCount => _techniques.Sum(t => t.Count);
+    /// <summary>
+    /// The system's techniques, as <see cref="TechniqueParticleCount"/> numbers them.
+    /// </summary>
     public IReadOnlyList<PuTechniqueDef> Techniques => Definition.Techniques;
 
+    /// <summary>
+    /// A simulation of <paramref name="definition"/> at time 0 with no particles, its emissions drawn from <paramref name="seed"/>.
+    /// </summary>
     public ParticleSimulation(PuSystemDef definition, int seed)
     {
         Definition = definition;
@@ -94,35 +139,98 @@ public sealed class ParticleSimulation
         _techniques = [.. definition.Techniques.Select(t => new TechniqueState(t))];
     }
 
+    /// <summary>
+    /// One emitter's running state.
+    /// </summary>
     sealed class EmitterState
     {
+        /// <summary>
+        /// The fraction of a particle carried over to the next step's emission.
+        /// </summary>
         public float Accumulator;
         /// <summary>
         /// Seconds into the emitter's current on/off cycle, and whether it is in its resting part.
         /// </summary>
         public float Clock;
+        /// <summary>
+        /// The length of the current working or resting part, in seconds; -1 before the first is drawn, infinity after the last.
+        /// </summary>
         public float Cycle = -1;
+        /// <summary>
+        /// Whether the emitter is in the resting part of its cycle.
+        /// </summary>
         public bool Resting;
+        /// <summary>
+        /// Seconds since the emitter started; its rate is read at this time.
+        /// </summary>
         public float Age;
     }
 
+    /// <summary>
+    /// One technique's particle pool, struct of arrays, with its emitters' and observers' state.
+    /// </summary>
     sealed class TechniqueState
     {
+        /// <summary>
+        /// The technique.
+        /// </summary>
         public readonly PuTechniqueDef Def;
+        /// <summary>
+        /// Each emitter's state, in the technique's emitter order.
+        /// </summary>
         public readonly EmitterState[] Emitters;
+        /// <summary>
+        /// The most particles the pool holds: the technique's visual quota.
+        /// </summary>
         public int Capacity;
+        /// <summary>
+        /// How many particles are alive; they fill the arrays from index 0.
+        /// </summary>
         public int Count;
+        /// <summary>
+        /// Per particle: position and velocity.
+        /// </summary>
         public float[] X = [], Y = [], Z = [], Vx = [], Vy = [], Vz = [];
+        /// <summary>
+        /// Per particle: age and life in seconds, sizes, texture rotation and its speed.
+        /// </summary>
         public float[] Age = [], Life = [], Width = [], Height = [], Depth = [], Rotation = [], RotationSpeed = [];
+        /// <summary>
+        /// Per particle: the colour, and the colour it was emitted with (for a multiplying colour affector).
+        /// </summary>
         public float[] R = [], G = [], B = [], A = [], Er = [], Eg = [], Eb = [], Ea = [];
+        /// <summary>
+        /// Per particle: its random seed, which the parallel affector passes hash.
+        /// </summary>
         public uint[] Seed = [];
+        /// <summary>
+        /// Per particle: its mass, read by a gravity affector (only drawn when the technique has one).
+        /// </summary>
         public float[] Mass = [];
+        /// <summary>
+        /// Whether the technique has a gravity affector.
+        /// </summary>
         public readonly bool HasGravity;
+        /// <summary>
+        /// Per particle: the index of the emitter that made it.
+        /// </summary>
         public byte[] Emitter = [];
+        /// <summary>
+        /// Seconds since the observers last checked.
+        /// </summary>
         public float ObserverClock;
+        /// <summary>
+        /// Per affector: the randomiser's time since it last moved the particles.
+        /// </summary>
         public readonly float[] RandomiserClock;
+        /// <summary>
+        /// The technique's step count, mixed into the per-step hashes.
+        /// </summary>
         public uint Step;
 
+        /// <summary>
+        /// An empty pool for <paramref name="def"/>, sized for its first particles.
+        /// </summary>
         public TechniqueState(PuTechniqueDef def)
         {
             Def = def;
@@ -174,6 +282,9 @@ public sealed class ParticleSimulation
             Resize(Math.Min(Capacity, Math.Max(X.Length * 2, InitialPool)));
         }
 
+        /// <summary>
+        /// Removes particle <paramref name="i"/> by moving the last one into its place (the order is not kept).
+        /// </summary>
         public void Remove(int i)
         {
             int last = --Count;
@@ -205,6 +316,8 @@ public sealed class ParticleSimulation
         }
     }
 
+    #region Stepping
+
     /// <summary>
     /// Steps the system by <paramref name="dt"/> seconds (split into steps of at most <see cref="MaxStep"/>).
     /// </summary>
@@ -233,6 +346,10 @@ public sealed class ParticleSimulation
     public static float LongestLife(PuSystemDef def) =>
         def.Techniques.SelectMany(t => t.Emitters).Select(e => e.Life.Range.Max).DefaultIfEmpty(0).Max();
 
+    /// <summary>
+    /// One step of <paramref name="dt"/> seconds: each enabled technique emits (unless stopped), ages, runs its affectors, moves and runs
+    /// its observers.
+    /// </summary>
     void Step(float dt, in ParticleEnvironment env)
     {
         Time += dt;
@@ -248,8 +365,14 @@ public sealed class ParticleSimulation
         }
     }
 
-    // ---- emission ----
+    #endregion
 
+    #region Emission
+
+    /// <summary>
+    /// Emits each working emitter's particles for <paramref name="dt"/>: its rate at its age times the emission scale, the fraction carried over, up
+    /// to the quota.
+    /// </summary>
     void Emit(TechniqueState t, float dt, in ParticleEnvironment env)
     {
         var emitters = t.Def.Emitters;
@@ -300,6 +423,9 @@ public sealed class ParticleSimulation
         return false;
     }
 
+    /// <summary>
+    /// Makes one particle of emitter <paramref name="e"/>: its place, direction, speed, life, size, colour and seed.
+    /// </summary>
     void Spawn(TechniqueState t, int emitterIndex, PuEmitterDef e, in ParticleEnvironment env)
     {
         var scale = Definition.Scale;
@@ -442,6 +568,9 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// A random value in -0.5..0.5.
+    /// </summary>
     float Centered() => _random.NextSingle() - 0.5f;
 
     /// <summary>
@@ -459,8 +588,13 @@ public sealed class ParticleSimulation
         return axis * c + (u * MathF.Cos(phi) + v * MathF.Sin(phi)) * s;
     }
 
-    // ---- ageing, affectors, motion ----
+    #endregion
 
+    #region Ageing, affectors and motion
+
+    /// <summary>
+    /// Ages every particle by <paramref name="dt"/> and removes those past their life.
+    /// </summary>
     static void Age(TechniqueState t, float dt)
     {
         for (int i = t.Count - 1; i >= 0; i--)
@@ -470,6 +604,10 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="body"/> over 0..<paramref name="count"/>: at once below <see cref="ParallelThreshold"/>, else in 1024-particle chunks on
+    /// the thread pool.
+    /// </summary>
     static void ForRange(int count, Action<int, int> body)
     {
         if (count < ParallelThreshold)
@@ -481,6 +619,10 @@ public sealed class ParticleSimulation
         Parallel.For(0, (count + chunk - 1) / chunk, c => body(c * chunk, Math.Min((c + 1) * chunk, count)));
     }
 
+    /// <summary>
+    /// Runs every enabled affector of the technique over its particles, in the technique's order: one pass per affector, skipping the particles of
+    /// the emitters it excludes.
+    /// </summary>
     void Affect(TechniqueState t, float dt, in ParticleEnvironment env)
     {
         var affectors = t.Def.Affectors;
@@ -499,213 +641,291 @@ public sealed class ParticleSimulation
             switch (a.Type)
             {
                 case PuAffectorType.Colour when a.TimeColours.Count > 0:
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            var c = Ramp(a.TimeColours, t.Age[i] / t.Life[i]);
-                            if (a.MultiplyColour) c *= new Vector4(t.Er[i], t.Eg[i], t.Eb[i], t.Ea[i]);
-                            t.R[i] = c.X;
-                            t.G[i] = c.Y;
-                            t.B[i] = c.Z;
-                            t.A[i] = c.W;
-                        }
-                    });
+                    AffectColour(t, a, excluded, n);
                     break;
                 case PuAffectorType.Scale:
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            // The scale is a rate: units per second, times the system scale, added to the size; xyz_scale alone when it is
-                            // given, else x / y / z; read at the life fraction or the system's age. A size that would not stay above 0 is
-                            // left as it was (Verified, the plugin's ScaleAffector::_affect and setOwnDimensions).
-                            float f = a.SinceStartSystem ? Time : t.Age[i] / t.Life[i];
-                            var s = Definition.Scale * (dt * Size);
-                            float rx, ry, rz;
-                            if (a.ScaleXyz is not null) rx = ry = rz = a.ScaleXyz.Evaluate(f);
-                            else
-                                (rx, ry, rz) = (a.ScaleX?.Evaluate(f) ?? 0, a.ScaleY?.Evaluate(f) ?? 0, a.ScaleZ?.Evaluate(f) ?? 0);
-                            float w = t.Width[i] + rx * s.X, h = t.Height[i] + ry * s.Y, d = t.Depth[i] + rz * s.Z;
-                            if (w > 0) t.Width[i] = w;
-                            if (h > 0) t.Height[i] = h;
-                            if (d > 0) t.Depth[i] = d;
-                        }
-                    });
+                    AffectScale(t, a, excluded, n, dt);
                     break;
                 case PuAffectorType.TextureRotator:
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                            if (excluded?[t.Emitter[i]] != true) t.Rotation[i] += t.RotationSpeed[i] * dt;
-                    });
+                    AffectTextureRotator(t, excluded, n, dt);
                     break;
                 case PuAffectorType.LinearForce:
-                    {
-                        var f = a.Force * dt;
-                        bool average = a.AverageForce;
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                if (average)
-                                {
-                                    // "average": the velocity moves halfway towards the force vector's direction at its strength
-                                    t.Vx[i] = (t.Vx[i] + a.Force.X) * 0.5f;
-                                    t.Vy[i] = (t.Vy[i] + a.Force.Y) * 0.5f;
-                                    t.Vz[i] = (t.Vz[i] + a.Force.Z) * 0.5f;
-                                }
-                                else
-                                {
-                                    t.Vx[i] += f.X;
-                                    t.Vy[i] += f.Y;
-                                    t.Vz[i] += f.Z;
-                                }
-                            }
-                        });
-                        break;
-                    }
+                    AffectLinearForce(t, a, excluded, n, dt);
+                    break;
                 case PuAffectorType.Vortex:
-                    {
-                        var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
-                        var centre = Origin + a.Position * Definition.Scale;
-                        if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
-                        // The plugin's VortexAffector::_preProcessParticles (Verified): once per update the angle is the rotation speed (radians a
-                        // second) read at the SYSTEM's age (a dyn_random draws anew each update), times the step. _affect then turns every
-                        // particle's place about the affector's position, and its velocity, by it.
-                        var q = Quaternion.CreateFromAxisAngle(axis, (a.RotationSpeed?.Evaluate(Time, _random) ?? 0) * dt);
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                var p = Vector3.Transform(new Vector3(t.X[i], t.Y[i], t.Z[i]) - centre, q) + centre;
-                                t.X[i] = p.X;
-                                t.Y[i] = p.Y;
-                                t.Z[i] = p.Z;
-                                var v = Vector3.Transform(new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]), q);
-                                t.Vx[i] = v.X;
-                                t.Vy[i] = v.Y;
-                                t.Vz[i] = v.Z;
-                            }
-                        });
-                        break;
-                    }
+                    AffectVortex(t, a, excluded, n, dt);
+                    break;
                 case PuAffectorType.Gravity:
-                    {
-                        // The plugin's GravityAffector::_affect (Verified): the direction gains d * (scale velocity * gravity * the particle's
-                        // mass * the affector's mass / |d|^2) * dt, d the vector to the affector's place (nothing at d = 0). The motion step then
-                        // multiplies the direction by the scale velocity again, and the velocities here are those moved distances, so the pull is
-                        // scale velocity squared in all.
-                        var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
-                        float g = a.Strength?.Evaluate(0) ?? 0;
-                        float pull = Definition.ScaleVelocity * Definition.ScaleVelocity * g * a.MassAffector * dt;
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
-                                float r2 = d.LengthSquared();
-                                if (!(r2 > 0)) continue;
-                                var dv = d * (pull * t.Mass[i] / r2);
-                                t.Vx[i] += dv.X;
-                                t.Vy[i] += dv.Y;
-                                t.Vz[i] += dv.Z;
-                            }
-                        });
-                        break;
-                    }
+                    AffectGravity(t, a, excluded, n, dt);
+                    break;
                 case PuAffectorType.Jet:
-                    {
-                        float acc = a.Strength?.Evaluate(0) ?? 0;
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                var v = new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]);
-                                float len = v.Length();
-                                if (len < 1e-4f) continue;
-                                v += v / len * acc * dt;
-                                t.Vx[i] = v.X;
-                                t.Vy[i] = v.Y;
-                                t.Vz[i] = v.Z;
-                            }
-                        });
-                        break;
-                    }
+                    AffectJet(t, a, excluded, n, dt);
+                    break;
                 case PuAffectorType.SineForce:
-                    {
-                        // force_vector · sin(2π f t) with f between min and max frequency by the particle's own seed (Unknown: the exact form).
-                        float tt = Time;
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                float f = a.MinFrequency + (a.MaxFrequency - a.MinFrequency) * Hash01(t.Seed[i]);
-                                var dv = a.Force * (MathF.Sin(MathF.Tau * f * tt) * dt);
-                                t.Vx[i] += dv.X;
-                                t.Vy[i] += dv.Y;
-                                t.Vz[i] += dv.Z;
-                            }
-                        });
-                        break;
-                    }
+                    AffectSineForce(t, a, excluded, n, dt);
+                    break;
                 case PuAffectorType.Randomiser:
-                    {
-                        // The plugin's Randomiser (Verified, _preProcessParticles / _affect / constructor): once the time passed since the last
-                        // kick exceeds time_step (every update when 0), each particle gets a uniform random value of up to max_deviation per axis
-                        // added to its DIRECTION (random_direction, true by default and set by no script), not scaled by anything; with
-                        // random_direction false its position moves by it, times the system scale. The direction is what the motion step
-                        // multiplies by the scale velocity, so as a velocity here the kick takes that factor. One kick per update, so the walk
-                        // depends on the update rate as the original does; a step off 1/60 s keeps the variance of a 60 Hz run (Engine choice).
-                        float stepTime = a.TimeStep;
-                        float rate = 1;
-                        if (stepTime > 0)
-                        {
-                            t.RandomiserClock[k] += dt;
-                            if (t.RandomiserClock[k] <= stepTime) break;
-                            t.RandomiserClock[k] -= stepTime;
-                        }
-                        else rate = MathF.Sqrt(Math.Min(dt * 60, 4));
-                        uint step = t.Step * 2654435761u + (uint)k * 40503u;
-                        bool kick = a.RandomDirection;
-                        var dev = a.MaxDeviation * (kick ? Definition.ScaleVelocity * rate : rate);
-                        var place = kick ? Vector3.One : Definition.Scale;
-                        ForRange(n, (lo, hi) =>
-                        {
-                            for (int i = lo; i < hi; i++)
-                            {
-                                if (excluded?[t.Emitter[i]] == true) continue;
-                                uint s = t.Seed[i] ^ step;
-                                float x = (Hash01(s * 3 + 1) * 2 - 1) * dev.X * place.X;
-                                float y = (Hash01(s * 3 + 2) * 2 - 1) * dev.Y * place.Y;
-                                float z = (Hash01(s * 3 + 3) * 2 - 1) * dev.Z * place.Z;
-                                if (kick)
-                                {
-                                    t.Vx[i] += x;
-                                    t.Vy[i] += y;
-                                    t.Vz[i] += z;
-                                }
-                                else
-                                {
-                                    t.X[i] += x;
-                                    t.Y[i] += y;
-                                    t.Z[i] += z;
-                                }
-                            }
-                        });
-                        break;
-                    }
+                    AffectRandomiser(t, k, a, excluded, n, dt);
+                    break;
             }
         }
     }
 
+    /// <summary>
+    /// The colour affector: the particle's colour from the time ramp at its life fraction, times its emitted colour with <c>multiply</c>.
+    /// </summary>
+    static void AffectColour(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n)
+    {
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                var c = Ramp(a.TimeColours, t.Age[i] / t.Life[i]);
+                if (a.MultiplyColour) c *= new Vector4(t.Er[i], t.Eg[i], t.Eb[i], t.Ea[i]);
+                t.R[i] = c.X;
+                t.G[i] = c.Y;
+                t.B[i] = c.Z;
+                t.A[i] = c.W;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The scale affector: grows (or shrinks) the particle's dimensions by its rates.
+    /// </summary>
+    void AffectScale(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                // The scale is a rate: units per second, times the system scale, added to the size; xyz_scale alone when it is
+                // given, else x / y / z; read at the life fraction or the system's age. A size that would not stay above 0 is
+                // left as it was (Verified, the plugin's ScaleAffector::_affect and setOwnDimensions).
+                float f = a.SinceStartSystem ? Time : t.Age[i] / t.Life[i];
+                var s = Definition.Scale * (dt * Size);
+                float rx, ry, rz;
+                if (a.ScaleXyz is not null) rx = ry = rz = a.ScaleXyz.Evaluate(f);
+                else
+                    (rx, ry, rz) = (a.ScaleX?.Evaluate(f) ?? 0, a.ScaleY?.Evaluate(f) ?? 0, a.ScaleZ?.Evaluate(f) ?? 0);
+                float w = t.Width[i] + rx * s.X, h = t.Height[i] + ry * s.Y, d = t.Depth[i] + rz * s.Z;
+                if (w > 0) t.Width[i] = w;
+                if (h > 0) t.Height[i] = h;
+                if (d > 0) t.Depth[i] = d;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The texture rotator: turns the particle's texture by its own rotation speed.
+    /// </summary>
+    static void AffectTextureRotator(TechniqueState t, bool[]? excluded, int n, float dt)
+    {
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+                if (excluded?[t.Emitter[i]] != true) t.Rotation[i] += t.RotationSpeed[i] * dt;
+        });
+    }
+
+    /// <summary>
+    /// The linear force: adds the force to the velocity, or with <c>average</c> moves the velocity halfway to it.
+    /// </summary>
+    static void AffectLinearForce(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        var f = a.Force * dt;
+        bool average = a.AverageForce;
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                if (average)
+                {
+                    // "average": the velocity moves halfway towards the force vector's direction at its strength
+                    t.Vx[i] = (t.Vx[i] + a.Force.X) * 0.5f;
+                    t.Vy[i] = (t.Vy[i] + a.Force.Y) * 0.5f;
+                    t.Vz[i] = (t.Vz[i] + a.Force.Z) * 0.5f;
+                }
+                else
+                {
+                    t.Vx[i] += f.X;
+                    t.Vy[i] += f.Y;
+                    t.Vz[i] += f.Z;
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// The vortex: turns the particle's position and velocity about the affector's axis.
+    /// </summary>
+    void AffectVortex(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
+        var centre = Origin + a.Position * Definition.Scale;
+        if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
+        // The plugin's VortexAffector::_preProcessParticles (Verified): once per update the angle is the rotation speed (radians a
+        // second) read at the SYSTEM's age (a dyn_random draws anew each update), times the step. _affect then turns every
+        // particle's place about the affector's position, and its velocity, by it.
+        var q = Quaternion.CreateFromAxisAngle(axis, (a.RotationSpeed?.Evaluate(Time, _random) ?? 0) * dt);
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                var p = Vector3.Transform(new Vector3(t.X[i], t.Y[i], t.Z[i]) - centre, q) + centre;
+                t.X[i] = p.X;
+                t.Y[i] = p.Y;
+                t.Z[i] = p.Z;
+                var v = Vector3.Transform(new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]), q);
+                t.Vx[i] = v.X;
+                t.Vy[i] = v.Y;
+                t.Vz[i] = v.Z;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The gravity affector: pulls the particle towards the affector's position.
+    /// </summary>
+    void AffectGravity(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        // The plugin's GravityAffector::_affect (Verified): the direction gains d * (scale velocity * gravity * the particle's
+        // mass * the affector's mass / |d|^2) * dt, d the vector to the affector's place (nothing at d = 0). The motion step then
+        // multiplies the direction by the scale velocity again, and the velocities here are those moved distances, so the pull is
+        // scale velocity squared in all.
+        var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
+        float g = a.Strength?.Evaluate(0) ?? 0;
+        float pull = Definition.ScaleVelocity * Definition.ScaleVelocity * g * a.MassAffector * dt;
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
+                float r2 = d.LengthSquared();
+                if (!(r2 > 0)) continue;
+                var dv = d * (pull * t.Mass[i] / r2);
+                t.Vx[i] += dv.X;
+                t.Vy[i] += dv.Y;
+                t.Vz[i] += dv.Z;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The jet: speeds the particle up along its direction of travel.
+    /// </summary>
+    static void AffectJet(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        float acc = a.Strength?.Evaluate(0) ?? 0;
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                var v = new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]);
+                float len = v.Length();
+                if (len < 1e-4f) continue;
+                v += v / len * acc * dt;
+                t.Vx[i] = v.X;
+                t.Vy[i] = v.Y;
+                t.Vz[i] = v.Z;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The sine force: adds the force vector times a sine of the system's age at the particle's own frequency.
+    /// </summary>
+    void AffectSineForce(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        // force_vector · sin(2π f t) with f between min and max frequency by the particle's own seed (Unknown: the exact form).
+        float tt = Time;
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                float f = a.MinFrequency + (a.MaxFrequency - a.MinFrequency) * Hash01(t.Seed[i]);
+                var dv = a.Force * (MathF.Sin(MathF.Tau * f * tt) * dt);
+                t.Vx[i] += dv.X;
+                t.Vy[i] += dv.Y;
+                t.Vz[i] += dv.Z;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The randomiser (affector <paramref name="k"/> of the technique, whose clock it keeps): nudges the particle's position by a random amount.
+    /// </summary>
+    void AffectRandomiser(TechniqueState t, int k, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    {
+        // The plugin's Randomiser (Verified, _preProcessParticles / _affect / constructor): once the time passed since the last
+        // kick exceeds time_step (every update when 0), each particle gets a uniform random value of up to max_deviation per axis
+        // added to its DIRECTION (random_direction, true by default and set by no script), not scaled by anything; with
+        // random_direction false its position moves by it, times the system scale. The direction is what the motion step
+        // multiplies by the scale velocity, so as a velocity here the kick takes that factor. One kick per update, so the walk
+        // depends on the update rate as the original does; a step off 1/60 s keeps the variance of a 60 Hz run (Engine choice).
+        float stepTime = a.TimeStep;
+        float rate = 1;
+        if (stepTime > 0)
+        {
+            t.RandomiserClock[k] += dt;
+            if (t.RandomiserClock[k] <= stepTime) return;
+            t.RandomiserClock[k] -= stepTime;
+        }
+        else rate = MathF.Sqrt(Math.Min(dt * 60, 4));
+        uint step = t.Step * 2654435761u + (uint)k * 40503u;
+        bool kick = a.RandomDirection;
+        var dev = a.MaxDeviation * (kick ? Definition.ScaleVelocity * rate : rate);
+        var place = kick ? Vector3.One : Definition.Scale;
+        ForRange(n, (lo, hi) =>
+        {
+            for (int i = lo; i < hi; i++)
+            {
+                if (excluded?[t.Emitter[i]] == true) continue;
+                uint s = t.Seed[i] ^ step;
+                float x = (Hash01(s * 3 + 1) * 2 - 1) * dev.X * place.X;
+                float y = (Hash01(s * 3 + 2) * 2 - 1) * dev.Y * place.Y;
+                float z = (Hash01(s * 3 + 3) * 2 - 1) * dev.Z * place.Z;
+                if (kick)
+                {
+                    t.Vx[i] += x;
+                    t.Vy[i] += y;
+                    t.Vz[i] += z;
+                }
+                else
+                {
+                    t.X[i] += x;
+                    t.Y[i] += y;
+                    t.Z[i] += z;
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// The colour at life fraction <paramref name="f"/> between the sorted keys, linearly; the end keys hold outside them.
+    /// </summary>
+    static Vector4 Ramp(IReadOnlyList<(float Time, Vector4 Colour)> points, float f)
+    {
+        if (f <= points[0].Time) return points[0].Colour;
+        for (int i = 1; i < points.Count; i++)
+            if (f <= points[i].Time)
+            {
+                float span = points[i].Time - points[i - 1].Time;
+                return span <= 1e-9f ? points[i].Colour : Vector4.Lerp(points[i - 1].Colour, points[i].Colour, (f - points[i - 1].Time) / span);
+            }
+        return points[^1].Colour;
+    }
+
+    /// <summary>
+    /// Moves every particle by its velocity for <paramref name="dt"/>, plus the wind when the environment says the system is wind-affected.
+    /// </summary>
     static void Move(TechniqueState t, float dt, in ParticleEnvironment env)
     {
         var wind = env.WindAffected ? env.Wind * env.WindSpeedMultiplier * dt : Vector2.Zero;
@@ -720,8 +940,13 @@ public sealed class ParticleSimulation
         });
     }
 
-    // ---- observers ----
+    #endregion
 
+    #region Observers
+
+    /// <summary>
+    /// Runs the observers with a DoExpire handler: an OnPosition or OnTime condition that holds removes the particle.
+    /// </summary>
     void Observe(TechniqueState t, float dt)
     {
         t.ObserverClock += dt;
@@ -760,6 +985,10 @@ public sealed class ParticleSimulation
             t.ObserverClock = 0;
     }
 
+    #endregion
+
+    #region Re-basing and wrapping (camera groups)
+
     /// <summary>
     /// Moves every world-space particle by <paramref name="delta"/> (re-basing the simulation's coordinates; the caller shifts <see cref="Origin"/>
     /// alike).
@@ -777,8 +1006,6 @@ public sealed class ParticleSimulation
             }
         }
     }
-
-    // ---- wrapping (camera groups) ----
 
     /// <summary>
     /// Keeps the world-space particles of every technique in the cube of half-extent <paramref name="halfExtent"/> round <paramref name="centre"/> by
@@ -837,6 +1064,9 @@ public sealed class ParticleSimulation
         }
     }
 
+    /// <summary>
+    /// <paramref name="v"/> wrapped into -<paramref name="half"/>..<paramref name="half"/> modulo <paramref name="edge"/>.
+    /// </summary>
     static float WrapAxis(float v, float half, float edge)
     {
         if (v >= -half && v < half) return v;
@@ -845,7 +1075,9 @@ public sealed class ParticleSimulation
         return m - half;
     }
 
-    // ---- reading ----
+    #endregion
+
+    #region Reading
 
     /// <summary>
     /// Technique <paramref name="index"/>'s particles into <paramref name="destination"/> (at least its <see cref="TechniqueParticleCount"/>
@@ -878,6 +1110,9 @@ public sealed class ParticleSimulation
         return n;
     }
 
+    /// <summary>
+    /// How many particles technique <paramref name="index"/> holds now.
+    /// </summary>
     public int TechniqueParticleCount(int index) => _techniques[index].Count;
 
     /// <summary>
@@ -889,23 +1124,16 @@ public sealed class ParticleSimulation
         return (t.X[..t.Count], t.Y[..t.Count], t.Z[..t.Count]);
     }
 
+    /// <summary>
+    /// Copies of technique <paramref name="index"/>'s particle ages and lives (for tests).
+    /// </summary>
     public (float[] Age, float[] Life) Ages(int index)
     {
         var t = _techniques[index];
         return (t.Age[..t.Count], t.Life[..t.Count]);
     }
 
-    static Vector4 Ramp(IReadOnlyList<(float Time, Vector4 Colour)> points, float f)
-    {
-        if (f <= points[0].Time) return points[0].Colour;
-        for (int i = 1; i < points.Count; i++)
-            if (f <= points[i].Time)
-            {
-                float span = points[i].Time - points[i - 1].Time;
-                return span <= 1e-9f ? points[i].Colour : Vector4.Lerp(points[i - 1].Colour, points[i].Colour, (f - points[i - 1].Time) / span);
-            }
-        return points[^1].Colour;
-    }
+    #endregion
 
     /// <summary>
     /// A hash of <paramref name="x"/> in [0, 1) (the particles' own random numbers, so parallel passes stay deterministic).

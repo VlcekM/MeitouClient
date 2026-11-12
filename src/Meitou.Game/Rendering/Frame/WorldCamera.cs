@@ -9,13 +9,16 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public sealed class WorldCamera
 {
+    /// <summary>
+    /// The point the camera orbits and looks at, in world units.
+    /// </summary>
     public Vector3 Target { get; set { field = value; PreciseEye = null; } }
 
     /// <summary>
-    /// The eye itself in double precision, for a camera that is placed by its eye (the game's free camera): <see cref="Target"/> is then a float point far
-    /// along the view, and the eye worked back from it stepped with the float's grid as it moved (0.004 units at 50000: a jump of a pixel or two for
-    /// something a few units away). Set after the pose; setting <see cref="Target"/>, <see cref="Yaw"/>, <see cref="Pitch"/> or <see cref="Distance"/>
-    /// clears it.
+    /// The eye itself in double precision, for a camera that is placed by its eye (the game's free camera): <see cref="Target"/> is then a float
+    /// point far along the view, and the eye worked back from it stepped with the float's grid as it moved (0.004 units at 50000: a jump of a pixel
+    /// or two for something a few units away). Set after the pose; setting <see cref="Target"/>, <see cref="Yaw"/>, <see cref="Pitch"/> or
+    /// <see cref="Distance"/> clears it.
     /// </summary>
     public (double X, double Y, double Z)? PreciseEye { get; set; }
 
@@ -28,19 +31,36 @@ public sealed class WorldCamera
     /// Radians above the horizon of the eye, as seen from the target.
     /// </summary>
     public float Pitch { get; set { field = value; PreciseEye = null; } } = 0.5f;
+
+    /// <summary>
+    /// The eye's distance from <see cref="Target"/>, in world units (<see cref="Zoom"/> keeps it 5 .. <see cref="ViewDistance"/>).
+    /// </summary>
     public float Distance { get; set { field = value; PreciseEye = null; } } = 2000;
 
     /// <summary>
-    /// Radians the picture is turned about the view direction (photo mode; 0 keeps the horizon level). Positive banks the camera to the right (the view's up turns
-    /// clockwise as seen), so the horizon's right end rises.
+    /// Radians the picture is turned about the view direction (photo mode; 0 keeps the horizon level). Positive banks the camera to the right (the
+    /// view's up turns clockwise as seen), so the horizon's right end rises.
     /// </summary>
     public float Roll { get; set; }
+
+    /// <summary>
+    /// The vertical field of view in radians (50 degrees by default).
+    /// </summary>
     public float FieldOfView { get; set; } = 50 * MathF.PI / 180;
-    /// <summary>The depth of field's focus, world units from the eye, as a cinema key sets it; null: the target's distance.</summary>
+
+    /// <summary>
+    /// The depth of field's focus, world units from the eye, as a cinema key sets it; null: the target's distance.
+    /// </summary>
     public float? FocusDistance { get; set; }
-    /// <summary>The f-number as a cinema key sets it; null: <see cref="PostOptions.DofAperture"/>.</summary>
+
+    /// <summary>
+    /// The f-number as a cinema key sets it; null: <see cref="PostOptions.DofAperture"/>.
+    /// </summary>
     public float? Aperture { get; set; }
-    /// <summary>The view distance asked for; the app raises <see cref="ViewDistance"/> above it when the haze reaches further (high eye).</summary>
+
+    /// <summary>
+    /// The view distance asked for; the app raises <see cref="ViewDistance"/> above it when the haze reaches further (high eye).
+    /// </summary>
     public float MinViewDistance { get; set; } = 60000;
 
     /// <summary>
@@ -53,17 +73,35 @@ public sealed class WorldCamera
     /// </summary>
     public float EyeClearance { get; set; } = 100;
 
+    /// <summary>
+    /// The unit vector from the target towards the eye.
+    /// </summary>
     Vector3 Back => new(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>
-    /// The eye in float: the double-precision eye rounded (<see cref="EyeResidual"/> holds what the rounding left). Far from the origin a float steps by 0.004
-    /// units at 50000 and 0.016 at 200000; a target moving by less than that flipped the eye a whole step, a jump of one or two pixels for a character a few units
-    /// from it (docs/character-renderer.md "Precision").
+    /// The eye in float: the double-precision eye rounded (<see cref="EyeResidual"/> holds what the rounding left). Far from the origin a float
+    /// steps by 0.004 units at 50000 and 0.016 at 200000; a target moving by less than that flipped the eye a whole step, a jump of one or two pixels
+    /// for a character a few units from it (docs/character-renderer.md "Precision").
     /// </summary>
     public Vector3 Eye => EyePrecise(out _);
-    /// <summary>The double-precision eye less <see cref="Eye"/>: under half a float step, exact in float. The eye-relative views take it in their translation.</summary>
-    public Vector3 EyeResidual { get { EyePrecise(out var r); return r; } }
 
+    /// <summary>
+    /// The double-precision eye less <see cref="Eye"/>: under half a float step, exact in float. The eye-relative views take it in their
+    /// translation.
+    /// </summary>
+    public Vector3 EyeResidual
+    {
+        get
+        {
+            EyePrecise(out var r);
+            return r;
+        }
+    }
+
+    /// <summary>
+    /// Where the eye is (<see cref="Distance"/> from the target along the yaw and pitch, or <see cref="PreciseEye"/>), worked in double: the float
+    /// eye and what its rounding left.
+    /// </summary>
     Vector3 EyePrecise(out Vector3 residual)
     {
         double cp = Math.Cos(Pitch), d = Distance;
@@ -73,6 +111,10 @@ public sealed class WorldCamera
         residual = new Vector3((float)(x - eye.X), (float)(y - eye.Y), (float)(z - eye.Z));
         return eye;
     }
+
+    /// <summary>
+    /// The unit view direction, from the eye towards the target.
+    /// </summary>
     public Vector3 Forward => -Back;
 
     /// <summary>
@@ -91,11 +133,17 @@ public sealed class WorldCamera
         return (2 * MathF.Atan(MathF.Sqrt(tanX * tanX + tanY * tanY)), 1);
     }
 
-    /// <summary>Looks along <see cref="Forward"/> (at <see cref="Target"/>): the rotation from the angles, built at the origin, not from the float eye, whose rounding
-    /// steps would turn the view by up to half a float step over the distance (a quarter pixel at 15 units from the target at 50000) every time the eye
-    /// crosses one; nor from a look-at point beside the far eye (eye + forward rounds to the eye's float step, a turn of a few pixels).</summary>
+    /// <summary>
+    /// The view matrix, Y up: looks along <see cref="Forward"/> (at <see cref="Target"/>), the rotation from the angles built at the origin, not from
+    /// the float eye, whose rounding steps would turn the view by up to half a float step over the distance (a quarter pixel at 15 units from the
+    /// target at 50000) every time the eye crosses one; nor from a look-at point beside the far eye (eye + forward rounds to the eye's float step, a
+    /// turn of a few pixels).
+    /// </summary>
     public Matrix4x4 View => Matrix4x4.CreateTranslation(-Eye) * Matrix4x4.CreateLookAt(Vector3.Zero, Forward, Up);
 
+    /// <summary>
+    /// The near-plane rule: a quarter of the eye's height above the terrain (or of the distance, when smaller), 0.5 .. <see cref="MaxNear"/>.
+    /// </summary>
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
 
     /// <summary>
@@ -137,6 +185,10 @@ public sealed class WorldCamera
         Target = eye - Back * Distance;
     }
 
+    /// <summary>
+    /// Moves the eye towards the target (positive <paramref name="steps"/>) or away, 15% a step, keeping the distance 5 .. <see
+    /// cref="ViewDistance"/>.
+    /// </summary>
     public void Zoom(float steps) => Distance = Math.Clamp(Distance * MathF.Pow(0.85f, steps), 5f, ViewDistance);
 
     /// <summary>

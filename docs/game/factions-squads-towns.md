@@ -44,8 +44,9 @@ state 3+) and not `inSomething` (`+0x2f8`, bed or cage), else the backup under t
 stands in a loaded or requested zone, cached as the backup; else the leader itself, usable or not. That member scan tests the *leader's* `+0x2f8`, not the member's (so a leader in a
 bed or cage is kept). The stored leader is never replaced there. Who becomes `squadleader` after the leader dies is **Unknown**. Meitou (`PopulationSystem.EffectiveLeader`, `Squad.Backup`):
 the same rule for a loaded platoon's place and the unload anchor; down = out (unconscious or dead) or carried, a limb hold and playing dead are not modelled. A campaign's announcement is task 129 in the leader's AI package, and animals get only
-`dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (death, leaving, a save or stand-in without a leader) takes its
-first member that is not an animal, else its first (`SquadRegistry.Successor`, engine choice). A player squad edited on the squads screen still makes its index 0 the leader.
+`dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (leaving, a save or stand-in without a leader), and an NPC squad whose leader died while a member
+lives, takes its first living member that is not an animal, else its first living one (`SquadRegistry.Successor`, engine choice), who then acts
+the leader's goals (a patrol), so the squad does not stand by the corpse. A player squad edited on the squads screen still makes its index 0 the leader.
 
 ## Unique characters
 
@@ -556,6 +557,21 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   **Observed**) and never spawns again. New nests come only from the area tick, up to `num nests` per biome group; whether a dead nest
   frees its count is **Unknown**. A group with `nests at fixed markers only` picks among its NEST_MARKER towns, leaving out every marker whose
   nearest town (by XZ, markers skipped) is within 2500 (3D) (**Verified**, `FUN_1408f6350`, 6,250,000 squared).
+- **Spot finder** (**Verified** by decompile; nests and homeless squads): a new nest (`FUN_1408f6350`) draws up to 10 random sectors of its group,
+  skipping the one in view and town-flagged ones, and takes the first where `FUN_1408f50d0` places a spot; failing that, a random sector and whatever
+  the finder left, unchecked (the sector's own position, +0x18, when nothing passed: the finder writes the out point only on a pass). `FUN_1408f50d0`:
+  4 rounds of a uniform point in the sector, each pushed up to 10 times out of a town's radius × 1.4 (another faction's × 3; the nest call's
+  arguments) and from within 1382.4 of the camera focus; a point passes when `FUN_1408f4d70` does: terrain height (`Terrain::getHeight`) not under
+  95 (`DAT_141685034`; -99, no terrain, passes) and a pixel of `areasmap.tga` with any of its three bytes non-zero. The image is the area manager's
+  `RealWorldEditableImage` (`FUN_1408fb580` loads "areasmap" from Overlaymaps over (-147456, -147456)..(147456, 147456)); the pixel is
+  `(int)((coordinate + 147456) / (294912 / 256))` per axis, clamped. Then the point is dropped inside a non-Ruins town or when its gate code
+  (`NavMesh::getGateCode` `FUN_1403a30f0`, [gate codes](pathfinding.md#gate-codes)) is above 0: inside town walls. So no spot is deeper than 5 in
+  the water (surface 100). **Data** (vanilla `areasmap.tga`, 256 × 256): 33 % black; black cells are the base `NONE` group, which has no nests or
+  homeless spawns; 917 black pixels (2 %) lie inside other groups' cells, at region edges. Meitou (`PopulationWild.cs` `SpotRefused`): the same three
+  tests for a homeless spot; a nest's candidate spots take the height and pixel tests at layout and the gate code (where the navmesh is loaded)
+  when it picks its centre; a nest roll whose cell has no passing spot passes to the next roll key (up to 10 a nest). The unchecked fallback is not
+  modelled: **Observed** (`probe nests`, the seed of a save): every nest finds a passing spot, so it would not fire (#496: before, navmesh water
+  counted as walkable and camps stood in lakes).
 - **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`; "area load" **Observed**), each of its nests runs `Nest` slot 64
   (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
   (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
@@ -590,7 +606,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a
   sector the flag leaves free, e.g. Ruins), (w + 1) × 2 when its load is 0 (**Verified**, `FUN_1408f9240`), and one squad is made there (`FUN_1408f8060`) if its intact count is below P × amount, retrying other sectors when that
   fails: the draw takes each sector out of the tree and loops while `FUN_1408f8060` returns 0 (no template left, no spot `FUN_1408f50d0`, or the spot inside a town, `FUN_140926d50`; 1
-  only after the squad is created; **Verified**), so one 2 s tick ends with a squad or an empty tree. Meitou: the sectors in weighted draw order without replacement, built in turn by one job until one makes a squad. Sectors a town stands in never enter the pick: `Town::setup` (`FUN_1409353c0`) sets sector byte +0x30 for every sector of the
+  only after the squad is created; **Verified**), so one 2 s tick ends with a squad or an empty tree. Meitou: the sectors in weighted draw order without replacement, built in turn by one job until one makes a squad. The load counts a save's homeless platoons like the squads made since (`AddPlatoonLoad`; **Observed**, KenshiOracle hold of a save at Sho-Battai: beside its 12 saved desert squads the original made 6 in an hour, 18 in all). Sectors a town stands in never enter the pick: `Town::setup` (`FUN_1409353c0`) sets sector byte +0x30 for every sector of the
   town's zone list (or of its position), +0x31 when the Town int at +0xd8 is 1 (its type, **Observed**), unless the type (+0xd8) is 4 (Ruins) or 9 (point of interest), so a
   Ruins town does not block its sectors and a nest marker (type 8, which `setup` handles itself) does; the pick, the spot fallbacks `FUN_1408f6350` / `FUN_1408fc1a0` and
   the patrol's town branch (below) read it (**Verified**, decompile; whether `setup` runs for the Null type (10) is **Unknown**). Meitou gives a sector
@@ -598,7 +614,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   lists a sector's towns but nest markers, points of interest and Null, Ruins included). The sector in view is never drawn either: the draw loop redraws a sector equal to
   `DAT_142135230`, which `FUN_1408f6940` (every frame, from the zone update `FUN_140a12c70`) sets to the sector at the GameWorld +0x580 object's position (`FUN_140785f90` → `FUN_1407f2960`: its scene node;
   **Verified**). +0x580 is `DAT_142134690`, the camera focus object of [corpses](character-stats.md#corpses) (same address, **Verified**; its constructor `FUN_1407f6b30` is `PlayerInterface`).
-  Meitou: weight 0 for the zone of the focus the zone loader uses (`FocusCommand`, else the first player character); a sector's load-time fill is not subject to it (engine choice). So a loaded sector is refilled as its squads die or walk out (**Verified** by code). The squad is given a home town: the
+  Meitou: weight 0 for the zone of the focus the zone loader uses (`FocusCommand`, else the first player character); a sector's load-time fill is not subject to it (engine choice). The load-time fill (a sector's ceil(P × amount) at once, engine choice) makes no more than the island's room: the sum of P × amount over the loaded sectors less their squads, those asked for and not spawned yet and the save's homeless squads standing in them (`PopulationSystem.IslandRoom`), so a save whose homeless squads fill the island adds none (**Observed**, a save at Sho-Battai: the original made 1 squad beside its 12 saved desert squads). So a loaded sector is refilled as its squads die or walk out (**Verified** by code). The squad is given a home town: the
   sector's own town when its faction is the squad's, else the faction's nearest town, or its nearest nest when that is 9216 nearer, none
   beyond 50000 (`createRandomUnloadedSquad` → `Ownerships::setHomeTown`, KenshiLib 1ce4a16 names; **Verified** by code). It tethers the
   patrol (below). Saved homeless platoons have no `basetown`/`hometown` ([save.md](../formats/save.md)); whether the home is saved
@@ -658,9 +674,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   idle, reached or failed), so the squad walks up to 200 outside the gate, stops, and turns to the next sector or town. Off screen a new
   point is picked within 500 of the last (`FUN_1407ee790`).
   Meitou (`PopulationHomeless.PatrolPoint`): the weights above with n the homeless squads standing in the zone and 10 for an empty active
-  one (engine choice), the tether, re-pick within 100 of the point for a loaded squad (the exact point, mill 50: engine choices; 500 only off screen); with no neighbour, a point of the home's sector, else of its own (engine choice).
+  one (engine choice), the tether, the leader walking to the exact point and the next drawn within 100 of it for a loaded squad (100 and the 2 s step: engine reading of the move's end; 500 only off screen); with no neighbour, a point of the home's sector, else of its own (engine choice).
   A drawn town's point is the outside point above (`OutsideTown`: the first non-ruined `is wall gate` building with gate code 0 or unknown (unknown = outside, engine choice) or `links together` building with `interior` references, its origin
-  moved 200 outward from the town position); the squad mills a 50 disc round it and re-picks within 100 (origin, outward and both radii: engine choices).
+  moved 200 outward from the town position); the leader walks to it and the next is drawn within 100 (origin, outward and the radius: engine choices).
   `patrol approaches towns` is set on 933 of 961 squad templates of the merged load order, the Starving Bandit and Dust Bandit roamers
   among them, so their patrols target NPC towns as above; no other town check was found (**Verified**, record dump).
 - **Traders**: restocked only while active, when the clock passes the platoon's `inventory refresh time`; an unloaded one catches up at

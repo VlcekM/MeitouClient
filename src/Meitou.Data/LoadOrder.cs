@@ -14,8 +14,14 @@ public sealed class LoadOrder
     /// </summary>
     public static readonly IReadOnlyList<string> BaseFiles = ["gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod"];
 
+    /// <summary>
+    /// The files to load, in order: the core files present, then the mods <c>mods.cfg</c> lists that were found.
+    /// </summary>
     public List<LoadOrderEntry> Entries { get; } = [];
 
+    /// <summary>
+    /// Problems found building the order (a mod <c>mods.cfg</c> names that is not on disk).
+    /// </summary>
     public List<GameDataIssue> Issues { get; } = [];
 
     /// <summary>
@@ -36,6 +42,9 @@ public sealed class LoadOrder
         return order;
     }
 
+    /// <summary>
+    /// The core files and the mods of <c>mods.cfg</c> in <paramref name="install"/>, with the language the game would run in.
+    /// </summary>
     public static LoadOrder FromInstall(GameInstall install)
     {
         var order = FromInstallFiles(install);
@@ -44,6 +53,9 @@ public sealed class LoadOrder
         return order;
     }
 
+    /// <summary>
+    /// The core files present, then each mod <c>mods.cfg</c> names in its order (a name already in the list is skipped, one not on disk is an issue).
+    /// </summary>
     static LoadOrder FromInstallFiles(GameInstall install)
     {
         var order = new LoadOrder();
@@ -85,4 +97,7 @@ public sealed class LoadOrder
     public static Dictionary<string, string> FindMods(GameInstall install) => ModList.FindMods(install);
 }
 
+/// <summary>
+/// One file of a load order: its file name (e.g. <c>Newwworld.mod</c>) and full path.
+/// </summary>
 public sealed record LoadOrderEntry(string Name, string Path);

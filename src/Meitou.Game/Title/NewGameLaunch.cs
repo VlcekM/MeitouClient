@@ -11,7 +11,14 @@ namespace Meitou.Game.Title;
 /// </summary>
 sealed class NewGameLaunch(GameHost host)
 {
+    /// <summary>
+    /// The new game start asked for (handled under the loading screen); null for none.
+    /// </summary>
     internal string? NewGameRequested;
+
+    /// <summary>
+    /// Leaving for the main menu was asked for (<see cref="HandleMainMenu"/>).
+    /// </summary>
     internal bool MainMenuRequested;
 
     /// <summary>

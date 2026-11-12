@@ -97,10 +97,12 @@ from the start.
   merged data: 43 animals, e.g. Bonedog 1 Animal Skin / 4 Animal Teeth / 3 Raw Meat; Pet Dog, Settler's Pup, Pack Beast Dead none).
 - Added when a new character's inventory is set up, after the `inventory` list (`Character::vfunc_88` `FUN_140622e80`, called last
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
-  set (**Observed**, decompile). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
-  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is, and whether it is
-  why the player's own animals have none (#341), is **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the
-  character is made from (**Inferred**).
+  set (**Observed**, decompile). An emptied inventory loads empty (**Observed**, original: a player's Bonedog saved with an empty INVENTORY_STATE was
+  loaded and saved again with nothing; Meitou `SavedCharacters`, an empty state is the whole kit). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is is
+  **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the character is made from (**Inferred**).
+  The player's own animals have them too (**Observed**: a new game's start squad, Bonedog, Pack Beast and Iron Spider, saved by the original holds them,
+  flagged; out of sight in the window, below).
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
@@ -110,10 +112,15 @@ from the start.
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).
-- No inventory-window filter on the flag was found: the items show while the owner lives (**Observed**, absence in the decompile).
-- Unknown: `FUN_1405a59a0` (reads record 3979's `death items`); whether the flag changes weight.
+- No inventory-window filter on the flag was found (**Observed**, absence in the decompile). The player's own animal's inventory window
+  shows no main grid at all, so they are out of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**,
+  original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
+  window keeps the grid).
+- Death items weigh nothing for a living owner (**Observed**, original: a Garru pup with a 6 kg backpack and 14 flagged 1 kg meat/skin items
+  shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. A dead owner's are **Unknown**.
+  Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
-Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
+Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to every new character, stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
 
 ## Ageing
@@ -146,6 +153,13 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
+  shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
+  and `athletics mult` are not separately verified, **Unknown**). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.
+- An animal with no backpack gets the naked bonus as a person with no armour and no backpack does (**Observed** for dexterity: at age 0.5 an Iron Spider with
+  Dexterity 40 shows 22 (+2) and a Bonedog with 23.3 shows 12 (+1), 1.1 times the aged value, while a Pack Beast wearing its backpack shows the plain value; the
+  dodge and stealth factors are not separately verified, **Unknown**). Meitou uses the shared refresh's 1.1 dodge and 1.2 stealth factors
+  (`Fighter.Naked`).
 - The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
   or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
   **Unknown**. Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it; what is in it can still be taken out.

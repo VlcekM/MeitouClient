@@ -7,6 +7,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's guard and stranger rules: the buildings strangers visit and the town guards' posts.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>
@@ -41,8 +44,10 @@ public sealed partial class AiSystem
                 || (uint)e.Target >= (uint)table.Previous.Length || !table.Previous[e.Target].Alive
                 || table.Previous[e.Target].Generation != e.Generation)
                 continue;
+
             if (table.Cold(e.Target) is not { } other || (other.Orders & CharacterOrders.Sneak) != 0 || !other.CarriedBy.IsNone)
                 continue;
+
             if (world.Sight.BuildingOf(e.Target) is { } inside && inside != home.Key)
                 strangers.Add(table.Previous[e.Target].Position);
         }

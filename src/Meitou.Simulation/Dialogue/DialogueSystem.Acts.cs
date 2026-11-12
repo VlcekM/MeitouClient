@@ -8,17 +8,12 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's regard and memory tags, and the AI acts its lines start.
+/// </summary>
 public sealed partial class DialogueSystem
 {
-    // DA_FOLLOW_WHILE_TALKING: who follows whom while its conversation lasts (hashed).
-    readonly SortedDictionary<CharacterId, CharacterId> _followers = new(Comparer<CharacterId>.Create(CompareIds));
-    // The tick the last "Alarm raised" was posted (DA_CRIME_ALARM; at most one per 30 s, FUN_1409335e0); hashed.
-
-    /// <summary>
-    /// The original's <c>Task_Runaway</c> first run (task 280, DA 34): 2000 + 400 x random units away from the threat (as
-    /// <see cref="FleeSystem.FirstRun"/>).
-    /// </summary>
-    const float RunAwayDistance = FleeSystem.FirstRun, RunAwaySpread = FleeSystem.RunSpread;
+    #region Regard and memory tags
 
     /// <summary>
     /// The short-term tag a character's squad sets on another (<c>FUN_1406744a0</c>): TEMP_ENEMY is not set on a character of an allied faction or
@@ -26,7 +21,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     void FlagFrom(World world, CharacterCold mc, CharacterId me, CharacterId who, CharacterCold wc, int tag)
     {
-        if (tag == MemoryTag.TempEnemy && (_data.Relations.Contains(mc.Faction) && _data.Relations.Contains(wc.Faction) && _data.Relations.IsAlly(mc.Faction, wc.Faction)
+        if (tag == MemoryTag.TempEnemy
+            && (_data.Relations.Contains(mc.Faction) && _data.Relations.Contains(wc.Faction) && _data.Relations.IsAlly(mc.Faction, wc.Faction)
             || RegardsFriendly(world, me, mc, who, wc))) return;
         Memory.Flag(world, mc.SquadId, who, tag);
     }
@@ -71,7 +67,8 @@ public sealed partial class DialogueSystem
     public void Captured(World world, int captor, int captive)
     {
         var table = world.Characters;
-        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null) Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
+        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null)
+            Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
         Forgive(world, captor, table.IdOf(captive));
     }
 
@@ -105,7 +102,11 @@ public sealed partial class DialogueSystem
         }
     }
 
-    bool AlliedFactions(int a, int b) => a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
+    /// <summary>
+    /// Whether factions <paramref name="a"/> and <paramref name="b"/> are the same or allied (false for a missing one).
+    /// </summary>
+    bool AlliedFactions(int a, int b) =>
+        a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
 
     /// <summary>
     /// Event 13 UNLOCK_MY_CAGE_OR_SHACKLES fired by a freed prisoner at its liberator (<c>FUN_140684990</c>, <b>Observed</b>): unless the speaker's
@@ -162,10 +163,17 @@ public sealed partial class DialogueSystem
         if (table.Cold(a) is not { } ac || table.Cold(b) is not { } bc || ac.Faction == bc.Faction) return 0;
         var (ida, idb) = (table.IdOf(a), table.IdOf(b));
         var (ab, _) = Memory.Read(world, ac.SquadId, idb);
-        if (Has(ab, MemoryTag.TempEnemy) || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Has(Memory.Read(world, bc.SquadId, ida).Short, MemoryTag.TempEnemy)) return 1;
+        if (Has(ab, MemoryTag.TempEnemy)
+            || (ac.IsPlayer || ac.Faction == world.Player.Faction) && Has(Memory.Read(world, bc.SquadId, ida).Short, MemoryTag.TempEnemy))
+        {
+            return 1;
+        }
         return Has(ab, MemoryTag.TempAlly) ? -1 : 0;
     }
 
+    /// <summary>
+    /// Whether bit <paramref name="tag"/> is set in <paramref name="tags"/>.
+    /// </summary>
     static bool Has(uint tags, int tag) => (tags >> tag & 1) != 0;
 
     /// <summary>
@@ -214,6 +222,16 @@ public sealed partial class DialogueSystem
         return r;
     }
 
+    #endregion
+
+    #region AI acts
+
+    /// <summary>
+    /// The original's <c>Task_Runaway</c> first run (task 280, DA 34): 2000 + 400 x random units away from the threat (as
+    /// <see cref="FleeSystem.FirstRun"/>).
+    /// </summary>
+    const float RunAwayDistance = FleeSystem.FirstRun, RunAwaySpread = FleeSystem.RunSpread;
+
     /// <summary>
     /// DA_RUN_AWAY (34): the speaker drops what it does and runs from the target (task 280, <c>Task_Runaway</c>'s first run; engine: one run at full
     /// speed, then its AI takes over), and its squad tags the target AGGRESSOR.
@@ -227,7 +245,8 @@ public sealed partial class DialogueSystem
         var away = new Vector2(here.X - from.X, here.Z - from.Z);
         away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : Vector2.UnitX;
         float r = Rng.Float(NextRoll(world, me));
-        TaskStart.Walk(world, s, new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r), SpeedMode.Free, TaskType.RunAwayForced, TaskSource.Npc);
+        TaskStart.Walk(world, s, new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r), SpeedMode.Free,
+            TaskType.RunAwayForced, TaskSource.Npc);
     }
 
     /// <summary>
@@ -240,7 +259,8 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (mc.IsPlayer || !table.TryResolveNext(me, out int s) || world.Squads.Find(mc.SquadId) is not { } squad) return;
         Vector2 home = squad.Ai?.Home is { } h ? new(h.Position.X, h.Position.Z)
-            : squad.Ai is { Town: >= 0 } board && board.Town < _data.Sites.Count ? new(_data.Sites[board.Town].Position.X, _data.Sites[board.Town].Position.Z)
+            : squad.Ai is { Town: >= 0 } board && board.Town < _data.Sites.Count
+                ? new(_data.Sites[board.Town].Position.X, _data.Sites[board.Town].Position.Z)
             : squad.HomeCentre;
         TaskStart.Walk(world, s, home, SpeedMode.Walk, TaskType.GoHomebuilding, TaskSource.Npc);
     }
@@ -265,13 +285,22 @@ public sealed partial class DialogueSystem
     void Separate(World world, CharacterId who)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { } old || old.Members.Count <= 1) return;
+        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { } old
+            || old.Members.Count <= 1)
+        {
+            return;
+        }
         var at = table.Next[s].Position;
         Squad squad;
-        if (c.IsPlayer) squad = SquadManagement.NewSquad(world, _data.Db, at, _data.Relations.Contains(c.Faction) && _data.Factions[c.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        if (c.IsPlayer)
+        {
+            squad = SquadManagement.NewSquad(world, _data.Db, at,
+                _data.Relations.Contains(c.Faction) && _data.Factions[c.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+        }
         else
         {
-            squad = new Squad { Id = world.Squads.NextId(), TemplateId = old.TemplateId, Faction = old.Faction, Position = at, HomeCentre = new(at.X, at.Z), HomeRadius = old.HomeRadius };
+            squad = new Squad { Id = world.Squads.NextId(), TemplateId = old.TemplateId, Faction = old.Faction, Position = at,
+                HomeCentre = new(at.X, at.Z), HomeRadius = old.HomeRadius };
             world.Squads.Add(squad);
             c.Ai = null;
             c.Role = (int)SquadRole.Leader;
@@ -326,120 +355,5 @@ public sealed partial class DialogueSystem
         foreach (var door in world.Fixtures.OfBuilding(gate.Key)) Locks.FixtureRegistry.OpenDoor(door);
     }
 
-    /// <summary>
-    /// DA_FOLLOW_WHILE_TALKING (16, Task_FollowAndTalk 164): the speaker follows the target with the shared follow task (FUN_140333400 /
-    /// FUN_140333500, the same as a follow order: stand-off 20 to 40 on the follower's side, the follow speed profile; <b>Verified</b>), a character
-    /// in a fight excepted (engine choice: no walk to end a fight).
-    /// </summary>
-    void StartFollowing(World world, CharacterId who, CharacterId whom)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { InCombat: false }) return;
-        TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, TaskType.FollowWhileTalking, TaskSource.Npc) { Target = whom });
-    }
-
-    /// <summary>
-    /// The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.
-    /// </summary>
-    void StepFollowers(World world)
-    {
-        if (_followers.Count == 0) return;
-        var table = world.Characters;
-        foreach (var (who, whom) in _followers.ToArray())
-        {
-            bool talking = _bubbles.Any(b => b.C.Npc == who) || _open?.Npc == who;
-            if (talking && table.TryResolveNext(who, out _) && Position(world, whom) is not null) continue;
-            _followers.Remove(who);
-            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom && table.Next[s].Task == (byte)CharacterTask.Follow)
-            {
-                cold.FollowOrder = CharacterId.None;
-                TaskStart.Stand(table, s);
-            }
-        }
-    }
-
-    /// <summary>
-    /// A town stalker's state (<c>Task_TownStalker</c>, 165): its victim, the waypoint past the town gate once picked, and whether it has harassed /
-    /// found no gate.
-    /// </summary>
-    sealed class Stalk(CharacterId target)
-    {
-        public CharacterId Target { get; } = target;
-        public Vector2? Waypoint { get; set; }
-        public bool Harassed { get; set; }
-        public bool NoGate { get; set; }
-    }
-
-    readonly SortedDictionary<CharacterId, Stalk> _stalkers = new(Comparer<CharacterId>.Create(CompareIds));
-
-    /// <summary>
-    /// EV_HARASSMENT, what a stalker opens on its victim outside town; how far past the gate it waits (<c>Task_TownStalker</c>, <b>Verified</b>
-    /// constant).
-    /// </summary>
-    const int Harassment = 26;
-    const float StalkPastGate = 300;
-
-    /// <summary>
-    /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): in a town, the stalker waits <see cref="StalkPastGate"/>
-    /// outside the town's first gate (on the line from the town centre through it), facing its victim, while the victim is no farther from the centre
-    /// than that point; with no gate it just stays. Once the victim is farther out, or anywhere outside a town, it follows it and, once, when it is
-    /// not talking, sends it event 26. It is done when, after that, neither is talking. Engine choices: re-aimed every 15 ticks; the first gate is
-    /// the town's first gate door in fixture order; the gate-code test on the gate's outside is not made.
-    /// </summary>
-    void StepStalkers(World world)
-    {
-        if (_stalkers.Count == 0) return;
-        var table = world.Characters;
-        foreach (var (who, stalk) in _stalkers.ToArray())
-        {
-            if (!table.TryResolveNext(who, out int s) || !Awake(table, s) || !table.TryResolveNext(stalk.Target, out int t) || !Awake(table, t)) { _stalkers.Remove(who); Release(world, who); continue; }
-            bool talking = _bubbles.Any(b => b.C.Npc == who || b.C.Player == who) || _open?.Npc == who || _open?.Player == who;
-            bool victimTalking = _bubbles.Any(b => b.C.Npc == stalk.Target || b.C.Player == stalk.Target) || _open?.Npc == stalk.Target || _open?.Player == stalk.Target;
-            if (stalk.Harassed && !talking && !victimTalking) { _stalkers.Remove(who); Release(world, who); continue; }
-            table.Cold(s)!.Engaged = true;   // the order holds it, not the AI
-            if (table.Cold(s)!.InCombat) continue;   // its walks would end the fight it is in (a new task drops the fight task)
-            ref var sn = ref table.Next[s];
-            var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-            int site = AiSystem.TownAt(_data, world, sn.Position).Site;
-            if (site >= 0 && !stalk.NoGate)
-            {
-                var centre = new Vector2(_data.Sites[site].Position.X, _data.Sites[site].Position.Z);
-                if (stalk.Waypoint is null)
-                {
-                    var gate = world.Fixtures.All.FirstOrDefault(f => f.Kind == Locks.FixtureKind.Door && f.IsGate && f.Site == site);
-                    if (gate is null) { stalk.NoGate = true; continue; }
-                    var g = new Vector2(gate.Position.X, gate.Position.Z);
-                    var outward = g - centre;
-                    stalk.Waypoint = g + (outward.LengthSquared() > 1e-6f ? Vector2.Normalize(outward) : Vector2.UnitX) * StalkPastGate;
-                }
-                var w = stalk.Waypoint.Value;
-                if (Vector2.Distance(victim, centre) <= Vector2.Distance(w, centre))
-                {
-                    if (world.Tick % 15 == 0 && Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), w) > TalkReach && (sn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(sn.Goal, w) > TalkReach))
-                        TaskStart.Walk(world, s, w, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
-                    else if (sn.Task != (byte)CharacterTask.GoTo)
-                    {
-                        var to = table.Next[t].Position - sn.Position;
-                        if (to.X * to.X + to.Z * to.Z > 1e-4f) sn.Yaw = MathF.Atan2(to.X, to.Z);
-                    }
-                    continue;
-                }
-            }
-            else if (site >= 0) continue;   // no gate: it only stays
-            // Outside: follow and harass.
-            if (!stalk.Harassed && !talking)
-            {
-                world.Defer(new DialogueEvent(who, stalk.Target, Harassment) { Tick = world.Tick + 1 });
-                stalk.Harassed = true;
-            }
-            if (world.Tick % 15 == 0 && Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), victim) > TalkReach)
-                TaskStart.Walk(world, s, victim, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
-        }
-    }
-
-    void HashActs(ref StateHasher hasher)
-    {
-        foreach (var (who, whom) in _followers) { hasher.Add(who); hasher.Add(whom); }
-        foreach (var (who, stalk) in _stalkers) { hasher.Add(who); hasher.Add(stalk.Target); hasher.Add(stalk.Harassed); hasher.Add(stalk.NoGate); if (stalk.Waypoint is { } w) hasher.Add(w); }
-    }
+    #endregion
 }

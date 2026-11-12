@@ -6,10 +6,15 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// Target choice: whom a fighter attacks and when it chooses again, the best attacker of a character for one joining its fight, and the threat a
+/// fight poses.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
-    /// How long a fighter keeps its target before it chooses again (CombatClassAI +0x2f0, docs/game/combat.md "Attack slots and circling"): 1 s, 0.3 s on Hold.
+    /// How long a fighter keeps its target before it chooses again (CombatClassAI +0x2f0, docs/game/combat.md "Attack slots and circling"): 1 s,
+    /// 0.3 s on Hold.
     /// </summary>
     public const float PickSeconds = 1, HoldPickSeconds = 0.3f;
 
@@ -34,25 +39,56 @@ public sealed partial class CombatSystem
     const float EyeHeight = 15;
 
     /// <summary>
-    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is not skipped).
+    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is
+    /// not skipped).
     /// </summary>
     const float SteerLineStep = 2;
+
+    /// <summary>
+    /// The radius of the circle the steering's line test sweeps against the walkable surface's walls (engine choice: near a point, so the line
+    /// itself is tested; a bar line a step thin is crossed between two of the <see cref="SteerLineStep"/> points, #439).
+    /// </summary>
+    const float SteerLineRadius = 0.1f;
+
+    /// <summary>
+    /// How far inside its polygon's edge the line test puts a fighter that stands off it (<see cref="IWalkability.SurfacePoint"/>): clear of the
+    /// swept circle, so the edge it stands by does not stop the sweep at any angle.
+    /// </summary>
+    const float SteerLineInset = 2 * SteerLineRadius;
 
     /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
     /// </summary>
     struct Choice
     {
+        /// <summary>
+        /// The chooser's slot and its current target's (-1: none).
+        /// </summary>
         public int Self, Current;
+        /// <summary>
+        /// The chooser.
+        /// </summary>
         public CharacterCold Cold;
+        /// <summary>
+        /// Whether the chooser is the player's, holds, is down (prone) and is an animal.
+        /// </summary>
         public bool Player, Hold, Prone, Animal;
+        /// <summary>
+        /// Where a holding chooser holds.
+        /// </summary>
         public Vector3 HoldPoint;
 
         /// <summary>
         /// The AI task's target whose attackers the chooser protects (a bodyguard's), -1: none.
         /// </summary>
         public int Protectee;
+        /// <summary>
+        /// The best candidate so far (-1: none).
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// The best candidate's score.
+        /// </summary>
         public float BestScore;
 
         /// <summary>
@@ -63,6 +99,9 @@ public sealed partial class CombatSystem
 
     #region Target choice
 
+    /// <summary>
+    /// The ticks a fighter keeps its target: <see cref="HoldPickSeconds"/> on Hold, else <see cref="PickSeconds"/>, at least 1.
+    /// </summary>
     static int PickTicks(World world, CharacterCold cold)
     {
         float seconds = Orders.Holding(cold) ? HoldPickSeconds : PickSeconds;
@@ -165,12 +204,12 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those fighting the subject,
-    /// and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a looker other than the
-    /// subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts as an ally (the
-    /// subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback to the
-    /// subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by
-    /// target, counted as attackers of theirs (the AI's serial step).
+    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those
+    /// fighting the subject, and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a
+    /// looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts
+    /// as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback
+    /// to the subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this
+    /// tick by target, counted as attackers of theirs (the AI's serial step).
     /// </summary>
     public int BestAttackerOf(World world, int subject, int looker, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -224,6 +263,10 @@ public sealed partial class CombatSystem
     /// </summary>
     public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } or { Maimed: true } || c.Fighter is not { CanAttack: true };
 
+    /// <summary>
+    /// Scores candidate <paramref name="c"/> for the chooser (<see cref="TargetScore"/>) and keeps it when it beats the best; one down, caged,
+    /// carried, of the chooser's faction or squad (but the current target), off its hold post or found unreachable lately is left out.
+    /// </summary>
     void Consider(World world, ref Choice q, int c, bool protect)
     {
         var table = world.Characters;
@@ -240,7 +283,8 @@ public sealed partial class CombatSystem
 
         ref readonly var o = ref _read[c];
         bool downed = tc.Medical is { Crawling: true } || o.AttackTech >= 0;
-        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0)) return;
+        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0))
+            return;
 
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X;
@@ -307,7 +351,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// How many fight the character in <paramref name="slot"/> (standing fighters whose target it is), as of the last tick; any thread after Schedule.
+    /// How many fight the character in <paramref name="slot"/> (standing fighters whose target it is), as of the last tick; any thread
+    /// after Schedule.
     /// </summary>
     public int AttackerCount(World world, int slot)
     {
@@ -365,8 +410,10 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
-    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last (engine stand-in for the navmesh line query). Last
-    /// tick's places; any thread after Sight's update.
+    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
+    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
+    /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
+    /// line to it, so nobody steered or swung at it (#559). Last tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
@@ -382,8 +429,18 @@ public sealed partial class CombatSystem
         for (float d = SteerLineStep; d < length; d += SteerLineStep)
             if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
 
-        return true;
+        var start = world.Walkability.SurfacePoint(from, SteerLineInset);
+        var end = world.Walkability.SurfacePoint(to, SteerLineInset);
+        var line = new Vector2(end.X - start.X, end.Z - start.Z);
+        return world.Walkability.Slide(start, line, SteerLineRadius) == line;
     }
+
+    /// <summary>
+    /// Whether fighter <paramref name="cold"/> is on a path chase after <paramref name="t"/> (<see cref="SteerState.ChaseTarget"/>: its line to it was
+    /// blocked, or the chase's timer still runs). The original's fight is then in state 11, whose update never reaches the attack start
+    /// (<c>FUN_14060d6a0</c>): it neither stands in reach nor swings, so a target across bars or a wall is walked round to, or dropped (#439).
+    /// </summary>
+    public static bool PathChasing(CharacterCold cold, int t) => cold.Steer is { } steer && steer.ChaseTarget == t;
 
     /// <summary>
     /// Whether <paramref name="a"/> at <paramref name="from"/> and <paramref name="t"/> at <paramref name="to"/> stand on different floors (engine

@@ -28,7 +28,8 @@ public class DoorJoinTests
         lock (Gate)
         {
             if (BuiltCache.TryGetValue(zone, out var b)) return b;
-            using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install));
+            using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!,
+                new CollisionCache(install));
             var settings = new NavBuildSettings();
             var full = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(zone), settings, out _, out var inner, interiors: true);
             var sites = new Dictionary<string, (int, bool, bool)>();

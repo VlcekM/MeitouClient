@@ -45,6 +45,9 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// </summary>
     public const float MaxChance = 0.9f, CagedPenalty = 10;
 
+    /// <summary>
+    /// The XP the picking trains.
+    /// </summary>
     readonly XpService _xp = new(constants, options);
 
     /// <summary>
@@ -72,9 +75,11 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     {
         if (picker.Medical is { Incapacitated: true } || !picker.CarriedBy.IsNone || !picker.Carrying.IsNone)
             return false;
+
         if (picker.Medical?.Aggregates().BothArmsDisabled == true) return false;
         if (picker.IsImprisoned && picker.InWhat is { } id && world.Fixtures.Find(id) is { Restrains: true })
             return false;
+
         return Chance(level, Skill(picker)) > constants.MinimumLockpickChance;
     }
 
@@ -115,6 +120,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
             l.NextRoll = LockState.RetryMin
                     + (LockState.RetryMax - LockState.RetryMin) * Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Lock, counter + 1));
         }
+
         if (c.Stats is { } stats && c.Race is { } race) _xp.Lockpicking(stats, race, success);
         return success ? PickOutcome.Success : PickOutcome.Failed;
     }

@@ -85,8 +85,14 @@ public enum PackageClass : byte
     Refugee = 15,
 }
 
+/// <summary>
+/// The <see cref="PackageClass"/> of each package signal.
+/// </summary>
 public static class PackageClasses
 {
+    /// <summary>
+    /// The class of package signal <paramref name="signal"/>.
+    /// </summary>
     public static PackageClass Of(int signal) => signal switch
     {
         0 or 2 or 3 or 7 or 8 or 9 or 18 or 21 => PackageClass.Plain,
@@ -113,7 +119,13 @@ public static class PackageClasses
 /// </summary>
 public interface IPackageRules
 {
+    /// <summary>
+    /// Whether a package of the class may start now (the original's package start test).
+    /// </summary>
     bool CanStart(Blackboard board, AiPackage package, PackageClass kind);
+    /// <summary>
+    /// Whether the running package of the class is finished (the original's finished test).
+    /// </summary>
     bool Finished(Blackboard board, AiPackage package, PackageClass kind);
 
     /// <summary>
@@ -142,6 +154,9 @@ public readonly record struct GatePost(TownBuilding Building, Vector3 Door, Vect
 /// </summary>
 public readonly record struct SeatClaim(TownBuilding Building, int Index)
 {
+    /// <summary>
+    /// The seat piece the claim names.
+    /// </summary>
     public HomeSpot Spot => Building.SeatAt(Index);
 }
 
@@ -157,10 +172,19 @@ public readonly record struct CrowdEntry(CharacterId Who, TaskType Type, Charact
 /// </summary>
 public sealed class Blackboard
 {
+    /// <summary>
+    /// The empty role lists of a board with no package running.
+    /// </summary>
     static readonly IReadOnlyList<AiGoal>[] NoRoles = [[], [], [], [], []];
 
+    /// <summary>
+    /// The squad's packages by slot, lowest slot first.
+    /// </summary>
     readonly SortedDictionary<int, List<AiPackage>> _slots = [];
 
+    /// <summary>
+    /// Makes the board with the template's packages by slot; no package runs until the first <see cref="Update"/>.
+    /// </summary>
     public Blackboard(IEnumerable<SlottedPackage> packages)
     {
         foreach (var (slot, package) in packages)
@@ -174,7 +198,13 @@ public sealed class Blackboard
     /// The package running (null: none could start; the members take only their default goals).
     /// </summary>
     public AiPackage? Current { get; private set; }
+    /// <summary>
+    /// The class of the running package (<see cref="PackageClass.Plain"/> without one).
+    /// </summary>
     public PackageClass CurrentClass => Current is { } p ? PackageClasses.Of(p.Signal) : PackageClass.Plain;
+    /// <summary>
+    /// The slot of the running package (-1: none, or a contract).
+    /// </summary>
     public int CurrentSlot { get; private set; } = -1;
 
     /// <summary>
@@ -242,6 +272,9 @@ public sealed class Blackboard
     /// found them (derived, not hashed).
     /// </summary>
     public IReadOnlyList<TownBuilding> Turrets { get; set; } = [];
+    /// <summary>
+    /// The turret index each member's slot claimed to man (see <see cref="Turrets"/>; derived, not hashed).
+    /// </summary>
     public Dictionary<int, int> TurretClaims { get; } = [];
 
     /// <summary>
@@ -273,6 +306,9 @@ public sealed class Blackboard
     /// once it is set, then kept even when the home changes.
     /// </summary>
     public TownBuilding? GateHome { get; set; }
+    /// <summary>
+    /// The home building the squad was given (see <see cref="Town"/>); <see cref="Home"/> is the one in use.
+    /// </summary>
     public TownBuilding? OwnHome { get; set; }
 
     /// <summary>
@@ -280,6 +316,9 @@ public sealed class Blackboard
     /// trespassing reads.
     /// </summary>
     public bool HomePublic { get; init; } = true;
+    /// <summary>
+    /// The home building in use: <see cref="OwnHome"/>, or the bar a bar package moved it to.
+    /// </summary>
     public TownBuilding? Home { get; set; }
 
     /// <summary>
@@ -302,12 +341,18 @@ public sealed class Blackboard
     /// A patrol's route (world X/Z) and the point the leader walks to next; empty when no patrol runs.
     /// </summary>
     public Vector2[] Route { get; set; } = [];
+    /// <summary>
+    /// The index in <see cref="Route"/> of the point the leader walks to next.
+    /// </summary>
     public int RouteIndex { get; set; }
 
     /// <summary>
     /// The game hours from which the next patrol may start, and when the running one gives up.
     /// </summary>
     public double NextPatrol { get; set; }
+    /// <summary>
+    /// The game hours at which the running patrol gives up (see <see cref="NextPatrol"/>).
+    /// </summary>
     public double PatrolGiveUp { get; set; }
 
     /// <summary>
@@ -321,6 +366,9 @@ public sealed class Blackboard
     /// the choice.
     /// </summary>
     public CampaignTown InTown { get; set; } = CampaignTown.None;
+    /// <summary>
+    /// The game hour the squad came into <see cref="InTown"/> (the original's +0x140).
+    /// </summary>
     public double InTownSince { get; set; }
 
     /// <summary>
@@ -334,6 +382,9 @@ public sealed class Blackboard
     /// before it may go on (+0xd4, uniform [5, 8) at each start). Kept while other packages run, as the original's package object.
     /// </summary>
     public int TraderState { get; set; }
+    /// <summary>
+    /// The hours the trader stays in a town before it may go on (+0xd4, uniform [5, 8) at each start; see <see cref="TraderState"/>).
+    /// </summary>
     public float TraderWait { get; set; }
 
     /// <summary>
@@ -341,8 +392,17 @@ public sealed class Blackboard
     /// whether it is spent (+0xb4: it never starts again) and its faction's wait after the last such assault ends (+0xb0, hours).
     /// </summary>
     public double AssaultStart { get; set; }
+    /// <summary>
+    /// The faction the passing-by assault attacks (+0x100, the town's; -1: none).
+    /// </summary>
     public int AssaultEnemy { get; set; } = -1;
+    /// <summary>
+    /// The passing-by assault is spent (+0xb4): it never starts again.
+    /// </summary>
     public bool AssaultDone { get; set; }
+    /// <summary>
+    /// The faction's wait after the last passing-by assault ends, in hours (+0xb0).
+    /// </summary>
     public float AssaultCooldown { get; set; }
 
     /// <summary>
@@ -352,6 +412,9 @@ public sealed class Blackboard
     /// (<see cref="AssaultSeeded"/>) and refills from the scan.
     /// </summary>
     public HashSet<CharacterId> AssaultTargets { get; } = [];
+    /// <summary>
+    /// Whether <see cref="AssaultTargets"/> was seeded from the start rule since the assault started or was loaded.
+    /// </summary>
     public bool AssaultSeeded { get; set; }
 
     /// <summary>
@@ -364,6 +427,9 @@ public sealed class Blackboard
     /// mission target, +0x28; -1: none yet).
     /// </summary>
     public bool RefugeeBroken { get; set; }
+    /// <summary>
+    /// The squad the refugee package makes for to join (its mission target, +0x28; -1: none yet).
+    /// </summary>
     public int RefugeeTarget { get; set; } = -1;
 
     /// <summary>
@@ -382,10 +448,14 @@ public sealed class Blackboard
             MissionTarget = CharacterId.None;
             Current = null;   // the slots choose again
         }
+
         foreach (var (slot, list) in _slots.Reverse())
             if (TrySlot(slot, list, rules)) return;
     }
 
+    /// <summary>
+    /// Tries the packages of one slot: starts or keeps one that can run; true when the slot's package runs.
+    /// </summary>
     bool TrySlot(int slot, List<AiPackage> list, IPackageRules? rules)
     {
         if (slot == 0 && list.Count == 1)
@@ -397,8 +467,10 @@ public sealed class Blackboard
                 if (list[0].LeadsTo is { } hop && Find(hop) is { } follow && MayLead(list[0], rules)) Start(follow.Package, follow.Slot, rules);
                 else if (CanStart(list[0], rules)) Start(list[0], 0, rules);
             }
+
             return true;
         }
+
         foreach (var p in list)
         {
             if (p == Current)
@@ -409,39 +481,61 @@ public sealed class Blackboard
                     Start(follow.Package, follow.Slot, rules);
                     return true;
                 }
+
                 return false;
             }
+
             if (CanStart(p, rules))
             {
                 Start(p, slot, rules);
                 return true;
             }
         }
+
         return false;
     }
 
+    /// <summary>
+    /// Whether package <paramref name="p"/> may start: a plain one always, another by the class rules (none given: never).
+    /// </summary>
     bool CanStart(AiPackage p, IPackageRules? rules)
     {
         var kind = PackageClasses.Of(p.Signal);
         return kind == PackageClass.Plain || (rules?.CanStart(this, p, kind) ?? false);
     }
 
+    /// <summary>
+    /// Whether package <paramref name="p"/> is finished: never a plain one, another by the class rules (none given: never).
+    /// </summary>
     bool Finished(AiPackage p, IPackageRules? rules)
     {
         var kind = PackageClasses.Of(p.Signal);
         return kind != PackageClass.Plain && (rules?.Finished(this, p, kind) ?? false);
     }
 
+    /// <summary>
+    /// Whether finished package <paramref name="p"/> may hand over to its <c>Leads to</c> (no rules given: yes).
+    /// </summary>
     bool MayLead(AiPackage p, IPackageRules? rules) => rules?.MayLead(this, p, PackageClasses.Of(p.Signal)) ?? true;
 
+    /// <summary>
+    /// The package with id <paramref name="id"/> and its slot; null when the board has none.
+    /// </summary>
     SlottedPackage? Find(string id)
     {
         foreach (var (slot, list) in _slots)
+        {
             foreach (var p in list)
                 if (p.Id == id) return new SlottedPackage(slot, p);
+        }
+
         return null;
     }
 
+    /// <summary>
+    /// Starts a package in <paramref name="slot"/> (-1: a contract): ends the one it replaces, loads its roles, bumps the version, resets the route,
+    /// home, bar table, mission town, destination and refugee state, then tells the rules it started.
+    /// </summary>
     void Start(AiPackage package, int slot, IPackageRules? rules)
     {
         if (Current is { } old && old != package) rules?.Ended(this, old, PackageClasses.Of(old.Signal));
@@ -480,6 +574,7 @@ public sealed class Blackboard
             if (running.Id == package.Id) return;
             _ended = (running, MissionTarget);
         }
+
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         MissionTarget = target ?? CharacterId.None;
@@ -487,23 +582,26 @@ public sealed class Blackboard
     }
 
     /// <summary>
-    /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, with no target.
-    /// </summary>
-    /// <summary>
     /// Makes a package of the slots the current one again without its start (the original keeps the running package object on its platoon while the
     /// squad is out of the world); false when no slot lists it.
     /// </summary>
     public bool Resume(AiPackage package)
     {
         foreach (var (slot, list) in _slots)
+        {
             if (list.Contains(package))
             {
                 Start(package, slot, null);
                 return true;
             }
+        }
+
         return false;
     }
 
+    /// <summary>
+    /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, with no target.
+    /// </summary>
     public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null)
     {
         Contract = package;
@@ -550,6 +648,9 @@ public sealed class Blackboard
         else Version++;
     }
 
+    /// <summary>
+    /// Adds the board's state to the world's state hash (the derived claims are left out).
+    /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
         hasher.Add(CurrentSlot);
@@ -575,6 +676,7 @@ public sealed class Blackboard
             hasher.Add(Destination.Site);
             hasher.Add(Destination.PlayerTown);
         }
+
         if (TraderWait > 0)
         {
             hasher.Add(TraderState);
@@ -591,6 +693,7 @@ public sealed class Blackboard
             hasher.Add(AssaultDone);
             hasher.Add(AssaultCooldown);
         }
+
         if (OccupyAway > 0) hasher.Add(OccupyAway);
         if (RefugeeBroken || RefugeeTarget >= 0)
         {
@@ -605,6 +708,9 @@ public sealed class Blackboard
 /// </summary>
 public enum FleeAsk : byte
 {
+    /// <summary>
+    /// No flight asked.
+    /// </summary>
     None = 0,
     /// <summary>
     /// Self preservation's provider 35: from the threats attacking it, until none is left (<see cref="CharacterCold.FleesAlone"/>).
@@ -646,6 +752,9 @@ public sealed class AiMind
     /// The plan's first step (None without a plan).
     /// </summary>
     public TaskType Step => Plan.Count > 0 ? Plan[0].Type : TaskType.None;
+    /// <summary>
+    /// The behaviour the engine acts the goal out with (<see cref="TaskBehaviours.Of"/>).
+    /// </summary>
     public AiBehaviour Behaviour { get; set; }
 
     /// <summary>
@@ -672,6 +781,9 @@ public sealed class AiMind
     /// The centre and radius <see cref="MovementSystem"/>'s wander uses instead of the squad's home (radius 0: the squad's).
     /// </summary>
     public Vector2 WanderCentre { get; set; }
+    /// <summary>
+    /// The radius of the wander round <see cref="WanderCentre"/> (0: the squad's home's).
+    /// </summary>
     public float WanderRadius { get; set; }
 
     /// <summary>
@@ -766,7 +878,13 @@ public sealed class AiMind
     /// renewed when a goal is taken up anew.
     /// </summary>
     public ulong NodeRoll { get; set; }
+    /// <summary>
+    /// The number of node draws behind <see cref="NodeRoll"/>.
+    /// </summary>
     public int NodeEpoch { get; set; }
+    /// <summary>
+    /// Whether it is working now (see <see cref="WorkEpoch"/>).
+    /// </summary>
     public bool WorkActive { get; set; }
 
     /// <summary>
@@ -774,6 +892,9 @@ public sealed class AiMind
     /// owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).
     /// </summary>
     public TownBuilding? WorkOperate { get; set; }
+    /// <summary>
+    /// The town building it empties the output of this tick (row 92; see <see cref="WorkOperate"/>; derived, not hashed).
+    /// </summary>
     public TownBuilding? CollectFrom { get; set; }
 
     /// <summary>
@@ -787,6 +908,9 @@ public sealed class AiMind
     /// starts the errand and clears it (derived, not hashed).
     /// </summary>
     public bool DitchRequest { get; set; }
+    /// <summary>
+    /// The faction owning the machine of <see cref="WorkOperate"/> (-1: none; derived, not hashed).
+    /// </summary>
     public int WorkOwner { get; set; }
 
     /// <summary>
@@ -855,6 +979,9 @@ public sealed class AiMind
     /// think reads what it kept.
     /// </summary>
     public CharacterId MedicPatient { get; set; } = CharacterId.None;
+    /// <summary>
+    /// The finder's score for <see cref="MedicPatient"/> (0: no patient).
+    /// </summary>
     public float MedicScore { get; set; }
 
     /// <summary>
@@ -912,9 +1039,11 @@ public sealed class AiMind
     /// the same tick, which starts the fight; never set between ticks (not hashed).
     /// </summary>
     public TaskType FightGoal { get; set; }
+    /// <summary>
+    /// The character the goal's finder picked for <see cref="FightGoal"/> (none: no fight asked).
+    /// </summary>
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
-    /// <summary>
     /// <summary>
     /// The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the
     /// carry system's serial sweep (the think reads it).
@@ -978,6 +1107,9 @@ public sealed class AiMind
     /// </summary>
     public float LookAbout { get; set; } = Crime.CrimeSystem.FirstLookAboutSeconds;
 
+    /// <summary>
+    /// Adds the mind's state to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
         if (Engine) hasher.Add(0x456E6769);
@@ -1004,6 +1136,7 @@ public sealed class AiMind
             hasher.Add(WorkEpoch);
             hasher.Add(WorkActive);
         }
+
         if (NodeRoll != 0) hasher.Add(NodeRoll);
         if (Resume) hasher.Add(0x52657375);
         if (PlaceAt is { } place) hasher.Add(place);
@@ -1015,6 +1148,7 @@ public sealed class AiMind
             hasher.Add(MedicPatient);
             hasher.Add(MedicScore);
         }
+
         if (CaptiveOffers.Count > 0)
         {
             hasher.Add(0x434F6666);   // "COff"
@@ -1024,16 +1158,19 @@ public sealed class AiMind
                 hasher.Add(d);
             }
         }
+
         if (!ForcedAssault.IsNone)
         {
             hasher.Add(0x466F7241);
             hasher.Add(ForcedAssault);
         }
+
         if (GuardVisitorAt is { } visitor)
         {
             hasher.Add(0x47756172);
             hasher.Add(visitor);
         }
+
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);

@@ -25,6 +25,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     public const int FrameRingDepth = 3;
 
+    /// <summary>
+    /// The present pass's shaders: a full-screen triangle that copies the backbuffer into the drawable.
+    /// </summary>
     const string PresentMsl = """
         #include <metal_stdlib>
         using namespace metal;
@@ -115,39 +118,124 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
         """;
 
+    /// <summary>
+    /// The window this context presents to; null for the headless (test) context.
+    /// </summary>
     readonly MetalDisplay? _display;
+    /// <summary>
+    /// The Metal device every resource is made on.
+    /// </summary>
     readonly MTLDevice _device;
+    /// <summary>
+    /// The queue the frames and upload batches are committed to.
+    /// </summary>
     readonly MTLCommandQueue _queue;
+    /// <summary>
+    /// The drawable's pixel format (the present pipeline's colour attachment).
+    /// </summary>
     readonly MTLPixelFormat _presentFormat;
+    /// <summary>
+    /// The largest MSAA sample count the device supports (from the constructor's probe).
+    /// </summary>
     readonly int _maxSampleCount;
+    /// <summary>
+    /// The frame-slot wait mode from <c>MEITOU_METAL_SLOT_WAIT</c>: wait for the reused slot's command buffer (the default, as Vulkan's fence), and
+    /// with "serial" for the previous frame instead; "0"/"false" turns the wait off for A/B diagnostics.
+    /// </summary>
     readonly bool _waitForSlot, _waitOneFrame;
-    // Lossless target compression / base-view reuse is on by default (validated in the 2026-10-24 Metal run);
-    // MEITOU_METAL_NO_COMPRESSION=1 disables it for an A/B. It is independent of the experimental GPU cull.
+
+    /// <summary>
+    /// Lossless target compression / base-view reuse, on by default (validated in the 2026-10-24 Metal run); <c>MEITOU_METAL_NO_COMPRESSION=1</c>
+    /// disables it for an A/B. It is independent of the experimental GPU cull.
+    /// </summary>
     static readonly bool LosslessCompression = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_COMPRESSION") != "1";
+    /// <summary>
+    /// The frame ring's slots (<see cref="FrameRingDepth"/>), indexed by <see cref="_slot"/>.
+    /// </summary>
     readonly MetalFrame[] _frames;
+    /// <summary>
+    /// The frame's GPU timestamps (<see cref="Timestamps"/>).
+    /// </summary>
     readonly MetalTimestamps _timestamps = new();
+    /// <summary>
+    /// The bindless argument-buffer table behind <see cref="Bindless"/>.
+    /// </summary>
     readonly MetalBindlessTable _bindless;
+    /// <summary>
+    /// Live textures by <see cref="GpuTexture"/> index; slot 0 is the null handle and a released texture leaves null.
+    /// </summary>
     readonly List<MetalTexture?> _textures = [null];
+    /// <summary>
+    /// Live texture views by <see cref="GpuView"/> index; slot 0 is the null handle.
+    /// </summary>
     readonly List<MetalTextureView?> _views = [null];
+    /// <summary>
+    /// Live buffers by <see cref="GpuBuffer"/> index; slot 0 is the null handle and a released buffer leaves null.
+    /// </summary>
     readonly List<MetalBuffer?> _buffers = [null];
+    /// <summary>
+    /// Binding sets by <see cref="GpuSet"/> index; slot 0 is the null handle (sets are never released).
+    /// </summary>
     readonly List<MetalSet?> _sets = [null];
+    /// <summary>
+    /// The stand-in textures a missing binding reads, by sampler slot, scalar kind and depth (made once by <see cref="Dummy"/>).
+    /// </summary>
     readonly Dictionary<(int Slot, ScalarKind Kind, bool Depth), SampledTexture> _dummies = [];
+    /// <summary>
+    /// The textures behind <see cref="_dummies"/>, disposed at teardown.
+    /// </summary>
     readonly List<GpuTexture> _dummyTextures = [];
+    /// <summary>
+    /// Depth states by test, write and compare op (<see cref="DepthState"/>).
+    /// </summary>
     readonly Dictionary<(bool Test, bool Write, DepthFunction Op), MTLDepthStencilState> _depthStates = [];
+    /// <summary>
+    /// The dummy vertex buffer (<see cref="DummyVertex"/>): GL's current generic value for a disabled attribute.
+    /// </summary>
     GpuBuffer _dummyVertex;
+    /// <summary>
+    /// The frame's backbuffer (window size) and the scene's depth and GI albedo (render size); made and resized by <see cref="EnsureTargets"/>.
+    /// </summary>
     GpuTexture? _backbuffer, _depth, _albedo;
+    /// <summary>
+    /// The pipeline that copies the backbuffer into the drawable (<see cref="PresentMsl"/>).
+    /// </summary>
     MTLRenderPipelineState _presentPipeline;
+    /// <summary>
+    /// The number of the frame being recorded, counted up by each frame begin; retirement and deferred deletes compare against it.
+    /// </summary>
     long _frameNumber;
+    /// <summary>
+    /// The frame ring slot being recorded; -1 before the first frame.
+    /// </summary>
     int _slot = -1;
-    // Objective-C objects returned by the frame's APIs (nextDrawable, commandBuffer, descriptors) are autoreleased.
-    // Without a per-frame pool they accumulate for the whole process: 16k CAMetalLayer drawables after eight minutes.
+
+    /// <summary>
+    /// The autorelease pool around a frame. Objective-C objects returned by the frame's APIs (nextDrawable, commandBuffer, descriptors) are
+    /// autoreleased; without a per-frame pool they accumulate for the whole process: 16k CAMetalLayer drawables after eight minutes.
+    /// </summary>
     NSAutoreleasePool _framePool;
+    /// <summary>
+    /// Whether <see cref="_framePool"/> is open (drained at the frame's end or at teardown).
+    /// </summary>
     bool _framePoolOpen;
-    // The host pass open now (the guests' targets and state), and the segments of the recording model.
+
+    /// <summary>
+    /// The host pass open now (the guests' targets and state); null outside a pass.
+    /// </summary>
     PassTargets? _passTargets;
+    /// <summary>
+    /// The draw state of the open host pass; null outside a pass.
+    /// </summary>
     DrawState? _passState;
+    /// <summary>
+    /// The command lists of the recording model: the open host pass, the open native segment and the open guest segment (null when closed).
+    /// </summary>
     MetalCommandList? _passList, _segment, _guest;
 
+    /// <summary>
+    /// A context presenting to a window: the display's device, queue and drawable format.
+    /// </summary>
     public MetalContext(MetalDisplay display) : this(display.Device, display.Queue, display.Layer.PixelFormat)
     {
         this._display = display;
@@ -199,6 +287,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _presentPipeline = MakePresentPipeline();
     }
 
+    /// <summary>
+    /// The Metal device every resource is made on.
+    /// </summary>
     public MTLDevice Device => _device;
 
     /// <summary>
@@ -206,15 +297,30 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     public double LastGpuMilliseconds { get; private set; }
 
+    /// <summary>
+    /// <c>objc_msgSend</c> for a selector that returns a double (a command buffer's GPU start and end times).
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern double Time_objc_msgSend(IntPtr receiver, IntPtr selector);
 
+    /// <summary>
+    /// <c>objc_retain</c>: keeps a command buffer alive while retired textures wait for it.
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_retain")]
     static extern IntPtr Retain_objc_retain(IntPtr obj);
 
+    /// <summary>
+    /// The command buffer's <c>GPUStartTime</c> selector (seconds).
+    /// </summary>
     static readonly Selector GpuStartTime = new("GPUStartTime");
+    /// <summary>
+    /// The command buffer's <c>GPUEndTime</c> selector (seconds).
+    /// </summary>
     static readonly Selector GpuEndTime = new("GPUEndTime");
 
+    /// <summary>
+    /// The GPU time of a slot's command buffer in ms, or 0 when it has none, has not completed or reported no time.
+    /// </summary>
     double CompletedGpuMs(MetalFrame frame)
     {
         var command = frame.Command;
@@ -254,8 +360,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         long oldest = _retiredTextures.Count > 0 ? _frameNumber - _retiredTextures[0].Frame : 0;
         return $"textures {tex}/{_textures.Count} views {liveViews}/{_views.Count} retiredViews {retired} retiredTextures {_retiredTextures.Count} " +
             $"oldest {oldest} levelViews {level} deferredDeletes {deferred} buffers {liveBuffers}/{_buffers.Count} " +
-            $"sets {_sets.Count} chunks {chunkCount} ({chunkBytes / 1048576} MB, {chunkUsed / 1048576} MB used); managed {managed.HeapSizeBytes / 1048576} MB " +
-            $"(LOH {loh / 1048576} MB), RSS {rss / 1048576} MB, GPU {Device.CurrentAllocatedSize / 1048576} MB";
+            $"sets {_sets.Count} chunks {chunkCount} ({chunkBytes / 1048576} MB, {chunkUsed / 1048576} MB used); " +
+            $"managed {managed.HeapSizeBytes / 1048576} MB (LOH {loh / 1048576} MB), RSS {rss / 1048576} MB, " +
+            $"GPU {Device.CurrentAllocatedSize / 1048576} MB";
     }
 
     /// <summary>
@@ -264,22 +371,49 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     public MTLCommandQueue Queue => _queue;
 
-    // ---- the seam's services ----
+    #region Seam services
 
+    /// <summary>
+    /// Upload bytes counted before the first frame, added to the first frame's statistics.
+    /// </summary>
+    long _pendingUploadBytes;
+
+    /// <summary>
+    /// The Metal shader library (MSL translation and compiled functions).
+    /// </summary>
     public MetalShaders Shaders { get; }
+    /// <summary>
+    /// The Metal pipeline cache.
+    /// </summary>
     public MetalPipelines Pipelines { get; }
+    /// <summary>
+    /// The Metal sampler cache.
+    /// </summary>
     public MetalSamplers Samplers { get; }
+    /// <summary>
+    /// The Metal upload batches (staging copies into textures and buffers).
+    /// </summary>
     public MetalUploads Uploads { get; }
+    /// <summary>
+    /// The frame ring slot being recorded.
+    /// </summary>
     public MetalFrame Frame => _frames[_slot];
+    /// <summary>
+    /// The per-frame constants the renderers fill (<see cref="FrameGlobals"/>).
+    /// </summary>
     public FrameGlobals Globals { get; } = new();
     /// <summary>
     /// The frame as the seam's interface (<see cref="IGpuContext.Frame"/>).
     /// </summary>
     IGpuFrame IGpuContext.Frame => Frame;
 
+    /// <inheritdoc/>
     IGpuShaders IGpuContext.Shaders => Shaders;
+    /// <inheritdoc/>
     IGpuPipelines IGpuContext.Pipelines => Pipelines;
+    /// <inheritdoc/>
     IGpuSamplers IGpuContext.Samplers => Samplers;
+    /// <inheritdoc/>
     IGpuUploads IGpuContext.Uploads => Uploads;
 
     /// <summary>
@@ -321,8 +455,6 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         else _pendingUploadBytes += bytes;
     }
 
-    long _pendingUploadBytes;
-
     /// <summary>
     /// Whether the open rendering has a depth attachment (<see cref="MetalCommandList.SetDepth"/>; Metal's validation objects to setting the state
     /// without one).
@@ -343,8 +475,32 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return _depthStates[key] = Device.NewDepthStencilState(d);
     }
 
-    // ---- the resources ----
+    #endregion
 
+    #region Resources
+
+    /// <summary>
+    /// Released textures kept until the command that could name them has completed; see <see cref="ReleaseRetired"/>.
+    /// </summary>
+    readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views, MetalTexture Texture)> _retiredTextures = [];
+    /// <summary>
+    /// Mip-bake level views retained by their encoding command (the impostor bakes create these).
+    /// </summary>
+    readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views)> _retiredLevelViews = [];
+    /// <summary>
+    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed.
+    /// </summary>
+    readonly List<(long Frame, MTLCommandBuffer Command, MTLBuffer Buffer, string Label)> _retiredUploads = [];
+    /// <summary>
+    /// Whether a failed upload command buffer has been logged (only the first is).
+    /// </summary>
+    bool _uploadErrorReported;
+    /// <summary>
+    /// Actions from <see cref="DeferDelete"/>, released after the frame ring has passed.
+    /// </summary>
+    readonly DeferredReleaseQueue _deferredDeletes = new();
+
+    /// <inheritdoc/>
     public GpuTexture CreateTexture(TextureDesc desc)
     {
         var d = new MTLTextureDescriptor();
@@ -393,6 +549,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return new GpuTexture(this, desc, _textures.Count - 1);
     }
 
+    /// <inheritdoc/>
     public GpuView View(GpuTexture texture, int baseLevel, int levels, int baseLayer, int layers, GpuViewType type, GpuSwizzle swizzle)
     {
         var of = _textures[texture.Index]!;
@@ -415,9 +572,14 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         // swizzled view creates a child texture. A multisampled texture always keeps its own image: its base type is
         // Type2DMultisample, and a child Type2D view would lose the samples (the reflection's MSAA targets depend on this).
         int totalLayers = of.Desc.Kind == TextureKind.Cube ? 6 * Math.Max(of.Desc.Layers, 1) : of.Desc.Layers;
-        bool baseView = (LosslessCompression || of.Desc.Samples > 1) && baseLevel == 0 && levels == of.Desc.Levels && baseLayer == 0 && layers == totalLayers &&
-            swizzle.Equals(GpuSwizzle.Identity) &&
-            viewType == (of.Desc.Kind switch { TextureKind.Cube => MTLTextureType.Cube, TextureKind.Texture2DArray => MTLTextureType.Type2DArray, _ => MTLTextureType.Type2D });
+        bool baseView = (LosslessCompression || of.Desc.Samples > 1) && baseLevel == 0 && levels == of.Desc.Levels && baseLayer == 0
+            && layers == totalLayers && swizzle.Equals(GpuSwizzle.Identity)
+            && viewType == (of.Desc.Kind switch
+            {
+                TextureKind.Cube => MTLTextureType.Cube,
+                TextureKind.Texture2DArray => MTLTextureType.Type2DArray,
+                _ => MTLTextureType.Type2D,
+            });
         var view = new MetalTextureView
         {
             // A swizzled view (the BC4 masks' red in all three, alpha one) is Metal's own texture swizzle: the same format, the
@@ -435,6 +597,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return new GpuView(view.ViewIndex);
     }
 
+    /// <summary>
+    /// The Metal swizzle of a view's (each identity component keeps its own channel).
+    /// </summary>
     static MTLTextureSwizzleChannels Swizzle(GpuSwizzle swizzle) => new()
     {
         red = Swizzle(swizzle.R, MTLTextureSwizzle.Red),
@@ -443,6 +608,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         alpha = Swizzle(swizzle.A, MTLTextureSwizzle.Alpha),
     };
 
+    /// <summary>
+    /// The Metal swizzle source of one component; identity reads the component's own channel.
+    /// </summary>
     static MTLTextureSwizzle Swizzle(GpuSwizzleComponent component, MTLTextureSwizzle identity) => component switch
     {
         GpuSwizzleComponent.Identity => identity,
@@ -455,6 +623,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _ => throw new NotSupportedException($"no Metal swizzle for {component}"),
     };
 
+    /// <summary>
+    /// Releases a texture and its views: their handles are cleared now and the Metal objects released once the command buffer that could name them
+    /// has completed (<see cref="ReleaseRetired"/>); before the first frame they are released at once.
+    /// </summary>
     public void ReleaseTexture(GpuTexture texture)
     {
         var of = _textures[texture.Index]!;
@@ -489,6 +661,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
     }
 
+    /// <summary>
+    /// Releases a texture's own image views and the texture.
+    /// </summary>
     void ReleaseTextureNow(IReadOnlyList<MTLTexture> images, MetalTexture texture)
     {
         foreach (var image in images) image.Dispose();
@@ -496,6 +671,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         texture.Release();
     }
 
+    /// <summary>
+    /// Releases retired textures whose command buffer has completed or failed, at most 64 per call unless <paramref name="force"/> (teardown)
+    /// releases them all.
+    /// </summary>
     void ReleaseRetired(bool force = false)
     {
         if (_retiredTextures.Count == 0) return;
@@ -554,6 +733,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _retiredLevelViews.Add((_frameNumber, command, images.ToArray()));
     }
 
+    /// <summary>
+    /// Releases retired mip-bake level views whose command buffer has completed or failed, at most 64 per call unless <paramref name="force"/>
+    /// releases them all.
+    /// </summary>
     void ReleaseRetiredLevelViews(bool force = false)
     {
         if (_retiredLevelViews.Count == 0) return;
@@ -595,6 +778,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _retiredUploads.Add((_frameNumber, command, buffer, label));
     }
 
+    /// <summary>
+    /// Releases upload staging buffers whose command buffer has completed or failed (all with <paramref name="force"/>); logs the first failed upload
+    /// with its label.
+    /// </summary>
     void ReleaseRetiredUploads(bool force = false)
     {
         if (_retiredUploads.Count == 0) return;
@@ -614,7 +801,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             {
                 _uploadErrorReported = true;
                 string where = retired.Label.Length > 500 ? retired.Label[..500] + "..." : retired.Label;
-                Console.WriteLine($"metal     upload command buffer failed{ (where.Length > 0 ? $" ({where})" : "") }: {retired.Command.Error.LocalizedDescription}");
+                Console.WriteLine($"metal     upload command buffer failed{(where.Length > 0 ? $" ({where})" : "")}: " +
+                    $"{retired.Command.Error.LocalizedDescription}");
             }
 
             retired.Buffer.Dispose();
@@ -623,8 +811,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs <see cref="DeferDelete"/> actions whose frame the ring has passed, at most 64 per call unless <paramref name="force"/> runs them all.
+    /// </summary>
     void ReleaseDeferred(bool force = false) => _deferredDeletes.ReleaseDue(_frameNumber, FrameRingDepth, 64, force);
 
+    /// <summary>
+    /// A buffer: GPU-only buffers are private storage (written only through the staging blit); the rest are shared, the unified memory the CPU writes
+    /// directly.
+    /// </summary>
     public GpuBuffer CreateBuffer(ulong size, BufferUse use, string name)
     {
         if (use.HasFlag(BufferUse.GpuOnly))
@@ -641,6 +836,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return RegisterBuffer(shared.Buffer, name);
     }
 
+    /// <summary>
+    /// Releases a buffer: its handle is cleared now and the Metal buffer released once the frame ring has passed (at once before the first frame).
+    /// </summary>
     public void ReleaseBuffer(GpuBuffer buffer)
     {
         // A mesh/index/instance buffer can be named by a frame still in flight when streaming unloads it; releasing it
@@ -654,6 +852,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         else DeferDelete(of.Release);
     }
 
+    /// <inheritdoc/>
     public GpuSet CreateSet(GpuSetLayout layout, ReadOnlySpan<GpuBinding> bindings)
     {
         _sets.Add(new MetalSet { Layout = layout, Bindings = [.. bindings] });
@@ -685,8 +884,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
     }
 
-    // ---- the host's recording model ----
+    #endregion
 
+    #region Recording model
+
+    // The host's recording model.
+
+    /// <inheritdoc/>
     public IGpuCommandList BeginGuest(string label)
     {
         if (_guest is not null) throw new InvalidOperationException("BeginGuest inside a guest segment");
@@ -698,6 +902,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return _guest = _passList;
     }
 
+    /// <inheritdoc/>
     public void EndGuest(IGpuCommandList cmd)
     {
         if (_guest is null || !ReferenceEquals(cmd, _guest))
@@ -707,6 +912,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         cmd.EndLabel();
     }
 
+    /// <inheritdoc/>
     public IGpuCommandList BeginNative(string label)
     {
         if (_segment is not null) throw new InvalidOperationException("BeginNative inside a native segment");
@@ -720,6 +926,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return _segment = list;
     }
 
+    /// <inheritdoc/>
     public void EndNative(IGpuCommandList cmd)
     {
         if (_segment is null || !ReferenceEquals(cmd, _segment))
@@ -730,9 +937,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _segment = null;
     }
 
+    /// <inheritdoc/>
     public bool PassOpen => _passList is not null;
 
+    /// <inheritdoc/>
     public PassTargets CurrentTargets() => _passTargets ?? throw new InvalidOperationException("no pass is open");
+    /// <inheritdoc/>
     public DrawState CurrentState() => _passState ?? throw new InvalidOperationException("no pass is open");
 
     /// <summary>
@@ -750,7 +960,11 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         record(Frame.Commands);
     }
 
-    // ---- the host's pass (the twin of GpuContext's BeginHostPass; the Metal host drives it directly) ----
+    #endregion
+
+    #region Host pass
+
+    // The host's pass (the twin of GpuContext's BeginHostPass; the Metal host drives it directly).
 
     /// <summary>
     /// The caller has begun a rendering instance on <paramref name="cmd"/> (inside its own native segment) into
@@ -764,6 +978,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         HasDepthAttachment = !targets.Depth.View.IsNull;
     }
 
+    /// <inheritdoc/>
     void IGpuContext.BeginHostPass(IGpuCommandList cmd, PassTargets targets, DrawState state) => BeginHostPass((MetalCommandList)cmd, targets, state);
 
     /// <summary>
@@ -772,10 +987,17 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public void BeginHostPassParallel(IGpuCommandList cmd, PassTargets targets, DrawState state, int stage) =>
         BeginHostPass((MetalCommandList)cmd, targets, state);
 
+    /// <summary>
+    /// Nothing to do: Metal records inline (the stage is a Vulkan secondary-pass concept).
+    /// </summary>
     public void SetPassStage(int stage) { }
 
+    /// <summary>
+    /// Nothing to close: Metal records inline, without secondary passes.
+    /// </summary>
     public void EndHostPassParallel(IGpuCommandList cmd) { }
 
+    /// <inheritdoc/>
     public void ClearDepth(IGpuCommandList host, float value, PixelRect rect)
     {
         if (_passList is null || !ReferenceEquals(host, _passList))
@@ -800,6 +1022,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <inheritdoc/>
     public bool RecordsSecondaries => false;
 
+    /// <inheritdoc/>
     public void EndHostPass(IGpuCommandList cmd)
     {
         if (_passList is null || !ReferenceEquals(cmd, _passList))
@@ -809,7 +1032,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         HasDepthAttachment = false;
     }
 
-    // ---- the frame loop ----
+    #endregion
+
+    #region Frame loop
 
     /// <summary>
     /// Begins a frame: the layer's next drawable and its command buffer, and the frame's backbuffer (the
@@ -834,11 +1059,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         // Vulkan's FrameRing waits on the slot's fence before reusing per-frame memory or running deletions. The normal
         // diagnostic waits for the slot that this frame will reuse; "serial" also waits for the immediately previous
         // frame, making the whole backend one-frame-in-flight.
-        if (_waitForSlot && _slot >= 0)
-        {
-            if (_waitOneFrame) _frames[_slot].WaitForCompletion();
-            else _frames[(_slot + 1) % FrameRingDepth].WaitForCompletion();
-        }
+        WaitForSlot();
 
         // Free what the previous rings no longer name before asking for another drawable; a frame's worth at a time.
         ReleaseRetired();
@@ -853,15 +1074,50 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             return false;
         }
 
-        if (_slot >= 0)
-        {
-            double gpu = CompletedGpuMs(_frames[_slot]);
-            if (gpu > 0) LastGpuMilliseconds = gpu;
-        }
-
+        ReadLastGpuTime();
         var size = display.Window.FramebufferSize;
-        int width = size.X, height = size.Y;
+        EnsureTargets(size.X, size.Y, drawable);
+        StartSlot(command, drawable);
+        return true;
+    }
 
+    /// <summary>
+    /// Waits for the slot this frame reuses (and, serial, for the previous frame) when the diagnostic asks for it.
+    /// </summary>
+    void WaitForSlot()
+    {
+        if (!_waitForSlot || _slot < 0) return;
+
+        if (_waitOneFrame) _frames[_slot].WaitForCompletion();
+        else _frames[(_slot + 1) % FrameRingDepth].WaitForCompletion();
+    }
+
+    /// <summary>
+    /// The GPU time of the frame the slot held last, once it has completed.
+    /// </summary>
+    void ReadLastGpuTime()
+    {
+        if (_slot < 0) return;
+
+        double gpu = CompletedGpuMs(_frames[_slot]);
+        if (gpu > 0) LastGpuMilliseconds = gpu;
+    }
+
+    /// <summary>
+    /// The size the scene renders at in a <paramref name="width"/> x <paramref name="height"/> pixel backbuffer (the window's backing pixels,
+    /// Retina included) at <paramref name="renderScale"/>.
+    /// </summary>
+    public static (int Width, int Height) SceneSize(int width, int height, float renderScale)
+    {
+        float scale = Math.Clamp(renderScale, 0.25f, 1f);
+        return (Math.Max((int)MathF.Round(width * scale), 1), Math.Max((int)MathF.Round(height * scale), 1));
+    }
+
+    /// <summary>
+    /// The backbuffer at the window's size, and the scene's depth and GI albedo at the render size (re-made when either changed).
+    /// </summary>
+    void EnsureTargets(int width, int height, CAMetalDrawable drawable)
+    {
         if (_backbuffer is not { } target || target.Desc.Width != width || target.Desc.Height != height)
         {
             Console.WriteLine($"metal     backbuffer {width}x{height}, drawable {drawable.Texture.Width}x{drawable.Texture.Height}");
@@ -871,8 +1127,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         float scale = Math.Clamp(RenderScale, 0.25f, 1f);
-        SceneWidth = Math.Max((int)MathF.Round(width * scale), 1);
-        SceneHeight = Math.Max((int)MathF.Round(height * scale), 1);
+        (SceneWidth, SceneHeight) = SceneSize(width, height, scale);
 
         if (_depth is not { } currentDepth || currentDepth.Desc.Width != SceneWidth || currentDepth.Desc.Height != SceneHeight)
         {
@@ -883,7 +1138,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             _albedo?.Dispose();
             _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
         }
+    }
 
+    /// <summary>
+    /// The next slot of the ring begins the frame: its command buffer and drawable, the bindless table's and the timestamps' slot.
+    /// </summary>
+    void StartSlot(MTLCommandBuffer command, CAMetalDrawable drawable)
+    {
         _frameNumber++;
         _slot = (_slot + 1) % FrameRingDepth;
         Retain_objc_retain(command.NativePtr);   // the frame pool drains at the end of this frame
@@ -897,7 +1158,6 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         _timestamps.Begin(_slot, _frameNumber);
-        return true;
     }
 
     /// <summary>
@@ -920,7 +1180,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// The scene's render scale (the Vulkan path's TAA/upscaler scale): 1 = native, 0.67 = the Vulkan path's Meitou default.
     /// </summary>
     public float RenderScale { get; set; } = 1f;
+    /// <summary>
+    /// The width of the scene's render targets (the render size the frame was begun with), in pixels.
+    /// </summary>
     public int SceneWidth { get; private set; }
+    /// <summary>
+    /// The height of the scene's render targets, in pixels.
+    /// </summary>
     public int SceneHeight { get; private set; }
 
     /// <summary>
@@ -1000,8 +1266,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         var encoder = command.RenderCommandEncoder(descriptor);
         encoder.SetRenderPipelineState(_presentPipeline);
         encoder.SetFragmentTexture(TextureAt(_backbuffer!), 0);
-        encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0))), 0);
+        encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest))), 0);
         var targetSize = stackalloc float[2] { (float)drawable.Texture.Width, (float)drawable.Texture.Height };
         encoder.SetFragmentBytes((nint)targetSize, 8, 1);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
@@ -1011,22 +1276,42 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         command.Commit();
     }
 
+    /// <inheritdoc/>
     public void EnsureFrame()
     {
         if (_slot < 0)
             throw new InvalidOperationException($"no frame slot (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
         if (!Frame.Open)
-            throw new InvalidOperationException($"frame {Frame.Number} closed (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
+        {
+            throw new InvalidOperationException(
+                $"frame {Frame.Number} closed (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
+        }
     }
 
-    // ---- the backend's own lookups (the command list resolves the handles through these) ----
+    #endregion
 
+    #region Backend lookups
+
+    // The backend's own lookups (the command list resolves the handles through these).
+
+    /// <summary>
+    /// The Metal texture of a texture handle.
+    /// </summary>
     internal MTLTexture TextureAt(GpuTexture texture) => _textures[texture.Index]!.Image;
 
+    /// <summary>
+    /// The Metal texture of a view handle.
+    /// </summary>
     internal MTLTexture ViewTexture(GpuView view) => _views[view.Index]!.Image;
 
+    /// <summary>
+    /// The binding set of a set handle.
+    /// </summary>
     internal MetalSet SetAt(GpuSet set) => _sets[set.Index]!;
 
+    /// <summary>
+    /// The Metal buffer and offset a buffer binding names.
+    /// </summary>
     internal (MTLBuffer Buffer, ulong Offset) Buffer(GpuBufferBinding binding) => (_buffers[binding.Buffer.Index]!.Buffer, binding.Offset);
 
     /// <summary>
@@ -1034,8 +1319,14 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     internal MetalBindlessTable BindlessTable => _bindless;
 
+    /// <summary>
+    /// The Metal buffer of a buffer handle.
+    /// </summary>
     internal MTLBuffer BufferAt(GpuBuffer buffer) => _buffers[buffer.Index]!.Buffer;
 
+    /// <summary>
+    /// A new shared-storage buffer (at least 16 bytes) with its CPU address.
+    /// </summary>
     internal SharedBuffer NewSharedBuffer(ulong size, string name)
     {
         var buffer = Device.NewBuffer(Math.Max(size, 16ul), MTLResourceOptions.ResourceStorageModeShared);
@@ -1047,10 +1338,22 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     internal readonly struct SharedBuffer
     {
+        /// <summary>
+        /// The Metal buffer.
+        /// </summary>
         public readonly MTLBuffer Buffer;
+        /// <summary>
+        /// Its contents' CPU address (shared storage).
+        /// </summary>
         public readonly byte* Pointer;
+        /// <summary>
+        /// Its length in bytes.
+        /// </summary>
         public readonly ulong Size;
 
+        /// <summary>
+        /// Wraps a shared buffer with its CPU address and length.
+        /// </summary>
         public SharedBuffer(MTLBuffer buffer, byte* pointer, ulong size)
         {
             Buffer = buffer;
@@ -1059,6 +1362,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
     }
 
+    /// <summary>
+    /// Labels a Metal buffer with the name (when there is one) and registers it under a new handle.
+    /// </summary>
     internal GpuBuffer RegisterBuffer(MTLBuffer buffer, string name)
     {
         if (name.Length > 0) buffer.Label = (NSString)name;
@@ -1067,6 +1373,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return new GpuBuffer(_buffers.Count - 1, buffer.Length);
     }
 
+    /// <summary>
+    /// Points an existing handle at another Metal buffer, labelled "frame constants" (nothing calls it now).
+    /// </summary>
     internal void RebindBuffer(GpuBuffer handle, MTLBuffer buffer) =>
         _buffers[handle.Index] = new MetalBuffer { Buffer = buffer, Name = "frame constants" };
 
@@ -1099,29 +1408,28 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return pipeline;
     }
 
-    // ---- the stand-ins ----
+    #endregion
 
+    #region Stand-ins
+
+    /// <summary>
+    /// The bindless index of the 2D stand-in texture (<see cref="StandIn2D"/>), registered on first use.
+    /// </summary>
     uint? _standIn2D;
-
-    /// <inheritdoc/>
-    public uint StandIn2D => _standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
-        Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
-
-    /// <inheritdoc/>
-    public bool HasRayQuery => false;
-    public bool HasTessellation => false;
-    public int MaxSampleCount => _maxSampleCount;
-
-    /// <inheritdoc/>
-    public bool ConstantVertexAttributes => false;
-    public bool RenderTargetsBottomUp => false;
 
     /// <summary>
     /// The vertices a disabled attribute may index: the generic value repeated at every 16-byte stride (4 MB an array).
     /// </summary>
     const int DummyVertexCapacity = 1 << 18;
 
+    /// <summary>
+    /// The dummy vertex arrays for float and integer attributes (<see cref="DummyVertexArray"/>), made on first use.
+    /// </summary>
     GpuBuffer? _dummyFloatVertex, _dummyIntVertex;
+
+    /// <inheritdoc/>
+    public uint StandIn2D => _standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
+        Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
 
     /// <inheritdoc/>
     public GpuBuffer DummyVertexArray(ScalarKind kind)
@@ -1132,6 +1440,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return _dummyIntVertex ??= MakeDummyVertexArray(0, 0, 0, 1, "dummy int vertices");
     }
 
+    /// <summary>
+    /// A shared buffer of <see cref="DummyVertexCapacity"/> copies of one 16-byte generic vertex value.
+    /// </summary>
     GpuBuffer MakeDummyVertexArray(int x, int y, int z, int w, string name)
     {
         var shared = NewSharedBuffer((ulong)DummyVertexCapacity * 16, name);
@@ -1141,6 +1452,78 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
         return RegisterBuffer(shared.Buffer, name);
     }
+
+    /// <summary>
+    /// The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.
+    /// </summary>
+    public SampledTexture Dummy(SamplerInfo sampler)
+    {
+        int slot = sampler.Dimension == SamplerDimension.Cube ? 2 : sampler.Arrayed ? 1 : 0;
+        var key = (slot, sampler.SampledKind, sampler.Depth);
+        if (_dummies.TryGetValue(key, out var made)) return made;
+
+        var format = sampler.Depth ? InternalFormat.DepthComponent24 : sampler.SampledKind switch
+        {
+            ScalarKind.UInt => InternalFormat.R32Ui,
+            ScalarKind.Int => InternalFormat.R32I,
+            _ => InternalFormat.Rgba8,
+        };
+
+        // A cube's six faces are its type's slices, not array layers: Layers is 1 for a plain cube (CreateTexture sets
+        // ArrayLength 1), and GpuTexture.View asks for all six slices.
+        int layers = 1;
+        var texture = CreateTexture(new TextureDesc(format, 1, 1, Layers: layers, Kind: slot == 2 ? TextureKind.Cube : TextureKind.Texture2D,
+            Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "dummy texture"));
+
+        // Shared storage: the CPU writes the texel where it is (a blit would need a command buffer of its own).
+        var image = _textures[texture.Index]!.Image;
+        var region = new MTLRegion { origin = new MTLOrigin(), size = new MTLSize { width = 1, height = 1, depth = 1 } };
+
+        if (sampler.Depth)
+        {
+            float one = 1f;
+            image.ReplaceRegion(region, 0, (nint)(&one), 4);
+        }
+        else
+        {
+            // The texel value is the R component (the other channels come from the format): 0, as GL's default texture is (0, 0, 0, 1).
+            Span<byte> texel = [0, 0, 0, 255];
+            if (sampler.SampledKind is ScalarKind.UInt or ScalarKind.Int) texel = new byte[4];
+            fixed (byte* p = texel) image.ReplaceRegion(region, 0, (nint)p, 4);
+        }
+
+        var view = texture.View();
+        var sampledTexture = new SampledTexture(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+            TextureWrapMode.Repeat, TextureWrapMode.Repeat, TextureWrapMode.Repeat, sampler.Depth, DepthFunction.Lequal, false, 1, false, 0)), view);
+        _dummyTextures.Add(texture);
+        _dummies[key] = sampledTexture;
+        return sampledTexture;
+    }
+
+    /// <summary>
+    /// The generic attribute value a disabled vertex input reads (GL's constant (0, 0, 0, 1), bound with stride 0).
+    /// </summary>
+    public GpuBuffer DummyVertex => _dummyVertex;
+
+    #endregion
+
+    #region Capabilities and the frame ring
+
+    /// <inheritdoc/>
+    public bool HasRayQuery => false;
+    /// <summary>
+    /// No tessellation stages on Metal.
+    /// </summary>
+    public bool HasTessellation => false;
+    /// <inheritdoc/>
+    public int MaxSampleCount => _maxSampleCount;
+
+    /// <inheritdoc/>
+    public bool ConstantVertexAttributes => false;
+    /// <summary>
+    /// False: row 0 of a Metal render target is at the top.
+    /// </summary>
+    public bool RenderTargetsBottomUp => false;
 
     /// <inheritdoc/>
     public int FramesInFlight => FrameRingDepth;
@@ -1181,6 +1564,24 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
     /// <inheritdoc/>
     public bool FrameCompleted(long frame) => _frameNumber - frame >= FrameRingDepth;
+
+    #endregion
+
+    #region Blits and clears
+
+    /// <summary>
+    /// Blit pipelines by target format (<see cref="BlitScaled"/>), made on first use.
+    /// </summary>
+    readonly Dictionary<MTLPixelFormat, MTLRenderPipelineState> _blitPipelines = [];
+    /// <summary>
+    /// Clear pipelines by attachment formats, sample count and what they write (<see cref="MakeClearPipeline"/>), made on first use.
+    /// </summary>
+    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth),
+        MTLRenderPipelineState> _clearPipelines = [];
+    /// <summary>
+    /// The compiled clear shaders (<c>ClearMsl</c>), compiled on first use.
+    /// </summary>
+    MTLLibrary? _clearLibrary;
 
     /// <summary>
     /// A texture copied into another: depth by a native copy (same size, format and kind only), colour by a sampling pass, which
@@ -1255,23 +1656,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// Released textures kept until the command that could name them has completed; see <see cref="ReleaseRetired"/>.
+    /// Draws <paramref name="source"/> into <paramref name="target"/> with a full-screen sampling pass at the target's size and the filter.
     /// </summary>
-    readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views, MetalTexture Texture)> _retiredTextures = [];
-    /// <summary>
-    /// Mip-bake level views retained by their encoding command (the impostor bakes create these).
-    /// </summary>
-    readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views)> _retiredLevelViews = [];
-    /// <summary>
-    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed.
-    /// </summary>
-    readonly List<(long Frame, MTLCommandBuffer Command, MTLBuffer Buffer, string Label)> _retiredUploads = [];
-    bool _uploadErrorReported;
-    /// <summary>
-    /// Actions from <see cref="DeferDelete"/>, released after the frame ring has passed.
-    /// </summary>
-    readonly DeferredReleaseQueue _deferredDeletes = new();
-
     unsafe void BlitScaled(MTLCommandBuffer command, MTLTexture source, MTLTexture target, MTLPixelFormat format, int width, int height,
         TextureMinFilter filter)
     {
@@ -1290,8 +1676,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         encoder.SetRenderPipelineState(pipeline);
         encoder.SetFragmentTexture(source, 0);
         var mag = filter == TextureMinFilter.Linear ? TextureMagFilter.Linear : TextureMagFilter.Nearest;
-        var sampler = Samplers.Backend(Samplers.Get(SamplerDesc.FromGl(filter, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)));
+        var sampler = Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(filter, mag)));
         encoder.SetFragmentSamplerState(sampler, 0);
         var size = stackalloc float[2] { width, height };
         encoder.SetFragmentBytes((nint)size, 8, 1);
@@ -1350,6 +1735,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
     }
 
+    /// <summary>
+    /// A pipeline drawing a clear rectangle into the given attachment formats, writing colour, depth or both.
+    /// </summary>
     MTLRenderPipelineState MakeClearPipeline(MTLPixelFormat colour, MTLPixelFormat extra, MTLPixelFormat depth, ulong samples, bool writesColour,
         bool writesDepth)
     {
@@ -1395,10 +1783,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return pipeline;
     }
 
-    readonly Dictionary<MTLPixelFormat, MTLRenderPipelineState> _blitPipelines = [];
-    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth), MTLRenderPipelineState> _clearPipelines = [];
-    MTLLibrary? _clearLibrary;
-
+    /// <summary>
+    /// A pipeline that copies a texture into a target of the format by sampling (<c>BlitMsl</c>).
+    /// </summary>
     MTLRenderPipelineState MakeBlitPipeline(MTLPixelFormat format)
     {
         NSError error = default;
@@ -1419,57 +1806,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         return pipeline;
     }
 
-    /// <summary>
-    /// The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.
-    /// </summary>
-    public SampledTexture Dummy(SamplerInfo sampler)
-    {
-        int slot = sampler.Dimension == SamplerDimension.Cube ? 2 : sampler.Arrayed ? 1 : 0;
-        var key = (slot, sampler.SampledKind, sampler.Depth);
-        if (_dummies.TryGetValue(key, out var made)) return made;
+    #endregion
 
-        var format = sampler.Depth ? InternalFormat.DepthComponent24 : sampler.SampledKind switch
-        {
-            ScalarKind.UInt => InternalFormat.R32Ui,
-            ScalarKind.Int => InternalFormat.R32I,
-            _ => InternalFormat.Rgba8,
-        };
-
-        // A cube's six faces are its type's slices, not array layers: Layers is 1 for a plain cube (CreateTexture sets
-        // ArrayLength 1), and GpuTexture.View asks for all six slices.
-        int layers = 1;
-        var texture = CreateTexture(new TextureDesc(format, 1, 1, Layers: layers, Kind: slot == 2 ? TextureKind.Cube : TextureKind.Texture2D,
-            Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "dummy texture"));
-
-        // Shared storage: the CPU writes the texel where it is (a blit would need a command buffer of its own).
-        var image = _textures[texture.Index]!.Image;
-        var region = new MTLRegion { origin = new MTLOrigin(), size = new MTLSize { width = 1, height = 1, depth = 1 } };
-
-        if (sampler.Depth)
-        {
-            float one = 1f;
-            image.ReplaceRegion(region, 0, (nint)(&one), 4);
-        }
-        else
-        {
-            // The texel value is the R component (the other channels come from the format): 0, as GL's default texture is (0, 0, 0, 1).
-            Span<byte> texel = [0, 0, 0, 255];
-            if (sampler.SampledKind is ScalarKind.UInt or ScalarKind.Int) texel = new byte[4];
-            fixed (byte* p = texel) image.ReplaceRegion(region, 0, (nint)p, 4);
-        }
-
-        var view = texture.View();
-        var sampledTexture = new SampledTexture(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.Repeat, TextureWrapMode.Repeat, TextureWrapMode.Repeat, sampler.Depth, DepthFunction.Lequal, false, 1, false, 0)), view);
-        _dummyTextures.Add(texture);
-        _dummies[key] = sampledTexture;
-        return sampledTexture;
-    }
-
-    /// <summary>
-    /// The generic attribute value a disabled vertex input reads (GL's constant (0, 0, 0, 1), bound with stride 0).
-    /// </summary>
-    public GpuBuffer DummyVertex => _dummyVertex;
+    #region Readback and teardown
 
     /// <summary>
     /// The live entries in the three resource tables (the deterministic leak tests' count; the table indices themselves are never reused).
@@ -1502,8 +1841,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         var command = Queue.CommandBuffer();
         var blit = command.BlitCommandEncoder();
         var buffer = Device.NewBuffer((ulong)(stride * height), MTLResourceOptions.ResourceStorageModeShared);
-        blit.CopyFromTexture(TextureAt(texture), (ulong)layer, (ulong)level, new MTLOrigin(), new MTLSize { width = (ulong)width, height = (ulong)height, depth = 1 },
-            buffer, 0, (ulong)stride, (ulong)(stride * height));
+        blit.CopyFromTexture(TextureAt(texture), (ulong)layer, (ulong)level, new MTLOrigin(),
+            new MTLSize { width = (ulong)width, height = (ulong)height, depth = 1 }, buffer, 0, (ulong)stride, (ulong)(stride * height));
         blit.EndEncoding();
         command.Commit();
         command.WaitUntilCompleted();
@@ -1544,6 +1883,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     public byte[] Readback(GpuTexture texture) => Readback(texture, 4);
 
+    /// <summary>
+    /// Closes the frame's autorelease pool and releases the blit and clear pipelines, every retired and deferred resource, the bindless table,
+    /// the stand-in textures and the buffers.
+    /// </summary>
     public void Dispose()
     {
         if (_framePoolOpen)
@@ -1571,4 +1914,6 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
         _buffers.Clear();
     }
+
+    #endregion
 }

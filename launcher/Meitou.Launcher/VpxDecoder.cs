@@ -8,12 +8,29 @@ namespace Meitou.Launcher;
 /// </summary>
 sealed unsafe partial class VpxDecoder : IDisposable
 {
+    /// <summary>
+    /// The ABI version <c>vpx_codec_dec_init_ver</c> expects (VPX_DECODER_ABI_VERSION: 3 + VPX_CODEC_ABI_VERSION, 4 + VPX_IMAGE_ABI_VERSION 5).
+    /// </summary>
     const int DecoderAbiVersion = 12; // VPX_DECODER_ABI_VERSION: 3 + VPX_CODEC_ABI_VERSION (4 + VPX_IMAGE_ABI_VERSION 5)
+
+    /// <summary>
+    /// <c>VPX_IMG_FMT_HIGHBITDEPTH</c>: a picture with more than 8 bits (not drawn).
+    /// </summary>
     const int ImgFmtHighBitDepth = 0x800;
 
+    /// <summary>
+    /// The codec context (<c>vpx_codec_ctx_t</c>, 56 bytes on 64-bit platforms, 128 allocated).
+    /// </summary>
     readonly IntPtr _context = Marshal.AllocHGlobal(128); // vpx_codec_ctx_t: 56 bytes on 64-bit platforms
+
+    /// <summary>
+    /// The context was initialised (and is destroyed with the decoder).
+    /// </summary>
     bool _open;
 
+    /// <summary>
+    /// Starts a decoder for <paramref name="codec"/> (<c>V_VP8</c> or <c>V_VP9</c>), with half the processors as threads (1 to 4).
+    /// </summary>
     public VpxDecoder(string codec)
     {
         new Span<byte>((void*)_context, 128).Clear();
@@ -40,7 +57,10 @@ sealed unsafe partial class VpxDecoder : IDisposable
             {
                 return vpx_codec_vp8_dx() != 0;
             }
-            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
+            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+            {
+                return false;
+            }
         }
     }
 
@@ -91,8 +111,14 @@ sealed unsafe partial class VpxDecoder : IDisposable
         });
     }
 
+    /// <summary>
+    /// <paramref name="value"/> clamped to a byte.
+    /// </summary>
     static byte Clamp(int value) => (byte)Math.Clamp(value, 0, 255);
 
+    /// <summary>
+    /// Destroys the codec and frees the context.
+    /// </summary>
     public void Dispose()
     {
         if (_open) vpx_codec_destroy(_context);
@@ -100,9 +126,15 @@ sealed unsafe partial class VpxDecoder : IDisposable
         Marshal.FreeHGlobal(_context);
     }
 
+    /// <summary>
+    /// <c>vpx_codec_dec_cfg_t</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct DecoderConfig
     {
+        /// <summary>
+        /// The decoding threads, and the picture size (0: from the stream).
+        /// </summary>
         public uint Threads, Width, Height;
     }
 
@@ -112,18 +144,60 @@ sealed unsafe partial class VpxDecoder : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     struct Image
     {
+        /// <summary>
+        /// The image format, colour space and range.
+        /// </summary>
         public int Format, ColorSpace, Range;
+
+        /// <summary>
+        /// The picture's size and bit depth, the display and render sizes and the chroma subsampling shifts.
+        /// </summary>
         public uint Width, Height, BitDepth, DisplayWidth, DisplayHeight, RenderWidth, RenderHeight, ChromaShiftX, ChromaShiftY;
+
+        /// <summary>
+        /// The planes: luma, the two chroma and alpha.
+        /// </summary>
         public byte* PlaneY, PlaneU, PlaneV, PlaneAlpha;
+
+        /// <summary>
+        /// Each plane's row stride in bytes.
+        /// </summary>
         public int StrideY, StrideU, StrideV, StrideAlpha;
     }
 
+    /// <summary>
+    /// The libvpx library's name.
+    /// </summary>
     const string Vpx = "vpx";
+
+    /// <summary>
+    /// <c>vpx_codec_vp8_dx</c>: the VP8 decoder interface.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp8_dx();
+
+    /// <summary>
+    /// <c>vpx_codec_vp9_dx</c>: the VP9 decoder interface.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp9_dx();
+
+    /// <summary>
+    /// <c>vpx_codec_dec_init_ver</c>.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial int vpx_codec_dec_init_ver(IntPtr context, IntPtr iface, DecoderConfig* config, CLong flags,
             int version);
+
+    /// <summary>
+    /// <c>vpx_codec_decode</c>.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial int vpx_codec_decode(IntPtr context, byte* data, uint size, IntPtr userData, CLong deadline);
+
+    /// <summary>
+    /// <c>vpx_codec_get_frame</c>.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial Image* vpx_codec_get_frame(IntPtr context, IntPtr* iterator);
+
+    /// <summary>
+    /// <c>vpx_codec_destroy</c>.
+    /// </summary>
     [LibraryImport(Vpx)] private static partial int vpx_codec_destroy(IntPtr context);
 }

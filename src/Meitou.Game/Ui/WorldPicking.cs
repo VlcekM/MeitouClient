@@ -163,6 +163,9 @@ sealed class WorldPicking(PlayerInterface player)
     /// </summary>
     public CharacterId? PickHurtAlly(Vector2 pixel) => PickWhere(pixel, c => c.IsPlayer && c.Body is { Dead: false, NeedsAid: true });
 
+    /// <summary>
+    /// The id of the nearest character under <paramref name="pixel"/> that <paramref name="accept"/> takes (<see cref="PickWhereAt"/>).
+    /// </summary>
     internal CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
 
     /// <summary>
@@ -225,12 +228,73 @@ sealed class WorldPicking(PlayerInterface player)
     /// <summary>
     /// What a right click acts on, as <see cref="PickAt"/> chose it.
     /// </summary>
-    internal enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage, Dummy, Seat }
+    internal enum Picked
+    {
+        /// <summary>
+        /// Nothing.
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// A character with a quick order.
+        /// </summary>
+        Character,
+
+        /// <summary>
+        /// An item on the ground.
+        /// </summary>
+        GroundItem,
+
+        /// <summary>
+        /// A container.
+        /// </summary>
+        Container,
+
+        /// <summary>
+        /// A door.
+        /// </summary>
+        Door,
+
+        /// <summary>
+        /// A rock to mine.
+        /// </summary>
+        Rock,
+
+        /// <summary>
+        /// A site that is an object.
+        /// </summary>
+        Site,
+
+        /// <summary>
+        /// A bed.
+        /// </summary>
+        Bed,
+
+        /// <summary>
+        /// A cage.
+        /// </summary>
+        Cage,
+
+        /// <summary>
+        /// A training dummy.
+        /// </summary>
+        Dummy,
+
+        /// <summary>
+        /// A town's turret.
+        /// </summary>
+        TownTurret,
+
+        /// <summary>
+        /// A seat.
+        /// </summary>
+        Seat,
+    }
 
     /// <summary>
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest
-    /// along the ray of a character with a quick order, a ground item, a container, a door, a rock and a site that is an object (unfinished, a
-    /// machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
+    /// along the ray of a character with a quick order, a ground item, a container, a door, a rock, a town turret and a site that is an object
+    /// (unfinished, a machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
     /// (each helper's <see cref="PlayerInterface.Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click
     /// only when nothing is (<see cref="BuildMode.SitePress"/>). Hover and click share it, as in the original.
     /// </summary>
@@ -264,6 +328,7 @@ sealed class WorldPicking(PlayerInterface player)
         Offer(Picked.Cage, cage?.T);
         Offer(Picked.Dummy, player.Furniture.PickDummyAt(p)?.T);
         Offer(Picked.Rock, player.Furniture.PickRockAt(p)?.T);
+        Offer(Picked.TownTurret, player.Furniture.PickTownTurretAt(p)?.T);
         if (player.Build.PickSiteAt(p) is { } site && player.Build.SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
 
         // An item behind the container, bed or cage met first but lying inside its bounds takes the click (the original's walk, FUN_140800250: the
@@ -303,6 +368,10 @@ sealed class WorldPicking(PlayerInterface player)
         player.Build.Services?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
         && f.Gap(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector2(point.X, point.Z)) == 0;
 
+    /// <summary>
+    /// The player's characters whose middle projects into the screen box from <paramref name="a"/> to <paramref name="b"/>, within the box-select
+    /// range.
+    /// </summary>
     internal IReadOnlyList<CharacterId> InBox(Vector2 a, Vector2 b)
     {
         float x0 = MathF.Min(a.X, b.X), x1 = MathF.Max(a.X, b.X), y0 = MathF.Min(a.Y, b.Y), y1 = MathF.Max(a.Y, b.Y);
@@ -323,11 +392,16 @@ sealed class WorldPicking(PlayerInterface player)
 
     #region Buildings
 
-    // Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast
-    // against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
-    // files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
+    /// <summary>
+    /// Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast
+    /// against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
+    /// files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
+    /// </summary>
     readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
+    /// <summary>
+    /// The collision triangles of building record <paramref name="record"/>, read once (empty without collision files).
+    /// </summary>
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
     {
         if (_collisionMeshes.TryGetValue(record, out var known)) return known;
@@ -341,7 +415,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// Where the ray meets a building: its hull prism first (null: no hit), then, when the record has collision triangles, the nearest of those
     /// (null: the ray passes through the prism without touching the building). <paramref name="y"/> is the building's base height.
     /// </summary>
-    internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
+    internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position,
+        float y, Quaternion rotation)
     {
         if (BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
         if (record is null) return prism;
@@ -379,7 +454,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// The nearest hit of the ray on the triangles (double sided), the mesh turned by <paramref name="rotation"/> and put at <paramref name="at"/>;
     /// null for none.
     /// </summary>
-    internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
+    internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at,
+        Quaternion rotation)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var inverse = Quaternion.Conjugate(q);

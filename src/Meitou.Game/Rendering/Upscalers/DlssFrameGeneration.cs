@@ -20,20 +20,69 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class DlssFrameGeneration : IFrameGenerator
 {
+    /// <summary>
+    /// sl::DLSSGMode off and on, and <c>DLSSGFlags::eRetainResourcesWhenOff</c> (sl_dlss_g.h).
+    /// </summary>
     const uint ModeOff = 0, ModeOn = 1, RetainResourcesWhenOff = 1 << 3;
+
+    /// <summary>
+    /// sl::Boolean's true and invalid.
+    /// </summary>
     const byte SlTrue = 1, SlInvalid = 2;
 
+    /// <summary>
+    /// The device context the copies and tags are recorded on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The Streamline instance frame generation runs through.
+    /// </summary>
     readonly Streamline _sl;
+
+    /// <summary>
+    /// The frame generation viewport (<see cref="Streamline.FrameGenerationViewport"/>), in native memory for Streamline's calls.
+    /// </summary>
     readonly ViewportHandle* _viewport;
+
+    /// <summary>
+    /// The depth and motion flipped top-down, and the world without the interface and the interface layer flipped top-down.
+    /// </summary>
     GpuTexture? _depthFlipped, _motionFlipped, _hudless, _uiFlipped;
+
+    /// <summary>
+    /// Whether the mode is on, whether it was ever set, whether a call failed (off for the run), and whether the one-time log lines were written.
+    /// </summary>
     bool _modeOn, _modeSet, _failed, _loggedActive, _loggedUnprepared;
+
+    /// <summary>
+    /// The display size of the frame being made.
+    /// </summary>
     int _displayWidth, _displayHeight;
+
+    /// <summary>
+    /// The DLSS-G status last read (0: ok).
+    /// </summary>
     uint _lastStatus;
+
+    /// <summary>
+    /// When the state was last read, in <see cref="Stopwatch"/> ticks.
+    /// </summary>
     long _lastStateTicks;
 
+    /// <summary>
+    /// Frame generation is wanted for this frame (<see cref="BeginFrame"/>), and nothing failed so far.
+    /// </summary>
     public bool Wanted { get; private set; }
+
+    /// <summary>
+    /// The post chain gave depth and motion this frame (<see cref="Prepare"/>).
+    /// </summary>
     public bool Prepared { get; private set; }
+
+    /// <summary>
+    /// This frame goes out with frame generation on (<see cref="Finish"/>).
+    /// </summary>
     public bool Enabled { get; private set; }
     /// <summary>
     /// The window shows the finished picture; DLSS-G is told which part is interface.
@@ -44,6 +93,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     /// </summary>
     public uint PresentedPerRendered { get; private set; }
 
+    /// <summary>
+    /// Allocates the frame generation viewport.
+    /// </summary>
     DlssFrameGeneration(GpuContext ctx, Streamline sl)
     {
         this._ctx = ctx;
@@ -67,6 +119,10 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return new DlssFrameGeneration(ctx, sl);
     }
 
+    /// <summary>
+    /// Starts a frame of <paramref name="displayW"/> x <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and
+    /// for screenshots and recorded frames.
+    /// </summary>
     public void BeginFrame(bool wanted, int displayW, int displayH)
     {
         (_displayWidth, _displayHeight) = (displayW, displayH);
@@ -130,6 +186,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return Enabled;
     }
 
+    /// <summary>
+    /// Copies the world and the interface flipped, then tags them as the HUD-less colour and the UI colour and alpha, valid until the present.
+    /// </summary>
     bool TagPicture(GpuTexture world, GpuTexture ui)
     {
         nint token = _sl.FrameToken();
@@ -166,10 +225,17 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
             DstStageMask = Silk.NET.Vulkan.PipelineStageFlags2.AllCommandsBit,
             DstAccessMask = Silk.NET.Vulkan.AccessFlags2.ShaderReadBit | Silk.NET.Vulkan.AccessFlags2.TransferReadBit,
         };
-        var dep = new Silk.NET.Vulkan.DependencyInfo { SType = Silk.NET.Vulkan.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &b };
+        var dep = new Silk.NET.Vulkan.DependencyInfo
+        {
+            SType = Silk.NET.Vulkan.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &b,
+        };
         _ctx.Device.Vk.CmdPipelineBarrier2(list.Handle, &dep);
     }
 
+    /// <summary>
+    /// Tags <paramref name="a"/> and <paramref name="b"/> as buffer types <paramref name="aType"/> and <paramref name="bType"/>, valid until the
+    /// present.
+    /// </summary>
     int TagPair(nint token, nint cb, GpuTexture a, uint aType, GpuTexture b, uint bType)
     {
         var ra = Resource(_ctx, a);
@@ -220,10 +286,13 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         PresentedPerRendered = state.NumFramesActuallyPresented;
         if (state.Status == _lastStatus) return;
         _lastStatus = state.Status;
-        Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per rendered frame, "
-            + $"{state.EstimatedVramUsageInBytes / (1 << 20)} MB, smallest side {state.MinWidthOrHeight}");
+        Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per "
+            + $"rendered frame, {state.EstimatedVramUsageInBytes / (1 << 20)} MB, smallest side {state.MinWidthOrHeight}");
     }
 
+    /// <summary>
+    /// The DLSS-G status bits as words ("ok" when none is set).
+    /// </summary>
     static string StatusText(uint status)
     {
         if (status == 0) return "ok";
@@ -235,6 +304,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return string.Join(", ", names.Where((_, bit) => (status & (1u << bit)) != 0));
     }
 
+    /// <summary>
+    /// Logs <paramref name="message"/> and turns DLSS frame generation off for the rest of the run; false.
+    /// </summary>
     bool Fail(string message)
     {
         Console.WriteLine($"frame generation  {message}; DLSS off for the rest of the run");
@@ -243,6 +315,9 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         return false;
     }
 
+    /// <summary>
+    /// Turns the mode off, frees DLSS-G's resources for the viewport (after the device has gone idle), the viewport and the flipped copies.
+    /// </summary>
     public void Dispose()
     {
         if (_modeOn) SetMode(false);

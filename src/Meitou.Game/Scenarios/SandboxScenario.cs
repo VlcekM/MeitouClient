@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Game.Editor;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Overlays;
@@ -29,16 +30,44 @@ sealed class SandboxScenario(GameHost host)
     /// </summary>
     const float PatrolHalf = 200;
 
+    /// <summary>
+    /// Whether this run is a <c>--sandbox</c>.
+    /// </summary>
     internal bool IsSandbox => host.GameOptions.Sandbox > 0;
 
+    /// <summary>
+    /// The sandbox's hero and, with two or more characters, the foe facing it; none when not spawned.
+    /// </summary>
     internal CharacterId SandboxHero = CharacterId.None, SandboxFoe = CharacterId.None;
+    /// <summary>
+    /// The hero's forced speed mode (walk, run, free; <c>--sandbox-mode</c>); null for the hero's own.
+    /// </summary>
     byte? _sandboxMode;
+    /// <summary>
+    /// The hero's fixed speed in units/s (<c>--sandbox-mode</c>); 0 for none.
+    /// </summary>
     float _sandboxSpeed;
-    bool _sandboxPatrol, _sandboxFollow;   // follow off: the camera stays on the middle of the floor until moved (Y follows the pair)
+    /// <summary>
+    /// Whether the hero patrols between ±200 along X, and whether the camera follows the pair (off: it stays on the middle of the floor until moved;
+    /// Y follows the pair).
+    /// </summary>
+    bool _sandboxPatrol, _sandboxFollow;
+    /// <summary>
+    /// The X the patrolling hero walks to next.
+    /// </summary>
     float _patrolTarget;
+    /// <summary>
+    /// The tick the patrol's last walk order was given at; -1 to give one.
+    /// </summary>
     long _patrolIssued = -1;
-    internal SandboxAnimationPicker? SandboxPicker;   // made on the first draw (the library is loaded with the scene)
-    float _toggleX0, _toggleY0, _toggleX1, _toggleY1;   // the panel's collapse button, as last drawn (pixels)
+    /// <summary>
+    /// The animation drop-down, made on the first draw (the library is loaded with the scene).
+    /// </summary>
+    internal SandboxAnimationPicker? SandboxPicker;
+    /// <summary>
+    /// The panel's collapse button, as last drawn (pixels).
+    /// </summary>
+    float _toggleX0, _toggleY0, _toggleX1, _toggleY1;
 
     /// <summary>
     /// A click on the panel's collapse button folds the panel to the button alone (a down arrow) or opens it again (<see
@@ -147,19 +176,33 @@ sealed class SandboxScenario(GameHost host)
         world.Commands.Enqueue(new SelectCommand([SandboxHero]) { Tick = world.Tick });
         bool patrol = false, fight = false;
         // --sandbox-mode: comma-separated walk, run or free, a fixed speed in units/s, patrol and fight.
-        foreach (string token in (host.GameOptions.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var tokens = (host.GameOptions.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (string token in tokens)
         {
             if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float speed)) _sandboxSpeed = speed;
             else
+            {
                 switch (token.ToLowerInvariant())
                 {
-                    case "walk": _sandboxMode = SpeedMode.Walk; break;
-                    case "run": _sandboxMode = SpeedMode.Run; break;
-                    case "free": _sandboxMode = SpeedMode.Free; break;
-                    case "patrol": patrol = true; break;
-                    case "fight": fight = true; break;   // the G key at the start (pictures of a fight)
-                    default: throw new ArgumentException("--sandbox-mode: walk, run, free, a speed in units/s, patrol or fight (comma-separated)");
+                    case "walk":
+                        _sandboxMode = SpeedMode.Walk;
+                        break;
+                    case "run":
+                        _sandboxMode = SpeedMode.Run;
+                        break;
+                    case "free":
+                        _sandboxMode = SpeedMode.Free;
+                        break;
+                    case "patrol":
+                        patrol = true;
+                        break;
+                    case "fight":
+                        fight = true;   // the G key at the start (pictures of a fight)
+                        break;
+                    default:
+                        throw new ArgumentException("--sandbox-mode: walk, run, free, a speed in units/s, patrol or fight (comma-separated)");
                 }
+            }
         }
         SandboxSendMovement();
         if (patrol) SandboxTogglePatrol();
@@ -167,10 +210,14 @@ sealed class SandboxScenario(GameHost host)
         host.Session.Ticked += _ => SandboxTick();
         string pair = host.GameOptions.Sandbox >= 2 ? ", two facing each other 30 units apart (G fights)" : "";
         string more = host.GameOptions.Sandbox > 2 ? $", {host.GameOptions.Sandbox - 2} more round them" : "";
-        Console.WriteLine($"sandbox   {record}{pair}{more}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, grid {SandboxMinor:0} / {SandboxMajor:0}");
+        Console.WriteLine($"sandbox   {record}{pair}{more}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, "
+            + $"grid {SandboxMinor:0} / {SandboxMajor:0}");
         return new Vector3(0, host.Scene.FlatHeight, 0);
     }
 
+    /// <summary>
+    /// The <c>--crowd</c> count, taken from the world options at boot: idle characters spawned round the start of a game that is not the sandbox.
+    /// </summary>
     internal int Crowd;
 
     /// <summary>
@@ -198,12 +245,18 @@ sealed class SandboxScenario(GameHost host)
         Console.WriteLine($"crowd     {placed} idle characters of {record} round {around.X:0}, {around.Z:0}");
     }
 
+    /// <summary>
+    /// Sends the hero's forced speed mode and speed to the simulation.
+    /// </summary>
     void SandboxSendMovement()
     {
         if (SandboxHero.IsNone) return;
         host.Session.World.Commands.Enqueue(new SandboxMovement(SandboxHero, _sandboxMode, _sandboxSpeed) { Tick = host.Session.World.Tick });
     }
 
+    /// <summary>
+    /// Starts the hero walking to the far end of the patrol, or stops it.
+    /// </summary>
     void SandboxTogglePatrol()
     {
         _sandboxPatrol = !_sandboxPatrol;
@@ -253,8 +306,12 @@ sealed class SandboxScenario(GameHost host)
                 _sandboxSpeed = Math.Clamp(MathF.Round(_sandboxSpeed / 5) * 5 + (key == EngineKey.RightBracket ? 5 : -5), 0, 150);
                 SandboxSendMovement();
                 break;
-            case EngineKey.P: SandboxTogglePatrol(); break;
-            case EngineKey.Y: _sandboxFollow = !_sandboxFollow; break;
+            case EngineKey.P:
+                SandboxTogglePatrol();
+                break;
+            case EngineKey.Y:
+                _sandboxFollow = !_sandboxFollow;
+                break;
             case EngineKey.G when !SandboxFoe.IsNone:
                 host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder([SandboxHero], SandboxFoe) { Tick = host.Session.World.Tick });
                 host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder([SandboxFoe], SandboxHero) { Tick = host.Session.World.Tick });
@@ -263,26 +320,29 @@ sealed class SandboxScenario(GameHost host)
     }
 
     /// <summary>
-    /// Keeps the camera on the hero (the middle of the pair while there is a foe), when following. Only the pivot moves: a cut every frame
-    /// (<see cref="CameraRig.Place"/>) would draw the rotation and zoom at the tick rate instead of interpolated.
-    /// </summary>
-    /// <summary>
-    /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), as the sandbox's follow does; a gone character
-    /// is let go.
+    /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), the target at its hips (the game's position
+    /// + <see cref="KenshiCamera.TrackHeight"/>); a gone character is let go. A carried character is tracked by its carrier until put down: the body
+    /// sways on the carrier's shoulder with every step, which shook the view.
     /// </summary>
     internal void FollowCamera()
     {
         if (host.Player.Follow is not { } id || host.Session.Camera.IsFree) return;
-        if (host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } followed)
+        var characters = host.Session.CurrentSnapshot.Characters;
+        if (characters.FirstOrDefault(c => c.Id == id) is not { } followed)
         {
             host.Player.Follow = null;
             return;
         }
         var tracked = host.Tracked(followed);
         host.Session.Camera.MovePivot(new Vector2(tracked.Position.X, tracked.Position.Z));
-        host.Camera.Target = host.DrawnPosition(tracked);
+        host.Camera.Target = host.DrawnPosition(tracked) + new Vector3(0, KenshiCamera.TrackHeight, 0);
     }
 
+    /// <summary>
+    /// Keeps the camera on the hero and the foe (their drawn places; the middle of the pair while there is a foe) while the camera follows and is
+    /// not free. Only the pivot moves: a cut every frame (<see cref="CameraRig.Place"/>) would draw the rotation and zoom at the tick rate instead
+    /// of interpolated.
+    /// </summary>
     internal void SandboxFollowCamera()
     {
         if (!IsSandbox || !_sandboxFollow || host.Session.Camera.IsFree) return;
@@ -329,7 +389,8 @@ sealed class SandboxScenario(GameHost host)
             AddCharacter("Foe", SandboxFoe, Add, yellow, detailed: false);
         }
         Add("");
-        Add($"patrol {(_sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {_patrolTarget:0})" : "off")}   follow {(_sandboxFollow ? "on" : "off")}", dim);
+        Add($"patrol {(_sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {_patrolTarget:0})" : "off")}   "
+            + $"follow {(_sandboxFollow ? "on" : "off")}", dim);
         Add("Z walk  X run  C free  [ ] fixed speed +-5  P patrol  G fight  Y follow  R stop", dim);
         SandboxPicker ??= host.AnimationLibrary is { } lib ? new SandboxAnimationPicker(lib, host.AnimationLengths) : null;
         if (SandboxPicker is not null)   // the button on the blank row
@@ -346,18 +407,34 @@ sealed class SandboxScenario(GameHost host)
         o.Flush(width, height);
     }
 
+    /// <summary>
+    /// One character's lines on the sandbox panel: its speed (set and measured), facing, state and animation layers; "gone" when it no longer lives.
+    /// </summary>
     void AddCharacter(string label, CharacterId id, Action<string, Vector4?> add, Vector4 heading, bool detailed)
     {
         var table = host.Session.World.Characters;
         var snapshot = host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
-        if (snapshot is null || !table.IsAlive(id)) { add($"{label}: gone", null); return; }
+        if (snapshot is null || !table.IsAlive(id))
+        {
+            add($"{label}: gone", null);
+            return;
+        }
         ref readonly var hot = ref table.Previous[id.Slot];
         var cold = table.Cold(id.Slot)!;
         float v = MathF.Sqrt(hot.Velocity.X * hot.Velocity.X + hot.Velocity.Z * hot.Velocity.Z), measured = 0;
         if (host.Session.PreviousSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } before)
-            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z)) / (float)host.Session.Simulation.TickSeconds;
+        {
+            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z))
+                / (float)host.Session.Simulation.TickSeconds;
+        }
         byte mode = cold.ModeOverride ?? hot.Mode;
-        string modeText = mode switch { SpeedMode.Walk => $"WALK (cap {hot.WalkSpeed:0.#})", SpeedMode.Run => $"RUN (cap {SpeedMode.RunCap:0})", SpeedMode.Group => "GROUP (squad's slowest)", _ => "FREE (no cap)" };
+        string modeText = mode switch
+        {
+            SpeedMode.Walk => $"WALK (cap {hot.WalkSpeed:0.#})",
+            SpeedMode.Run => $"RUN (cap {SpeedMode.RunCap:0})",
+            SpeedMode.Group => "GROUP (squad's slowest)",
+            _ => "FREE (no cap)",
+        };
         add($"{label}: {snapshot.Name}   {(CharacterTask)hot.Task}", heading);
         add($"v {v,6:0.00} u/s   measured {measured,6:0.00}   speed chain {hot.MaxSpeed:0.0}", null);
         if (!detailed)
@@ -371,6 +448,9 @@ sealed class SandboxScenario(GameHost host)
         AddLayers(snapshot, cold, add);
     }
 
+    /// <summary>
+    /// A character's animation layers on the panel: the synch phase and rate, then each layer's clip, time, length and weight.
+    /// </summary>
     void AddLayers(CharacterSnapshot snapshot, CharacterCold cold, Action<string, Vector4?> add)
     {
         if (cold.Animation is { } a) add($"synch phase {a.Phase:0.000}   rate F {a.Rate:0.000}   state {snapshot.Animations.Count} layer(s)", null);
@@ -379,7 +459,9 @@ sealed class SandboxScenario(GameHost host)
             // Published by record name; the length is the clip's (a technique's record name differs from its clip).
             // An animal publishes its clips by clip name (its techniques by record name) and has its own skeleton's lengths.
             bool animal = cold.Fighter is { IsAnimal: true };
-            string clip = host.AnimationLibrary is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique) ? lib.Definitions[at].Clip : layer.Name;
+            var library = host.AnimationLibrary;
+            string clip = library is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique)
+                ? lib.Definitions[at].Clip : layer.Name;
             float length = host.AnimationLengths?.For(animal ? cold.Race?.StringId : null).Of(clip) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }

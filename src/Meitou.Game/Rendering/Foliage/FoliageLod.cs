@@ -52,6 +52,9 @@ public static class FoliageLodBuilder
     /// Bumped when the simplifier, the fractions or the error measure change: it is part of the disk cache's key.
     /// </summary>
     public const int Version = 3;
+    /// <summary>
+    /// The share of the triangles each level keeps: 50 %, 25 % and 10 %.
+    /// </summary>
     public static readonly float[] Fractions = [0.5f, 0.25f, 0.1f];
     /// <summary>
     /// The fewest triangles a level reduces a part to; a part with fewer than twice this is not reduced.
@@ -80,6 +83,9 @@ public static class FoliageLodBuilder
     /// A level must have at most this share of the triangles of the level before it.
     /// </summary>
     public const float MinGain = 0.8f;
+    /// <summary>
+    /// The most sample points the deviation is measured on (<see cref="Subsample"/>).
+    /// </summary>
     const int MaxSamples = 1500;
 
     /// <summary>
@@ -211,8 +217,14 @@ public static class FoliageLodBuilder
         return (Math.Max(a, b), angle);
     }
 
+    /// <summary>
+    /// <paramref name="v"/> normalised; zero for a near-zero vector.
+    /// </summary>
     static Vector3 Normalized(Vector3 v) => v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
 
+    /// <summary>
+    /// At most <see cref="MaxSamples"/> of <paramref name="points"/>, evenly spread.
+    /// </summary>
     static List<(Vector3, Vector3)> Subsample(List<(Vector3, Vector3)> points)
     {
         if (points.Count <= MaxSamples) return points;
@@ -221,8 +233,14 @@ public static class FoliageLodBuilder
         return result;
     }
 
+    /// <summary>
+    /// A triangle for the deviation measure: its corners, their normals and its bounding box.
+    /// </summary>
     readonly record struct Tri(Vector3 A, Vector3 B, Vector3 C, Vector3 Na, Vector3 Nb, Vector3 Nc, Vector3 Min, Vector3 Max);
 
+    /// <summary>
+    /// The triangles of an index list with their corner normals and bounding boxes.
+    /// </summary>
     static Tri[] Triangles(Vertex[] vertices, uint[] indices)
     {
         var result = new Tri[indices.Length / 3];
@@ -254,7 +272,11 @@ public static class FoliageLodBuilder
                 var q = Vector3.Max(Vector3.Zero, Vector3.Max(t.Min - p, p - t.Max));
                 if (q.LengthSquared() >= best) continue;
                 float d = DistanceSquared(p, t.A, t.B, t.C);
-                if (d < best) { best = d; bestTriangle = i; }
+                if (d < best)
+                {
+                    best = d;
+                    bestTriangle = i;
+                }
             }
             if (best > worst) worst = best;
             if (n != Vector3.Zero && bestTriangle >= 0)
@@ -269,6 +291,10 @@ public static class FoliageLodBuilder
         return MathF.Sqrt(worst);
     }
 
+    /// <summary>
+    /// The barycentric coordinates of <paramref name="p"/> in the triangle (<paramref name="a"/>, <paramref name="b"/>, <paramref name="c"/>); (1, 0,
+    /// 0) for a degenerate one.
+    /// </summary>
     static (float, float, float) Barycentric(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
     {
         Vector3 v0 = b - a, v1 = c - a, v2 = p - a;
@@ -311,15 +337,27 @@ public static class FoliageLodBuilder
     }
 }
 
-/// gets no level is cached too (an empty set), so it is not worked out again.
+/// <summary>
+/// The disk cache of generated levels: <c>%LOCALAPPDATA%\Meitou\lods\&lt;name&gt;_&lt;key&gt;.mlod</c> (<see cref="Root"/>; never inside the
+/// repository), keyed by the mesh file's content hash and <see cref="FoliageLodBuilder.Version"/>. Written to a temporary name and moved into place. A
+/// mesh that gets no level is cached too (an empty set), so it is not worked out again.
 /// </summary>
 public static class FoliageLodCache
 {
-    const uint Magic = 0x444F4C4D;   // "MLOD"
+    /// <summary>
+    /// The cache file's magic, "MLOD".
+    /// </summary>
+    const uint Magic = 0x444F4C4D;
 
+    /// <summary>
+    /// The cache's folder.
+    /// </summary>
     public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
         "lods");
 
+    /// <summary>
+    /// The cache file of a mesh: its name made safe and cut to 40 characters, a hash of its bytes, the variant and the version.
+    /// </summary>
     public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version, string variant = "")
     {
         var hash = Convert.ToHexString(SHA256.HashData(fileBytes))[..24].ToLowerInvariant();
@@ -362,9 +400,15 @@ public static class FoliageLodCache
             }
             return (true, new FoliageLodSet { Indices = indices, Errors = errors, NormalAngles = normals, Triangles = triangles });
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException) { return (false, null); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or OverflowException or OutOfMemoryException)
+        {
+            return (false, null);
+        }
     }
 
+    /// <summary>
+    /// Writes the levels (none: an empty set) to a temporary file and moves it into place; the file's size, 0 when it could not be written.
+    /// </summary>
     public static long Save(string path, FoliageLodSet? set, int partCount, int version = FoliageLodBuilder.Version)
     {
         try
@@ -389,7 +433,11 @@ public static class FoliageLodCache
                         foreach (var list in part)
                         {
                             writer.Write(list.Length);
-                            foreach (uint i in list) { if (wide) writer.Write(i); else writer.Write((ushort)i); }
+                            foreach (uint i in list)
+                            {
+                                if (wide) writer.Write(i);
+                                else writer.Write((ushort)i);
+                            }
                         }
                     }
                 }

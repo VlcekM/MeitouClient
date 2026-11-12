@@ -215,7 +215,7 @@ Fly a fixed route through 5-10 zones, return, idle 60 s, repeat three times. Rec
 managed LOH, GPU allocation, resident textures and per-cache counts after each idle.
 
 - **Plateau after cycle 1-2:** bounded high-water cache; tune budgets/eviction.
-- **Linear growth each cycle:** per-visit leak; find duplicate `ZoneState`, mesh/LOD, atlas, view or buffer objects.
+- **Linear growth each cycle:** per-visit leak; find duplicate `FoliageZoneState`, mesh/LOD, atlas, view or buffer objects.
 - **Large managed heap with small RSS:** GC not decommitting; compact LOH / tune GC.
 - **RSS high with small managed heap:** native/GPU/driver retention; drain views/buffers and check Metal allocation.
 

@@ -9,25 +9,17 @@ namespace Meitou.Data.Characters;
 /// then for characters without a body file a random head, hair, beard, hair colour, skin tone, sliders and face poses from the race's editor limits,
 /// then backpack, clothing (with quality and material) and weapons (with manufacturer and model). Deterministic for a seed: the original's generator
 /// (<see cref="MsvcRandom"/>) seeded from it, its draws in the original's order (docs/characters.md "Original random sequence"). The step functions
-/// (<see cref="RollHead"/>, <see cref="RollFace"/>, <see cref="RollHair"/>,
-/// <see cref="RollBody"/>, <see cref="RollFacePoses"/>) are also the character editor's randomisers.
+/// (<see cref="RollHead"/>, <see cref="RollFace"/>, <see cref="RollHair"/>, <see cref="RollBody"/>, <see cref="RollFacePoses"/>) are also the
+/// character editor's randomisers.
 /// </summary>
 public static class CharacterGenerator
 {
+    #region Generation
+
     /// <summary>
     /// The RACE the original falls back to when a character has none (by id, so a mod that renames Greenlander keeps it; docs/characters.md).
     /// </summary>
     public const string DefaultRaceId = "17-gamedata.quack";
-
-    /// <summary>
-    /// Kenshi's float-to-int rounding for sliders: halves round away from zero.
-    /// </summary>
-    public static int Round(float value) => value < 0 ? (int)MathF.Ceiling(value - 0.5f) : (int)MathF.Floor(value + 0.5f);
-
-    /// <summary>
-    /// Item quality of an armour grade (ArmourRarity 0–5); other values give 20.
-    /// </summary>
-    public static int QualityOfGrade(int grade) => grade switch { 0 => 5, 2 => 40, 3 => 60, 4 => 80, 5 => 95, _ => 20 };
 
     /// <summary>
     /// Rolls <paramref name="nameOrId"/> (CHARACTER or RACE, by string id or name). <paramref name="female"/> forces the gender;
@@ -40,6 +32,9 @@ public static class CharacterGenerator
         return Generate(db, installRoot, record, seed, female, faction);
     }
 
+    /// <summary>
+    /// Rolls a CHARACTER or RACE record; <paramref name="raceOverride"/> is a squad template's race override, which wins over the CHARACTER's races.
+    /// </summary>
     public static Loadout Generate(GameDatabase db, string installRoot, GameRecord record, int seed, bool? female = null, GameRecord? faction = null,
             IReadOnlyList<GameReference>? raceOverride = null)
     {
@@ -47,47 +42,9 @@ public static class CharacterGenerator
         var notes = new List<string>();
         GameRecord? character = record.Type == FcsRecordType.Character ? record : null;
 
-        // A body file, if the CHARACTER names one that reads.
-        AppearanceFile? bodyFile = null;
-        if (character?.GetPath("body") is { Length: > 0 } bodyPath)
-        {
-            try
-            {
-                bodyFile = AppearanceFile.Read(Resolve(installRoot, bodyPath));
-            }
-            catch (Exception e)
-                when (e is IOException or FcsFormatException or UnauthorizedAccessException)
-            {
-                notes.Add($"body file {bodyPath}: {e.Message}");
-            }
-        }
-
-        // Race (Faction::chooseARace, Verified in outline): the squad template's "race override", else the CHARACTER's "race" list (val0 = relative
-        // weight, entries with val0 > 0), else the faction's "races" (Faction::chooseARace reads no body file: the loader fills the chosen race's
-        // appearance afterwards), else the body file's race (engine fallback).
-        GameRecord? race = record.Type == FcsRecordType.Race ? record : null;
-        if (race is null && character is not null && raceOverride is { Count: > 0 })
-            race = PickRelative(rng, raceOverride.Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
-        if (race is null && character is not null)
-            race = PickRelative(rng, character.GetReferences("race").Where(r => r.Values.Value0 > 0)
-                .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
-        if (race is null && (faction
-                ?? (character?.GetReferences("faction") is { Count: > 0 } own ? db.Find(own[0].TargetStringId) : null)) is { } races)
-            race = PickRelative(rng, races.GetReferences("races").Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId),
-                    (float)r.Values.Value0)));   // FUN_1407fe270: weight <= 0 never drawn
-        if (race is null && bodyFile?.RaceId is { } bodyRace)
-            race = db.Find(bodyRace);   // engine fallback where the original has no race at all (it logs an error)
-        if (race is null)
-        {
-            race = CharacterAppearance.Find(db, DefaultRaceId, FcsRecordType.Race)
-                    ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
-            notes.Add($"no race: default {DefaultRaceId}");
-        }
-
-        // Gender: "female chance" percent, never for a single-gender race.
-        bool isFemale = female ?? bodyFile?.Female ?? (!race.GetBool("single gender") && rng.Unit() < (character?.GetInt("female chance")
-                ?? 50) * 0.01f);
-        if (isFemale && race.GetBool("single gender")) isFemale = false;
+        var bodyFile = ReadBodyFile(installRoot, character, notes);
+        var race = ChooseRace(db, record, character, faction, raceOverride, bodyFile, rng, notes);
+        bool isFemale = ChooseGender(race, character, bodyFile, female, rng);
 
         AppearanceFile appearance;
         int morph = -1;
@@ -112,7 +69,73 @@ public static class CharacterGenerator
         return loadout;
     }
 
-    // ---- Appearance --------------------------------------------------------------------------------------------
+    /// <summary>
+    /// The CHARACTER's body file, if it names one that reads; a file that does not read is noted.
+    /// </summary>
+    static AppearanceFile? ReadBodyFile(string installRoot, GameRecord? character, List<string> notes)
+    {
+        // A body file, if the CHARACTER names one that reads.
+        AppearanceFile? bodyFile = null;
+        if (character?.GetPath("body") is { Length: > 0 } bodyPath)
+        {
+            try
+            {
+                bodyFile = AppearanceFile.Read(Resolve(installRoot, bodyPath));
+            }
+            catch (Exception e)
+                when (e is IOException or FcsFormatException or UnauthorizedAccessException)
+            {
+                notes.Add($"body file {bodyPath}: {e.Message}");
+            }
+        }
+        return bodyFile;
+    }
+
+    /// <summary>
+    /// The race: <paramref name="record"/> itself when it is a RACE, else the first of the picks below that gives one, else the default race.
+    /// </summary>
+    static GameRecord ChooseRace(GameDatabase db, GameRecord record, GameRecord? character, GameRecord? faction,
+            IReadOnlyList<GameReference>? raceOverride, AppearanceFile? bodyFile, MsvcRandom rng, List<string> notes)
+    {
+        // Race (Faction::chooseARace, Verified in outline): the squad template's "race override", else the CHARACTER's "race" list (val0 = relative
+        // weight, entries with val0 > 0), else the faction's "races" (Faction::chooseARace reads no body file: the loader fills the chosen race's
+        // appearance afterwards), else the body file's race (engine fallback).
+        GameRecord? race = record.Type == FcsRecordType.Race ? record : null;
+        if (race is null && character is not null && raceOverride is { Count: > 0 })
+            race = PickRelative(rng, raceOverride.Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
+        if (race is null && character is not null)
+            race = PickRelative(rng, character.GetReferences("race").Where(r => r.Values.Value0 > 0)
+                .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value0)));
+        if (race is null && (faction
+                ?? (character?.GetReferences("faction") is { Count: > 0 } own ? db.Find(own[0].TargetStringId) : null)) is { } races)
+            race = PickRelative(rng, races.GetReferences("races").Where(r => r.Values.Value0 > 0).Select(r => (db.Find(r.TargetStringId),
+                    (float)r.Values.Value0)));   // FUN_1407fe270: weight <= 0 never drawn
+        if (race is null && bodyFile?.RaceId is { } bodyRace)
+            race = db.Find(bodyRace);   // engine fallback where the original has no race at all (it logs an error)
+        if (race is null)
+        {
+            race = CharacterAppearance.Find(db, DefaultRaceId, FcsRecordType.Race)
+                    ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
+            notes.Add($"no race: default {DefaultRaceId}");
+        }
+        return race;
+    }
+
+    /// <summary>
+    /// The gender: <paramref name="female"/> when given, else the body file's, else a roll.
+    /// </summary>
+    static bool ChooseGender(GameRecord race, GameRecord? character, AppearanceFile? bodyFile, bool? female, MsvcRandom rng)
+    {
+        // Gender: "female chance" percent, never for a single-gender race.
+        bool isFemale = female ?? bodyFile?.Female ?? (!race.GetBool("single gender") && rng.Unit() < (character?.GetInt("female chance")
+                ?? 50) * 0.01f);
+        if (isFemale && race.GetBool("single gender")) isFemale = false;
+        return isFemale;
+    }
+
+    #endregion
+
+    #region Appearance
 
     /// <summary>
     /// A generated NPC's look in the original's draw order (<c>FUN_140581770</c>): head, head again with the face sliders, beard, hair and hair
@@ -128,6 +151,24 @@ public static class CharacterGenerator
         a.Bools["sex female"] = female;
         a.References["race"] = [new FcsReference(race.StringId, 0, 0, 0)];
 
+        var limits = ReadLimits(db, installRoot, race, female, g, notes);
+
+        faction ??= character?.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(f => f is not null);
+        RollHead(db, race, a, rng);
+        RollFace(db, race, limits, a, rng);
+        RollHair(db, race, faction, a, rng);
+        RollBody(limits, a, rng, skinReroll: true);
+        int morph = RollMorph(race, limits, a, rng, g);
+
+        a.Strings["idle stance"] = "idle_stand_normal";
+        return (new AppearanceFile { Record = a }, morph);
+    }
+
+    /// <summary>
+    /// The race's editor limits of the gender (<paramref name="g"/>), or null; a missing or unreadable file is noted.
+    /// </summary>
+    static AppearanceLimits? ReadLimits(GameDatabase db, string installRoot, GameRecord race, bool female, string g, List<string> notes)
+    {
         AppearanceLimits? limits = null;
         if (race.GetPath("editor limits") is { Length: > 0 } limitsPath)
         {
@@ -143,13 +184,14 @@ public static class CharacterGenerator
             if (limits is null) notes.Add($"editor limits {limitsPath}: no {g} config");
         }
         else notes.Add($"race '{race.Name}' has no editor limits: no random sliders");
+        return limits;
+    }
 
-        faction ??= character?.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(f => f is not null);
-        RollHead(db, race, a, rng);
-        RollFace(db, race, limits, a, rng);
-        RollHair(db, race, faction, a, rng);
-        RollBody(limits, a, rng, skinReroll: true);
-
+    /// <summary>
+    /// The morph face's index and its face poses (none without limits: -1, no draw).
+    /// </summary>
+    static int RollMorph(GameRecord race, AppearanceLimits? limits, FcsRecord a, MsvcRandom rng, string g)
+    {
         // Face poses: one of the race's "morph num" faces per gender (morph index = (int)(unit × morph num)), each a fixed roll of the pose sliders:
         // the original seeds the global generator with the FNV-1a of the morph face's mesh name when it makes that mesh (FUN_14007c070); the name's
         // form is Unknown, so Meitou's stand-in is race/gender/index.
@@ -160,8 +202,7 @@ public static class CharacterGenerator
             morph = Math.Min((int)(rng.Unit() * count), count - 1);
             RollFacePoses(limits, a, new MsvcRandom((uint)Fnv1A($"{race.StringId}/{g}/{morph}")));
         }
-        a.Strings["idle stance"] = "idle_stand_normal";
-        return (new AppearanceFile { Record = a }, morph);
+        return morph;
     }
 
     /// <summary>
@@ -233,9 +274,8 @@ public static class CharacterGenerator
 
     /// <summary>
     /// The body (<c>FUN_14007b940</c>): the Body sliders, then the Body colours, each as <see cref="Rolls"/> rolls them (each list its own group
-    /// draws); with
-    /// <paramref name="skinReroll"/> (a generated NPC, not the editor) the skin tone again, uniform over its whole range; last <c>Posture</c> back to
-    /// the appearance template's 20 (docs/characters.md "Random appearance": its draw is still made).
+    /// draws); with <paramref name="skinReroll"/> (a generated NPC, not the editor) the skin tone again, uniform over its whole range; last
+    /// <c>Posture</c> back to the appearance template's 20 (docs/characters.md "Random appearance": its draw is still made).
     /// </summary>
     public static void RollBody(AppearanceLimits? limits, FcsRecord look, MsvcRandom rng, bool skinReroll)
     {
@@ -276,8 +316,8 @@ public static class CharacterGenerator
     /// <summary>
     /// The original's rolls of a list of ranges (<c>FUN_14006fcf0</c>, <c>FUN_140070460</c>, <c>FUN_140070010</c>, <b>Verified</b> by decompilation):
     /// the ranges without a <c>random_group</c> in list order, one draw each; then one draw per group, shared by its ranges, the groups in the order
-    /// of the original's
-    /// <c>boost::unordered_map&lt;short, …&gt;</c> (<see cref="BoostHashOrder"/>). A value is round(variation × (2r − 1) + mid), not clamped.
+    /// of the original's <c>boost::unordered_map&lt;short, …&gt;</c> (<see cref="BoostHashOrder"/>). A value is round(variation × (2r − 1) + mid),
+    /// not clamped.
     /// </summary>
     static List<(T Range, int Value)> Rolls<T>(List<T> ranges, Func<T, (int Group, int Mid, int Variation)> of, MsvcRandom rng)
     {
@@ -307,10 +347,23 @@ public static class CharacterGenerator
         return result;
     }
 
+    /// <summary>
+    /// Whether the look is female (<c>sex female</c>).
+    /// </summary>
     static bool IsFemale(FcsRecord look) => look.Bools.TryGetValue("sex female", out var f) && f;
 
-    // ---- Equipment ---------------------------------------------------------------------------------------------
+    #endregion
 
+    #region Equipment
+
+    /// <summary>
+    /// Item quality of an armour grade (ArmourRarity 0–5); other values give 20.
+    /// </summary>
+    public static int QualityOfGrade(int grade) => grade switch { 0 => 5, 2 => 40, 3 => 60, 4 => 80, 5 => 95, _ => 20 };
+
+    /// <summary>
+    /// Rolls the backpack, robot limbs, clothing, crossbow and weapons in that order, then puts a hip weapon before a back one.
+    /// </summary>
     static void RollEquipment(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout)
     {
         RollBackpack(db, character, race, rng, loadout);
@@ -477,10 +530,9 @@ public static class CharacterGenerator
 
     /// <summary>
     /// The weapon factory's substitute when the picked manufacturer has no model or its model's level is 0 (<c>FUN_140580750</c>, <b>Verified</b>):
-    /// manufacturer <c>1057-gamedata.base</c> with model
-    /// <c>1058-gamedata.base</c>, the level that manufacturer's <c>weapon models</c> entry for the model gives plus the manufacturer's <c>overall
-    /// level</c> (cut to an int; neither base record has it).
-    /// <paramref name="orElse"/> stands in for a missing 1057 (a stripped data set).
+    /// manufacturer <c>1057-gamedata.base</c> with model <c>1058-gamedata.base</c>, the level that manufacturer's <c>weapon models</c> entry for the
+    /// model gives plus the manufacturer's <c>overall level</c> (cut to an int; neither base record has it). <paramref name="orElse"/> stands in for
+    /// a missing 1057 (a stripped data set).
     /// </summary>
     public static (GameRecord Maker, GameRecord? Model, int Level) FallbackWeaponMaker(GameDatabase db, GameRecord orElse)
     {
@@ -491,7 +543,9 @@ public static class CharacterGenerator
         return (maker, model, (int)(level + maker.GetFloat("overall level")));   // the float is added before the cut
     }
 
-    // ---- Weighted picks ----------------------------------------------------------------------------------------
+    #endregion
+
+    #region Weighted picks
 
     /// <summary>
     /// Relative weights: roll in [0, total) and take the first entry whose running sum exceeds it.
@@ -504,6 +558,9 @@ public static class CharacterGenerator
         return Running(list, rng.Range(0, list.Sum(o => o.Weight)));
     }
 
+    /// <summary>
+    /// <see cref="PickRelative{T}"/> for references.
+    /// </summary>
     static GameReference? PickRelative(MsvcRandom rng, IEnumerable<(GameReference? Ref, float Weight)> options)
     {
         var list = options.Where(o => o.Ref is not null && o.Weight > 0).ToList();
@@ -523,6 +580,9 @@ public static class CharacterGenerator
         return roll < list.Sum(o => o.Weight) ? Running(list, roll) : null;
     }
 
+    /// <summary>
+    /// <see cref="PickAbsolute{T}"/> for references.
+    /// </summary>
     static GameReference? PickAbsolute(MsvcRandom rng, IEnumerable<(GameReference? Ref, float Weight)> options)
     {
         var list = options.Where(o => o.Ref is not null && o.Weight > 0).ToList();
@@ -531,6 +591,9 @@ public static class CharacterGenerator
         return roll < list.Sum(o => o.Weight) ? RunningRef(list, roll) : null;
     }
 
+    /// <summary>
+    /// The first entry whose running weight sum exceeds <paramref name="roll"/>, else the last.
+    /// </summary>
     static T? Running<T>(List<(T? Item, float Weight)> list, float roll) where T : class
     {
         float sum = 0;
@@ -539,6 +602,9 @@ public static class CharacterGenerator
         return list[^1].Item;
     }
 
+    /// <summary>
+    /// <see cref="Running{T}"/> for references.
+    /// </summary>
     static GameReference? RunningRef(List<(GameReference? Ref, float Weight)> list, float roll)
     {
         float sum = 0;
@@ -561,7 +627,14 @@ public static class CharacterGenerator
         return list[^1].Item;
     }
 
-    // ---- Helpers -----------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Helpers
+
+    /// <summary>
+    /// Kenshi's float-to-int rounding for sliders: halves round away from zero.
+    /// </summary>
+    public static int Round(float value) => value < 0 ? (int)MathF.Ceiling(value - 0.5f) : (int)MathF.Floor(value + 0.5f);
 
     /// <summary>
     /// RGB 0–1 to hue, saturation, brightness 0–1 (the inverse of <see cref="CharacterAppearance.FromHsb"/>).
@@ -576,6 +649,9 @@ public static class CharacterGenerator
         return (hue, delta / max, max);
     }
 
+    /// <summary>
+    /// The 32-bit FNV-1a hash of the low byte of each char of <paramref name="s"/>, as a seed mix-in per record.
+    /// </summary>
     static int Fnv1A(string s)
     {
         uint h = 0x811c9dc5;
@@ -591,4 +667,6 @@ public static class CharacterGenerator
     internal static string Resolve(string installRoot, string fcsPath) =>
         (Content.GameInstall.IsValid(installRoot) ? Physics.CollisionPaths.Resolve(Content.GameInstall.Open(installRoot), fcsPath) : null)
         ?? Path.Combine(installRoot, fcsPath.Replace('\\', Path.DirectorySeparatorChar).TrimStart('.', Path.DirectorySeparatorChar));
+
+    #endregion
 }

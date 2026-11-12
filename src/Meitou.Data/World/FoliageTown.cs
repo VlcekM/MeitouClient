@@ -8,5 +8,8 @@ namespace Meitou.Data.World;
 /// </summary>
 public readonly record struct FoliageTown(Vector2 At, float Range, bool Owned = false)
 {
+    /// <summary>
+    /// The town's X/Z and range.
+    /// </summary>
     public void Deconstruct(out Vector2 at, out float range) => (at, range) = (At, Range);
 }

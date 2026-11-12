@@ -7,8 +7,17 @@ using Meitou.Data.Audio;
 /// </summary>
 static class AudioTool
 {
+    #region Run
+
+    /// <summary>
+    /// The install's Wwise bank folder, <c>data/audio</c>.
+    /// </summary>
     static string AudioDirectory(GameInstall install) => Path.Combine(install.DataDirectory, "audio");
 
+    /// <summary>
+    /// <c>meitou-tools audio</c>: no argument surveys every bank, <c>render</c> mixes events into a WAV, otherwise dumps one bank (a file or a name
+    /// in the audio folder) or, with <c>--wav</c> or <c>--decode</c>, exports or decodes its sounds. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         if (args.Length == 0) return Survey(install);
@@ -22,11 +31,16 @@ static class AudioTool
         }
         var bank = WwiseBank.ReadFile(path);
         int wav = Array.IndexOf(args, "--wav");
-        if (wav >= 0 && wav + 1 < args.Length) return ExportWav(install, bank, args[wav + 1], args.Length > wav + 2 ? args[wav + 2] : null);
+        if (wav >= 0 && wav + 1 < args.Length)
+            return ExportWav(install, bank, args[wav + 1], args.Length > wav + 2 ? args[wav + 2] : null);
         if (args.Contains("--decode")) return DecodeAll(install, bank);
         Dump(bank, args.Contains("--media"));
         return 0;
     }
+
+    #endregion
+
+    #region Render
 
     /// <summary>
     /// <c>audio render &lt;seconds&gt; &lt;out.wav&gt; [banks and events...] [name=value parameters] [group:state states]</c>: plays events through
@@ -40,7 +54,8 @@ static class AudioTool
     {
         if (args.Length < 2 || !double.TryParse(args[0], System.Globalization.CultureInfo.InvariantCulture, out double seconds))
         {
-            Console.Error.WriteLine("audio render <seconds> <out.wav> [Bank.bnk ...] [Event[@x,y,z][~seconds] or 8-digit hex id ...] [Parameter=value ...] [Group:State ...] [@listener=x,y,z[,fx,fy,fz]]");
+            Console.Error.WriteLine("audio render <seconds> <out.wav> [Bank.bnk ...] [Event[@x,y,z][~seconds] "
+                + "or 8-digit hex id ...] [Parameter=value ...] [Group:State ...] [@listener=x,y,z[,fx,fy,fz]]");
             return 2;
         }
 
@@ -113,6 +128,10 @@ static class AudioTool
         return events;
     }
 
+    /// <summary>
+    /// Mixes <paramref name="events"/> (each posted at its time in seconds) through <paramref name="player"/> into <paramref name="all"/>, one output
+    /// block at a time, <paramref name="total"/> frames at <paramref name="rate"/>.
+    /// </summary>
     static void MixRender(
         Meitou.Game.Audio.WwisePlayer player, List<(double At, string Event, ulong Object)> events, float[] all, int rate, int total)
     {
@@ -161,6 +180,13 @@ static class AudioTool
         Console.WriteLine($"{position}  last second: {level}");
     }
 
+    #endregion
+
+    #region Decode
+
+    /// <summary>
+    /// The Vorbis codebook library read from the game's <c>kenshi_x64.exe</c>, null (said on the console) when it is not found.
+    /// </summary>
     static WwiseCodebookLibrary? Library(GameInstall install)
     {
         var exe = Path.Combine(install.Root, "kenshi_x64.exe");
@@ -189,7 +215,8 @@ static class AudioTool
                 int frames = pcm.Length / w.Channels;
                 float peak = pcm.Length == 0 ? 0 : pcm.Max(MathF.Abs);
                 if (frames != w.SampleCount
-                        || peak is 0 or > 4) Console.WriteLine($"  {m.Id:X8} frames {frames} of {w.SampleCount}, peak {peak:0.###}");
+                        || peak is 0 or > 4)
+                    Console.WriteLine($"  {m.Id:X8} frames {frames} of {w.SampleCount}, peak {peak:0.###}");
             }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException)
             {
@@ -197,7 +224,8 @@ static class AudioTool
                 Console.WriteLine($"  {m.Id:X8} FAIL {e.Message}");
             }
         }
-        Console.WriteLine($"{bank.Media.Count - failed} of {bank.Media.Count} decoded, {seconds:0.0} s of audio in {watch.Elapsed.TotalSeconds:0.00} s");
+        Console.WriteLine($"{bank.Media.Count - failed} of {bank.Media.Count} decoded, "
+            + $"{seconds:0.0} s of audio in {watch.Elapsed.TotalSeconds:0.00} s");
         return failed == 0 ? 0 : 1;
     }
 
@@ -219,6 +247,9 @@ static class AudioTool
         return 0;
     }
 
+    /// <summary>
+    /// Writes interleaved float samples as a 16-bit PCM WAV file.
+    /// </summary>
     static void WriteWav(string file, float[] pcm, int channels, int rate)
     {
         using var s = new BinaryWriter(File.Create(file));
@@ -236,6 +267,10 @@ static class AudioTool
         s.Write(pcm.Length * 2);
         foreach (var x in pcm) s.Write((short)Math.Clamp(MathF.Round(x * 32767), -32768, 32767));
     }
+
+    #endregion
+
+    #region Survey
 
     /// <summary>
     /// Every bank: version, sections, object types, decode failures, media and references that do not resolve.
@@ -260,17 +295,27 @@ static class AudioTool
                 Console.WriteLine($"    FAIL {bad.Type} {bad.Id:X8}: {bad.Error}");
             }
             var sounds = bank.Objects.OfType<WwiseSound>().ToList();
-            var external = sounds.Where(s => s.Source.IsVorbis && bank.FindMedia(s.Source.SourceId) is null)
-                .Select(s => allMedia.TryGetValue(s.Source.SourceId, out var other) ? other
-                        : "nowhere").GroupBy(x => x).Select(g => $"{g.Key} x{g.Count()}").ToList();
+            var external = sounds
+                .Where(s => s.Source.IsVorbis && bank.FindMedia(s.Source.SourceId) is null)
+                .Select(s => allMedia.TryGetValue(s.Source.SourceId, out var other) ? other : "nowhere")
+                .GroupBy(x => x)
+                .Select(g => $"{g.Key} x{g.Count()}")
+                .ToList();
             var unused = bank.Media.Count(m => !sounds.Any(s => s.Source.SourceId == m.Id));
-            var misplaced = sounds.Count(s => bank.FindMedia(s.Source.SourceId) is { } m
-                    && (m.Offset != s.Source.Offset || m.Length != s.Source.Size));
+            var misplaced = sounds.Count(s =>
+            {
+                return bank.FindMedia(s.Source.SourceId) is { } m && (m.Offset != s.Source.Offset || m.Length != s.Source.Size);
+            });
             var dangling = Dangling(bank).ToList();
-            if (external.Count > 0) Console.WriteLine($"    sounds with media in another bank: {string.Join(", ", external)}");
+            if (external.Count > 0)
+                Console.WriteLine($"    sounds with media in another bank: {string.Join(", ", external)}");
             if (unused > 0) Console.WriteLine($"    media no sound uses: {unused}");
             if (misplaced > 0) Console.WriteLine($"    sounds whose offset/size differ from DIDX: {misplaced}");
-            if (dangling.Count > 0) Console.WriteLine($"    references outside the bank: {string.Join(", ", dangling.GroupBy(d => d.Kind).Select(g => $"{g.Key} x{g.Count()}"))}");
+            if (dangling.Count > 0)
+            {
+                Console.WriteLine("    references outside the bank: "
+                    + $"{string.Join(", ", dangling.GroupBy(d => d.Kind).Select(g => $"{g.Key} x{g.Count()}"))}");
+            }
         }
         Console.WriteLine(failures == 0 ? "All version 112 objects decoded." : $"{failures} objects failed to decode.");
         return failures == 0 ? 0 : 1;
@@ -292,11 +337,19 @@ static class AudioTool
                     yield return ($"{a.Kind} target", a.Target);
                     break;
             }
-            if (Node(o) is { } node && node.ParentId != 0 && bank.Find(node.ParentId) is null) yield return ("parent", node.ParentId);
+            if (Node(o) is { } node && node.ParentId != 0 && bank.Find(node.ParentId) is null)
+                yield return ("parent", node.ParentId);
             foreach (var c in Children(o)) if (bank.Find(c) is null) yield return ("child", c);
         }
     }
 
+    #endregion
+
+    #region Objects
+
+    /// <summary>
+    /// The node part (properties, positioning, parent) of a hierarchy object, null for an object without one.
+    /// </summary>
     public static WwiseNodeBase? Node(WwiseObject o) => o switch
     {
         WwiseSound s => s.Node,
@@ -308,6 +361,9 @@ static class AudioTool
         _ => Music(o)?.Node,
     };
 
+    /// <summary>
+    /// The music node part of a music segment, switch or playlist, null for any other object.
+    /// </summary>
     public static WwiseMusicNode? Music(WwiseObject o) => o switch
     {
         WwiseMusicSegment s => s.Music,
@@ -328,6 +384,10 @@ static class AudioTool
         _ => Music(o)?.Children ?? [],
     };
 
+    #endregion
+
+    #region Dump
+
     /// <summary>
     /// Names of the music banks' events, groups and states that match the exe's strings by hash (docs/formats/wwise-bnk.md#music).
     /// </summary>
@@ -338,14 +398,31 @@ static class AudioTool
     }.Concat(new[] { "Dunes", "Savannah", "Swamplands", "Tarsands" }.SelectMany(b => new[] { $"Music_{b}_Play", $"Music_{b}_Stop" }))
         .ToDictionary(WwiseHash.Id);
 
+    /// <summary>
+    /// An id in hexadecimal, with its name when it is one of the known names (<see cref="KnownNames"/>).
+    /// </summary>
     static string Name(uint id) => KnownNames.TryGetValue(id, out var n) ? $"{id:X8} ({n})" : id.ToString("X8");
 
+    /// <summary>
+    /// Whether <paramref name="o"/> is a node not printed yet whose parent is none or outside the bank: a root of the rest of the tree.
+    /// </summary>
+    static bool IsRoot(WwiseBank bank, WwiseObject o, HashSet<uint> printed) =>
+        Node(o) is not null && !printed.Contains(o.Id) && (Node(o)!.ParentId == 0 || bank.Find(Node(o)!.ParentId) is null);
+
+    /// <summary>
+    /// Prints a bank: its header and sections, every object with its details, the hierarchy as trees from its roots and, with <paramref
+    /// name="media"/>, the embedded media.
+    /// </summary>
     static void Dump(WwiseBank bank, bool media)
     {
-        Console.WriteLine($"bank {bank.Id:X8} v{bank.Version} language {bank.LanguageId} names {string.Join(", ", bank.BankNames.Select(kv => $"{kv.Key:X8}={kv.Value}"))}");
+        Console.WriteLine($"bank {bank.Id:X8} v{bank.Version} language {bank.LanguageId} names "
+            + $"{string.Join(", ", bank.BankNames.Select(kv => $"{kv.Key:X8}={kv.Value}"))}");
         Console.WriteLine($"sections {string.Join(' ', bank.Sections.Select(s => $"{s.Tag}={s.Length}"))}");
         if (media)
-            foreach (var m in bank.Media) Console.WriteLine($"  wem {m.Id:X8} {m.Length,9} bytes  {WemSummary(bank.MediaBytes(m).Span)}");
+        {
+            foreach (var m in bank.Media)
+                Console.WriteLine($"  wem {m.Id:X8} {m.Length,9} bytes  {WemSummary(bank.MediaBytes(m).Span)}");
+        }
         var printed = new HashSet<uint>();
         foreach (var e in bank.Objects.OfType<WwiseEvent>())
         {
@@ -357,16 +434,21 @@ static class AudioTool
                     Console.WriteLine($"  action {a:X8} (missing)");
                     continue;
                 }
-                Console.WriteLine($"  {action.Kind}/{action.Scope} -> {action.Target:X8}{(action.TargetIsBus ? " (bus)" : "")}{Props(action.Properties)}{ActionDetail(action)}");
+                Console.WriteLine($"  {action.Kind}/{action.Scope} -> "
+                    + $"{action.Target:X8}{(action.TargetIsBus ? " (bus)" : "")}{Props(action.Properties)}{ActionDetail(action)}");
                 if (action.Kind == WwiseActionKind.Play) Tree(bank, action.Target, 2, printed);
             }
         }
-        var rest = bank.Objects.Where(o => Node(o) is not null && !printed.Contains(o.Id)
-                && (Node(o)!.ParentId == 0 || bank.Find(Node(o)!.ParentId) is null)).ToList();
+        var rest = bank.Objects.Where(o => IsRoot(bank, o, printed)).ToList();
         foreach (var o in rest) Tree(bank, o.Id, 0, printed);
-        foreach (var raw in bank.Objects.OfType<WwiseRawObject>()) Console.WriteLine($"{raw.Type} {raw.Id:X8} {raw.Body.Length} bytes{(raw.Error is null ? "" : " FAIL " + raw.Error)}");
+        foreach (var raw in bank.Objects.OfType<WwiseRawObject>())
+            Console.WriteLine($"{raw.Type} {raw.Id:X8} {raw.Body.Length} bytes{(raw.Error is null ? "" : " FAIL " + raw.Error)}");
     }
 
+    /// <summary>
+    /// The kind-specific part of an action's line: the bank of a Play, the group and state of a SetState, the value of a volume, pitch or low-pass
+    /// change.
+    /// </summary>
     static string ActionDetail(WwiseAction a) => a.Kind switch
     {
         WwiseActionKind.Play => $" bank {a.BankId:X8}",
@@ -376,6 +458,9 @@ static class AudioTool
         _ => "",
     };
 
+    /// <summary>
+    /// Prints the object <paramref name="id"/> and its children <paramref name="depth"/> levels in, each once (<paramref name="printed"/>).
+    /// </summary>
     static void Tree(WwiseBank bank, uint id, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -413,19 +498,27 @@ static class AudioTool
         PrintChildren(bank, o, depth, pad, printed);
     }
 
+    /// <summary>
+    /// Prints an object's children: a switch container's per switch, a music switch's decision tree, a playlist's items, else its child list.
+    /// </summary>
     static void PrintChildren(WwiseBank bank, WwiseObject o, int depth, string pad, HashSet<uint> printed)
     {
         if (o is WwiseSwitchContainer sw)
+        {
             foreach (var (switchId, nodes) in sw.Switches)
             {
                 Console.WriteLine($"{pad}  when {switchId:X8}:");
                 foreach (var n in nodes) Tree(bank, n, depth + 2, printed);
             }
+        }
 
         foreach (var c in Children(o))
             if (o is not WwiseSwitchContainer || !printed.Contains(c)) Tree(bank, c, depth + 1, printed);
     }
 
+    /// <summary>
+    /// Appends a node's properties, its positioning (when it overrides the parent's), RTPCs and state groups.
+    /// </summary>
     static void AppendNodeDetails(StringBuilder sb, WwiseNodeBase node)
     {
         sb.Append(Props(node.Properties));
@@ -436,10 +529,15 @@ static class AudioTool
             sb.Append($" pos {node.Positioning.Bits:X2}{attenuation}{paths}");
         }
 
-        foreach (var rtpc in node.Rtpcs) sb.Append($" rtpc {rtpc.GameParameterId:X8}->p{rtpc.ParameterId}[{rtpc.Points.Length}]");
+        foreach (var rtpc in node.Rtpcs)
+            sb.Append($" rtpc {rtpc.GameParameterId:X8}->p{rtpc.ParameterId}[{rtpc.Points.Length}]");
         foreach (var s in node.StateGroups) sb.Append($" states {s.GroupId:X8}[{s.States.Length}]");
     }
 
+    /// <summary>
+    /// Appends what an object's kind holds: a sound's source, and the settings of a random or sequence, switch or layer container, music segment,
+    /// track or switch.
+    /// </summary>
     static void AppendKindDetails(StringBuilder sb, WwiseObject o)
     {
         switch (o)
@@ -448,13 +546,15 @@ static class AudioTool
                 sb.Append($" wem {s.Source.SourceId:X8} {s.Source.Size} bytes{(s.Source.IsVorbis ? "" : $" plugin {s.Source.PluginId:X8}")}");
                 break;
             case WwiseRandomSequence r:
-                sb.Append($" {(r.Mode == 0 ? "random" : "sequence")} loop {r.LoopCount} transition {r.TransitionMode}:{r.TransitionTime}ms avoid {r.AvoidRepeatCount} flags {r.Flags:X2}");
+                sb.Append($" {(r.Mode == 0 ? "random" : "sequence")} loop {r.LoopCount} transition "
+                    + $"{r.TransitionMode}:{r.TransitionTime}ms avoid {r.AvoidRepeatCount} flags {r.Flags:X2}");
                 break;
             case WwiseSwitchContainer w:
                 sb.Append($" group {w.GroupType}:{w.GroupId:X8} default {w.DefaultSwitch:X8}");
                 break;
             case WwiseLayerContainer l:
-                foreach (var layer in l.Layers) sb.Append($" layer {layer.Id:X8} x-fade {layer.CrossfadeParameterId:X8}[{layer.Associations.Length}]");
+                foreach (var layer in l.Layers)
+                    sb.Append($" layer {layer.Id:X8} x-fade {layer.CrossfadeParameterId:X8}[{layer.Associations.Length}]");
                 break;
             case WwiseMusicSegment s:
                 sb.Append($" {s.Duration:0.#} ms entry {s.EntryCue:0.#} exit {s.ExitCue:0.#}{(s.Music.Children.Length == 0 ? " (silent)" : "")}");
@@ -470,17 +570,28 @@ static class AudioTool
         }
     }
 
+    /// <summary>
+    /// A transition fade: "cut" when it has no time and no offset, else its time, curve and offset.
+    /// </summary>
     static string Fade(WwiseFade f) => f.Time == 0 && f.Offset == 0 ? "cut" : $"{f.Time} ms curve {f.Curve} offset {f.Offset}";
 
+    /// <summary>
+    /// A music transition rule's line: sources to destinations, the exit's sync and fade-out, the entry's fade-in, jump and cues.
+    /// </summary>
     static string Transition(WwiseMusicTransition t)
     {
         static string Ids(uint[] ids) => string.Join("|", ids.Select(i => i == WwiseMusicTransition.Any ? "any" : i.ToString("X8")));
         var (s, d) = (t.Source, t.Destination);
-        return $"rule {Ids(t.Sources)} -> {Ids(t.Destinations)}: exit sync {s.SyncType} fade-out {Fade(s.FadeOut)}{(s.PlayPostExit ? " post-exit" : "")}"
+        return $"rule {Ids(t.Sources)} -> {Ids(t.Destinations)}: "
+            + $"exit sync {s.SyncType} fade-out {Fade(s.FadeOut)}{(s.PlayPostExit ? " post-exit" : "")}"
             + $"; enter fade-in {Fade(d.FadeIn)}{(d.PlayPreEntry ? " pre-entry" : "")}{(d.JumpToId != 0 ? $" jump to item {d.JumpToId:X8}" : "")}"
-                + $"{(d.EntryType != 0 ? $" entry {d.EntryType}" : "")}{(s.CueFilter != 0 || d.CueFilter != 0 ? $" cues {s.CueFilter:X8}/{d.CueFilter:X8}" : "")}";
+            + $"{(d.EntryType != 0 ? $" entry {d.EntryType}" : "")}"
+            + $"{(s.CueFilter != 0 || d.CueFilter != 0 ? $" cues {s.CueFilter:X8}/{d.CueFilter:X8}" : "")}";
     }
 
+    /// <summary>
+    /// Prints a music switch's decision tree node: each key's children or the audio node it plays.
+    /// </summary>
     static void Decision(WwiseBank bank, WwiseDecisionNode d, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -491,7 +602,10 @@ static class AudioTool
             foreach (var c in d.Children) Decision(bank, c, depth + 1, printed);
         }
         else if (d.AudioNodeId == 0) Console.WriteLine($"{pad}when {key}: nothing");
-        else if (bank.Find(d.AudioNodeId) is null) Console.WriteLine($"{pad}when {key}: {d.AudioNodeId:X8} (in another bank)");
+        else if (bank.Find(d.AudioNodeId) is null)
+        {
+            Console.WriteLine($"{pad}when {key}: {d.AudioNodeId:X8} (in another bank)");
+        }
         else
         {
             Console.WriteLine($"{pad}when {key}:");
@@ -499,6 +613,9 @@ static class AudioTool
         }
     }
 
+    /// <summary>
+    /// Prints a playlist item (group or segment) with its loop count, weight and children.
+    /// </summary>
     static void PlaylistItem(WwiseBank bank, WwisePlaylistItem item, int depth, HashSet<uint> printed)
     {
         var pad = new string(' ', depth * 2);
@@ -506,8 +623,17 @@ static class AudioTool
         string weight = item.Weight == 50000 ? "" : $" weight {item.Weight / 50000.0:0.##}";
         if (item.IsGroup)
         {
-            string type = item.PlaylistType switch { 0 => "sequence (continuous)", 1 => "sequence (step)", 2 => "random (continuous)", 3 => "random (step)", _ => $"type {item.PlaylistType}" };
-            Console.WriteLine($"{pad}group {item.ItemId:X8} {type}{loop}{weight}{(item.AvoidRepeatCount > 0 && item.PlaylistType >= 2 ? $" avoid {item.AvoidRepeatCount}" : "")}{(item.Shuffle ? " shuffle" : "")}, {item.Children.Length} items");
+            string type = item.PlaylistType switch
+            {
+                0 => "sequence (continuous)",
+                1 => "sequence (step)",
+                2 => "random (continuous)",
+                3 => "random (step)",
+                _ => $"type {item.PlaylistType}",
+            };
+            Console.WriteLine($"{pad}group {item.ItemId:X8} {type}{loop}{weight}"
+                + $"{(item.AvoidRepeatCount > 0 && item.PlaylistType >= 2 ? $" avoid {item.AvoidRepeatCount}" : "")}"
+                + $"{(item.Shuffle ? " shuffle" : "")}, {item.Children.Length} items");
             foreach (var c in item.Children) PlaylistItem(bank, c, depth + 1, printed);
             return;
         }
@@ -515,6 +641,9 @@ static class AudioTool
         Tree(bank, item.SegmentId, depth + 1, printed);
     }
 
+    /// <summary>
+    /// A properties block as " {name=value ... name~[min,max]}", empty when it has none.
+    /// </summary>
     static string Props(WwiseProperties p)
     {
         if (p.Values.Count == 0 && p.Ranges.Count == 0) return "";
@@ -523,6 +652,9 @@ static class AudioTool
         return $" {{{string.Join(' ', parts)}}}";
     }
 
+    /// <summary>
+    /// A short name for a property id (vol, pitch, lpf, fade, loop), else its number.
+    /// </summary>
     static string PropName(byte id) => id switch
     {
         WwisePropertyId.Volume => "vol",
@@ -533,6 +665,9 @@ static class AudioTool
         _ => $"p{id:X2}",
     };
 
+    /// <summary>
+    /// A property's raw 32 bits as text: as an integer when it reads as a denormal float (small integers stored as ints), else as the float.
+    /// </summary>
     static string PropValue(byte id, uint raw)
     {
         float f = BitConverter.UInt32BitsToSingle(raw);
@@ -553,7 +688,10 @@ static class AudioTool
             var tag = Encoding.ASCII.GetString(wem.Slice(p, 4));
             int len = BitConverter.ToInt32(wem.Slice(p + 4, 4));
             if (tag == "fmt ")
-                sb.Append($"codec {BitConverter.ToUInt16(wem.Slice(p + 8, 2)):X4} ch {BitConverter.ToUInt16(wem.Slice(p + 10, 2))} {BitConverter.ToUInt32(wem.Slice(p + 12, 4))} Hz fmt {len}; ");
+            {
+                sb.Append($"codec {BitConverter.ToUInt16(wem.Slice(p + 8, 2)):X4} ch {BitConverter.ToUInt16(wem.Slice(p + 10, 2))} "
+                    + $"{BitConverter.ToUInt32(wem.Slice(p + 12, 4))} Hz fmt {len}; ");
+            }
             else
                 sb.Append($"{tag.Trim()} {len}; ");
             if (len < 0) break;
@@ -561,4 +699,6 @@ static class AudioTool
         }
         return sb.ToString().TrimEnd(' ', ';');
     }
+
+    #endregion
 }

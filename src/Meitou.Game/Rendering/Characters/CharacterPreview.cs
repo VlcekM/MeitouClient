@@ -31,6 +31,10 @@ public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMa
 /// </summary>
 internal sealed class PreviewResolve : IDisposable
 {
+    /// <summary>
+    /// The resolve's fragment shader: each destination pixel averages its <c>uScale</c> × <c>uScale</c> source samples, each tone mapped first and
+    /// weighted by coverage, then grades and dithers per the look.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -85,12 +89,31 @@ internal sealed class PreviewResolve : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The device the resolve draws on.
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The resolve's shader program.
+    /// </summary>
     readonly LegacyProgram _program;
+    /// <summary>
+    /// The supersampled source picture's sampler slot.
+    /// </summary>
     readonly SamplerSlot _source;
+    /// <summary>
+    /// The program's uniforms: the destination rectangle, the supersampling scale, the tone curve and its mix, the grade with its saturation and
+    /// contrast, and the dither switch.
+    /// </summary>
     readonly UniformHandle _rect, _scale, _tone, _toneMix, _grade, _saturation, _contrast, _dither;
+    /// <summary>
+    /// The resolve's pipeline by destination format, made on first use.
+    /// </summary>
     readonly Dictionary<InternalFormat, GpuPipeline> _pipelines = [];
 
+    /// <summary>
+    /// Compiles the resolve program and finds its sampler and uniforms.
+    /// </summary>
     public PreviewResolve(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -115,8 +138,7 @@ internal sealed class PreviewResolve : IDisposable
         // Sampled: the studio's occlusion reads it (CharacterRenderer.Studio).
         var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s,
             Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: name + " depth"));
-        var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
+        var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest)), colour.View());
         return (colour, depth, sampled);
     }
 
@@ -131,8 +153,11 @@ internal sealed class PreviewResolve : IDisposable
         var targets = PassTargets.Of(into, null);
         var state = DrawState.For(targets.Formats, false);
         if (!_pipelines.TryGetValue(into.Desc.Format, out var pipeline))
+        {
             _pipelines[into.Desc.Format] = pipeline = _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]),
                     PrimitiveType.Triangles, targets.Formats, _program.Name));
+        }
+
         var cmd = _gpu.BeginNative("character preview resolve");
         cmd.Order();   // the source was just drawn
         cmd.BeginRendering(new RenderingDesc(targets.Colour, default, targets.Width, targets.Height));
@@ -161,5 +186,8 @@ internal sealed class PreviewResolve : IDisposable
         _gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Frees the program (the pipelines belong to the device's cache).
+    /// </summary>
     public void Dispose() => _program.Dispose();
 }

@@ -39,6 +39,8 @@ namespace Meitou.Simulation.Kidnap;
 /// </summary>
 public sealed partial class CaptiveSystem
 {
+    #region Give-up waits and tests
+
     /// <summary>
     /// The downed and cuffed or carried: the AI's give-up list entries (hashed while any exist).
     /// </summary>
@@ -50,12 +52,6 @@ public sealed partial class CaptiveSystem
     public KidnapSystem? Kidnap { get; set; }
 
     /// <summary>
-    /// Weapon sections <c>Task_StripWeapons</c> empties (<c>FUN_140747ff0</c> reads the target's <c>hip</c> and <c>back</c> sections,
-    /// <b>Observed</b>).
-    /// </summary>
-    static bool IsWeaponSection(string section) => section is "hip" or "back";
-
-    /// <summary>
     /// The stock shackles (ARMOUR <c>SHACKLES</c>, "Prisoner Shackles"; docs/game/locks.md "Data") a capturer puts on a captive (engine choice).
     /// </summary>
     public const string ShacklesRecord = "SHACKLES";
@@ -65,6 +61,15 @@ public sealed partial class CaptiveSystem
     /// </summary>
     public const int ShoutAtSlaveWorker = 38;
 
+    /// <summary>
+    /// Weapon sections <c>Task_StripWeapons</c> empties (<c>FUN_140747ff0</c> reads the target's <c>hip</c> and <c>back</c> sections,
+    /// <b>Observed</b>).
+    /// </summary>
+    static bool IsWeaponSection(string section) => section is "hip" or "back";
+
+    /// <summary>
+    /// Whether <paramref name="who"/> is in <paramref name="list"/> with a wait that runs past <paramref name="now"/>.
+    /// </summary>
     bool Waiting(List<(CharacterId Who, double Until)> list, CharacterId who, double now)
     {
         for (int k = 0; k < list.Count; k++)
@@ -72,17 +77,26 @@ public sealed partial class CaptiveSystem
         return false;
     }
 
+    /// <summary>
+    /// Sets <paramref name="who"/>'s wait in <paramref name="list"/> to <paramref name="until"/>, adding it when absent.
+    /// </summary>
     void SetWait(List<(CharacterId Who, double Until)> list, CharacterId who, double until)
     {
         for (int k = 0; k < list.Count; k++)
+        {
             if (list[k].Who == who)
             {
                 list[k] = (who, until);
                 return;
             }
+        }
+
         list.Add((who, until));
     }
 
+    /// <summary>
+    /// Drops the given-up waits that ran out by <paramref name="now"/>.
+    /// </summary>
     void ExpireWaits(double now)
     {
         _givenUp.RemoveAll(e => e.Until <= now);
@@ -106,20 +120,51 @@ public sealed partial class CaptiveSystem
             if (p.Template.LimbSlot is 2 or 3) return true;
             if (p.Template.LimbSlot is 0 or 1) arms++;
         }
+
         return arms >= 2;
     }
 
-    // ------------------------------------------------------------------ finders
+    #endregion
 
+    #region Finders
+
+    /// <summary>
+    /// The state of one scan for a downed character to capture or carry (<see cref="NearestDown"/>): who looks, its senses, and the nearest eligible
+    /// one so far.
+    /// </summary>
     struct DownScan
     {
+        /// <summary>
+        /// The captive system scanning.
+        /// </summary>
         public CaptiveSystem System;
+        /// <summary>
+        /// The world scanned.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The looker's sense entries (null: none; the grid query covers whoever within its sight they lack).
+        /// </summary>
         public SenseBlock? Senses;
+        /// <summary>
+        /// The looker's slot.
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The looker.
+        /// </summary>
         public CharacterCold Me;
+        /// <summary>
+        /// Whether the scan is for a capture (else for a carry).
+        /// </summary>
         public bool Capture;
+        /// <summary>
+        /// The nearest eligible character so far (-1: none).
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// The squared distance of <see cref="Best"/>.
+        /// </summary>
         public float BestD2;
     }
 
@@ -143,6 +188,7 @@ public sealed partial class CaptiveSystem
         {
             if (st.Senses?.Knows(st.World.Characters.IdOf(v)) == true || !CharacterFacts.Perceives(st.World, st.Self, v))
                 return;
+
             Consider(ref st, v);
         });
         return scan.Best;
@@ -163,10 +209,14 @@ public sealed partial class CaptiveSystem
         {
             if ((e.Tags & excluded) != 0 || (uint)e.Target >= (uint)table.HighWater || table.Next[e.Target].Generation != e.Generation)
                 continue;
+
             Consider(ref scan, e.Target);
         }
     }
 
+    /// <summary>
+    /// Keeps character <paramref name="v"/> as the scan's best when it is eligible and nearer than the best so far.
+    /// </summary>
     static void Consider(ref DownScan st, int v)
     {
         if (!st.System.Eligible(st.World, st.Self, st.Me, v, st.Capture)) return;
@@ -175,6 +225,10 @@ public sealed partial class CaptiveSystem
         if (d2 < st.BestD2) (st.Best, st.BestD2) = (v, d2);
     }
 
+    /// <summary>
+    /// Whether character <paramref name="v"/> may be taken by the looker (see <see cref="NearestDown"/>): down, not carried, held or imprisoned, a
+    /// person, and the further tests of a capture or a carry.
+    /// </summary>
     bool Eligible(World world, int self, CharacterCold me, int v, bool capture)
     {
         var table = world.Characters;
@@ -182,14 +236,18 @@ public sealed partial class CaptiveSystem
         if (!c.CarriedBy.IsNone || c.InSomething != HeldState.None || c.IsImprisoned || c.Fighter is { IsAnimal: true }
                 || c.Appearance?.Animal is not null || c.Race is null)
             return false;
+
         var id = table.IdOf(v);
         if (Busy(id) || Waiting(_givenUp, id, world.GameHours) || Kidnap is { } k && k.Abductions.Any(a => a.Victim == id))
             return false;
-        if (!capture) return c.SlaveState != 0 && c.SlaveOwner == me.Faction
-                && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
+
+        if (!capture)
+            return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
+
         if (c.SlaveState == 1 || c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat
                 || Maimed(c.Medical!) || LockSystem.WornShackles(c) is not null)
             return false;
+
         return c.Faction != me.Faction && !Allied(me.Faction, c.Faction);
     }
 
@@ -219,9 +277,12 @@ public sealed partial class CaptiveSystem
                 {
                     var slaves = new List<int>();
                     foreach (int s in SlavesOf(world, squad))
+                    {
                         if (table.Cold(s) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !Waiting(_givenUp, table.IdOf(s), now)
                                 && !Busy(table.IdOf(s)))
                             slaves.Add(s);
+                    }
+
                     if (slaves.Count == 0) return null;
                     ulong roll = Rng.Hash(world.Seed, Rng.Key(worker), RngPurpose.Slow, ShoutSalt + (ulong)world.Tick);
                     int pick = slaves[Rng.Int(roll, slaves.Count)];
@@ -244,8 +305,11 @@ public sealed partial class CaptiveSystem
                     {
                         // A probe counts the goal as started: its plan treats first, which the start does.
                         if (probe)
+                        {
                             return new CaptiveJob { Kind = CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "",
                                     Faction = cold.Faction };
+                        }
+
                         FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
                         return null;
                     }
@@ -263,12 +327,23 @@ public sealed partial class CaptiveSystem
                     };
                 }
         }
+
         return null;
     }
 
+    #endregion
+
+    #region One job
+
+    /// <summary>
+    /// The salt of the shout rolls.
+    /// </summary>
     const ulong ShoutSalt = 0x53686F7574536C76;
 
-    // ------------------------------------------------------------------ one job
+    /// <summary>
+    /// The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
+    /// </summary>
+    Dialogue.DialogueSystem? _talk;
 
     /// <summary>
     /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task fires it, and again every
@@ -320,15 +395,16 @@ public sealed partial class CaptiveSystem
         }
     }
 
-    // The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
-    Dialogue.DialogueSystem? _talk;
-
+    /// <summary>
+    /// One tick of a slave worker job: walking to the slave, then working on it; false when it is over.
+    /// </summary>
     bool StepSlaveWork(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
         float dt = world.TickSeconds;
         if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.Medical is not { Dead: false })
             return End(world, j, CaptiveEventKind.GaveUp);
+
         if (!cc.CarriedBy.IsNone || cc.IsImprisoned)
         {
             // A capture whose target someone else took (a guard carrying it to jail): left alone for a while, so the next sweep does not send the
@@ -336,15 +412,15 @@ public sealed partial class CaptiveSystem
             if (j.Kind == CaptiveJobKind.Capture) SetWait(_givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
             return End(world, j, CaptiveEventKind.GaveUp);
         }
+
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
         if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, c, to);
 
         // It got up: a caged one is beaten down first (196 Beat prisoner, Task_KillPrisoner: B list 78 imprisoned, 5 weapon drawn; effect 7 target
-        // down) by an armed worker;
-
-        // any other is given up.
+        // down) by an armed worker; any other is given up.
         if (!Down(cc) && j.Kind == CaptiveJobKind.Capture && (!cc.IsImprisoned || combat is null || wc.Fighter is not { Unarmed: false }))
             return End(world, j, CaptiveEventKind.GaveUp);
+
         if (j.Phase == CaptivePhase.Walk)
         {
             var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
@@ -358,15 +434,27 @@ public sealed partial class CaptiveSystem
                     SetWait(_givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
                     return End(world, j, CaptiveEventKind.GaveUp);
                 }
+
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }
+
             TaskStart.Stand(table, w);
             if (j.Kind == CaptiveJobKind.Carry) return Hand(world, j, w);
             j.Phase = CaptivePhase.Work;
             j.Time = 0;
             wc.ActionClip = ProcessClip;
         }
+
+        return CaptureAt(world, j, w, c, wc, cc);
+    }
+
+    /// <summary>
+    /// The work at the captive: facing it, a caged one beaten down, its weapons stripped, then cuffed and handed over.
+    /// </summary>
+    bool CaptureAt(World world, CaptiveJob j, int w, int c, CharacterCold wc, CharacterCold cc)
+    {
+        var table = world.Characters;
 
         // Capture at the captive: facing it, strip, then cuff.
         var face = table.Next[c].Position - table.Next[w].Position;
@@ -381,6 +469,7 @@ public sealed partial class CaptiveSystem
             if (Down(cc)) (wc.ActionClip, j.Time) = (ProcessClip, 0);
             return true;
         }
+
         if (j.Blows == 0)
         {
             if (j.Time < Settings.StripSeconds) return true;
@@ -389,9 +478,11 @@ public sealed partial class CaptiveSystem
             j.Time = 0;
             return true;
         }
+
         EnslavingCrime(world, w, c, cc);
         if (j.Time < Settings.CuffSeconds) return true;
         Cuff(world, c, cc);
+
         // FUN_140684990(dialogue, target, 0x25) when the bar is full
         world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, RecapturedSlave) { Tick = world.Tick + 1 });
         return Hand(world, j, w);
@@ -424,10 +515,22 @@ public sealed partial class CaptiveSystem
         var table = world.Characters;
         if (table.Cold(w) is not { } wc || !table.TryResolveNext(captive, out int c) || table.Cold(c) is not { Medical.Dead: false } cc)
             return;
+
         FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
         if (Settings.RecordLog)
             _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Enslaved, CaptiveJobKind.Capture, table.IdOf(w), captive));
     }
+
+    /// <summary>
+    /// Chains a recaught slave (<see cref="CharacterAssembly.Chain"/>, the original's <c>setChainedMode</c> at the end of its cuffing): an arrest's
+    /// slave catching cages it without the cuffing step, and one caged unshackled never looks like a slave, so the slavers process it forever (#508).
+    /// </summary>
+    public void Chain(CharacterCold cc) => _assembly.Chain(cc);
+
+    /// <summary>
+    /// Draws a character's head as its shave now is (<see cref="CharacterAssembly.MatchShave"/>): an ex-slave's hair grown back.
+    /// </summary>
+    public void MatchShave(CharacterCold cc) => _assembly.MatchShave(cc);
 
     /// <summary>
     /// <c>Task_StripWeapons</c> once its 0.8 s are up: the items of the target's <c>hip</c> and <c>back</c> sections go to the stripper's inventory
@@ -448,8 +551,10 @@ public sealed partial class CaptiveSystem
             if (wc.Inventory is not { } into || !into.Add(item)) world.GroundItems.Drop(item, at, 0);
             moved = true;
         }
+
         if (moved && wc.SquadId >= 0)
             world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, world.Characters.IdOf(c), Dialogue.MemoryTag.Looted);
+
         cc.DrawnWeapon = WeaponKinds.None;
         _assembly.RefreshEquipment(cc);
     }
@@ -467,8 +572,10 @@ public sealed partial class CaptiveSystem
         bool enslaves = squad.Faction == world.Player.Faction || (uint)squad.Faction < (uint)data.Factions.Count
                 && data.Factions[squad.Faction].AntiSlavery;
         if (enslaves)
+        {
             world.SystemOf<Crime.CrimeSystem>()?.SetPending(world, w, Crime.CrimeCode.Enslaving, cc.Faction, world.Characters.IdOf(c),
                     Crime.CrimeSystem.MinTimer);
+        }
     }
 
     /// <summary>
@@ -491,10 +598,14 @@ public sealed partial class CaptiveSystem
                 inv.Items.Add(worn);
             }
         }
+
         Items.InventoryCommands.TryEquip(inv, shackles);
         _assembly.RefreshEquipment(cc);
     }
 
+    /// <summary>
+    /// Adds the given-up waits to the world's state hash.
+    /// </summary>
     void HashWaits(ref StateHasher hasher)
     {
         hasher.Add(_givenUp.Count);
@@ -504,4 +615,6 @@ public sealed partial class CaptiveSystem
             hasher.Add(until);
         }
     }
+
+    #endregion
 }

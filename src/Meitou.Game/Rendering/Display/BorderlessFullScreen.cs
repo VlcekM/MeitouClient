@@ -19,6 +19,15 @@ public static class BorderlessFullScreen
     /// </summary>
     static Vector2D<int> s_windowedPosition, s_windowedSize;
 
+    /// <summary>
+    /// How far in from a monitor's corner a window is put, as Silk.NET's default 50,50: on X11 the position is the content's, and the title bar goes
+    /// above it.
+    /// </summary>
+    const int Inset = 50;
+
+    /// <summary>
+    /// Whether the window is in full screen: borderless (Windows) or full screen on a monitor (GLFW).
+    /// </summary>
     public static bool IsOn(IWindow window) => window.WindowBorder == WindowBorder.Hidden || FullScreen(window);
 
     /// <summary>
@@ -64,12 +73,6 @@ public static class BorderlessFullScreen
     }
 
     /// <summary>
-    /// How far in from a monitor's corner a window is put, as Silk.NET's default 50,50: on X11 the position is the content's, and the title bar goes
-    /// above it.
-    /// </summary>
-    const int Inset = 50;
-
-    /// <summary>
     /// Puts the window near the corner of the primary monitor's work area (X11 honours it; Wayland places windows itself).
     /// </summary>
     public static unsafe void MoveToPrimaryMonitor(IWindow window)
@@ -81,6 +84,9 @@ public static class BorderlessFullScreen
         window.Position = new Vector2D<int>(x + Inset, y + Inset);
     }
 
+    /// <summary>
+    /// Switches the window between borderless full screen on its monitor and the bordered, maximized window.
+    /// </summary>
     public static void Toggle(IWindow window)
     {
         if (IsOn(window))
@@ -121,7 +127,8 @@ public static class BorderlessFullScreen
         window.WindowBorder = WindowBorder.Hidden;
         window.Position = origin;
         window.Size = size;
-        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y} (monitor work area {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y} at {monitor.Bounds.Origin.X},{monitor.Bounds.Origin.Y})");
+        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y} " +
+            $"(monitor work area {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y} at {monitor.Bounds.Origin.X},{monitor.Bounds.Origin.Y})");
     }
 
     /// <summary>
@@ -138,13 +145,20 @@ public static class BorderlessFullScreen
             for (int i = 0; i < count; i++)
             {
                 glfw.GetMonitorWorkarea(monitors[i], out int x, out int y, out int w, out int h);
-                if (centre.X >= x && centre.X < x + w && centre.Y >= y && centre.Y < y + h) { found = monitors[i]; break; }
+                if (centre.X >= x && centre.X < x + w && centre.Y >= y && centre.Y < y + h)
+                {
+                    found = monitors[i];
+                    break;
+                }
             }
             if (found == null) found = glfw.GetPrimaryMonitor();
             if (found == null) return null;
             glfw.GetMonitorPos(found, out int px, out int py);
             return new Vector2D<int>(px, py);
         }
-        catch (Exception e) when (e is NotSupportedException or DllNotFoundException or EntryPointNotFoundException) { return null; }
+        catch (Exception e) when (e is NotSupportedException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
     }
 }

@@ -15,12 +15,34 @@ sealed class ProspectingPanel(PlayerInterface player)
 {
     #region State
 
+    /// <summary>
+    /// The world the last report belongs to (a new one only takes the baseline).
+    /// </summary>
     object? _prospectWorld;
+
+    /// <summary>
+    /// The serial of the last report seen.
+    /// </summary>
     long _prospectSerial;
+
+    /// <summary>
+    /// The report the window shows; null for none.
+    /// </summary>
     ProspectReport? _prospectReport;
+
+    /// <summary>
+    /// The resource row picked (the map's resource).
+    /// </summary>
     int _prospectRow;
+
+    /// <summary>
+    /// The report and row the map texture was last drawn for (serial times 8 plus the row); -1 for none.
+    /// </summary>
     long _prospectMapDrawn = -1;
 
+    /// <summary>
+    /// The texture name of the results' map.
+    /// </summary>
     const string ProspectMapTexture = "meitou:prospect:map";
 
     #endregion
@@ -79,12 +101,18 @@ sealed class ProspectingPanel(PlayerInterface player)
         player.InterfaceSounds.Sound("Prospect_Results");
     }
 
+    /// <summary>
+    /// The results window's bindings: its caption, the camera marker hidden.
+    /// </summary>
     internal void BindProspectScreen(UiBindings b)
     {
         b.Text["Root"] = "PROSPECTING RESULTS";
         b.Hidden.Add("CameraMarker");
     }
 
+    /// <summary>
+    /// A results row picked: its resource is the map's.
+    /// </summary>
     internal void ProspectScreenAction(MyGuiEvent e)
     {
         if (!e.Action.StartsWith("prospect-row:", StringComparison.Ordinal)) return;
@@ -104,11 +132,11 @@ sealed class ProspectingPanel(PlayerInterface player)
     {
         if (_prospectReport is not { } r) return;
 
-        float row = 20 * player.Height / 1080f;
+        float row = 20 * player.UiScale;
         float pixels = player.StandardPixels;
 
-        // The ink of the window's text comes from its templates (the overview lines are Kenshi_TextboxStandardText, AddLines' default, the resource values
-        // Kenshi_GenericTextBoxFlatSmall), which a UI mod recolours with the window's skin; the fixed palette ink is only the fallback.
+        // The ink of the window's text comes from its templates (the overview lines are Kenshi_TextboxStandardText, AddLines' default, the resource
+        // values Kenshi_GenericTextBoxFlatSmall), which a UI mod recolours with the window's skin; the fixed palette ink is only the fallback.
         string labelInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText");
         string valueInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxFlatSmall");
         player.AddLines(controls, "OverviewDatapanel1",
@@ -133,6 +161,9 @@ sealed class ProspectingPanel(PlayerInterface player)
         if (controls.FirstOrDefault(c => c.Name == "ResourcesList") is { } list) AddResourceRows(controls, r, list, valueInk);
     }
 
+    /// <summary>
+    /// <paramref name="v"/> as invariant text.
+    /// </summary>
     static string N(int v) => v.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>

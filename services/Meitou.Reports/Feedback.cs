@@ -10,11 +10,23 @@ namespace Meitou.Reports;
 /// <summary>
 /// The game's feedback button: a form (title, text, version, mods, camera location) is started, its attachments (screenshot, navmesh screenshot,
 /// zipped save, gzipped log) are uploaded one request each, and sending it opens a GitHub issue that links them. The files stay in
-/// <see cref="Config.FeedbackDir"/>, public under an unguessable token; one person starts at most 10 forms a day.
+/// <see cref="Config.FeedbackDir"/>, public under an unguessable token; one person starts at most 20 forms a day.
 /// </summary>
 sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClientFactory http, ILogger<Feedback> log)
 {
+    /// <summary>
+    /// The attachment kinds a form can ask for and upload, in their upload order.
+    /// </summary>
     public static readonly string[] Kinds = ["screenshot", "navmesh", "save", "log"];
+
+    /// <summary>
+    /// The platform names a form may give; any other is stored as "other".
+    /// </summary>
+    static readonly string[] Platforms = ["win", "linux", "mac", "proton", "other"];
+
+    /// <summary>
+    /// The longest title, text, version, camera location and mods list kept (characters), and the forms one person may start a day.
+    /// </summary>
     const int TitleMax = 100, BodyMax = 5000, VersionMax = 64, LocationMax = 200, ModsMax = 1000, PerDay = 20;
 
     /// <summary>
@@ -22,6 +34,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// </summary>
     public static long MaxBytes(string kind) => kind == "save" ? 95_000_000 : 16 << 20;
 
+    /// <summary>
+    /// The file name an attachment of <paramref name="kind"/> is stored under in the form's folder.
+    /// </summary>
     public static string FileName(string kind) => kind switch
     {
         "screenshot" => "screenshot.png",
@@ -40,7 +55,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         string? body = Clean(b.Body, BodyMax, lines: true);
         string version = Clean(b.Version, VersionMax, lines: false) ?? "unknown";
         string? commit = Clean(b.Commit, VersionMax, lines: false);
-        string platform = b.Platform is { } p && Intake.Platforms.Contains(p) ? p : "other";
+        string platform = b.Platform is { } p && Platforms.Contains(p) ? p : "other";
         string? discord = Clean(b.Discord, 64, lines: false);
         string[] mods = [.. (b.Mods ?? []).Select(m => Clean(m, 200, lines: false)).OfType<string>().Take(ModsMax)];
         string? location = Clean(b.Location, LocationMax, lines: false);
@@ -143,6 +158,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// Deletes the form's folder and its attachments (nothing for a malformed token).
+    /// </summary>
     public void DeleteFiles(string token)
     {
         if (!ValidToken(token)) return;
@@ -172,6 +190,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         _ => row.LogSize is null,
     };
 
+    /// <summary>
+    /// The GitHub issue's text: the player's text (mentions defused), the game's details and links to the attachments with their sizes.
+    /// </summary>
     string IssueBody(FeedbackRow row)
     {
         string Link(string kind) => new Uri(config.PublicUrl, $"feedback/{row.Token}/{FileName(kind)}").AbsoluteUri;
@@ -198,8 +219,10 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         void Picture(string kind, string label, long? size)
         {
             if (size is { } bytes)
+            {
                 s.AppendLine(bytes <= 5_000_000 ? $"![{label}]({Link(kind)})" : $"[{label}]({Link(kind)}) (png, {Mb(bytes)}, too large to show)")
                     .AppendLine();
+            }
         }
         Picture("screenshot", "Screenshot", row.ScreenshotSize);
         Picture("navmesh", "Navmesh", row.NavmeshSize);
@@ -216,6 +239,10 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// </summary>
     static string Unmention(string text) => text.Replace("@", "@​", StringComparison.Ordinal);
 
+    /// <summary>
+    /// <paramref name="s"/> trimmed, without control characters (line breaks kept when <paramref name="lines"/>) and cut to <paramref name="max"/>;
+    /// null when empty.
+    /// </summary>
     static string? Clean(string? s, int max, bool lines)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
@@ -223,6 +250,9 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         return s.Length > max ? s[..max] : s;
     }
 
+    /// <summary>
+    /// Whether <paramref name="token"/> has the form of a form token: 32 lower-case hexadecimal digits.
+    /// </summary>
     static bool ValidToken(string token) => token.Length == 32 && token.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 }
 

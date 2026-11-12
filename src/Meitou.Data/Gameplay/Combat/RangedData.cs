@@ -9,9 +9,24 @@ namespace Meitou.Data.Gameplay.Combat;
 /// </summary>
 public sealed record GunData
 {
+    /// <summary>
+    /// The GUN_DATA's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The GUN_DATA's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// <c>accuracy deviation at 0 skill</c> (degrees, default 4).
+    /// </summary>
     public float AccuracyDeviationAtZeroSkill { get; init; } = 4;
+
+    /// <summary>
+    /// <c>accuracy perfect skill</c> (default 70).
+    /// </summary>
     public int AccuracyPerfectSkill { get; init; } = 70;
 
     /// <summary>
@@ -19,9 +34,24 @@ public sealed record GunData
     /// </summary>
     public float AimSpeed { get; init; } = 1;
 
+    /// <summary>
+    /// <c>num shots</c> (default 1).
+    /// </summary>
     public int NumShots { get; init; } = 1;
+
+    /// <summary>
+    /// <c>range</c> (units, default 1000).
+    /// </summary>
     public int Range { get; init; } = 1000;
+
+    /// <summary>
+    /// <c>reload time min</c> (seconds, default 1).
+    /// </summary>
     public float ReloadTimeMin { get; init; } = 1;
+
+    /// <summary>
+    /// <c>reload time max</c> (seconds, default 5).
+    /// </summary>
     public float ReloadTimeMax { get; init; } = 5;
 
     /// <summary>
@@ -33,6 +63,10 @@ public sealed record GunData
     /// <c>barrel pos Y</c>, <c>barrel pos Z</c>: the muzzle in the barrel part's frame (x 0).
     /// </summary>
     public float BarrelY { get; init; }
+
+    /// <summary>
+    /// <c>barrel pos Z</c>: the muzzle's Z in the barrel part's frame (default 5).
+    /// </summary>
     public float BarrelZ { get; init; } = 5;
 
     /// <summary>
@@ -40,6 +74,9 @@ public sealed record GunData
     /// </summary>
     public string LiveAmmoMesh { get; init; } = "";
 
+    /// <summary>
+    /// Reads a GUN_DATA record with the fcs.def defaults named on each property.
+    /// </summary>
     public static GunData From(GameRecord r)
     {
         float speed = RecordReading.Float(r, "shot speed", 1);
@@ -70,21 +107,84 @@ public sealed record GunData
 /// </summary>
 public sealed record CrossbowData
 {
+    /// <summary>
+    /// The CROSSBOW's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The CROSSBOW's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// <c>pierce damage min 0</c>: the low end of the pierce damage at quality 0.
+    /// </summary>
     public float PierceDamageMin0 { get; init; }
+
+    /// <summary>
+    /// <c>pierce damage min 1</c>: the low end of the pierce damage at quality 1.
+    /// </summary>
     public float PierceDamageMin1 { get; init; }
+
+    /// <summary>
+    /// <c>pierce damage max 0</c>: the high end of the pierce damage at quality 0.
+    /// </summary>
     public float PierceDamageMax0 { get; init; }
+
+    /// <summary>
+    /// <c>pierce damage max 1</c>: the high end of the pierce damage at quality 1.
+    /// </summary>
     public float PierceDamageMax1 { get; init; }
+
+    /// <summary>
+    /// <c>range</c> (units) at quality 0.
+    /// </summary>
     public int Range0 { get; init; }
+
+    /// <summary>
+    /// <c>range 1</c> (units) at quality 1.
+    /// </summary>
     public int Range1 { get; init; }
+
+    /// <summary>
+    /// <c>reload time min</c> (seconds) at quality 0.
+    /// </summary>
     public float ReloadTimeMin0 { get; init; }
+
+    /// <summary>
+    /// <c>reload time min 1</c> (seconds) at quality 1.
+    /// </summary>
     public float ReloadTimeMin1 { get; init; }
+
+    /// <summary>
+    /// <c>reload time max</c> (seconds) at quality 0.
+    /// </summary>
     public float ReloadTimeMax0 { get; init; }
+
+    /// <summary>
+    /// <c>reload time max 1</c> (seconds) at quality 1.
+    /// </summary>
     public float ReloadTimeMax1 { get; init; }
+
+    /// <summary>
+    /// <c>accuracy deviation at 0 skill</c> (degrees) at quality 0.
+    /// </summary>
     public float AccuracyDeviation0 { get; init; }
+
+    /// <summary>
+    /// <c>accuracy deviation at 0 skill 1</c> (degrees) at quality 1.
+    /// </summary>
     public float AccuracyDeviation1 { get; init; }
+
+    /// <summary>
+    /// <c>shot speed</c> (units per second) at quality 0.
+    /// </summary>
     public float ShotSpeed0 { get; init; }
+
+    /// <summary>
+    /// <c>shot speed 1</c> (units per second) at quality 1.
+    /// </summary>
     public float ShotSpeed1 { get; init; }
 
     /// <summary>
@@ -92,8 +192,20 @@ public sealed record CrossbowData
     /// the engine does not apply them.
     /// </summary>
     public float BleedMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>human damage mult</c> (default 1); not applied, see <see cref="BleedMult"/>.
+    /// </summary>
     public float HumanDamageMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>animal damage mult</c> (default 1); not applied, see <see cref="BleedMult"/>.
+    /// </summary>
     public float AnimalDamageMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>robot damage mult</c> (default 1); not applied, see <see cref="BleedMult"/>.
+    /// </summary>
     public float RobotDamageMult { get; init; } = 1;
 
     /// <summary>
@@ -138,6 +250,10 @@ public sealed record CrossbowData
     public CrossbowStats At(float q, CombatConstants constants, float globalDamageMultiplier = 1) =>
         Lerp(q, globalDamageMultiplier, constants.BowDamage1, constants.BowDamage99);
 
+    /// <summary>
+    /// Lerps every level-0/level-1 pair by <paramref name="q"/>, the pierce ends scaled by <paramref name="bow1"/> and <paramref name="bow99"/>
+    /// first, then times <paramref name="g"/> and truncated.
+    /// </summary>
     CrossbowStats Lerp(float q, float g, float bow1, float bow99)
     {
         static float L(float a, float b, float t) => a + (b - a) * t;
@@ -153,12 +269,18 @@ public sealed record CrossbowData
             speed);
     }
 
+    /// <summary>
+    /// The target of the first entry of reference list <paramref name="list"/>; empty when the list has none.
+    /// </summary>
     static string FirstReference(GameRecord r, string list)
     {
         var refs = r.GetReferences(list);
         return refs.Count > 0 ? refs[0].TargetStringId : "";
     }
 
+    /// <summary>
+    /// Reads a CROSSBOW record (the level fields default to 0, <c>num shots</c> to at least 1).
+    /// </summary>
     public static CrossbowData From(GameRecord r) => new()
     {
         StringId = r.StringId,

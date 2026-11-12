@@ -10,6 +10,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class ItemCells(PlayerInterface player)
 {
+    /// <summary>
+    /// The item icon source; null: names only.
+    /// </summary>
     internal ItemIcons? ItemIcons;
 
     /// <summary>
@@ -70,8 +73,8 @@ sealed class ItemCells(PlayerInterface player)
             [TooltipRuntime.ItemTipKey] = name,
             [property] = index.ToString(CultureInfo.InvariantCulture),
         };
-        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero, TextColour: System.Numerics.Vector4.One,
-            Pickable: pickable, TextScale: 0.9f * player.InventoryScale, Clip: clip));
+        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero,
+            TextColour: System.Numerics.Vector4.One, Pickable: pickable, TextScale: 0.9f * player.UiScale, Clip: clip));
     }
 
     /// <summary>
@@ -80,7 +83,7 @@ sealed class ItemCells(PlayerInterface player)
     /// </summary>
     void AddCharge(List<UiControl> controls, string name, UiRect area, float fill, UiRect? clip)
     {
-        float height = Math.Max(3, player.InventoryScale * 3);
+        float height = Math.Max(3, player.UiScale * 3);
         float inset = 1;
         float width = Math.Max(0, area.Width - 2 * inset);
         float top = area.Y + area.Height - inset - height;

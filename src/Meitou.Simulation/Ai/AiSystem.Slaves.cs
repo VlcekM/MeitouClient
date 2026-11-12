@@ -3,8 +3,10 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Ai;
 
-// The town data a player character's Obedient Slave job (187, Kidnap/ObedientSlave.cs) works with: the worker goals' finder (189 / 190) over the town
-// a point is in.
+/// <summary>
+/// The town data a player character's Obedient Slave job (187, Kidnap/ObedientSlave.cs) works with: the worker goals' finder (189 / 190) over the
+/// town a point is in.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>
@@ -19,6 +21,6 @@ public sealed partial class AiSystem
     /// </summary>
     internal (TownBuilding Building, string Clip, string? Functionality)? WorkAt(World world, CharacterId self, Vector3 at, int epoch) =>
         TownAt(at) is >= 0 and var site && PickWork(world, self, site, epoch) is { } building
-            ? (building, WorkClipOf(building), WorkFunctionalityOf(building))
+            ? (building, _work.ClipOf(building), _work.FunctionalityOf(building))
             : null;
 }

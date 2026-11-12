@@ -64,7 +64,10 @@ public class TownArtifactTests
             t.References["residents"] = [SyntheticTown.Ref("vault-t", 1), SyntheticTown.Ref("hut-t", 1)];
             t.Ints["item artifacts max value"] = 5000;
         });
-        TownFixture Chest(int i) => new($"{VaultKey}/{i}", "chest-t", false, VaultAt, 0) { Function = TownBuildings.GeneralStorageFunction, StorageWidth = 4, StorageHeight = 4 };
+        TownFixture Chest(int i) => new($"{VaultKey}/{i}", "chest-t", false, VaultAt, 0)
+        {
+            Function = TownBuildings.GeneralStorageFunction, StorageWidth = 4, StorageHeight = 4,
+        };
         var vaultHome = new TownBuilding("vault", "house-t", "Vault", VaultAt, 0, true, false, [])
         {
             Zone = VaultZone, CanHouse = true, Furnished = true, InteriorLayout = "Vault", ResidentsTemplate = "vault-t", Fixtures = [Chest(0),
@@ -182,7 +185,10 @@ public class TownArtifactTests
             Assert.Equal(3, kept.Where(i => i.Record == "book-t" && i.Unique).Sum(i => i.Quantity));
             Assert.Contains(kept, i => i.Record == "junk-t" && !i.Unique);   // the rest of the stock too
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
     [Fact]
@@ -255,6 +261,9 @@ public class TownArtifactTests
                     new ArtifactStack("core-t", "", "", 0, 1)],
                 PopulationSystem.ReadArtifacts(kept, data.Db));
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 }

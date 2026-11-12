@@ -12,7 +12,8 @@ namespace Meitou.Game.Rendering.Objects;
 static class LampShaders
 {
     /// <summary>
-    /// A lamp tile's mapping (Gi.LampTiles): a sphere by octahedral directions, a cone by its plane, a little wider than the cone so a lookup at the rim stays inside. For the fill and for the lookup.
+    /// A lamp tile's mapping (Gi.LampTiles): a sphere by octahedral directions, a cone by its plane, a little wider than the cone so a lookup at the
+    /// rim stays inside. For the fill and for the lookup.
     /// </summary>
     public const string TileMapping = """
         const float LAMP_TILE_GUARD = 1.04;
@@ -136,6 +137,10 @@ static class LampShaders
 
         """;
 
+    /// <summary>
+    /// The lamp functions (the class summary's inputs and switches): the game's attenuation, and <c>lampLight</c>, which adds the lamps around a
+    /// surface point like the sun.
+    /// </summary>
     public const string Lighting = """
         #ifndef LAMP_VISIBILITY
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) 1.0
@@ -229,5 +234,8 @@ static class LampShaders
     /// <summary>
     /// The defines <see cref="Lighting"/> needs, ahead of it.
     /// </summary>
-    public static string Defines => $"#define LAMP_INDEX_WIDTH {WorldLamps.IndexWidth}\n#define LAMP_TILE_UNIT {Gi.LampTiles.MinTile}\n#define LAMP_DIFFUSE {(1 - Data.World.KenshiLighting.DielectricSpecular).ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture)}\n";
+    public static string Defines => $"#define LAMP_INDEX_WIDTH {WorldLamps.IndexWidth}\n" +
+        $"#define LAMP_TILE_UNIT {Gi.LampTiles.MinTile}\n" +
+        $"#define LAMP_DIFFUSE {(1 - Data.World.KenshiLighting.DielectricSpecular).ToString("0.0########",
+            System.Globalization.CultureInfo.InvariantCulture)}\n";
 }

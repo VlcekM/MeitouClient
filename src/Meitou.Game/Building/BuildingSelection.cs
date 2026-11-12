@@ -22,6 +22,9 @@ sealed class BuildingSelection(PlayerInterface player)
     internal sealed record SelectedBuilding(string Name, string? Type, string? Owner, string? Town, string? SiteId, string Instance,
         Vector3 Position, Vector2[]? Hull, bool PublicDay = false, bool PublicNight = false, string? Record = null, bool Destroyed = false);
 
+    /// <summary>
+    /// The building selected by a click; null when none is.
+    /// </summary>
     internal SelectedBuilding? Selected;
 
     /// <summary>
@@ -106,21 +109,8 @@ sealed class BuildingSelection(PlayerInterface player)
     internal (SelectedBuilding Building, float T)? PickBuildingAt(Vector2 pixel)
     {
         if (player.Ray(pixel) is not { } ray) return null;
-        // A visible bed takes the click over the house around it, as a plain building is no right-click candidate (PickAt); a nearer object site or
-        // rock still wins.
-        if (player.Furniture.PickBedAt(pixel) is { } bedHit
-            && !(player.Build.PickSiteAt(pixel) is { } before && before.Site.Id + "@bed0" != bedHit.Bed.Id && player.Build.SiteIsObject(before.Site)
-                && before.T < bedHit.T)
-            && !(player.Furniture.PickRockAt(pixel) is { } stone && stone.T < bedHit.T))
-        {
-            var bed = bedHit.Bed;
-            if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } bedSite)
-                return (SiteBuilding(bedSite), bedHit.T);
-            var spotName = player.Build.Services?.ItemName(bed.Record) ?? bed.Record;
-            var spotOwner = player.FactionName?.Invoke(bed.Owner);
-            var spot = new SelectedBuilding(spotName, null, spotOwner, null, null, bed.Id, bed.Position, null, Record: bed.Record);
-            return (spot, bedHit.T);
-        }
+        if (PickFurnitureAt(pixel) is { } furniture) return furniture;
+
         float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
@@ -169,6 +159,61 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
+    /// The visible bed, container or cage nearest under the pixel, which takes the click over the house around it, as the original picks furniture
+    /// as a building by its own collision (docs/game/ui-input.md "Building picking and selection"); a plain building is no right-click candidate
+    /// (PickAt). A nearer object site or rock still wins. One that belongs to a site of the player's selects that site.
+    /// </summary>
+    (SelectedBuilding Building, float T)? PickFurnitureAt(Vector2 pixel)
+    {
+        if (NearestFurnitureAt(pixel) is not { } hit) return null;
+        if (player.Build.PickSiteAt(pixel) is { } front && !IsSiteOf(front.Site, hit.Id) && player.Build.SiteIsObject(front.Site) && front.T < hit.T)
+            return null;
+        if (player.Furniture.PickRockAt(pixel) is { } stone && stone.T < hit.T) return null;
+
+        if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => IsSiteOf(s, hit.Id)) is { } site)
+            return (SiteBuilding(site), hit.T);
+
+        var name = player.Build.Services?.ItemName(hit.Record) ?? hit.Record;
+        var owner = player.FactionName?.Invoke(hit.Owner);
+        return (new SelectedBuilding(name, null, owner, null, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
+    }
+
+    /// <summary>
+    /// The nearest of the bed, container and cage under the pixel: its fixture id, BUILDING record, place, owner faction and ray distance. A
+    /// container or cage that is a level building of its own (a town's standalone cage or safe, its fixture id the placement's key) is left to the
+    /// level buildings' pick, which gives its Type and Town.
+    /// </summary>
+    (string Id, string Record, Vector3 Position, int Owner, float T)? NearestFurnitureAt(Vector2 pixel)
+    {
+        (string Id, string Record, Vector3 Position, int Owner, float T)? best = null;
+        void Offer(string id, string record, Vector3 position, int owner, float t)
+        {
+            if (best is not { } b || t < b.T) best = (id, record, position, owner, t);
+        }
+
+        if (player.Furniture.PickBedAt(pixel) is ({ } bed, var bedT))
+            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, bedT);
+        if (player.Furniture.PickContainerAt(pixel) is ({ } box, var boxT) && !IsLevelBuilding(box.Id, box.Position))
+            Offer(box.Id, box.Record, box.Position, box.Owner, boxT);
+        if (player.Furniture.PickCageAt(pixel) is ({ } cage, var cageT) && !IsLevelBuilding(cage.Id, cage.Position))
+            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, cageT);
+        return best;
+    }
+
+    /// <summary>
+    /// Whether the fixture <paramref name="id"/> at <paramref name="at"/> is a level building's own lock: the placement standing there has its id
+    /// as key (an interior's fixture is <c>&lt;house key&gt;/&lt;index&gt;</c>).
+    /// </summary>
+    bool IsLevelBuilding(string id, Vector3 at) =>
+        player.Build.Services?.Placement.StaticPlacementsAround(new Vector2(at.X, at.Z), 1).Any(p => p.Key == id) == true;
+
+    /// <summary>
+    /// Whether the fixture <paramref name="fixture"/> belongs to the player's <paramref name="site"/>: its bed (<c>&lt;site&gt;@bed0</c>) or its own
+    /// lock (a cage or safe, the site's id).
+    /// </summary>
+    static bool IsSiteOf(Simulation.Construction.BuildingSnapshot site, string fixture) => fixture == site.Id + "@bed0" || fixture == site.Id;
+
+    /// <summary>
     /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the
     /// level building is tested against its whole collision, roof included, while the original passes a building's hidden roof and upper floors in
     /// the interior view (docs/game/ui-input.md "Building picking and selection").
@@ -187,6 +232,9 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     const string PausedColour = "777777";
 
+    /// <summary>
+    /// Each BUILDING record's build data by record id (<see cref="BuildingData"/>, asked once per record).
+    /// </summary>
     readonly Dictionary<string, Data.Gameplay.Construction.BuildingBuildData?> _buildingData = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -207,8 +255,6 @@ sealed class BuildingSelection(PlayerInterface player)
         var state = new List<PlayerInterface.HudLine>();
         var stats = new List<PlayerInterface.HudLine>();
         var extended = new List<PlayerInterface.HudLine>();
-        string status = "Normal";
-        bool bad = false;
         bool own = focus.SiteId is not null;
         bool playerSite = focus.SiteId is { } siteId && !Simulation.Production.ProductionSystem.IsNatural(siteId);
         var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
@@ -216,6 +262,33 @@ sealed class BuildingSelection(PlayerInterface player)
         // (the original's slot 79: the owner is the player's faction).
         var detail = player.Session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
         bool mine = playerSite || detail is { Owned: true };
+        var inspected = AddStateLines(focus, site, detail, own, playerSite, state, stats);
+
+        // Slot 114 asks slot 97 (broken, +0x3b6) before completion: a machine being dismantled reads Broken, not Under construction.
+        // A generator's own word still comes after.
+        var unfinished = site is { Complete: false } && own ? player.Production.Machine(focus.SiteId) : null;
+        var (status, bad) = SiteStatus(site, unfinished);
+        if (unfinished is not null && ProductionWindows.GeneratorWord(unfinished) is { } word)
+        {
+            (status, bad) = word;
+        }
+        else
+        {
+            AddWorkLines(focus, detail, own, mine, stats, extended, ref status, ref bad);
+        }
+
+        AddPublicLines(focus, site, detail, mine, playerSite, stats);
+        var header = HeaderLine(focus, detail, own, playerSite, mine, inspected);
+        return (header, [.. state], [.. stats], status, bad, [.. extended]);
+    }
+
+    /// <summary>
+    /// The building's state lines (Type, Town, a turret's heights, a bed's cost, the upgrades and construction buttons of the player's site) and a
+    /// bed's healing line; returns the inspected richness of the building, if any.
+    /// </summary>
+    Simulation.Production.RichnessView? AddStateLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site,
+        Simulation.Locks.BuildingDetail? detail, bool own, bool playerSite, List<PlayerInterface.HudLine> state, List<PlayerInterface.HudLine> stats)
+    {
         if (focus.Type is { Length: > 0 } type) state.Add(new("Type:", type));
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
@@ -236,10 +309,17 @@ sealed class BuildingSelection(PlayerInterface player)
         // The construction buttons (Building slot 117, FUN_1402fea10): Dismantle in BadBright, and while unfinished PAUSE CONSTRUCTION,
         // captioned [PAUSED] in #777777 while paused.
         if (playerSite && site is { LevelPlacement: null }) AddConstructionButtons(site, state);
+        return inspected;
+    }
 
-        // Slot 114 asks slot 97 (broken, +0x3b6) before completion: a machine being dismantled reads Broken, not Under construction.
-        // A generator's own word still comes after.
-        var unfinished = site is { Complete: false } && own ? player.Production.Machine(focus.SiteId) : null;
+    /// <summary>
+    /// The medical header's status word of a site: Broken (destroyed, or an unfinished machine that is broken), the construction state while
+    /// unfinished, else Normal.
+    /// </summary>
+    static (string Status, bool Bad) SiteStatus(Simulation.Construction.BuildingSnapshot? site, Simulation.Production.MachineSnapshot? unfinished)
+    {
+        string status = "Normal";
+        bool bad = false;
         if (site is { Destroyed: true } || unfinished is { Broken: true })
         {
             status = "Broken";
@@ -250,45 +330,55 @@ sealed class BuildingSelection(PlayerInterface player)
             status = site.Dismantling ? "Being dismantled" : site.Paused ? "Paused" : "Under construction";
             bad = true;
         }
+        return (status, bad);
+    }
 
-        if (unfinished is not null && ProductionWindows.GeneratorWord(unfinished) is { } word)
+    /// <summary>
+    /// The stats lines of what the building does: its first door, a rock's richness, a machine's lines (or an unmined rock's), which may change
+    /// the status word.
+    /// </summary>
+    void AddWorkLines(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool own, bool mine, List<PlayerInterface.HudLine> stats,
+        List<PlayerInterface.HudLine> extended, ref string status, ref bool bad)
+    {
+        if (FirstDoor(focus) is { } door)
         {
-            (status, bad) = word;
-        }
-        else
-        {
-            if (FirstDoor(focus) is { } door)
+            // DoorStuff slot 40 (FUN_140304120): the value in the exe's green #a8b774, BadBright for a broken door, a closed locked one and
+            // Locked; on the player's own door full-row buttons (width 1.0: the key is not shown, as the owner's screenshots show).
+            if (door.Broken)
             {
-                // DoorStuff slot 40 (FUN_140304120): the value in the exe's green #a8b774, BadBright for a broken door, a closed locked one and
-                // Locked; on the player's own door full-row buttons (width 1.0: the key is not shown, as the owner's screenshots show).
-                if (door.Broken)
-                {
-                    status = "Broken";
-                    bad = true;
-                }
-
-                AddDoorLines(door, mine, stats);
+                status = "Broken";
+                bad = true;
             }
 
-            var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
-                ? r : (Simulation.Production.RichnessView?)null;
-            if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
-
-            if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
-            {
-                Simulation.Combat.TurretPanelView? turretPanel =
-                    player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;
-                player.Production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich, turretPanel, mine);
-            }
-            else if (rich is { Efficiency: { } e } unmined)
-            {
-                // A rock nobody has mined yet has no machine; the original shows its lines all the same.
-                (status, bad) = ProductionWindows.ProductionStatus(0, e);
-                stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
-                ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
-            }
+            AddDoorLines(door, mine, stats);
         }
 
+        var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
+            ? r : (Simulation.Production.RichnessView?)null;
+        if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
+
+        if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
+        {
+            Simulation.Combat.TurretPanelView? turretPanel =
+                player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;
+            player.Production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich, turretPanel, mine);
+        }
+        else if (rich is { Efficiency: { } e } unmined)
+        {
+            // A rock nobody has mined yet has no machine; the original shows its lines all the same.
+            (status, bad) = ProductionWindows.ProductionStatus(0, e);
+            stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
+            ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
+        }
+    }
+
+    /// <summary>
+    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one) and the
+    /// For sale button.
+    /// </summary>
+    void AddPublicLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail, bool mine,
+        bool playerSite, List<PlayerInterface.HudLine> stats)
+    {
         // Not on a player-built site under construction; an owned town house has it while being repaired too.
         if (mine && site is not { LevelPlacement: null, Complete: false }
             && (playerSite ? site?.TownName : focus.Town) is { Length: > 0 }
@@ -312,7 +402,14 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("For sale:", Loc.Tr("c.{1,num}", price), PlayerInterface.GoodColour, PlayerInterface.GoodColour,
                 Action: "meitou:building-buy", ButtonWidth: 0.4f));
         }
+    }
 
+    /// <summary>
+    /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building.
+    /// </summary>
+    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool own, bool playerSite, bool mine,
+        Simulation.Production.RichnessView? inspected)
+    {
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town
         // NO_TOWN is explored, not secret).
         string? owner = focus.Owner;
@@ -324,8 +421,7 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var name = detail?.Bed?.Name ?? focus.Name;
         var value = mine ? player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "" : owner ?? "";
-        var header = new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
-        return (header, [.. state], [.. stats], status, bad, [.. extended]);
+        return new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
     }
 
     /// <summary>
@@ -367,9 +463,18 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The upgrade chain of a BUILDING record and its build data (the panel's [UPGRADE] / [DOWNGRADE] and their tooltips); the host sets them.
     /// </summary>
     public Func<string, string?>? UpgradeOf { get; set; }
+    /// <summary>
+    /// The BUILDING record that upgrades to this one; null when none does (the host sets it).
+    /// </summary>
     public Func<string, string?>? DowngradeOf { get; set; }
+    /// <summary>
+    /// A BUILDING record's build data; null for one without (the host sets it).
+    /// </summary>
     public Func<string, Data.Gameplay.Construction.BuildingBuildData?>? BuildingData { get; set; }
 
+    /// <summary>
+    /// A record's build data, asked of <see cref="BuildingData"/> once and kept.
+    /// </summary>
     Data.Gameplay.Construction.BuildingBuildData? DataOf(string record) =>
         _buildingData.TryGetValue(record, out var data) ? data : _buildingData[record] = BuildingData?.Invoke(record);
 
@@ -443,13 +548,13 @@ sealed class BuildingSelection(PlayerInterface player)
 
     /// <summary>
     /// The gun's <c>Loaded</c> bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4, <b>Observed</b>): "{loaded}/{shots}", filled (loaded + 1
-    /// - the reload still to go) / shots; its rows Base Reload Speed (the reload times, 2 decimals), User Skill and, with a gunner, User Reload Speed
-    /// from the gunner's Crossbows level (stat 0x23, as the base class reads it).
+    /// - gun +0xe0) / shots, so it drains from (loaded + 1) / shots while a reload runs; its rows Base Reload Speed (the reload times, 2 decimals),
+    /// User Skill and, with a gunner, User Reload Speed from the gunner's Crossbows level (stat 0x23, as the base class reads it).
     /// </summary>
     static PlayerInterface.MedicalRow LoadedRow(Simulation.Combat.TurretPanelView g)
     {
         static string F2(float v) => v.ToString("F2", CultureInfo.InvariantCulture);
-        float fill = g.Shots > 0 ? Math.Clamp((g.Loaded + 1 - g.ReloadLeft) / g.Shots, 0, 1) : 0;
+        float fill = g.Shots > 0 ? Math.Clamp((g.Loaded + g.ReloadLeft) / g.Shots, 0, 1) : 0;
         var tip = new List<string> { Loc.Tr("Base Reload Speed:") + " " + Loc.Tr("{1}-{2} seconds", F2(g.ReloadMin), F2(g.ReloadMax)),
             Loc.Tr("User Skill:") + " " + ((int)(g.Crossbows ?? 0)).ToString(CultureInfo.InvariantCulture) };
         if (g.Crossbows is { } level)

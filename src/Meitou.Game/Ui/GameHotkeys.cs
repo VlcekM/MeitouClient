@@ -79,12 +79,17 @@ sealed class GameHotkeys(PlayerInterface player)
         return doubleTap;
     }
 
+    /// <summary>
+    /// A game hotkey: member selection (a double tap centres), build mode, focus, select all, next and previous, then the orders (not from the free
+    /// camera).
+    /// </summary>
     public void Key(EngineKey key, bool shift)
     {
         player.UiInput++;
         bool doubleTap = HotkeyDoubleTap(key);
 
-        // select_0..9 (events 100..109, keys 1..9 and 0 by default): the active squad's members; a second press within half a second centres on the member.
+        // select_0..9 (events 100..109, keys 1..9 and 0 by default): the active squad's members; a second press within half a second centres on the
+        // member.
         if (Array.FindIndex(SelectMemberActions, a => Bound(a, key)) is var member and >= 0)
         {
             player.SelectMember(member, shift, doubleTap);

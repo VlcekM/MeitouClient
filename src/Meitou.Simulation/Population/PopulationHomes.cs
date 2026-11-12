@@ -65,15 +65,16 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A floor of <paramref name="home"/> for a resident whose spot at height <paramref name="y"/> has none near it (engine choice; null: none, the spot's height
-    /// stands): at a node, the nearest storey below it on the mesh (an upper room the mesh does not reach, Observed: Stack's Longhouse
-    /// <c>4-Newwworld-INGAME</c>); at the origin of a building without nodes, its lowest floor more than <see cref="RaisedFloor"/> above the terrain (raised
-    /// houses, whose floor is 25..55 above their origin, Observed: the Swamp Houses and Cannibal Shacks). Only buildings with an interior (an
+    /// A floor of <paramref name="home"/> for a resident whose spot at height <paramref name="y"/> has none near it (engine choice; null: none, the
+    /// spot's height stands): at a node, the nearest storey below it on the mesh (an upper room the mesh does not reach, Observed: Stack's Longhouse
+    /// <c>4-Newwworld-INGAME</c>); at the origin of a building without nodes, its lowest floor more than <see cref="RaisedFloor"/> above the terrain
+    /// (raised houses, whose floor is 25..55 above their origin, Observed: the Swamp Houses and Cannibal Shacks). Only buildings with an interior (an
     /// <c>interior mask</c>, not a gateway), so gate guards stay on the ground under the walkway.
     /// </summary>
     Vector3? HomeFloor(IWalkability walk, TownBuilding home, float x, float z, float y)
     {
-        if (_data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any()) return null;
+        if (_data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any())
+            return null;
 
         float terrain = walk.TerrainHeight(x, z);
         if (HasNode(home))
@@ -119,8 +120,9 @@ public sealed partial class PopulationSystem
     static bool HasNode(TownBuilding b) => b.Spots.Any(s => s.NodeType is NodeGeneral or NodeShopkeeper or NodeGuardPost);
 
     /// <summary>
-    /// <see cref="HomeFloor"/>'s numbers (engine choices): a floor more than 12 above the terrain is a raised one (the walkers' step-down limit), scanned in
-    /// 4-unit steps up to 60 above the origin (or the terrain, when it is buried), within 40 of the spot (a shack's middle is often furniture).
+    /// <see cref="HomeFloor"/>'s numbers (engine choices): a floor more than 12 above the terrain is a raised one (the walkers' step-down
+    /// limit), scanned in 4-unit steps up to 60 above the origin (or the terrain, when it is buried), within 40 of the spot (a shack's middle is
+    /// often furniture).
     /// </summary>
     const float RaisedFloor = 12, FloorScanStep = 4, FloorScanReach = 60, FloorScanRadius = 40;
 

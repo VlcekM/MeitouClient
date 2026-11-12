@@ -43,13 +43,35 @@ internal sealed unsafe partial class CharacterRenderer
     /// range).
     /// </summary>
     public List<PortraitRequest> PortraitRequests { get; } = [];
+    /// <summary>
+    /// The characters this update poses even out of range: the portrait requests' and the stage's (<see cref="GatherPortraitKeys"/>).
+    /// </summary>
     readonly HashSet<long> _portraitKeys = [];
+    /// <summary>
+    /// This frame's live index of each character, by key, for the portrait requests.
+    /// </summary>
     readonly Dictionary<long, int> _liveByKey = [];
+    /// <summary>
+    /// The live index drawn alone into a portrait, icon, stage or hover mask (-1: the world's views are drawn).
+    /// </summary>
     int _portraitLive = -1;
+    /// <summary>
+    /// The portrait atlas (sRGB, <see cref="PortraitColumns"/> × <see cref="PortraitRows"/> cells) and its depth, made on first use.
+    /// </summary>
     GpuTexture? _portraitColour, _portraitDepth;
+    /// <summary>
+    /// <see cref="_portraitColour"/> with a clamped bilinear sampler.
+    /// </summary>
     SampledTexture? _portraitSampled;
+
     // The enhanced portraits (Look): each drawn into this half-float square, then resolved into its cell of the atlas above.
+    /// <summary>
+    /// The enhanced portraits' half-float square and its depth (<see cref="PortraitSupersample"/> times a cell's size).
+    /// </summary>
     GpuTexture? _portraitHdr, _portraitHdrDepth;
+    /// <summary>
+    /// <see cref="_portraitHdr"/> sampled for the resolve.
+    /// </summary>
     SampledTexture _portraitHdrSampled;
 
     /// <summary>
@@ -66,8 +88,8 @@ internal sealed unsafe partial class CharacterRenderer
                     Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "portraits"));
                 _portraitDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
                     Name: "portraits depth"));
-                _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                    TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _portraitColour.View());
+                _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+                    _portraitColour.View());
                 _cleared = false;
                 _portraitShown.Clear();
             }
@@ -75,6 +97,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// Whether the atlas has been cleared since it was made.
+    /// </summary>
     bool _cleared;
 
     /// <summary>
@@ -87,13 +112,23 @@ internal sealed unsafe partial class CharacterRenderer
         if (StageRequest is { } stage) _portraitKeys.Add(stage.Key);
     }
 
+    /// <summary>
+    /// What a cell last showed: the character's key and the serial of its look, its asset, its radius and its textures' images, so an unchanged cell
+    /// is not drawn again.
+    /// </summary>
     sealed record ShownPortrait(long Key, uint Serial, CharacterAsset Asset, float Radius,
         (GpuTexture? Image, bool Swizzled)[] Textures);
     /// <summary>
     /// The character, appearance and streamed texture images each cell last showed.
     /// </summary>
     readonly Dictionary<int, ShownPortrait> _portraitShown = [];
+    /// <summary>
+    /// The still pose's bone palette and attach matrices (<see cref="PosePortrait"/>), grown as needed.
+    /// </summary>
     Matrix4x4[] _portraitBones = [], _portraitAttach = [];
+    /// <summary>
+    /// Scratch: the still pose's layers (the idle at time 0 and the posture layers).
+    /// </summary>
     readonly List<ActiveLayer> _portraitLayers = [];
 
     /// <summary>
@@ -110,11 +145,14 @@ internal sealed unsafe partial class CharacterRenderer
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
         bool any = !_cleared;
         foreach (var request in PortraitRequests)
+        {
             if (Due(request, out _))
             {
                 any = true;
                 break;
             }
+        }
+
         if (!any) return;
 
         if (!_cleared) ClearPortraitAtlas(atlas);
@@ -146,8 +184,11 @@ internal sealed unsafe partial class CharacterRenderer
     {
         var supersampled = _look with { Supersample = PortraitSupersample };
         if (_portraitHdr is null)
+        {
             (_portraitHdr, _portraitHdrDepth, _portraitHdrSampled) = PreviewResolve.Targets(Gpu, PortraitCell, PortraitCell, supersampled,
                     "portrait hdr");
+        }
+
         _preview ??= new PreviewResolve(Gpu);
 
         foreach (var request in PortraitRequests)
@@ -251,6 +292,9 @@ internal sealed unsafe partial class CharacterRenderer
         return pose;
     }
 
+    /// <summary>
+    /// Puts back the live pose <see cref="BeginPortraitPose"/> replaced.
+    /// </summary>
     void EndPortraitPose(int index, in PortraitPose pose)
     {
         ref var l = ref _live[index];
@@ -259,19 +303,30 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// The posed portrait character (<see cref="_portraitLive"/>) into <paramref name="rect"/> (cleared first) of the open pass, with <paramref name="constants"/>.
+    /// The posed portrait character (<see cref="_portraitLive"/>) into <paramref name="rect"/> (cleared first) of the open pass, with
+    /// <paramref name="constants"/>.
     /// </summary>
     void DrawPortraitView(IGpuCommandList cmd, int index, PixelViewport viewport, PixelRect rect, in ViewConstants constants, Vector3 eye)
     {
         cmd.Clear(true, default, true, 1, rect);
         Gpu.SetPassViewport(viewport, rect);
 
-        // The shader's plain model or the studio (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced, the resolve finishes it.
+        // The shader's plain model or the studio (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced,
+        // the resolve finishes it.
         _portraitLive = index;
-        try { DrawView(constants, eye, []); }
-        finally { _portraitLive = -1; }
+        try
+        {
+            DrawView(constants, eye, []);
+        }
+        finally
+        {
+            _portraitLive = -1;
+        }
     }
 
+    /// <summary>
+    /// Frees the enhanced portraits' square and its depth.
+    /// </summary>
     void DisposePortraitHdr()
     {
         _portraitHdr?.Dispose();
@@ -293,12 +348,15 @@ internal sealed unsafe partial class CharacterRenderer
             shown.Serial != request.Serial || shown.Asset != l.Asset || shown.Radius != l.Radius) return true;
         int texture = 0;
         foreach (var part in l.Asset.Parts)
+        {
             foreach (var t in part.Material.Tex)
             {
                 if (texture >= shown.Textures.Length || shown.Textures[texture] != (t?.Native, t?.Swizzled ?? false))
                     return true;
                 texture++;
             }
+        }
+
         return texture != shown.Textures.Length;
     }
 
@@ -321,11 +379,17 @@ internal sealed unsafe partial class CharacterRenderer
         {
             scratch.Pose(asset.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_portraitLayers), _portraitBones);
             foreach (var part in asset.Parts)
+            {
                 if (part.AttachIndex >= 0)
                     _portraitAttach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
+            }
+
             return asset.HeadBone >= 0 ? scratch.BoneTransform(asset.HeadBone).Translation : new Vector3(0, asset.Height * 0.85f, 0);
         }
-        finally { rig.Return(scratch); }
+        finally
+        {
+            rig.Return(scratch);
+        }
     }
 
     /// <summary>
@@ -346,6 +410,9 @@ internal sealed unsafe partial class CharacterRenderer
         return (target + direction, target);
     }
 
+    /// <summary>
+    /// Frees the atlas, its depth and the enhanced square.
+    /// </summary>
     void DisposePortraits()
     {
         _portraitColour?.Dispose();

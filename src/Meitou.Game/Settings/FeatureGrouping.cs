@@ -3,8 +3,8 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its own
-/// settings folded under it, closed until opened. Settings in no group stay rows of their own.
+/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
+/// own settings folded under it, closed until opened. Settings in no group stay rows of their own.
 /// </summary>
 sealed class FeatureGrouping(SettingsMenu menu)
 {
@@ -15,8 +15,14 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "");
 
+    /// <summary>
+    /// The group of the race switches (every <c>race:</c> setting is in it).
+    /// </summary>
     const string SkinGroup = "Skin";
 
+    /// <summary>
+    /// The features, in the Graphics tabs' order: each group's id, heading setting, members, title and hint.
+    /// </summary>
     internal static readonly FeatureGroup[] FeatureGroups =
     [
         // Display
@@ -103,7 +109,11 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return i < 0 ? FeatureGroups.Length : i;
     }
 
-    static bool InGroup(FeatureGroup g, string raw) => g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
+    /// <summary>
+    /// Whether setting <paramref name="raw"/> is a member of <paramref name="g"/> (a race switch of the Skin group too).
+    /// </summary>
+    static bool InGroup(FeatureGroup g, string raw) =>
+        g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
 
     #endregion
 
@@ -114,12 +124,18 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal readonly HashSet<string> OpenGroups = [];
 
+    /// <summary>
+    /// Opens or closes group <paramref name="id"/> and drops the keyboard focus.
+    /// </summary>
     internal void ToggleGroup(string id)
     {
         if (!OpenGroups.Remove(id)) OpenGroups.Add(id);
         menu.Focus = -1;
     }
 
+    /// <summary>
+    /// Opens groups <paramref name="ids"/> (the settings showcase).
+    /// </summary>
     internal void ShowcaseOpen(params string[] ids)
     {
         foreach (var id in ids)
@@ -173,6 +189,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return output;
     }
 
+    /// <summary>
+    /// A member's <paramref name="label"/> without the feature's name it starts with ("Light shafts strength" in Light shafts is "Strength").
+    /// </summary>
     static string WithinGroup(string label, string group) =>
         label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
             ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..]

@@ -25,6 +25,9 @@ public sealed record BuildGroup(string Name, IReadOnlyList<BuildingBuildData> Me
 /// </summary>
 public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
 {
+    /// <summary>
+    /// Every BUILDING's build data, the candidates of the menu.
+    /// </summary>
     public IReadOnlyList<BuildingBuildData> Catalog { get; } = catalog;
 
     /// <summary>
@@ -74,7 +77,8 @@ public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
 /// <summary>
 /// A level-data building as the selection panel names it: <paramref name="Name"/> is the placement state's own name (else the record's),
 /// <paramref name="Type"/> the record's name when it differs; <paramref name="Town"/> and <paramref name="Owner"/> are null when it is in no town or
-/// the town gives none; <paramref name="PublicDay"/> / <paramref name="PublicNight"/> are the state's flags.
+/// the town gives none; <paramref name="PublicDay"/> / <paramref name="PublicNight"/> are the state's flags; <paramref name="Turret"/> marks a town's
+/// turret building (<c>TownBuilding.Turret</c>).
 /// </summary>
 public sealed record WorldBuildingInfo(
     string Name,
@@ -83,7 +87,8 @@ public sealed record WorldBuildingInfo(
     string? Owner,
     bool PublicDay = false,
     bool PublicNight = false,
-    bool Destroyed = false);
+    bool Destroyed = false,
+    bool Turret = false);
 
 /// <summary>
 /// What the game interface needs from the host to run build mode: the catalog, names, the parts of a building, the placement services and the ghost
@@ -91,6 +96,9 @@ public sealed record WorldBuildingInfo(
 /// </summary>
 public sealed class BuildServices
 {
+    /// <summary>
+    /// The build menu's lists.
+    /// </summary>
     public required BuildMenu Menu { get; init; }
     /// <summary>
     /// An ITEM record's name.
@@ -108,11 +116,17 @@ public sealed class BuildServices
     /// The game's saved picture of a BUILDING (<c>data/icons/buildings</c>), null when none: the window then shows the renderer's drawing.
     /// </summary>
     public Func<string, string?> IconFile { get; init; } = _ => null;
+    /// <summary>
+    /// The ground, footprints and collision lookups the placement checks use.
+    /// </summary>
     public required PlacementServices Placement { get; init; }
     /// <summary>
     /// The placed towns, for <c>PlacementRules.TownBlock</c>.
     /// </summary>
     public required Func<IReadOnlyList<PlacementTown>> Towns { get; init; }
+    /// <summary>
+    /// The player's faction id, for the town ownership checks.
+    /// </summary>
     public required Func<string> PlayerFactionId { get; init; }
     /// <summary>
     /// What the panel shows of a level-data building: its name, type, town, owner faction and public flags.

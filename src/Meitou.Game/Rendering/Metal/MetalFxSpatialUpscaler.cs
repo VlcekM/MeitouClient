@@ -11,19 +11,46 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalFxSpatialUpscaler : IUpscaler
 {
+    /// <summary>
+    /// The context whose device, textures and frame command buffer the scaler uses.
+    /// </summary>
     readonly MetalContext _ctx;
+    /// <summary>
+    /// The spatial scaler; null until the first dispatch, replaced when a size changes.
+    /// </summary>
     MTLFXSpatialScaler _scaler;
+    /// <summary>
+    /// The render and display sizes the scaler was made for (0 before it is made).
+    /// </summary>
     int _inputWidth, _inputHeight, _outputWidth, _outputHeight;
+    /// <summary>
+    /// Set when the scaler could not be made or encoded: every later dispatch returns false.
+    /// </summary>
     bool _failed;
 
+    /// <summary>
+    /// An upscaler over the context; the scaler itself is made on the first dispatch.
+    /// </summary>
     MetalFxSpatialUpscaler(MetalContext ctx) => this._ctx = ctx;
 
+    /// <summary>
+    /// MetalFX.
+    /// </summary>
     public UpscalerKind Kind => UpscalerKind.MetalFx;
+    /// <summary>
+    /// "metalfx spatial", with the render and display sizes once the scaler is made.
+    /// </summary>
     public string Name => _inputWidth == 0 ? "metalfx spatial" : $"metalfx spatial {_inputWidth}x{_inputHeight} -> {_outputWidth}x{_outputHeight}";
 
+    /// <summary>
+    /// The spatial upscaler when the MetalFX framework loads, else null; the scaler is made on the first dispatch.
+    /// </summary>
     public static MetalFxSpatialUpscaler? TryCreate(MetalContext ctx) =>
         MetalFxRuntime.Available ? new MetalFxSpatialUpscaler(ctx) : null;
 
+    /// <summary>
+    /// Encodes the spatial scaler from the frame's colour into the output; false when it cannot.
+    /// </summary>
     public bool Dispatch(UpscaleInputs i)
     {
         if (_failed) return false;
@@ -46,6 +73,10 @@ public sealed class MetalFxSpatialUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Makes the scaler (HDR colour processing) for the sizes when it has none or another size (the old one deleted after the frame ring); false when
+    /// MetalFX fails.
+    /// </summary>
     bool EnsureScaler(int width, int height, int displayWidth, int displayHeight)
     {
         if (_scaler.NativePtr != IntPtr.Zero && _inputWidth == width && _inputHeight == height &&
@@ -94,6 +125,9 @@ public sealed class MetalFxSpatialUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Releases the scaler.
+    /// </summary>
     public void Dispose()
     {
         if (_scaler.NativePtr != IntPtr.Zero) _scaler.Dispose();

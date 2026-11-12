@@ -5,6 +5,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The buildings of a gather: the placements near the zone, their hash, and their parts' collision as triangles, carvers, door painters and solids.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
@@ -58,6 +61,10 @@ internal sealed partial class ZoneGeometryGatherer
         return hash;
     }
 
+    /// <summary>
+    /// Adds the buildings placed near the zone and the objects of their layouts, marks the range of building triangles, and sets the zone's building
+    /// hash (<paramref name="knownHash"/> when the caller has it).
+    /// </summary>
     void AddBuildings(ZoneGeometry g, uint? knownHash)
     {
         g.BuildingFirstTriangle = g.TriangleCount;
@@ -76,8 +83,14 @@ internal sealed partial class ZoneGeometryGatherer
         g.BuildingHash = knownHash ?? BuildingHash(g.Zone, g.Margin);
     }
 
+    /// <summary>
+    /// Mixes <paramref name="v"/> into <paramref name="h"/> (the boost hash_combine step).
+    /// </summary>
     static uint Combine(uint h, uint v) => h ^ (v + 0x9e3779b9 + (h << 6) + (h >> 2));
 
+    /// <summary>
+    /// A hash of <paramref name="s"/> that is the same in every run (17, then x 31 plus each character), unlike <see cref="string.GetHashCode()"/>.
+    /// </summary>
     static int Stable(string s)
     {
         unchecked
@@ -95,11 +108,6 @@ internal sealed partial class ZoneGeometryGatherer
             out var zoneDb) ? zoneDb.Find(b.StateId) : null;
 
     /// <summary>
-    /// The objects of a building's layouts placed in the world (docs/formats/zones.md, "Building layouts"): the signs and stalls of its exterior
-    /// layout and the furniture of its interior layout, as the renderer lays them out. None for a destroyed building, whose layouts are not drawn
-    /// either; no furniture for a bought town house (<see cref="BuildingPlacement.WithoutInterior"/>).
-    /// </summary>
-    /// <summary>
     /// Debug (the interior survey): an interior layout name per placement key in place of its level state's, "" for none.
     /// </summary>
     internal Dictionary<string, string> InteriorLayoutOverrides { get; } = [];
@@ -115,6 +123,10 @@ internal sealed partial class ZoneGeometryGatherer
                 yield return (name, _layouts.Items(layout).SelectMany(i => ShapeMiddles(site, i)).ToList());
     }
 
+    /// <summary>
+    /// The middle of each collision shape of a layout object placed in the site (x and z of its box's middle, y of its base); none for an object
+    /// paths ignore, nor for passable parts.
+    /// </summary>
     IEnumerable<Vector3> ShapeMiddles(InteriorSite site, LayoutItem item)
     {
         if ((PathMode)item.Building.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore) yield break;
@@ -132,6 +144,11 @@ internal sealed partial class ZoneGeometryGatherer
         }
     }
 
+    /// <summary>
+    /// The objects of a building's layouts placed in the world (docs/formats/zones.md, "Building layouts"): the signs and stalls of its exterior
+    /// layout and the furniture of its interior layout, as the renderer lays them out. None for a destroyed building, whose layouts are not drawn
+    /// either; no furniture for a bought town house (<see cref="BuildingPlacement.WithoutInterior"/>).
+    /// </summary>
     IEnumerable<(LayoutItem Item, Vector3 Position, Quaternion Rotation)> LayoutObjects(BuildingPlacement b, GameRecord record, Vector3 position,
             bool destroyed)
     {
@@ -209,6 +226,11 @@ internal sealed partial class ZoneGeometryGatherer
         return furniture ? 19 + (objectInRange ? objectFloor : 0) : group;
     }
 
+    /// <summary>
+    /// Adds one part's collision: an interior's shapes through the interior rules, an interior mask's as carvers, a door's as door painters with door
+    /// seeds, other groups when the included mask (and, for <paramref name="upper"/>, the upper contents mask) has them, walkable by the owner's path
+    /// mode, group and <paramref name="open"/>; floor-0/1 shapes are recorded in <see cref="ZoneGeometry.FloorRanges"/>.
+    /// </summary>
     void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId,
             InteriorContext? interior = null, int? floorOverride = null, bool open = false, bool upper = false)
     {
@@ -255,11 +277,6 @@ internal sealed partial class ZoneGeometryGatherer
     // ---- shape placement ----
 
     /// <summary>
-    /// Places a prepared shape. <paramref name="walkableSlope"/> 0: a cutting obstacle (all its triangles are <see cref="NavArea.Null"/>); otherwise
-    /// a triangle is walkable up to that slope. <paramref name="carve"/>: a convex obstacle also removes the floor inside its volume
-    /// (<see cref="NavSolid"/>).
-    /// </summary>
-    /// <summary>
     /// A door painter reaches this far below its hull and is grown by <see cref="DoorPainterGrow"/> on each side (engine choice).
     /// </summary>
     const float DoorPainterDrop = 10, DoorPainterGrow = 3;
@@ -271,6 +288,11 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float CarverDrop = 60;
 
+    /// <summary>
+    /// Places a prepared shape. <paramref name="walkableSlope"/> 0: a cutting obstacle (all its triangles are <see cref="NavArea.Null"/>); otherwise
+    /// a triangle is walkable up to that slope. <paramref name="carve"/>: a convex obstacle also removes the floor inside its volume
+    /// (<see cref="NavSolid"/>).
+    /// </summary>
     /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock, walkable foliage) also removes the floor inside it
     /// (<see cref="NavMeshSolid"/>).</param>
     void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve, bool meshSolid = false)
@@ -327,12 +349,20 @@ internal sealed partial class ZoneGeometryGatherer
             if (Vector3.Dot(n, centre) + d > -0.5f) return null; // the centre on a face: no volume to speak of
             bool known = false;
             foreach (var q in planes)
-                if (Vector3.Dot(n, new Vector3(q.X, q.Y, q.Z)) > 0.9999f && MathF.Abs(d - q.W) < 0.1f) { known = true; break; }
+                if (Vector3.Dot(n, new Vector3(q.X, q.Y, q.Z)) > 0.9999f && MathF.Abs(d - q.W) < 0.1f)
+                {
+                    known = true;
+                    break;
+                }
             if (!known) planes.Add(new Vector4(n, d));
         }
         return planes.Count < 4 ? null : new NavSolid([.. planes], new Vector2(lo.X, lo.Z), new Vector2(hi.X, hi.Z));
     }
 
+    /// <summary>
+    /// Adds a shape's points and triangles: a triangle is walkable ground up to <paramref name="walkableSlope"/> degrees (0: all cutting), counted in
+    /// the stats by kind.
+    /// </summary>
     void EmitTriangles(ZoneGeometry g, Vector3[] pts, int[] idx, float walkableSlope)
     {
         int baseIndex = g.Vertices.Count / 3;
@@ -345,11 +375,16 @@ internal sealed partial class ZoneGeometryGatherer
             float len = n.Length();
             byte area = NavArea.Null;
             if (walkableSlope > 0 && len > 1e-9f && n.Y / len >= cos) area = NavArea.Ground;
-            if (area == NavArea.Null) g.Stats.CuttingTriangles++; else g.Stats.WalkableTriangles++;
+            if (area == NavArea.Null) g.Stats.CuttingTriangles++;
+            else g.Stats.WalkableTriangles++;
             g.AddTriangle(baseIndex + idx[t], baseIndex + idx[t + 1], baseIndex + idx[t + 2], area);
         }
     }
 
+    /// <summary>
+    /// Adds a shape's footprint prism to <paramref name="target"/>: a carver reaches <see cref="CarverDrop"/> below it, a door painter
+    /// <see cref="DoorPainterDrop"/> below and grown by <see cref="DoorPainterGrow"/>.
+    /// </summary>
     void AddVolume(List<NavVolume> target, PreparedShape shape, Matrix4x4 node, GatherStats stats, bool carver)
     {
         var pts = new Vector3[shape.Vertices.Length];
@@ -362,10 +397,15 @@ internal sealed partial class ZoneGeometryGatherer
         }
         // A door painter needs some thickness to catch cells; a door's hull is only a few units deep (engine choice).
         target.Add(NavGeometry.Footprint(pts, yMin - (carver ? CarverDrop : DoorPainterDrop), yMax, carver ? 0 : DoorPainterGrow));
-        if (carver) stats.Carvers++; else stats.Painters++;
+        if (carver) stats.Carvers++;
+        else stats.Painters++;
     }
 }
 
+/// <summary>
+/// The buildings' collision for ragdolls and the weather's shelter ray (<see cref="RagdollTriangles"/>, <see cref="RoofTriangles"/>), gathered per
+/// zone apart from the navmesh build.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
@@ -383,6 +423,10 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     public void RoofTriangles(ZoneCoordinate zone, List<Vector3> output) => BuildingTriangles(zone, output, roofs: true);
 
+    /// <summary>
+    /// The triangles of the buildings placed in <paramref name="zone"/> and their layout objects (the roof groups with <paramref name="roofs"/>, else
+    /// the rest and the map features).
+    /// </summary>
     void BuildingTriangles(ZoneCoordinate zone, List<Vector3> output, bool roofs)
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(zone);
@@ -397,6 +441,10 @@ internal sealed partial class ZoneGeometryGatherer
         if (!roofs) AddRagdollFeatures(zone, output);
     }
 
+    /// <summary>
+    /// Adds one building's collision triangles: its passable parts and all of a building paths ignore with <paramref name="roofs"/>, the other parts
+    /// without; never doors.
+    /// </summary>
     void AddRagdollBuilding(GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed, List<Vector3> output,
             bool roofs)
     {

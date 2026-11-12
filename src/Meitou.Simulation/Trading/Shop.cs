@@ -19,6 +19,9 @@ namespace Meitou.Simulation.Trading;
 /// </summary>
 public sealed class Shop
 {
+    /// <summary>
+    /// The stock grid's size in cells (<see cref="Width"/> x <see cref="Height"/>).
+    /// </summary>
     public const int Width = 18, Height = 18;
     /// <summary>
     /// The stock section's stack bonus (<c>ShopTraderInventory::vfunc_1</c> sets the section's minimum 1 and mult 50, <b>Observed</b> decompile): a
@@ -26,7 +29,13 @@ public sealed class Shop
     /// </summary>
     public const float StockStackMult = 50;
 
+    /// <summary>
+    /// The stock: an 18 x 18 grid whose cells hold <see cref="StockStackMult"/> x each item's <c>stackable</c>.
+    /// </summary>
     public Inventory Stock { get; init; } = new(Width, Height) { StackBonusMult = StockStackMult };
+    /// <summary>
+    /// The trader's terms the prices read.
+    /// </summary>
     public required Trader Terms { get; init; }
     /// <summary>
     /// A building shop's building (<see cref="Meitou.Data.World.TownBuilding.Key"/>): its stock is the merged storage of the building's containers;
@@ -42,6 +51,9 @@ public sealed class Shop
     /// </summary>
     public int Fills { get; set; }
 
+    /// <summary>
+    /// The cells outside every container (<see cref="UnusedCells"/>), made on first read.
+    /// </summary>
     List<GridRegion>? _unused;
 
     /// <summary>
@@ -204,6 +216,9 @@ public sealed class Shop
         return false;
     }
 
+    /// <summary>
+    /// Adds the next restock tick, the fill count and the stock to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(NextRestockTick);
@@ -261,7 +276,8 @@ public static class ShopFiller
             11 => "item spawns resident small",
             _ => null,
         };
-        return list is null ? [] : [.. faction.GetReferences(list).Select(r => new RecordLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
+        return list is null
+            ? [] : [.. faction.GetReferences(list).Select(r => new RecordLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
     }
 
     /// <summary>
@@ -352,6 +368,10 @@ public static class ShopFiller
         AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MapItem, db, market);
     }
 
+    /// <summary>
+    /// Puts each <paramref name="type"/> record of <paramref name="list"/> into the stock, its v0 units in stacks of at most its <c>stackable</c> (at
+    /// least 1).
+    /// </summary>
     static void AddSpecialList(Shop shop, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
     {
         foreach (var r in list)
@@ -370,6 +390,10 @@ public static class ShopFiller
         }
     }
 
+    /// <summary>
+    /// A weighted pick of <paramref name="entries"/> by one float draw (entries of weight 0 or less never picked; the first when no weight is
+    /// above 0).
+    /// </summary>
     internal static VendorEntry Pick(IReadOnlyList<VendorEntry> entries, ref RandomStream rng)
     {
         long total = entries.Sum(e => (long)Math.Max(e.Weight, 0));
@@ -405,6 +429,10 @@ public static class ShopFiller
         units.Add(item);
     }
 
+    /// <summary>
+    /// A new unit of <paramref name="entry"/>: armour of a rolled grade's quality, a limb or crossbow of a rolled level, a weapon with a manufacturer
+    /// and model; null when the record makes none.
+    /// </summary>
     static ItemInstance? Make(VendorEntry entry, VendorList list, GameRecord? faction, SquadTemplate template, Market market, GameDatabase db,
         ref RandomStream rng)
     {
@@ -440,6 +468,9 @@ public static class ShopFiller
     public static int CrossbowGrade(int g, ref RandomStream rng) => g == 5 ? g :
         Spread([(g, 100), (g - 2, g > 1 ? 20 : 0), (g - 1, g > 0 ? 33 : 0), (g + 1, g < 5 ? 33 : 0), (g + 2, g < 4 ? 5 : 0)], g, ref rng);
 
+    /// <summary>
+    /// The grade of <paramref name="w"/> an int draw in [0, total) falls on against the running sums; <paramref name="g"/> when none.
+    /// </summary>
     static int Spread(ReadOnlySpan<(int Grade, int Weight)> w, int g, ref RandomStream rng)
     {
         int total = 0;
@@ -523,6 +554,9 @@ public static class ShopFiller
         return (maker, picked.TargetStringId, picked.Values.Value0);
     }
 
+    /// <summary>
+    /// The weighted pick of a weapon model (v1 the weight, 0 counting 100; negative ones left out).
+    /// </summary>
     static GameReference? Model(List<GameReference> models, ref RandomStream rng) =>
         PickWeighted(models.Where(r => r.Values.Value1 >= 0).ToList(), r => r.Values.Value1 == 0 ? 100 : r.Values.Value1, ref rng);
 

@@ -50,6 +50,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     #region Cascades
 
+    /// <summary>
+    /// The cascades about to be drawn this frame (the first ones used; cleared after drawing).
+    /// </summary>
     readonly CasterView[] _casterViews = new CasterView[ShadowSettings.MaxCascades];
 
     /// <summary>
@@ -58,10 +61,24 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public IGpuContext Gpu { get; }
 
+    /// <summary>
+    /// The cascade array (null before the first frame).
+    /// </summary>
     GpuTexture? _atlas;
+
+    /// <summary>
+    /// The cascade array with the comparison sampler (the receivers') and with the plain one (the blocker pass's and the debug view's).
+    /// </summary>
     SampledTexture _atlasShadow, _atlasPlain;
+
+    /// <summary>
+    /// The receivers read the cascade array (it is published once the receiver block was uploaded with it).
+    /// </summary>
     bool _atlasPublished;
-    // One layer's side and the layers of the cascade array (Faithful: the game's atlas, one layer; Meitou: a tile-sized layer per cascade).
+
+    /// <summary>
+    /// One layer's side (texels) and the layers of the cascade array (Faithful: the game's atlas, one layer; Meitou: a tile-sized layer per cascade).
+    /// </summary>
     int _atlasSize, _atlasLayers;
 
     /// <param name="assets">Where to find the game's <c>white-noise.png</c> (the receiver's jitter); without it a hash stands in.</param>
@@ -71,6 +88,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         _receiver = new FrameBlock(gpu, ReceiverBytes);
         _casterBias = new FrameBlock(gpu, 16);
         _meitouBlock = new FrameBlock(gpu, MeitouShadowShaders.BlockBytes);
+        _blockers = new ShadowBlockerMap(gpu);
+        _landmarks = new LandmarkShadowMap(gpu);
         _timer = new PassTimer(gpu);
         LoadNoise(assets);
         PublishGlobals();
@@ -173,6 +192,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     void SetTile(int x, int y, int s) =>
         Gpu.SetPassViewport(new PixelViewport(x, y, s, s, 0, 1), new PixelRect(x, y, (uint)s, (uint)s));
 
+    /// <summary>
+    /// Ends a cascade host: the job threads' secondaries closed, the rendering and the host pass ended.
+    /// </summary>
     void EndHost(IGpuCommandList cmd)
     {
         if (Gpu is GpuContext parallel && parallel.Frame.Parallel.Open) parallel.Frame.Parallel.End();
@@ -210,6 +232,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         _atlasPlain = Sampled(_atlas, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
     }
 
+    /// <summary>
+    /// Frees the cascade array; the receivers get the stand-in until it is made and published again.
+    /// </summary>
     void FreeAtlas()
     {
         if (_atlas is null) return;
@@ -222,11 +247,20 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     #region Receiver
 
-    // The receiver block (the faithful layout, also the Meitou receiver's cascades) and the casters' bias of the cascade being drawn.
+    /// <summary>
+    /// The receiver block (the faithful layout, also the Meitou receiver's cascades).
+    /// </summary>
     readonly FrameBlock _receiver;
+
+    /// <summary>
+    /// The casters' bias block of the cascade being drawn (<see cref="SetCasterBias"/>).
+    /// </summary>
     readonly FrameBlock _casterBias;
 
-    // Float offsets of the receiver block's members.
+    /// <summary>
+    /// Float offsets of the receiver block's members: the per-cascade tile rectangles, cascade data and extents after the tile matrices, then the
+    /// light rotation, the origin, the forward direction and the atlas sizes.
+    /// </summary>
     const int RectAt = 16 * ShadowSettings.MaxCascades, CascadeAt = 20 * ShadowSettings.MaxCascades, ExtentAt = 24 * ShadowSettings.MaxCascades,
         LightAt = 28 * ShadowSettings.MaxCascades, OriginAt = LightAt + 16, ForwardAt = LightAt + 20, AtlasAt = LightAt + 24;
 
@@ -242,15 +276,20 @@ public sealed unsafe partial class ShadowPass : IDisposable
         g.Publish(ShadowShaders.ReceiverBlock, _receiver.Binding);
         g.Publish(ShadowShaders.CasterBlock, _casterBias.Binding);
         g.Publish("uShadowMap", () => _atlasPublished ? _atlasShadow : default);
-        g.Publish("uShadowNoise", () => { UploadNoise(); return _noiseSampled; });   // a segment being prepared: a frame is open
+        // a segment being prepared: a frame is open
+        g.Publish("uShadowNoise", () =>
+        {
+            UploadNoise();
+            return _noiseSampled;
+        });
         g.Publish(MeitouShadowShaders.Block, _meitouBlock.Binding);
 
         // The terrain shadow map with its own sampler (linear, clamped; TerrainShadowMap).
         g.Publish("uShadowTerrain", () => _boundTerrain ?? default);
         // Traced, the binding carries the sun's visibility volume instead (ShadowPass.Traced: no cascades, so no blocker map).
-        g.Publish("uShadowBlocker", () => _volumePublished ? _volumeSampled : _blockerPublished ? _blockerSampled : default);
+        g.Publish("uShadowBlocker", () => _volumePublished ? _volumeSampled : _blockers.Published);
         // The landmark shadow map (comparison, linear, clamped).
-        g.Publish("uShadowLandmark", () => _landmarkPublished ? _landmarkSampled : default);
+        g.Publish("uShadowLandmark", () => _landmarks.Published);
     }
 
     /// <summary>
@@ -258,7 +297,14 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// mipmapped, so the LOD bias never applies; wrap R is GL's default.
     /// </summary>
     SampledTexture Sampled(GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, bool compare = false) =>
-        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)),
+        Sampled(Gpu, t, min, mag, wrap, compare);
+
+    /// <summary>
+    /// <see cref="Sampled(GpuTexture, TextureMinFilter, TextureMagFilter, TextureWrapMode, bool)"/> on <paramref name="gpu"/>.
+    /// </summary>
+    internal static SampledTexture Sampled(IGpuContext gpu, GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap,
+        bool compare = false) =>
+        new(gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)),
             t.View());
 
     /// <summary>
@@ -276,6 +322,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
         return m with { M12 = -m.M12, M22 = -m.M22, M32 = -m.M32, M42 = 1f - m.M42 };
     }
 
+    /// <summary>
+    /// Fills the receiver block from this frame's cascades (tile matrices relative to the eye, tiles, selection depths and filter radii, sizes) and
+    /// the light, eye and atlas, and uploads it.
+    /// </summary>
     void Publish(ShadowView view, ShadowCascade[] cascades)
     {
         var data = new float[ReceiverBytes / 4];
@@ -308,6 +358,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         if (_atlas is not null) _atlasPublished = true;
     }
 
+    /// <summary>
+    /// A matrix into the block at float offset <paramref name="at"/>, in the order GL reads as the column-vector form.
+    /// </summary>
     static void Put(float[] d, int at, Matrix4x4 m)
     {
         // System.Numerics row-major memory is what GL reads as the column-major column-vector form (as WorldGl.Matrix).
@@ -329,6 +382,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         d[at + 15] = m.M44;
     }
 
+    /// <summary>
+    /// A vector into the block at float offset <paramref name="at"/>.
+    /// </summary>
     static void Put(float[] d, int at, Vector4 v)
     {
         d[at] = v.X;
@@ -363,6 +419,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public bool FogCapEnabled { get; set; } = true;
 
+    /// <summary>
+    /// The hysteresis behind <see cref="FogCap"/>.
+    /// </summary>
     readonly ShadowFogCap _fogCapState = new();
 
     /// <summary>
@@ -370,6 +429,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public float? FogCap { get; private set; }
 
+    /// <summary>
+    /// The sun's shadows are drawn (off: the receivers' term is 1 everywhere).
+    /// </summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -416,6 +478,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         }
     }
 
+    /// <summary>
+    /// <see cref="Settings"/> with <see cref="EffectiveRange"/> (the settings themselves while the range is unclamped).
+    /// </summary>
     ShadowSettings Effective => EffectiveRange is var range && range == Settings.Range ? Settings : Settings with { Range = range };
 
     /// <summary>
@@ -473,21 +538,53 @@ public sealed unsafe partial class ShadowPass : IDisposable
         _noisePixels = null;
     }
 
+    /// <summary>
+    /// The game's noise texture (null: not found, a hash stands in).
+    /// </summary>
     GpuTexture? _noise;
+
+    /// <summary>
+    /// The noise with its sampler, published once uploaded.
+    /// </summary>
     SampledTexture _noiseSampled;
+
+    /// <summary>
+    /// The noise's texels were uploaded.
+    /// </summary>
     bool _noiseUploaded;
+
+    /// <summary>
+    /// The noise's texels until the upload (null after it).
+    /// </summary>
     byte[]? _noisePixels;
+
+    /// <summary>
+    /// The noise's size in texels.
+    /// </summary>
     (int Width, int Height) _noiseSize;
 
     #endregion
 
     #region Cost
 
+    /// <summary>
+    /// Times the pass on the GPU.
+    /// </summary>
     readonly PassTimer _timer;
+
+    /// <summary>
+    /// The GPU and CPU times of the frames drawn (ms), for <see cref="DescribeStats"/>.
+    /// </summary>
     readonly List<double> _gpuSamples = [], _cpuSamples = [];
 
+    /// <summary>
+    /// The CPU time of the last frame's pass (ms).
+    /// </summary>
     public double CpuMs { get; private set; }
 
+    /// <summary>
+    /// The GPU time of the last pass read back (ms).
+    /// </summary>
     public double GpuMs { get; private set; }
 
     /// <summary>
@@ -531,10 +628,29 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     #region Debug views
 
+    /// <summary>
+    /// The scene depth copied for the debug view (<see cref="CaptureDepth"/>).
+    /// </summary>
     GpuTexture? _sceneDepth;
+
+    /// <summary>
+    /// The copied depth with its nearest sampler.
+    /// </summary>
     SampledTexture _sceneDepthSampled;
+
+    /// <summary>
+    /// The debug views' programs: the scene's shadow term and the cascade maps (native, made on first use).
+    /// </summary>
     LegacyProgram? _debugProgram, _atlasProgram;   // the debug views (native, made on first use)
+
+    /// <summary>
+    /// The debug programs' uniforms: the scene view's inverse view-projection, eye and mode, the atlas view's layer count and grid.
+    /// </summary>
     UniformHandle _debugInverse, _debugEye, _debugMode, _atlasLayersHandle, _atlasGridHandle;
+
+    /// <summary>
+    /// The debug programs' samplers: the scene depth and the cascade array.
+    /// </summary>
     SamplerSlot _debugDepth, _atlasSlot;
 
     /// <summary>
@@ -649,6 +765,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Frees the Meitou maps, the cascade array, the noise, the debug depth and the debug programs.
+    /// </summary>
     public void Dispose()
     {
         DisposeMeitou();

@@ -64,7 +64,8 @@ public static class HitOutcomes
     public static BlowOutcome Decide(CombatTechnique? reaction, float progress, int blowDirection)
     {
         if (reaction is null) return BlowOutcome.Hit;
-        if (reaction.IsBlock && !reaction.IsDodge && reaction.AttackDirection1 == blowDirection && progress > BlockProgress) return BlowOutcome.Blocked;
+        if (reaction.IsBlock && !reaction.IsDodge && reaction.AttackDirection1 == blowDirection && progress > BlockProgress)
+            return BlowOutcome.Blocked;
         if (reaction.IsDodge && progress >= DodgeFrom && progress <= DodgeTo) return BlowOutcome.Dodged;
 
         return BlowOutcome.Hit;

@@ -4,12 +4,19 @@ using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Ai;
 
-// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes
-// the shops' stock and the squads' purses.
+/// <summary>
+/// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes
+/// the shops' stock and the squads' purses.
+/// </summary>
 public sealed partial class AiSystem
 {
-    // Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
+    /// <summary>
+    /// Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
+    /// </summary>
     int _shopping;
+    /// <summary>
+    /// The trade system that does the buying, resolved on first use.
+    /// </summary>
     TradeSystem? _trade;
 
     /// <summary>
@@ -36,6 +43,7 @@ public sealed partial class AiSystem
                 mind.NextBuyTick = 0;
                 continue;
             }
+
             waiting = true;
             if (world.Tick < mind.NextBuyTick) continue;
             if (BuyOnce(world, s, mind, shop)) mind.NextBuyTick = world.Tick + BuyTicks(world);
@@ -46,6 +54,7 @@ public sealed partial class AiSystem
                 mind.ShopAt = null;
             }
         }
+
         if (waiting) Interlocked.Exchange(ref _shopping, 1);
     }
 
@@ -76,10 +85,12 @@ public sealed partial class AiSystem
                 k = list.NextOpen(skipped[..skips]);
                 continue;
             }
+
             list.Use(k);
             if (sale == NpcSale.Sold) return true;
             if (!list.IsOpen(k)) k = list.NextOpen(skipped[..skips]);
         }
+
         return false;
     }
 }

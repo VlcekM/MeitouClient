@@ -27,6 +27,9 @@ public sealed record WeatherState
     /// The wind in the ground plane: unit direction (x, z) and speed in units per second.
     /// </summary>
     public Vector2 WindDirection { get; init; } = Vector2.UnitX;
+    /// <summary>
+    /// See <see cref="WindDirection"/>.
+    /// </summary>
     public float WindSpeed { get; init; }
 
     /// <summary>
@@ -51,6 +54,9 @@ public sealed record WeatherState
     /// <b>Observed</b>).
     /// </summary>
     public Vector3 FogColour { get; init; } = Vector3.One;
+    /// <summary>
+    /// The blended fog distance.
+    /// </summary>
     public float FogDistance { get; init; }
 
     /// <summary>

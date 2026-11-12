@@ -5,25 +5,85 @@ namespace Meitou.Data.Audio;
 /// </summary>
 public enum WwiseObjectType : byte
 {
+    /// <summary>
+    /// HIRC type 1: a state's property changes; kept raw.
+    /// </summary>
     State = 1,
+    /// <summary>
+    /// HIRC type 2: a sound (<see cref="WwiseSound"/>).
+    /// </summary>
     Sound = 2,
+    /// <summary>
+    /// HIRC type 3: an action of an event (<see cref="WwiseAction"/>).
+    /// </summary>
     Action = 3,
+    /// <summary>
+    /// HIRC type 4: an event, a list of actions (<see cref="WwiseEvent"/>).
+    /// </summary>
     Event = 4,
+    /// <summary>
+    /// HIRC type 5: a random or sequence container (<see cref="WwiseRandomSequence"/>).
+    /// </summary>
     RandomSequenceContainer = 5,
+    /// <summary>
+    /// HIRC type 6: a switch container (<see cref="WwiseSwitchContainer"/>).
+    /// </summary>
     SwitchContainer = 6,
+    /// <summary>
+    /// HIRC type 7: an actor-mixer (<see cref="WwiseActorMixer"/>).
+    /// </summary>
     ActorMixer = 7,
+    /// <summary>
+    /// HIRC type 8: a bus (<see cref="WwiseBus"/>).
+    /// </summary>
     Bus = 8,
+    /// <summary>
+    /// HIRC type 9: a layer (blend) container (<see cref="WwiseLayerContainer"/>).
+    /// </summary>
     LayerContainer = 9,
+    /// <summary>
+    /// HIRC type 10: a music segment (<see cref="WwiseMusicSegment"/>).
+    /// </summary>
     MusicSegment = 10,
+    /// <summary>
+    /// HIRC type 11: a music track (<see cref="WwiseMusicTrack"/>).
+    /// </summary>
     MusicTrack = 11,
+    /// <summary>
+    /// HIRC type 12: a music switch container (<see cref="WwiseMusicSwitch"/>).
+    /// </summary>
     MusicSwitch = 12,
+    /// <summary>
+    /// HIRC type 13: a music random/sequence container, a playlist (<see cref="WwiseMusicPlaylist"/>).
+    /// </summary>
     MusicRandomSequence = 13,
+    /// <summary>
+    /// HIRC type 14: a distance attenuation (<see cref="WwiseAttenuation"/>).
+    /// </summary>
     Attenuation = 14,
+    /// <summary>
+    /// HIRC type 15: a dialogue event; kept raw.
+    /// </summary>
     DialogueEvent = 15,
+    /// <summary>
+    /// HIRC type 16: a feedback bus; kept raw.
+    /// </summary>
     FeedbackBus = 16,
+    /// <summary>
+    /// HIRC type 17: a feedback node; kept raw.
+    /// </summary>
     FeedbackNode = 17,
+    /// <summary>
+    /// HIRC type 18: an effect share set (<see cref="WwiseEffect"/>).
+    /// </summary>
     FxShareSet = 18,
+    /// <summary>
+    /// HIRC type 19: an effect (<see cref="WwiseEffect"/>).
+    /// </summary>
     FxCustom = 19,
+    /// <summary>
+    /// HIRC type 20: an auxiliary bus (<see cref="WwiseBus"/> with <see cref="WwiseBus.IsAux"/>).
+    /// </summary>
     AuxBus = 20,
 }
 
@@ -44,13 +104,23 @@ public sealed record WwiseEvent(uint Id, uint[] Actions) : WwiseObject(WwiseObje
 
 /// <summary>
 /// An action. <see cref="Kind"/> is the high byte of the action type (what it does), <see cref="Scope"/> the low byte (which objects:
-/// 1 the target, 2 the target in the event's game object, 3 all, 4 all in the game object, ...). Kind-specific fields are set where they apply.
+/// 2 the target on every game object, 3 the target on the posting game object, 4 all, 5 all but the exceptions on the posting object, 6 and 7
+/// all but the exceptions; docs/formats/wwise-bnk.md "Action"). Kind-specific fields are set where they apply.
 /// </summary>
 public sealed record WwiseAction(uint Id, ushort ActionType, uint Target, bool TargetIsBus,
         WwiseProperties Properties) : WwiseObject(WwiseObjectType.Action, Id)
 {
+    /// <summary>
+    /// What the action does: the high byte of <see cref="ActionType"/>.
+    /// </summary>
     public WwiseActionKind Kind => (WwiseActionKind)(ActionType >> 8);
+    /// <summary>
+    /// Which objects the action applies to: the low byte of <see cref="ActionType"/>, numbered as in the Wwise SDK.
+    /// </summary>
     public int Scope => ActionType & 0xFF;
+    /// <summary>
+    /// Stop, play and set-value actions: the shape of the fade curve.
+    /// </summary>
     public byte FadeCurve { get; init; }
     /// <summary>
     /// Play: the bank holding the target.
@@ -60,18 +130,33 @@ public sealed record WwiseAction(uint Id, ushort ActionType, uint Target, bool T
     /// Set/reset pitch, volume, bus volume, low-pass: 1 = an offset, 2 = an absolute value.
     /// </summary>
     public byte ValueMeaning { get; init; }
+    /// <summary>
+    /// Set-value actions: the value, an offset or absolute as <see cref="ValueMeaning"/> says.
+    /// </summary>
     public float Value { get; init; }
+    /// <summary>
+    /// Set-value actions: the lower end of the random range added to <see cref="Value"/>.
+    /// </summary>
     public float ValueMin { get; init; }
+    /// <summary>
+    /// Set-value actions: the upper end of the random range added to <see cref="Value"/>.
+    /// </summary>
     public float ValueMax { get; init; }
     /// <summary>
     /// Set state: the state group and the state.
     /// </summary>
     public uint GroupId { get; init; }
+    /// <summary>
+    /// Set state: the state set in <see cref="GroupId"/>.
+    /// </summary>
     public uint StateId { get; init; }
     /// <summary>
     /// Bypass effects: whether to bypass, and the effect slot mask.
     /// </summary>
     public bool Bypass { get; init; }
+    /// <summary>
+    /// Bypass effects: the slots affected, bit n = slot n, 0x10 = all slots.
+    /// </summary>
     public byte BypassMask { get; init; }
     /// <summary>
     /// Objects excluded from a stop or set-value action over all objects: (id, is a bus).
@@ -84,19 +169,61 @@ public sealed record WwiseAction(uint Id, ushort ActionType, uint Target, bool T
 /// </summary>
 public enum WwiseActionKind : byte
 {
+    /// <summary>
+    /// Kind 0x01: stops the target, fading out.
+    /// </summary>
     Stop = 0x01,
+    /// <summary>
+    /// Kind 0x02: pauses the target.
+    /// </summary>
     Pause = 0x02,
+    /// <summary>
+    /// Kind 0x03: resumes a paused target.
+    /// </summary>
     Resume = 0x03,
+    /// <summary>
+    /// Kind 0x04: plays the target, loading it from <see cref="WwiseAction.BankId"/>.
+    /// </summary>
     Play = 0x04,
+    /// <summary>
+    /// Kind 0x08: sets the target's pitch.
+    /// </summary>
     SetPitch = 0x08,
+    /// <summary>
+    /// Kind 0x09: resets the target's pitch.
+    /// </summary>
     ResetPitch = 0x09,
+    /// <summary>
+    /// Kind 0x0A: sets the target's volume.
+    /// </summary>
     SetVolume = 0x0A,
+    /// <summary>
+    /// Kind 0x0B: resets the target's volume.
+    /// </summary>
     ResetVolume = 0x0B,
+    /// <summary>
+    /// Kind 0x0C: sets a bus's volume.
+    /// </summary>
     SetBusVolume = 0x0C,
+    /// <summary>
+    /// Kind 0x0D: resets a bus's volume.
+    /// </summary>
     ResetBusVolume = 0x0D,
+    /// <summary>
+    /// Kind 0x0E: sets the target's low-pass filter.
+    /// </summary>
     SetLowPass = 0x0E,
+    /// <summary>
+    /// Kind 0x0F: resets the target's low-pass filter.
+    /// </summary>
     ResetLowPass = 0x0F,
+    /// <summary>
+    /// Kind 0x12: sets a state of a state group.
+    /// </summary>
     SetState = 0x12,
+    /// <summary>
+    /// Kind 0x1A: bypasses or unbypasses effect slots of the target.
+    /// </summary>
     BypassFx = 0x1A,
 }
 
@@ -106,9 +233,18 @@ public enum WwiseActionKind : byte
 /// </summary>
 public sealed record WwiseProperties(IReadOnlyDictionary<byte, uint> Values, IReadOnlyDictionary<byte, (float Min, float Max)> Ranges)
 {
+    /// <summary>
+    /// A property list with no values and no ranges.
+    /// </summary>
     public static readonly WwiseProperties Empty = new(new Dictionary<byte, uint>(), new Dictionary<byte, (float, float)>());
 
+    /// <summary>
+    /// Property <paramref name="id"/> as a float; <paramref name="fallback"/> when the list does not have it.
+    /// </summary>
     public float Float(byte id, float fallback = 0) => Values.TryGetValue(id, out var v) ? BitConverter.UInt32BitsToSingle(v) : fallback;
+    /// <summary>
+    /// Property <paramref name="id"/> as an int; <paramref name="fallback"/> when the list does not have it.
+    /// </summary>
     public int Int(byte id, int fallback = 0) => Values.TryGetValue(id, out var v) ? (int)v : fallback;
 }
 
@@ -188,8 +324,17 @@ public readonly record struct WwisePathVertex(float X, float Y, float Z, int Dur
 public sealed record WwisePositioning(byte Bits, byte Bits3D, uint AttenuationId, byte PathMode, int TransitionTime, WwisePathVertex[] Vertices,
     (uint FirstVertex, uint VertexCount)[] Paths, (float X, float Y, float Z)[] PathRanges)
 {
+    /// <summary>
+    /// Whether the node sets its own positioning instead of its parent's (bit 0).
+    /// </summary>
     public bool OverridesParent => (Bits & 1) != 0;
+    /// <summary>
+    /// Whether the node is positioned in 3D with an attenuation (bit 3).
+    /// </summary>
     public bool Is3D => (Bits & 8) != 0;
+    /// <summary>
+    /// The 3D position type, bits 5-6; 3 adds paths around the listener.
+    /// </summary>
     public int PositionType3D => (Bits >> 5) & 3;
     /// <summary>
     /// The sound moves along the stored paths around the listener (3D type 3 with vertices).
@@ -262,6 +407,9 @@ public sealed record WwiseBus(uint Id, uint ParentBusId, WwiseProperties Propert
     bool IsAux = false, WwiseEffectSlot[]? Slots = null, byte FxBypass = 0)
     : WwiseObject(IsAux ? WwiseObjectType.AuxBus : WwiseObjectType.Bus, Id)
 {
+    /// <summary>
+    /// The bus's effect slots; empty when it has none.
+    /// </summary>
     public WwiseEffectSlot[] Effects { get; init; } = Slots ?? [];
 }
 
@@ -274,6 +422,9 @@ public sealed record WwiseBus(uint Id, uint ParentBusId, WwiseProperties Propert
 public sealed record WwiseAttenuation(uint Id, WwiseCone? Cone, sbyte[] CurveToUse, WwiseAttenuationCurve[] Curves, WwiseRtpc[] Rtpcs)
     : WwiseObject(WwiseObjectType.Attenuation, Id)
 {
+    /// <summary>
+    /// The usages, as indices into <see cref="CurveToUse"/>: dry volume, game-defined and user-defined auxiliary sends, low-pass.
+    /// </summary>
     public const int VolumeDry = 0, AuxGameDefined = 1, AuxUserDefined = 2, LowPass = 3;
 
     /// <summary>
@@ -301,7 +452,13 @@ public sealed record WwiseCone(float InsideDegrees, float OutsideDegrees, float 
 /// </summary>
 public sealed record WwiseEffect(WwiseObjectType Type, uint Id, uint PluginId, byte[] Parameters, WwiseRtpc[] Rtpcs) : WwiseObject(Type, Id)
 {
+    /// <summary>
+    /// The plug-in id of Wwise RoomVerb.
+    /// </summary>
     public const uint RoomVerbPlugin = 0x00760003;
+    /// <summary>
+    /// Whether the effect is a RoomVerb with its full parameter block (at least 20 floats).
+    /// </summary>
     public bool IsRoomVerb => PluginId == RoomVerbPlugin && Parameters.Length >= 80;
 
     /// <summary>
@@ -344,6 +501,9 @@ public sealed record WwiseTransitionDestination(WwiseFade FadeIn, uint CueFilter
 /// </summary>
 public sealed record WwiseMusicTransition(uint[] Sources, uint[] Destinations, WwiseTransitionSource Source, WwiseTransitionDestination Destination)
 {
+    /// <summary>
+    /// The source or destination id that matches any music object.
+    /// </summary>
     public const uint Any = 0xFFFFFFFF;
 }
 
@@ -368,7 +528,13 @@ public sealed record WwiseMarker(uint Id, double Position, string Name)
 public sealed record WwiseMusicSegment(uint Id, WwiseMusicNode Music, double Duration,
         WwiseMarker[] Markers) : WwiseObject(WwiseObjectType.MusicSegment, Id)
 {
+    /// <summary>
+    /// The position of the entry cue (ms); 0 without one.
+    /// </summary>
     public double EntryCue => Markers.FirstOrDefault(m => m.Id == WwiseMarker.Entry)?.Position ?? 0;
+    /// <summary>
+    /// The position of the exit cue (ms); the segment's end without one.
+    /// </summary>
     public double ExitCue => Markers.FirstOrDefault(m => m.Id == WwiseMarker.Exit)?.Position ?? Duration;
 }
 
@@ -411,6 +577,9 @@ public sealed record WwisePlaylistItem(uint SegmentId, uint ItemId, uint Playlis
         uint Weight,
     ushort AvoidRepeatCount, bool UsingWeight, bool Shuffle, WwisePlaylistItem[] Children)
 {
+    /// <summary>
+    /// Whether the item is a group of items rather than a segment.
+    /// </summary>
     public bool IsGroup => Children.Length > 0 || SegmentId == 0;
 }
 

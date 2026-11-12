@@ -31,6 +31,18 @@ public static unsafe class MslTranslator
     public const uint TableBinding = 28;
 
     /// <summary>
+    /// An argument buffer's parameter in the generated MSL (<c>spvDescriptorSetBufferN</c>), with its buffer index.
+    /// </summary>
+    static readonly System.Text.RegularExpressions.Regex ArgumentBuffer =
+        new(@"constant (spvDescriptorSetBuffer(\d+)& [^ ]+) \[\[buffer\([0-9]+\)\]\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// The push constant block's parameter in the generated MSL (the engine's <c>Push</c> block), with its buffer index.
+    /// </summary>
+    static readonly System.Text.RegularExpressions.Regex PushBlock =
+        new(@"constant Push& ([_A-Za-z0-9]+) \[\[buffer\([0-9]+\)\]\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
     /// The MSL for one SPIR-V module, with its entry point renamed (the MSL entry point names have to be unique per stage:
     /// spirv-cross names the stages' entry points the same).
     /// </summary>
@@ -88,6 +100,7 @@ public static unsafe class MslTranslator
             // Every descriptor set is an argument buffer in this mode: each takes its stage's flattened set index (the vertex stage's
             // above the vertex buffers), the table's the fixed free one.
             if (argumentBufferSet is { } table)
+            {
                 msl = ArgumentBuffer.Replace(msl, m =>
                 {
                     uint set = uint.Parse(m.Groups[2].Value);
@@ -98,6 +111,7 @@ public static unsafe class MslTranslator
                         : set;
                     return $"constant {m.Groups[1].Value} [[buffer({index})]]";
                 });
+            }
 
             // This spirv-cross has no binding option for push constants: the block comes out at [[buffer(0)]] — the stage's
             // low indices belong to the flattened resources and the vertex buffers (MetalShaders's numbers), the top index
@@ -106,12 +120,9 @@ public static unsafe class MslTranslator
         }
     }
 
-    static readonly System.Text.RegularExpressions.Regex ArgumentBuffer =
-        new(@"constant (spvDescriptorSetBuffer(\d+)& [^ ]+) \[\[buffer\([0-9]+\)\]\]", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    static readonly System.Text.RegularExpressions.Regex PushBlock =
-        new(@"constant Push& ([_A-Za-z0-9]+) \[\[buffer\([0-9]+\)\]\]", System.Text.RegularExpressions.RegexOptions.Compiled);
-
+    /// <summary>
+    /// The cross-compiler's last error message ("no message" when it has none).
+    /// </summary>
     static string Error(Cross cross, Context* context)
     {
         byte* message = cross.ContextGetLastErrorString(context);

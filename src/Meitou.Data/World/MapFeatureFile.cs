@@ -11,7 +11,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class MapFeatureFile
 {
+    /// <summary>
+    /// The file's path under the data folder.
+    /// </summary>
     public const string RelativePath = "newland/land/features.dat";
+    /// <summary>
+    /// The file's first four bytes, <c>MF01</c>.
+    /// </summary>
     static readonly byte[] Magic = "MF01"u8.ToArray();
 
     /// <summary>
@@ -19,13 +25,26 @@ public sealed class MapFeatureFile
     /// </summary>
     public List<List<MapFeature>> Zones { get; } = [];
 
+    /// <summary>
+    /// The zone of index <paramref name="index"/> in <see cref="Zones"/>.
+    /// </summary>
     public static ZoneCoordinate ZoneOf(int index) => new(index % WorldLayout.ZoneCount, index / WorldLayout.ZoneCount);
 
+    /// <summary>
+    /// Every placement with its zone, zone by zone.
+    /// </summary>
     public IEnumerable<(ZoneCoordinate Zone, MapFeature Feature)> All() =>
         Zones.SelectMany((list, i) => list.Select(f => (ZoneOf(i), f)));
 
+    /// <summary>
+    /// Reads the install's <see cref="RelativePath"/>.
+    /// </summary>
     public static MapFeatureFile Open(GameInstall install) => Read(File.ReadAllBytes(Path.Combine(install.DataDirectory, RelativePath)));
 
+    /// <summary>
+    /// Parses a map feature file: the magic, the zone count, a table of (offset, size) per zone, then the blocks back to back; throws when a block is
+    /// out of place or bytes are left over.
+    /// </summary>
     public static MapFeatureFile Read(byte[] data)
     {
         if (data.Length < 8 || !data.AsSpan(0, 4).SequenceEqual(Magic))
@@ -53,6 +72,10 @@ public sealed class MapFeatureFile
         return file;
     }
 
+    /// <summary>
+    /// Reads one zone's block into <paramref name="list"/>: a count, then per placement its id (a length byte and UTF-8), position, scale and
+    /// rotation (w, x, y, z); throws when bytes are left over.
+    /// </summary>
     static void ReadBlock(ReadOnlySpan<byte> block, List<MapFeature> list, int zone)
     {
         int n = BinaryPrimitives.ReadInt32LittleEndian(block), p = 4;

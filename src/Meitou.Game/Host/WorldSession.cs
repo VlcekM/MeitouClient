@@ -19,6 +19,21 @@ namespace Meitou.Game.Host;
 /// </summary>
 public sealed class WorldSession : IDisposable
 {
+    #region Session
+
+    /// <summary>
+    /// The world settings every world of the session is made with (<see cref="ReplaceWorld"/> too).
+    /// </summary>
+    readonly WorldSettings _worldSettings;
+    /// <summary>
+    /// The walkability every world of the session uses (open ground when none was given).
+    /// </summary>
+    readonly IWalkability _worldWalkability;
+
+    /// <summary>
+    /// Makes the session: the clocks (the world's tick must be the simulation clock's), the game clock, the bindings, the camera rig over the ground
+    /// or the sea, and the world with its systems and walkability.
+    /// </summary>
     public WorldSession(Vector3 focus, (double X0, double Z0, double X1, double Z1) region, Func<float, float, float> ground,
         double startHour = GameClock.DefaultStartHour, double tickRate = FixedStepClock.DefaultTickRate, InputBindings? bindings = null,
         GameClock? clock = null, WorldSettings? simulation = null, IEnumerable<ITickSystem>? systems = null,
@@ -42,9 +57,6 @@ public sealed class WorldSession : IDisposable
         World.Fixtures.Doors = _worldWalkability as Simulation.Locks.IDoorGate;
     }
 
-    readonly WorldSettings _worldSettings;
-    readonly IWalkability _worldWalkability;
-
     /// <summary>
     /// The point the world was loaded around.
     /// </summary>
@@ -61,6 +73,9 @@ public sealed class WorldSession : IDisposable
     /// The game-time simulation tick.
     /// </summary>
     public SimulationClock Simulation { get; } = new();
+    /// <summary>
+    /// The game's clock: the hour, the day and the date.
+    /// </summary>
     public GameClock Clock { get; }
     /// <summary>
     /// The simulated world; it ticks with the simulation clock. Replaced as a whole by <see cref="ReplaceWorld"/> (a loaded save); read it again
@@ -73,45 +88,30 @@ public sealed class WorldSession : IDisposable
     /// of them.
     /// </summary>
     public WorldSnapshot CurrentSnapshot => _held ? _heldCurrent! : World.Snapshot;
+    /// <summary>
+    /// The snapshot before <see cref="CurrentSnapshot"/> (held while ticks run ahead).
+    /// </summary>
     public WorldSnapshot PreviousSnapshot => _held ? _heldPrevious! : World.PreviousSnapshot;
     /// <summary>
     /// The world tick the shown snapshot is of (<see cref="World.Tick"/> less the ticks run ahead).
     /// </summary>
     public long ShownTick => _held ? _heldTick : World.Tick;
 
-    // The ticks run ahead (docs/simulation.md "Tick ahead"): the shown pair and its tick held meanwhile, the runner, and how many are run but not yet
-    // due.
-    bool _held;
-    long _heldTick;
-    int _aheadTicks;
-    // The ticks a frame owes, smoothed (how many the next batch runs ahead), and the speed they were owed at.
-    double _owedPerFrame = 1, _owedSpeed;
-    WorldSnapshot? _heldCurrent, _heldPrevious;
-    TickRunner? _runner;
-    bool _running;
-
-    /// <summary>
-    /// The wall time (ms) of the last ticks run ahead, 0 once taken (for the profiler).
-    /// </summary>
-    public double TakeAheadMs() { double ms = _aheadMs; _aheadMs = 0; return ms; }
-    /// <summary>
-    /// The last ticks run ahead's ms, left for <see cref="TakeAheadMs"/>.
-    /// </summary>
-    public double AheadMs => _aheadMs;
-    double _aheadMs;
-
-    /// <summary>
-    /// A world tick's wall time (ms), smoothed over the last ten or so ticks, whether run in the frame or ahead (the host's dynamic tick ahead reads
-    /// it).
-    /// </summary>
-    public double TickMs { get; private set; }
-    void Measure(double ms) => TickMs = TickMs == 0 ? ms : TickMs + (ms - TickMs) * 0.1;
     /// <summary>
     /// Where the frame is between the previous and the current simulation tick (the snapshots' alpha, not the camera's).
     /// </summary>
     public float SimulationAlpha => Simulation.Alpha;
+    /// <summary>
+    /// The input the host feeds from its window; each control tick consumes it.
+    /// </summary>
     public InputState Input { get; } = new();
+    /// <summary>
+    /// The key and button bindings of the actions.
+    /// </summary>
     public InputBindings Bindings { get; }
+    /// <summary>
+    /// The strategy and free cameras, moved by the control ticks.
+    /// </summary>
     public CameraRig Camera { get; }
     /// <summary>
     /// The eye the simulation takes as the camera's (<see cref="World.ViewPosition"/>) instead of the rig's, while the host holds the view elsewhere
@@ -131,6 +131,92 @@ public sealed class WorldSession : IDisposable
     /// Called for each control tick's actions after the session's own handling (pause, speed, camera); the host's actions (quit, screenshot...).
     /// </summary>
     public event Action<ActionState>? Ticked;
+
+    /// <summary>
+    /// Swaps in a new world made from <paramref name="systems"/> (same settings and walkability) at a tick boundary, for a loaded save. <paramref
+    /// name="setup"/> fills the new world (before its first tick, as <c>SaveLoader.Load</c> needs); when it throws the old world stays and the new
+    /// one and its systems are disposed. The old world and its systems are disposed after the swap. The control tick, the camera, the input and the
+    /// simulation clock carry on; the game clock is the caller's to set. Call it between frames or from a control tick's handler, never from inside a
+    /// world tick.
+    /// </summary>
+    public World ReplaceWorld(IEnumerable<ITickSystem> systems, Action<World>? setup = null)
+    {
+        EnsureNotRunning();
+        var list = systems.ToList();
+        var next = new World(_worldSettings, _worldWalkability, list);
+        next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
+        next.BenchFacingFix = World.BenchFacingFix;
+        try
+        {
+            setup?.Invoke(next);
+        }
+        catch
+        {
+            Discard(next);
+            throw;
+        }
+        var old = World;
+        World = next;
+        // Ticks the old world ran ahead go with it.
+        (_aheadTicks, _held, _heldPrevious, _heldCurrent) = (0, false, null, null);
+        Discard(old);
+        // The navmesh door table follows the new world: the old one's locked doors are forgotten, the new one's told.
+        if (_worldWalkability is Simulation.Locks.IDoorGate gate)
+        {
+            gate.ResetDoors();
+            next.Fixtures.Doors = gate;
+        }
+        return next;
+    }
+
+    /// <summary>
+    /// Disposes a world and its systems that own resources.
+    /// </summary>
+    static void Discard(World world)
+    {
+        world.Dispose();
+        foreach (var s in world.Systems) (s as IDisposable)?.Dispose();
+    }
+
+    /// <summary>
+    /// Called when the session is disposed, for the systems that own threads.
+    /// </summary>
+    public void Dispose()
+    {
+        // A tick still ahead finishes first; what it threw no longer matters.
+        if (_running)
+        {
+            _running = false;
+            try
+            {
+                _runner!.Wait();
+            }
+            catch (Exception)
+            {
+            }
+        }
+        _runner?.Dispose();
+        Discard(World);
+    }
+
+    /// <summary>
+    /// The camera to draw this frame.
+    /// </summary>
+    public CameraState CameraAt() => Camera.At(Alpha);
+
+    #endregion
+
+    #region Frame advance
+
+    /// <summary>
+    /// A world tick's wall time (ms), smoothed over the last ten or so ticks, whether run in the frame or ahead (the host's dynamic tick ahead reads
+    /// it).
+    /// </summary>
+    public double TickMs { get; private set; }
+    /// <summary>
+    /// Folds a tick's wall time into <see cref="TickMs"/> (a tenth of the change each tick).
+    /// </summary>
+    void Measure(double ms) => TickMs = TickMs == 0 ? ms : TickMs + (ms - TickMs) * 0.1;
 
     /// <summary>
     /// Runs one frame's worth of real time: the control ticks it holds, then the simulation ticks; returns the control ticks.
@@ -202,6 +288,76 @@ public sealed class WorldSession : IDisposable
     }
 
     /// <summary>
+    /// One simulation tick: the world runs its phases (publishing its snapshot when <paramref name="publish"/>), the game clock moves by one tick of
+    /// game time.
+    /// </summary>
+    void SimulationTick(bool publish)
+    {
+        World.GameHours = Clock.TotalHours;
+        World.Daytime = Clock.IsDaytime;
+        // the ragdoll physics steps in real time
+        World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);
+        World.ViewPosition = ViewEye ?? Camera.Current.Eye;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        World.RunTick(publish);
+        Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+        Clock.Advance(Simulation.TickSeconds);
+    }
+
+    #endregion
+
+    #region Tick ahead
+
+    /// <summary>
+    /// Whether the shown snapshot pair and its tick are held while ticks run ahead (docs/simulation.md "Tick ahead").
+    /// </summary>
+    bool _held;
+    /// <summary>
+    /// The world tick of the held pair.
+    /// </summary>
+    long _heldTick;
+    /// <summary>
+    /// The ticks run ahead and not yet due.
+    /// </summary>
+    int _aheadTicks;
+    /// <summary>
+    /// The ticks a frame owes, smoothed (how many the next batch runs ahead), and the speed they were owed at.
+    /// </summary>
+    double _owedPerFrame = 1, _owedSpeed;
+    /// <summary>
+    /// The snapshot pair shown while ticks run ahead.
+    /// </summary>
+    WorldSnapshot? _heldCurrent, _heldPrevious;
+    /// <summary>
+    /// The thread ticks run ahead on, made on first use.
+    /// </summary>
+    TickRunner? _runner;
+    /// <summary>
+    /// Whether ticks run ahead now (between <see cref="BeginTickAhead"/> and <see cref="EndTickAhead"/>); nothing may touch the world then.
+    /// </summary>
+    bool _running;
+
+    /// <summary>
+    /// The wall time (ms) of the last ticks run ahead, until <see cref="TakeAheadMs"/> takes it.
+    /// </summary>
+    double _aheadMs;
+
+    /// <summary>
+    /// The wall time (ms) of the last ticks run ahead, 0 once taken (for the profiler).
+    /// </summary>
+    public double TakeAheadMs()
+    {
+        double ms = _aheadMs;
+        _aheadMs = 0;
+        return ms;
+    }
+
+    /// <summary>
+    /// The last ticks run ahead's ms, left for <see cref="TakeAheadMs"/>.
+    /// </summary>
+    public double AheadMs => _aheadMs;
+
+    /// <summary>
     /// Starts the next simulation ticks on a thread of their own, ahead of the clock (docs/simulation.md "Tick ahead"), while the host draws the
     /// world from the shown snapshots; <see cref="EndTickAhead"/> waits for them. As many run as a frame has owed lately (at least one, at most the
     /// frame budget), so at 2x and 5x a frame's ticks overlap the draw too. Nothing may touch <see cref="World"/> in between. Does nothing while
@@ -249,6 +405,9 @@ public sealed class WorldSession : IDisposable
         (_held, _heldPrevious, _heldCurrent) = (false, null, null);
     }
 
+    /// <summary>
+    /// Throws while ticks run ahead: nothing may touch the world then.
+    /// </summary>
     void EnsureNotRunning()
     {
         if (_running) throw new InvalidOperationException("a simulation tick is running ahead: call EndTickAhead first");
@@ -259,26 +418,56 @@ public sealed class WorldSession : IDisposable
     /// </summary>
     sealed class TickRunner : IDisposable
     {
+        /// <summary>
+        /// The runner's thread.
+        /// </summary>
         readonly Thread _thread;
+        /// <summary>
+        /// Released to start a batch, and when the batch is done.
+        /// </summary>
         readonly SemaphoreSlim _start = new(0), _done = new(0);
+        /// <summary>
+        /// The world the batch ticks; null between batches.
+        /// </summary>
         World? _world;
+        /// <summary>
+        /// Each tick's game hour and daytime, the clock's as the ticks would run in the frame.
+        /// </summary>
         (double Hours, bool Daytime)[] _starts = [];
+        /// <summary>
+        /// The batch's wall time in ms.
+        /// </summary>
         double _ms;
+        /// <summary>
+        /// What the batch threw, rethrown by <see cref="Wait"/>.
+        /// </summary>
         System.Runtime.ExceptionServices.ExceptionDispatchInfo? _failure;
+        /// <summary>
+        /// Set by <see cref="Dispose"/> to end the thread.
+        /// </summary>
         volatile bool _stopping;
 
+        /// <summary>
+        /// Starts the runner's background thread.
+        /// </summary>
         public TickRunner()
         {
             _thread = new Thread(Run) { IsBackground = true, Name = "Meitou.Tick" };
             _thread.Start();
         }
 
+        /// <summary>
+        /// Starts a batch: the world's ticks with these start times.
+        /// </summary>
         public void Start(World w, (double Hours, bool Daytime)[] tickStarts)
         {
             (_world, _starts, _failure) = (w, tickStarts, null);
             _start.Release();
         }
 
+        /// <summary>
+        /// Waits for the batch; rethrows what it threw, else returns its wall time in ms.
+        /// </summary>
         public double Wait()
         {
             _done.Wait();
@@ -287,6 +476,9 @@ public sealed class WorldSession : IDisposable
             return _ms;
         }
 
+        /// <summary>
+        /// The thread's loop: waits for a batch, runs its ticks (only the last two publish), keeps a failure and the time.
+        /// </summary>
         void Run()
         {
             while (true)
@@ -312,6 +504,9 @@ public sealed class WorldSession : IDisposable
             }
         }
 
+        /// <summary>
+        /// Ends the thread after any batch running.
+        /// </summary>
         public void Dispose()
         {
             _stopping = true;
@@ -319,86 +514,9 @@ public sealed class WorldSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// One simulation tick: the world runs its phases (publishing its snapshot when <paramref name="publish"/>), the game clock moves by one tick of
-    /// game time.
-    /// </summary>
-    void SimulationTick(bool publish)
-    {
-        World.GameHours = Clock.TotalHours;
-        World.Daytime = Clock.IsDaytime;
-        // the ragdoll physics steps in real time
-        World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);
-        World.ViewPosition = ViewEye ?? Camera.Current.Eye;
-        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        World.RunTick(publish);
-        Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-        Clock.Advance(Simulation.TickSeconds);
-    }
+    #endregion
 
-    /// <summary>
-    /// Swaps in a new world made from <paramref name="systems"/> (same settings and walkability) at a tick boundary, for a loaded save. <paramref
-    /// name="setup"/> fills the new world (before its first tick, as <c>SaveLoader.Load</c> needs); when it throws the old world stays and the new
-    /// one and its systems are disposed. The old world and its systems are disposed after the swap. The control tick, the camera, the input and the
-    /// simulation clock carry on; the game clock is the caller's to set. Call it between frames or from a control tick's handler, never from inside a
-    /// world tick.
-    /// </summary>
-    public World ReplaceWorld(IEnumerable<ITickSystem> systems, Action<World>? setup = null)
-    {
-        EnsureNotRunning();
-        var list = systems.ToList();
-        var next = new World(_worldSettings, _worldWalkability, list);
-        next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
-        next.BenchFacingFix = World.BenchFacingFix;
-        try
-        {
-            setup?.Invoke(next);
-        }
-        catch
-        {
-            Discard(next);
-            throw;
-        }
-        var old = World;
-        World = next;
-        // Ticks the old world ran ahead go with it.
-        (_aheadTicks, _held, _heldPrevious, _heldCurrent) = (0, false, null, null);
-        Discard(old);
-        // The navmesh door table follows the new world: the old one's locked doors are forgotten, the new one's told.
-        if (_worldWalkability is Simulation.Locks.IDoorGate gate)
-        {
-            gate.ResetDoors();
-            next.Fixtures.Doors = gate;
-        }
-        return next;
-    }
-
-    static void Discard(World world)
-    {
-        world.Dispose();
-        foreach (var s in world.Systems) (s as IDisposable)?.Dispose();
-    }
-
-    /// <summary>
-    /// Called when the session is disposed, for the systems that own threads.
-    /// </summary>
-    public void Dispose()
-    {
-        // A tick still ahead finishes first; what it threw no longer matters.
-        if (_running)
-        {
-            _running = false;
-            try
-            {
-                _runner!.Wait();
-            }
-            catch (Exception)
-            {
-            }
-        }
-        _runner?.Dispose();
-        Discard(World);
-    }
+    #region Control tick
 
     /// <summary>
     /// One control tick: the actions from the input (pause, speed), then the camera.
@@ -427,10 +545,10 @@ public sealed class WorldSession : IDisposable
     /// play benchmark).
     /// </summary>
     public double CameraMs { get; set; }
+    /// <summary>
+    /// The host's <see cref="Ticked"/> handlers' wall time (ms) since the host last cleared it.
+    /// </summary>
     public double HandlersMs { get; set; }
 
-    /// <summary>
-    /// The camera to draw this frame.
-    /// </summary>
-    public CameraState CameraAt() => Camera.At(Alpha);
+    #endregion
 }

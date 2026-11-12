@@ -20,7 +20,8 @@ public class DuelTests(ITestOutputHelper output)
     {
         var sa = combat.StateOf(a);
         var sb = combat.StateOf(b);
-        return $"ticks {world.Tick}: A thrown {sa.Thrown} landed {sa.Landed} parried {sa.Parried} evaded {sa.Evaded} taken {sa.Taken}; B thrown {sb.Thrown} landed {sb.Landed} parried {sb.Parried} evaded {sb.Evaded} taken {sb.Taken}";
+        return $"ticks {world.Tick}: A thrown {sa.Thrown} landed {sa.Landed} parried {sa.Parried} evaded {sa.Evaded} taken {sa.Taken}; "
+            + $"B thrown {sb.Thrown} landed {sb.Landed} parried {sb.Parried} evaded {sb.Evaded} taken {sb.Taken}";
     }
 
     [Fact]
@@ -30,7 +31,12 @@ public class DuelTests(ITestOutputHelper output)
         var (a, b) = Pair(world, new Combatant { Name = "A" }, new Combatant { Name = "B" });
         int ticks = RunToEnd(world, a, b);
         output.WriteLine(Summary(world, combat, a, b));
-        foreach (var e in combat.Log) output.WriteLine($"  t{e.Tick} {e.Attacker}->{e.Defender} blow {e.Blow} {e.Outcome} part {e.Part} cut {e.Cut:0.0} blunt {e.Blunt:0.0} stun {e.Stun:0.0}{(e.Knockout ? " KO" : "")}{(e.Death ? " DEATH" : "")}");
+        foreach (var e in combat.Log)
+        {
+            output.WriteLine($"  t{e.Tick} {e.Attacker}->{e.Defender} blow {e.Blow} {e.Outcome} part {e.Part} cut {e.Cut:0.0} blunt {e.Blunt:0.0} "
+                + $"stun {e.Stun:0.0}{(e.Knockout ? " KO" : "")}{(e.Death ? " DEATH" : "")}");
+        }
+
         Assert.True(Down(world, a) != Down(world, b), "exactly one of them is out");
         Assert.InRange(ticks, 60, 6000);
         int thrown = combat.StateOf(a).Thrown + combat.StateOf(b).Thrown;

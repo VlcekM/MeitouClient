@@ -9,7 +9,7 @@
   },
   "rockchinq": {
     "commits": 13,
-    "areas": "Town houses, Town repairs, Shopkeeper routines, Trading and buyback, Character stats, New-game options, Build orders"
+    "areas": "Town houses, Trading, Shopkeepers"
   },
   "hazzael": {
     "commits": 6,
@@ -20,16 +20,16 @@
     "areas": "Audio, Saves"
   },
   "gosuboy": {
-    "commits": 7,
-    "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
+    "commits": 9,
+    "areas": "Metal, Shaders, Seats"
   },
   "crockmr": {
-    "commits": 38,
-    "areas": "Slaver AI, Slave escape, Town guards, Navmesh, Medical treatment, Save loading, Sleep goals, Squads, Prisoner cages, Workplaces"
+    "commits": 51,
+    "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 3,
-    "areas": "Benchmarks, Crossbow tracers"
+    "commits": 6,
+    "areas": "Benchmarks, Crossbow bolt tracers"
   },
   "lucasskrewer": {
     "commits": 12,
@@ -48,7 +48,11 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 2,
-    "areas": "Repair beds, Bodyguard jobs"
+    "commits": 28,
+    "areas": "Animals, Medics, Inventory, Rendering"
+  },
+  "robgreen490": {
+    "commits": 4,
+    "areas": "UI scaling, Inventory rendering"
   }
 }

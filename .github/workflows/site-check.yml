@@ -26,5 +26,4 @@ jobs:
           node-version: 24
       - run: python3 ../bench/tools/generate.py --out public/bench/bench.json
       - run: npm ci
-      - run: node scripts/history.mjs
       - run: npm run build

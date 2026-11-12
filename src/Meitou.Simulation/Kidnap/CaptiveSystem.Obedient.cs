@@ -3,9 +3,14 @@ using Meitou.Simulation.Ai;
 
 namespace Meitou.Simulation.Kidnap;
 
-// The player slaves' Obedient Slave job (187): its decision source and the act-out of the worker rows (ObedientSlave.cs).
+/// <summary>
+/// The player slaves' Obedient Slave job (187): its decision source and the act-out of the worker rows (ObedientSlave.cs).
+/// </summary>
 public sealed partial class CaptiveSystem : ITaskOwner
 {
+    /// <summary>
+    /// The decision source and job contributor of the Obedient Slave job.
+    /// </summary>
     readonly ObedientJobs _obedient = new();
 
     /// <summary>

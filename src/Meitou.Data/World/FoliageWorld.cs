@@ -11,18 +11,52 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class FoliageWorld : IDisposable
 {
+    /// <summary>
+    /// The game install the maps are read from.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// The merged game database (towns).
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The world's level data (towns).
+    /// </summary>
     readonly WorldLevelData _world;
+    /// <summary>
+    /// The layout cache; null places every zone.
+    /// </summary>
     readonly FoliageLayoutCache? _cache;
-    // Opened on the first zone that is actually placed: a zone read from the layout cache needs none of them.
+    /// <summary>
+    /// The heightmap. It and the three below are opened on the first zone that is actually placed: a zone read from the layout cache needs none
+    /// of them.
+    /// </summary>
     TerrainHeightmap? _map;
+    /// <summary>
+    /// The blend info file (the zone's biome list).
+    /// </summary>
     BlendInfoFile? _blend;
+    /// <summary>
+    /// The biome map.
+    /// </summary>
     FoliageBiomeMap? _biomes;
+    /// <summary>
+    /// The towns that keep foliage away.
+    /// </summary>
     List<FoliageTown>? _towns;
+    /// <summary>
+    /// The overlay tiles read, by tile (at most four kept) when no shared cache is given.
+    /// </summary>
     readonly Dictionary<(int, int), byte[]> _tiles = [];
+    /// <summary>
+    /// The overlay tiles shared between workers, by tile; null keeps a cache of this instance's own.
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>>? _sharedTiles;
 
+    /// <summary>
+    /// The placer's inputs for <paramref name="world"/>: the catalog read from <paramref name="db"/> unless given, overlay tiles shared through
+    /// <paramref name="sharedTiles"/> when given, and zones cached in <paramref name="cache"/> when given.
+    /// </summary>
     public FoliageWorld(GameInstall install, GameDatabase db, WorldLevelData world, FoliageCatalog? catalog = null,
         System.Collections.Concurrent.ConcurrentDictionary<(int, int), Lazy<byte[]>>? sharedTiles = null, FoliageLayoutCache? cache = null)
     {
@@ -34,11 +68,15 @@ public sealed class FoliageWorld : IDisposable
         Catalog = catalog ?? FoliageCatalog.Load(db);
     }
 
+    /// <summary>
+    /// The FOLIAGE catalog the zones are placed from.
+    /// </summary>
     public FoliageCatalog Catalog { get; }
 
     /// <summary>
-    /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a snapshot: a town founded or captured later changes
-    /// the placement of resource rocks only when its zone is placed again, docs/formats/foliage.md "Towns").
+    /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a
+    /// snapshot: a town founded or captured later changes the placement of resource rocks only when its zone is placed again,
+    /// docs/formats/foliage.md "Towns").
     /// </summary>
     public static IReadOnlySet<(int X, int Z)> PlayerTowns { get; set; } = new HashSet<(int, int)>();
 
@@ -54,8 +92,13 @@ public sealed class FoliageWorld : IDisposable
     {
         var list = new List<FoliageTown>();
         foreach (var t in world.Towns())
+        {
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != BuildingTowns.NestMarkerType)
-                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000), PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
+            {
+                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000),
+                    PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
+            }
+        }
         return list;
     }
 
@@ -90,6 +133,9 @@ public sealed class FoliageWorld : IDisposable
         return list;
     }
 
+    /// <summary>
+    /// The town nearest to (<paramref name="x"/>, <paramref name="z"/>); null when there is none.
+    /// </summary>
     FoliageTown? NearestTown(float x, float z)
     {
         var at = new Vector2(x, z);
@@ -121,8 +167,8 @@ public sealed class FoliageWorld : IDisposable
     }
 
     /// <summary>
-    /// <see cref="Load"/> with the instances grouped for the renderer (<see cref="GroupedFoliageZone"/>, whose zone has no instance list): a layout read back
-    /// from the cache is grouped straight from the file's records, a placed one from its list (which is then emptied).
+    /// <see cref="Load"/> with the instances grouped for the renderer (<see cref="GroupedFoliageZone"/>, whose zone has no instance list): a layout
+    /// read back from the cache is grouped straight from the file's records, a placed one from its list (which is then emptied).
     /// </summary>
     public GroupedFoliageZone LoadGrouped(ZoneCoordinate zone, bool farOnly = false)
     {
@@ -135,6 +181,9 @@ public sealed class FoliageWorld : IDisposable
         return grouped;
     }
 
+    /// <summary>
+    /// Places one zone's foliage from the maps (and saves it to the layout cache when there is one).
+    /// </summary>
     (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly)
     {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -163,5 +212,8 @@ public sealed class FoliageWorld : IDisposable
         return (laid, ground);
     }
 
+    /// <summary>
+    /// Closes the heightmap.
+    /// </summary>
     public void Dispose() => _map?.Dispose();
 }

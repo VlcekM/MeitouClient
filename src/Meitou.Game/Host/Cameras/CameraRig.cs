@@ -21,19 +21,26 @@ public sealed class CameraRig
     /// </summary>
     public const float LookRange = 20000;
 
+    /// <summary>
+    /// The previous and current tick's camera, interpolated for drawing between ticks (<see cref="At"/>).
+    /// </summary>
     readonly Interpolated<CameraState> _states;
+    /// <summary>
+    /// The ground (or sea) height under a point, for the eye and the free camera.
+    /// </summary>
     readonly Func<float, float, float> _ground;
 
     /// <summary>
-    /// The height the strategy camera's pivot keeps above: the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the game's
-    /// pivot ray also hits buildings' floors; the eye keeps above the ground and the sea only, docs/formats/camera.md "Height").
+    /// The height the strategy camera's pivot and eye keep above: the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the
+    /// game's pivot ray also hits buildings' floors; engine choice: the eye keeps above them too, so it never sinks into a building's base,
+    /// docs/formats/camera.md "Height").
     /// </summary>
     public float GroundAt(float x, float z) => Floors?.Invoke(x, z) is { } floor ? MathF.Max(_ground(x, z), floor) : _ground(x, z);
 
     /// <summary>
-    /// The height the strategy camera's eye keeps above: the ground or the sea, whichever is higher.
+    /// The height the strategy camera's eye keeps above: <see cref="GroundAt"/>, building floors included.
     /// </summary>
-    public float EyeGroundAt(float x, float z) => _ground(x, z);
+    public float EyeGroundAt(float x, float z) => GroundAt(x, z);
 
     /// <summary>
     /// The highest building floor at a point that the strategy camera's pivot rides on, or null (set by the host; the free camera keeps to the
@@ -41,18 +48,34 @@ public sealed class CameraRig
     /// </summary>
     public Func<float, float, float?>? Floors { get; set; }
 
+    /// <summary>
+    /// A rig on <paramref name="ground"/> (the ground or the sea, whichever is higher, at a point), starting in the strategy camera;
+    /// <paramref name="settings"/> are shared by both cameras.
+    /// </summary>
     public CameraRig(Func<float, float, float> ground, CameraSettings? settings = null)
     {
         this._ground = ground;
         Settings = settings ?? new CameraSettings();
-        Strategy = new StrategyCamera(ground, Settings, GroundAt);
+        Strategy = new StrategyCamera(GroundAt, Settings);
         Free = new FreeCamera(ground, Settings);
         _states = new Interpolated<CameraState>(Strategy.State, CameraState.Lerp);
     }
 
+    /// <summary>
+    /// The settings both cameras read.
+    /// </summary>
     public CameraSettings Settings { get; }
+    /// <summary>
+    /// The strategy camera, the one at the start.
+    /// </summary>
     public StrategyCamera Strategy { get; }
+    /// <summary>
+    /// The free camera (<see cref="InputAction.ToggleFreeCamera"/>).
+    /// </summary>
     public FreeCamera Free { get; }
+    /// <summary>
+    /// Whether the free camera is the active one.
+    /// </summary>
     public bool IsFree { get; private set; }
 
     /// <summary>
@@ -148,6 +171,9 @@ public sealed class CameraRig
         if (cut) _states.Snap(next); else _states.Push(next);
     }
 
+    /// <summary>
+    /// Switches the active camera (the cut and placement rules of <see cref="CameraRig"/>).
+    /// </summary>
     void Toggle()
     {
         if (!IsFree)

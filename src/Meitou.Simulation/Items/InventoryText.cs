@@ -10,6 +10,9 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public static class InventoryText
 {
+    /// <summary>
+    /// The debug lines: the carried weight, then one line per item (quantity, name, section and cell, the nutrition of food).
+    /// </summary>
     public static IReadOnlyList<string> Lines(Inventory inventory)
     {
         var lines = new List<string> { $"Carries {inventory.ContentWeight():0.0} kg" };

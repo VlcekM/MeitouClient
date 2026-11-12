@@ -7,6 +7,9 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public static class Censorship
 {
+    /// <summary>
+    /// The replacements, applied in this order.
+    /// </summary>
     static readonly (string From, string To)[] Pairs =
     [
         ("shitting", "crapping"), ("Shitting", "Crapping"), ("shitty", "crappy"), ("Shitty", "Crappy"),
@@ -16,6 +19,9 @@ public static class Censorship
         ("asshole", "idiot"), ("Asshole", "Idiot"), ("ASSHOLE", "IDIOT"), ("asswipe", "idiot"),
     ];
 
+    /// <summary>
+    /// <paramref name="text"/> with every pair's replacement applied in order.
+    /// </summary>
     public static string Apply(string text)
     {
         foreach (var (from, to) in Pairs)

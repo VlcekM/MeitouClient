@@ -4,6 +4,9 @@ using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// Self preservation's view of the threats round a character (<see cref="ThreatLevel"/>, <see cref="Threatened"/>).
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
@@ -55,8 +58,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Whether a threat of the senses' list (<see cref="SenseBlock.Threats"/>, as of the last look) still stands, at any distance: Self preservation's list A
-    /// <c>!159</c> does not hold (<c>FUN_140436720</c>, the threats count non-zero). Reads the last tick's state, so any thread after Schedule.
+    /// Whether a threat of the senses' list (<see cref="SenseBlock.Threats"/>, as of the last look) still stands, at any distance: Self
+    /// preservation's list A <c>!159</c> does not hold (<c>FUN_140436720</c>, the threats count non-zero). Reads the last tick's state, so any thread
+    /// after Schedule.
     /// </summary>
     public bool Threatened(World world, int self)
     {
@@ -64,7 +68,8 @@ public sealed partial class CombatSystem
         if (CharacterFacts.Senses(world, self) is not { } senses) return false;
 
         foreach (var id in senses.Threats)
-            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !_read[id.Slot].Down) return true;
+            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !_read[id.Slot].Down)
+                return true;
 
         return false;
     }

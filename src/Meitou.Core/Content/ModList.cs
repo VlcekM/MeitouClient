@@ -154,6 +154,9 @@ public static class ModList
         WriteLines(Path.Combine(install.DataDirectory, "__mods.list"), names);
     }
 
+    /// <summary>
+    /// Writes <paramref name="lines"/> to <paramref name="path"/>, each ended by CRLF, as UTF-8 without a BOM.
+    /// </summary>
     static void WriteLines(string path, IEnumerable<string> lines)
     {
         var text = new StringBuilder();
@@ -161,7 +164,10 @@ public static class ModList
         File.WriteAllText(path, text.ToString(), new UTF8Encoding(false));
     }
 
-    // Kahn's algorithm over the mods' header dependencies, stable in name order; names not in the list are ignored.
+    /// <summary>
+    /// Kahn's algorithm over the mods' header dependencies, stable in name order; names not in the list are ignored. Mods still waiting in a
+    /// dependency cycle come last, in name order.
+    /// </summary>
     static IEnumerable<ModInfo> DependencyOrder(List<ModInfo> mods)
     {
         var byFile = mods.ToDictionary(m => m.Name + ".mod", StringComparer.Ordinal);
@@ -180,21 +186,59 @@ public static class ModList
     }
 }
 
-public enum ModSource { Local, Workshop }
+/// <summary>
+/// Where a mod was found.
+/// </summary>
+public enum ModSource
+{
+    /// <summary>
+    /// A folder of the install's <c>mods</c> directory.
+    /// </summary>
+    Local,
+
+    /// <summary>
+    /// A downloaded Steam workshop item of Kenshi.
+    /// </summary>
+    Workshop
+}
 
 /// <summary>
 /// A mod on disk: its name (the <c>.mod</c> file's stem), file and source.
 /// </summary>
 public sealed class ModInfo(string name, string path, ModSource source)
 {
+    /// <summary>
+    /// The <c>.mod</c> header once <see cref="Header"/> has read it; null before that or when unreadable.
+    /// </summary>
     ModHeader? _header;
+    /// <summary>
+    /// Whether <see cref="Header"/> has tried to read the file yet (the header may be null after it did).
+    /// </summary>
     bool _headerRead;
+    /// <summary>
+    /// <see cref="HasNativePlugin"/> once checked; null before the first use.
+    /// </summary>
     bool? _nativePlugin;
+    /// <summary>
+    /// <see cref="HasCode"/> once checked; null before the first use.
+    /// </summary>
     bool? _code;
 
+    /// <summary>
+    /// The mod's name: the <c>.mod</c> file's name without its extension, as <c>mods.cfg</c> lists it.
+    /// </summary>
     public string Name { get; } = name;
+    /// <summary>
+    /// Full path of the mod's <c>.mod</c> file.
+    /// </summary>
     public string Path { get; } = path;
+    /// <summary>
+    /// Where the mod was found: the install's <c>mods</c> folder or a Steam workshop item.
+    /// </summary>
     public ModSource Source { get; } = source;
+    /// <summary>
+    /// The folder the <c>.mod</c> file sits in, which also holds the mod's other files.
+    /// </summary>
     public string Folder => System.IO.Path.GetDirectoryName(Path)!;
 
     /// <summary>
@@ -207,6 +251,9 @@ public sealed class ModInfo(string name, string path, ModSource source)
     /// </summary>
     public bool HasCode => _code ??= File.Exists(CodeManifestPath);
 
+    /// <summary>
+    /// Where the mod's <see cref="ModList.CodeManifestFile"/> is (or would be): in <see cref="Folder"/>.
+    /// </summary>
     public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);
 
     /// <summary>
@@ -226,6 +273,9 @@ public sealed class ModInfo(string name, string path, ModSource source)
     }
 }
 
+/// <summary>
+/// A mod in the launcher's list with whether it is enabled (<see cref="ModList.Save"/> writes the enabled ones to <c>mods.cfg</c>).
+/// </summary>
 public sealed record ModEntry(ModInfo Mod, bool Enabled);
 
 /// <summary>
@@ -233,6 +283,10 @@ public sealed record ModEntry(ModInfo Mod, bool Enabled);
 /// </summary>
 public sealed record ModHeader(int FileType, string Author, string Description, IReadOnlyList<string> Dependencies, IReadOnlyList<string> References)
 {
+    /// <summary>
+    /// Reads the header at the start of the <c>.mod</c> file at <paramref name="path"/>; null when the file is unreadable, not type 16 or 17, or has
+    /// a bad string length.
+    /// </summary>
     public static ModHeader? TryRead(string path)
     {
         try
@@ -251,6 +305,9 @@ public sealed record ModHeader(int FileType, string Author, string Description, 
         }
     }
 
+    /// <summary>
+    /// Reads a header string: an int32 byte length (0..1 MiB, else <see cref="InvalidDataException"/>) and that many UTF-8 bytes.
+    /// </summary>
     static string ReadString(BinaryReader r)
     {
         int length = r.ReadInt32();
@@ -258,5 +315,8 @@ public sealed record ModHeader(int FileType, string Author, string Description, 
         return Encoding.UTF8.GetString(r.ReadBytes(length));
     }
 
+    /// <summary>
+    /// Splits a header's comma-separated mod list into trimmed, non-empty names.
+    /// </summary>
     static string[] Split(string list) => list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

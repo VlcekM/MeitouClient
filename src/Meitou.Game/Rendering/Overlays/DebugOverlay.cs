@@ -23,10 +23,20 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// The baked characters: printable ASCII and Latin-1 up to the middle dot (U+00B7), which the Meitou UI joins details with.
     /// </summary>
     const int FirstChar = 32, CharCount = 0xB8 - FirstChar;
-    // The size the glyphs are baked at (16 px; a display face is baked larger so it stays sharp drawn big) and the atlas side that holds them.
+
+    /// <summary>
+    /// The size the glyphs are baked at (16 px; a display face is baked larger so it stays sharp drawn big).
+    /// </summary>
     readonly float _pixelHeight = 16;
+
+    /// <summary>
+    /// The side of the square atlas that holds the baked glyphs (the smallest that fits, 256 to 2048).
+    /// </summary>
     readonly int _atlasSize = 512;
 
+    /// <summary>
+    /// The monospace system fonts tried in order (Windows, the Linux distributions' paths, macOS); the game's Exo2 when none is found.
+    /// </summary>
     static readonly string[] FontCandidates =
     [
         @"C:\Windows\Fonts\consola.ttf", @"C:\Windows\Fonts\CascadiaMono.ttf", @"C:\Windows\Fonts\cour.ttf",
@@ -40,7 +50,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         "/System/Library/Fonts/Menlo.ttc",
     ];
 
-    // Vertex: position (pixels), uv (u < 0: solid), colour.
+    /// <summary>
+    /// The vertex shader: position (pixels), uv (u &lt; 0: solid), colour.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec2 aPos;
@@ -57,6 +69,10 @@ public sealed unsafe class DebugOverlay : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The fragment shader: the colour with the atlas's coverage as alpha for text, the colour times the texel for an image, the colour alone for a
+    /// solid quad.
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -75,34 +91,92 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// The native GPU API (docs/renderer-native.md 7.1 step 8).
     /// </summary>
     public IGpuContext Gpu { get; }
+
+    /// <summary>
+    /// The baked glyph atlas (R8); null when a UI font draws instead.
+    /// </summary>
     readonly GpuTexture? _atlas;
+
+    /// <summary>
+    /// The baked atlas with the sampler it is drawn with.
+    /// </summary>
     readonly SampledTexture _atlasSampled;
+
+    /// <summary>
+    /// The overlay's program (<see cref="Vertex"/>, <see cref="Fragment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The screen size uniform.
+    /// </summary>
     readonly UniformHandle _uScreen;
+
+    /// <summary>
+    /// The uniform that says the batch is an image (its texels' colour kept).
+    /// </summary>
     readonly UniformHandle _uImage;
+
+    /// <summary>
+    /// The image the batch draws (null: text and solid shapes).
+    /// </summary>
     SampledTexture? _imageBatch;
+
+    /// <summary>
+    /// The program's atlas sampler slot.
+    /// </summary>
     readonly SamplerSlot _samplerAtlas;
+
+    /// <summary>
+    /// The baked glyphs' rectangles and advances, from the first baked character.
+    /// </summary>
     readonly StbTrueType.stbtt_bakedchar[] _glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
+
+    /// <summary>
+    /// The queued vertices, <see cref="Stride"/> floats each, until <see cref="Flush"/>.
+    /// </summary>
     readonly List<float> _batch = [];
+
+    /// <summary>
+    /// Floats per vertex: position, uv and colour.
+    /// </summary>
     const int Stride = 8;
     /// <summary>
     /// Queued text geometry by caption, position, scale and colour; for a UI font valid for one <see cref="UiFont.Generation"/> of its atlas.
     /// </summary>
     readonly Dictionary<(string Text, float X, float Top, float Scale, Vector4 Colour), (float[] Vertices, float Width)> _textGeometry = [];
+
+    /// <summary>
+    /// The floats held by <see cref="_textGeometry"/>, to bound it.
+    /// </summary>
     int _cachedTextFloats;
     /// <summary>
     /// The glyph-cache font this overlay draws and measures with (null: the stb_truetype faces).
     /// </summary>
     readonly UiFont? _uiFont;
+
+    /// <summary>
+    /// The UI font atlas generation <see cref="_textGeometry"/> was made for.
+    /// </summary>
     int _cacheGeneration;
     /// <summary>
     /// Where, in <see cref="_batch"/>, the quads of each atlas texture begin (a UI font's atlas can be replaced while quads are queued).
     /// </summary>
     readonly List<(int Start, SampledTexture Texture)> _atlasRuns = [];
 
+    /// <summary>
+    /// The line height in pixels: a row of text.
+    /// </summary>
     public float LineHeight { get; }
+
+    /// <summary>
+    /// The width of a character in pixels (monospace).
+    /// </summary>
     public float CharWidth { get; }
 
+    /// <summary>
+    /// Whether <see cref="Draw"/> shows its panels.
+    /// </summary>
     public bool Visible { get; set; }
 
     /// <summary>
@@ -110,6 +184,9 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// </summary>
     public GpuTexture? Target { get; set; }
 
+    /// <summary>
+    /// Bakes the glyphs of <paramref name="font"/> at <paramref name="pixelHeight"/> into the smallest atlas that holds them and makes the program.
+    /// </summary>
     DebugOverlay(IGpuContext gpu, byte[] font, float pixelHeight = 16)
     {
         Gpu = gpu;
@@ -173,6 +250,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         return path is null ? null : new DebugOverlay(gpu, File.ReadAllBytes(path));
     }
 
+    /// <summary>
+    /// An overlay drawing in the TrueType font file <paramref name="path"/>, its glyphs baked with stb_truetype.
+    /// </summary>
     /// <param name="pixelHeight">The size the glyphs are baked at: about the size the face is drawn at keeps it sharp.</param>
     public static DebugOverlay FromFont(IGpuContext gpu, string path, float pixelHeight = 16) => new(gpu, File.ReadAllBytes(path), pixelHeight);
 
@@ -208,6 +288,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         return advance;
     }
 
+    /// <summary>
+    /// The width of <paramref name="text"/> in pixels at <paramref name="scale"/>, kerned.
+    /// </summary>
     public float MeasureText(string text, float scale = 1)
     {
         float width = 0;
@@ -216,6 +299,10 @@ public sealed unsafe class DebugOverlay : IDisposable
         return width;
     }
 
+    /// <summary>
+    /// <paramref name="text"/> as it fits in <paramref name="width"/> pixels at <paramref name="scale"/>: whole, or cut with "..." (empty when not
+    /// even that fits).
+    /// </summary>
     public string FitText(string text, float width, float scale = 1)
     {
         if (MeasureText(text, scale) <= width) return text;
@@ -298,15 +385,33 @@ public sealed unsafe class DebugOverlay : IDisposable
         yield return word[start..];
     }
 
+    /// <summary>
+    /// Whether a line may break between code points <paramref name="before"/> and <paramref name="after"/>: one of them a CJK character, and neither
+    /// kept to its neighbour by punctuation.
+    /// </summary>
     static bool BreaksBetween(int before, int after) =>
         (IsBreakable(before) || IsBreakable(after)) && !Listed(NoLineStart, after) && !Listed(NoLineEnd, before);
 
+    /// <summary>
+    /// The punctuation and small kana a line may not start with.
+    /// </summary>
     const string NoLineStart = "、。，．,.：:；;？?！!）)」』】〕〉》］]｝}" +
         "ー・…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ";
+
+    /// <summary>
+    /// The opening brackets a line may not end with.
+    /// </summary>
     const string NoLineEnd = "（(「『【〔〈《［[｛{";
 
+    /// <summary>
+    /// Whether <paramref name="codePoint"/> (in the basic plane) is one of <paramref name="set"/>.
+    /// </summary>
     static bool Listed(string set, int codePoint) => codePoint < 0x10000 && set.Contains((char)codePoint);
 
+    /// <summary>
+    /// Whether a line may break before or after <paramref name="cp"/>: CJK ideographs, Hangul, compatibility ideographs, full-width forms and the
+    /// supplementary ideograph planes.
+    /// </summary>
     static bool IsBreakable(int cp) =>
         cp is >= 0x2E80 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF
             or >= 0xFF00 and <= 0xFFEF or >= 0x20000 and <= 0x3FFFF;
@@ -350,6 +455,9 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     #region Panels
 
+    /// <summary>
+    /// The panels' background and their text's colour.
+    /// </summary>
     public static readonly Vector4 PanelColour = new(0.05f, 0.05f, 0.06f, 0.78f), TextColour = new(0.92f, 0.92f, 0.88f, 1f);
 
     /// <summary>
@@ -447,6 +555,9 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// </summary>
     public float Text(string s, float x, float top, Vector4 colour) => TextScaled(s, x, top, colour, 1);
 
+    /// <summary>
+    /// <see cref="Text"/> drawn <paramref name="scale"/> times the font's size.
+    /// </summary>
     public float TextScaled(string s, float x, float top, Vector4 colour, float scale)
     {
         if (_imageBatch is not null) throw new InvalidOperationException("Flush UI images before queuing text.");
@@ -504,6 +615,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         _cachedTextFloats += added;
     }
 
+    /// <summary>
+    /// Forgets the cached text geometry for a new UI font atlas <paramref name="generation"/>.
+    /// </summary>
     void DropCachedGeometry(int generation)
     {
         _textGeometry.Clear();
@@ -610,6 +724,9 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// </summary>
     SampledTexture AtlasAt(int run) => _atlasRuns.Count > 0 ? _atlasRuns[run].Texture : _uiFont is { } ui ? ui.Sampled : _atlasSampled;
 
+    /// <summary>
+    /// Empties the batch, its image and its atlas runs.
+    /// </summary>
     void ClearBatch()
     {
         _batch.Clear();
@@ -713,10 +830,29 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// </summary>
     public sealed class OverlayPass(IGpuContext gpu, int width, int height) : IDisposable
     {
+        /// <summary>
+        /// The queued vertices of every run.
+        /// </summary>
         readonly List<float> _vertices = [];
+
+        /// <summary>
+        /// The draws: runs of vertices with the same texture and scissor.
+        /// </summary>
         readonly List<Run> _runs = [];
+
+        /// <summary>
+        /// The overlay whose program draws the pass (the first that adds).
+        /// </summary>
         DebugOverlay? _renderer;
+
+        /// <summary>
+        /// The target every add draws into.
+        /// </summary>
         GpuTexture? _target;
+
+        /// <summary>
+        /// A draw of the pass: its texture, whether it is an image, its scissor, and its vertices.
+        /// </summary>
         readonly record struct Run(SampledTexture Texture, bool Image, PixelRect Scissor, int First, int Count);
 
         /// <summary>
@@ -725,7 +861,14 @@ public sealed unsafe class DebugOverlay : IDisposable
         public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First,
             int Count);
 
+        /// <summary>
+        /// The adds recorded since <see cref="BeginRecording"/>; null when not recording.
+        /// </summary>
         List<Recorded>? _recording;
+
+        /// <summary>
+        /// The floats recorded with them.
+        /// </summary>
         List<float>? _recordedFloats;
 
         /// <summary>
@@ -733,6 +876,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         /// </summary>
         public void BeginRecording(List<Recorded> adds, List<float> floats) => (_recording, _recordedFloats) = (adds, floats);
 
+        /// <summary>
+        /// Stops recording.
+        /// </summary>
         public void EndRecording() => (_recording, _recordedFloats) = (null, null);
 
         /// <summary>
@@ -743,6 +889,9 @@ public sealed unsafe class DebugOverlay : IDisposable
             foreach (var r in adds) Add(r.Owner, floats.AsSpan(r.First, r.Count), r.Image, r.Clip, r.Atlas);
         }
 
+        /// <summary>
+        /// Empties the pass for a new frame of <paramref name="newWidth"/> x <paramref name="newHeight"/>.
+        /// </summary>
         public OverlayPass Reset(int newWidth, int newHeight)
         {
             width = newWidth;
@@ -754,6 +903,10 @@ public sealed unsafe class DebugOverlay : IDisposable
             return this;
         }
 
+        /// <summary>
+        /// Adds <paramref name="owner"/>'s vertices <paramref name="data"/> to the pass, drawn with <paramref name="image"/> (null: the font atlas,
+        /// or none for solid shapes) inside <paramref name="clip"/>; joined to the last run when they share its clip and texture.
+        /// </summary>
         /// <param name="atlas">The font atlas texture the glyph quads of <paramref name="data"/> sample (a UI font's can change between runs); null:
         /// the owner's baked one.</param>
         public void Add(DebugOverlay owner, ReadOnlySpan<float> data, SampledTexture? image, PixelRect clip, SampledTexture? atlas = null)
@@ -795,9 +948,15 @@ public sealed unsafe class DebugOverlay : IDisposable
             _runs.Add(new(texture, isImage, clip, first, count));
         }
 
+        /// <summary>
+        /// Whether two scissors are the same rectangle.
+        /// </summary>
         static bool SameClip(PixelRect a, PixelRect b) => a.X == b.X && a.Y == b.Y
             && a.Width == b.Width && a.Height == b.Height;
 
+        /// <summary>
+        /// Draws every run into the target in one rendering (nothing when nothing was added).
+        /// </summary>
         public void Dispose()
         {
             if (_renderer is not { } painter || _target is null || _runs.Count == 0) return;
@@ -920,6 +1079,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         vertices[5] = e;
     }
 
+    /// <summary>
+    /// Queues a rectangle of two triangles with its corners' texture coordinates (<paramref name="u0"/> &lt; 0: solid).
+    /// </summary>
     void Quad(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, Vector4 c)
     {
         OverlayVertex a = new(new(x0, y0, u0, v0), c), b = new(new(x1, y0, u1, v0), c);
@@ -933,14 +1095,23 @@ public sealed unsafe class DebugOverlay : IDisposable
         vertices[5] = e;
     }
 
+    /// <summary>
+    /// Queues one vertex.
+    /// </summary>
     void Emit(float x, float y, float u, float v, Vector4 c)
     {
         Reserve(1)[0] = new(new(x, y, u, v), c);
     }
 
+    /// <summary>
+    /// One queued vertex as <see cref="Stride"/> floats: position and uv, then colour.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     readonly record struct OverlayVertex(Vector4 PositionUv, Vector4 Colour);
 
+    /// <summary>
+    /// Room for <paramref name="count"/> vertices at the end of the batch, to be written.
+    /// </summary>
     Span<OverlayVertex> Reserve(int count)
     {
         int start = _batch.Count;
@@ -952,6 +1123,9 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Releases the baked atlas, the UI font and the program.
+    /// </summary>
     public void Dispose()
     {
         _atlas?.Dispose();

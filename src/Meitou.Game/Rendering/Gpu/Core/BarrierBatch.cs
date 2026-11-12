@@ -28,8 +28,14 @@ public struct BarrierBatch
     /// </summary>
     public AccessFlags2 DstAccess;
 
+    /// <summary>
+    /// Whether nothing was added.
+    /// </summary>
     public readonly bool IsEmpty => SrcStages == 0 && DstStages == 0;
 
+    /// <summary>
+    /// ORs a dependency's stages and accesses into the batch.
+    /// </summary>
     public void Add(PipelineStageFlags2 srcStages, AccessFlags2 srcAccess, PipelineStageFlags2 dstStages, AccessFlags2 dstAccess)
     {
         SrcStages |= srcStages;

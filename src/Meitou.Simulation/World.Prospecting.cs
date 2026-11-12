@@ -2,8 +2,14 @@ using Meitou.Simulation.Production;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's last prospecting, for the host.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The last prospecting (see <see cref="Prospected"/>).
+    /// </summary>
     volatile ProspectReport? _prospected;
 
     /// <summary>

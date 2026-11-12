@@ -5,11 +5,12 @@
 # official GitHub repositories (cached in -Cache; the FidelityFX source is built by build-ffx-linux.sh) and none of them is in the repository. Linux and macOS zips are made on a Unix machine with zip(1), which stores the execute
 # bits: the Linux zip on Linux (build-ngx-shim.sh links with GNU ld), macOS zips on a Mac, which ad-hoc signs the binaries (Apple Silicon
 # refuses unsigned code).
-#   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Rid win-x64|linux-x64|osx-x64|osx-arm64] [-Output out] [-Cache C:\Temp\release-cache]
+#   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Rid win-x64|linux-x64|osx-x64|osx-arm64] [-LegacyMac] [-Output out] [-Cache C:\Temp\release-cache]
 # (PowerShell 7: Windows PowerShell 5.1 writes the zip with backslashes in its paths, which some unzippers reject.)
 param(
     [Parameter(Mandatory = $true)] [string] $Version,
     [ValidateSet("win-x64", "linux-x64", "osx-x64", "osx-arm64")] [string] $Rid = "win-x64",
+    [switch] $LegacyMac,
     [string] $Output = "out",
     [string] $Cache = (Join-Path ([IO.Path]::GetTempPath()) "meitou-release-cache")
 )
@@ -20,6 +21,8 @@ $root = Resolve-Path (Join-Path $PSScriptRoot "../..")
 $windows = $Rid -like "win-*"
 $mac = $Rid -like "osx-*"
 $linux = $Rid -like "linux-*"
+if ($LegacyMac -and -not $mac) { throw "LegacyMac is only supported for macOS runtimes" }
+$legacy = $LegacyMac.IsPresent.ToString().ToLowerInvariant()
 if (-not $windows -and $IsWindows) { throw "make the $Rid zip on Linux or macOS: a zip made on Windows has no execute bits" }
 if ($mac -and -not $IsMacOS) { throw "make the $Rid zip on macOS: its binaries need an ad-hoc signature" }
 if ($linux -and -not $IsLinux) { throw "make the $Rid zip on Linux: build-ngx-shim.sh links an ELF library with GNU ld" }
@@ -27,7 +30,8 @@ $exe = if ($windows) { ".exe" } else { "" }
 # The game executable's name: Meitou.Game's AssemblyName.
 $game = ([xml](Get-Content (Join-Path $root "src/Meitou.Game/Meitou.Game.csproj"))).Project.PropertyGroup.AssemblyName | Where-Object { $_ } | Select-Object -First 1
 if (-not $game) { throw "no AssemblyName in Meitou.Game.csproj" }
-$name = "Meitou-$Version-$Rid"
+$suffix = if ($LegacyMac) { "-legacy" } else { "" }
+$name = "Meitou-$Version-$Rid$suffix"
 $stage = Join-Path $Output $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
@@ -40,9 +44,15 @@ $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0
 # meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
 # The game goes last: the viewer and meitou-tools reference it and bring copies of its runtimeconfig and deps, which its own publish then replaces.
 $projects = @("tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj", "src/Meitou.Game/Meitou.Game.csproj")
+if ($LegacyMac) {
+    bash (Join-Path $PSScriptRoot "build-native-macos.sh") $Rid
+    if ($LASTEXITCODE -ne 0) { throw "macOS native libraries build failed" }
+
+    Copy-Item (Join-Path $root "macos-runtime/$Rid/LICENSE-*.txt") $stage
+}
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
-        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage
+        -p:MeitouLegacyMac=$legacy -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
 # The Unix runtime packs carry native debug symbols (*.dbg, *.dwarf, *.dSYM; ~250 MB): not shipped.
@@ -50,7 +60,7 @@ Get-ChildItem $stage -Recurse -Include *.dbg, *.dwarf, *.dSYM | Remove-Item -Rec
 
 # The settings the launcher's Graphics page shows, under the names this build saves them (docs/launcher.md "Graphics"). The file is the same
 # for every runtime, so the host's own build writes it: the staged exe may be for another one.
-dotnet run --project (Join-Path $root "src/Meitou.Game/Meitou.Game.csproj") -c Release -- --settings-schema (Join-Path (Resolve-Path $stage) "settings-schema.json")
+dotnet run --project (Join-Path $root "src/Meitou.Game/Meitou.Game.csproj") -c Release -p:MeitouLegacyMac=$legacy -- --settings-schema (Join-Path (Resolve-Path $stage) "settings-schema.json")
 if ($LASTEXITCODE -ne 0) { throw "writing settings-schema.json failed" }
 
 function Get-Archive([string] $url, [string] $name = [IO.Path]::GetFileName($url)) {
@@ -133,6 +143,7 @@ if ($linux) {
 # Our licence, the GPL exception for the NVIDIA libraries, the notices, and how to start.
 Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "LICENSE-EXCEPTION.md"), (Join-Path $root "THIRD_PARTY_NOTICES.md") $stage
 $platform = @{ "win-x64" = "Windows x64"; "linux-x64" = "Linux x64"; "osx-x64" = "macOS Intel"; "osx-arm64" = "macOS Apple Silicon" }[$Rid]
+if ($LegacyMac) { $platform += " Legacy (.NET 10)" }
 $title = "Meitou $Version ($platform)"
 $requirements = if ($mac) {
     "Requirements: macOS with a Vulkan loader and MoltenVK installed (they are not included), e.g. from the LunarG Vulkan SDK.`n" +
@@ -235,7 +246,10 @@ if ($windows) {
     if ($LASTEXITCODE -ne 0) { throw "chmod failed" }
     if ($mac) {
         # Ad-hoc signatures (no Apple identity): enough for Apple Silicon to run the code; Gatekeeper still flags browser downloads.
-        $code = @($programs) + @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName)
+        # Intel dylibs stay as shipped (Intel Macs run unsigned code): Silk.NET's x64 shaderc and spirv-cross have no header padding, so the
+        # signature's load command overwrote the start of __text and the game crashed on launch (#461).
+        $dylibs = if ($Rid -eq "osx-arm64") { @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName) } else { @() }
+        $code = @($programs) + $dylibs
         foreach ($file in $code) {
             codesign --force --sign - $file
             if ($LASTEXITCODE -ne 0) { throw "codesign $file failed" }

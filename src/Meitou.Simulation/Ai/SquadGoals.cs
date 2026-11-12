@@ -7,7 +7,13 @@ namespace Meitou.Simulation.Ai;
 /// </summary>
 public readonly record struct GoalTarget(CharacterId Body, string? Place)
 {
+    /// <summary>
+    /// A target that is a character.
+    /// </summary>
     public static GoalTarget Of(CharacterId body) => new(body, null);
+    /// <summary>
+    /// A target that is a place (a fixture or building id).
+    /// </summary>
     public static GoalTarget At(string place) => new(CharacterId.None, place);
 }
 
@@ -17,6 +23,9 @@ public readonly record struct GoalTarget(CharacterId Body, string? Place)
 /// </summary>
 public interface IGoalSource
 {
+    /// <summary>
+    /// Adds the (worker, target) pairs it acts out now to <paramref name="goals"/>.
+    /// </summary>
     void Publish(World world, SquadGoals goals);
 }
 
@@ -29,7 +38,13 @@ public interface IGoalSource
 /// </summary>
 public sealed class SquadGoals
 {
+    /// <summary>
+    /// The entries: the squad, the worker and the target.
+    /// </summary>
     readonly List<(int Squad, CharacterId Worker, GoalTarget Target)> _entries = [];
+    /// <summary>
+    /// The world's goal claims, refreshed by every pair <see cref="Add"/> records (null: none).
+    /// </summary>
     GoalClaims? _book;
 
     /// <summary>
@@ -67,6 +82,18 @@ public sealed class SquadGoals
         int n = 0;
         foreach (var (s, worker, t) in _entries)
             if (s == squad && worker != asker && worker != target.Body && t == target) n++;
+        return n;
+    }
+
+    /// <summary>
+    /// How many workers of any squad work on <paramref name="target"/>: not the asker, nor the target itself. Engine only (the original's list is
+    /// per squad, <see cref="Working"/>).
+    /// </summary>
+    public int WorkingAny(CharacterId asker, GoalTarget target)
+    {
+        int n = 0;
+        foreach (var (_, worker, t) in _entries)
+            if (worker != asker && worker != target.Body && t == target) n++;
         return n;
     }
 

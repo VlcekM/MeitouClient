@@ -14,6 +14,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// The record's name in the data files (<see cref="GameRecord.BaseName"/>): for finding an item by its English name, whatever the language.
     /// </summary>
     public string BaseName { get => _baseName ?? Name; init => _baseName = value; }
+    /// <summary>
+    /// The data files' name when it differs from <see cref="Name"/>; null: the same.
+    /// </summary>
     string? _baseName;
     /// <summary>
     /// <c>weight kg</c>.
@@ -23,6 +26,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// <c>inventory footprint width</c> / <c>height</c>: cells in a grid.
     /// </summary>
     public int Width { get; init; } = 1;
+    /// <summary>
+    /// <c>inventory footprint height</c>.
+    /// </summary>
     public int Height { get; init; } = 1;
     /// <summary>
     /// How many units one inventory cell holds: ITEM <c>stackable</c>, an int ("number that can be stacked in inventory", default 1 in
@@ -35,6 +41,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// mult) (1 and 1 for other items).
     /// </summary>
     public int StackBonusMinimum { get; init; } = 1;
+    /// <summary>
+    /// <c>stackable bonus mult</c>.
+    /// </summary>
     public float StackBonusMult { get; init; } = 1;
     /// <summary>
     /// The item function a made item holds (<see cref="FunctionOf"/>): an ITEM's <c>item function</c> (3 food, 15 raw meat, 8 drugs, 1 first aid kit,
@@ -45,6 +54,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// The record's <c>charges</c> before food scaling, at least 1 (the constructor lifts anything below 1 to 1).
     /// </summary>
     public float Charges { get; init; } = 1;
+    /// <summary>
+    /// The record's <c>value</c>: the base price.
+    /// </summary>
     public int Value { get; init; }
     /// <summary>
     /// <c>trade item</c>: sells for its full price unless stolen (docs/game/economy.md section 5). Cleared for the food that
@@ -61,6 +73,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// A CONTAINER's <c>storage size width</c> / <c>height</c> (cells of its contents grid; 0 for other items).
     /// </summary>
     public int StorageWidth { get; init; }
+    /// <summary>
+    /// <c>storage size height</c>.
+    /// </summary>
     public int StorageHeight { get; init; }
     /// <summary>
     /// A CONTAINER's <c>encumbrance effect</c>: the factor on the weight of its contents (1 for other items).
@@ -73,6 +88,9 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// <c>Limiter::canEquip</c> <c>FUN_1405936b0</c>, <b>Verified</b> by decompile; checked by sections other than type 7, <c>FUN_14074bc30</c>).
     /// </summary>
     public string[] WornOnlyBy { get; init; } = [];
+    /// <summary>
+    /// The races that may not wear it (<c>races exclude</c>; not read when <see cref="WornOnlyBy"/> lists any).
+    /// </summary>
     public string[] WornNeverBy { get; init; } = [];
 
     /// <summary>
@@ -117,8 +135,15 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// </summary>
     public bool ScalesCharges => Scales(Type, Function, Charges);
 
+    /// <summary>
+    /// Whether an item of <paramref name="type"/>, <paramref name="function"/> and <paramref name="charges"/> scales its
+    /// charges (<see cref="ScalesCharges"/>).
+    /// </summary>
     static bool Scales(FcsRecordType type, int function, float charges) => type == FcsRecordType.Item && function is 3 or 15 && charges > 1;
 
+    /// <summary>
+    /// The carrying and eating facts of record <paramref name="r"/>.
+    /// </summary>
     public static ItemInfo From(GameRecord r)
     {
         var (function, charges) = FunctionOf(r);

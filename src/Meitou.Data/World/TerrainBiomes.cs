@@ -14,10 +14,22 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class BlendInfoFile
 {
+    /// <summary>
+    /// The file's path under the data folder.
+    /// </summary>
     public const string RelativePath = "newland/land/blendinfo.dat";
+    /// <summary>
+    /// Biome colours a cell lists.
+    /// </summary>
     public const int SlotsPerCell = 5;
+    /// <summary>
+    /// The file's first four bytes, <c>KBI1</c>.
+    /// </summary>
     static readonly byte[] Magic = "KBI1"u8.ToArray();
 
+    /// <summary>
+    /// A file of the given grid, slot table and slot-mask quadtrees (null when the file has none).
+    /// </summary>
     BlendInfoFile(int cells, int resolution, uint[] slots, byte[][]? nodes) =>
         (Cells, Resolution, Slots, Nodes) = (cells, resolution, slots, nodes);
 
@@ -29,6 +41,9 @@ public sealed class BlendInfoFile
     /// Same as <see cref="Cells"/>; the grid is square (kept for callers that think in X and Z).
     /// </summary>
     public int CellsX => Cells;
+    /// <summary>
+    /// Same as <see cref="Cells"/>; the grid is square.
+    /// </summary>
     public int CellsZ => Cells;
     /// <summary>
     /// Leaves per cell side of the slot-mask quadtree (32 in the base game: one blend-map pixel per leaf).
@@ -47,6 +62,9 @@ public sealed class BlendInfoFile
     /// </summary>
     public byte[][]? Nodes { get; }
 
+    /// <summary>
+    /// World units per cell side.
+    /// </summary>
     public double CellSize => (double)WorldLayout.WorldSize / Cells;
 
     /// <summary>
@@ -65,6 +83,9 @@ public sealed class BlendInfoFile
     /// Slot bits (bit k = slot k) of a node byte; the top three bits hold how many are set.
     /// </summary>
     public static int MaskSlots(byte node) => node & 0x1F;
+    /// <summary>
+    /// How many slots a node byte has set (its top three bits).
+    /// </summary>
     public static int MaskCount(byte node) => node >> 5;
 
     /// <summary>
@@ -94,8 +115,16 @@ public sealed class BlendInfoFile
         return nodes[a];
     }
 
+    /// <summary>
+    /// Reads the install's <see cref="RelativePath"/>.
+    /// </summary>
     public static BlendInfoFile Open(GameInstall install) => Read(File.ReadAllBytes(Path.Combine(install.DataDirectory, RelativePath)));
 
+    /// <summary>
+    /// Parses a blend info file: the magic, the cell count and the quadtree resolution (a power of two), the slot table, then, when present, the
+    /// int32 node count and each cell's quadtree (only its root byte when the root has one slot). Throws on an implausible grid or a truncated or
+    /// overlong file.
+    /// </summary>
     public static BlendInfoFile Read(byte[] data)
     {
         if (data.Length < 12 || !data.AsSpan(0, 4).SequenceEqual(Magic))
@@ -138,7 +167,38 @@ public sealed class BlendInfoFile
 /// <summary>
 /// Terrain layers of a biome, in the order of Kenshi's terrain texture arrays (terrain shader, docs/formats/terrain.md).
 /// </summary>
-public enum TerrainLayer { Base, Slope, Cliff, Grass, Dirt, Road }
+public enum TerrainLayer
+{
+    /// <summary>
+    /// 0: <c>texture base</c>.
+    /// </summary>
+    Base,
+
+    /// <summary>
+    /// 1: <c>texture slope</c>.
+    /// </summary>
+    Slope,
+
+    /// <summary>
+    /// 2: <c>texture vertical</c>.
+    /// </summary>
+    Cliff,
+
+    /// <summary>
+    /// 3: <c>texture grass</c>.
+    /// </summary>
+    Grass,
+
+    /// <summary>
+    /// 4: <c>texture dirt</c>.
+    /// </summary>
+    Dirt,
+
+    /// <summary>
+    /// 5: <c>texture road</c>.
+    /// </summary>
+    Road
+}
 
 /// <summary>
 /// How a BIOMES record textures the terrain: six layers (diffuse + normal map, tiling), slope ranges, colour
@@ -147,7 +207,13 @@ public enum TerrainLayer { Base, Slope, Cliff, Grass, Dirt, Road }
 /// </summary>
 public sealed record BiomeTerrain
 {
+    /// <summary>
+    /// The record's string id.
+    /// </summary>
     public required string StringId { get; init; }
+    /// <summary>
+    /// The record's name.
+    /// </summary>
     public required string Name { get; init; }
     /// <summary>
     /// Colour of the biome in <c>biomemap.png</c> / <c>blendinfo.dat</c> (RGB).
@@ -157,6 +223,9 @@ public sealed record BiomeTerrain
     /// Per <see cref="TerrainLayer"/>: diffuse and normal texture paths as stored (null when empty).
     /// </summary>
     public required string?[] Diffuse { get; init; }
+    /// <summary>
+    /// Per <see cref="TerrainLayer"/>: the normal map paths as stored (null when empty).
+    /// </summary>
     public required string?[] Normal { get; init; }
     /// <summary>
     /// Per layer: repeats per 5000 world units on X and Y.
@@ -166,7 +235,13 @@ public sealed record BiomeTerrain
     /// Shader slope ranges: X slope layer, Y cliff layer, Z "slope … 3" (unused by the shader), W grass.
     /// </summary>
     public required Vector4 SlopeMin { get; init; }
+    /// <summary>
+    /// <c>slope max 1</c>, <c>2</c>, <c>3</c>, <c>grass</c> × <see cref="SlopeScale"/>; see <see cref="SlopeMin"/>.
+    /// </summary>
     public required Vector4 SlopeMax { get; init; }
+    /// <summary>
+    /// <c>slope fade 1</c>, <c>2</c>, <c>3</c>, <c>grass</c> × <see cref="SlopeScale"/>: the width of each range's fade.
+    /// </summary>
     public required Vector4 SlopeBlend { get; init; }
     /// <summary>
     /// Colour-map strength for cliff, grass, dirt, road (base and slope always take the full colour).
@@ -176,9 +251,21 @@ public sealed record BiomeTerrain
     /// Ground colour (RGB 0..1): what the textures fade to with distance.
     /// </summary>
     public required Vector3 GroundColour { get; init; }
+    /// <summary>
+    /// <c>fade distance</c>: the shader's <c>textureFade</c> takes its inverse.
+    /// </summary>
     public required float FadeDistance { get; init; }
+    /// <summary>
+    /// <c>brightness fix</c>, 0 replaced with 1 as the game does.
+    /// </summary>
     public required float BrightnessFix { get; init; }
+    /// <summary>
+    /// <c>distort wavelength</c>: the shader's distortion takes its inverse (0 when it is not positive).
+    /// </summary>
     public required float DistortWavelength { get; init; }
+    /// <summary>
+    /// <c>distort amplitude</c>: the shader's distortion takes it × 0.01.
+    /// </summary>
     public required float DistortAmplitude { get; init; }
     /// <summary>
     /// Per layer in the order base, slope, cliff, grass, dirt, road (the `absorbance 0`, `1`, `2`, `grass`, `dirt`, `road` fields, fcs.def defaults
@@ -191,16 +278,28 @@ public sealed record BiomeTerrain
     /// </summary>
     public const float SlopeScale = 0.01f;
 
+    /// <summary>
+    /// The diffuse texture fields per <see cref="TerrainLayer"/>; the normal maps add " normal".
+    /// </summary>
     static readonly string[] TextureFields = ["texture base", "texture slope", "texture vertical", "texture grass", "texture dirt", "texture road"];
+    /// <summary>
+    /// The suffix of the <c>tiling X</c> / <c>tiling Y</c> fields per <see cref="TerrainLayer"/>.
+    /// </summary>
     static readonly string[] TilingSuffix = ["0", "1", "2", "grass", "dirt", "road"];
 
+    /// <summary>
+    /// The terrain look of BIOMES record <paramref name="r"/>, missing fields at their fcs.def defaults.
+    /// </summary>
     public static BiomeTerrain FromRecord(GameRecord r)
     {
         static string? Tex(GameRecord r, string field) => r.GetPath(field) is { Length: > 0 } p ? p : null;
         // Defaults are the fcs.def ones.
         Vector2[] defaultTiling = [new(50, 50), new(70, 70), new(40, 10), new(40, 40), new(40, 40), new(40, 40)];
-        Vector4 Slope(string what, float d1, float d2, float dGrass) => new Vector4(
-            r.GetFloat($"slope {what} 1", d1), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0), r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
+        Vector4 Slope(string what, float d1, float d2, float dGrass) =>
+            new Vector4(r.GetFloat($"slope {what} 1", d1), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0),
+                r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
+        Vector2 TilingOf(string s, int i) =>
+            new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y));
         uint ground = (uint)r.GetInt("ground colour", 0xC0A040) & 0xFFFFFF;
         float brightness = r.GetFloat("brightness fix", 1);
         return new BiomeTerrain
@@ -210,17 +309,19 @@ public sealed record BiomeTerrain
             Index = (uint)r.GetInt("index") & 0xFFFFFF,
             Diffuse = [.. TextureFields.Select(f => Tex(r, f))],
             Normal = [.. TextureFields.Select(f => Tex(r, f + " normal"))],
-            Tiling = [.. TilingSuffix.Select((s, i) => new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y)))],
+            Tiling = [.. TilingSuffix.Select(TilingOf)],
             SlopeMin = Slope("min", 0, 0, 0),
             SlopeMax = Slope("max", 90, 90, 20),
             SlopeBlend = Slope("fade", 5, 5, 5),
-            OverlayMult = new Vector4(r.GetFloat("overlay mult vertical", 1), r.GetFloat("overlay mult grass", 1), r.GetFloat("overlay mult dirt", 1), r.GetFloat("overlay mult road", 1)),
+            OverlayMult = new Vector4(r.GetFloat("overlay mult vertical", 1), r.GetFloat("overlay mult grass", 1), r.GetFloat("overlay mult dirt", 1),
+                r.GetFloat("overlay mult road", 1)),
             GroundColour = new Vector3((ground >> 16) & 0xFF, (ground >> 8) & 0xFF, ground & 0xFF) / 255f,
             FadeDistance = r.GetFloat("fade distance", 4000),
             BrightnessFix = brightness == 0 ? 1 : brightness, // the game replaces 0 with 1
             DistortWavelength = r.GetFloat("distort wavelength", 1000),
             DistortAmplitude = r.GetFloat("distort amplitude", 0),
-            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
+            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f),
+                r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
         };
     }
 
@@ -243,9 +344,21 @@ public sealed record BiomeTerrain
 /// </summary>
 public static class TerrainMaps
 {
+    /// <summary>
+    /// The land maps' folder under the data folder.
+    /// </summary>
     public const string LandDirectory = "newland/land";
+    /// <summary>
+    /// The biome blend map (the weights of <see cref="BlendInfoFile"/>'s slots 0..3 in R, G, B, A).
+    /// </summary>
     public const string BlendMap = "newland/land/blendmap.png";
+    /// <summary>
+    /// The biome map: the BIOMES <c>index</c> colour of each place.
+    /// </summary>
     public const string BiomeMap = "newland/land/biomemap.png";
+    /// <summary>
+    /// Overlay and colour map tiles per world side.
+    /// </summary>
     public const int OverlayTiles = 8;
 
     /// <summary>

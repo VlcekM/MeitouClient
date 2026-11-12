@@ -7,45 +7,165 @@ namespace Meitou.Data.Gameplay.Bodies;
 /// </summary>
 public enum StatsEnumerated
 {
+    /// <summary>
+    /// No stat (the enum's 0; no storage).
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// <c>STAT_STRENGTH</c>: STATS field and save key <c>strength</c>, CharStats <c>+0x80</c>.
+    /// </summary>
     Strength = 1,
+    /// <summary>
+    /// <c>STAT_MELEE_ATTACK</c>: STATS field and save key <c>attack</c>, CharStats <c>+0x120</c>.
+    /// </summary>
     MeleeAttack = 2,
+    /// <summary>
+    /// <c>STAT_LABOURING</c>: STATS field and save key <c>labouring</c>, CharStats <c>+0xe4</c>.
+    /// </summary>
     Labouring = 3,
+    /// <summary>
+    /// <c>STAT_SCIENCE</c>: STATS field and save key <c>science</c>, CharStats <c>+0xe0</c>.
+    /// </summary>
     Science = 4,
+    /// <summary>
+    /// <c>STAT_ENGINEERING</c>: STATS field and save key <c>engineer</c>, CharStats <c>+0xcc</c>.
+    /// </summary>
     Engineering = 5,
+    /// <summary>
+    /// <c>STAT_ROBOTICS</c>: STATS field and save key <c>robotics</c>, CharStats <c>+0xdc</c>.
+    /// </summary>
     Robotics = 6,
+    /// <summary>
+    /// <c>STAT_SMITHING_WEAPON</c>: STATS field and save key <c>weapon smith</c>, CharStats <c>+0xd0</c>.
+    /// </summary>
     SmithingWeapon = 7,
+    /// <summary>
+    /// <c>STAT_SMITHING_ARMOUR</c>: STATS field and save key <c>armour smith</c>, CharStats <c>+0xd4</c>.
+    /// </summary>
     SmithingArmour = 8,
+    /// <summary>
+    /// <c>STAT_MEDIC</c>: STATS field and save key <c>medic</c>, CharStats <c>+0x98</c>.
+    /// </summary>
     Medic = 9,
+    /// <summary>
+    /// <c>STAT_THIEVING</c>: STATS field and save key <c>thievery</c>, CharStats <c>+0xac</c>.
+    /// </summary>
     Thieving = 10,
+    /// <summary>
+    /// <c>STAT_TURRETS</c>: STATS field and save key <c>turrets</c>, CharStats <c>+0x114</c>.
+    /// </summary>
     Turrets = 11,
+    /// <summary>
+    /// <c>STAT_FARMING</c>: STATS field and save key <c>farming</c>, CharStats <c>+0xe8</c>.
+    /// </summary>
     Farming = 12,
+    /// <summary>
+    /// <c>STAT_COOKING</c>: STATS field and save key <c>cooking</c>, CharStats <c>+0xec</c>.
+    /// </summary>
     Cooking = 13,
+    /// <summary>
+    /// <c>STAT_HIVEMEDIC</c>: shares <c>medic</c> (CharStats <c>+0x98</c>).
+    /// </summary>
     HiveMedic = 14,
+    /// <summary>
+    /// <c>STAT_VET</c>: shares <c>medic</c> (CharStats <c>+0x98</c>).
+    /// </summary>
     Vet = 15,
+    /// <summary>
+    /// <c>STAT_STEALTH</c>: STATS field and save key <c>stealth</c>, CharStats <c>+0xa4</c>.
+    /// </summary>
     Stealth = 16,
+    /// <summary>
+    /// <c>STAT_ATHLETICS</c>: STATS field and save key <c>athletics</c>, CharStats <c>+0x94</c>.
+    /// </summary>
     Athletics = 17,
+    /// <summary>
+    /// <c>STAT_DEXTERITY</c>: STATS field and save key <c>dexterity</c>, CharStats <c>+0x88</c>.
+    /// </summary>
     Dexterity = 18,
+    /// <summary>
+    /// <c>STAT_MELEE_DEFENCE</c>: STATS field and save key <c>defence</c>, CharStats <c>+0x124</c>.
+    /// </summary>
     MeleeDefence = 19,
+    /// <summary>
+    /// <c>STAT_WEAPONS</c>: no storage (the accessor returns a dummy slot).
+    /// </summary>
     Weapons = 20,
+    /// <summary>
+    /// <c>STAT_TOUGHNESS</c>: STATS field and save key <c>toughness2</c>, CharStats <c>+0x90</c>.
+    /// </summary>
     Toughness = 21,
+    /// <summary>
+    /// <c>STAT_ASSASSINATION</c>: STATS field and save key <c>assassin</c>, CharStats <c>+0xb8</c>.
+    /// </summary>
     Assassination = 22,
+    /// <summary>
+    /// <c>STAT_SWIMMING</c>: STATS field and save key <c>swimming</c>, CharStats <c>+0xa8</c>.
+    /// </summary>
     Swimming = 23,
+    /// <summary>
+    /// <c>STAT_PERCEPTION</c>: STATS field and save key <c>perception</c>, CharStats <c>+0x8c</c>.
+    /// </summary>
     Perception = 24,
+    /// <summary>
+    /// <c>STAT_KATANAS</c>: STATS field and save key <c>katana</c>, CharStats <c>+0xf8</c>.
+    /// </summary>
     Katanas = 25,
+    /// <summary>
+    /// <c>STAT_SABRES</c>: STATS field and save key <c>sabres</c>, CharStats <c>+0xfc</c>.
+    /// </summary>
     Sabres = 26,
+    /// <summary>
+    /// <c>STAT_HACKERS</c>: STATS field and save key <c>hackers</c>, CharStats <c>+0x100</c>.
+    /// </summary>
     Hackers = 27,
+    /// <summary>
+    /// <c>STAT_HEAVYWEAPONS</c>: STATS field and save key <c>heavy weapons</c>, CharStats <c>+0x108</c>.
+    /// </summary>
     HeavyWeapons = 28,
+    /// <summary>
+    /// <c>STAT_BLUNT</c>: STATS field and save key <c>blunt</c>, CharStats <c>+0x104</c>.
+    /// </summary>
     Blunt = 29,
+    /// <summary>
+    /// <c>STAT_MARTIALARTS</c>: STATS field and save key <c>unarmed</c>, CharStats <c>+0x10c</c>.
+    /// </summary>
     MartialArts = 30,
+    /// <summary>
+    /// <c>STAT_MASSCOMBAT</c>: save key <c>mass combat</c> only (no STATS field), CharStats <c>+0x9c</c>.
+    /// </summary>
     MassCombat = 31,
+    /// <summary>
+    /// <c>STAT_DODGE</c>: STATS field and save key <c>dodge</c>, CharStats <c>+0xf0</c>.
+    /// </summary>
     Dodge = 32,
+    /// <summary>
+    /// <c>STAT_SURVIVAL</c>: no storage (dummy).
+    /// </summary>
     Survival = 33,
+    /// <summary>
+    /// <c>STAT_POLEARMS</c>: STATS field and save key <c>poles</c>, CharStats <c>+0x118</c>.
+    /// </summary>
     Polearms = 34,
+    /// <summary>
+    /// <c>STAT_CROSSBOWS</c>: STATS field and save key <c>bow</c>, CharStats <c>+0x110</c>.
+    /// </summary>
     Crossbows = 35,
+    /// <summary>
+    /// <c>STAT_FRIENDLY_FIRE</c>: STATS field and save key <c>ff</c>, CharStats <c>+0xf4</c>.
+    /// </summary>
     FriendlyFire = 36,
+    /// <summary>
+    /// <c>STAT_LOCKPICKING</c>: STATS field and save key <c>lockpicking</c>, CharStats <c>+0xb0</c>.
+    /// </summary>
     Lockpicking = 37,
+    /// <summary>
+    /// <c>STAT_SMITHING_BOW</c>: STATS field and save key <c>bow smith</c>, CharStats <c>+0xd8</c>.
+    /// </summary>
     SmithingBow = 38,
+    /// <summary>
+    /// One past the last stat number: the count, not a stat.
+    /// </summary>
     End = 39,
 }
 
@@ -59,7 +179,10 @@ public static class StatsInfo
     /// </summary>
     public const int Count = (int)StatsEnumerated.End;
 
-    // Index = stat number. Null: no field of that name (aliases and the two numbers without storage).
+    /// <summary>
+    /// The STATS field (and save key) of each stat number, by number; null where there is no field of that name (14 and 15 share medic's, 20 and 33
+    /// have no storage).
+    /// </summary>
     static readonly string?[] FieldNames =
     [
         null, "strength", "attack", "labouring", "science", "engineer", "robotics", "weapon smith", "armour smith", "medic",

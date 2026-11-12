@@ -19,6 +19,9 @@ sealed class AdvancedOptions(PlayerInterface player)
     /// </summary>
     internal NewGameSettings NewGameOptions { get; set; } = new();
 
+    /// <summary>
+    /// The advanced options panel is open under the window.
+    /// </summary>
     internal bool AdvancedOpen;
 
     /// <summary>
@@ -27,13 +30,19 @@ sealed class AdvancedOptions(PlayerInterface player)
     /// </summary>
     internal int AdvancedHelp = -1;
 
+    /// <summary>
+    /// The help texts of the options (the catalog's lines).
+    /// </summary>
     internal NewGameHelpCatalog AdvancedHelpCatalog = new();
 
     #endregion
 
     #region Layout
 
-    // Both panels belong to the same modal screen, so the lower panel cannot block Begin, Cancel or the toggle above it.
+    /// <summary>
+    /// Both panels belong to the same modal screen, so the lower panel cannot block Begin, Cancel or the toggle above it. The start window's layout
+    /// with <paramref name="advanced"/>'s root added as a plain widget, its widgets' names prefixed <c>advanced-</c>.
+    /// </summary>
     internal static MyGuiLayout WithAdvancedPanel(MyGuiLayout start, MyGuiLayout advanced)
     {
         static MyGuiWidget Prefix(MyGuiWidget w) => w with { Name = "advanced-" + w.Name, Children = w.Children.Select(Prefix).ToArray() };
@@ -42,6 +51,9 @@ sealed class AdvancedOptions(PlayerInterface player)
         return start with { Roots = [.. start.Roots, panel] };
     }
 
+    /// <summary>
+    /// The New game window's bindings (<see cref="BindAdvancedPanels"/> of <c>new-game</c>).
+    /// </summary>
     internal void BindNewGamePanels(UiBindings b) => BindAdvancedPanels("new-game", b);
 
     /// <summary>
@@ -53,14 +65,15 @@ sealed class AdvancedOptions(PlayerInterface player)
     {
         var root = player.FaithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
-        float scale = player.Height / 1080f;
+        float scale = player.UiScale;
         float width = Math.Min(size.Width, player.Width - 24);
         float mainHeight = Math.Min(size.Height, player.Height - 24);
         float extra = AdvancedOpen ? Math.Max(0, Math.Min(player.Height * .43f, player.Height - 24 - mainHeight)) : 0;
         float x = Math.Min(player.Width * (player.TitleOpen || id == "import" ? 0.5f : 0.6f), player.Width - width);
         float y = Math.Min(player.Height * 0.05f, Math.Max(0, player.Height - mainHeight - extra));
 
-        // Meitou: centred across, the window with its options panel centred down (the menu stack is on the left, so the original's spot reads off-centre).
+        // Meitou: centred across, the window with its options panel centred down (the menu stack is on the left, so the original's spot reads
+        // off-centre).
         if (player.UiMode == UiMode.Meitou)
         {
             x = (player.Width - width) / 2;
@@ -79,6 +92,9 @@ sealed class AdvancedOptions(PlayerInterface player)
 
     #region Input
 
+    /// <summary>
+    /// An advanced options event: a tick toggled, or a slider dragged or stepped by 0.05 (the value rounded to 0.05); false for any other event.
+    /// </summary>
     internal bool AdvancedAction(MyGuiEvent e)
     {
         var parts = e.Action.Split(':');
@@ -110,11 +126,14 @@ sealed class AdvancedOptions(PlayerInterface player)
 
     #region Content
 
+    /// <summary>
+    /// The advanced options' rows (sliders, ticks and the help footer) in the open panel of <paramref name="screen"/>; nothing while it is closed.
+    /// </summary>
     internal void AddAdvancedContent(List<UiControl> controls, string screen = "new-game")
     {
         if (!AdvancedOpen || controls.FirstOrDefault(c => c.Name == "advanced-Datapanel") is not { } panel) return;
 
-        float s = player.Height / 1080f;
+        float s = player.UiScale;
         var area = panel.Bounds;
 
         // The labels sit on Kenshi_GenericTextBoxFlatSkin, the help panel on Kenshi_GenericTextBoxSkin; the value boxes' skin names no text colour,
@@ -125,7 +144,10 @@ sealed class AdvancedOptions(PlayerInterface player)
         AddHelpFooter(controls, screen);
     }
 
-    // The font resource's own size, so the Font size option (font size2) applies as it does to the help text below.
+    /// <summary>
+    /// The font resource's own size, so the Font size option (font size2) applies as it does to the help text below. A label's text properties: the
+    /// medium standard font in <paramref name="labelInk"/> (the value boxes' ink for a value).
+    /// </summary>
     static Dictionary<string, string> OptionText(string labelInk, string align = "Left VCenter", bool value = false) => new()
     {
         ["FontName"] = "Kenshi_StandardFont_Medium",
@@ -215,7 +237,7 @@ sealed class AdvancedOptions(PlayerInterface player)
     {
         if (controls.FirstOrDefault(c => c.Name == "advanced-TooltipPanel") is not { } footer) return;
 
-        float s = player.Height / 1080f;
+        float s = player.UiScale;
         int sliders = NewGameSettings.Options.Length;
         int helpLine = AdvancedHelp >= 0 && AdvancedHelp < sliders
             ? NewGameSettings.Options[AdvancedHelp].HelpLine

@@ -10,6 +10,9 @@ namespace Meitou.Localisation;
 /// </summary>
 public static class MeitouTranslations
 {
+    /// <summary>
+    /// The embedded resource name of a built-in catalog is <see cref="Prefix"/>, the locale code and <see cref="Suffix"/>.
+    /// </summary>
     const string Prefix = "Meitou.locale.", Suffix = ".po";
 
     /// <summary>
@@ -61,6 +64,9 @@ public static class MeitouTranslations
         return result;
     }
 
+    /// <summary>
+    /// The built-in catalog's locale code matching <paramref name="code"/> (dash or underscore, any case); null when none is built in.
+    /// </summary>
     static string? Embedded(string code)
     {
         string normalized = code.Replace('-', '_');

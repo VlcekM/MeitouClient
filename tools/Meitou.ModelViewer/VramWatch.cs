@@ -12,11 +12,30 @@ namespace Meitou.ModelViewer;
 /// </summary>
 sealed class VramWatch : IDisposable
 {
+    /// <summary>
+    /// Guards the peak and the budget, written by the watch thread.
+    /// </summary>
     static readonly Lock Gate = new();
+
+    /// <summary>
+    /// The highest device-local use seen and the last budget, bytes.
+    /// </summary>
     static ulong s_peakUsed, s_budget;
+
+    /// <summary>
+    /// Stops the watch thread.
+    /// </summary>
     readonly CancellationTokenSource _stop = new();
+
+    /// <summary>
+    /// The thread that reads the video memory every 100 ms.
+    /// </summary>
     readonly Thread _thread;
 
+    /// <summary>
+    /// Starts the watch thread: it keeps the peak and ends the process (exit code 9) when the use passes <paramref name="limit"/> times the budget
+    /// (0: never).
+    /// </summary>
     VramWatch(VulkanDevice device, double limit)
     {
         _thread = new Thread(() =>
@@ -24,7 +43,11 @@ sealed class VramWatch : IDisposable
             while (!_stop.IsCancellationRequested)
             {
                 var (used, total) = device.VideoMemory();
-                lock (Gate) { s_peakUsed = Math.Max(s_peakUsed, used); s_budget = total; }
+                lock (Gate)
+                {
+                    s_peakUsed = Math.Max(s_peakUsed, used);
+                    s_budget = total;
+                }
                 if (limit > 0 && total > 0 && used > limit * total)
                 {
                     Console.WriteLine($"vram      ABORT: {used / 1048576.0:0} MB in use of a {total / 1048576.0:0} MB budget "
@@ -50,12 +73,21 @@ sealed class VramWatch : IDisposable
         Environment.Exit(code);
     }
 
+    /// <summary>
+    /// The current process's pseudo handle (Windows).
+    /// </summary>
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     static extern nint GetCurrentProcess();
 
+    /// <summary>
+    /// Ends a process at once (Windows).
+    /// </summary>
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     static extern bool TerminateProcess(nint process, uint exitCode);
 
+    /// <summary>
+    /// Starts a watch with the limit of <c>MEITOU_VRAM_KILL</c> (default 0.95).
+    /// </summary>
     public static VramWatch Start(VulkanDevice device)
     {
         double limit = double.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_KILL"), CultureInfo.InvariantCulture, out var v) ? v : 0.95;
@@ -68,10 +100,15 @@ sealed class VramWatch : IDisposable
     public static string Describe()
     {
         lock (Gate)
+        {
             return $"peak {s_peakUsed / 1048576.0:0} MB in use of a {s_budget / 1048576.0:0} MB budget "
                 + $"({(s_budget > 0 ? 100.0 * s_peakUsed / s_budget : 0):0.0}%)";
+        }
     }
 
+    /// <summary>
+    /// Stops the watch thread and waits for it.
+    /// </summary>
     public void Dispose()
     {
         _stop.Cancel();

@@ -21,6 +21,9 @@ public sealed class WaveSet
     /// </summary>
     public const float BreakerPeriod = 8;
 
+    /// <summary>
+    /// The game hours of the last <see cref="Step"/> (null: none yet, the next takes its values at once).
+    /// </summary>
     double? _lastHours;
 
     /// <summary>
@@ -57,6 +60,9 @@ public sealed class WaveSet
         _lastHours = null;
     }
 
+    /// <summary>
+    /// Advances the breakers and the normals' time to <paramref name="gameHours"/> (a step is at most 1 game second; the wind direction is unused).
+    /// </summary>
     public void Step(double gameHours, Vector2 windDirection, float windSpeed)
     {
         _ = windDirection;

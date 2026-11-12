@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       - name: Version
         id: version
@@ -73,10 +73,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { rid: win-x64, os: windows-latest }
-          - { rid: linux-x64, os: ubuntu-22.04 }
-          - { rid: osx-x64, os: macos-latest }
-          - { rid: osx-arm64, os: macos-latest }
+          - { rid: win-x64, os: windows-latest, legacy: false, package: win-x64 }
+          - { rid: linux-x64, os: ubuntu-22.04, legacy: false, package: linux-x64 }
+          - { rid: osx-x64, os: macos-latest, legacy: false, package: osx-x64 }
+          - { rid: osx-arm64, os: macos-latest, legacy: false, package: osx-arm64 }
+          - { rid: osx-x64, os: macos-latest, legacy: true, package: osx-x64-legacy }
+          - { rid: osx-arm64, os: macos-latest, legacy: true, package: osx-arm64-legacy }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -84,6 +86,12 @@ jobs:
           fetch-depth: 0
 
       - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 11.0.x
+
+      - name: macOS compatibility runtime
+        if: matrix.legacy
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -94,12 +102,12 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./tools/scripts/package-release.ps1 -Version "${{ needs.version.outputs.version }}" -Rid ${{ matrix.rid }} -Output out -Cache "$env:RUNNER_TEMP/release-cache"
+        run: ./tools/scripts/package-release.ps1 -Version "${{ needs.version.outputs.version }}" -Rid ${{ matrix.rid }} -LegacyMac:$${{ matrix.legacy }} -Output out -Cache "$env:RUNNER_TEMP/release-cache"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zip-${{ matrix.rid }}
-          path: out/Meitou-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip
+          name: zip-${{ matrix.package }}
+          path: out/Meitou-${{ needs.version.outputs.version }}-${{ matrix.package }}.zip
           compression-level: 0
           if-no-files-found: error
 
@@ -129,7 +137,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          $zips = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64') | ForEach-Object { "out/Meitou-$env:VERSION-$_.zip" }
+          $zips = @('win-x64', 'linux-x64', 'osx-x64', 'osx-arm64', 'osx-x64-legacy', 'osx-arm64-legacy') | ForEach-Object { "out/Meitou-$env:VERSION-$_.zip" }
           foreach ($zip in $zips) { if (-not (Test-Path $zip)) { throw "$zip missing" } }
           $notes = (Get-Content -Raw "$env:RUNNER_TEMP/changes.md").Trim()
           gh release create "v$env:VERSION" @zips --target $env:GITHUB_SHA `

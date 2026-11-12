@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """build.py: fetch upstream Meitou, build the benchmark target the way the maintainers do (self-contained release publish), install the benchmark settings.
-Works on Linux, Windows and macOS (Python 3.10+, standard library only; needs git and the .NET 10 SDK).
+Works on Linux, Windows and macOS (Python 3.10+, standard library only; needs git and the .NET SDK the target's global.json names: 11.x, or 10.x for targets before the .NET 11 move).
 
 Usage:  python3 build.py [target]
   target   host (default)  the build for this machine: linux-x64, win-x64, osx-arm64 or osx-x64
@@ -15,7 +15,7 @@ Env (all optional):
   REMOTE, REF   what to build. Default REF = the latest benchmark target (read from targets.json); the build folder is then Meitou-master-<suffix>.
                 Another REF still works but is OFF-TARGET (warned; accepted when submitted, flagged on the page); the folder is then named after it.
   BUILD_ROOT    where builds go (default <kit>/builds). Folders: Meitou-master-linux, -win, -osx-arm64, -osx-x64.
-  DOTNET_ROOT   folder of a .NET SDK that is not on PATH (put first on PATH). Otherwise `dotnet` from PATH; the SDK must be 10.x.
+  DOTNET_ROOT   folder of a .NET SDK that is not on PATH (put first on PATH). Otherwise `dotnet` from PATH; the SDK must be 11.x (10.x for older targets).
   MEMORY_MAX    e.g. 6G: run the publish in a systemd user scope with this cap (Linux with `systemd-run --user` only; ignored elsewhere).
   FORCE=1       rebuild even if the build folder already holds this commit.
 The publish command is upstream's own (tools/scripts/package-release.ps1):
@@ -74,7 +74,7 @@ def build_folder_name(name, rid):
 
 
 def sdk_ok(run=K.run_capture):
-    return any(l.startswith("10.") for l in run(["dotnet", "--list-sdks"]).splitlines())
+    return any(l.startswith(("10.", "11.")) for l in run(["dotnet", "--list-sdks"]).splitlines())
 
 
 def main(argv):
@@ -99,9 +99,9 @@ def main(argv):
     if not shutil.which("git"):
         raise K.KitError("'git' not found on PATH. Install git.")
     if not shutil.which("dotnet"):
-        raise K.KitError("'dotnet' not found on PATH. Install the .NET 10 SDK (https://dotnet.microsoft.com/download) or set DOTNET_ROOT to its folder.")
+        raise K.KitError("'dotnet' not found on PATH. Install the .NET 11 SDK (https://dotnet.microsoft.com/download) or set DOTNET_ROOT to its folder.")
     if not sdk_ok():
-        raise K.KitError(".NET SDK 10.x not found (dotnet --list-sdks: %s)" % " ".join(K.run_capture(["dotnet", "--list-sdks"]).split("\n")))
+        raise K.KitError(".NET SDK 11.x or 10.x not found (dotnet --list-sdks: %s)" % " ".join(K.run_capture(["dotnet", "--list-sdks"]).split("\n")))
     if "osx-" in " ".join(rids) and osname != "macos":
         print("build.py: WARNING: osx builds are made on a Mac upstream (ad-hoc signing needs codesign); this one will not be signed.", file=sys.stderr)
     settings = os.path.join(here, "meitou.user.json")

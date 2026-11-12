@@ -26,6 +26,7 @@ into top-to-bottom rows; cell `(floor(x/4608)+32,floor(z/4608)+32)` reads `(4cx+
 RGB packed `R<<16|G<<8|B`. All 71 colours match BIOME_GROUP indices; no offset/flip. Match by
 StringId/colour, never name (two NONE records). **Observed:** whether original sampling chooses
 exactly the centre on mixed border blocks. The camera's region lookup (`FUN_1408f56b0`, `FUN_1409e8f70`:64,72; **Verified**, constants read from the exe) uses cell `(int)((coord + 147465) / 4608)` truncated toward zero and clamped to 0..63 per axis (off-map positions take the edge cell); 147465 = 32 x 4608 + 9, so its boundaries sit 9 units from the `floor(x/4608)+32` cells above. Meitou applies it to the camera lookup only (`WeatherAreas.CameraCellOf`); other lookups keep the town-verified cells. Seasonless regions use Default.
+The spawn-spot finder also reads single pixels (a black one refuses the spot; `WeatherAreas.IsPainted`, [spot finder](../game/factions-squads-towns.md#off-screen-world)).
 
 ## Wind and camera transitions
 
@@ -155,7 +156,7 @@ Acid Rain, Dust Storm, Burning, Poison Gas, in the Bad colour tag and the Good o
 raining acid, and you aren't wearing anything to protect your skin.  Best to find shelter soon."; dust "...it affects your accuracy in combat."; "You are currently on fire."; "...breathing
 in poison gas."), below 0.99 "...your gear is providing you with {1} protection.", else the total-protection sentence. **Observed**: the short string is the information panel's State
 line and the long one its tooltip (their reader was not traced). The event is refused by `FUN_140684990` while the owner talks ([dialogue](../game/dialogue.md#firing-an-event)).
-Meitou (`WeatherSystem.Hurt`, `HudPanels.WeatherText`): the same texts and conditions; the State line shows the notice with the long text as tooltip; the event goes to every hurt
+Meitou (`WeatherSystem.Hurt`, `HudPanels.WeatherText`): the same texts and conditions; the State line shows the notice with the long text as tooltip, except while the ranged line (Aiming / Reloading) shows; the event goes to every hurt
 character at most every 8 s per event (`WeatherSystem.EventPause`, **engine choice**: the original fires every hurt tick and relies on the refusals and the lines' repetition limits).
 
 **Shelter** (`FUN_1405cf790`, **Verified (decompiled)**): a ray 1000 above the character straight down; a hit more than 10 over its feet on a building whose BUILDING record has

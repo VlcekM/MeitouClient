@@ -21,6 +21,9 @@ public static class FogShadingRate
     /// </summary>
     public static readonly (float TwoByTwo, float FourByFour) Thresholds = (DefaultTwoByTwo, DefaultFourByFour);
 
+    /// <summary>
+    /// The default opacities of <see cref="Thresholds"/>.
+    /// </summary>
     public const float DefaultTwoByTwo = 0.8f, DefaultFourByFour = 0.97f;
 
     /// <summary>

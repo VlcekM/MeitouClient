@@ -26,6 +26,9 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed unsafe partial class CharacterRenderer : IDisposable
 {
+    /// <summary>
+    /// The device everything is drawn on.
+    /// </summary>
     IGpuContext Gpu { get; }
 
     /// <summary>
@@ -39,10 +42,25 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         return slice;
     }
 
+    /// <summary>
+    /// The native model's sets the three programs are made with and bound through (with four extra storage buffers).
+    /// </summary>
     readonly NativeFrame _nativeFrame;
+    /// <summary>
+    /// The programs of the colour pass, the depth-only passes (shadows, prepass) and the motion-vector pass.
+    /// </summary>
     readonly ReflectedProgram _colourProg, _depthProg, _motionProg;
+    /// <summary>
+    /// The meshes, textures, rigs, morphs and material table the assets are built from.
+    /// </summary>
     readonly CharacterContent _content;
+    /// <summary>
+    /// GPU timers of the colour and the depth passes, for the statistics.
+    /// </summary>
     readonly PassTimer _colourTimer, _depthTimer;
+    /// <summary>
+    /// The built asset of each appearance by reference (null: it could not be built); kept between frames.
+    /// </summary>
     readonly Dictionary<CharacterAppearance, CharacterAsset?> _assets = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
@@ -76,7 +94,13 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// and textures), the eye's own being only those it can draw.
     /// </summary>
     public Vector3? Ahead { get; set; }
+    /// <summary>
+    /// The player's kept points (see <see cref="Ahead"/>), in world units.
+    /// </summary>
     public IReadOnlyList<Vector3> Kept { get; set; } = [];
+    /// <summary>
+    /// The ground distance from <see cref="Ahead"/> or a kept point within which characters are built ahead, in world units.
+    /// </summary>
     public float KeptReach { get; set; } = 3000;
     /// <summary>
     /// The camera's distance to its target: a kept character's texture needs count from at least this far (the view a jump there would have).
@@ -92,6 +116,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// (and so marked used) as if seen from there, or the cache's idle limit unloaded them before a jump there.
     /// </summary>
     readonly List<(CharacterAsset Asset, float Distance)> _keptLooks = [];
+    /// <summary>
+    /// The ground (X/Z) distance from <paramref name="p"/> to the nearest kept point; infinity with none.
+    /// </summary>
     float NearKept(Vector3 p)
     {
         float d = float.PositiveInfinity;
@@ -136,6 +163,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// 10 s.
     /// </summary>
     public bool Covered { get; set; }
+    /// <summary>
+    /// The per-frame budget for texture uploads and builds while <see cref="Covered"/>, in milliseconds.
+    /// </summary>
     const double CoveredBudgetMs = 16;
     /// <summary>
     /// Ogre's camera LOD bias as a distance factor (above 1: coarser levels sooner).
@@ -170,6 +200,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             _materialEpoch++;
         }
     }
+    /// <summary>
+    /// Backing field of <see cref="SkinShading"/>.
+    /// </summary>
     bool _skinShading = true;
 
     /// <summary>
@@ -217,6 +250,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public bool SkinOn(string? race, bool byDefault) => race is not null && _skinRaces is not null && _skinRaces.TryGetValue(race,
         out bool chosen) ? chosen : byDefault;
+    /// <summary>
+    /// The skin scattering table (<see cref="SkinTable"/>).
+    /// </summary>
     readonly SkinScattering _skinScattering;
 
     /// <summary>
@@ -229,6 +265,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         get => _skinRaces;
         set { _skinRaces = value; _portraitShown.Clear(); _materialEpoch++; }
     }
+    /// <summary>
+    /// Backing field of <see cref="SkinRaces"/>.
+    /// </summary>
     IReadOnlyDictionary<string, bool>? _skinRaces;
 
     /// <summary>
@@ -236,6 +275,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public static bool SkinByDefault(GameRecord race) => !race.GetBool("is robot");
 
+    /// <summary>
+    /// Whether the skin shading applies to a body material's race: the Skin page's choice, else the material's default.
+    /// </summary>
     bool SkinFor(PartMaterial m) => m.Race is not null && _skinRaces is not null && _skinRaces.TryGetValue(m.Race,
         out bool chosen) ? chosen : m.SkinDefault;
 
@@ -252,19 +294,49 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     // Statistics of the last Update / Draw.
+    /// <summary>
+    /// Characters posed in the last update.
+    /// </summary>
     public int Posed { get; private set; }
+    /// <summary>
+    /// Characters drawn in the last view.
+    /// </summary>
     public int DrawnCharacters { get; private set; }
+    /// <summary>
+    /// Part instances drawn in the last view.
+    /// </summary>
     public int DrawnParts { get; private set; }
+    /// <summary>
+    /// Triangles drawn in the last view.
+    /// </summary>
     public long DrawnTriangles { get; private set; }
+    /// <summary>
+    /// Draw calls recorded in the last view.
+    /// </summary>
     public int DrawCalls { get; private set; }
     /// <summary>
     /// Part instances drawn by mesh LOD level in the last view, and their triangles.
     /// </summary>
     public readonly int[] LevelParts = new int[8];
+    /// <summary>
+    /// Triangles drawn by mesh LOD level in the last view (see <see cref="LevelParts"/>).
+    /// </summary>
     public readonly long[] LevelTriangles = new long[8];
+    /// <summary>
+    /// CPU time of the last <see cref="Update"/>, in milliseconds.
+    /// </summary>
     public double LastUpdateMs { get; private set; }
+    /// <summary>
+    /// CPU time the last update spent posing, in milliseconds.
+    /// </summary>
     public double LastPoseMs { get; private set; }
+    /// <summary>
+    /// CPU time of the last view's draw recording, in milliseconds.
+    /// </summary>
     public double LastDrawCpuMs { get; private set; }
+    /// <summary>
+    /// How many appearances have a built asset (counted on each read).
+    /// </summary>
     public int Assets => _assets.Count(a => a.Value is not null);
     /// <summary>
     /// Loads waiting: the looks drawn this frame that the last <see cref="Update"/> is going to build but has not yet, and the character textures
@@ -278,20 +350,32 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             // A reused set: the background-loading bar asks every frame.
             _pendingLooks.Clear();
             foreach (var c in Draws.Items)
+            {
                 if (!_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
                     _pendingLooks.Add(c.Appearance);
+            }
+
             foreach (var c in Draws.Distant)
+            {
                 if (!_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
                     _pendingLooks.Add(c.Appearance);
+            }
+
             return _pendingLooks.Count + _content.Textures.AwaitedCount + _content.Textures.UnresidentUsedCount;
         }
     }
+    /// <summary>
+    /// The set <see cref="PendingLoads"/> counts the waiting looks in, reused between reads.
+    /// </summary>
     readonly HashSet<CharacterAppearance> _pendingLooks = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// The eye and build reach of the last <see cref="GatherLive"/>, for <see cref="PendingLoads"/> (before the first update nothing is near).
     /// </summary>
     Vector3 _buildEye;
+    /// <summary>
+    /// The build reach of the last <see cref="GatherLive"/> (see <see cref="_buildEye"/>).
+    /// </summary>
     float _buildReach;
 
     /// <summary>
@@ -304,9 +388,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         !Deferred(c) && (LoadingFocus is not null || _portraitKeys.Contains(c.Key) || WantsAsset(c, eye, reach));
 
     /// <summary>
-    /// Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.
+    /// Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished. Only looks an update
+    /// builds (<see cref="BuildsLook"/>) count: one out of the eye's reach on the title, never built, held its screen up for good.
     /// </summary>
-    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
+    public bool ContentPending => Draws.Items.Any(c => !_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
+        || Draws.Distant.Any(c => !_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
         || _content.Textures.AwaitedCount > 0 || _content.Textures.UnresidentUsedCount > 0;
 
     /// <summary>
@@ -352,6 +438,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _content.ReleaseCloseUps();
         ReleaseStage();
     }
+    /// <summary>
+    /// Problems met while loading the characters' content (<see cref="CharacterContent.Messages"/>).
+    /// </summary>
     public List<string> Messages => _content.Messages;
 
     /// <summary>
@@ -359,18 +448,43 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     struct Live
     {
+        /// <summary>
+        /// The asset it is drawn with.
+        /// </summary>
         public CharacterAsset Asset;
+        /// <summary>
+        /// Its model-to-world transform this frame.
+        /// </summary>
         public Matrix4x4 World;
+        /// <summary>
+        /// Its bounding sphere's centre in the world.
+        /// </summary>
         public Vector3 Centre;
+        /// <summary>
+        /// Its bounding sphere's radius in the world.
+        /// </summary>
         public float Radius;
-        /// <summary>The water's mark on the character, as its instances' flags carry it (<see cref="SoakBits"/>).</summary>
+        /// <summary>
+        /// The water's mark on the character, as its instances' flags carry it (<see cref="SoakBits"/>).
+        /// </summary>
         public uint Soak;
+        /// <summary>
+        /// Where its bones start in this frame's palette, where its attach matrices start in <see cref="CharacterRenderer._attach"/>, and the range
+        /// of its animation layers in <see cref="CharacterRenderer._layers"/>.
+        /// </summary>
         public int BoneBase, AttachBase, LayerStart, LayerCount;
         /// <summary>
         /// Its parts' first entry in <see cref="CharacterRenderer._partFrames"/> (one per asset part).
         /// </summary>
         public int PartBase;
+        /// <summary>
+        /// What the renderer keeps of it between frames.
+        /// </summary>
         public CharState State;
+        /// <summary>
+        /// <c>Repose</c>: posed this frame (else its last palette is held); the others: the weapon drawn, that weapon the crossbow, the back melee
+        /// weapon (as <see cref="AssetPart.ShowsWith"/> takes them).
+        /// </summary>
         public bool Repose, WeaponDrawn, RangedDrawn, BackDrawn;
         /// <summary>
         /// The blood of its first 8 body parts, a byte each (<see cref="CharacterInstance.Blood"/>).
@@ -389,7 +503,13 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// How tall it is on screen, in pixels (its diameter over its distance by the view's pixels per radian): the thinning's priority.
         /// </summary>
         public float Pixels;
+        /// <summary>
+        /// The bolts loaded in its crossbow (<see cref="AssetPart.ShownShots"/>).
+        /// </summary>
         public int Shots;
+        /// <summary>
+        /// The bolts stuck in it, drawn on their bones (<see cref="CharState.BoltLocal"/>).
+        /// </summary>
         public IReadOnlyList<StuckBoltMesh> Bolts;
         /// <summary>
         /// The limb held at its <c>mouth</c> point (<see cref="CharacterInstance.Mouth"/>; null: none).
@@ -399,6 +519,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// The ragdoll's bones over the animation (null: none).
         /// </summary>
         public BonePose? Bones;
+        /// <summary>
+        /// Its <see cref="CharacterInstance.Key"/>.
+        /// </summary>
         public long Key;
         /// <summary>
         /// Beyond <see cref="DrawDistance"/> (or <see cref="CharacterInstance.Hidden"/>) but posed for its portrait (<see cref="PortraitRequests"/>):
@@ -428,9 +551,21 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     sealed class CharState
     {
+        /// <summary>
+        /// The last posed bone palette and the one before it (for motion vectors), and the same for the attach matrices.
+        /// </summary>
         public Matrix4x4[] Bones = [], Previous = [], Attach = [], PreviousAttach = [];
+        /// <summary>
+        /// The last drawn model-to-world transform and the one before it.
+        /// </summary>
         public Matrix4x4 World, PreviousWorld;
+        /// <summary>
+        /// Whether <see cref="World"/> has been set (the first frame's previous transform is the current one).
+        /// </summary>
         public bool HasWorld;
+        /// <summary>
+        /// The update stamp it was last posed in (-1: never) and the one it was last seen in (<see cref="EvictStates"/> forgets it after 60).
+        /// </summary>
         public long Posed = -1, Seen;
         /// <summary>
         /// The pose-rate period the character was last seen in (<see cref="PosePixelSteps"/>).
@@ -441,12 +576,21 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// world.
         /// </summary>
         public CharacterAsset? Asset;
+        /// <summary>
+        /// The weapon state of the last update (see <see cref="Live.Repose"/>), and whether it is drawn in the world.
+        /// </summary>
         public bool WeaponDrawn, RangedDrawn, BackDrawn, InWorld;
         /// <summary>
         /// Each stuck bolt's transform in its bone's frame, fixed the first time it was drawn (by bolt id).
         /// </summary>
         public readonly Dictionary<int, Matrix4x4> BoltLocal = [];
+        /// <summary>
+        /// The bounding sphere's centre in the world at the last update (<see cref="RayHit"/>).
+        /// </summary>
         public Vector3 Centre;
+        /// <summary>
+        /// The bounding sphere's radius at the last update.
+        /// </summary>
         public float Radius;
         /// <summary>
         /// Its last indoors answer (<see cref="Live.Interior"/>), asked again once it has moved.
@@ -542,6 +686,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// What is kept of each character between frames, by <see cref="CharacterInstance.Key"/>; evicted once unseen (<see cref="EvictStates"/>).
+    /// </summary>
     readonly Dictionary<long, CharState> _states = [];
     /// <summary>
     /// The thinning by size on screen (engine choice, a performance measure: the original poses every animated character every frame): a character at
@@ -573,6 +720,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public Func<double>? PoseClock { get; set; }
 
+    /// <summary>
+    /// The pose clock's seconds at the start of this update (<see cref="PoseClock"/>, else the real time), for the thinning's buckets.
+    /// </summary>
     double _poseSeconds;
 
     /// <summary>
@@ -582,6 +732,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public bool InReach(Vector3 position, Vector3 eye, float distanceScale = 1) => Vector3.DistanceSquared(position,
         eye) <= (DrawDistance * distanceScale + ReachMargin) * (DrawDistance * distanceScale + ReachMargin);
+    /// <summary>
+    /// The margin added to <see cref="DrawDistance"/> for the largest bodies' size, in world units.
+    /// </summary>
     const float ReachMargin = 2000;
     /// <summary>
     /// The distance within which a character may be drawn this frame (<see cref="DrawDistance"/> plus the margin): the simulation's near radius for
@@ -623,6 +776,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         return WorldCamera.Intersects(planes, mirrored - r, mirrored + r);
     }
 
+    /// <summary>
+    /// The pose interval, in steps of the full rate, for a character <paramref name="pixels"/> tall: doubled past each of
+    /// <see cref="PosePixelSteps"/>.
+    /// </summary>
     int PoseInterval(float pixels)
     {
         int interval = 1;
@@ -631,16 +788,49 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         return interval;
     }
 
+    /// <summary>
+    /// This frame's characters in range (the first <see cref="_liveCount"/>), grown as needed and reused.
+    /// </summary>
     Live[] _live = new Live[256];
+    /// <summary>
+    /// Scratch: the live indices sorted by size for the thinning, reused.
+    /// </summary>
     int[] _thinOrder = [];
+    /// <summary>
+    /// How many entries of <see cref="_live"/> are this frame's.
+    /// </summary>
     int _liveCount;
+    /// <summary>
+    /// This frame's animation layers of every live character (the first <see cref="_layerCount"/>), grown as needed.
+    /// </summary>
     ActiveLayer[] _layers = new ActiveLayer[1024];
+    /// <summary>
+    /// How many entries of <see cref="_layers"/> are this frame's.
+    /// </summary>
     int _layerCount;
+    /// <summary>
+    /// This frame's attach matrices of every live character (the first <see cref="_attachCount"/>), grown as needed.
+    /// </summary>
     Matrix4x4[] _attach = new Matrix4x4[256];
+    /// <summary>
+    /// How many entries of <see cref="_attach"/> are this frame's.
+    /// </summary>
     int _attachCount;
+    /// <summary>
+    /// This frame's bone palettes and the previous ones, in host-visible frame memory (the same slice when motion vectors are off).
+    /// </summary>
     Transient _bones, _previousBones;
+    /// <summary>
+    /// The parts shown on the live characters this frame, each once, whose materials the update writes.
+    /// </summary>
     readonly List<AssetPart> _slotParts = [];
+    /// <summary>
+    /// The update's count, the stamp the states, materials and parts are marked with.
+    /// </summary>
     long _updateStamp;
+    /// <summary>
+    /// The character textures' memory governor.
+    /// </summary>
     readonly CharacterTextureBudget _budget = new();
 
     /// <summary>
@@ -658,18 +848,36 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _viewKnown = true;
     }
 
+    /// <summary>
+    /// Whether <see cref="SetView"/> has been called: until then nothing is thinned or culled as tiny.
+    /// </summary>
     bool _viewKnown;
     /// <summary>
     /// Wait, at the next <see cref="Update"/> after <see cref="SetView"/>, for every asset and texture (stills).
     /// </summary>
     public bool SettleFirst { get; set; }
+    /// <summary>
+    /// The device's texture LOD bias at the start of this update, which the bindless texture indices are made for.
+    /// </summary>
     float _textureBias;
+    /// <summary>
+    /// The device's stand-in texture for slots whose texture is missing or not resident.
+    /// </summary>
     uint _textureStandIn;
-    // What every material record depends on besides its material: the texture cache's version, the bias, the stand-in and the samplers. A change (or
-    // a skin setting's) starts a new epoch, and each record is written again when next used.
+
+    /// <summary>
+    /// What every material record depends on besides its material: the texture cache's version, the bias, the stand-in and the samplers. A change (or
+    /// a skin setting's) starts a new epoch, and each record is written again when next used.
+    /// </summary>
     (int, float, uint, int) _materialInputs;
+    /// <summary>
+    /// The material records' epoch (see <see cref="_materialInputs"/>); a record written in an older one is written again.
+    /// </summary>
     int _materialEpoch = 1;
 
+    /// <summary>
+    /// Compiles the colour, depth and motion programs and makes the content, the skin table and the pass timers.
+    /// </summary>
     public CharacterRenderer(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assetLocator, CharacterRigs? rigs = null)
     {
         Gpu = gpu;
@@ -687,6 +895,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _depthTimer = new PassTimer(gpu);
     }
 
+    /// <summary>
+    /// The VRAM guard the character texture cache answers to (null: none).
+    /// </summary>
     public VramGuard? Guard { get => _content.Textures.Guard; set => _content.Textures.Guard = value; }
     /// <summary>
     /// The characters' texture cache (the VRAM dump lists it).
@@ -734,8 +945,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             var rig = l.Asset.Rig;
             if (state.Bones.Length != rig.BoneCount) continue;
             if (state.BoltLocal.Count > bolts.Count)
+            {
                 foreach (int id in state.BoltLocal.Keys.ToArray())
                     if (!bolts.Any(b => b.Id == id)) state.BoltLocal.Remove(id);
+            }
+
             int root = rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Handle ?? 0;
             foreach (var bolt in bolts)
             {
@@ -795,8 +1009,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             ref var l = ref _live[i];
             if (l.PortraitOnly || l.Asset.IsIcon || l.Asset.Lamps.Count == 0) continue;
             foreach (var lamp in l.Asset.Lamps)
+            {
                 if (lamp.AttachIndex < l.State.Attach.Length)
                     into.Add(lamp.Light with { Position = (l.State.Attach[lamp.AttachIndex] * l.World).Translation });
+            }
         }
     }
 
@@ -883,7 +1099,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             var inst = items[i];
 
-            // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the host's lists still hold it.
+            // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the
+            // host's lists still hold it.
             _assets.TryGetValue(inst.Appearance, out var known);
             if (CullTiny(in inst, eye, known)) continue;
             if (AssetFor(in inst, eye, reach * inst.DrawDistanceScale, ref built, ref buildMs) is not { } asset)
@@ -896,8 +1113,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
+
+            // FUN_1405c9f60: the position's distance, skipped for a gigantic race.
             bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale
-                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;   // FUN_1405c9f60: the position's distance, skipped for a gigantic race
+                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;
             if (far && !_portraitKeys.Contains(inst.Key))
             {
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach)
@@ -957,6 +1176,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// The tallest asset built per body mesh, so a look not built yet can be judged before its build.
     /// </summary>
     readonly Dictionary<string, float> _bodyHeights = [];
+    /// <summary>
+    /// The characters culled as tiny in the last update and in this one (swapped each update), for the hysteresis of <see cref="CullTiny"/>.
+    /// </summary>
     HashSet<long> _tinyBefore = [], _tinyNow = [];
 
     /// <summary>
@@ -1061,9 +1283,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         var asset = l.Asset;
         var rig = asset.Rig;
         if (inst.Poses is { } poses)
+        {
             for (int p = 0; p < poses.Count; p++)
+            {
                 if (rig.Layer(_content.Database, poses[p].Animation, asset.Animal) is { } def)
                     AddLayer(new ActiveLayer(def, poses[p].Time, poses[p].Weight));
+            }
+        }
+
         foreach (var (def, time) in asset.Fixed) AddLayer(new ActiveLayer(def, time, 1));
         l.LayerCount = _layerCount - l.LayerStart;
     }
@@ -1258,30 +1485,50 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var part in _slotParts)
             Offer(part, part.Near / part.UvScale * _budget.NeedScale);
         foreach (var (asset, distance) in _keptLooks)
+        {
             foreach (var part in asset.Parts)
                 Offer(part, Math.Max(Math.Max(distance, KeptViewDistance) - asset.Radius * 0.5f, 0.5f) / part.UvScale * _budget.NeedScale);
+        }
 
         static void Offer(AssetPart part, float need)
         {
             // Negative attachment bias needs finer resident mips as well as biased sampling.
             need *= MathF.Pow(2, part.Material.MipmapBias);
             foreach (var t in part.Material.Tex)
+            {
                 if (t is not null)
                 {
                     t.OfferNow(need);
                     _ = t.Key;
                 }
+            }
         }
     }
 
+    /// <summary>
+    /// Whether two material records are equal byte for byte (an unchanged record is not written again).
+    /// </summary>
     static bool SameRecord(in CharacterMaterialRecord a, in CharacterMaterialRecord b) =>
-        MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in b)));
+        MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in a))
+            .SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in b)));
 
+    /// <summary>
+    /// Scratch for <see cref="EvictStates"/>: the keys to forget.
+    /// </summary>
     readonly List<long> _staleKeys = [];
 
     // The distant list's share of an update (CharacterDrawList.Distant): what it asks for, found when it or what it is judged by changes.
+    /// <summary>
+    /// The distant looks to build ahead.
+    /// </summary>
     readonly List<CharacterAppearance> _distantBuilds = [];
+    /// <summary>
+    /// The built distant characters near a kept point, with their distance from it.
+    /// </summary>
     readonly List<(CharacterAsset Asset, float Distance)> _distantKept = [];
+    /// <summary>
+    /// The draw list's distant version and the hash of the rules the last scan was made with ((-1, 0): never scanned).
+    /// </summary>
     (int Version, int Inputs) _distantScanned = (-1, 0);
 
     /// <summary>
@@ -1320,9 +1567,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < _distantBuilds.Count; i++)
         {
             var look = _distantBuilds[i];
-            if (_assets.ContainsKey(look)) { _distantBuilds.RemoveAt(i--); continue; }
-            if (LoadBudget > 0 && (!_content.Fetched(look) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs)))
+            if (_assets.ContainsKey(look))
+            {
+                _distantBuilds.RemoveAt(i--);
                 continue;
+            }
+
+            if (LoadBudget > 0
+                && (!_content.Fetched(look) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs)))
+            {
+                continue;
+            }
             long buildStart = Stopwatch.GetTimestamp();
             _assets[look] = _content.Build(look);
             buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
@@ -1346,12 +1601,18 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (_weaponBlood.Count > 0 && !GearBlood.Enabled) _weaponBlood.Clear();
     }
 
+    /// <summary>
+    /// Appends an animation layer to this frame's layers, growing the array as needed.
+    /// </summary>
     void AddLayer(in ActiveLayer layer)
     {
         if (_layerCount == _layers.Length) Array.Resize(ref _layers, _layerCount * 2);
         _layers[_layerCount++] = layer;
     }
 
+    /// <summary>
+    /// The bindless index of a texture for this frame's bias; the stand-in when it is null or has no key (<paramref name="present"/> false).
+    /// </summary>
     uint Index(WorldTexture? t, out bool present)
     {
         uint key = t?.Key ?? 0;
@@ -1388,6 +1649,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (asset.PendingNormals is not { } p || !Ready(p.Normal) || !Ready(p.Blend)) return;
         asset.PendingNormals = null;
         foreach (var part in asset.Parts)
+        {
             if (part.Material.Shading == CharacterShaders.ShadeBody)
             {
                 part.Material.Tex[CharacterShaders.SlotNormal] = p.Normal;
@@ -1395,11 +1657,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 part.Material.MuscleBlend = p.Weight;
                 part.Material.RecordEpoch = 0;
             }
+        }
 
         // Reading the key asks for the texture; a missing file never becomes resident.
         static bool Ready(WorldTexture? t) => t is null || t.Key != 0 || t.State == WorldTexture.Residency.Missing;
     }
 
+    /// <summary>
+    /// Writes a material's record: its textures' bindless indices, the flags of what is present, pending, worn, dyed, skinned, bloody or wounded, the
+    /// vest mask and the colours.
+    /// </summary>
     void Write(PartMaterial m, ref CharacterMaterialRecord r)
     {
         r = default;
@@ -1490,12 +1757,23 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             }
             Update(eye);   // the indices of what has just landed
         }
-        finally { LoadBudget = old; }
+        finally
+        {
+            LoadBudget = old;
+        }
     }
 
+    /// <summary>
+    /// A line about the content for the statistics: appearances, meshes and their memory, the texture cache and the governor's need factor.
+    /// </summary>
     public string Describe() =>
-        $"{Assets} appearances, {_content.MeshCount} meshes ({_content.MeshBytes / 1048576.0:0.0} MB), {_content.Textures.Describe()}, texture need x{_budget.NeedScale:0.0} (mark {_content.Textures.MarkMb:0} MB)";
+        $"{Assets} appearances, {_content.MeshCount} meshes ({_content.MeshBytes / 1048576.0:0.0} MB), {_content.Textures.Describe()}, " +
+        $"texture need x{_budget.NeedScale:0.0} (mark {_content.Textures.MarkMb:0} MB)";
 
+    /// <summary>
+    /// Prints the statistics when anything was drawn, then frees the programs, the frame sets, the content, the skin table, the portraits, the stage,
+    /// the hover masks and the icons.
+    /// </summary>
     public void Dispose()
     {
         if (_updateCount > 0) Console.WriteLine($"characters {Statistics()}");

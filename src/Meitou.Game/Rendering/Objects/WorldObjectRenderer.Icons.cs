@@ -22,41 +22,91 @@ public sealed unsafe partial class WorldObjectRenderer
     /// Pictures drawn at once; the others wait their turn.
     /// </summary>
     const int BuildingIconsPerFrame = 2;
+
     /// <summary>
     /// Frames a picture is drawn waiting for its meshes and textures before it is shown with what it has.
     /// </summary>
     const int BuildingIconGiveUpFrames = 300;
 
+    /// <summary>
+    /// One building picture: its parts, their loose instances while it is made, its camera and its textures.
+    /// </summary>
     sealed class BuildingIconEntry
     {
+        /// <summary>
+        /// The BUILDING record's string id the picture is of.
+        /// </summary>
         public required string Record;
+
+        /// <summary>
+        /// The parts as asked for, laid out at the origin and unrotated.
+        /// </summary>
         public required IReadOnlyList<PlacedMesh> Parts;
+
         /// <summary>
         /// The parts drawn, laid out at the origin, and their instances (in the same order).
         /// </summary>
         public PlacedMesh[] Base = [];
+
+        /// <summary>
+        /// The loose instances of <see cref="Base"/> while the picture is made (null until laid out; emptied once drawn).
+        /// </summary>
         public List<ObjectStreamer.Instance>? Instances;
+
         /// <summary>
         /// The camera and the node's turns are set (<see cref="FrameIcon"/>).
         /// </summary>
         public bool Framed;
+
+        /// <summary>
+        /// The node's turn, and the picture's camera (<see cref="BuildingIconStyle.Matrices"/>).
+        /// </summary>
         public Matrix4x4 Model, View, Projection;
+
+        /// <summary>
+        /// Where the parts stand: the eye when they were laid out, so the streaming loads their meshes and fine textures.
+        /// </summary>
         public Vector3 Anchor;
+
+        /// <summary>
+        /// The picture (RGBA8, <see cref="BuildingIconStyle.Size"/> square) and its depth target (freed once the picture is final).
+        /// </summary>
         public GpuTexture? Colour, Depth;
+
+        /// <summary>
+        /// The picture with its linear, edge-clamped sampler, for the UI.
+        /// </summary>
         public SampledTexture Sampled;
+
         /// <summary>
         /// Nothing to draw (no parts, no bounds): the window shows none.
         /// </summary>
         public bool Failed;
+
         /// <summary>
         /// The image holds a picture (published to the UI thread).
         /// </summary>
         public volatile bool Drawn;
+
+        /// <summary>
+        /// Frames drawn so far (past <see cref="BuildingIconGiveUpFrames"/> the picture is shown with what it has).
+        /// </summary>
         public int Frames;
     }
 
+    /// <summary>
+    /// Every picture asked for, by record id.
+    /// </summary>
     readonly ConcurrentDictionary<string, BuildingIconEntry> _buildingIcons = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Pictures asked for (from any thread), taken in by <see cref="DrawBuildingIcons"/>.
+    /// </summary>
     readonly ConcurrentQueue<BuildingIconEntry> _buildingIconRequests = new();
+
+    /// <summary>
+    /// The pictures being made: drawn each frame until final.
+    /// </summary>
     readonly List<BuildingIconEntry> _buildingIconsUnsettled = [];
 
     /// <summary>
@@ -139,7 +189,11 @@ public sealed unsafe partial class WorldObjectRenderer
         var boxes = new List<(Vector3, Vector3, Matrix4x4)>(entry.Base.Length);
         for (int i = 0; i < entry.Base.Length; i++)
             if (entry.Instances![i].Gpu is { } gpu && gpu.Max.X >= gpu.Min.X) boxes.Add((gpu.Min, gpu.Max, entry.Base[i].Transform));
-        if (BuildingIconStyle.Matrices(boxes) is not { } camera) { entry.Failed = true; return; }
+        if (BuildingIconStyle.Matrices(boxes) is not { } camera)
+        {
+            entry.Failed = true;
+            return;
+        }
         (entry.Model, entry.View, entry.Projection) = camera;
         var place = entry.Model * Matrix4x4.CreateTranslation(entry.Anchor);
         for (int i = 0; i < entry.Base.Length; i++)
@@ -152,16 +206,21 @@ public sealed unsafe partial class WorldObjectRenderer
         }
     }
 
+    /// <summary>
+    /// Draws one picture: its textures made on first use, its instances into batches of their own at their finest held level, recorded with the
+    /// objects' colour program at the picture's camera, without fog or weather.
+    /// </summary>
     void DrawBuildingIcon(BuildingIconEntry entry)
     {
         const int size = BuildingIconStyle.Size;
         if (entry.Colour is null)
         {
-            entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"building icon {entry.Record}"));
-            entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size, Use: TextureUse.DepthTarget, Name: $"building icon depth {entry.Record}"));
-            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false,
-                        0)), entry.Colour.View());
+            entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size, size,
+                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"building icon {entry.Record}"));
+            entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size, Use: TextureUse.DepthTarget,
+                Name: $"building icon depth {entry.Record}"));
+            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+                entry.Colour.View());
         }
 
         // The batches of this picture alone (the frame's Draw starts its own from nothing).
@@ -203,8 +262,14 @@ public sealed unsafe partial class WorldObjectRenderer
         _active.Clear();
     }
 
+    /// <summary>
+    /// The options the pictures are drawn with (the defaults).
+    /// </summary>
     static readonly WorldRenderOptions IconOptions = new();
 
+    /// <summary>
+    /// Frees every picture's textures.
+    /// </summary>
     void DisposeBuildingIcons()
     {
         foreach (var entry in _buildingIcons.Values)

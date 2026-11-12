@@ -1,3 +1,4 @@
+using System.Globalization;
 using Meitou.Content;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
@@ -20,15 +21,25 @@ sealed record GameplaySettings(
     int HarpoonLimit = RangedTuning.DefaultStuckLimit,
     bool FastZoneHopping = false)
 {
+    /// <summary>
+    /// The sliders' ranges: squad size, population, raid size and frequency, and the auto save time in minutes.
+    /// </summary>
     public const float MinSquadSize = 0.5f, MaxSquadSize = 3, MinPopulation = 0.5f, MaxPopulation = 4,
         MinRaidSize = 0.25f, MaxRaidSize = 4, MinRaidFrequency = 0.25f, MaxRaidFrequency = 3, MinAutoSaveMinutes = 1, MaxAutoSaveMinutes = 30;
 
+    /// <summary>
+    /// The NPC View Range when <c>settings.cfg</c> has none.
+    /// </summary>
     public const float DefaultNpcRange = 3250;
 
     /// <summary>
     /// The drop-downs' items, by the stored number.
     /// </summary>
     public static readonly string[] TownAttackLabels = ["Bombardment", "High", "Normal", "Fewer", "Rare", "Never"];
+
+    /// <summary>
+    /// The Dismemberment drop-down's items, by the stored number.
+    /// </summary>
     public static readonly string[] DismembermentLabels = ["Never", "Rare", "Frequent"];
 
     /// <summary>
@@ -60,6 +71,9 @@ sealed record GameplaySettings(
     public static float NpcRange(GameInstall install) =>
         ReadValues(install).TryGetValue("npc range", out float v) ? (v < 1000 ? 3000 : v) : DefaultNpcRange;
 
+    /// <summary>
+    /// The install's <c>settings.cfg</c> values by key (case-insensitive); empty when it is missing or unreadable.
+    /// </summary>
     static Dictionary<string, float> ReadValues(GameInstall install)
     {
         var values = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -71,7 +85,7 @@ sealed record GameplaySettings(
                 foreach (var line in File.ReadLines(file))
                 {
                     if (line.IndexOf('=') is > 0 and var eq
-                        && float.TryParse(line[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v)
+                        && float.TryParse(line[(eq + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out float v)
                         && float.IsFinite(v))
                     {
                         values[line[..eq].Trim()] = v;

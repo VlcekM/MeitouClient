@@ -65,23 +65,24 @@ public sealed partial class UiPainter
 
     /// <summary>
     /// The size <see cref="Draw"/> gives <paramref name="text"/> in font resource <paramref name="fontName"/> on a viewport
-    /// <paramref name="viewportHeight"/> high: wrapped to <paramref name="wrapWidth"/> when that is above zero (a control with <c>WordWrap</c> true), else
-    /// one line per line break. <paramref name="minimumTextPixels"/> is the value passed to <see cref="Draw"/>.
+    /// <paramref name="viewportHeight"/> high: wrapped to <paramref name="wrapWidth"/> when that is above zero (a control with <c>WordWrap</c> true),
+    /// else one line per line break. <paramref name="minimumTextPixels"/> is the value passed to <see cref="Draw"/>.
     /// </summary>
     public TextSize MeasureText(string fontName, string text, int viewportHeight, float wrapWidth, float minimumTextPixels)
     {
-        var font = ResourceFont(fontName, viewportHeight / 1080f, minimumTextPixels) ?? _standardFont ?? _overlay;
-        float scale = font == _standardFont || font == _overlay ? Math.Clamp(viewportHeight / 1080f, 0.5f, 1.5f) : 1;
+        var font = ResourceFont(fontName, Scale(viewportHeight), minimumTextPixels) ?? _standardFont ?? _overlay;
+        float scale = font == _standardFont || font == _overlay ? ClampedScale(viewportHeight) : 1;
         return Measure(font, text, wrapWidth, scale);
     }
 
     /// <summary>
     /// The lines <paramref name="text"/> wraps to at <paramref name="wrapWidth"/> and their size, in font resource <paramref name="fontName"/> as
-    /// <see cref="Draw"/> paints a caption with <c>TextScale</c> <paramref name="textScale"/> and a nonzero <paramref name="minimumTextPixels"/> (a panel
-    /// fitted to its text before it is drawn). The lines are plain text: colour tags are measured as the drawn text shows them, without their markup,
-    /// and dropped.
+    /// <see cref="Draw"/> paints a caption with <c>TextScale</c> <paramref name="textScale"/> and a nonzero <paramref name="minimumTextPixels"/> (a
+    /// panel fitted to its text before it is drawn). The lines are plain text: colour tags are measured as the drawn text shows them, without their
+    /// markup, and dropped.
     /// </summary>
-    public (IReadOnlyList<string> Lines, TextSize Size) WrapCaption(string fontName, string text, float textScale, float wrapWidth, float minimumTextPixels)
+    public (IReadOnlyList<string> Lines, TextSize Size) WrapCaption(string fontName, string text, float textScale, float wrapWidth,
+        float minimumTextPixels)
     {
         var resourceFont = ResourceFont(fontName, textScale, minimumTextPixels);
         var font = resourceFont ?? _standardFont ?? _overlay;
@@ -110,6 +111,10 @@ public sealed partial class UiPainter
         return Measure(_standardFont ?? _overlay, text, wrapWidth, resourceScale);
     }
 
+    /// <summary>
+    /// The size of <paramref name="text"/> (its tags taken out) in <paramref name="font"/> at <paramref name="scale"/>: wrapped to <paramref
+    /// name="wrapWidth"/> when it is above 0, else one line per break.
+    /// </summary>
     static TextSize Measure(DebugOverlay font, string text, float wrapWidth, float scale)
     {
         text = MyGuiTextTags.Strip(text.Replace("\\n", "\n", StringComparison.Ordinal)).ReplaceLineEndings("\n");

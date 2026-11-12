@@ -3,7 +3,14 @@ using Meitou.Data.Ui;
 
 namespace Meitou.Game.Ui;
 
+/// <summary>
+/// A widget event of a screen: the widget, the action (its own, or select, accept, text), the text and the value.
+/// </summary>
 public sealed record MyGuiEvent(string Screen, string Widget, string Action, string Text = "", float Value = 0);
+
+/// <summary>
+/// A screen's controls as one arrange laid them out.
+/// </summary>
 public sealed record MyGuiScreenFrame(string Id, IReadOnlyList<UiControl> Controls);
 
 /// <summary>
@@ -13,13 +20,44 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 {
     #region State
 
+    /// <summary>
+    /// The registered screens by id.
+    /// </summary>
     readonly Dictionary<string, Screen> _screens = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The open screens, bottom first (panels at the bottom).
+    /// </summary>
     readonly List<string> _open = [];
+
+    /// <summary>
+    /// Each follower's leader (<see cref="Follow"/>).
+    /// </summary>
     readonly Dictionary<string, string> _leaders = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The screens as the last <see cref="Arrange"/> laid them out.
+    /// </summary>
     IReadOnlyList<MyGuiScreenFrame> _frame = [];
+
+    /// <summary>
+    /// The edit box with the keyboard focus; null for none.
+    /// </summary>
     (string Screen, string Widget)? _focus;
+
+    /// <summary>
+    /// The focused edit box's text, caret and selection.
+    /// </summary>
     UiTextBuffer? _edit;
+
+    /// <summary>
+    /// The window being dragged, where the drag began and the window's offset then.
+    /// </summary>
     (string Screen, Vector2 At, Vector2 Offset)? _drag;
+
+    /// <summary>
+    /// A press in the focused edit box is selecting by drag.
+    /// </summary>
     bool _selecting;
 
     /// <summary>
@@ -27,8 +65,14 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     (string Screen, string List, int Line, long At)? _lastListClick;
 
+    /// <summary>
+    /// The double-click time, seconds.
+    /// </summary>
     const double DoubleClickSeconds = 0.5;
 
+    /// <summary>
+    /// A button pressed, a list line selected or accepted, or an edit box's text changed.
+    /// </summary>
     public event Action<MyGuiEvent>? Activated;
 
     /// <summary>
@@ -47,28 +91,100 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
     #region Screens
 
+    /// <summary>
+    /// A registered screen: its layout, kind and the state it keeps while closed (offset, pin, texts, tabs, list selections and scrolls).
+    /// </summary>
     sealed partial class Screen(MyGuiLayout layout, bool modal, bool centreRoot, bool panel = false)
     {
+        /// <summary>
+        /// The screen's layout, its templates expanded.
+        /// </summary>
         public MyGuiLayout Layout { get; set; } = layout;
+
+        /// <summary>
+        /// A modal screen: it takes every click outside it (unless it passes through).
+        /// </summary>
         public bool Modal { get; } = modal;
+
+        /// <summary>
+        /// A HUD panel: drawn under every window, never raised or closed by Escape.
+        /// </summary>
         public bool Panel { get; } = panel;
+
+        /// <summary>
+        /// The root is centred on the screen.
+        /// </summary>
         public bool CentreRoot { get; } = centreRoot;
+
+        /// <summary>
+        /// How far the window was moved from its layout position.
+        /// </summary>
         public Vector2 Offset;
+
+        /// <summary>
+        /// The pin button is down.
+        /// </summary>
         public bool Pinned;
+
+        /// <summary>
+        /// The edit boxes' and captions' texts by widget.
+        /// </summary>
         public Dictionary<string, string> Text { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The tab controls' selected tabs by widget.
+        /// </summary>
         public Dictionary<string, int> Tabs { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The lists' selected lines by widget.
+        /// </summary>
         public Dictionary<string, int> Selected { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The scroll offsets by widget.
+        /// </summary>
         public Dictionary<string, float> Scroll { get; } = new(StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// A screen is open.
+    /// </summary>
     public bool HasWindows => _open.Count > 0;
+
+    /// <summary>
+    /// A modal screen is open.
+    /// </summary>
     public bool HasModal => _open.Any(id => _screens[id].Modal);
+
+    /// <summary>
+    /// Whether screen <paramref name="id"/> is modal.
+    /// </summary>
     public bool IsModal(string id) => _screens[id].Modal;
+
+    /// <summary>
+    /// A window drag or a widget captures the pointer.
+    /// </summary>
     public bool CapturesPointer => _drag is not null || CapturesWidget;
+
+    /// <summary>
+    /// An edit box has the keyboard focus.
+    /// </summary>
     public bool HasKeyboardFocus => _focus is not null;
+
+    /// <summary>
+    /// The registered screens' ids.
+    /// </summary>
     public IReadOnlyList<string> Registered => _screens.Keys.ToArray();
+
+    /// <summary>
+    /// The open screens' ids, bottom first.
+    /// </summary>
     public IReadOnlyList<string> OpenScreens => _open.ToArray();
 
+    /// <summary>
+    /// Registers screen <paramref name="id"/> with <paramref name="layout"/> (its templates expanded).
+    /// </summary>
     public void Register(string id, MyGuiLayout layout, bool modal = false, bool centreRoot = false) =>
         _screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), modal, centreRoot));
 
@@ -85,7 +201,14 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public void Replace(string id, MyGuiLayout layout) => _screens[id].Layout = MyGuiTemplates.Expand(layout, resources);
 
+    /// <summary>
+    /// Screen <paramref name="id"/>'s layout.
+    /// </summary>
     public MyGuiLayout Layout(string id) => _screens[id].Layout;
+
+    /// <summary>
+    /// Whether screen <paramref name="id"/> is open.
+    /// </summary>
     public bool IsOpen(string id) => _open.Contains(id);
 
     /// <summary>
@@ -93,13 +216,23 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public bool IsPinned(string id) => _open.Contains(id) && _screens[id].Pinned;
 
+    /// <summary>
+    /// Puts the pin button of screen <paramref name="id"/> down or up.
+    /// </summary>
     public void SetPinned(string id, bool pinned) => _screens[id].Pinned = pinned;
+
+    /// <summary>
+    /// Whether screen <paramref name="id"/> is registered.
+    /// </summary>
     public bool IsRegistered(string id) => _screens.ContainsKey(id);
 
     #endregion
 
     #region Window lifetime
 
+    /// <summary>
+    /// Opens screen <paramref name="id"/> on top (a panel at the bottom), dropping the keyboard focus.
+    /// </summary>
     public void Open(string id)
     {
         if (!_screens.TryGetValue(id, out var s)) throw new KeyNotFoundException(id);
@@ -123,6 +256,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public void Follow(string id, string leader) => _leaders[id] = leader;
 
+    /// <summary>
+    /// Closes screen <paramref name="id"/> and its followers: its pin, focus, drag and widget state let go.
+    /// </summary>
     public void Close(string id)
     {
         foreach (var (follower, leader) in _leaders.ToArray())
@@ -144,12 +280,22 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         _frame = _frame.Where(f => f.Id != id).ToArray();
     }
 
+    /// <summary>
+    /// Closes every open screen.
+    /// </summary>
     public void CloseAll()
     {
         foreach (string id in _open.ToArray()) Close(id);
     }
 
+    /// <summary>
+    /// Drops the selection of list <paramref name="list"/>.
+    /// </summary>
     public void ClearSelection(string id, string list) => _screens[id].Selected.Remove(list);
+
+    /// <summary>
+    /// Selects tab <paramref name="index"/> (at least 0) of tab control <paramref name="widget"/>.
+    /// </summary>
     public void SetTab(string id, string widget, int index) => _screens[id].Tabs[widget] = Math.Max(0, index);
 
     /// <summary>
@@ -157,15 +303,32 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public Vector2 GetOffset(string id) => _screens[id].Offset;
 
-    public void SetOffset(string id, Vector2 offset) => _screens[id].Offset = offset;
+    /// <summary>
+    /// Moves screen <paramref name="id"/> by <paramref name="offset"/> from its layout position.
+    /// </summary>
+    public void SetOffset(string id, Vector2 offset)
+    {
+        _screens[id].Offset = offset;
+        _screens[id].Dragged = false;
+    }
 
+    /// <summary>
+    /// Sets a widget's text (the focused edit box's too).
+    /// </summary>
     public void SetText(string id, string widget, string text)
     {
         _screens[id].Text[widget] = text;
         if (_focus == (id, widget)) _edit?.Set(text);
     }
 
+    /// <summary>
+    /// A widget's text; empty for none.
+    /// </summary>
     public string GetText(string id, string widget) => _screens[id].Text.GetValueOrDefault(widget) ?? "";
+
+    /// <summary>
+    /// The selected tab of tab control <paramref name="widget"/>.
+    /// </summary>
     public int GetTab(string id, string widget) => _screens[id].Tabs.GetValueOrDefault(widget);
 
     /// <summary>
@@ -188,7 +351,12 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
     #region Arrange
 
-    public IReadOnlyList<MyGuiScreenFrame> Arrange(int width, int height, Func<string, UiBindings> bind, Action<string, List<UiControl>>? decorate = null)
+    /// <summary>
+    /// Lays out the open screens (modal ones last) with their kept state, the caret, the pin and the keyboard focus; <paramref name="decorate"/> adds
+    /// a screen's own controls.
+    /// </summary>
+    public IReadOnlyList<MyGuiScreenFrame> Arrange(int width, int height, Func<string, UiBindings> bind,
+        Action<string, List<UiControl>>? decorate = null)
     {
         var result = new List<MyGuiScreenFrame>();
         RepeatTick();
@@ -251,6 +419,10 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         }
     }
 
+    /// <summary>
+    /// The screen and control under <paramref name="p"/>, from the top; a modal screen that does not pass clicks through takes the click on its
+    /// surroundings.
+    /// </summary>
     (string Id, UiControl Control)? Pick(Vector2 p)
     {
         foreach (var screen in _frame.Reverse())
@@ -264,6 +436,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return null;
     }
 
+    /// <summary>
+    /// Whether a screen takes the point <paramref name="p"/>.
+    /// </summary>
     public bool Contains(Vector2 p) => Pick(p) is not null;
 
     /// <summary>
@@ -271,12 +446,19 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public IReadOnlyList<MyGuiScreenFrame> LastFrame => _frame;
 
+    /// <summary>
+    /// The screen and control under <paramref name="p"/> (<see cref="Pick"/>).
+    /// </summary>
     public (string Screen, UiControl Control)? HitTest(Vector2 p) => Pick(p);
 
     #endregion
 
     #region Pointer and keys
 
+    /// <summary>
+    /// A press at <paramref name="p"/>: raises the window and presses its widget, chrome, edit box (placing the caret) or button, else starts a drag;
+    /// false outside every screen.
+    /// </summary>
     public bool PointerDown(Vector2 p)
     {
         _keyButton = null;
@@ -386,6 +568,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             _drag = (id, p, s.Offset);
     }
 
+    /// <summary>
+    /// A pointer move: the drag selection in the focused edit box, a captured widget, or the window drag; false when nothing took it.
+    /// </summary>
     public bool PointerMove(Vector2 p)
     {
         if (_selecting && _edit is not null && CaretAt?.Invoke(p) is { } at)
@@ -401,6 +586,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return true;
     }
 
+    /// <summary>
+    /// The pointer is released: the drag, the selecting and the captured widget end.
+    /// </summary>
     public void PointerUp()
     {
         _drag = null;
@@ -408,6 +596,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         ReleaseWidget();
     }
 
+    /// <summary>
+    /// The wheel over <paramref name="p"/>: scrolls the widget under it; false outside every screen.
+    /// </summary>
     public bool Wheel(Vector2 p, float steps)
     {
         if (Pick(p) is not { } picked) return false;
@@ -416,6 +607,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return true;
     }
 
+    /// <summary>
+    /// Escape: closes the open combo list, else the top window (or its leader); false when nothing is open.
+    /// </summary>
     public bool Escape()
     {
         if (_open.Count == 0) return false;
@@ -428,6 +622,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return true;
     }
 
+    /// <summary>
+    /// Types <paramref name="value"/> into the focused edit box; false without one or for a control character.
+    /// </summary>
     public bool TextInput(char value)
     {
         if (_focus is null || _edit is null || char.IsControl(value)) return false;
@@ -437,6 +634,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return true;
     }
 
+    /// <summary>
+    /// Stores the focused edit box's text and raises its text event (nothing when it is read-only).
+    /// </summary>
     void PublishEdit()
     {
         if (_focus is not { } f || _edit is null || _edit.ReadOnly) return;
@@ -445,6 +645,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         Activated?.Invoke(new(f.Screen, f.Widget, "text", _edit.Text));
     }
 
+    /// <summary>
+    /// An editing key in the focused edit box (copy, cut and paste through the clipboard); false without one.
+    /// </summary>
     public bool EditKey(UiEditKey key, bool extend = false)
     {
         if (_focus is null || _edit is null) return false;
@@ -455,6 +658,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         return true;
     }
 
+    /// <summary>
+    /// Backspace in the focused edit box.
+    /// </summary>
     public bool Backspace() => EditKey(UiEditKey.Backspace);
 
     /// <summary>
@@ -462,6 +668,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// </summary>
     public bool FocusNext(bool backwards = false) => CycleFocus(backwards);
 
+    /// <summary>
+    /// Enter: activates the focused widget, else the top window's default button; false when nothing took it.
+    /// </summary>
     public bool Submit()
     {
         if (ActivateFocused()) return true;

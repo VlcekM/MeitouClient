@@ -2,7 +2,7 @@ blank_issues_enabled: true
 contact_links:
   - name: Roadmap
     url: https://meitou.kenshi.wiki/roadmap
-    about: What works in Meitou and what does not yet. "Works for me" and "Broken" buttons are on each row.
+    about: What each Meitou version is planned to bring, and how far it is.
   - name: Discord
     url: https://discord.gg/DVAHH2n9DR
-    about: Questions and play reports (/works and /broken).
+    about: Questions and talk about playing Meitou.

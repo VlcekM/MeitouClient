@@ -8,15 +8,13 @@ namespace Meitou.Data.Gameplay.Economy;
 public readonly record struct VendorEntry(string Id, FcsRecordType Type, int Weight);
 
 /// <summary>
-/// A VENDOR_LIST (docs/game/economy.md sections 9.2 and 13): the weighted items a shop, a container or a nest's loot is rolled from, and the money
-/// roll.
+/// A VENDOR_LIST (docs/game/economy.md sections 9.2 and 13): the weighted items a shop, a container or a nest's loot is rolled from, and the
+/// money roll.
 /// <para>The names of its reference lists are not written down in the docs (<c>items</c>, <c>weapons</c>, <c>clothing</c>, ...), so every list is
 /// read and its entries kept by the type of the record they point at: item kinds become <see cref="Entries"/>, WEAPON_MANUFACTURERs
 /// <see cref="Manufacturers"/>. The game merges a list's entries into one weighted table (the item-group picker of factions-squads-towns.md section
 /// 8, <b>Observed</b>). The weight is the entry's v0, "relative chance" in the editor; a v0 of 0 counts as 100 as in the generic weighted pick (the
-/// vendor lists' own reading of 0 is
-/// <b>Unknown</b>,
-/// docs/game/economy.md Unknowns: 472 entries are (0, 100, 0)).</para>
+/// vendor lists' own reading of 0 is <b>Unknown</b>, docs/game/economy.md Unknowns: 472 entries are (0, 100, 0)).</para>
 /// </summary>
 public sealed record VendorList
 {
@@ -25,7 +23,14 @@ public sealed record VendorList
     /// </summary>
     static readonly string[] GearBlueprintLists = ["armour blueprints", "crossbow blueprints", "backpack blueprints"];
 
+    /// <summary>
+    /// The record's string id (a VENDOR_LIST, or another record read as one).
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The record's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
 
     /// <summary>
@@ -38,7 +43,15 @@ public sealed record VendorList
     /// <b>Verified</b>).
     /// </summary>
     public float MoneyItemProb { get; init; }
+
+    /// <summary>
+    /// <c>money item min</c> (default 0).
+    /// </summary>
     public int MoneyItemMin { get; init; }
+
+    /// <summary>
+    /// <c>money item max</c> (default 0).
+    /// </summary>
     public int MoneyItemMax { get; init; }
 
     /// <summary>
@@ -61,6 +74,10 @@ public sealed record VendorList
         t is FcsRecordType.Item or FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Crossbow
         or FcsRecordType.LimbReplacement or FcsRecordType.Container or FcsRecordType.MapItem;
 
+    /// <summary>
+    /// Reads every reference list of <paramref name="r"/>: item kinds and blueprints into <see cref="Entries"/>, WEAPON_MANUFACTURERs into
+    /// <see cref="Manufacturers"/>; a WEAPON no listed manufacturer makes is dropped.
+    /// </summary>
     public static VendorList From(GameDatabase db, GameRecord r)
     {
         var entries = new List<VendorEntry>();
@@ -93,8 +110,8 @@ public sealed record VendorList
     }
 
     /// <summary>
-    /// Sorts one reference of a list into the entries (items and blueprints) or the manufacturers; a reference to a record the database lacks is
-    /// skipped.
+    /// Sorts one reference of a list into the entries (items and blueprints) or the manufacturers; a reference to a record the database lacks
+    /// is skipped.
     /// </summary>
     static void AddEntry(GameDatabase db, string list, GameReference e, List<VendorEntry> entries, List<RecordLink> makers)
     {

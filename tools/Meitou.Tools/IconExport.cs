@@ -45,6 +45,10 @@ static class IconExport
     /// </summary>
     sealed record Wanted(IconKey Key, string Manufacturer);
 
+    /// <summary>
+    /// <c>meitou-tools icons &lt;folder&gt; [--enhanced] [--mods]</c>: writes every item's icon and <c>icons.json</c> into the folder (the base
+    /// game's data, or the load order with <c>--mods</c>). Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         if (args is not [var output, ..] || output.StartsWith("--", StringComparison.Ordinal)) return Usage();
@@ -58,7 +62,8 @@ static class IconExport
         var drawn = items.Where(r => ItemIcons.Renders(r) && ItemIconStyle.MeshOf(r).Length > 0).ToDictionary(r => r.StringId, r => WantedOf(db, r));
 
         var entries = new List<Entry>();
-        foreach (var item in items.Where(r => !drawn.ContainsKey(r.StringId))) entries.Add(CopyStaticIcon(item, assets, output));
+        foreach (var item in items.Where(r => !drawn.ContainsKey(r.StringId)))
+            entries.Add(CopyStaticIcon(item, assets, output));
         var complete = Draw(install, db, assets, [.. drawn.Values.SelectMany(w => w).Select(w => w.Key)], enhanced, output);
         foreach (var (id, wanted) in drawn) entries.Add(DrawnEntry(db.Find(id)!, wanted, complete, db, output));
 
@@ -67,6 +72,9 @@ static class IconExport
         return 0;
     }
 
+    /// <summary>
+    /// Prints the command line and returns 2.
+    /// </summary>
     static int Usage()
     {
         Console.Error.WriteLine("meitou-tools icons <folder> [--enhanced] [--mods]");
@@ -101,8 +109,10 @@ static class IconExport
         {
             if (!maker.GetReferences("weapon types").Any(r => r.TargetStringId == weapon.StringId)) continue;
             foreach (var model in maker.GetReferences("weapon models"))
+            {
                 if (db.Find(model.TargetStringId) is { Type: FcsRecordType.MaterialSpecsWeapon } && seen.Add(model.TargetStringId))
                     wanted.Add(new(new IconKey(weapon.StringId, model.TargetStringId), maker.Name));
+            }
         }
         return wanted;
     }
@@ -115,11 +125,13 @@ static class IconExport
         var files = wanted.Where(w => File.Exists(Path.Combine(output, FileName(w.Key)))).ToList();
         var first = files.FirstOrDefault();
         var variants = item.Type == FcsRecordType.Weapon && files.Count > 0
-            ? files.Select(w => new Variant(w.Manufacturer, w.Key.Material, db.Find(w.Key.Material)?.Name ?? "", FileName(w.Key),
-                complete.Contains(w.Key))).ToList()
+            ? files.Select(ToVariant).ToList()
             : null;
         bool firstComplete = first is not null && complete.Contains(first.Key);
         return new(item.StringId, item.Name, item.Type.ToString(), first is null ? null : FileName(first.Key), firstComplete, variants);
+
+        Variant ToVariant(Wanted w) =>
+            new(w.Manufacturer, w.Key.Material, db.Find(w.Key.Material)?.Name ?? "", FileName(w.Key), complete.Contains(w.Key));
     }
 
     /// <summary>
@@ -199,6 +211,9 @@ static class IconExport
         return flipped;
     }
 
+    /// <summary>
+    /// Writes <c>icons.json</c>: every entry, indented, camel-case names.
+    /// </summary>
     static void WriteManifest(string output, List<Entry> entries)
     {
         var options = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -212,8 +227,9 @@ static class IconExport
     static void Report(List<Entry> entries)
     {
         Console.WriteLine($"{entries.Count(e => e.File is not null)} of {entries.Count} items have an icon.");
-        foreach (var e in entries.Where(e => e.File is null)) Console.WriteLine($"  no icon:   {e.StringId} {e.Name} ({e.Type})");
-        foreach (var e in entries.Where(e => e.File is not null
-                && !e.Complete)) Console.WriteLine($"  partial:   {e.StringId} {e.Name} ({e.Type}): drawn without all its textures");
+        foreach (var e in entries.Where(e => e.File is null))
+            Console.WriteLine($"  no icon:   {e.StringId} {e.Name} ({e.Type})");
+        foreach (var e in entries.Where(e => e.File is not null && !e.Complete))
+            Console.WriteLine($"  partial:   {e.StringId} {e.Name} ({e.Type}): drawn without all its textures");
     }
 }

@@ -12,12 +12,27 @@ namespace Meitou.Simulation.Items;
 /// </summary>
 public sealed class Inventory(int width, int height)
 {
+    /// <summary>
+    /// The main grid's size in cells.
+    /// </summary>
     public const int MainWidth = 8, MainHeight = 10;
 
+    /// <summary>
+    /// A character's inventory with the main grid's size.
+    /// </summary>
     public Inventory() : this(MainWidth, MainHeight) { }
 
+    /// <summary>
+    /// The width of the grid in cells.
+    /// </summary>
     public int Width { get; } = width;
+    /// <summary>
+    /// The height of the grid in cells.
+    /// </summary>
     public int Height { get; } = height;
+    /// <summary>
+    /// The items, each with its section and cell.
+    /// </summary>
     public List<ItemInstance> Items { get; } = [];
 
     /// <summary>
@@ -27,25 +42,30 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// The weight of everything in this inventory (not including a carried person or fitted prosthetics, which vanilla keeps outside the inventory).
+    /// With <paramref name="skipDeath"/> the death items (<see cref="ItemInstance.Death"/>) weigh nothing: a living owner's do not count in the
+    /// original's Total Weight (<b>Observed</b>, docs/game/animals.md "Death items").
     /// </summary>
-    public float ContentWeight()
+    public float ContentWeight(bool skipDeath = false)
     {
         float w = 0;
         foreach (var i in Items)
-            if (!InventoryCommands.IsLimbSection(i.Section)) w += i.Weight;
+            if (!InventoryCommands.IsLimbSection(i.Section) && !(skipDeath && i.Death)) w += i.WeightOf(skipDeath);
+
         return w;
     }
 
     /// <summary>
-    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
+    /// <see cref="ContentWeight(bool)"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
     /// the section it came from (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
     /// </summary>
-    public float ContentWeight(HeldItem? held)
+    public float ContentWeight(HeldItem? held, bool skipDeath = false)
     {
-        float w = ContentWeight();
-        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section)) return w;
+        float w = ContentWeight(skipDeath);
+        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section) || skipDeath && held.Item.Death)
+            return w;
+
         float factor = held.Section == "backpack_content" ? Backpack?.ContentsFactor ?? 1 : 1;
-        return w + held.Item.Weight * factor;
+        return w + held.Item.WeightOf(skipDeath) * factor;
     }
 
     /// <summary>
@@ -91,6 +111,9 @@ public sealed class Inventory(int width, int height)
     /// see <see cref="LimitOf"/>.
     /// </summary>
     public int StackBonusMinimum { get; init; } = 1;
+    /// <summary>
+    /// A backpack's <c>stackable bonus mult</c> (1 for a character's own grid).
+    /// </summary>
     public float StackBonusMult { get; init; } = 1;
     /// <summary>
     /// A storage limited to listed items (a resource store's <c>storage limit</c>): its stacks start from 1 instead of the record's <c>stackable</c>
@@ -136,6 +159,10 @@ public sealed class Inventory(int width, int height)
     /// </summary>
     public bool HasRoomFor(ItemInstance item) => Room(this, "main", item) || Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
+    /// <summary>
+    /// Whether <paramref name="inv"/>'s <paramref name="section"/> takes one unit of <paramref name="item"/>: a stack of it with room left, or a
+    /// free cell.
+    /// </summary>
     static bool Room(Inventory inv, string section, ItemInstance item)
     {
         int limit = inv.LimitOf(item);
@@ -265,6 +292,9 @@ public sealed class Inventory(int width, int height)
         return false;
     }
 
+    /// <summary>
+    /// Adds the items (record, place, quantity, level, quality, charges, the unique flag, buy-back coins, a bag's contents) to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Items.Count);
@@ -296,6 +326,9 @@ public sealed class Inventory(int width, int height)
 /// </summary>
 public readonly record struct GridRegion(int X, int Y, int Width, int Height)
 {
+    /// <summary>
+    /// Whether the <paramref name="w"/> x <paramref name="h"/> cells at (<paramref name="x"/>, <paramref name="y"/>) lie inside the region.
+    /// </summary>
     public bool Contains(int x, int y, int w, int h) => x >= X && y >= Y && x + w <= X + Width && y + h <= Y + Height;
 
     /// <summary>

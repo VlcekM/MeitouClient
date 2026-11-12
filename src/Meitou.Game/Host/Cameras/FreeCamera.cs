@@ -14,11 +14,23 @@ namespace Meitou.Game.Host.Cameras;
 /// </summary>
 public sealed class FreeCamera
 {
+    /// <summary>
+    /// The pitch limit, +-1.5 radians as in the viewer.
+    /// </summary>
     const float PitchLimit = 1.5f;
 
+    /// <summary>
+    /// The ground (or sea) height under a point, which the eye keeps above.
+    /// </summary>
     readonly Func<float, float, float> _ground;
+    /// <summary>
+    /// The settings the camera reads (speeds, response, clearance).
+    /// </summary>
     readonly CameraSettings _settings;
 
+    /// <summary>
+    /// A free camera over <paramref name="ground"/>; <paramref name="settings"/> default to a new set.
+    /// </summary>
     public FreeCamera(Func<float, float, float> ground, CameraSettings? settings = null)
     {
         this._ground = ground;
@@ -30,6 +42,10 @@ public sealed class FreeCamera
     /// eye, so a slow flight close to a thing moved in small jumps. <see cref="PositionResidual"/> is what the float leaves out.
     /// </summary>
     double _x, _y, _z;
+
+    /// <summary>
+    /// The eye, from the double-precision position.
+    /// </summary>
     public Vector3 Position
     {
         get => new((float)_x, (float)_y, (float)_z);
@@ -47,7 +63,14 @@ public sealed class FreeCamera
             return new((float)(_x - p.X), (float)(_y - p.Y), (float)(_z - p.Z));
         }
     }
+
+    /// <summary>
+    /// Units per second; follows the wished direction with an exponential response.
+    /// </summary>
     public Vector3 Velocity { get; private set; }
+    /// <summary>
+    /// Radians; the view's heading (0 looks along -Z), as <see cref="CameraState.Yaw"/>.
+    /// </summary>
     public float Yaw { get; private set; }
     /// <summary>
     /// Radians; positive looks down (the strategy camera's convention).
@@ -69,6 +92,9 @@ public sealed class FreeCamera
     /// </summary>
     public PhotoControls? Photo { get; set; }
 
+    /// <summary>
+    /// The view direction (unit), from <see cref="Yaw"/> and <see cref="Pitch"/>.
+    /// </summary>
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>
@@ -91,6 +117,9 @@ public sealed class FreeCamera
         KeepAboveGround();
     }
 
+    /// <summary>
+    /// The camera now: the eye looking along <see cref="Forward"/>, its target <see cref="ReportedDistance"/> ahead.
+    /// </summary>
     public CameraState State
     {
         get
@@ -100,6 +129,10 @@ public sealed class FreeCamera
         }
     }
 
+    /// <summary>
+    /// One step of <paramref name="dt"/> seconds: the keys and the mouse drag turn the view, the move keys set the wished velocity (doubled with
+    /// Shift), the eye moves and is kept above the ground.
+    /// </summary>
     public void Update(float dt, ActionState a)
     {
         float look = Photo?.LookScale ?? 1;
@@ -167,6 +200,9 @@ public sealed class FreeCamera
         KeepAboveGround();
     }
 
+    /// <summary>
+    /// Lifts the eye to <see cref="CameraSettings.FreeClearance"/> above the ground under it, ending a fall.
+    /// </summary>
     void KeepAboveGround()
     {
         float min = _ground(Position.X, Position.Z) + _settings.FreeClearance;
@@ -211,6 +247,9 @@ public sealed class FreeCamera
 /// </summary>
 public sealed class PhotoControls
 {
+    /// <summary>
+    /// The slowest and fastest fly speed (the wheel's range), and the most the view may bank (radians).
+    /// </summary>
     public const float MinSpeed = 5, MaxSpeed = 30000, MaxRoll = MathF.PI / 2;
 
     /// <summary>

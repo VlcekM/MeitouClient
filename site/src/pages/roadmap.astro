@@ -1,74 +1,49 @@
 ---
-// Roadmap: the parity roadmap inside the site's header and footer, in the site's Exo 2 and rounded plates: status tiles and
-// platform chips that filter the rows (kept in the query string so a filtered view is linkable), category chips with a
-// status bar each, one table per category, and Kenshi screenshots behind it that change every 20 s. On wide screens
-// the filters and categories stay in a sticky column beside the tables.
+// Roadmap: what each Meitou version brings, from src/data/roadmap.ts, inside the site's header and footer, in the site's Exo 2 and
+// rounded plates: status tiles that filter the features (kept in the query string so a filtered view is linkable), a search, one
+// link per version with a status bar and its areas under it, one table per area, and Kenshi screenshots behind it that change every
+// 20 s. On wide screens the filters and versions stay in a sticky column beside the tables.
 import '@fontsource/exo-2/700.css';
 import Base from '../layouts/Base.astro';
-import { asOf, allRows, bugs, categories, countBy, fixedSeen, fixedUnseen, order, platformStatus, refUrl, statuses } from '../data/roadmap';
-import type { Os, Row } from '../data/roadmap';
-import { history } from '../data/history';
-import { recheckBefore, reportBuilds } from '../data/releases';
-import { reports } from '../data/reports';
+import { allFeatures, countBy, featuresOf, order, statuses, versionId, versions } from '../data/roadmap';
+import type { Area, Feature, Version } from '../data/roadmap';
 
-// Entries of each "Recently fixed" list shown before the toggle; the rest sit in a <details> (all shown to a reader without a script too).
-const FIXED_SHOWN = 10;
-// "Recently fixed" is one list: the fixed-on-master and the seen-in-play entries together, newest close date first (a closed
-// issue's close date, or a fix's merge date); entries without a date come last. Entries from the seen-in-play data get a badge.
-const shortTitle = (t: string) => t.split(/[:;(]/)[0].trim();
-const recentFixes = [...fixedSeen.map((f) => ({ ...f, seen: true })), ...fixedUnseen.map((f) => ({ ...f, seen: false }))]
-  .sort((x, y) => (y.closed ?? '').localeCompare(x.closed ?? ''));
-
-const oses: Os[] = ['win', 'linux', 'mac'];
-const osShort = { win: 'Win', linux: 'Linux', mac: 'macOS' } as const;
-const mark = { works: '✓', untested: '?', wip: '~', bug: '!', missing: '✗', na: '–' } as const;
-const platforms = { all: 'All platforms', win: 'Windows', linux: 'Linux', mac: 'macOS', specific: 'Differs by platform' } as const;
-const differs = (r: Row) => !!r.platforms && oses.some((os) => platformStatus(r, os) !== platformStatus(r, 'win'));
-// Per-row data for the filter script: the status on each platform, whether it differs, whether it has bugs.
-const rowData = (r: Row) => JSON.stringify({ s: r.status, p: Object.fromEntries(oses.map((os) => [os, platformStatus(r, os)])), d: differs(r), b: r.bugs.length > 0 });
-const counts = countBy(allRows);
+const counts = countBy(allFeatures);
 const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
-const stale = (r: Row) => !!r.seen && !!recheckBefore && r.seen.date < recheckBefore;
-const byText = (by: string) => (/^#\d+$/.test(by) ? by : by === 'playtest' ? 'a playtest' : by);
-// History chart: one stacked bar per day the roadmap changed (newest 40), as percentages of the rows that day.
-const snaps = history.snapshots.slice(-40);
-const chartW = 640, chartH = 120, barGap = 2;
-const barW = snaps.length ? Math.min(28, (chartW - barGap * (snaps.length - 1)) / snaps.length) : 0;
-const statusLabel = (s: keyof typeof statuses | null) => (s ? statuses[s].label : 'removed');
-const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteKey: reports.turnstileSiteKey, builds: reportBuilds });
+// A status bar: each status's share of the features.
+const bar = (features: Feature[]) => order.map((k) => ({ k, width: features.length ? (100 * countBy(features)[k]) / features.length : 0 }));
+const label = (v: Version) => (v.name ? `${v.version} · ${v.name}` : v.version);
+// The areas a version's tables are drawn as: its own features first, as an area without a heading.
+const areasOf = (v: Version): Area[] => [...(v.features?.length ? [{ id: 'features', name: '', features: v.features }] : []), ...(v.areas ?? [])];
+// A note's text and its [text](url) links, in order.
+const noteParts = (note: string) => note.split(/\[([^\]]+)\]\((https?:[^)\s]+)\)/).reduce<{ text: string; href?: string }[]>((parts, s, i) => {
+  if (i % 3 === 0) parts.push({ text: s });
+  else if (i % 3 === 1) parts.push({ text: s, href: '' });
+  else parts[parts.length - 1].href = s;
+  return parts;
+}, []);
+const summary = (features: Feature[]) => {
+  const c = countBy(features);
+  return order.filter((k) => c[k]).map((k) => `${c[k]} ${statuses[k].label.toLowerCase()}`).join(' · ');
+};
 ---
-<Base title="Roadmap - Meitou" description="How far each of Kenshi's systems is in Meitou, against unmodded Kenshi 1.0.68." kofiTop>
+<Base title="Roadmap - Meitou" description="What each Meitou version brings, and how far it is." kofiTop>
   <span slot="center">Roadmap page by <a href="https://github.com/Demitrix2k">@DemitriX</a></span>
   <div class="backdrop" aria-hidden="true" data-bgs={JSON.stringify(backgrounds)}><div></div><div></div></div>
   <div class="rd">
     <header>
-      <h1>What works in Meitou, and what does not yet</h1>
+      <h1>What each Meitou version brings</h1>
       <p>
-        Kenshi's systems, by category. Every system has one status. <b>Works</b> covers what someone has seen working in
-        play and reported bugs whose fix is on master; a feature that is only in the code and was never reported is{' '}
-        <b>Untested</b>, however complete it looks.
+        The features planned for each version, by area. <b>Done</b> is in Meitou, <b>In progress</b> is in Meitou with known gaps,
+        and <b>Planned</b> is not started. Bugs and their fixes are tracked as{' '}
+        <a href="https://github.com/VlcekM/MeitouClient/issues">GitHub issues</a>.
       </p>
-      <div class="meta">As of {asOf.date} · <span class="mono">master {asOf.master}</span> · Reference: unmodded Kenshi 1.0.68</div>
     </header>
 
     <aside class="side">
     <section aria-labelledby="status-h">
-      <div class="status-head">
-        <h2 id="status-h">Status at a glance</h2>
-        <button type="button" class="filt" aria-expanded="false" aria-controls="filters" hidden>
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 5h18l-7 8.5V19l-4 2v-7.5z" /></svg>
-          Filter<span class="fc" hidden></span>
-        </button>
-      </div>
-      <div class="filters" id="filters"><div class="filters-in">
-      <div class="plats" role="group" aria-label="Filter by platform">
-        <span class="lbl">Platform</span>
-        {Object.entries(platforms).map(([k, v]) => <button type="button" class="chip" data-p={k} aria-pressed={String(k === 'all')}>{v}</button>)}
-        <span class="lbl gap">Bugs</span>
-        <button type="button" class="chip hbchip" data-bugs aria-pressed="false">Has bugs</button>
-      </div>
-      <input type="search" class="search" placeholder="Search systems and notes" aria-label="Search systems and notes" hidden />
-      </div></div>
+      <h2 id="status-h">Status at a glance</h2>
+      <input type="search" class="search" placeholder="Search features and notes" aria-label="Search features and notes" hidden />
       <div class="tiles" role="group" aria-label="Filter by status">
         {order.map((k) => (
           <button type="button" class={`tile st-${k}`} data-s={k} title={statuses[k].desc} aria-pressed="false">
@@ -76,177 +51,71 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
           </button>
         ))}
       </div>
-      <div class="filter-note" hidden>Showing all rows. <button type="button" class="clear">Show all</button></div>
+      <div class="filter-note" hidden>Showing all features. <button type="button" class="clear">Show all</button></div>
     </section>
 
-    <section aria-labelledby="cats-h">
-      <h2 id="cats-h">Categories</h2>
-      <nav class="loop" aria-label="Categories">
-        {categories.map((c, i) => {
-          const cc = countBy(c.rows);
-          return (
-            <>
-              {i > 0 && <span class="arrow" aria-hidden="true">›</span>}
-              <a href={`#${c.id}`}>
-                <span class="nm">{i + 1}. {c.name}</span>
-                <span class="mini" data-bar={c.id}>{order.map((k) => <span class={`st-${k}`} style={`width: ${(100 * cc[k]) / c.rows.length}%`}></span>)}</span>
+    <section aria-labelledby="versions-h">
+      <h2 id="versions-h">Versions</h2>
+      <nav class="loop" aria-label="Versions">
+        {versions.map((v) => (
+          <>
+            <a class="ver" href={`#${versionId(v)}`}>
+              <span class="nm">{label(v)}</span>
+              <span class="mini">{bar(featuresOf(v)).map((b) => <span class={`st-${b.k}`} style={`width: ${b.width}%`}></span>)}</span>
+            </a>
+            {(v.areas ?? []).map((a) => (
+              <a href={`#${versionId(v)}-${a.id}`}>
+                <span class="nm">{a.name}</span>
+                <span class="mini">{bar(a.features).map((b) => <span class={`st-${b.k}`} style={`width: ${b.width}%`}></span>)}</span>
               </a>
-            </>
-          );
-        })}
+            ))}
+          </>
+        ))}
       </nav>
     </section>
     </aside>
 
     <div class="body">
-    {categories.map((c, i) => (
-      <section class="stage" id={c.id}>
+    {versions.length === 0 && <p class="empty-cats none">Nothing on the roadmap yet.</p>}
+    {versions.map((v) => (
+      <section class="version" id={versionId(v)}>
         <div class="stage-head">
-          <span class="eyebrow">Category {i + 1}</span>
-          <h2>{c.name}</h2>
-          <span class="meta" data-sum={c.id}></span>
-          <p>{c.blurb}</p>
+          {v.name && <span class="eyebrow">Version {v.version}</span>}
+          <h2>{v.name ?? `Version ${v.version}`}</h2>
+          <span class="meta">{summary(featuresOf(v))}</span>
+          {v.blurb && <p>{v.blurb}</p>}
         </div>
-        <div class="tbl">
-          <table>
-            <thead><tr><th>System</th><th>Status</th><th>What is known</th></tr></thead>
-            <tbody>
-              {c.rows.map((r) => (
-                <tr id={r.id} data-row={rowData(r)}>
-                  <td class="sys">
-                    {r.system}
-                    {r.bugs.length > 0 && <a class="hb" href="#bugs" title={`Known bugs: ${r.bugs.join(', ')}`}>has bugs · {r.bugs.join(', ')}</a>}
-                    {differs(r) && (
-                      <span class="obs">
-                        {oses.map((os) => {
-                          const s = platformStatus(r, os);
-                          return <span class={`ob st-${s}`} title={`${osShort[os]}: ${s === 'na' ? 'not applicable' : statuses[s].label}`}>{osShort[os]} {mark[s]}</span>;
-                        })}
-                      </span>
-                    )}
-                  </td>
-                  <td class="st"><span class={`pill st-${r.status}`}>{statuses[r.status].label}</span></td>
-                  <td class="note">
-                    {r.note}
-                    {r.seen && (
-                      <span class:list={['seen', { stale: stale(r) }]}>
-                        {stale(r) ? `Not rechecked since ${r.seen.build} (${r.seen.date})` : `Last confirmed on ${r.seen.build}, ${r.seen.date}, by ${byText(r.seen.by)}`}
-                      </span>
-                    )}
-                    <span class="rep" data-rep={r.id} data-name={r.system} hidden>
-                      <span class="rc"></span>
-                      <button type="button" data-v="works">Works for me</button>
-                      <button type="button" data-v="broken">Broken</button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {areasOf(v).map((a) => (
+          <section class="stage" id={`${versionId(v)}-${a.id}`} data-name={a.name || label(v)}>
+            {a.name && (
+              <div class="stage-head">
+                <h3>{a.name}</h3>
+                <span class="meta">{summary(a.features)}</span>
+                {a.blurb && <p>{a.blurb}</p>}
+              </div>
+            )}
+            <div class="tbl">
+              <table>
+                <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+                <tbody>
+                  {a.features.map((f) => (
+                    <tr id={f.id} data-s={f.status}>
+                      <td class="sys">{f.name}</td>
+                      <td class="st"><span class={`pill st-${f.status}`}>{statuses[f.status].label}</span></td>
+                      <td class="note">{noteParts(f.note).map((p) => (p.href ? <a href={p.href}>{p.text}</a> : p.text))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))}
       </section>
     ))}
 
     <p class="empty-cats" hidden></p>
-
-    <section id="bugs" class="stage" aria-labelledby="bugs-h">
-      <h2 id="bugs-h">Known bugs</h2>
-      <p class="meta">Open differences and faults seen in play, as issues on GitHub.</p>
-      <div class="tbl">
-        <table>
-          <thead><tr><th>ID</th><th>What is seen</th><th>What the original does</th><th>State</th><th>Platform</th></tr></thead>
-          <tbody>
-            {bugs.map((b) => (
-              <tr>
-                <td class="ref">{refUrl(b.id) ? <a href={refUrl(b.id)}>{b.id}</a> : b.id}</td>
-                <td>{b.seen}</td>
-                <td class="note">{b.original}</td>
-                <td class="note">{b.state}</td>
-                <td class="note">{b.platform ?? ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section aria-labelledby="fixed-h">
-      <h2 id="fixed-h">Recently fixed</h2>
-      <p class="meta">Newest first, by the date the issue was closed or the fix merged. Entries marked "seen in play" were checked in the game; the others are fixed on master and not yet seen in play.</p>
-      <ul class="fixlist">{recentFixes.slice(0, FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{shortTitle(f.text)}{f.seen && <span class="seen"> seen in play</span>}</span><span class="when">{f.closed ?? ''}</span></li>)}</ul>
-      {recentFixes.length > FIXED_SHOWN && (
-        <details class="fixmore">
-          <summary><span class="more">Show all {recentFixes.length}</span><span class="less">Show fewer</span></summary>
-          <ul class="fixlist">{recentFixes.slice(FIXED_SHOWN).map((f) => <li><span class="tag">{refUrl(f.id) ? <a href={refUrl(f.id)}>{f.id}</a> : f.id || '—'}</span><span>{shortTitle(f.text)}{f.seen && <span class="seen"> seen in play</span>}</span><span class="when">{f.closed ?? ''}</span></li>)}</ul>
-        </details>
-      )}
-    </section>
-
-    {(snaps.length > 1 || history.changes.length > 0) && (
-      <section aria-labelledby="changes-h">
-        <h2 id="changes-h">Recent changes</h2>
-        <p class="meta">How the statuses moved. Also as <a href="/roadmap-changes.xml">RSS</a> and <a href="/roadmap-changes.json">JSON</a>; the whole roadmap is <a href="/roadmap.json">roadmap.json</a>.</p>
-        {snaps.length > 1 && (
-          <figure class="hist">
-            <svg viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="Share of systems in each status, per day the roadmap changed">
-              {snaps.map((s, i) => {
-                const total = order.reduce((n, k) => n + (s.counts[k] ?? 0), 0) || 1;
-                let y = chartH;
-                return (
-                  <g class="hbar" transform={`translate(${i * (barW + barGap)} 0)`}>
-                    <title>{`${s.date}: ${order.map((k) => `${s.counts[k] ?? 0} ${statuses[k].label.toLowerCase()}`).join(', ')}`}</title>
-                    {order.map((k) => {
-                      const h = ((s.counts[k] ?? 0) / total) * chartH;
-                      y -= h;
-                      return h > 0 && <rect class={`st-${k}`} x="0" y={y + 1} width={barW} height={Math.max(0, h - 2)} />;
-                    })}
-                  </g>
-                );
-              })}
-            </svg>
-            <figcaption class="legend">
-              {order.map((k) => <span><i class={`st-${k}`}></i>{statuses[k].label}</span>)}
-              <span class="meta">{snaps[0].date} to {snaps[snaps.length - 1].date}</span>
-            </figcaption>
-          </figure>
-        )}
-        {history.changes.length > 0 && (
-          <ul class="fixlist">
-            {history.changes.slice(0, 15).map((c) => (
-              <li><span class="tag">{c.date}</span><span><a href={`#${c.id}`}>{c.system}</a>: {c.from === null ? `added as ${statusLabel(c.to)}` : `${statusLabel(c.from)} to ${statusLabel(c.to)}`}</span></li>
-            ))}
-          </ul>
-        )}
-      </section>
-    )}
     </div>
   </div>
-  <dialog class="repdlg" data-config={reportConfig}>
-    <form method="dialog">
-      <h3>Report: <span class="rname"></span></h3>
-      <fieldset class="verdict">
-        <label><input type="radio" name="verdict" value="works" /> Works for me</label>
-        <label><input type="radio" name="verdict" value="broken" /> Broken</label>
-      </fieldset>
-      <label>Build
-        <select name="build">{reportBuilds.map((b) => <option value={b}>{b}</option>)}<option value="other">Other or self-built</option></select>
-      </label>
-      <label>Platform
-        <select name="platform"><option value="win">Windows</option><option value="linux">Linux</option><option value="mac">macOS</option><option value="proton">Proton</option></select>
-      </label>
-      <label class="inline"><input type="checkbox" name="modded" /> Playing with mods</label>
-      <label>What you did or saw <span class="opt">(optional for Works)</span>
-        <input name="note" maxlength="300" autocomplete="off" />
-      </label>
-      <div class="ts"></div>
-      <p class="rstatus" role="status"></p>
-      <div class="actions">
-        <button type="submit" value="cancel" formnovalidate>Cancel</button>
-        <button type="button" class="send">Send report</button>
-      </div>
-      <p class="meta small">Stored: the row, your answers and a salted hash of your IP to count distinct people. Bugs with steps belong in a <a href="https://github.com/VlcekM/MeitouClient/issues/new/choose">GitHub issue</a>.</p>
-    </form>
-  </dialog>
   <a class="totop" href="#top" aria-label="Back to top" hidden>
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M6 14l6-6 6 6" /></svg>
     <span>Top</span>
@@ -297,160 +166,58 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
     });
   })();
 
-  // Filters: one status at a time (click again to clear), one platform, and systems with known bugs. Counts and bars follow the platform.
+  // Filters: one status at a time (click again to clear) and a search over the feature names and notes. Areas and versions with
+  // nothing to show are hidden.
   (() => {
-    const ORDER = ['works', 'untested', 'wip', 'bug', 'missing'];
-    const LABEL = { works: 'Works', untested: 'Untested', wip: 'WIP', bug: 'Bug', missing: 'Missing', na: 'N/A' };
-    const PLAT = { win: 'Windows', linux: 'Linux', mac: 'macOS' };
-    let active = null, plat = 'all', onlyBugs = false, query = '';
+    const ORDER = ['done', 'wip', 'planned'];
+    const LABEL = { done: 'Done', wip: 'In progress', planned: 'Planned' };
+    let active = null, query = '';
     const search = document.querySelector('.search');
     search.hidden = false;
-    const filt = document.querySelector('.filt'), filters = document.querySelector('.filters');
-    // Search text per row: the system, its note and evidence (not the report buttons).
-    const textOf = (tr) => [tr.querySelector('.sys').textContent, ...[...tr.querySelector('.note').childNodes].filter((n) => !n.classList?.contains('rep')).map((n) => n.textContent)].join(' ').toLowerCase();
-    const rows = [...document.querySelectorAll('tr[data-row]')].map((tr) => ({ tr, text: textOf(tr), ...JSON.parse(tr.dataset.row) }));
-    const on = (r) => plat === 'all' ? true : plat === 'specific' ? r.d : r.p[plat] !== 'na';
-    const st = (r) => (plat in PLAT ? r.p[plat] : r.s);
-    const bar = (el, rs) => { const n = rs.length; el.querySelectorAll('span').forEach((s, i) => { s.style.width = n ? `${(100 * rs.filter((r) => st(r) === ORDER[i]).length) / n}%` : '0'; }); };
+    const rows = [...document.querySelectorAll('tr[data-s]')].map((tr) => ({ tr, s: tr.dataset.s, text: tr.textContent.toLowerCase() }));
     const note = document.querySelector('.filter-note'), clear = note.querySelector('.clear');
-    function apply() {
-      const vis = rows.filter(on);
-      document.querySelectorAll('.tile').forEach((t) => {
-        t.querySelector('.n').textContent = vis.filter((r) => st(r) === t.dataset.s).length;
-        t.setAttribute('aria-pressed', String(t.dataset.s === active));
-      });
-      document.querySelector('.tiles').classList.toggle('filtering', !!active);
-      document.querySelectorAll('.chip[data-p]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.p === plat)));
-      document.querySelector('[data-bugs]').setAttribute('aria-pressed', String(onlyBugs));
+    const shows = (r) => (!active || r.s === active) && (!query || r.text.includes(query));
+    function showAreas() {
       const left = [];
-      document.querySelectorAll('.stage[id]:not(#bugs)').forEach((sec) => {
-        const rs = rows.filter((r) => sec.contains(r.tr)), shown = rs.filter(on);
-        bar(document.querySelector(`[data-bar="${sec.id}"]`), shown);
-        sec.querySelector('[data-sum]').textContent = shown.length
-          ? ORDER.map((k) => [k, shown.filter((r) => st(r) === k).length]).filter(([, n]) => n).map(([k, n]) => `${n} ${LABEL[k].toLowerCase()}`).join(' · ')
-          : 'nothing for this platform';
+      document.querySelectorAll('.stage[id]').forEach((sec) => {
         let any = false;
-        rs.forEach((r) => {
-          const s = on(r) ? st(r) : r.s, show = on(r) && (!active || s === active) && (!onlyBugs || r.b) && (!query || r.text.includes(query));
-          const pill = r.tr.querySelector('.pill'); pill.className = `pill st-${s}`; pill.textContent = LABEL[s];
-          r.tr.hidden = !show; any ||= show;
-        });
+        rows.filter((r) => sec.contains(r.tr)).forEach((r) => { r.tr.hidden = !shows(r); any ||= shows(r); });
         sec.hidden = !any;
-        if (!any) left.push(sec.querySelector('h2').textContent);
+        if (!any) left.push(sec.dataset.name);
       });
-      // Categories with nothing to show are left out, and named in one line after the rest.
-      const empty = document.querySelector('.empty-cats');
-      empty.textContent = left.length === document.querySelectorAll('.stage[id]:not(#bugs)').length
-        ? 'No rows match the filters.' : `No rows match the filters in: ${left.join(', ')}.`;
+      document.querySelectorAll('.version').forEach((v) => { v.hidden = !v.querySelector('.stage:not([hidden])'); });
+
+      // Areas with nothing to show are left out, and named in one line after the rest.
+      const empty = document.querySelector('.empty-cats:not(.none)');
+      empty.textContent = left.length === document.querySelectorAll('.stage[id]').length
+        ? 'No features match the filters.' : `No features match the filters in: ${left.join(', ')}.`;
       empty.hidden = !left.length;
+    }
+    function apply() {
+      document.querySelectorAll('.tile').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.s === active)));
+      document.querySelector('.tiles').classList.toggle('filtering', !!active);
+      showAreas();
       const parts = [];
-      if (plat !== 'all') parts.push(plat === 'specific' ? 'rows whose status differs by platform' : `the status on ${PLAT[plat]}`);
       if (active) parts.push(`${LABEL[active]} only`);
-      if (onlyBugs) parts.push('systems with known bugs');
-      if (query) parts.push(`systems matching “${search.value.trim()}”`);
+      if (query) parts.push(`features matching “${search.value.trim()}”`);
       note.firstChild.textContent = `Showing ${parts.join(', ')}. `;
       note.hidden = !parts.length;
-      const n = (plat !== 'all') + onlyBugs + !!query, fc = filt.querySelector('.fc');
-      fc.textContent = n; fc.hidden = !n;
-      // The filters live in the query string (defaults left out), so a filtered view can be linked; the #row anchor stays.
+
+      // The filters live in the query string (defaults left out), so a filtered view can be linked; the #feature anchor stays.
       const qs = new URLSearchParams();
       if (active) qs.set('status', active);
-      if (plat !== 'all') qs.set('platform', plat);
-      if (onlyBugs) qs.set('bugs', '1');
       if (search.value.trim()) qs.set('q', search.value.trim());
       const url = location.pathname + (qs.size ? `?${qs}` : '') + location.hash;
       if (url !== location.pathname + location.search + location.hash) history.replaceState(null, '', url);
     }
-    const given = new URLSearchParams(location.search), PLATS = ['all', 'specific', ...Object.keys(PLAT)];
+    const given = new URLSearchParams(location.search);
     if (ORDER.includes(given.get('status'))) active = given.get('status');
-    if (PLATS.includes(given.get('platform'))) plat = given.get('platform');
-    onlyBugs = given.get('bugs') === '1';
     search.value = given.get('q') ?? '';
     query = search.value.trim().toLowerCase();
     document.querySelector('.tiles').addEventListener('click', (e) => { const t = e.target.closest('.tile'); if (!t) return; active = active === t.dataset.s ? null : t.dataset.s; apply(); });
-    document.querySelector('.plats').addEventListener('click', (e) => {
-      const c = e.target.closest('.chip'); if (!c) return;
-      if (c.hasAttribute('data-bugs')) onlyBugs = !onlyBugs; else plat = c.dataset.p;
-      apply();
-    });
     search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); apply(); });
-    clear.addEventListener('click', () => { active = null; plat = 'all'; onlyBugs = false; query = search.value = ''; apply(); });
-    // Platform, bug and search filters fold away behind the Filter button; open at load when one of them is set.
-    filt.hidden = false;
-    const fold = (open) => { filt.setAttribute('aria-expanded', String(open)); filters.classList.toggle('shut', !open); filters.inert = !open; };
-    filt.addEventListener('click', () => fold(filters.classList.contains('shut')));
-    fold(plat !== 'all' || onlyBugs || !!query);
-    filters.offsetHeight; filters.classList.add('anim');
+    clear.addEventListener('click', () => { active = null; query = search.value = ''; apply(); });
     apply();
-  })();
-
-  // Play reports: counts per row from the reports service, and a Works for me / Broken form. Hidden when the service is not set or down.
-  (() => {
-    const dlg = document.querySelector('.repdlg'), cfg = JSON.parse(dlg.dataset.config);
-    if (!cfg.url) return;
-    const form = dlg.querySelector('form'), status = dlg.querySelector('.rstatus'), send = dlg.querySelector('.send');
-    let row = null, widget = null;
-    const show = (summary) => {
-      const by = Object.fromEntries(summary.rows.map((s) => [s.row, s]));
-      document.querySelectorAll('[data-rep]').forEach((el) => {
-        const s = by[el.dataset.rep];
-        el.querySelector('.rc').textContent = s ? `${s.works} works, ${s.broken} broken, last on ${s.lastBuild}` : 'No reports yet';
-        el.hidden = false;
-      });
-    };
-    const load = (fresh) => fetch(`${cfg.url}/summary`, fresh ? { cache: 'reload' } : {}).then((r) => (r.ok ? r.json() : Promise.reject())).then(show);
-    load().catch(() => {});
-
-    // Turnstile is loaded on the first open only, so a visitor who never reports never loads it.
-    const turnstile = () => new Promise((resolve) => {
-      if (!cfg.siteKey) return resolve();
-      if (window.turnstile) return resolve();
-      const s = document.createElement('script');
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      s.onload = () => resolve(); s.onerror = () => resolve();
-      document.head.append(s);
-    });
-    const guessPlatform = () => /Mac/.test(navigator.platform) ? 'mac' : /Linux/.test(navigator.platform) ? 'linux' : 'win';
-
-    document.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-rep] button'); if (!b) return;
-      const el = b.closest('[data-rep]');
-      row = el.dataset.rep;
-      dlg.querySelector('.rname').textContent = el.dataset.name;
-      form.reset();
-      form.verdict.value = b.dataset.v;
-      form.platform.value = guessPlatform();
-      status.textContent = ''; send.disabled = false;
-      dlg.showModal();
-      await turnstile();
-      if (cfg.siteKey && window.turnstile) {
-        if (widget === null) widget = window.turnstile.render(dlg.querySelector('.ts'), { sitekey: cfg.siteKey, theme: 'dark' });
-        else window.turnstile.reset(widget);
-      }
-    });
-
-    send.addEventListener('click', async () => {
-      const verdict = form.verdict.value, note = form.note.value.trim();
-      if (verdict === 'broken' && !note) { status.textContent = 'Say what happened.'; form.note.focus(); return; }
-      send.disabled = true; status.textContent = 'Sending…';
-      const body = {
-        row, verdict, note, build: form.build.value, platform: form.platform.value, modded: form.modded.checked, source: 'web',
-        turnstile: widget !== null && window.turnstile ? window.turnstile.getResponse(widget) : undefined,
-      };
-      try {
-        const r = await fetch(`${cfg.url}/reports`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (r.status === 429) throw new Error('Too many reports from here; try again later.');
-        const res = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(res.error ? `Not sent: ${res.error}.` : 'Not sent.');
-        status.textContent = 'Thanks, recorded.';
-        load(true).catch(() => {});
-        setTimeout(() => dlg.close(), 900);
-      } catch (err) {
-        status.textContent = err.message || 'Not sent; the report service did not answer.';
-        send.disabled = false;
-        if (widget !== null && window.turnstile) window.turnstile.reset(widget);
-      }
-    });
   })();
 </script>
 
@@ -464,8 +231,7 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
 <style>
   .backdrop, .rd {
     --bg: #1c1613; --surface: #2a201b; --fg: #eadfcb; --muted: #a8977f; --line: #3d312a; --accent: #e07b45;
-    --works: #7fd09c; --works-bg: #1f3a2a; --untested: #a7b1ac; --untested-bg: #2a312d;
-    --wip: #e6b84e; --wip-bg: #3d321a; --bug: #f08b82; --bug-bg: #432522; --missing: #c3a6ec; --missing-bg: #352a45;
+    --done: #7fd09c; --done-bg: #1f3a2a; --wip: #e6b84e; --wip-bg: #3d321a; --planned: #a7b1ac; --planned-bg: #2a312d;
     --font-display: var(--font-exo); --font-body: var(--font-exo); --r-plate: calc(2 * var(--radius-card));
   }
   .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
@@ -483,7 +249,6 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
   .rd h3 { font-size: 1.1rem; font-weight: 600; }
   .rd p { margin: 0; max-width: 70ch; }
   .rd a { color: var(--accent); }
-  .mono { font-family: var(--font-mono); font-size: .85em; }
   .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .12em; font-size: .85rem; color: var(--muted); font-weight: 600; }
   .meta { color: var(--muted); font-size: .9rem; }
   header { display: grid; gap: 10px; }
@@ -497,38 +262,23 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
   .tile:hover, .tile:focus-visible { border-color: var(--c); outline: none; }
   .tile[aria-pressed="true"] { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); }
   .tiles.filtering .tile[aria-pressed="false"] { opacity: .55; }
-  .plats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .plats .lbl { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .1em; font-size: .8rem; color: var(--muted); font-weight: 600; margin-right: 4px; }
-  .plats .gap { margin-left: 10px; }
-  .chip { font: inherit; font-size: .9rem; cursor: pointer; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
-  .chip:hover, .chip:focus-visible { border-color: var(--accent); outline: none; }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-  .chip.hbchip[aria-pressed="true"] { background: var(--bug); border-color: var(--bug); }
-  .rd .hb { display: inline-block; margin-left: 8px; font-family: var(--font-mono); font-size: .7rem; font-weight: 500; line-height: 1.5; padding: 0 6px; border-radius: var(--radius-portrait); color: var(--bug); border: 1px solid var(--bug); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
-  .rd .hb:hover, .rd .hb:focus-visible { background: var(--bug-bg); outline: none; }
-  .obs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-  .ob { font-family: var(--font-mono); font-size: .7rem; font-weight: 500; line-height: 1.5; padding: 0 5px; border-radius: var(--radius-portrait); color: var(--c); background: var(--cb); white-space: nowrap; }
-  .st-na { --c: var(--muted); --cb: transparent; border: 1px dashed var(--line); }
-  .filter-note { font-size: .9rem; color: var(--muted); }
-  .filter-note button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-
-  .mini span { display: block; height: 100%; background: var(--c); }
 
   .loop { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .rd .loop a { text-decoration: none; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 6px 10px; display: grid; gap: 4px; min-width: 118px; }
+  .rd .loop a.ver { border-color: var(--accent); }
   .rd .loop a:hover, .rd .loop a:focus-visible { border-color: var(--accent); outline: none; }
   .loop .nm { font-family: var(--font-display); font-weight: 600; font-size: .95rem; }
-  .loop .mini { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--untested-bg); }
-  .loop .arrow { color: var(--muted); font-family: var(--font-display); }
+  .loop .mini { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--planned-bg); }
+  .mini span { display: block; height: 100%; background: var(--c); }
 
   .pill { display: inline-block; font-size: .78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; letter-spacing: .02em; color: var(--c); background: var(--cb); }
-  .st-works { --c: var(--works); --cb: var(--works-bg); }
-  .st-untested { --c: var(--untested); --cb: var(--untested-bg); }
+  .st-done { --c: var(--done); --cb: var(--done-bg); }
   .st-wip { --c: var(--wip); --cb: var(--wip-bg); }
-  .st-bug { --c: var(--bug); --cb: var(--bug-bg); }
-  .st-missing { --c: var(--missing); --cb: var(--missing-bg); }
+  .st-planned { --c: var(--planned); --cb: var(--planned-bg); }
 
-  .stage { scroll-margin-top: 16px; }
+  .stage, .version { scroll-margin-top: 16px; }
+  .version { display: grid; gap: 24px; }
+  .rd .empty-cats { max-width: none; margin: 0; padding: 10px 14px; color: var(--muted); font-size: .9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-plate); }
   .stage-head { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
   .stage-head p { color: var(--muted); flex-basis: 100%; }
   .tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-plate); }
@@ -539,27 +289,11 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
   td.sys { font-weight: 600; width: 30%; }
   td.st { width: 1%; white-space: nowrap; }
   td.note { color: var(--muted); font-size: .92rem; }
-  td.ref { width: 1%; white-space: nowrap; font-family: var(--font-mono); font-size: .8rem; }
-  .rd td.ref a { text-decoration: none; }
-  .rd .empty-cats { max-width: none; margin: 0; padding: 10px 14px; color: var(--muted); font-size: .9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-plate); }
-  /* A row linked as /roadmap#<row id> is marked. */
+  /* A feature linked as /roadmap#<feature id> is marked. */
   tr[id] { scroll-margin-top: 24px; }
   tr:target td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
   tr:target td.sys { box-shadow: inset 3px 0 0 var(--accent); }
   tr[hidden], table[hidden], [hidden] { display: none !important; }
-
-  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
-  .cols > div { display: grid; gap: 10px; min-width: 0; align-content: start; }
-  .fixlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-  .fixlist li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; }
-  .fixlist .when { font-size: 0.85em; opacity: 0.7; white-space: nowrap; }
-  .fixlist .seen { font-size: 0.8em; opacity: 0.8; border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
-  .fixlist li > span:last-child { min-width: 0; }
-  .fixmore { margin-top: 8px; }
-  .fixmore > summary { cursor: pointer; color: var(--accent, inherit); margin-bottom: 8px; }
-  .fixmore .less, .fixmore[open] .more { display: none; }
-  .fixmore[open] .less { display: inline; }
-  .tag { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); white-space: nowrap; }
 
   /* Back to top: bottom right. */
   .totop {
@@ -575,61 +309,14 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
 
   .search { font: inherit; font-size: .9rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; width: 100%; }
   .search:focus-visible { border-color: var(--accent); outline: none; }
-  .status-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .status-head h2 { white-space: nowrap; }
-  .filt { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .9rem; cursor: pointer; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; }
-  .filt:hover, .filt:focus-visible, .filt[aria-expanded="true"] { border-color: var(--accent); outline: none; }
-  .filt .fc { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: .75rem; font-weight: 600; line-height: 18px; text-align: center; }
-  /* Folds by animating its row from 0fr to 1fr, so it slides open to its natural height; the negative margin takes back the
-     section gap while shut. */
-  .filters { display: grid; grid-template-rows: 1fr; align-self: start; }
-  .filters.shut { grid-template-rows: 0fr; margin-top: -10px; opacity: 0; }
-  .filters-in { display: grid; gap: 10px; min-height: 0; overflow: hidden; }
-  @media (prefers-reduced-motion: no-preference) { .filters.anim { transition: grid-template-rows .25s ease, margin-top .25s ease, opacity .2s ease; } }
-  .seen { display: block; margin-top: 4px; font-size: .82rem; color: var(--works); }
-  .seen.stale { color: var(--wip); }
-  .rep { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: .8rem; }
-  .rep .rc { color: var(--muted); margin-right: 2px; }
-  .rep button { font: inherit; cursor: pointer; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
-  .rep button:hover, .rep button:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
 
-  .hist { margin: 0; display: grid; gap: 8px; }
-  .hist svg { width: 100%; max-width: 640px; height: auto; }
-  .hist rect { fill: var(--c); rx: 2px; }
-  .hbar:hover rect { opacity: .8; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; align-items: center; }
-  .legend span { display: inline-flex; gap: 6px; align-items: center; }
-  .legend i { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
-
-  .repdlg {
-    --bg: #1c1613; --surface: #2a201b; --fg: #eadfcb; --muted: #a8977f; --line: #3d312a; --accent: #e07b45;
-    color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: calc(2 * var(--radius-card)); padding: 18px 20px; width: min(440px, calc(100vw - 32px));
-    font-family: var(--font-exo);
-  }
-  .repdlg::backdrop { background: rgba(0, 0, 0, .6); }
-  .repdlg form { display: grid; gap: 12px; }
-  .repdlg h3 { margin: 0; font-family: var(--font-exo); font-size: 1.3rem; font-weight: 600; }
-  .repdlg fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: 16px; }
-  .repdlg label { display: grid; gap: 4px; font-size: .9rem; }
-  .repdlg label.inline, .repdlg fieldset label { display: flex; gap: 6px; align-items: center; }
-  .repdlg :is(select, input:not([type])) { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-btn); padding: 6px 8px; }
-  .repdlg .opt, .repdlg .small { color: var(--muted); font-size: .8rem; margin: 0; }
-  .repdlg a { color: var(--accent); }
-  .repdlg .rstatus { margin: 0; min-height: 1.2em; font-size: .9rem; }
-  .repdlg .actions { display: flex; gap: 8px; justify-content: flex-end; }
-  .repdlg .actions button { font: inherit; cursor: pointer; border-radius: 999px; padding: 5px 14px; border: 1px solid var(--line); background: transparent; color: var(--fg); }
-  .repdlg .actions .send { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
-  .repdlg .actions .send:disabled { opacity: .6; cursor: default; }
-
-  /* Wide screens (16:9 desktops): the filters and categories in a sticky column on the left from the top of the page, the
+  /* Wide screens (16:9 desktops): the filters and versions in a sticky column on the left from the top of the page, the
      header and tables beside it. A column taller than the window scrolls with the page until its bottom shows, then sticks
      (the script sets --side-top). */
   @media (min-width: 1240px) {
     .rd { max-width: none; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 28px 40px; padding-top: 0; }
     .rd > header { grid-column: 2; grid-row: 1; gap: 6px; }
     .rd > header p { max-width: 110ch; grid-column: 1 / -1; }
-    .rd > header { grid-template-columns: 1fr auto; align-items: baseline; column-gap: 24px; }
-    .rd > header > .meta { grid-row: 1; grid-column: 2; text-align: right; }
     .rd h1 { font-size: 2rem; }
     .body { grid-column: 2; grid-row: 2; }
     .side {
@@ -641,10 +328,7 @@ const reportConfig = JSON.stringify({ url: reports.url.replace(/\/$/, ''), siteK
     .side .tile { grid-template-columns: 3ch 1fr; column-gap: 10px; align-items: baseline; padding: 5px 12px 5px 16px; border-radius: var(--radius-card); }
     .side .tile .n { font-size: 1.3rem; }
     .side .tile .d { display: none; }
-    .side .plats .lbl { flex-basis: 100%; margin: 4px 0 0; }
-    .side .plats .chip { flex: 1 1 auto; }
     .side .loop { display: grid; gap: 4px; }
-    .side .loop .arrow { display: none; }
     .rd .side .loop a { grid-template-columns: 1fr 72px; align-items: center; gap: 12px; min-width: 0; padding: 4px 12px; }
     .side .loop .nm { font-size: .9rem; }
   }

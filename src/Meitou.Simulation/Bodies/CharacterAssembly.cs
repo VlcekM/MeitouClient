@@ -98,11 +98,7 @@ sealed class CharacterAssembly(PopulationData data)
                 if (crossbow is null && combat.Crossbow(item.Record) is { } x)
                     crossbow = CrossbowInstance.Create(item.Level * 0.01f, x, combat.Constants, data.BodyOptions.GlobalDamageMultiplier,
                         item.UnitWeight, section == "back");
-        var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
-        float? backpackStealth = inventory.Backpack is not null ? packRecord?.GetFloat("stealth mult", 1) ?? 1 : null;
-
-        // CONTAINER +0x238 (FUN_140763810): the raw athletics mult, the seed of the gear's smallest run factor.
-        float backpackAthletics = packRecord?.GetFloat("athletics mult", 1) ?? 1;
+        var pack = PackOf(inventory);
         string fistsId = (raceId is null ? null : data.Db.Find(raceId))?.GetReferences("fists lv1")
             .Select(r => r.TargetStringId).FirstOrDefault() ?? "FISTS";
 
@@ -110,8 +106,7 @@ sealed class CharacterAssembly(PopulationData data)
         var fists = (combat.Weapon(fistsId) ?? combat.Weapon("FISTS")) is { } fistsData
             ? WeaponInstance.Create(1, fistsData, null, null, combat.Constants)
             : null;
-        var fighter = new Fighter(First("hip"), armour, backpackStealth, backpackAthletics,
-            packRecord?.GetInt("combat skill bonus", 0) ?? 0, packRecord?.GetFloat("combat speed mult", 1) ?? 1)
+        var fighter = new Fighter(First("hip"), armour, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed)
         {
             BackWeapon = First("back"),
             Crossbow = crossbow,
@@ -125,9 +120,10 @@ sealed class CharacterAssembly(PopulationData data)
     /// An animal's fighter (docs/game/animals.md): its natural weapon, the ANIMAL_CHARACTER's <c>weapon</c> (a WEAPON of a creature category) made by
     /// its <c>weapon level</c> manufacturer; no armour. The weapon's level is the manufacturer's first model's level, with that model (an <b>engine
     /// choice</b>: the original makes the item without a level argument, and its default was not traced, <b>Unknown</b>). No weapon (or one not in
-    /// the data) gives a fighter without an attack.
+    /// the data) gives a fighter without an attack. A worn backpack counts as on a person (<see cref="PackOf"/>: the Garru Backpack's
+    /// <c>combat skill bonus</c> -4 shows on a Pack Beast's Attack in the original, <b>Observed</b>, docs/game/animals.md).
     /// </summary>
-    Fighter MakeAnimalFighter(AnimalData animal)
+    Fighter MakeAnimalFighter(AnimalData animal, Inventory inventory)
     {
         var combat = data.Combat;
         WeaponInstance? weapon = null;
@@ -138,11 +134,30 @@ sealed class CharacterAssembly(PopulationData data)
             weapon = WeaponInstance.Create((model?.Level ?? 0) * 0.01f, w, maker,
                 model is { } m ? combat.WeaponMaterial(m.ModelStringId) : null, combat.Constants);
         }
-        return new Fighter(weapon) { IsAnimal = true };
+
+        var pack = PackOf(inventory);
+        return new Fighter(weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true };
     }
 
+    /// <summary>
+    /// What the worn backpack gives the fighter (<see cref="Fighter"/>'s backpack seeds): its <c>stealth mult</c> (null without a backpack), the raw
+    /// <c>athletics mult</c> (CONTAINER +0x238, <c>FUN_140763810</c>: the seed of the gear's smallest run factor), <c>combat skill bonus</c> and
+    /// <c>combat speed mult</c>.
+    /// </summary>
+    (float? Stealth, float Athletics, int Skill, float Speed) PackOf(Inventory inventory)
+    {
+        var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
+        float? stealth = inventory.Backpack is not null ? packRecord?.GetFloat("stealth mult", 1) ?? 1 : null;
+
+        return (stealth, packRecord?.GetFloat("athletics mult", 1) ?? 1, packRecord?.GetInt("combat skill bonus", 0) ?? 0,
+            packRecord?.GetFloat("combat speed mult", 1) ?? 1);
+    }
+
+    /// <summary>
+    /// The fighter of a character: an animal's from its ANIMAL_CHARACTER record, anyone else's from its gear, limbs and race.
+    /// </summary>
     Fighter FighterOf(GameRecord? record, Inventory inventory, MedicalState? medical, string? raceId) =>
-        AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal) : MakeFighter(inventory, medical, raceId);
+        AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal, inventory) : MakeFighter(inventory, medical, raceId);
 
     /// <summary>
     /// The FACTION record of the character's faction (null: none or not in the data).
@@ -187,6 +202,10 @@ sealed class CharacterAssembly(PopulationData data)
         RefreshEquipment(c);
     }
 
+    /// <summary>
+    /// Makes the character's fighter again from its inventory (keeping its guard and encumbrance), the drawn weapon following the new kit, and dyes
+    /// its gear.
+    /// </summary>
     public void RefreshEquipment(CharacterCold cold)
     {
         if (cold.Inventory is not { } inventory) return;
@@ -200,14 +219,31 @@ sealed class CharacterAssembly(PopulationData data)
         if (cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != HandHold.OfCategory((int)WeaponCategory.Bow).Weapon)
             cold.DrawnWeapon = CombatSystem.MeleeDrawn(fighter);
         Dye(cold, inventory);
-        if (cold.Appearance is not { } look || look.Animal is not null) return;
+        RefreshLook(cold);
+    }
+
+    /// <summary>
+    /// Builds the character's look again when it does not show the character's shave (<see cref="CharacterCold.Shaved"/>: a head shaven by
+    /// processing, or grown back since the look was made).
+    /// </summary>
+    public void MatchShave(CharacterCold cold)
+    {
+        if (cold.Appearance is { Animal: null } look && look.Shaved != cold.Shaved) RefreshLook(cold);
+    }
+
+    /// <summary>
+    /// Builds the character's look again from its body, worn kit, limbs and shave; an animal's and one without an inventory stay as they are.
+    /// </summary>
+    void RefreshLook(CharacterCold cold)
+    {
+        if (cold.Inventory is not { } inventory || cold.Appearance is not { } look || look.Animal is not null) return;
         var body = look.Loadout?.Appearance.Record ?? look.Body?.Record;
         if (Saving.SavedKit.LoadoutOf(body, Saving.SavedKit.FromInventory(inventory), data.Db, look.Loadout?.Seed ?? 0, FactionRecord(cold))
-            is { } kit)
-        {
-            Saving.SavedKit.SetLimbs(kit, cold.Medical, data.Db);
-            if (data.Appearances?.Create(cold.RecordId, kit) is { } updated) cold.Appearance = updated;
-        }
+            is not { } kit)
+            return;
+
+        Saving.SavedKit.SetLimbs(kit, cold.Medical, data.Db);
+        if (data.Appearances?.Create(cold.RecordId, kit, cold.Shaved) is { } updated) cold.Appearance = updated;
     }
 
     /// <summary>
@@ -245,10 +281,6 @@ sealed class CharacterAssembly(PopulationData data)
     }
 
     /// <summary>
-    /// CHARACTER <c>NPC class</c> (<b>Verified</b>, carry-loot.md 4.3: read by <c>FUN_14062b210</c>, the editor's CharacterTypeEnum, <c>fcs.def</c>
-    /// default MILITARY); None without a CHARACTER record (an animal's ANIMAL_CHARACTER, or nothing).
-    /// </summary>
-    /// <summary>
     /// The record's <c>NPC class</c>, except that a player-faction character is an Adventurer (9), as the original sets it when the character is made
     /// (<c>FUN_14062b210</c>).
     /// </summary>
@@ -262,6 +294,10 @@ sealed class CharacterAssembly(PopulationData data)
     public static float FactionImportanceOf(GameRecord? record) =>
         record is { Type: FcsRecordType.Character } ? record.GetFloat("faction importance", 0) : 0;
 
+    /// <summary>
+    /// CHARACTER <c>NPC class</c> (<b>Verified</b>, carry-loot.md 4.3: read by <c>FUN_14062b210</c>, the editor's CharacterTypeEnum, <c>fcs.def</c>
+    /// default MILITARY); None without a CHARACTER record (an animal's ANIMAL_CHARACTER, or nothing).
+    /// </summary>
     public static FundamentalType NpcClassOf(GameRecord? record) =>
         record is { Type: FcsRecordType.Character }
             ? (FundamentalType)record.GetInt("NPC class", (int)FundamentalType.Military)
@@ -283,9 +319,9 @@ sealed class CharacterAssembly(PopulationData data)
         cold.Medical = medical;
         if (AnimalData.From(record) is { } animal) (cold.Animal, cold.ShownAge) = (animal, age);
 
-        // One made for the player has no death items (engine choice, docs/game/animals.md "Death items": a start's dog had its meat and skins, #341).
+        // One made for the player has its death items too (docs/game/animals.md "Death items"), but no spawn money.
         bool npc = !cold.IsPlayer && (data.PlayerFaction < 0 || cold.Faction != data.PlayerFaction);
-        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id), deathItems: npc);
+        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id));
         if (npc) data.Items.AddSpawnMoney(cold.Inventory, record, seed, Rng.Key(id));
 
         // CHARACTER `wears uniform` (CharacterHuman::setupInventorySections, Verified read; Observed use): the armour it is made wearing is its

@@ -8,12 +8,19 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record BirdFlockData
 {
+    /// <summary>
+    /// The WILDLIFE_BIRDS's string id.
+    /// </summary>
     public required string Id { get; init; }
 
     /// <summary>
     /// The mesh (a static one, drawn as a hardware-instanced <c>HWBirds</c> material) and its texture.
     /// </summary>
     public string Mesh { get; init; } = "";
+
+    /// <summary>
+    /// <c>texture</c>: the mesh's texture.
+    /// </summary>
     public string Texture { get; init; } = "";
 
     /// <summary>
@@ -30,19 +37,55 @@ public sealed record BirdFlockData
     /// <c>height</c>: the cruising height over the ground.
     /// </summary>
     public float Height { get; init; }
+
+    /// <summary>
+    /// <c>ground height</c> (docs/game/birds.md).
+    /// </summary>
     public float GroundHeight { get; init; }
+
+    /// <summary>
+    /// <c>ground strength</c> (docs/game/birds.md).
+    /// </summary>
     public float GroundStrength { get; init; }
+
+    /// <summary>
+    /// <c>contour strength</c> (docs/game/birds.md).
+    /// </summary>
     public float ContourStrength { get; init; }
 
     /// <summary>
     /// <c>distance</c>: a radius in world units round the camera controller (<b>Verified</b>, <c>FUN_140260620</c>).
     /// </summary>
     public float Distance { get; init; }
+
+    /// <summary>
+    /// <c>flocking</c>.
+    /// </summary>
     public bool Flocking { get; init; }
+
+    /// <summary>
+    /// <c>circling</c>.
+    /// </summary>
     public bool Circling { get; init; }
+
+    /// <summary>
+    /// <c>spawn height min</c>.
+    /// </summary>
     public float SpawnHeightMin { get; init; }
+
+    /// <summary>
+    /// <c>spawn height max</c>.
+    /// </summary>
     public float SpawnHeightMax { get; init; }
+
+    /// <summary>
+    /// <c>scale min</c> (default 1).
+    /// </summary>
     public float ScaleMin { get; init; } = 1;
+
+    /// <summary>
+    /// <c>scale max</c> (default 1).
+    /// </summary>
     public float ScaleMax { get; init; } = 1;
 
     /// <summary>
@@ -50,6 +93,9 @@ public sealed record BirdFlockData
     /// </summary>
     public IReadOnlyDictionary<string, int> Amounts { get; init; } = new Dictionary<string, int>();
 
+    /// <summary>
+    /// The flocks of this kind BIOME_GROUP <paramref name="group"/> holds; 0 when it does not list the kind.
+    /// </summary>
     public int AmountIn(string group) => Amounts.GetValueOrDefault(group);
 
     /// <summary>

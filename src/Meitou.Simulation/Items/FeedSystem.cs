@@ -67,9 +67,19 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// </summary>
     public const int FoodFunction = 3, RawFoodFunction = 15;
 
+    /// <summary>
+    /// The settings; the defaults when none were given.
+    /// </summary>
     public FeedSettings Settings { get; } = settings ?? new FeedSettings();
+    /// <summary>
+    /// The item factory the system makes items with.
+    /// </summary>
     public ItemFactory Items { get; } = items;
 
+    /// <summary>
+    /// Every <see cref="FeedSettings.CheckEveryTicks"/>: each living character with medical state, a race and an inventory eats from its mouth,
+    /// fetches ground food (the player faction's other animals) or eats a hungry bite from its own items, its backpack or a mate's.
+    /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Tick % Math.Max(Settings.CheckEveryTicks, 1) != 0) return;
@@ -92,8 +102,8 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             }
 
             // Goal 259 Picking up food (every player animal has it, Character::setupAI): hungry with no food on it, it fetches food from the ground.
-            // A player character's is the
-            // decision step's (PickingUpFood); this pass runs it for the other animals of the player's faction, idle or following.
+            // A player character's is the decision step's (PickingUpFood); this pass runs it for the other animals of the player's faction, idle or
+            // following.
             if (animal && playerSide && !cold.IsPlayer && WantsGroundFood(cold, race, med, own)
                     && world.Characters.Next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Follow
                 && GroundFood(world, i, cold) is { } ground)
@@ -114,7 +124,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
 
     /// <summary>
     /// The hunger at or under which a player animal looks for food on the ground (259's desire, medical hunger
-    /// <= 2.4, <b>Verified</b>), and under which it does so in a fight (1.2).
+    /// &lt;= 2.4, <b>Verified</b>), and under which it does so in a fight (1.2).
     /// </summary>
     public const float FoodOnGroundBelow = 2.4f, FoodOnGroundInFight = 1.2f;
     /// <summary>
@@ -158,10 +168,13 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     static void FetchFood(World world, int slot, CharacterCold cold, GroundItem food)
     {
         cold.PickingUpItem = food.Id;
-        if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PlayerSystem.PickUpReach)
+        if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PickUps.PickUpReach)
             TaskStart.Walk(world, slot, food.Position, SpeedMode.Run, Data.Gameplay.Ai.TaskType.EatFoodOnGround, TaskSource.Goal);
     }
 
+    /// <summary>
+    /// Registers goal 259 Picking up food with the decision system.
+    /// </summary>
     public void RegisterSources(DecisionSystem decisions) => decisions.Register(new PickingUpFood());
 
     /// <summary>
@@ -169,11 +182,26 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// </summary>
     sealed class PickingUpFood : IDecisionSource
     {
+        /// <summary>
+        /// The source's name in the decision log.
+        /// </summary>
         public string Name => "259 Picking up food";
+        /// <summary>
+        /// A goal: it runs in the goals step.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Goals;
+        /// <summary>
+        /// Goal 259.
+        /// </summary>
         public int Key => 259;
+        /// <summary>
+        /// Its weight.
+        /// </summary>
         public float Weight => 0.5f;
 
+        /// <summary>
+        /// Runs while it picks up food it went for; else for an animal that wants ground food (<see cref="WantsGroundFood"/>) and finds some.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -187,6 +215,9 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             return GroundFood(world, slot, cold) is not null ? DecisionCheck.Run : DecisionCheck.No("no food on the ground");
         }
 
+        /// <summary>
+        /// Goes for the nearest ground food.
+        /// </summary>
         public void Start(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -261,6 +292,9 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// </summary>
     static bool PlayerSide(World world, CharacterCold cold) => cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction;
 
+    /// <summary>
+    /// A squad mate's backpack food within <see cref="ShareReach"/> the character would bite, the first mate in squad order; nulls when none.
+    /// </summary>
     (Inventory? From, ItemInstance? Food) FromMates(World world, int slot, CharacterCold cold, RaceData race, bool animal)
     {
         if (cold.SquadId < 0 || world.Squads.Find(cold.SquadId) is not { } squad) return (null, null);

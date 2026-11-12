@@ -9,10 +9,12 @@ public sealed record LoadoutItem(GameRecord Record)
     /// Item quality 0–100 (ARMOUR: from the CHARACTER's <c>armour grade</c>, docs/characters.md).
     /// </summary>
     public int Quality { get; init; }
+
     /// <summary>
     /// The MATERIAL_SPECS_CLOTHING picked from the item's <c>material</c> list, if any.
     /// </summary>
     public GameRecord? Material { get; init; }
+
     /// <summary>
     /// The COLOR_DATA the instance carries (its <c>color sid</c>, <see cref="Gameplay.ItemColours"/>); null: none yet, the wearer's scheme applies.
     /// </summary>
@@ -28,18 +30,22 @@ public sealed record LoadoutWeapon(GameRecord Weapon)
     /// WEAPON_MANUFACTURER that made it (CHARACTER <c>weapon level</c>).
     /// </summary>
     public GameRecord? Manufacturer { get; init; }
+
     /// <summary>
     /// MATERIAL_SPECS_WEAPON model of the manufacturer (its look).
     /// </summary>
     public GameRecord? Model { get; init; }
+
     /// <summary>
     /// The model's level (manufacturer <c>weapon models</c> val0).
     /// </summary>
     public int Level { get; init; }
+
     /// <summary>
     /// Inventory section: <c>hip</c> or <c>back</c>.
     /// </summary>
     public required string Section { get; init; }
+
     /// <summary>
     /// Row in the section (the item's <c>inventory y</c>); a <c>back</c> item in row 1 or more hangs at <c>back2</c>.
     /// </summary>
@@ -53,9 +59,9 @@ public sealed record LoadoutWeapon(GameRecord Weapon)
 
 /// <summary>
 /// A limb that is not the natural one (docs/game/character-stats.md "Limb replacements and robots"): <see cref="State"/> 1 stump, 2 replaced, 3
-/// crushed (the medical
-/// <c>LimbState</c>), and for a replaced limb its LIMB_REPLACEMENT record, the item level it is made at (a CHARACTER <c>robot limbs</c> entry's v0)
-/// and the COLOR_DATA the item carries (its <c>color sid</c>; null: none yet, the wearer's scheme applies, docs/characters.md "Clothing colours").
+/// crushed (the medical <c>LimbState</c>), and for a replaced limb its LIMB_REPLACEMENT record, the item level it is made at (a CHARACTER <c>robot
+/// limbs</c> entry's v0) and the COLOR_DATA the item carries (its <c>color sid</c>; null: none yet, the wearer's scheme applies, docs/characters.md
+/// "Clothing colours").
 /// </summary>
 public sealed record LoadoutLimb(int State, GameRecord? Prosthetic = null, int Level = 0, GameRecord? Colour = null);
 
@@ -66,46 +72,84 @@ public sealed record LoadoutLimb(int State, GameRecord? Prosthetic = null, int L
 /// </summary>
 public sealed class Loadout
 {
+    /// <summary>
+    /// The seed the roll was made with.
+    /// </summary>
     public required int Seed { get; init; }
+
+    /// <summary>
+    /// The CHARACTER rolled; null when rolled from a RACE.
+    /// </summary>
     public GameRecord? Character { get; init; }
+
     /// <summary>
     /// The FACTION it was rolled for (null: the CHARACTER's own); its <c>color</c> is the uniform scheme of what it puts on.
     /// </summary>
     public GameRecord? Faction { get; init; }
+
+    /// <summary>
+    /// The RACE rolled.
+    /// </summary>
     public required GameRecord Race { get; init; }
+
+    /// <summary>
+    /// Whether the character rolled female.
+    /// </summary>
     public required bool Female { get; init; }
+
     /// <summary>
     /// The body file, or a generated CHARACTER_APPEARANCE (<see cref="Generated"/>) when the CHARACTER has none.
     /// </summary>
     public required AppearanceFile Appearance { get; init; }
+
     /// <summary>
     /// True when <see cref="Appearance"/> was rolled, false when it is the CHARACTER's own body file.
     /// </summary>
     public bool Generated { get; init; }
+
     /// <summary>
     /// Which of the race's <c>morph num</c> faces the face poses came from (−1 for a body file).
     /// </summary>
     public int MorphIndex { get; init; } = -1;
 
+    /// <summary>
+    /// The clothing rolled, one ARMOUR per slot.
+    /// </summary>
     public List<LoadoutItem> Clothing { get; } = [];
+
+    /// <summary>
+    /// The backpack rolled; null when none.
+    /// </summary>
     public LoadoutItem? Backpack { get; set; }
+
     /// <summary>
     /// Worn ITEMs (the belt's lantern), which show only through their <c>physics attachment</c>.
     /// </summary>
     public List<LoadoutItem> Carried { get; } = [];
+
+    /// <summary>
+    /// The crossbow rolled (carried on the back); null when none.
+    /// </summary>
     public LoadoutWeapon? Crossbow { get; set; }
+
     /// <summary>
     /// Weapons in equip order (hip first, then back).
     /// </summary>
     public List<LoadoutWeapon> Weapons { get; } = [];
+
     /// <summary>
     /// The limbs by slot (0 left arm, 1 right arm, 2 left leg, 3 right leg); null for a natural one.
     /// </summary>
     public LoadoutLimb?[] Limbs { get; } = new LoadoutLimb?[4];
+
     /// <summary>
     /// The head was cut off (Meitou, <c>MedicalState.Decapitated</c>): the look has no head, hair, beard or hat.
     /// </summary>
     public bool Decapitated { get; set; }
+
+    /// <summary>
+    /// What the roll could not place or show, as readable lines.
+    /// </summary>
     public List<string> Notes { get; } = [];
 
     /// <summary>

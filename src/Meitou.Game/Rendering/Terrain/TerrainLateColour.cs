@@ -8,5 +8,8 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public static class TerrainLateColour
 {
+    /// <summary>
+    /// The terrain colour is drawn after the occluders (true, the default); false draws it first.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 }

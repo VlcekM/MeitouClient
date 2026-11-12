@@ -13,7 +13,8 @@ namespace Meitou.Simulation.Saving;
 static class SavedLimbs
 {
     /// <summary>
-    /// Applies the saved limbs of <paramref name="medical"/> (a record of <paramref name="file"/>): stumps, crushed limbs and the fitted prosthetics as items.
+    /// Applies the saved limbs of <paramref name="medical"/> (a record of <paramref name="file"/>): stumps, crushed limbs and the fitted prosthetics
+    /// as items.
     /// </summary>
     public static void Apply(MedicalState state, SaveFile? file, FcsRecord medical, ItemFactory items)
     {
@@ -58,6 +59,7 @@ static class SavedLimbs
                 Source = item.Source,
             };
         }
+
         SaveLimbs.Write(file, medical, state.LimbBits, items);
     }
 }

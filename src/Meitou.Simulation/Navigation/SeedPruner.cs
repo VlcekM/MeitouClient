@@ -11,13 +11,14 @@ namespace Meitou.Simulation.Navigation;
 internal static class SeedPruner
 {
     /// <summary>
-    /// How far above a destroyed interior's lowest polygon a region may start and still be its ground floor (engine choice: well under a storey, 60+ in the
-    /// Hub's houses; docs/game/pathfinding.md "Destroyed interiors").
+    /// How far above a destroyed interior's lowest polygon a region may start and still be its ground floor (engine choice: well under a storey, 60+
+    /// in the Hub's houses; docs/game/pathfinding.md "Destroyed interiors").
     /// </summary>
     public const float DestroyedFloorBand = 40;
 
     /// <summary>
-    /// How far (units) a border edge's middle may be from the ground (the terrain, or the water's height over it) to count as ground level (engine choice).
+    /// How far (units) a border edge's middle may be from the ground (the terrain, or the water's height over it) to count as ground level
+    /// (engine choice).
     /// </summary>
     public const float BorderGroundSlack = 30;
 
@@ -99,7 +100,8 @@ internal static class SeedPruner
     }
 
     /// <summary>
-    /// Keeps the largest region when no seed matched ("All regions are below the area threshold and too far from a seed point. Keeping the largest region.").
+    /// Keeps the largest region when no seed matched ("All regions are below the area threshold and too far from a seed point. Keeping the
+    /// largest region.").
     /// </summary>
     static void KeepLargestRegion(ZoneNavMesh mesh, bool[] keep, int portalsBelow)
     {
@@ -115,8 +117,8 @@ internal static class SeedPruner
     }
 
     /// <summary>
-    /// Also marks in <paramref name="keep"/> (a kept set over <paramref name="mesh"/>'s polygons) the regions that <paramref name="seeds"/> reach (no fallback);
-    /// true when a polygon was added.
+    /// Also marks in <paramref name="keep"/> (a kept set over <paramref name="mesh"/>'s polygons) the regions that <paramref name="seeds"/> reach (no
+    /// fallback); true when a polygon was added.
     /// </summary>
     public static bool Extend(ZoneNavMesh mesh, bool[] keep, IReadOnlyList<Vector3> seeds, NavBuildSettings s)
     {

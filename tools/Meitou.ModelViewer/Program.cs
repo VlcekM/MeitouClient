@@ -22,8 +22,19 @@ return 2;
 /// </summary>
 static class SmokeTest
 {
+    /// <summary>
+    /// The seconds after the first frame the window closes at; null without <c>--quit-after</c> (or once it has).
+    /// </summary>
     static double? s_seconds;
+
+    /// <summary>
+    /// The frames drawn.
+    /// </summary>
     static long s_frames;
+
+    /// <summary>
+    /// Runs from the first frame.
+    /// </summary>
     static readonly Stopwatch Clock = new();
 
     /// <summary>
@@ -34,8 +45,14 @@ static class SmokeTest
         var rest = new List<string>();
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--quit-after" && i + 1 < args.Length) s_seconds = double.Parse(args[++i], CultureInfo.InvariantCulture);
-            else rest.Add(args[i]);
+            if (args[i] == "--quit-after" && i + 1 < args.Length)
+            {
+                s_seconds = double.Parse(args[++i], CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                rest.Add(args[i]);
+            }
         }
         return rest.ToArray();
     }

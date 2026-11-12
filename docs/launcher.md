@@ -12,6 +12,9 @@ items); the launcher never downloads or hosts mods.
   are, so `/releases/latest` (README's link) is the newest launcher; README's
   setup links are `/releases/latest/download/<name>`, so the Setup/AppImage/pkg names must stay free of the version. Full releases of both pass
   `--notes-start-tag` with the previous tag of their own family, so the generated notes never span the other family's tag.
+- Both manual release workflows accept `build_only`: packages go to workflow artifacts, with no tag, release or announcement;
+  the supplied version needs no changelog section. Mac matrices include standard .NET 11 and separate .NET 10
+  [legacy compatibility](macos-port.md#running) builds for both architectures.
 - Both tag the commit the run started on with `GITHUB_TOKEN`. **Verified** (throwaway test workflow, 2026-10-22): GitHub refuses that
   token a tag or release (HTTP 403 "Resource not accessible by integration") on a commit whose `.github/workflows/` files differ from
   the current master, as it lacks the `workflows` permission. So pushing a workflow edit while a release runs fails its release step;
@@ -21,11 +24,14 @@ items); the launcher never downloads or hosts mods.
   (patch after the newest full release) as a pre-release without a changelog section; its notes list every
   commit since the newest game tag (GitHub's generated notes cover only merged pull requests, so nightlies don't use them). It is skipped when nothing
   outside `news/`, `site/`, `launcher/`, `docs/` and `.github/workflows/` changed since the newest game tag (nightly or full). Only the newest 14
-  nightlies are kept, so the releases page and the launcher's Versions list stay short. Each nightly's commit list is posted to Discord
+  nightlies are kept, so the releases page and the launcher's Versions list stay short. Each nightly's commit list, and each full release's changelog section, is posted to Discord
   as the Tinfist bot (secret `DISCORD_BOT_TOKEN`, repository variable `DISCORD_NIGHTLY_CHANNEL`), else through the `DISCORD_WEBHOOK_URL`
   channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed.
 - Game assets: `Meitou-<version>-<rid>.zip`, `<rid>` as .NET's `RuntimeInformation.RuntimeIdentifier` (`win-x64`, `linux-x64`,
-  `osx-x64`, `osx-arm64`). A release with no zip for the machine's RID is listed but not installable.
+  `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
+  matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
+  `MeitouLauncherLegacy` / `Meitou Launcher Legacy`; installed games live in `versions-legacy/`, separately from standard builds.
+  Settings are shared; changing the install folder moves both build families. A release with no matching zip is listed but not installable.
 - The list comes from the REST API without a token (60 requests an hour per IP). Every page is read (`per_page=100`, until a short page),
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count
   against the quota.
@@ -93,7 +99,8 @@ binary in `package-release.ps1` is the real fix (not set up).
 `release.yml` and `nightly.yml` run `tools/scripts/package-release.ps1 -Rid <rid>` on one runner per RID (win-x64 on Windows, linux-x64 on Ubuntu,
 both osx RIDs on macOS) and attaches all four zips to the one `v<version>` release. Each zip has a single top folder
 `Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime. Unix zips are made with
-`zip(1)` (execute bits kept), macOS binaries and dylibs are ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
+`zip(1)` (execute bits kept), macOS binaries (and Apple Silicon dylibs; Intel ones stay as shipped, as re-signing corrupts the unpadded shaderc and spirv-cross) are
+ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
 
 Native dependencies off Windows:
 - Bundled from NuGet runtimes (**Verified** in the linux-x64 publish output): `libopenal.so`/`.dylib` (OpenAL Soft 1.23.1),
@@ -152,12 +159,12 @@ folder containing `data/gamedata.base`. DepotDownloader is not bundled or automa
 
 ## Steam overlay and play time
 
-- In a Debug launcher run, Play uses `src/Meitou.Game/bin/Debug/net10.0/MeitouClient.exe` when available, so source changes are tested instead of an older downloaded release; Release builds continue using the selected installed version. Debug runs redirect the child's stdout/stderr into the launcher's console and debugger output.
+- In a Debug launcher run, Play uses `src/Meitou.Game/bin/Debug/net11.0/MeitouClient.exe` when available, so source changes are tested instead of an older downloaded release; Release builds continue using the selected installed version. Debug runs redirect the child's stdout/stderr into the launcher's console and debugger output.
 - Settings → **Launch as Kenshi on Steam** (Windows, `LaunchAsSteamKenshi`, on by default; also asked in the first-start dialog) gates this. Off, Play sets no app ID, removes inherited `SteamAppId`/`SteamGameId` and a leftover `steam_appid.txt` holding `233860`, so the game skips Steamworks (no overlay or play time).
 - On, on Windows Kenshi installs that include `steam_api64.dll`, Play writes `steam_appid.txt` (`233860`) in the working directory and beside the Meitou executable and sets `SteamAppId`/`SteamGameId` for the game, then removes the files when Meitou exits (or on the next Play, if the launcher closed first). If either place already holds another ID, it writes nothing and sets no variables. The game (not for `--screenshot` or a start listing) loads the install's Steamworks DLL and calls `SteamAPI_InitFlat` when exported, else `SteamAPI_Init`, before creating its graphics device, and `SteamAPI_Shutdown` on exit; Meitou ships no Steamworks binaries. Other platforms and installs without the DLL skip it.
 - **Unknown** (from the [Steamworks API](https://partner.steamgames.com/doc/sdk/api) and [overlay](https://partner.steamgames.com/doc/features/overlay) docs, not yet checked against a Steam run): a direct launch with `steam_appid.txt` counts as Kenshi play time, needs a Kenshi licence and a running Steam client, and gets the overlay on Vulkan, whose FPS counter is under Steam Settings → In Game.
 
-`versions/` and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
+The version folders and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
 is saved) an overlay asks for the install folder, the Kenshi folder and the renderer, prefilled with the current and the
 detected ones. Changing the install folder there or in Settings moves the installed versions (copied, then deleted,
 across drives).
@@ -244,10 +251,6 @@ interpolated string, which no translation could match.
 - A value of the wrong type is dropped by its JSON path and takes its default; the rest stay. Unparsable JSON gives all defaults.
   Either way the file is first copied to `meitou.user.<yyyyMMdd-HHmmss>.bak.json`.
 
-## Play reports
-
-"Report to the roadmap" sends a play report to the reports service: [play-reports](play-reports.md).
-
 ## Mod list
 
 `ModList` (Meitou.Core) holds the discovery and `mods.cfg` rules shared with `LoadOrder`
@@ -301,7 +304,7 @@ News videos are hosted on the site, not in git: `tools/scripts/upload-media.sh` 
 support; the site is not behind Cloudflare. **Observed** 2026-10-25: GitHub plays no repository `.webm` in the browser (its file page
 offers only the raw file, which raw.githubusercontent.com sends as an attachment), so it cannot host the full video either.
 
-A `.webm` in place of an image is a video (`VideoView`, the post's full width): its first MB is fetched with a Range request (`NewsFeed.HeadAsync`, cached as `.head`) for the poster, the whole file (cached like an image) only on the first Play, the button dimmed meanwhile; `WebmFile` reads the
+A `.webm` in place of an image is a video (`VideoView`, the post's full width): its first MB is fetched with a Range request (`NewsMediaCache.HeadAsync`, cached as `.head`) for the poster, the whole file (cached like an image) only on the first Play, the button dimmed meanwhile; `WebmFile` reads the
 first video and audio track (Matroska elements, Block lacing), and the first decoded picture is the poster under a play button.
 A click plays it; then a click or Space pauses and resumes, the bottom bar (shown while paused or hovered) skips 10 s back or forward (or Left/Right) and seeks by click or drag. Every play, resume or seek is a new session from that time: decode from the keyframe before it without drawing, show it, then sound from its first Vorbis packet at or after it (Vorbis can start at any packet). Sessions of all videos run one after another, so two never hold OpenAL's current context. One plays at a time; it pauses when the Home page is left, returns to the poster at the end or when the post is rebuilt.
 Pictures: VP8/VP9 through libvpx (`VpxDecoder`, BSD), 8-bit only, converted BT.601 studio range to BGRA. Sound: Vorbis only

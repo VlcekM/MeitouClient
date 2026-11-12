@@ -96,8 +96,14 @@ public interface IGpuUploads
 /// </summary>
 public interface IGpuReadback : IDisposable
 {
+    /// <summary>
+    /// The buffer the GPU writes.
+    /// </summary>
     GpuBuffer Handle { get; }
 
+    /// <summary>
+    /// The buffer's size in bytes.
+    /// </summary>
     ulong Size { get; }
 
     /// <summary>

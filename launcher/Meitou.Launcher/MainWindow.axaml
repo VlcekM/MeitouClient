@@ -103,9 +103,6 @@
           <StackPanel DockPanel.Dock="Left" Spacing="4" Margin="4,0,0,0" VerticalAlignment="Center">
             <TextBlock Classes="caps" Text="MEITOU LAUNCHER" />
             <TextBlock x:Name="LauncherVersionText" Classes="desc" />
-            <Button x:Name="ReportButton" Classes="link" Click="Report_Click" IsVisible="False" Padding="0" ToolTip.Tip="Tell the roadmap a system works or is broken">
-              <TextBlock Text="Report to the roadmap" />
-            </Button>
           </StackPanel>
           <!-- The status line, and under it the running download's progress (seen from any page, not just Versions) -->
           <StackPanel VerticalAlignment="Center" Spacing="6" Margin="24,0,16,0">

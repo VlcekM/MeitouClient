@@ -18,61 +18,153 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class Ngx : IDisposable
 {
+    #region Library
+
     /// <summary>
     /// MEITOU_NGX_LOG=1 prints everything NGX says (its verbose level) (hundreds of lines at start-up); otherwise only its errors, minus the optional
     /// config files and the system model folder it looks for.
     /// </summary>
     static readonly bool Verbose = Environment.GetEnvironmentVariable("MEITOU_NGX_LOG") is "1";
 
+    /// <summary>
+    /// The NVIDIA driver's NGX library on Linux, which the client library talks to.
+    /// </summary>
     const string DriverLibraryName = "libnvidia-ngx.so.1";
-    const uint ApiVersion = 0x15;   // NVSDK_NGX_VERSION_API_MACRO (nvsdk_ngx_defs.h)
+
+    /// <summary>
+    /// The NGX API version the init is called with: <c>NVSDK_NGX_VERSION_API_MACRO</c> (nvsdk_ngx_defs.h).
+    /// </summary>
+    const uint ApiVersion = 0x15;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Result_Success</c>: what NGX's calls return when they succeed.
+    /// </summary>
     internal const int ResultSuccess = 1;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Feature_SuperSampling</c>: the DLSS feature.
+    /// </summary>
     internal const int FeatureSuperSampling = 1;
 
+    /// <summary>
+    /// The client library's file name: <c>meitou_ngx.dll</c> on Windows, <c>libmeitou_ngx.so</c> elsewhere.
+    /// </summary>
     public static string LibraryName => OperatingSystem.IsWindows() ? "meitou_ngx.dll" : "libmeitou_ngx.so";
 
+    /// <summary>
+    /// The DLSS model's file name pattern: <c>nvngx_dlss.dll</c> on Windows, <c>libnvidia-ngx-dlss.so.*</c> elsewhere.
+    /// </summary>
     static string ModelPattern => OperatingSystem.IsWindows() ? "nvngx_dlss.dll" : "libnvidia-ngx-dlss.so.*";
 
+    /// <summary>
+    /// <c>NVSDK_NGX_PathListInfo</c>: the folders NGX looks for feature models in.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct PathListInfo
     {
+        /// <summary>
+        /// The folders, wide strings.
+        /// </summary>
         public nint Paths;
+
+        /// <summary>
+        /// How many folders.
+        /// </summary>
         public uint Length;
     }
 
+    /// <summary>
+    /// <c>NVSDK_NGX_LoggingInfo</c>: where NGX's log goes.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct LoggingInfo
     {
+        /// <summary>
+        /// The log callback (<see cref="OnLog"/>).
+        /// </summary>
         public nint Callback;
+
+        /// <summary>
+        /// The least level logged (1 on, 2 verbose).
+        /// </summary>
         public int MinimumLevel;
+
+        /// <summary>
+        /// Whether NGX's other log sinks are off (1: only the callback).
+        /// </summary>
         public byte DisableOtherSinks;
     }
 
+    /// <summary>
+    /// <c>NVSDK_NGX_FeatureCommonInfo</c>: the init's paths and logging.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct FeatureCommonInfo
     {
+        /// <summary>
+        /// The folders the models are looked for in.
+        /// </summary>
         public PathListInfo PathList;
+
+        /// <summary>
+        /// NGX's internal data (0).
+        /// </summary>
         public nint Internal;
+
+        /// <summary>
+        /// The logging.
+        /// </summary>
         public LoggingInfo Logging;
     }
 
-    // NVSDK_NGX_VULKAN_Init_with_ProjectID, called through libffi (InitFromNativeCaller).
-    readonly nint _init;
-    readonly delegate* unmanaged<nint, int> _shutdown;
     /// <summary>
-    /// The strings handed to NGX at init (paths, project id, version), kept until it is shut down.
+    /// <c>NVSDK_NGX_VULKAN_Init_with_ProjectID</c>: called directly on Windows, through libffi elsewhere (<see cref="InitFromNativeCaller"/>).
     /// </summary>
-    readonly List<nint> _initStrings = [];
-    readonly delegate* unmanaged<void**, int> _getCapabilityParameters;
-    internal readonly delegate* unmanaged<void**, int> AllocateParameters;
-    internal readonly delegate* unmanaged<void*, int> DestroyParameters;
-    internal readonly delegate* unmanaged<nint, nint, int, void*, void**, int> CreateFeature;
-    internal readonly delegate* unmanaged<void*, int> ReleaseFeature;
-    internal readonly delegate* unmanaged<nint, void*, void*, nint, int> EvaluateFeature;
-    nint _device;
-    bool _disposed;
+    readonly nint _init;
 
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_Shutdown1</c>, for the device.
+    /// </summary>
+    readonly delegate* unmanaged<nint, int> _shutdown;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_GetCapabilityParameters</c>.
+    /// </summary>
+    readonly delegate* unmanaged<void**, int> _getCapabilityParameters;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_AllocateParameters</c>, for the upscaler's parameter maps.
+    /// </summary>
+    internal readonly delegate* unmanaged<void**, int> AllocateParameters;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_DestroyParameters</c>.
+    /// </summary>
+    internal readonly delegate* unmanaged<void*, int> DestroyParameters;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_CreateFeature1</c>, for the upscaler's DLSS feature.
+    /// </summary>
+    internal readonly delegate* unmanaged<nint, nint, int, void*, void**, int> CreateFeature;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_ReleaseFeature</c>.
+    /// </summary>
+    internal readonly delegate* unmanaged<void*, int> ReleaseFeature;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_VULKAN_EvaluateFeature_C</c>, for the upscaler's evaluations.
+    /// </summary>
+    internal readonly delegate* unmanaged<nint, void*, void*, nint, int> EvaluateFeature;
+
+    /// <summary>
+    /// The instance extensions DLSS needs (<see cref="Apply"/> adds them).
+    /// </summary>
     public string[] InstanceExtensions { get; }
+
+    /// <summary>
+    /// The device extensions DLSS needs.
+    /// </summary>
     public string[] DeviceExtensions { get; }
     /// <summary>
     /// After the device exists: DLSS runs on it (an NVIDIA GPU on NVIDIA's driver, and the DLSS model in place).
@@ -83,6 +175,9 @@ public sealed unsafe class Ngx : IDisposable
     /// </summary>
     public string? ModelPath { get; }
 
+    /// <summary>
+    /// Binds the client library's exports and the parameter functions.
+    /// </summary>
     Ngx(nint lib, string[] instance, string[] device, string? modelPath)
     {
         _init = NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_Init_with_ProjectID");
@@ -120,8 +215,8 @@ public sealed unsafe class Ngx : IDisposable
 
         if (Find(LibraryName) is not { } client)
         {
-            reason = $"{LibraryName} not found (tools/scripts/build-ngx-shim{ShimSuffix()}.sh builds it; next to the executable or in MEITOU_DLSS_PATH); "
-                + "NGX not loaded";
+            reason = $"{LibraryName} not found (tools/scripts/build-ngx-shim{ShimSuffix()}.sh builds it; next to the executable or in "
+                + "MEITOU_DLSS_PATH); NGX not loaded";
             return null;
         }
 
@@ -134,8 +229,14 @@ public sealed unsafe class Ngx : IDisposable
         return Load(client, out reason);
     }
 
+    /// <summary>
+    /// The build script's suffix for the platform (<c>-win</c> on Windows).
+    /// </summary>
     static string ShimSuffix() => OperatingSystem.IsWindows() ? "-win" : "";
 
+    /// <summary>
+    /// Loads the client library at <paramref name="client"/>; null (and why) when it does not load or lacks an export.
+    /// </summary>
     static Ngx? Load(string client, out string? reason)
     {
         nint lib;
@@ -160,6 +261,9 @@ public sealed unsafe class Ngx : IDisposable
         }
     }
 
+    /// <summary>
+    /// Asks the client library for the extensions DLSS needs and makes the instance; null (and why) when the query fails.
+    /// </summary>
     static Ngx? Create(string client, nint lib, out string? reason)
     {
         var required = (delegate* unmanaged<uint*, byte***, uint*, byte***, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_RequiredExtensions");
@@ -203,6 +307,9 @@ public sealed unsafe class Ngx : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// The <paramref name="count"/> UTF-8 strings of a native string array.
+    /// </summary>
     static string[] Strings(byte** array, uint count)
     {
         var result = new string[count];
@@ -220,6 +327,7 @@ public sealed unsafe class Ngx : IDisposable
     public void Apply(VulkanDeviceOptions options)
     {
         options.InstanceExtensions = [.. options.InstanceExtensions ?? [], .. InstanceExtensions];
+
         // The device enables buffer device address as the Vulkan 1.2 feature; NGX's list names it as VK_EXT_buffer_device_address, which may not
         // be enabled together with that feature.
         options.DeviceExtensions = [.. options.DeviceExtensions ?? [], .. DeviceExtensions.Where(e => e != "VK_EXT_buffer_device_address")];
@@ -231,6 +339,15 @@ public sealed unsafe class Ngx : IDisposable
             Attach(d);
         };
     }
+
+    #endregion
+
+    #region Device
+
+    /// <summary>
+    /// The device NGX was initialised on (0: none), which <see cref="Dispose"/> shuts it down for.
+    /// </summary>
+    nint _device;
 
     /// <summary>
     /// NGX is loaded whenever the DLSS model is there, DLSS chosen or not, so nothing here may stop the game: a failure leaves DLSS off, and without
@@ -250,6 +367,9 @@ public sealed unsafe class Ngx : IDisposable
         if (!DlssSupported) Dispose();
     }
 
+    /// <summary>
+    /// Initialises NGX on the device and checks DLSS is available; false (logged) on NVK or another vendor's driver, a failed init or no DLSS.
+    /// </summary>
     bool TryAttach(VulkanDevice d)
     {
         // Only NVIDIA's own driver: another vendor's device (a hybrid laptop's other GPU) or NVK, Mesa's driver for NVIDIA GPUs, which reports
@@ -303,6 +423,9 @@ public sealed unsafe class Ngx : IDisposable
         };
     }
 
+    /// <summary>
+    /// Calls the init with the device's handles; null when it could not be called (libffi missing).
+    /// </summary>
     int? InitNgx(VulkanDevice d, byte* project, byte* version, byte* dataPath, FeatureCommonInfo* info)
     {
         if (OperatingSystem.IsWindows())
@@ -382,6 +505,9 @@ public sealed unsafe class Ngx : IDisposable
         return (int)result;
     }
 
+    /// <summary>
+    /// The device's Vulkan driver id.
+    /// </summary>
     static Silk.NET.Vulkan.DriverId Driver(VulkanDevice d)
     {
         var driver = new Silk.NET.Vulkan.PhysicalDeviceDriverProperties { SType = Silk.NET.Vulkan.StructureType.PhysicalDeviceDriverProperties };
@@ -394,6 +520,18 @@ public sealed unsafe class Ngx : IDisposable
         return driver.DriverID;
     }
 
+    #endregion
+
+    #region Native strings and log
+
+    /// <summary>
+    /// The strings handed to NGX at init (paths, project id, version), kept until it is shut down.
+    /// </summary>
+    readonly List<nint> _initStrings = [];
+
+    /// <summary>
+    /// Keeps <paramref name="p"/> to be freed at shut down, and returns it.
+    /// </summary>
     byte* Keep(byte* p)
     {
         _initStrings.Add((nint)p);
@@ -422,6 +560,9 @@ public sealed unsafe class Ngx : IDisposable
         return p;
     }
 
+    /// <summary>
+    /// NGX's log callback: everything with <c>MEITOU_NGX_LOG=1</c>, else only the wanted errors.
+    /// </summary>
     [UnmanagedCallersOnly]
     static void OnLog(byte* message, int level, int feature)
     {
@@ -437,9 +578,24 @@ public sealed unsafe class Ngx : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether a log line is an error worth showing (not the missing optional config files or the system model folder).
+    /// </summary>
     static bool IsWantedError(string text) =>
         text.Contains("error", StringComparison.OrdinalIgnoreCase) && !text.Contains("configuration file") && !text.Contains("model folder");
 
+    #endregion
+
+    #region Disposal
+
+    /// <summary>
+    /// Whether NGX was shut down.
+    /// </summary>
+    bool _disposed;
+
+    /// <summary>
+    /// Shuts NGX down for the device (once) and frees the init's strings.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
@@ -452,6 +608,8 @@ public sealed unsafe class Ngx : IDisposable
 
         _initStrings.Clear();
     }
+
+    #endregion
 }
 
 /// <summary>
@@ -460,12 +618,34 @@ public sealed unsafe class Ngx : IDisposable
 /// </summary>
 static unsafe class NgxParameters
 {
+    /// <summary>
+    /// <c>NVSDK_NGX_Parameter_SetF</c>.
+    /// </summary>
     static delegate* unmanaged<void*, byte*, float, void> s_setF;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Parameter_SetUI</c>.
+    /// </summary>
     static delegate* unmanaged<void*, byte*, uint, void> s_setUi;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Parameter_SetI</c>.
+    /// </summary>
     static delegate* unmanaged<void*, byte*, int, void> s_setI;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Parameter_SetVoidPointer</c>.
+    /// </summary>
     static delegate* unmanaged<void*, byte*, void*, void> s_setVoidPointer;
+
+    /// <summary>
+    /// <c>NVSDK_NGX_Parameter_GetI</c>.
+    /// </summary>
     static delegate* unmanaged<void*, byte*, int*, int> s_getI;
 
+    /// <summary>
+    /// Binds the parameter functions of the client library <paramref name="lib"/>.
+    /// </summary>
     public static void Load(nint lib)
     {
         s_setF = (delegate* unmanaged<void*, byte*, float, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetF");
@@ -475,26 +655,41 @@ static unsafe class NgxParameters
         s_getI = (delegate* unmanaged<void*, byte*, int*, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_GetI");
     }
 
+    /// <summary>
+    /// Sets the float parameter <paramref name="name"/> (null-terminated) of map <paramref name="p"/>.
+    /// </summary>
     public static void SetFloat(void* p, ReadOnlySpan<byte> name, float value)
     {
         fixed (byte* n = name) s_setF(p, n, value);
     }
 
+    /// <summary>
+    /// Sets the unsigned integer parameter <paramref name="name"/> (null-terminated) of map <paramref name="p"/>.
+    /// </summary>
     public static void SetUInt(void* p, ReadOnlySpan<byte> name, uint value)
     {
         fixed (byte* n = name) s_setUi(p, n, value);
     }
 
+    /// <summary>
+    /// Sets the integer parameter <paramref name="name"/> (null-terminated) of map <paramref name="p"/>.
+    /// </summary>
     public static void SetInt(void* p, ReadOnlySpan<byte> name, int value)
     {
         fixed (byte* n = name) s_setI(p, n, value);
     }
 
+    /// <summary>
+    /// Sets the pointer parameter <paramref name="name"/> (null-terminated) of map <paramref name="p"/>.
+    /// </summary>
     public static void SetPointer(void* p, ReadOnlySpan<byte> name, void* value)
     {
         fixed (byte* n = name) s_setVoidPointer(p, n, value);
     }
 
+    /// <summary>
+    /// Reads the integer parameter <paramref name="name"/> (null-terminated) of map <paramref name="p"/> into <paramref name="value"/>; NGX's result.
+    /// </summary>
     public static int GetInt(void* p, ReadOnlySpan<byte> name, int* value)
     {
         fixed (byte* n = name) return s_getI(p, n, value);

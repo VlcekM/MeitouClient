@@ -9,13 +9,17 @@ namespace Meitou.Game.Rendering.Objects;
 /// </summary>
 static class BuildingMaterial
 {
+    /// <summary>
+    /// The material of a building part's MATERIAL_SPEC record (the class summary's rules).
+    /// </summary>
     public static SurfaceMaterial FromSpec(GameRecord spec)
     {
         int type = spec.GetInt("material type");
         bool alpha = type is 1 or 2;
         return new SurfaceMaterial
         {
-            Description = $"{spec.Type} '{spec.Name}' (building material, type {type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
+            Description = $"{spec.Type} '{spec.Name}' (building material, " +
+                $"type {type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
             Diffuse = Tex(spec, "texture map") ?? "white.dds",
             Normal = Tex(spec, "normal map"),
             Diffuse2 = type == 3 ? Tex(spec, "texture map 2") : null,
@@ -31,5 +35,8 @@ static class BuildingMaterial
         };
     }
 
+    /// <summary>
+    /// A record's path field, or null when empty.
+    /// </summary>
     static string? Tex(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;
 }

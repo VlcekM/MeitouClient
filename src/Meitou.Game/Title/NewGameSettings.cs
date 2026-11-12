@@ -15,6 +15,9 @@ internal sealed record NewGameSettings
     /// </summary>
     internal sealed record Option(string Key, string Label, float Min, float Max, int HelpLine);
 
+    /// <summary>
+    /// The sliders, in the panel's order.
+    /// </summary>
     public static readonly Option[] Options =
     [
         new("ht", "Hunger time", .25f, 8, 557),
@@ -31,6 +34,9 @@ internal sealed record NewGameSettings
     /// </summary>
     internal sealed record Tick(string Key, string Label, bool Default, int HelpLine);
 
+    /// <summary>
+    /// The ticks under the sliders, in the panel's order.
+    /// </summary>
     public static readonly Tick[] Ticks =
     [
         new("bl", "Bandits loot the player", true, 564),
@@ -39,26 +45,51 @@ internal sealed record NewGameSettings
         new("ep", "Easy prospecting", false, -1),
     ];
 
+    /// <summary>
+    /// Each slider's value, in the order of <see cref="Options"/>.
+    /// </summary>
     readonly float[] _values;
+
+    /// <summary>
+    /// Each tick's state, in the order of <see cref="Ticks"/>.
+    /// </summary>
     readonly bool[] _ticks;
 
+    /// <summary>
+    /// The defaults: every slider at 1, every tick at its loader's default.
+    /// </summary>
     public NewGameSettings()
         : this(Enumerable.Repeat(1f, Options.Length).ToArray(), Ticks.Select(t => t.Default).ToArray())
     {
     }
 
+    /// <summary>
+    /// Settings holding <paramref name="values"/> and <paramref name="ticks"/> (not copied).
+    /// </summary>
     NewGameSettings(float[] values, bool[] ticks)
     {
         this._values = values;
         this._ticks = ticks;
     }
 
+    /// <summary>
+    /// Slider <paramref name="index"/>'s value.
+    /// </summary>
     public float this[int index] => _values[index];
 
+    /// <summary>
+    /// Whether tick <paramref name="index"/> is set.
+    /// </summary>
     public bool Ticked(int index) => _ticks[index];
 
+    /// <summary>
+    /// Bandits loot the player (the first tick).
+    /// </summary>
     public bool BanditsLoot => _ticks[0];
 
+    /// <summary>
+    /// A copy with slider <paramref name="index"/> at <paramref name="value"/>, clamped to its range (1 for a value that is not finite).
+    /// </summary>
     public NewGameSettings Set(int index, float value)
     {
         var copy = (float[])_values.Clone();
@@ -66,6 +97,9 @@ internal sealed record NewGameSettings
         return new(copy, _ticks);
     }
 
+    /// <summary>
+    /// A copy with tick <paramref name="index"/> set to <paramref name="value"/>.
+    /// </summary>
     public NewGameSettings SetTick(int index, bool value)
     {
         var copy = (bool[])_ticks.Clone();

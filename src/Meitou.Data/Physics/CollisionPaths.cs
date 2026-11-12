@@ -7,6 +7,9 @@ namespace Meitou.Data.Physics;
 /// </summary>
 public static class CollisionPaths
 {
+    /// <summary>
+    /// The mods found per install root, with the newer write time of its <c>mods</c> and Workshop folders when they were scanned.
+    /// </summary>
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> ModCache = new();
 
     /// <summary>
@@ -49,7 +52,8 @@ public static class CollisionPaths
         var rel = recordPath.Replace('\\', '/').TrimStart('.', '/');
         var full = GameFiles.Resolve(Path.Combine(install.Root, rel));
         if (File.Exists(full)) return full;
-        // A mod's own files: <c>.\mods\Mod Name\x</c> is the folder of that mod, which for a Workshop mod is its Workshop folder, not a folder under the install.
+        // A mod's own files: <c>.\mods\Mod Name\x</c> is the folder of that mod, which for a Workshop mod is its Workshop folder, not a folder under
+        // the install.
         if (rel.StartsWith("mods/", StringComparison.OrdinalIgnoreCase) && rel.IndexOf('/', 5) is var slash and > 5
             && ModFolder(install, rel[5..slash]) is { } folder)
         {

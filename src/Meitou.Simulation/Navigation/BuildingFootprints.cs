@@ -15,8 +15,8 @@ namespace Meitou.Simulation.Navigation;
 public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 {
     /// <summary>
-    /// The convex hull of each collision shape on its own (same space as <see cref="Hull"/>): what the pick & collision inspector draws next to the
-    /// merged hull.
+    /// The convex hull of each collision shape on its own (same space as <see cref="Hull"/>): what the pick &amp; collision inspector draws next to
+    /// the merged hull.
     /// </summary>
     public IReadOnlyList<Vector2[]> Shapes { get; init; } = [];
 
@@ -75,7 +75,8 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
             var a = Hull[i];
             var e = Hull[(i + 1) % Hull.Length] - a;
             float cross = e.X * (p.Y - a.Y) - e.Y * (p.X - a.X);
-            if (cross > 0) left++; else if (cross < 0) right++;
+            if (cross > 0) left++;
+            else if (cross < 0) right++;
             float t = e.LengthSquared() > 1e-12f ? Math.Clamp(Vector2.Dot(p - a, e) / e.LengthSquared(), 0, 1) : 0;
             nearest = MathF.Min(nearest, Vector2.Distance(p, a + t * e));
         }
@@ -84,9 +85,9 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 }
 
 /// <summary>
-/// A placed building's footprint in the world.
+/// A placed building's footprint in the world, and its BUILDING record.
 /// </summary>
-public readonly record struct PlacedFootprint(string Id, Vector2[] Hull);
+public readonly record struct PlacedFootprint(string Id, Vector2[] Hull, string Record = "");
 
 /// <summary>
 /// A level-data building with the footprint of its record (in its own space), for picking; <paramref name="Plot"/> when it is the
@@ -101,15 +102,39 @@ public readonly record struct PlacedBuilding(BuildingPlacement Placement, Buildi
 /// </summary>
 public sealed class BuildingFootprints
 {
+    /// <summary>
+    /// The game install the collision files and the part meshes' bounds are resolved in.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// The game data the BUILDING records are looked up in.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The collision files read so far (the footprints and <see cref="File"/> share it).
+    /// </summary>
     readonly CollisionCache _collision;
-    // The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    /// <summary>
+    /// The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    /// </summary>
     (int Revision, Dictionary<ZoneCoordinate, List<BuildingPlacement>> Map)? _indexed;
+    /// <summary>
+    /// Guards building and swapping <see cref="_indexed"/> (<see cref="Index"/> runs on any caller's thread).
+    /// </summary>
     readonly object _indexGate = new();
+    /// <summary>
+    /// The level data whose placed buildings are indexed and picked; null: no placed buildings.
+    /// </summary>
     readonly WorldLevelData? _levels;
+    /// <summary>
+    /// Each BUILDING record's footprint by id, read once on a worker (<see cref="Request"/>); a null result is a record without collision.
+    /// </summary>
     readonly ConcurrentDictionary<string, Task<BuildingFootprint?>> _byRecord = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Reads the footprints of <paramref name="db"/>'s BUILDING records from the collision files of <paramref name="install"/>, and indexes the
+    /// placed buildings of <paramref name="levels"/> (null: none).
+    /// </summary>
     public BuildingFootprints(GameInstall install, GameDatabase db, WorldLevelData? levels)
     {
         this._install = install;
@@ -118,6 +143,9 @@ public sealed class BuildingFootprints
         _collision = new CollisionCache(install);
     }
 
+    /// <summary>
+    /// The level data's buildings by zone, made again when <see cref="WorldLevelData.EditRevision"/> moved on since the last call.
+    /// </summary>
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> Index()
     {
         int revision = _levels?.EditRevision ?? 0;
@@ -298,6 +326,9 @@ public sealed class BuildingFootprints
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> File(string recordPath) =>
         _collision.Get(recordPath) is { } prepared ? [.. prepared.Shapes.Select(s => (s.Vertices, s.Indices))] : [];
 
+    /// <summary>
+    /// The <see cref="Plot"/> stand-ins by BUILDING id, made once each; null for a record with collision or without readable part bounds.
+    /// </summary>
     readonly ConcurrentDictionary<string, BuildingFootprint?> _plots = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -323,15 +354,39 @@ public sealed class BuildingFootprints
         return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y));
     });
 
+    /// <summary>
+    /// The part meshes' bounds by mesh path, read once each (<see cref="PartBounds"/>).
+    /// </summary>
     readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> _partBounds = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The bounds box of a building part's mesh in its own space (the mesh file's bounds chunk, read once); null when the file is not found or has
-    /// none.
+    /// The bounds box of a building part's mesh in its own space, cached by path. Falls back to the structural reader when stored chunk lengths
+    /// prevent a fast bounds read; null when the file is missing, unreadable or has no bounds.
     /// </summary>
-    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => _partBounds.GetOrAdd(meshPath, path =>
-        Data.Physics.CollisionPaths.Resolve(_install, path) is { } file && Data.Ogre.OgreMeshReader.TryReadBounds(file,
-                out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : null);
+    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => _partBounds.GetOrAdd(meshPath, ReadPartBounds);
+
+    /// <summary>
+    /// Reads a part's stored bounds without trusting exporter chunk lengths when the fast walk fails.
+    /// </summary>
+    (Vector3 Min, Vector3 Max)? ReadPartBounds(string meshPath)
+    {
+        if (Data.Physics.CollisionPaths.Resolve(_install, meshPath) is not { } file) return null;
+
+        try
+        {
+            var bounds = Data.Ogre.OgreMeshReader.TryReadBounds(file, out var fast)
+                ? fast
+                : Data.Ogre.OgreMeshReader.ReadFile(file).Bounds;
+            if (bounds is not { } b) return null;
+            if (!float.IsFinite(b.Min.X + b.Min.Y + b.Min.Z + b.Max.X + b.Max.Y + b.Max.Z)) return null;
+
+            return b.Max.X >= b.Min.X && b.Max.Y >= b.Min.Y && b.Max.Z >= b.Min.Z ? (b.Min, b.Max) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Data.Ogre.OgreFormatException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Whether a BUILDING is a farm (it names a <c>farm data</c>): the level buildings without collision that a click still selects, by their
@@ -339,9 +394,16 @@ public sealed class BuildingFootprints
     /// </summary>
     bool IsFarm(string buildingId) => _db.Find(buildingId)?.GetReferences("farm data") is [_, ..];
 
+    /// <summary>
+    /// Starts reading a record's footprint on a worker the first time it is asked for; the task of the read.
+    /// </summary>
     Task<BuildingFootprint?> Request(string buildingId) => _byRecord.GetOrAdd(buildingId, static (id, self) => Task.Run(() => self.Compute(id)),
             this);   // a static factory: nothing allocated on a hit
 
+    /// <summary>
+    /// Reads a BUILDING's footprint: the hull of its parts' collision shapes (record <c>scale</c> applied, 1 when not positive) with each shape's own
+    /// hull in <see cref="BuildingFootprint.Shapes"/>; null for a missing record or one without collision.
+    /// </summary>
     BuildingFootprint? Compute(string buildingId)
     {
         if (_db.Find(buildingId) is not { } building) return null;
@@ -381,6 +443,10 @@ public sealed class BuildingFootprints
                 yield return new PlacedBuilding(b, plot, Plot: true);
     }
 
+    /// <summary>
+    /// The level data's placed buildings (not those at the origin or aimed at a zone record) within 200 units of the ray's ground track over
+    /// <paramref name="maxDistance"/>, from the zones round the track.
+    /// </summary>
     IEnumerable<BuildingPlacement> Near(Vector3 origin, Vector3 direction, float maxDistance)
     {
         var map = Index();
@@ -418,7 +484,15 @@ public sealed class BuildingFootprints
     /// <paramref name="terrainHeight"/> sets a placement that has no height of its own.
     /// </summary>
     public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> LinkedAround(Vector2 centre, float radius, Func<double,
-            double, float> terrainHeight)
+            double, float> terrainHeight) =>
+        PlacedAround(centre, radius, record => _db.Find(record)?.GetBool("links together") == true, terrainHeight);
+
+    /// <summary>
+    /// The level data's buildings whose record passes <paramref name="record"/>, placed within <paramref name="radius"/> of <paramref name="centre"/>
+    /// (X, Z), with their absolute position and turn. <paramref name="terrainHeight"/> sets a placement that has no height of its own.
+    /// </summary>
+    public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> PlacedAround(Vector2 centre, float radius,
+        Func<string, bool> record, Func<double, double, float> terrainHeight)
     {
         if (_levels is null) yield break;
         var map = Index();
@@ -433,8 +507,7 @@ public sealed class BuildingFootprints
                     if (b.TargetsZoneRecord || b.Position == Vector3.Zero
                             || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > radius * radius)
                         continue;
-                    if (_db.Find(b.BuildingId)?.GetBool("links together") == true
-                            && BuildingPlacements.Resolve(b, _db, _levels, terrainHeight) is { } r)
+                    if (record(b.BuildingId) && BuildingPlacements.Resolve(b, _db, _levels, terrainHeight) is { } r)
                         yield return (b.Key, b.BuildingId, r.Position, b.Rotation);
                 }
             }
@@ -542,7 +615,7 @@ public sealed class BuildingFootprints
                             || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach))
                         continue;
                     if (Of(b.BuildingId) is { } footprint)
-                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation));
+                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation), b.BuildingId);
                 }
             }
     }

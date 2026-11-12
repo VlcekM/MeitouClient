@@ -35,6 +35,9 @@ public static class CloudLayer
     /// The second lookup of <c>Clouds.dds</c> is shifted by this in texture space; the tile texture adds <c>0.1 ×</c> its red to the density.
     /// </summary>
     public static readonly Vector2 SecondLookupShift = new(0.2f, 0.6f);
+    /// <summary>
+    /// See <see cref="SecondLookupShift"/>: the factor on the tile texture's red.
+    /// </summary>
     public const float TileWeight = 0.1f;
     /// <summary>
     /// The floor of <c>getColorAt(+Z) · skyMult</c> in <c>zenithLight</c>, the sky controller's offset 0xb8, set when the sky is created.
@@ -63,7 +66,8 @@ public static class CloudLayer
 
     /// <summary>
     /// <c>zenithLight = max(getColorAt(+Z) · skyMult, (0.001, 0.001, 0.0015)) · sunColour.g</c> (FUN_14066f190: the direction is Ogre's
-    /// <c>UNIT_Z</c>). <paramref name="sun"/>: unit direction towards the sun; <paramref name="skyMultiplier"/>: the weather's (faded) sky colour multiplier.
+    /// <c>UNIT_Z</c>). <paramref name="sun"/>: unit direction towards the sun; <paramref name="skyMultiplier"/>: the weather's (faded) sky
+    /// colour multiplier.
     /// </summary>
     public static Vector3 ZenithLight(Vector3 sun, Vector3 skyMultiplier) =>
         Vector3.Max(SkyXModel.Colour(Vector3.UnitZ, sun, skydome: false) * skyMultiplier, ZenithFloor) * KenshiLighting.SunColour(sun).Y;

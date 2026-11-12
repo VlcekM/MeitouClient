@@ -1,7 +1,9 @@
 # MeitouClient
 
-C# / .NET 10 reimplementation of the Kenshi engine (namespace `Meitou`), GPL-3.0-or-later. Goal: a
+C# / .NET 11 reimplementation of the Kenshi engine (namespace `Meitou`), GPL-3.0-or-later. Goal: a
 drop-in replacement that runs original content and mods unchanged.
+
+`CLAUDE.md` is canonical; keep `AGENTS.md` identical whenever either file changes.
 
 ## Research notes: read and keep them current
 
@@ -66,6 +68,8 @@ drop-in replacement that runs original content and mods unchanged.
   bodies always in braces on their own lines. Guard clauses first, then the main path unindented.
 - Lines: wrap past ~150, preferably by naming a local; a repeated long expression becomes a helper. A lambda longer than a line
   becomes a named method (method group) or a statement lambda laid out like a method. Chained `?:` and LINQ calls one per line.
+- Merged code (a PR, another branch, a contributor's patch, a port) follows these rules too: bring it up to them while merging,
+  without changing its behaviour.
 
 ## Branches
 

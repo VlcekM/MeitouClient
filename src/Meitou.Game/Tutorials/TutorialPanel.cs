@@ -42,19 +42,64 @@ sealed class TutorialPanel(PlayerInterface player)
     /// </summary>
     const float HighlightLow = 0.1f, HighlightHigh = 0.4f, HighlightRate = 0.4f;
 
+    /// <summary>
+    /// The host's tutorial manager; null without tutorials.
+    /// </summary>
     TutorialManager? _tutorials;
+
+    /// <summary>
+    /// The tutorial texts of the active language (the pages' lines).
+    /// </summary>
     internal TutorialCatalog TutorialTexts = TutorialCatalog.From([]);
+
+    /// <summary>
+    /// The tutorial panel's layout and its line's (<c>Kenshi_TutorialPanel</c>, <c>Kenshi_TutorialTooltipPanel</c>); null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? TutorialPanelLayout, TutorialLineLayout;
+
+    /// <summary>
+    /// Item id to how long its line still flashes, seconds (a newly started item).
+    /// </summary>
     internal readonly Dictionary<int, float> TutorialFlashes = [];
+
+    /// <summary>
+    /// The item whose page the panel shows, null when none.
+    /// </summary>
     internal int? TutorialShown;
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.Stopwatch"/> timestamp of the last poll (0 before the first), for its frame time.
+    /// </summary>
     long _tutorialClock;
 
-    // The page's advance state: the 5 s timer, whether its condition was seen, and what its start remembered.
+    /// <summary>
+    /// The page's advance state: the 5 s timer, whether its condition was seen, and what its start remembered. The timer, seconds.
+    /// </summary>
     float _tutorialTimer;
+
+    /// <summary>
+    /// The page's condition was seen; the camera was zoomed (the camera page).
+    /// </summary>
     bool _tutorialSeen, _tutorialZoomed;
+
+    /// <summary>
+    /// The camera's target when the page started.
+    /// </summary>
     Vector3 _tutorialCameraTarget;
+
+    /// <summary>
+    /// The camera's distance when the page started.
+    /// </summary>
     float _tutorialCameraDistance;
+
+    /// <summary>
+    /// The PCs imprisoned when the lockpicking page first looked.
+    /// </summary>
     readonly HashSet<CharacterId> _tutorialPrisoners = [];
+
+    /// <summary>
+    /// Each PC's last position, for the movement page.
+    /// </summary>
     readonly Dictionary<CharacterId, Vector3> _tutorialLastPositions = [];
 
     /// <summary>
@@ -69,7 +114,15 @@ sealed class TutorialPanel(PlayerInterface player)
     /// condition holds.
     /// </summary>
     float _highlightAlpha, _highlightDirection = 1;
+
+    /// <summary>
+    /// The highlighted HUD part.
+    /// </summary>
     TutorialHighlight _highlightShown;
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.Stopwatch"/> timestamp of the last highlight frame (0 before the first).
+    /// </summary>
     long _highlightClock;
 
     /// <summary>
@@ -92,17 +145,22 @@ sealed class TutorialPanel(PlayerInterface player)
             TutorialFlashes.Clear();
             return;
         }
+
         if (manager.Update(dt, () => TutorialPoll(false)) is { Count: > 0 } started)
         {
             foreach (int id in started) TutorialFlashes[id] = 1;
             player.InterfaceSounds.Sound("Thing_Complete");
         }
+
         foreach (int id in TutorialFlashes.Keys.ToArray())
             if ((TutorialFlashes[id] -= dt) <= 0) TutorialFlashes.Remove(id);
         if (TutorialShown is { } shown && !manager.Active.Contains(shown)) TutorialShown = null;
         if (TutorialShown is { } open && TutorialAdvanced(open, dt)) NextTutorialPage(open);
     }
 
+    /// <summary>
+    /// The page item <paramref name="id"/> is on (clamped to its pages).
+    /// </summary>
     TutorialPage PageOf(int id) =>
         TutorialCatalog.Items[id].Pages[Math.Clamp(_tutorials!.Pages[id], 0, TutorialCatalog.Items[id].Pages.Length - 1)];
 
@@ -192,6 +250,9 @@ sealed class TutorialPanel(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The next page of item <paramref name="id"/>, or its dismissal after the last.
+    /// </summary>
     void NextTutorialPage(int id)
     {
         if (_tutorials!.Pages[id] >= TutorialCatalog.Items[id].Pages.Length - 1)
@@ -204,6 +265,9 @@ sealed class TutorialPanel(PlayerInterface player)
         StartTutorialPage(id);
     }
 
+    /// <summary>
+    /// Dismisses item <paramref name="id"/>: it ends and leaves the panel.
+    /// </summary>
     void DismissTutorial(int id)
     {
         if (TutorialShown == id) TutorialShown = null;
@@ -248,7 +312,8 @@ sealed class TutorialPanel(PlayerInterface player)
             || !player.Session.World.Player.Exists || player.CharacterEditor.EditorOpen)
             return;
 
-        float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale), width = MathF.Round(player.Width * TutorialListWidth);
+        float scale = player.UiScale, lineHeight = MathF.Round(TutorialLineHeight * scale);
+        float width = MathF.Round(player.Width * TutorialListWidth);
         float y = player.Height * TutorialListHeight;
         var active = manager.Active;
         for (int k = active.Count - 1; k >= 0; k--)
@@ -276,6 +341,7 @@ sealed class TutorialPanel(PlayerInterface player)
                 else if (c.Name == "CloseButton") control = control with { Action = "meitou:tutorial", Argument = $"close:{id}" };
                 controls.Add(control);
             }
+
             if (TutorialFlashes.TryGetValue(id, out float alpha))
             {
                 var flashBounds = new UiRect(0, y, width, lineHeight);
@@ -283,6 +349,7 @@ sealed class TutorialPanel(PlayerInterface player)
                     new Vector4(1, 1, 1, alpha), Pickable: false));
             }
         }
+
         if (TutorialShown is not { } shown) return;
         var (title, pages) = TutorialCatalog.Items[shown];
         int page = Math.Clamp(manager.Pages[shown], 0, pages.Length - 1);
@@ -298,7 +365,13 @@ sealed class TutorialPanel(PlayerInterface player)
         if (page == 0) w.Disabled.Add("PrevTutorialButton");
         foreach (var c in MyGuiPresentation.Arrange(TutorialPanelLayout, player.Width, player.Height, w, player.UiResources.Layers))
         {
-            string? argument = c.Name switch { "NextTutorialButton" => "next", "PrevTutorialButton" => "prev", "DismissButton" => "dismiss", _ => null };
+            string? argument = c.Name switch
+            {
+                "NextTutorialButton" => "next",
+                "PrevTutorialButton" => "prev",
+                "DismissButton" => "dismiss",
+                _ => null,
+            };
             var control = c with { Name = c.Name.Length > 0 ? "tutorial-window-" + c.Name : c.Name };
             if (argument is not null) control = control with { Action = "meitou:tutorial", Argument = argument };
             else if (c.Action.StartsWith("mygui:close", StringComparison.Ordinal))
@@ -308,6 +381,9 @@ sealed class TutorialPanel(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The Tutorials window's bindings: the titles, the selected row's page with its paging, ACTIVATE and the page buttons.
+    /// </summary>
     internal void BindTutorialsWindow(UiBindings b)
     {
         b.Text["Root"] = "TUTORIALS";
@@ -326,6 +402,9 @@ sealed class TutorialPanel(PlayerInterface player)
         if (_tutorialsPage < pages.Length - 1) b.Disabled.Remove("NextTutorialButton");
     }
 
+    /// <summary>
+    /// A Tutorials window event: a row picked, the previous or next page, or ACTIVATE (the item goes into the panel at its first page).
+    /// </summary>
     internal void TutorialsWindowAction(MyGuiEvent e)
     {
         if (e.Widget == "TutorialList" && e.Action == "select"
@@ -493,7 +572,8 @@ sealed class TutorialPanel(PlayerInterface player)
     {
         var snap = player.Session.CurrentSnapshot;
         int faction = player.Session.World.Player.Faction;
-        bool unsettled = false, aid = false, attack = false, ko = false, awake = false, sneak = false, hungry = false, playingDead = false, slave = false;
+        bool unsettled = false, aid = false, attack = false, ko = false, awake = false;
+        bool sneak = false, hungry = false, playingDead = false, slave = false;
         int pcs = 0;
         var pcIds = new List<CharacterId>();
         foreach (var c in snap.Characters)
@@ -523,6 +603,7 @@ sealed class TutorialPanel(PlayerInterface player)
             built |= site.Complete && m.Output is not null;
             crafting |= site.Complete && m.Craft is not null;
         }
+
         foreach (var m in snap.Machines)
             if (m.TechLevel > 0 && sites.TryGetValue(m.Site, out var bench) && bench.Complete) research = true;
         foreach (var site in sites.Values) unstarted |= !site.Complete && site.Progress == 0;

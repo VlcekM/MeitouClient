@@ -19,6 +19,10 @@ static class ParticleTextureDetail
     /// </summary>
     const int MaxSide = 512;
 
+    /// <summary>
+    /// The pixels across <paramref name="image"/> needs on screen: its side over the largest reduction that keeps its detail (1 when it has no
+    /// brightness).
+    /// </summary>
     public static float PixelsNeeded(RgbaImage image)
     {
         var (v, w, h) = Coverage(image);

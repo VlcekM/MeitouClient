@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.10.0
+
+- Built on .NET 11.
+- The DLSS preset on the Graphics page shows only while anti-aliasing is DLSS.
+
 ## v1.9.0
 
 - **Code mods just run**: an enabled code mod runs its own C# code, as in RimWorld; there is nothing to allow first. The Trust code

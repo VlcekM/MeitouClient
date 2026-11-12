@@ -39,14 +39,38 @@ public sealed class SimulationClock
     /// </summary>
     public const int DefaultMaxTicksPerFrame = 2;
 
+    /// <summary>
+    /// The fixed step that counts the ticks, fed game time.
+    /// </summary>
     readonly FixedStepClock _steps = new(TickRate);
+    /// <summary>
+    /// The speeds the speed actions step through (see <see cref="Speeds"/>).
+    /// </summary>
     readonly double[] _speeds = [.. DefaultSpeeds];
+    /// <summary>
+    /// The speed (see <see cref="Speed"/>).
+    /// </summary>
     double _speed = 1;
+    /// <summary>
+    /// The last non-zero speed (see <see cref="LastNonZeroSpeed"/>).
+    /// </summary>
     double _lastSpeed = 1;
+    /// <summary>
+    /// The speed the pause key resumes at (see <see cref="Remember"/>).
+    /// </summary>
     double _rememberedSpeed;
+    /// <summary>
+    /// Whether <see cref="_rememberedSpeed"/> was ever set.
+    /// </summary>
     bool _rememberedSet;
+    /// <summary>
+    /// The most ticks a frame may run at speed 1 (see <see cref="MaxTicksPerFrame"/>).
+    /// </summary>
     int _maxTicksPerFrame;
 
+    /// <summary>
+    /// A clock at speed 1 that runs at most <paramref name="maxTicksPerFrame"/> ticks a frame at speed 1.
+    /// </summary>
     public SimulationClock(int maxTicksPerFrame = DefaultMaxTicksPerFrame) => MaxTicksPerFrame = maxTicksPerFrame;
 
     /// <summary>
@@ -129,6 +153,9 @@ public sealed class SimulationClock
         _rememberedSpeed = Remap(old, _rememberedSpeed);
     }
 
+    /// <summary>
+    /// The value at the same step of the new speeds when it was one of the old fast ones, else unchanged.
+    /// </summary>
     double Remap(double[] old, double value) => Array.IndexOf(old, value) is var i and > 0 ? _speeds[i] : value;
 
     /// <summary>
@@ -231,7 +258,8 @@ public sealed class SimulationClock
         }
 
         long droppedBefore = _steps.DroppedTicks;
-        int run = _steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * _speed, (int)Math.Min(Math.Ceiling(_maxTicksPerFrame * _speed), int.MaxValue));
+        int run = _steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * _speed,
+            (int)Math.Min(Math.Ceiling(_maxTicksPerFrame * _speed), int.MaxValue));
         long dropped = _steps.DroppedTicks - droppedBefore;
         AchievedSpeed = AchievedSpeedOver(_speed, run, dropped);
         return run;

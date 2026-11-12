@@ -73,6 +73,12 @@ sealed partial class GameHost
         : Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>
+    /// A key or button bound to Highlight (either Alt by default) is down: the original's steal, pick-lock and loot modifier is that action's held
+    /// flag (docs/game/ui-input.md "Building picking and selection").
+    /// </summary>
+    internal bool HighlightHeld() => Session.Bindings.Get(InputAction.Highlight).Any(Session.Input.IsHeld);
+
+    /// <summary>
     /// The button the interface sees for a physical one: the Select button is its left, the Command button its right (each falls back to its own
     /// default while unbound, so the interface stays reachable). Any other of the three, such as the Orbit button, is its middle (which the map pans
     /// with and which stops no click reaching the world under the interface); the extra buttons stay as they are.
@@ -115,7 +121,7 @@ sealed partial class GameHost
 
     /// <summary>
     /// --log-spikes: a tick run ahead over <see cref="SpikeSimMs"/>, by system and part, in the frame whose draw waited for it (its profile holds
-    /// that tick alone then: <see cref="GameLoop.SimProfile"/> cleared it before the draw).
+    /// that tick alone then: <see cref="Host.SimProfileWindow.SimProfile"/> cleared it before the draw).
     /// </summary>
     void NoteAheadTick()
     {
@@ -146,16 +152,28 @@ sealed partial class GameHost
             }
         }
         foreach (var line in world.TakeSaid())
-            Player.MessageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
+            Player.DialogueLog.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
         if (world.Systems.OfType<Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
+        {
             foreach (var k in carry.TakeKnockouts())
+            {
                 if (world.Characters.IsAlive(k.Attacker) && world.Characters.Cold(k.Attacker.Slot) is { IsPlayer: true } attacker)
-                    Player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} ({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
+                {
+                    Player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} "
+                        + $"({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
+                }
+            }
+        }
         if (Population is not null)
             foreach (var line in Population.TakeTownLog()) Console.WriteLine($"town      {line}");
         if (Population is not null)
+        {
             foreach (var w in Population.TakeWildLog())
-                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Simulation.Population.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
+            {
+                string from = w.Kind == Simulation.Population.WildKind.Nest ? "nest" : "sector of";
+                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {from} {w.Place}");
+            }
+        }
     }
 }

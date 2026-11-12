@@ -80,33 +80,33 @@ public sealed unsafe partial class PostProcess
     /// <summary>The occlusion's targets at the size this frame asks for: half the render size, or all of it at GTAO's top quality.</summary>
     void EnsureAoSize()
     {
-        if (_aoA is null) return;
+        if (_occlusion.A is null) return;
         bool full = GtaoOn && Options.GtaoFullSize;
         int w = full ? _width : Math.Max((_width + 1) / 2, 1), h = full ? _height : Math.Max((_height + 1) / 2, 1);
-        if (_aoA.Width == w && _aoA.Height == h) return;
-        _aoA.Texture.Dispose();   // released after the frames in flight
-        _aoB?.Texture.Dispose();
+        if (_occlusion.A.Width == w && _occlusion.A.Height == h) return;
+        _occlusion.A.Texture.Dispose();   // released after the frames in flight
+        _occlusion.B?.Texture.Dispose();
         using var batch = Gpu.Uploads.Begin();
-        _aoA = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-        _aoB = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
+        _occlusion.A = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
+        _occlusion.B = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
     }
 
     /// <summary><see cref="ApplySsao"/> with GTAO: the pending layers first (the old order: shafts, fog, occlusion), then the occlusion over them.</summary>
     void ApplyGtao()
     {
         if (MergeLayers) ApplyLayers(false);
-        if (!_haveScene || _sceneColour is null || _aoA is null) return;
+        if (!_haveScene || _sceneColour is null || _occlusion.A is null) return;
         RunGtao();
         bool surface = SurfaceReady;
         var p = _gtaoApply[surface ? 1 : 0] ??= new GtaoApplyPass(Gpu, surface);
-        Bind(p.P, p.Ao, _aoB);
+        Bind(p.P, p.Ao, _occlusion.B);
         Bind(p.P, p.Depth, _sceneDepth);
         if (surface) Bind(p.P, p.Surface, _giAlbedo);
         p.P.Set(p.Size, (float)_width, (float)_height);
-        p.P.Set(p.AoSize, (float)_aoB!.Width, (float)_aoB.Height);
+        p.P.Set(p.AoSize, (float)_occlusion.B!.Width, (float)_occlusion.B.Height);
         p.P.Set(p.NearFar, _nearPlane, _farPlane);
         // A half-size texel's gather read the depth texel past its centre (GtaoShaders.GatherMain's floor): a quarter of that texel.
-        float shift = _aoB.Width < _width ? 0.25f : 0f;
+        float shift = _occlusion.B.Width < _width ? 0.25f : 0f;
         p.P.Set(p.Curve, PostOptions.GtaoPower, PostOptions.GtaoStrength, PostOptions.GtaoAlbedo, shift);
         Draw(p.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, AoMultiplyState);
         Stamp("ssao");
@@ -143,7 +143,7 @@ public sealed unsafe partial class PostProcess
             }
         }
         GtaoGather(characters);
-        if (SsaoStamps) Stamp("gtao gen");
+        if (AmbientOcclusion.Stamps) Stamp("gtao gen");
         GtaoBlur(characters);
     }
 
@@ -158,7 +158,7 @@ public sealed unsafe partial class PostProcess
         SetGtaoView(g);
         SetGtaoMarch(g);
         g.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
-        Draw(g.P, _aoA!);
+        Draw(g.P, _occlusion.A!);
     }
 
     void SetGtaoView(GtaoGatherPass g)
@@ -189,8 +189,8 @@ public sealed unsafe partial class PostProcess
     /// <summary>The SSAO's blur over the gather; the second pass takes the occlusion off the characters' pixels. Leaves the result in <see cref="aoB"/>.</summary>
     void GtaoBlur(bool characters)
     {
-        var a = _aoA!; var b = _aoB!;
-        var bl = _blur;
+        var a = _occlusion.A!; var b = _occlusion.B!;
+        var bl = _occlusion.Blur;
         Bind(bl.P, bl.Ao, a);
         Bind(bl.P, bl.Mask, null);
         bl.P.Set(bl.Step, 1f / a.Width, 0f);
@@ -201,8 +201,8 @@ public sealed unsafe partial class PostProcess
         bl.P.Set(bl.Step, 0f, 1f / a.Height);
         bl.P.Set(bl.CharacterAo, characters ? PostOptions.SsaoCharacterStrength : 1f);
         Draw(bl.P, a);
-        if (SsaoStamps) Stamp("gtao blur");
-        (_aoA, _aoB) = (_aoB, _aoA);
+        if (AmbientOcclusion.Stamps) Stamp("gtao blur");
+        (_occlusion.A, _occlusion.B) = (_occlusion.B, _occlusion.A);
     }
 
     void DisposeGtao()

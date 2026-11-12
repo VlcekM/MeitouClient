@@ -9,16 +9,40 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class GameOptions
 {
+    #region Options
+
+    /// <summary>
+    /// <c>--title-preview</c>: with <c>--screenshot</c>, a picture of the staged Meitou title scene.
+    /// </summary>
     public bool TitlePreview;
+    /// <summary>
+    /// <c>--fps-limit</c>: the frame limit when vsync is off for this run (0 = unlimited); null keeps the saved one.
+    /// </summary>
     public int? FpsLimit;
+    /// <summary>
+    /// <c>--seed</c>: the world seed (default 0).
+    /// </summary>
     public ulong Seed;
     /// <summary>
     /// <c>--seed</c> was given: a new game from the menu keeps it instead of rolling a fresh one.
     /// </summary>
     public bool SeedGiven;
+    /// <summary>
+    /// <c>--vsync</c> / <c>--no-vsync</c> for this run; null keeps the saved setting.
+    /// </summary>
     public bool? VSync;
+    /// <summary>
+    /// <c>--hdr</c> / <c>--no-hdr</c> for this run; null keeps the saved setting.
+    /// </summary>
     public bool? Hdr;
+    /// <summary>
+    /// <c>--ui</c>: the UI mode for this run; null keeps the saved one.
+    /// </summary>
     public Meitou.Data.Ui.UiMode? UiMode;
+    /// <summary>
+    /// The title screen for this run, over <see cref="UserConfig.MeitouMainMenu"/>: <c>--title-preview</c> on, <c>--low-end</c> off.
+    /// </summary>
+    public bool? MeitouMainMenu;
     /// <summary>
     /// <c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.
     /// </summary>
@@ -32,6 +56,9 @@ sealed class GameOptions
     /// <c>--mods-cfg</c>: read the enabled mods from this file instead of <c>data/mods.cfg</c> (also <c>MEITOU_MODS_CFG</c>; the option wins).
     /// </summary>
     public string? ModsCfg;
+    /// <summary>
+    /// <c>--ui-showcase</c>: with <c>--screenshot</c>, pictures of the HUD, inventory, stats, map, menus, a trade and a conversation.
+    /// </summary>
     public bool UiShowcase;
     /// <summary>
     /// With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).
@@ -45,6 +72,10 @@ sealed class GameOptions
     /// With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.
     /// </summary>
     public int Ticks;
+    /// <summary>
+    /// <c>--no-population</c> (an empty world), <c>--new-game</c> (a new game at a start), <c>--list-starts</c> (print the starts and exit) and
+    /// <c>--data-check</c> (print the load order's data problems and exit).
+    /// </summary>
     public bool NoPopulation, NewGame, ListStarts, DataCheck;
     /// <summary>
     /// <c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).
@@ -75,7 +106,6 @@ sealed class GameOptions
     /// <c>--sandbox-animals</c>: one animal of every race the ANIMAL_CHARACTER records use, in the rings.
     /// </summary>
     public bool SandboxAnimals;
-
     /// <summary>
     /// <c>--terrain-sandbox [x,z]</c>: the empty world round a flat spot whose ground is a field of tiles, one per ground texture
     /// (GroundRelief.FieldCentre).
@@ -134,6 +164,9 @@ sealed class GameOptions
     /// The start to play (null = the default); with <c>--move-to</c> the picture shows a selected squad walking.
     /// </summary>
     public string? NewGameName;
+    /// <summary>
+    /// <c>--move-to</c>: with <c>--new-game</c>, the squad is selected and ordered to walk to this X/Z.
+    /// </summary>
     public (float X, float Z)? MoveTo;
     /// <summary>
     /// Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).
@@ -196,6 +229,13 @@ sealed class GameOptions
     /// </summary>
     public string? SceneTown;
 
+    #endregion
+
+    #region Command line
+
+    /// <summary>
+    /// The command line's help text (its Keys part is also logged when play starts).
+    /// </summary>
     public const string Usage = """
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
           --fps-limit <n>            frame limit when vsync is off (default 150 from meitou.user.json; 0 = unlimited)
@@ -272,178 +312,354 @@ sealed class GameOptions
         for (int i = 0; i < args.Length; i++)
         {
             string a = args[i];
-            string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{a} needs a value");
+            if (ParseScreenOption(g, a, args, ref i) || ParseStartOption(g, a, args, ref i) || ParseRunOption(g, a, args, ref i)
+                || ParseAgentOption(g, a, args, ref i) || ParseSandboxOption(g, a, args, ref i) || ParseBattleOption(g, a, args, ref i)
+                || ParseSceneOption(g, a, args, ref i))
+                continue;
+
             switch (a)
             {
-                case "--ui-showcase": g.UiShowcase = true;
-                break;
-                case "--ui-panel": g.UiPanel = Next();
-                break;
-                case "--settings-showcase": g.SettingsShowcase = true;
-                break;
-                case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture);
-                break;
-                case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture);
-                g.SeedGiven = true;
-                break;
-                case "--ui":
-                    g.UiMode = Next().ToLowerInvariant() switch
-                    {
-                        "faithful" => Data.Ui.UiMode.Faithful,
-                        "meitou" => Data.Ui.UiMode.Meitou,
-                        _ => throw new ArgumentException("--ui must be faithful or meitou"),
-                    };
+                case "--low-end":
+                    g.LowEnd = true;
+                    rest.Add(a);
                     break;
-                case "--vsync": g.VSync = true;
-                break;
-                case "--no-vsync": g.VSync = false;
-                break;
-                case "--hdr": g.Hdr = true;
-                break;
-                case "--no-hdr": g.Hdr = false;
-                break;
-                case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture);
-                break;
-                case "--no-population": g.NoPopulation = true;
-                break;
-                case "--title-preview": g.TitlePreview = true;
-                g.UiMode = Data.Ui.UiMode.Meitou;
-                break;
-                case "--new-game":
-                    g.NewGame = true;
-                    if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
+                case "--benchmark-baseline":
+                    g.BenchmarkBaseline = true;
+                    rest.Add(a);
                     break;
-                case "--list-starts": g.ListStarts = true;
-                break;
-                case "--data-check": g.DataCheck = true;
-                break;
-                case "--wiki-export": g.WikiExport = Next();
-                break;
-                case "--facts-only": g.WikiFactsOnly = true;
-                break;
-                case "--sandbox":
-                    g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count)
-                        ? Math.Clamp(count, 1, 1000) : 1;
-                    if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
+                default:
+                    rest.Add(a);
                     break;
-                case "--sandbox-character": g.SandboxCharacter = Next();
-                break;
-                case "--sandbox-mode": g.SandboxMode = Next();
-                break;
-                case "--sandbox-races": g.SandboxRaces = true;
-                break;
-                case "--sandbox-animals": g.SandboxAnimals = true;
-                break;
-                case "--terrain-sandbox":
-                    g.TerrainSandbox = TerrainSandboxSpot;
-                    if (i + 1 < args.Length && args[i + 1] == "cliffs")
-                        (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
-                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var tx, var tz]
-                            && float.TryParse(tx, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
-                            && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
-                    {
-                        g.TerrainSandbox = (fx, fz);
-                        i++;
-                    }
-                    break;
-                case "--duel":
-                    g.Duel = true;
-                    if (i + 1 < args.Length && args[i + 1].Split(',') is [var dx, var dz]
-                            && float.TryParse(dx, NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-                            && float.TryParse(dz, NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
-                    {
-                        g.DuelAt = (x, z);
-                        i++;
-                    }
-                    break;
-                case "--battle":
-                    g.Battle = [.. Enumerable.Range(0, 2).Select(_ => (Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1), Next()))];
-                    if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int rows))
-                    {
-                        g.BattleRows = Math.Max(rows, 1);
-                        i++;
-                    }
-                    break;
-                case "--battle-map":
-                    switch (Next())
-                    {
-                        case "plateau": (g.BattleFlat, g.BattleAt) = (false, null);
-                        break;
-                        case "mesa": (g.BattleFlat, g.BattleAt) = (false, (DuelScenario.DuelSpot.X, DuelScenario.DuelSpot.Y));
-                        break;
-                        case "fog": (g.BattleFlat, g.BattleAt) = (false, (BattleScenario.FogBattleSpot.X, BattleScenario.FogBattleSpot.Y));
-                        break;
-                        case "sandbox": (g.BattleFlat, g.BattleAt) = (true, null);
-                        break;
-                        case var map when map.Split(',') is [var mx, var mz]
-                                && float.TryParse(mx, NumberStyles.Float, CultureInfo.InvariantCulture, out float bx)
-                            && float.TryParse(mz, NumberStyles.Float, CultureInfo.InvariantCulture, out float bz):
-                            (g.BattleFlat, g.BattleAt) = (false, (bx, bz));
-                            break;
-                        default: throw new ArgumentException("--battle-map must be plateau, mesa, fog, sandbox or x,z");
-                    }
-                    break;
-                case "--battle-no-fear": g.BattleNoFear = true;
-                break;
-                case "--battle-width":
-                    var widths = Next().Split(',').Select(w => (int?)Math.Max(int.Parse(w, CultureInfo.InvariantCulture), 1)).ToArray();
-                    g.BattleWidth = widths switch
-                    {
-                        [var both] => [both, both],
-                        [var first, var second] => [first, second],
-                        _ => throw new ArgumentException("--battle-width takes one or two counts, a,b"),
-                    };
-                    break;
-                case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture));
-                break;
-                case "--quit-after": g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
-                break;
-                case "--load": g.Load = Next();
-                break;
-                case "--continue": g.Continue = true;
-                break;
-                case "--control-dir": g.ControlDir = Next();
-                break;
-                case "--screenshot-after": g.ShotAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
-                break;
-                case "--screenshot-out": g.ShotOut = Next();
-                break;
-                case "--exec": case "--setup": g.Exec = Next();
-                break;
-                case "--renderer":
-                    {
-                        string renderer = Next().ToLowerInvariant();
-                        if (renderer is not ("vulkan" or "metal")) throw new ArgumentException("--renderer must be vulkan or metal");
-                        g.Renderer = renderer;
-                        break;
-                    }
-                case "--play-bench": (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
-                break;
-                case "--no-precompile": g.NoPrecompile = true;
-                break;
-                case "--scene": g.Scene = Next().ToLowerInvariant();
-                break;
-                case "--scene-frames": g.SceneFrames = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 200);
-                break;
-                case "--scene-every": g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1);
-                break;
-                case "--scene-npc": g.SceneNpc = Next();
-                break;
-                case "--scene-town": g.SceneTown = Next();
-                break;
-                case "--mods-cfg": g.ModsCfg = Next();
-                break;
-                case "--low-end": g.LowEnd = true;
-                rest.Add(a);
-                break;
-                case "--benchmark-baseline": g.BenchmarkBaseline = true;
-                rest.Add(a);
-                break;
-                default: rest.Add(a);
-                break;
             }
         }
-        if (g.LowEnd) g.UiMode = Data.Ui.UiMode.Faithful;
+        if (g.LowEnd)
+        {
+            g.UiMode = Data.Ui.UiMode.Faithful;
+            g.MeitouMainMenu = false;
+        }
         return (g, rest.ToArray());
     }
+
+    /// <summary>
+    /// The value after option <paramref name="a"/> (at <paramref name="i"/>), which steps past it; an error when the command line ends.
+    /// </summary>
+    static string NextValue(string[] args, ref int i, string a) => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{a} needs a value");
+
+    /// <summary>
+    /// The UI and picture options (<c>--ui</c>, the showcases, <c>--title-preview</c>); false when <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseScreenOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--ui-showcase":
+                g.UiShowcase = true;
+                break;
+            case "--ui-panel":
+                g.UiPanel = Next();
+                break;
+            case "--settings-showcase":
+                g.SettingsShowcase = true;
+                break;
+            case "--ui":
+                g.UiMode = Next().ToLowerInvariant() switch
+                {
+                    "faithful" => Data.Ui.UiMode.Faithful,
+                    "meitou" => Data.Ui.UiMode.Meitou,
+                    _ => throw new ArgumentException("--ui must be faithful or meitou"),
+                };
+                break;
+            case "--title-preview":
+                g.TitlePreview = true;
+                g.UiMode = Data.Ui.UiMode.Meitou;
+                g.MeitouMainMenu = true;
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The options of what the game starts in (a new game, a save, the seed, the mods, the listings and exports); false when
+    /// <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseStartOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--seed":
+                g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture);
+                g.SeedGiven = true;
+                break;
+            case "--no-population":
+                g.NoPopulation = true;
+                break;
+            case "--new-game":
+                g.NewGame = true;
+                if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
+                break;
+            case "--list-starts":
+                g.ListStarts = true;
+                break;
+            case "--data-check":
+                g.DataCheck = true;
+                break;
+            case "--wiki-export":
+                g.WikiExport = Next();
+                break;
+            case "--facts-only":
+                g.WikiFactsOnly = true;
+                break;
+            case "--load":
+                g.Load = Next();
+                break;
+            case "--continue":
+                g.Continue = true;
+                break;
+            case "--mods-cfg":
+                g.ModsCfg = Next();
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The options of how the game runs (frame limit, vsync, renderer, the bench, the timed runs); false when <paramref name="a"/> is none of
+    /// them.
+    /// </summary>
+    static bool ParseRunOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--fps-limit":
+                g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+            case "--vsync":
+                g.VSync = true;
+                break;
+            case "--no-vsync":
+                g.VSync = false;
+                break;
+            case "--hdr":
+                g.Hdr = true;
+                break;
+            case "--no-hdr":
+                g.Hdr = false;
+                break;
+            case "--ticks":
+                g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+            case "--move-to":
+                g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture));
+                break;
+            case "--quit-after":
+                g.QuitAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+            case "--renderer":
+                {
+                    string renderer = Next().ToLowerInvariant();
+                    if (renderer is not ("vulkan" or "metal")) throw new ArgumentException("--renderer must be vulkan or metal");
+                    g.Renderer = renderer;
+                    break;
+                }
+            case "--play-bench":
+                (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
+                break;
+            case "--no-precompile":
+                g.NoPrecompile = true;
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The agent channel's options (<c>--control-dir</c>, <c>--exec</c>, the timed screenshot); false when <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseAgentOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--control-dir":
+                g.ControlDir = Next();
+                break;
+            case "--screenshot-after":
+                g.ShotAfter = double.Parse(Next(), CultureInfo.InvariantCulture);
+                break;
+            case "--screenshot-out":
+                g.ShotOut = Next();
+                break;
+            case "--exec":
+            case "--setup":
+                g.Exec = Next();
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The animation sandbox, terrain sandbox and duel options; false when <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseSandboxOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--sandbox":
+                g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count)
+                    ? Math.Clamp(count, 1, 1000) : 1;
+                if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
+                break;
+            case "--sandbox-character":
+                g.SandboxCharacter = Next();
+                break;
+            case "--sandbox-mode":
+                g.SandboxMode = Next();
+                break;
+            case "--sandbox-races":
+                g.SandboxRaces = true;
+                break;
+            case "--sandbox-animals":
+                g.SandboxAnimals = true;
+                break;
+            case "--terrain-sandbox":
+                g.TerrainSandbox = TerrainSandboxSpot;
+                if (i + 1 < args.Length && args[i + 1] == "cliffs")
+                    (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
+                if (i + 1 < args.Length && args[i + 1].Split(',') is [var tx, var tz]
+                        && float.TryParse(tx, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
+                        && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
+                {
+                    g.TerrainSandbox = (fx, fz);
+                    i++;
+                }
+                break;
+            case "--duel":
+                g.Duel = true;
+                if (i + 1 < args.Length && args[i + 1].Split(',') is [var dx, var dz]
+                        && float.TryParse(dx, NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                        && float.TryParse(dz, NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+                {
+                    g.DuelAt = (x, z);
+                    i++;
+                }
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>--battle</c> options; false when <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseBattleOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--battle":
+                g.Battle = [.. Enumerable.Range(0, 2).Select(_ => (Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1), Next()))];
+                if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int rows))
+                {
+                    g.BattleRows = Math.Max(rows, 1);
+                    i++;
+                }
+                break;
+            case "--battle-map":
+                switch (Next())
+                {
+                    case "plateau":
+                        (g.BattleFlat, g.BattleAt) = (false, null);
+                        break;
+                    case "mesa":
+                        (g.BattleFlat, g.BattleAt) = (false, (DuelScenario.DuelSpot.X, DuelScenario.DuelSpot.Y));
+                        break;
+                    case "fog":
+                        (g.BattleFlat, g.BattleAt) = (false, (BattleScenario.FogBattleSpot.X, BattleScenario.FogBattleSpot.Y));
+                        break;
+                    case "sandbox":
+                        (g.BattleFlat, g.BattleAt) = (true, null);
+                        break;
+                    case var map when map.Split(',') is [var mx, var mz]
+                            && float.TryParse(mx, NumberStyles.Float, CultureInfo.InvariantCulture, out float bx)
+                            && float.TryParse(mz, NumberStyles.Float, CultureInfo.InvariantCulture, out float bz):
+                        (g.BattleFlat, g.BattleAt) = (false, (bx, bz));
+                        break;
+                    default:
+                        throw new ArgumentException("--battle-map must be plateau, mesa, fog, sandbox or x,z");
+                }
+                break;
+            case "--battle-no-fear":
+                g.BattleNoFear = true;
+                break;
+            case "--battle-width":
+                var widths = Next().Split(',').Select(w => (int?)Math.Max(int.Parse(w, CultureInfo.InvariantCulture), 1)).ToArray();
+                g.BattleWidth = widths switch
+                {
+                    [var both] => [both, both],
+                    [var first, var second] => [first, second],
+                    _ => throw new ArgumentException("--battle-width takes one or two counts, a,b"),
+                };
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The staged <c>--scene</c> options; false when <paramref name="a"/> is none of them.
+    /// </summary>
+    static bool ParseSceneOption(GameOptions g, string a, string[] args, ref int index)
+    {
+        int i = index;
+        string Next() => NextValue(args, ref i, a);
+        switch (a)
+        {
+            case "--scene":
+                g.Scene = Next().ToLowerInvariant();
+                break;
+            case "--scene-frames":
+                g.SceneFrames = Math.Clamp(int.Parse(Next(), CultureInfo.InvariantCulture), 1, 200);
+                break;
+            case "--scene-every":
+                g.SceneEvery = Math.Max(int.Parse(Next(), CultureInfo.InvariantCulture), 1);
+                break;
+            case "--scene-npc":
+                g.SceneNpc = Next();
+                break;
+            case "--scene-town":
+                g.SceneTown = Next();
+                break;
+            default:
+                return false;
+        }
+        index = i;
+        return true;
+    }
+
+    #endregion
 }

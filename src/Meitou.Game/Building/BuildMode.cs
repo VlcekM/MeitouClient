@@ -39,34 +39,84 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     const float CeilingHang = 1;
 
+    /// <summary>
+    /// The host's building services (data, menu, placement checks); null until the host sets them, and build mode does not open without them.
+    /// </summary>
     internal BuildServices? Services;
+    /// <summary>
+    /// Whether build mode is open.
+    /// </summary>
     internal bool Active;
-    // Build mode paused a running game (the original's requested pause, FUN_1404e65e0): leaving it resumes the speed the player had.
+    /// <summary>
+    /// Whether build mode paused a running game: leaving it resumes the speed the player had. Build mode paused a running game (the original's
+    /// requested pause, FUN_1404e65e0): leaving it resumes the speed the player had.
+    /// </summary>
     bool _buildPausedGame;
+    /// <summary>
+    /// The building category chosen in the menu; null for the first that shows.
+    /// </summary>
     string? _buildCategory;
+    /// <summary>
+    /// The index of the chosen group in its category's list.
+    /// </summary>
     int _buildGroup;
 
     /// <summary>
     /// A right click dropped the held building: no building is held until one is chosen from the lists again (<c>FUN_1404e27e0</c>).
     /// </summary>
     internal bool BuildDiscarded;
-    // Which member of the group is chosen (null: its default pick).
+    /// <summary>
+    /// Which member of the group is chosen (null: its default pick).
+    /// </summary>
     internal BuildingBuildData? BuildMember;
+    /// <summary>
+    /// The ghosts placed and not yet confirmed, sent as one order on Confirm.
+    /// </summary>
     internal readonly List<QueuedGhost> BuildQueue = [];
+    /// <summary>
+    /// The ghost's turn (degrees), lift over where the cursor meets (units) and tilt factor.
+    /// </summary>
     float _ghostYaw, _ghostLift, _ghostTilt = DefaultTilt;
-    // How far the ghost may still sink and rise at its last place (PlacementCheck.Margins, after the nudge); the height keys stop at them.
+    /// <summary>
+    /// How far the ghost may still sink and rise at its last place (PlacementCheck.Margins, after the nudge); the height keys stop at them.
+    /// </summary>
     PlacementCheck.VerticalMargins _ghostMargins = PlacementCheck.VerticalMargins.Unlimited;
-    // The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
+    /// <summary>
+    /// The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
+    /// </summary>
     internal (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On)? Ghost;
+    /// <summary>
+    /// The build map's keys held down (the ghost's controls run while held).
+    /// </summary>
     readonly HashSet<Key> _buildHeld = [];
+    /// <summary>
+    /// The timestamp of the last ghost update (<see cref="System.Diagnostics.Stopwatch"/>); 0 to start the frame time afresh.
+    /// </summary>
     long _buildClock;
+    /// <summary>
+    /// Whether the queue's ghosts were drawn last frame, so an emptied queue clears them once.
+    /// </summary>
     bool _ghostsDrawn;
+    /// <summary>
+    /// The placement failure shown in the message panel; null while the ghost can stand.
+    /// </summary>
     string? _buildMessage;
-    // Walls (docs/game/buildings-production.md "Walls"): the line being laid (its wall, start, the snap there and whether it runs backwards),
-    // its pieces this frame with their checks, the snap at its end, and the snap of the ghost before the first click.
+    /// <summary>
+    /// The wall line being laid (docs/game/buildings-production.md "Walls"): its wall, start, the snap there and whether it runs backwards; null
+    /// outside a line.
+    /// </summary>
     internal (BuildingBuildData Master, Vector3 Start, WallSnap? StartSnap, bool Reversed)? WallLine;
+    /// <summary>
+    /// The wall line's pieces this frame, each with its own placement check and footprint.
+    /// </summary>
     internal readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull)> WallPieces = [];
+    /// <summary>
+    /// The snap at the wall line's end, and the snap of the ghost before the first click.
+    /// </summary>
     WallSnap? _wallEndSnap, _ghostSnap;
+    /// <summary>
+    /// The buildable buildings by record id, made on first use.
+    /// </summary>
     Dictionary<string, BuildingBuildData>? _buildIndex;
 
     /// <summary>
@@ -74,7 +124,8 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal static readonly string[] BuildHiddenHud =
     [
-        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel", "BuildPanel",
+        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel",
+        "BuildPanel",
     ];
 
     /// <summary>
@@ -92,8 +143,14 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public BuildServices? BuildHost { get => Services; set => Services = value; }
 
+    /// <summary>
+    /// Whether build mode is open.
+    /// </summary>
     public bool BuildModeOn => Active;
 
+    /// <summary>
+    /// The buildings the player may build: every building while the level editor builds, otherwise the snapshot's unlocked ones.
+    /// </summary>
     internal IReadOnlySet<string> Unlocked() =>
         player.LevelEditorPanel.LevelBuild ? player.LevelEditorPanel.LevelEveryBuilding() : player.Session.CurrentSnapshot.UnlockedBuildings;
 
@@ -102,6 +159,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public void ToggleBuildMode() => SetBuildMode(!Active);
 
+    /// <summary>
+    /// Opens build mode (pausing a running game and clearing the ghost) or closes it (dropping the queue and resuming the speed it paused); does not
+    /// open without services or over a modal screen.
+    /// </summary>
     internal void SetBuildMode(bool on)
     {
         if (on && (Services is null || player.FaithfulScreens.HasModal)) return;
@@ -149,6 +210,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Menu
 
+    /// <summary>
+    /// The menu's categories with something unlocked (sorted by name while the level editor builds).
+    /// </summary>
     IReadOnlyList<string> BuildCategories()
     {
         if (Services?.Menu.Categories(Unlocked()) is not { } categories) return [];
@@ -166,9 +230,15 @@ sealed class BuildMode(PlayerInterface player)
         return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : categories[0];
     }
 
+    /// <summary>
+    /// The chosen category's groups with something unlocked.
+    /// </summary>
     IReadOnlyList<BuildGroup> BuildGroups() =>
         CurrentCategory() is { } category && Services is { } host ? host.Menu.Groups(category, Unlocked()) : [];
 
+    /// <summary>
+    /// The chosen group; null without groups or after a right click dropped the held building.
+    /// </summary>
     BuildGroup? CurrentGroup()
     {
         var groups = BuildGroups();
@@ -181,6 +251,9 @@ sealed class BuildMode(PlayerInterface player)
     internal BuildingBuildData? CurrentBuilding() =>
         CurrentGroup() is { } group ? BuildMember is { } member && group.Members.Contains(member) ? member : group.Default : null;
 
+    /// <summary>
+    /// Steps the chosen group's member by <paramref name="step"/> (wrapping round), resetting the lift.
+    /// </summary>
     void StepVariant(int step)
     {
         if (CurrentGroup() is not { Members.Count: > 1 } group || CurrentBuilding() is not { } current) return;
@@ -226,6 +299,9 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public bool OwnsBuildNumpad(Key key) => Active && key is EngineKey.KeypadAdd or EngineKey.KeypadSubtract;
 
+    /// <summary>
+    /// A key went up: the build map's controls stop.
+    /// </summary>
     public void BuildKeyUp(Key key)
     {
         player.UiInput++;
@@ -292,73 +368,154 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The ghost of the chosen building under the cursor: on a building's floor when one is under the ray, else on the terrain, tilted to the
-    /// ground, settled and judged; a wall ghost snaps to its link points first.
+    /// The ghost of the chosen building under the cursor: on a building's floor when one is under the ray, else on a raised walkway (a wall top),
+    /// else on the terrain, tilted to the ground, settled and judged; a wall ghost snaps to its link points first, a <c>snaps to</c> ghost to its
+    /// target.
     /// </summary>
     void PlaceGhost(BuildServices host, BuildingBuildData building, (Vector3 Origin, Vector3 Direction) ray, Vector3 terrainHit)
     {
-        // A building's floor before the terrain: the ghost stands on it, level.
-        var floorHit = building.LinksTogether ? null
-            : host.Placement.FloorAlong(ray.Origin, ray.Direction, Vector3.Distance(ray.Origin, terrainHit));
-        var on = floorHit?.Floor;
-        var hit = floorHit?.Position ?? terrainHit;
-        var parts = host.Parts(building.Id);
+        var (hit, on, surface) = GhostStand(host, building, ray, terrainHit);
         var footprint = host.Placement.Footprint(building.Id);
-        var at = new Vector2(hit.X, hit.Z);
         var box = footprint?.Bounds ?? (new Vector2(-4), new Vector2(4));
-
-        // The ghost tilts to the ground: all the way for a building that matches the slope, else by the player's tilt factor, never more than its
-        // slope limit.
-        var normal = on is not null ? Vector3.UnitY : PlacementCheck.GroundNormal(host.Placement.Ground, at, _ghostYaw, box);
-        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (building.MatchSlope ? 1 : _ghostTilt);
-        if (building.MaxSlope > 0) angle = MathF.Min(angle, building.MaxSlope * MathF.PI / 180);
-        var axis = Vector3.Cross(Vector3.UnitY, normal);
-        var tilt = axis.LengthSquared() < 1e-10f ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
-        var rotation = tilt * Quaternion.CreateFromAxisAngle(Vector3.UnitY, _ghostYaw);
+        var rotation = GhostTilt(host, building, on is not null || surface is not null, new Vector2(hit.X, hit.Z), box);
 
         // A ceiling light hangs CeilingHang below the ceiling over the floor point (its mesh hangs below its origin, so on the floor it was buried
         // under it).
         float y = building.CeilingPlacement && on?.Ceiling is { } ceiling ? ceiling - CeilingHang : hit.Y;
         var position = new Vector3(hit.X, y + _ghostLift, hit.Z);
-        float yaw = _ghostYaw;
-        Func<string, Vector3, Quaternion, bool>? ignore = null;
 
-        // A wall ghost before its first click snaps to the nearest link point: it starts there, or ends there on a free start (Verified,
-        // FUN_140427950).
-        if (building is { LinksTogether: true, LinkType: 0 or 3 } && Building.WallLine.Find(WallLinks(position), position) is { } snap)
-        {
-            _ghostSnap = snap;
-            rotation = Building.WallLine.LookRotation(snap.Direction);
-            position = snap.Code == 2 ? snap.Point - Vector3.Transform(new Vector3(0, 0, building.LinkLength), rotation) : snap.Point;
-            yaw = PlacementCheck.YawOf(rotation);
-            ignore = WallIgnore(new WallPiece(building, position, rotation), [snap.Point]);
-        }
-
+        // On a raised walkway the walls under the ghost carry it (engine choice).
         var snapshot = player.Session.CurrentSnapshot;
-        var query = new PlacementQuery(building, position, rotation, yaw, on?.Floor ?? 0, parts,
+        var query = new PlacementQuery(building, position, rotation, _ghostYaw, on?.Floor ?? 0, host.Parts(building.Id),
             BuildQueue, snapshot.Characters, snapshot.Buildings, host.Towns(), host.PlayerFactionId(), host.Placement)
-        { Ignore = ignore, On = on, Lift = _ghostLift };
-
-        // The ghost settles on the ground by itself (the original nudges it every frame, FUN_1404d1680): the height it keeps is what the placement
-        // is judged at and what a click queues.
-        if (PlacementCheck.Settle(query) is { } settled)
-        {
-            _ghostLift += settled.Step;
-            position.Y += settled.Step;
-            _ghostMargins = settled.After;
-            query = query with { Position = position, Lift = _ghostLift };
-        }
+        { On = on, Surface = surface, Lift = _ghostLift, PassThrough = surface is null ? null : IsWall };
+        query = SnapToWall(query) ?? SnapToTarget(host, query, footprint) ?? Settled(query);
 
         var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
             : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable
             : PlacementCheck.Evaluate(query);
-        Ghost = (position, rotation, failure, building, footprint?.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)), on);
+        var hull = footprint?.Place(query.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, query.Yaw));
+        Ghost = (query.Position, query.Rotation, failure, building, hull, query.On);
+    }
+
+    /// <summary>
+    /// Where the ghost stands under the cursor: a building's floor along the ray, else a raised walkable surface outside the rooms (a wall top, as
+    /// a move order picks it), else the terrain. A wall stands on the terrain.
+    /// </summary>
+    (Vector3 Hit, GhostFloor? On, float? Surface) GhostStand(BuildServices host, BuildingBuildData building,
+        (Vector3 Origin, Vector3 Direction) ray, Vector3 terrainHit)
+    {
+        if (building.LinksTogether) return (terrainHit, null, null);
+
+        float length = Vector3.Distance(ray.Origin, terrainHit);
+        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, length) is { } floor) return (floor.Position, floor.Floor, null);
+
+        // Engine stand-in for the original's ghost meeting the physics shapes: walls have no rooms, so a turret over a wall top went to the terrain
+        // inside the wall (#431).
+        var top = player.Picking.SurfaceMoveHit?.Invoke(ray.Origin, ray.Direction, length);
+        return top is { } walkway ? (walkway, null, walkway.Y) : (terrainHit, null, null);
+    }
+
+    /// <summary>
+    /// The ghost's turn: <see cref="_ghostYaw"/>, tilted to the ground under its footprint box at <paramref name="at"/> (none when it stands
+    /// <paramref name="level"/>, on a floor or walkway), all the way for a building that matches the slope, else by the player's tilt factor, never
+    /// more than its slope limit.
+    /// </summary>
+    Quaternion GhostTilt(BuildServices host, BuildingBuildData building, bool level, Vector2 at, (Vector2 Min, Vector2 Max) box)
+    {
+        var normal = level ? Vector3.UnitY : PlacementCheck.GroundNormal(host.Placement.Ground, at, _ghostYaw, box);
+        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (building.MatchSlope ? 1 : _ghostTilt);
+        if (building.MaxSlope > 0) angle = MathF.Min(angle, building.MaxSlope * MathF.PI / 180);
+
+        var axis = Vector3.Cross(Vector3.UnitY, normal);
+        var tilt = axis.LengthSquared() < 1e-10f ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
+        return tilt * Quaternion.CreateFromAxisAngle(Vector3.UnitY, _ghostYaw);
+    }
+
+    /// <summary>
+    /// A wall ghost before its first click snaps to the nearest link point: it starts there, or ends there on a free start (<b>Verified</b>,
+    /// <c>FUN_140427950</c>). Null when it is no wall or finds none.
+    /// </summary>
+    PlacementQuery? SnapToWall(PlacementQuery q)
+    {
+        var building = q.Building;
+        if (building is not { LinksTogether: true, LinkType: 0 or 3 } || Building.WallLine.Find(WallLinks(q.Position), q.Position) is not { } snap)
+            return null;
+
+        _ghostSnap = snap;
+        var rotation = Building.WallLine.LookRotation(snap.Direction);
+        var position = snap.Code == 2 ? snap.Point - Vector3.Transform(new Vector3(0, 0, building.LinkLength), rotation) : snap.Point;
+        var ignore = WallIgnore(new WallPiece(building, position, rotation), [snap.Point]);
+        return q with { Position = position, Rotation = rotation, Yaw = PlacementCheck.YawOf(rotation), Ignore = ignore };
+    }
+
+    /// <summary>
+    /// A <c>snaps to</c> ghost takes the place and turn of its nearest target (<see cref="GhostSnap"/>); its target never blocks it, nor, on a
+    /// wall, the other walls. Null when it snaps to nothing or finds no target in reach: it then stands where the cursor is (engine choice, the
+    /// original's "marked by blue nodes" refusal is not decided).
+    /// </summary>
+    PlacementQuery? SnapToTarget(BuildServices host, PlacementQuery q, Simulation.Navigation.BuildingFootprint? footprint)
+    {
+        var building = q.Building;
+        if (building.SnapsTo.Count == 0) return null;
+
+        var (min, max) = footprint?.Bounds ?? (Vector2.Zero, Vector2.Zero);
+        if (GhostSnap.Find(building, (min + max) / 2, q.Position, SnapTargets(host, building, q.Position)) is not { } target) return null;
+
+        bool onWall = IsWall(target.Record);
+        return q with
+        {
+            Position = target.Position,
+            Rotation = target.Rotation,
+            Yaw = PlacementCheck.YawOf(target.Rotation),
+            Floor = 0,
+            On = null,
+            Surface = null,
+            Snapped = true,
+            PassThrough = record => building.SnapsTo.Contains(record) || onWall && IsWall(record),
+        };
+    }
+
+    /// <summary>
+    /// What <paramref name="building"/> may snap to round <paramref name="near"/>: the queued ghosts, the player's sites and the level's buildings
+    /// (a level building that is a site already is the site's).
+    /// </summary>
+    IEnumerable<SnapTarget> SnapTargets(BuildServices host, BuildingBuildData building, Vector3 near)
+    {
+        var sites = player.Session.CurrentSnapshot.Buildings;
+        var known = sites.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        var level = host.Placement.PlacedAround(new Vector2(near.X, near.Z), GhostSnap.Reach + LevelWallReach, building.SnapsTo.Contains)
+            .Where(b => !known.Contains(b.Key));
+        return BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
+            .Concat(sites.Select(s => new SnapTarget(s.Record, s.Position, s.Rotation)))
+            .Concat(level.Select(b => new SnapTarget(b.Record, b.Position, b.Rotation)));
+    }
+
+    /// <summary>
+    /// Whether a BUILDING record is a wall (<c>links together</c>).
+    /// </summary>
+    bool IsWall(string record) => BuildData(record) is { LinksTogether: true };
+
+    /// <summary>
+    /// The ghost settled on the ground by itself (the original nudges it every frame, FUN_1404d1680): the height it keeps is what the placement is
+    /// judged at and what a click queues.
+    /// </summary>
+    PlacementQuery Settled(PlacementQuery q)
+    {
+        if (PlacementCheck.Settle(q) is not { } settled) return q;
+
+        _ghostLift += settled.Step;
+        _ghostMargins = settled.After;
+        return q with { Position = q.Position + new Vector3(0, settled.Step, 0), Lift = _ghostLift };
     }
 
     #endregion
 
     #region Walls
 
+    /// <summary>
+    /// A buildable building by record id; null for one not in the menu's catalog.
+    /// </summary>
     BuildingBuildData? BuildData(string id)
     {
         _buildIndex ??= Services?.Menu.Catalog.GroupBy(b => b.Id, StringComparer.Ordinal)
@@ -408,6 +565,9 @@ sealed class BuildMode(PlayerInterface player)
         return false;
     };
 
+    /// <summary>
+    /// The distance between two points on the ground plane (x, z).
+    /// </summary>
     static float FlatDistance(Vector3 a, Vector3 b) => Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z));
 
     /// <summary>
@@ -591,6 +751,9 @@ sealed class BuildMode(PlayerInterface player)
         return min is { } a && max is { } b ? b - a : default;
     }
 
+    /// <summary>
+    /// Drops the wall line being laid, else the last queued ghost (with its sound).
+    /// </summary>
     void BuildUndo()
     {
         if (WallCancel()) return;
@@ -600,6 +763,9 @@ sealed class BuildMode(PlayerInterface player)
         BuildQueue.RemoveAt(BuildQueue.Count - 1);
     }
 
+    /// <summary>
+    /// Sends the queue as one <see cref="PlaceBuildings"/> order (the level editor's own confirm while it builds) and leaves build mode.
+    /// </summary>
     void BuildConfirm()
     {
         if (player.LevelEditorPanel.LevelBuild)
@@ -629,6 +795,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Window
 
+    /// <summary>
+    /// Fills the build screen's bindings: the categories, groups and members, the message panel, and the buttons' actions.
+    /// </summary>
     internal void BindBuildScreen(UiBindings b)
     {
         void Enable(string name, string action)
@@ -784,13 +953,27 @@ sealed class BuildMode(PlayerInterface player)
                 BuildMember = null;
                 _ghostLift = 0;
                 break;
-            case ("BuldingTypePrevButton", _): StepVariant(-1); break;
-            case ("BuldingTypeNextButton", _): StepVariant(1); break;
-            case ("ConfirmButton", _): BuildConfirm(); break;
-            case ("UndoButton", _): BuildUndo(); break;
-            case ("BuildButton", _): SetBuildMode(false); break;
-            case ("FloorArrowUp", _): player.Floor?.Step(1); break;
-            case ("FloorArrowDown", _): player.Floor?.Step(-1); break;
+            case ("BuldingTypePrevButton", _):
+                StepVariant(-1);
+                break;
+            case ("BuldingTypeNextButton", _):
+                StepVariant(1);
+                break;
+            case ("ConfirmButton", _):
+                BuildConfirm();
+                break;
+            case ("UndoButton", _):
+                BuildUndo();
+                break;
+            case ("BuildButton", _):
+                SetBuildMode(false);
+                break;
+            case ("FloorArrowUp", _):
+                player.Floor?.Step(1);
+                break;
+            case ("FloorArrowDown", _):
+                player.Floor?.Step(-1);
+                break;
         }
     }
 
@@ -798,7 +981,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Sites
 
-    // A right press on a site: when, where and which, for the quick order (build) given on release or the menu opened after the hold.
+    /// <summary>
+    /// A right press on a site: when, where and which, for the quick order (build) given on release or the menu opened after the hold.
+    /// </summary>
     (BuildingSnapshot Site, Vector2 At, long Since)? _sitePending;
 
     /// <summary>
@@ -869,10 +1054,17 @@ sealed class BuildMode(PlayerInterface player)
         // A building placed inside the one hit first (its roof or walls, hidden in the interior view) is what the click means, when the view
         // shows that building's inside there.
         while (best is not null
-            && hits.Where(h => h.Site.Parent == best.Id && !player.Hidden(ray, h.T)).OrderBy(h => h.T).FirstOrDefault() is { Site: not null } inside)
+            && hits.Where(h => StandsIn(h.Site, best) && !player.Hidden(ray, h.T)).OrderBy(h => h.T).FirstOrDefault() is { Site: not null } inside)
             (best, bestT) = inside;
         return best is null ? null : (WallOf(best), bestT);
     }
+
+    /// <summary>
+    /// Whether <paramref name="child"/> was placed in <paramref name="building"/>: its parent is the site's id, or for a repaired level building (a
+    /// bought town house) the level instance id, which is what furniture built in it names.
+    /// </summary>
+    static bool StandsIn(BuildingSnapshot child, BuildingSnapshot building) =>
+        child.Parent is { } parent && (parent == building.Id || parent == building.LevelPlacement?.InstanceId);
 
     /// <summary>
     /// The wall an attached short piece, connector or wedge belongs to (its orders, name and materials are the wall's), else the site itself.
@@ -904,14 +1096,7 @@ sealed class BuildMode(PlayerInterface player)
         }
 
         // The convex polygon in X/Z: clip the ray against each edge's half plane.
-        float area = 0;
-        for (int i = 0; i < polygon.Length; i++)
-        {
-            var next = polygon[(i + 1) % polygon.Length];
-            area += polygon[i].X * next.Y - next.X * polygon[i].Y;
-        }
-
-        float sign = area >= 0 ? 1 : -1;
+        float sign = PlacementCheck.Winding(polygon);
         for (int i = 0; i < polygon.Length; i++)
         {
             var p = polygon[i];
@@ -960,50 +1145,65 @@ sealed class BuildMode(PlayerInterface player)
         if (own && (site.Destroyed || site.Complete && site.NeedsWork)) verbs.Add(("Repair", () => OrderConstruction(site, selection)));
         else if (!site.Complete && !site.Destroyed) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         player.Production.AddMachineVerb(verbs, site, selection);
-        if (site.Complete && player.Production.Machine(site.Id) is { } machine)
-        {
-            if (machine.IsStorage)
-                // Order 124: one haul trip, with Shift the Hauling to job (FUN_1407fa650).
-                verbs.Add(("Auto-Haul", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.OperateOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-
-            // With Shift the dispatch turns Inventory (26) on a storage into Hauling to (124) and Man Turret (146) into Turret guard (234)
-            // (FUN_1407fa650, docs/game/ui-input.md "Click").
-            if (machine.IsStorage)
-            {
-                verbs.Add(("Inventory", () =>
-                {
-                    if (player.SlowModifier)
-                        player.Say(new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
-                            { Tick = player.Session.World.Tick });
-                    else
-                        OpenStorage(site);
-                }));
-            }
-            else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
-
-            // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else the
-            // carried corpses go in.
-            if (own && machine.Function == TownBuildings.CorpseDisposalFunction)
-                verbs.Add(("Corpse Disposal", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.DisposeCorpseOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-            if (machine.Function == ObjectRanges.TurretFunction)
-                verbs.Add(("Man Turret", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.UseTurret, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-        }
+        if (site.Complete && player.Production.Machine(site.Id) is { } machine) AddMachineVerbs(verbs, site, selection, machine, own);
 
         if (own && site.LevelPlacement is null)
             verbs.Add(("Dismantle", () => player.Say(new DismantleOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
         if (site.LevelPlacement is null && !site.Complete && site.Progress <= 0 && site.Materials.All(m => m.Delivered <= 0))
             verbs.Add(("Cancel Construction", () => player.Say(new CancelSite(site.Id) { Tick = player.Session.World.Tick })));
-        // A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once
-        // (docs/simulation.md "Cages, beds and locks").
+        AddDoorVerbs(verbs, site);
+        return verbs;
+    }
+
+    /// <summary>
+    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, a furnace's Inventory, a corpse machine's Corpse Disposal, a turret's Man
+    /// Turret.
+    /// </summary>
+    void AddMachineVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection,
+        Simulation.Production.MachineSnapshot machine, bool own)
+    {
+        if (machine.IsStorage)
+            // Order 124: one haul trip, with Shift the Hauling to job (FUN_1407fa650).
+            verbs.Add(("Auto-Haul", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.OperateOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+
+        // With Shift the dispatch turns Inventory (26) on a storage into Hauling to (124) and Man Turret (146) into Turret guard (234)
+        // (FUN_1407fa650, docs/game/ui-input.md "Click").
+        if (machine.IsStorage)
+        {
+            verbs.Add(("Inventory", () =>
+            {
+                if (player.SlowModifier)
+                    player.Say(new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
+                        { Tick = player.Session.World.Tick });
+                else
+                    OpenStorage(site);
+            }));
+        }
+        else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
+
+        // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else the
+        // carried corpses go in.
+        if (own && machine.Function == TownBuildings.CorpseDisposalFunction)
+            verbs.Add(("Corpse Disposal", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.DisposeCorpseOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+        if (machine.Function == ObjectRanges.TurretFunction)
+            verbs.Add(("Man Turret", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.UseTurret, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+    }
+
+    /// <summary>
+    /// A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once (docs/simulation.md "Cages, beds and
+    /// locks").
+    /// </summary>
+    void AddDoorVerbs(List<(string, Action)> verbs, BuildingSnapshot site)
+    {
         var doors = player.Session.CurrentSnapshot.Doors.Where(d => d.Key.Building == site.Id).Select(d => d.Value).ToList();
         if (site.Complete && doors.Count > 0)
         {
@@ -1019,9 +1219,11 @@ sealed class BuildMode(PlayerInterface player)
             }
             ));
         }
-        return verbs;
     }
 
+    /// <summary>
+    /// Orders the selection to build (or repair) the site; with the slow modifier it also adds the matching job.
+    /// </summary>
     void OrderConstruction(BuildingSnapshot site, IReadOnlyList<CharacterId> selection)
     {
         player.Say(new BuildOrder(selection, site.Id) { Tick = player.Session.World.Tick });
@@ -1244,7 +1446,7 @@ sealed class BuildMode(PlayerInterface player)
         float minimum = player.TitleOpen ? 0 : player.StandardPixels;
         var width = UiTooltips.Arrange(lines, TooltipKind.Floating, player.Width, player.Height, top, null,
             (text, wrap) => painter.MeasureText(TooltipRuntime.TooltipFont, text, player.Height, wrap, minimum) is var s
-                ? new(s.Width, s.Height) : default).Panel.Width;
+                ? new(s.Width, s.Height) : default, player.InterfaceScale).Panel.Width;
         var anchor = top with { X = top.X + width / 2 };
         player.TooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "build-readout", anchor, colours);
     }

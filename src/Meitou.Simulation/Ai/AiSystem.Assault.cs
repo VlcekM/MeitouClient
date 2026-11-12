@@ -6,27 +6,37 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's assault orders: a dialogue's Assault order and the assaults a think picks, started in the serial step.
+/// </summary>
 public sealed partial class AiSystem
 {
-    // Resolved in the serial step; the think only reads it (null before the first tick: only the mission target itself is then known).
+    /// <summary>
+    /// Resolved in the serial step; the think only reads it (null before the first tick: only the mission target itself is then known).
+    /// </summary>
     CombatSystem? _combat;
 
-    // Set by a think that picked someone to assault (<see cref="AiMind.AssaultTarget"/>).
+    /// <summary>
+    /// Set by a think that picked someone to assault (<see cref="AiMind.AssaultTarget"/>).
+    /// </summary>
     int _assaulting;
 
-    // Characters holding a dialogue's Assault order (AiMind.ForcedAssault): SendAssaults keeps running while any is left.
+    /// <summary>
+    /// Characters holding a dialogue's Assault order (AiMind.ForcedAssault): SendAssaults keeps running while any is left.
+    /// </summary>
     int _forcedAssaults;
 
     /// <summary>
-    /// A dialogue attack effect's Assault order for the speaker (<c>FUN_140680560</c> cases 6, 0x37 and 0x39: <c>FUN_1405d20d0(speaker, 0, 0x65 | 0xf8, target)</c>,
-    /// <b>Verified</b>; goal 101, 248 for 0x37, whose extra list-B <c>!159</c> and commitment are not modelled): the speaker attacks the best known, in-area,
-    /// standing member of the target's squad. Given only to a speaker of a faction that is not the player's. False when the speaker has no AI mind
-    /// (the caller then attacks the target itself).
+    /// A dialogue attack effect's Assault order for the speaker (<c>FUN_140680560</c> cases 6, 0x37 and 0x39: <c>FUN_1405d20d0(speaker, 0, 0x65 |
+    /// 0xf8, target)</c>, <b>Verified</b>; goal 101, 248 for 0x37, whose extra list-B <c>!159</c> and commitment are not modelled): the speaker
+    /// attacks the best known, in-area, standing member of the target's squad. Given only to a speaker of a faction that is not the player's. False
+    /// when the speaker has no AI mind (the caller then attacks the target itself).
     /// </summary>
     public bool OrderAssault(World world, CharacterId speaker, CharacterId target)
     {
         if (!world.Characters.TryResolveNext(speaker, out int s) || world.Characters.Cold(s)?.Ai is not { } mind)
             return false;
+
         if (world.Characters.Cold(s)!.Faction == world.Player.Faction) return true;   // the player's faction's speaker gets no order
         mind.ForcedAssault = target;
         Interlocked.Exchange(ref _forcedAssaults, 1);
@@ -74,6 +84,7 @@ public sealed partial class AiSystem
             if (c.SlaveState != 1 && (c.Faction == me.Faction
                 || Relations.Contains(c.Faction) && Relations.Contains(me.Faction) && Relations.IsAlly(me.Faction, c.Faction)))
                 continue;
+
             if (PursuitSystem.PathImpossible(me, m, world.Tick)) continue;
 
             var candidate = new TargetCandidate

@@ -8,7 +8,28 @@ namespace Meitou.Game.Rendering.Objects;
 /// <summary>
 /// Where a surface's alpha comes from. Values follow the fcs.def descriptions (docs/viewer.md).
 /// </summary>
-public enum AlphaSource { None, DiffuseAlpha, NormalAlpha, DiffuseChannel }
+public enum AlphaSource
+{
+    /// <summary>
+    /// Opaque: no alpha test.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// The diffuse map's alpha (script materials with alpha rejection or blending).
+    /// </summary>
+    DiffuseAlpha,
+
+    /// <summary>
+    /// The normal map's alpha (ALPHA and FOLIAGE materials, foliage leaves).
+    /// </summary>
+    NormalAlpha,
+
+    /// <summary>
+    /// A channel of the diffuse map (<see cref="SurfaceMaterial.AlphaChannel"/>; channel-packed hair).
+    /// </summary>
+    DiffuseChannel
+}
 
 /// <summary>
 /// How the viewer shades one submesh: texture files plus the few material switches Kenshi's records carry.
@@ -19,53 +40,107 @@ public sealed record SurfaceMaterial
     /// Where this came from, e.g. <c>MATERIAL_SPEC 'wallbasic01' via BUILDING_PART 'basic wall gate A'</c>.
     /// </summary>
     public required string Description { get; init; }
+
+    /// <summary>
+    /// The diffuse texture file (null: none).
+    /// </summary>
     public string? Diffuse { get; init; }
+
+    /// <summary>
+    /// The normal map file (null: none).
+    /// </summary>
     public string? Normal { get; init; }
+
     /// <summary>
     /// Second texture set, blended in by vertex alpha (BuildingShader.DUAL, MapFeatureMode.DUAL_*).
     /// </summary>
     public string? Diffuse2 { get; init; }
+
+    /// <summary>
+    /// The second set's normal map file.
+    /// </summary>
     public string? Normal2 { get; init; }
+
     /// <summary>
     /// The game's metalness map (<c>metalness map</c>; red channel, objects.hlsl), where the record names one: few do.
     /// </summary>
     public string? Metal { get; init; }
+
+    /// <summary>
+    /// Where the surface's alpha comes from (<see cref="AlphaSource.None"/>: opaque).
+    /// </summary>
     public AlphaSource Alpha { get; init; }
+
     /// <summary>
     /// Alpha test threshold 0–1 (0 = no test).
     /// </summary>
     public float AlphaThreshold { get; init; }
+
     /// <summary>
     /// For <see cref="AlphaSource.DiffuseChannel"/> and channel-packed hair: channel indices 0–3 (R, G, B, A).
     /// </summary>
     public int AlphaChannel { get; init; } = 3;
+
+    /// <summary>
+    /// The texture channel holding the grey diffuse (channel-packed hair, 0-3); -1: the texture's own colour.
+    /// </summary>
     public int GreyChannel { get; init; } = -1;
+
+    /// <summary>
+    /// A colour the diffuse is multiplied by (hair's brown; white for the rest).
+    /// </summary>
     public Vector3 Tint { get; init; } = Vector3.One;
+
+    /// <summary>
+    /// Drawn without back-face culling (foliage, alpha clothing, cull-none script materials).
+    /// </summary>
     public bool DoubleSided { get; init; }
+
+    /// <summary>
+    /// The EMISSIVE type (map feature mode 6, MATERIAL_SPEC type 4).
+    /// </summary>
     public bool Emissive { get; init; }
+
     /// <summary>
     /// World-space planar projection instead of UVs (MapFeatureMode.TRIPLANAR / DUAL_TRIPLANAR).
     /// </summary>
     public bool Triplanar { get; init; }
+
     /// <summary>
     /// The DUST define: the weather's dust covers the material (building parts; triplanar map features, docs/formats/weather.md "Dust").
     /// </summary>
     public bool Dust { get; init; }
+
     /// <summary>
     /// The foliage shader (FOLIAGE map features, leaves): wetness with a fixed absorbance.
     /// </summary>
     public bool Foliage { get; init; }
+
+    /// <summary>
+    /// The texture coordinates' tiling (the record's <c>tile X</c>, <c>tile Y</c>).
+    /// </summary>
     public Vector2 Tile { get; init; } = Vector2.One;
+
+    /// <summary>
+    /// The record's <c>specular mult</c> (1 when absent).
+    /// </summary>
     public float SpecularMult { get; init; } = 1;
+
     /// <summary>
     /// Multiply the diffuse by the vertex colour when the mesh has one (the COLOURING define; docs/formats/runtime-materials.md).
     /// </summary>
     public bool VertexColours { get; init; }
+
     /// <summary>
     /// Character head textures, sampled at uv + (0, 1): the body mesh keeps head UVs in v -1..0 (Kenshi character.hlsl).
     /// </summary>
     public string? HeadDiffuse { get; init; }
+
+    /// <summary>
+    /// The character head's normal map (see <see cref="HeadDiffuse"/>).
+    /// </summary>
     public string? HeadNormal { get; init; }
+
     /// <summary>
     /// Clamp to a transparent black border instead of repeating (Kenshi's Character material units).
     /// </summary>
@@ -79,10 +154,30 @@ public sealed record SurfaceMaterial
 /// </summary>
 public sealed class MaterialResolver
 {
+    /// <summary>
+    /// The records the candidates come from (null: script materials only).
+    /// </summary>
     readonly GameDatabase? _db;
+
+    /// <summary>
+    /// The Ogre script materials (null: none).
+    /// </summary>
     readonly OgreMaterialLibrary? _materials;
+
+    /// <summary>
+    /// Finds texture files (a candidate whose diffuse map is not found is dropped).
+    /// </summary>
     readonly AssetLocator _assets;
+
+    /// <summary>
+    /// The records whose filename fields name each mesh (bare name, case-insensitive), with the field; an item with mesh variants is listed under
+    /// each variant.
+    /// </summary>
     readonly Dictionary<string, List<(GameRecord Record, string Field)>> _meshUsers = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The records that reference each record (by string id), for parts that take a parent's material and weapons that take a manufacturer's model.
+    /// </summary>
     readonly Dictionary<string, List<GameRecord>> _referencedBy = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -93,6 +188,9 @@ public sealed class MaterialResolver
         "black.dds", "flat.dds", "white.dds", "grey.dds", "gray.dds", "blank.dds", "blask.dds",
     };
 
+    /// <summary>
+    /// Indexes the database's records by the meshes they name and by the records they reference.
+    /// </summary>
     public MaterialResolver(GameDatabase? db, OgreMaterialLibrary? materials, AssetLocator assets)
     {
         this._db = db;
@@ -118,6 +216,9 @@ public sealed class MaterialResolver
         }
     }
 
+    /// <summary>
+    /// The users list of a mesh, made on first use.
+    /// </summary>
     List<(GameRecord, string)> Users(string mesh)
     {
         if (!_meshUsers.TryGetValue(mesh, out var list)) _meshUsers[mesh] = list = [];
@@ -147,6 +248,10 @@ public sealed class MaterialResolver
             .ToList();
     }
 
+    /// <summary>
+    /// The materials a record gives for the mesh named in its <paramref name="field"/>: by record type (foliage, map features, birds, hair, races,
+    /// weapons), else its own texture map, then its material references (a building part without any takes its parents').
+    /// </summary>
     IEnumerable<SurfaceMaterial> FromRecord(GameRecord record, string field)
     {
         string via = $"{record.Type} '{record.Name}' .{field}";
@@ -191,7 +296,9 @@ public sealed class MaterialResolver
             case FcsRecordType.Race:
                 {
                     // The first head of the race (heads are picked per character; the first is as good as any).
-                    var head = record.GetReferences(female ? "heads female" : "heads male").Select(r => _db!.Find(r.TargetStringId)).FirstOrDefault(h => h is not null);
+                    var head = record.GetReferences(female ? "heads female" : "heads male")
+                        .Select(r => _db!.Find(r.TargetStringId))
+                        .FirstOrDefault(h => h is not null);
                     yield return new SurfaceMaterial
                     {
                         Description = via + " (body texture" + (head is null ? ")" : $", head '{head.Name}')"),
@@ -225,6 +332,10 @@ public sealed class MaterialResolver
             yield return m with { Description = $"{m.Description} via {via}" };
     }
 
+    /// <summary>
+    /// A map feature's (or foliage mesh's) material by its MapFeatureMode <paramref name="mode"/>: triplanar and dual modes, FOLIAGE's cut-out from
+    /// the normal map's alpha, EMISSIVE; vertex colouring always.
+    /// </summary>
     SurfaceMaterial MapFeature(GameRecord record, string via, int mode, int alphaThreshold)
     {
         // MapFeatureMode { UV_MAPPED, TRIPLANAR, TERRAIN, DUAL_TEXTURE, FOLIAGE, DUAL_TRIPLANAR, EMISSIVE }
@@ -249,6 +360,9 @@ public sealed class MaterialResolver
         };
     }
 
+    /// <summary>
+    /// The MapFeatureMode name of a mode number (the number itself when unknown).
+    /// </summary>
     public static string MapFeatureModeName(int mode) => mode switch
     {
         0 => "UV_MAPPED",
@@ -261,6 +375,9 @@ public sealed class MaterialResolver
         _ => mode.ToString(),
     };
 
+    /// <summary>
+    /// A weapon's looks: the models of the WEAPON_MANUFACTURERs that list it, highest chance first.
+    /// </summary>
     IEnumerable<SurfaceMaterial> WeaponModels(GameRecord weapon)
     {
         // WEAPON_MANUFACTURER lists "weapon types" (WEAPON) and "weapon models" (MATERIAL_SPECS_WEAPON); a weapon's look is
@@ -275,6 +392,9 @@ public sealed class MaterialResolver
                     yield return m with { Description = $"{m.Description} (model of {maker.Name})" };
     }
 
+    /// <summary>
+    /// The materials of a list of MATERIAL_SPEC references, likeliest first, collections expanded (at most 4 deep).
+    /// </summary>
     IEnumerable<SurfaceMaterial> Expand(IReadOnlyList<GameReference> refs, int depth)
     {
         if (_db is null || depth > 4) yield break;
@@ -293,6 +413,9 @@ public sealed class MaterialResolver
             }
     }
 
+    /// <summary>
+    /// The material of one MATERIAL_SPEC, MATERIAL_SPECS_CLOTHING or MATERIAL_SPECS_WEAPON record (none for another type).
+    /// </summary>
     IEnumerable<SurfaceMaterial> Leaf(GameRecord spec)
     {
         string name = $"{spec.Type} '{spec.Name}'";
@@ -304,7 +427,8 @@ public sealed class MaterialResolver
                     int type = spec.GetInt("material type");
                     yield return new SurfaceMaterial
                     {
-                        Description = $"{name} (type {type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
+                        Description = $"{name} (type " +
+                            $"{type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
                         Diffuse = Tex(spec, "texture map"),
                         Normal = Tex(spec, "normal map"),
                         Diffuse2 = type == 3 ? Tex(spec, "texture map 2") : null,
@@ -378,5 +502,8 @@ public sealed class MaterialResolver
         };
     }
 
+    /// <summary>
+    /// A record's path field, or null when empty.
+    /// </summary>
     static string? Tex(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;
 }

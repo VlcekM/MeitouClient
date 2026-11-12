@@ -15,22 +15,51 @@ namespace Meitou.Game.Editor;
 /// </summary>
 sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? lengths)
 {
+    /// <summary>
+    /// The list's first entry: no forced animation, the simulation animates the hero.
+    /// </summary>
     const string Simulation = "simulation";
+    /// <summary>
+    /// The rows the open list shows at once.
+    /// </summary>
     const int VisibleRows = 24;
     /// <summary>
     /// The record names, techniques included, each once.
     /// </summary>
     readonly string[] _names = [Simulation,
         .. library.Definitions.Select(d => d.Name).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
+    /// <summary>
+    /// The typed filter (letters a name must contain, case ignored).
+    /// </summary>
     string _filter = "";
+    /// <summary>
+    /// The names that pass the filter ("simulation" always), in list order.
+    /// </summary>
     List<string> _shown = [];
+    /// <summary>
+    /// The first row shown, and the highlighted row (Up / Down, the wheel, Enter).
+    /// </summary>
     int _scroll, _highlight;
+    /// <summary>
+    /// The forced animation's record name; null when the simulation animates the hero.
+    /// </summary>
     string? _current;
+    /// <summary>
+    /// The picked clip's length in seconds (1 when unknown), the loop's period.
+    /// </summary>
     float _length = 1;
+    /// <summary>
+    /// When the clip was picked (<see cref="Stopwatch"/> timestamp): the loop's start.
+    /// </summary>
     long _pickedAt;
-    // The button and the open list, as last drawn (pixels).
+    /// <summary>
+    /// The button's and the open list's corners and the row height, as last drawn (pixels).
+    /// </summary>
     float _buttonX0, _buttonY0, _buttonX1, _buttonY1, _listX0, _listY0, _listX1, _listY1, _rowHeight = 20;
 
+    /// <summary>
+    /// Whether the list is open.
+    /// </summary>
     public bool Open { get; private set; }
 
     /// <summary>
@@ -38,6 +67,9 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     /// </summary>
     public string? Current => _current;
 
+    /// <summary>
+    /// The button's text: the forced animation, or "simulation".
+    /// </summary>
     public string ButtonText => $"animation: {_current ?? Simulation} v";
 
     /// <summary>
@@ -46,8 +78,14 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     public CharacterPose[]? Pose() => _current is null ? null
         : [new CharacterPose(_current, (float)(Stopwatch.GetElapsedTime(_pickedAt).TotalSeconds % _length), 1)];
 
+    /// <summary>
+    /// The status line: the picked clip's loop length; empty for none.
+    /// </summary>
     public string Status => _current is null ? "" : $"loops {_length:0.00} s";
 
+    /// <summary>
+    /// Picks a list entry and closes the list: "simulation" drops the forced animation, any other loops its clip from now.
+    /// </summary>
     void Pick(string name)
     {
         Open = false;
@@ -62,6 +100,9 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
         _pickedAt = Stopwatch.GetTimestamp();
     }
 
+    /// <summary>
+    /// Applies the filter afresh and goes back to the top of the list.
+    /// </summary>
     void Refilter()
     {
         _shown = [.. _names.Where(n => n == Simulation || n.Contains(_filter, StringComparison.OrdinalIgnoreCase))];
@@ -69,12 +110,18 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
         _highlight = 0;
     }
 
+    /// <summary>
+    /// Keeps the highlighted row on the list and in view.
+    /// </summary>
     void ClampScroll()
     {
         _highlight = Math.Clamp(_highlight, 0, Math.Max(0, _shown.Count - 1));
         _scroll = Math.Clamp(_scroll, Math.Max(0, _highlight - VisibleRows + 1), Math.Min(_highlight, Math.Max(0, _shown.Count - VisibleRows)));
     }
 
+    /// <summary>
+    /// Whether point <paramref name="p"/> is inside the rectangle.
+    /// </summary>
     static bool In(Vector2 p, float x0, float y0, float x1, float y1) => p.X >= x0 && p.X <= x1 && p.Y >= y0 && p.Y <= y1;
 
     /// <summary>
@@ -101,6 +148,9 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
         return true;
     }
 
+    /// <summary>
+    /// The wheel scrolls the open list by three rows a notch; false (the game's) while it is closed.
+    /// </summary>
     public bool Scroll(float wheel)
     {
         if (!Open) return false;
@@ -117,28 +167,38 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     {
         switch (key)
         {
-            case EngineKey.Escape: Open = false;
-            break;
-            case EngineKey.Enter: if (_shown.Count > 0) Pick(_shown[_highlight]);
-            break;
-            case EngineKey.Up: _highlight--;
+            case EngineKey.Escape:
+                Open = false;
+                break;
+            case EngineKey.Enter:
+                if (_shown.Count > 0) Pick(_shown[_highlight]);
+                break;
+            case EngineKey.Up:
+                _highlight--;
             ClampScroll();
             break;
-            case EngineKey.Down: _highlight++;
+            case EngineKey.Down:
+                _highlight++;
             ClampScroll();
             break;
-            case EngineKey.PageUp: _highlight -= VisibleRows;
+            case EngineKey.PageUp:
+                _highlight -= VisibleRows;
             ClampScroll();
             break;
-            case EngineKey.PageDown: _highlight += VisibleRows;
+            case EngineKey.PageDown:
+                _highlight += VisibleRows;
             ClampScroll();
             break;
-            case EngineKey.Backspace when _filter.Length > 0: _filter = _filter[..^1];
+            case EngineKey.Backspace when _filter.Length > 0:
+                _filter = _filter[..^1];
             Refilter();
             break;
         }
     }
 
+    /// <summary>
+    /// A typed character extends the open list's filter.
+    /// </summary>
     public void TextInput(char c)
     {
         if (!Open || char.IsControl(c)) return;

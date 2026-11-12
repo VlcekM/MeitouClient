@@ -13,6 +13,7 @@ using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Production;
 using Meitou.Tests.Combat;
 using static Meitou.Tests.Bodies.BodyFixtures;
@@ -117,12 +118,26 @@ public class OrderQueueTests
         Assert.True(rig.Cold(gunner).OrderQueue[0].Started);
     }
 
+    /// <summary>
+    /// A town's turret (#545): the player's order on its <c>townwork:</c> site makes its machine and the gunner mans it, with no "It needs
+    /// electricity." (a town has no power grid). Catches a town turret ordered but never manned.
+    /// </summary>
+    [Fact]
+    public void A_player_character_ordered_onto_a_town_turret_mans_it()
+    {
+        using var rig = new TurretRig(town: true);
+        rig.Say(new UseTurretOrder([rig.Gunner], rig.Turret) { Tick = 0 });
+        rig.RunUntil(() => rig.Task(rig.Gunner) == CharacterTask.Operate && rig.Cold(rig.Gunner).Operating, 600, "manning the town turret");
+
+        Assert.Equal(rig.Turret, rig.Cold(rig.Gunner).OperateSite);
+    }
+
     static TaskType[] Rows(SimWorld world, CharacterId id) => [.. world.Characters.Cold(id.Slot)!.OrderQueue.Select(e => e.Row)];
 
     /// <summary>
     /// A player's turret (function 12) with a gunner of the player's next to it and an enemy fighter 120 away; movement, pursuit, body, production,
     /// combat and retaliation; with <paramref name="aggro"/> also the attack-on-sight look, the two factions hostile (the urgent turret job's sensed
-    /// enemies).
+    /// enemies). With <paramref name="town"/> the turret is a town's building instead (its <c>townwork:</c> site).
     /// </summary>
     internal sealed class TurretRig : IDisposable
     {
@@ -131,7 +146,7 @@ public class OrderQueueTests
         public string Turret;
         readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
 
-        public TurretRig(bool aggro = false)
+        public TurretRig(bool aggro = false, bool town = false)
         {
             var db = FirstAidTests.KitDatabase();
             var fn = new FcsRecord { StringId = "92-t", Flags = 0x10, Name = "92-t", RecordType = FcsRecordType.BuildingFunctionality };
@@ -140,8 +155,12 @@ public class OrderQueueTests
             var turret = new FcsRecord { StringId = "64-t", Flags = 0x10, Name = "Test Turret", RecordType = FcsRecordType.Building };
             turret.References["functionality"] = [new FcsReference("92-t", 0, 0, 0)];
             var file = new FcsFile();
-            file.Records.AddRange([fn, turret]);
+            file.Records.AddRange([fn, turret, SyntheticTown.Rec("30-t", FcsRecordType.Town, "Test Town")]);
             db.Apply(file, "turret.mod");
+            var at = new Vector3(1000, 300, 2000);
+            var tower = new TownBuilding("tower", "64-t", "Test Turret", at, 0, false, false, []) { Turret = new TurretPost(at, 0, 10, "", null) };
+            var data = PopulationData.Create(db, [new TownPlacement("inst", "30-t", at, null)],
+                    buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [tower] });
             var items = new ItemFactory(db, BaseGame);
             var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
                     new CombatOptions { SelfApproach = false, TickMedical = false });
@@ -149,13 +168,22 @@ public class OrderQueueTests
             [
                 new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(_walk, true)),
                         new BodySystem(BaseGame, BodyOptions.Default),
-                new ProductionSystem(db, BaseGame, BodyOptions.Default, items, null), combat, new RetaliationSystem(combat),
+                town ? new ProductionSystem(data) : new ProductionSystem(db, BaseGame, BodyOptions.Default, items, null), combat,
+                        new RetaliationSystem(combat),
                         aggro ? new AggroSystem(Hostile()) { Combat = combat } : Senses(combat),
             ]);
             World.Player.Faction = 1;
-            Turret = World.Buildings.NewId(WorldLayout.ZoneOf(1000, 2000));
-            World.Buildings.Add(new BuildSite { Id = Turret, Record = "64-t", Position = new Vector3(1000, 300, 2000), Owner = 1, Materials = [],
-                    Complete = true });
+            if (town)
+            {
+                combat.Towns = data;
+                Turret = ProductionSystem.TownWorkPrefix + tower.Key;
+            }
+            else
+            {
+                Turret = World.Buildings.NewId(WorldLayout.ZoneOf(1000, 2000));
+                World.Buildings.Add(new BuildSite { Id = Turret, Record = "64-t", Position = at, Owner = 1, Materials = [], Complete = true });
+            }
+
             Gunner = Add(1000, 2030, player: true);
             Enemy = Add(1000, 2150, player: false);
         }

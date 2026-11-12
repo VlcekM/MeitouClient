@@ -1,11 +1,14 @@
 namespace Meitou.Game.Tutorials;
 
 /// <summary>
-/// What the tutorial triggers look at, filled by the interface at each poll (docs/game/ui-screens.md "Tutorials"). "PCs" are the player's characters; the building
-/// tests are over the player's buildings.
+/// What the tutorial triggers look at, filled by the interface at each poll (docs/game/ui-screens.md "Tutorials"). "PCs" are the player's characters;
+/// the building tests are over the player's buildings.
 /// </summary>
 readonly record struct TutorialPoll
 {
+    /// <summary>
+    /// The character editor is open or a world is loading (no trigger fires then).
+    /// </summary>
     public bool EditorOrLoading { get; init; }
 
     /// <summary>
@@ -13,47 +16,156 @@ readonly record struct TutorialPoll
     /// </summary>
     public bool Unsettled { get; init; }
 
+    /// <summary>
+    /// A PC stands in a town (the world's tutorial facts).
+    /// </summary>
     public bool InTown { get; init; }
+
+    /// <summary>
+    /// A PC needs first aid.
+    /// </summary>
     public bool NeedsFirstAid { get; init; }
+
+    /// <summary>
+    /// A PC is in combat.
+    /// </summary>
     public bool UnderAttack { get; init; }
+
+    /// <summary>
+    /// How many PCs are alive.
+    /// </summary>
     public int PcCount { get; init; }
 
     /// <summary>
     /// The PCs, for the recruit tutorial's newest member.
     /// </summary>
     public IReadOnlyList<Simulation.CharacterId> Pcs { get; init; }
+
+    /// <summary>
+    /// The squad carries stolen goods (the world's tutorial facts).
+    /// </summary>
     public bool Stolen { get; init; }
+
+    /// <summary>
+    /// A PC is unconscious (not playing dead).
+    /// </summary>
     public bool AnyUnconscious { get; init; }
+
+    /// <summary>
+    /// A PC is conscious.
+    /// </summary>
     public bool AnyConscious { get; init; }
+
+    /// <summary>
+    /// A PC is in a prison.
+    /// </summary>
     public bool InPrison { get; init; }
+
+    /// <summary>
+    /// A PC is in a cannibal cage.
+    /// </summary>
     public bool InCannibalCage { get; init; }
+
+    /// <summary>
+    /// A PC is sneaking.
+    /// </summary>
     public bool Sneaking { get; init; }
+
+    /// <summary>
+    /// The steal pointer shows: a selection over another faction's ground item (cursor 0x15).
+    /// </summary>
     public bool StealCursor { get; init; }
+
+    /// <summary>
+    /// The inspected character is another faction's with a bounty.
+    /// </summary>
     public bool SelectedHasBounty { get; init; }
+
+    /// <summary>
+    /// A PC that is not a robot is hungry (hunger below 2).
+    /// </summary>
     public bool Hungry { get; init; }
+
+    /// <summary>
+    /// A PC is playing dead.
+    /// </summary>
     public bool PlayingDead { get; init; }
+
+    /// <summary>
+    /// The player has a production building (a machine with an output, a farm or a crafting bench).
+    /// </summary>
     public bool HasProductionBuilding { get; init; }
+
+    /// <summary>
+    /// A PC is a slave.
+    /// </summary>
     public bool Slave { get; init; }
+
+    /// <summary>
+    /// A PC wears a faction's uniform (the world's tutorial facts).
+    /// </summary>
     public bool Uniform { get; init; }
+
+    /// <summary>
+    /// A player machine's output or farm is full.
+    /// </summary>
     public bool MachineFull { get; init; }
+
+    /// <summary>
+    /// The inspected building is for sale.
+    /// </summary>
     public bool SelectedForSale { get; init; }
+
+    /// <summary>
+    /// A finished player building with an output exists.
+    /// </summary>
     public bool ProductionComplete { get; init; }
+
+    /// <summary>
+    /// Build mode is placing a building.
+    /// </summary>
     public bool Placing { get; init; }
+
+    /// <summary>
+    /// A finished player crafting bench exists.
+    /// </summary>
     public bool CraftingComplete { get; init; }
+
+    /// <summary>
+    /// A finished player research bench (tech level above 0) exists.
+    /// </summary>
     public bool ResearchComplete { get; init; }
+
     /// <summary>
     /// The management (overview) tab shown, -1 when it is closed.
     /// </summary>
     public int ManagementTab { get; init; }
+
+    /// <summary>
+    /// The player knows a blueprint (the world's tutorial facts).
+    /// </summary>
     public bool Blueprint { get; init; }
+
+    /// <summary>
+    /// A player construction is placed but not started (no progress).
+    /// </summary>
     public bool UnstartedConstruction { get; init; }
+
+    /// <summary>
+    /// The prospecting window is open.
+    /// </summary>
     public bool Prospecting { get; init; }
+
+    /// <summary>
+    /// The selected (else the inspected) character has a stump for a limb.
+    /// </summary>
     public bool SelectedStump { get; init; }
 }
 
 /// <summary>
-/// The tutorial manager (<c>TutorialManager</c>, docs/game/ui-screens.md "Tutorials"): 34 items, each pending until its trigger holds at a poll (every 2 real seconds), then
-/// active (listed in the panel) until dismissed, then ended. Its state is <c>__tutorials.data</c>: the active ids, then the pending ones.
+/// The tutorial manager (<c>TutorialManager</c>, docs/game/ui-screens.md "Tutorials"): 34 items, each pending until its trigger holds at a poll
+/// (every 2 real seconds), then active (listed in the panel) until dismissed, then ended. Its state is <c>__tutorials.data</c>: the active ids, then
+/// the pending ones.
 /// </summary>
 sealed class TutorialManager
 {
@@ -69,7 +181,14 @@ sealed class TutorialManager
         "BuildMode_Construction", "Prospecting", "MissingLimb",
     ];
 
+    /// <summary>
+    /// The state file's name.
+    /// </summary>
     public const string FileName = "__tutorials.data";
+
+    /// <summary>
+    /// The state file's magic number.
+    /// </summary>
     const uint Magic = 0xBAAAAAAD;
 
     /// <summary>
@@ -82,10 +201,29 @@ sealed class TutorialManager
     /// </summary>
     const int CalmNeeded = 20;
 
+    /// <summary>
+    /// The active ids in the panel's order, the pending ones, and those a poll drops from pending (their trigger met another way).
+    /// </summary>
     readonly List<int> _active = [], _pending = [], _drops = [];
+
+    /// <summary>
+    /// The state file's path.
+    /// </summary>
     readonly string _path;
+
+    /// <summary>
+    /// Seconds until the next poll.
+    /// </summary>
     double _timer;
+
+    /// <summary>
+    /// What do I do?'s calm counter; the PC count when the recruit tutorial started watching (-1 before).
+    /// </summary>
     int _calm, _recruits = -1;
+
+    /// <summary>
+    /// The PCs when the recruit tutorial started watching, so the newest member is found.
+    /// </summary>
     HashSet<Simulation.CharacterId>? _recruitBase;
 
     /// <summary>
@@ -93,6 +231,9 @@ sealed class TutorialManager
     /// </summary>
     public Simulation.CharacterId? Recruit { get; private set; }
 
+    /// <summary>
+    /// The manager of the state file at <paramref name="path"/>, read at once.
+    /// </summary>
     public TutorialManager(string path)
     {
         this._path = path;
@@ -109,14 +250,24 @@ sealed class TutorialManager
     /// </summary>
     public bool Fresh { get; private set; }
 
+    /// <summary>
+    /// The active ids, in the panel's order.
+    /// </summary>
     public IReadOnlyList<int> Active => _active;
 
     /// <summary>
     /// Each item's page (kept when it ends, as the original keeps it).
     /// </summary>
     public int[] Pages { get; } = new int[Names.Length];
+
+    /// <summary>
+    /// The state changed since it was last saved.
+    /// </summary>
     bool _dirty;
 
+    /// <summary>
+    /// Reads the state file: the active and then the pending ids; a missing or broken file makes every item pending (and <see cref="Fresh"/>).
+    /// </summary>
     void Load()
     {
         try
@@ -148,6 +299,9 @@ sealed class TutorialManager
         }
     }
 
+    /// <summary>
+    /// Writes the state file: magic, item count, the active ids, then the pending ones; a failure is only logged.
+    /// </summary>
     void Save()
     {
         _dirty = false;
@@ -167,11 +321,14 @@ sealed class TutorialManager
         }
     }
 
+    /// <summary>
+    /// Whether item <paramref name="id"/> has ended (neither active nor pending).
+    /// </summary>
     bool Ended(int id) => !_active.Contains(id) && !_pending.Contains(id);
 
     /// <summary>
-    /// One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and <c>Thing_Complete</c>);
-    /// saves when changed.
+    /// One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and
+    /// <c>Thing_Complete</c>); saves when changed.
     /// </summary>
     public List<int>? Update(double seconds, Func<TutorialPoll> poll)
     {
@@ -182,6 +339,7 @@ sealed class TutorialManager
             _drops.Clear();
             _dirty = true;
         }
+
         List<int>? started = null;
         _timer -= seconds;
         if (_timer <= 0)
@@ -197,6 +355,7 @@ sealed class TutorialManager
                 }
             _timer = PollSeconds;
         }
+
         if (_dirty) Save();
         return started;
     }

@@ -20,42 +20,91 @@ sealed class InventoryWindows(PlayerInterface player)
     /// The held item as drawn: the world's, or what the interface expects while its last held command is on its way (<see cref="HeldSerial"/>).
     /// </summary>
     internal HeldItemView? Held;
+
     /// <summary>
     /// Where the pointer holds the item: its offset from the item's top-left corner, in cells (at least half a cell inside the footprint,
     /// <c>FUN_140713560</c>).
     /// </summary>
     Vector2 _heldGrab;
+
     /// <summary>
     /// The serial of the held command the world has not applied yet (0: none), when it was sent, and the last serial used.
     /// </summary>
     internal long HeldSerial, HeldSentAt, HeldCounter;
+
     /// <summary>
     /// Where the press that lifted the held item was, while the button is down (null otherwise).
     /// </summary>
     internal Vector2? LiftPress;
+
     /// <summary>
     /// The item cell a whole-stack lift emptied, hidden until the world's answer (its window and the cell's index or machine code).
     /// </summary>
     internal (ItemOwner Window, int Code)? Lifting;
+
     /// <summary>
     /// Shift and Ctrl at the last press (a lift takes the whole stack with either).
     /// </summary>
     internal bool PressShift, PressCtrl;
+
     /// <summary>
     /// The pinned inventory windows (<see cref="PinnedPrefix"/> and a number) and the character each stays on (docs/game/ui-screens.md section 6).
     /// </summary>
     internal readonly Dictionary<string, CharacterId> PinnedInventories = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The pinned characters last told to the simulation (<see cref="ShowInventoryCommand"/>), which publishes their grids while they are not
     /// selected.
     /// </summary>
     CharacterId[] _pinnedSent = [];
+
     /// <summary>
     /// The character whose window was pinned last: selecting someone else opens the inventory again for them, beside it.
     /// </summary>
     CharacterId _pinnedFrom = CharacterId.None;
+
+    /// <summary>
+    /// The bag window's layout as read, registered again for each pinned window's bag.
+    /// </summary>
+    internal MyGuiLayout? BagLayout;
+
+    /// <summary>
+    /// The screen id prefix of the pinned inventory windows.
+    /// </summary>
     const string PinnedPrefix = "inventory-pin-";
+
+    /// <summary>
+    /// The screen id prefix of the pinned windows' bag windows (the same number as their pinned window's).
+    /// </summary>
+    const string PinnedBagPrefix = "bag-pin-";
+
+    /// <summary>
+    /// Whether <paramref name="screen"/> is a pinned inventory window.
+    /// </summary>
     internal static bool IsPinnedInventory(string screen) => screen.StartsWith(PinnedPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether <paramref name="screen"/> is a pinned window's bag window.
+    /// </summary>
+    internal static bool IsPinnedBag(string screen) => screen.StartsWith(PinnedBagPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The bag window of pinned window <paramref name="slot"/>.
+    /// </summary>
+    static string PinnedBagOf(string slot) => PinnedBagPrefix + slot[PinnedPrefix.Length..];
+
+    /// <summary>
+    /// The pinned window a pinned bag window belongs to.
+    /// </summary>
+    static string PinnedSlotOf(string bag) => PinnedPrefix + bag[PinnedBagPrefix.Length..];
+
+    /// <summary>
+    /// The screen a window binds as: a pinned window as the inventory, its bag as the bag, any other as itself.
+    /// </summary>
+    internal static string ScreenKind(string screen) =>
+        IsPinnedInventory(screen) ? "inventory"
+        : IsPinnedBag(screen) ? "bag"
+        : screen;
 
     /// <summary>
     /// How long the interface waits for the world to apply a held command before it shows the world's held item again (engine choice).
@@ -68,47 +117,65 @@ sealed class InventoryWindows(PlayerInterface player)
     static readonly string[] ItemScreens = ["inventory", "bag", "limbs", "loot", "loot-bag", "trader", "building", "bench", "storage"];
 
     /// <summary>
-    /// The character the inventory window (and its bag and limbs) shows: the lead selected character, also while trading, as the original's (a trade
-    /// passes to the window's character, <see cref="Meitou.Simulation.Trading.TradeSystem.TradeWith"/>; a pinned window is its own screen,
-    /// <see cref="SyncPinnedInventories"/>).
+    /// The character the inventory window (and its bag and limbs) shows: the looter of the open loot or container window while selected, else the
+    /// lead selected character, also while trading (a trade passes to the window's character,
+    /// <see cref="Meitou.Simulation.Trading.TradeSystem.TradeWith"/>; a pinned window is its own screen, <see cref="SyncPinnedInventories"/>).
+    /// The original always shows the lead selected character, even when another selected one looted (engine choice, issue #389).
     /// </summary>
-    internal CharacterSnapshot? InventoryOwner() => player.Selected().FirstOrDefault();
+    internal CharacterSnapshot? InventoryOwner()
+    {
+        var selected = player.Selected();
+        var opener = LootingCharacter();
+        return selected.FirstOrDefault(c => c.Id == opener) ?? selected.FirstOrDefault();
+    }
 
     /// <summary>
-    /// The character a character window shows: a pinned window's, the loot's body, else the inventory owner.
+    /// The character whose loot or container window is open, none while neither is.
     /// </summary>
-    internal CharacterSnapshot? WindowCharacter(string screen) =>
-        TradeWindows.IsLootScreen(screen) ? player.TradeWindows.LootBody()
-        : screen == "limbs" ? LimbsCharacter()
-        : PinnedInventories.TryGetValue(screen, out var pinned) ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pinned)
-        : InventoryOwner();
+    CharacterId LootingCharacter()
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        return snapshot.OpenLoot.IsNone ? snapshot.ContainerOpener : snapshot.LootOpener;
+    }
+
+    /// <summary>
+    /// The character a character window shows: a pinned window's (and its bag's), the loot's body, else the inventory owner.
+    /// </summary>
+    internal CharacterSnapshot? WindowCharacter(string screen)
+    {
+        if (IsPinnedBag(screen)) screen = PinnedSlotOf(screen);
+        return TradeWindows.IsLootScreen(screen) ? player.TradeWindows.LootBody()
+            : screen == "limbs" ? LimbsCharacter()
+            : PinnedInventories.TryGetValue(screen, out var pinned) ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pinned)
+            : IsPinnedInventory(screen) ? null
+            : InventoryOwner();
+    }
+
+    /// <summary>
+    /// Whether the window belongs to the open loot's body, including its separate limbs window.
+    /// </summary>
+    internal bool IsLootWindow(string screen) => TradeWindows.IsLootScreen(screen)
+        || screen == "limbs" && LimbsCharacter()?.Id == player.Session.CurrentSnapshot.OpenLoot;
+
+    /// <summary>
+    /// Whether a bag window shows <paramref name="character"/>'s bag: the inventory's bag, or the bag of their pinned window.
+    /// </summary>
+    internal bool BagShown(CharacterId character) =>
+        player.FaithfulScreens.IsOpen("bag") && InventoryOwner()?.Id == character
+        || PinnedInventories.Any(p => p.Value == character && player.FaithfulScreens.IsOpen(PinnedBagOf(p.Key)));
 
     /// <summary>
     /// Once a frame: the inventory window's pin (its caption's "O") moves it to a pinned window of its own that stays on its character, and the
     /// inventory opens again beside it for the next character selected, so several inventories show at once (docs/game/ui-screens.md section 6).
     /// Unpinning a pinned window gives it back to the selection when the inventory is closed, else closes it. A pinned window whose character is gone
-    /// closes. Pinned windows have no bag or limbs window.
+    /// closes. A bag open when the window is pinned stays open as the pinned window's own bag; pinned windows have no limbs window.
     /// </summary>
     internal void SyncPinnedInventories()
     {
         if (player.FaithfulScreens is null || player.TradeWindows.CharacterInventoryLayout is null) return;
 
         var lead = InventoryOwner();
-
-        if (player.FaithfulScreens.IsPinned("inventory") && lead is not null)
-        {
-            string slot = PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key ?? FreePinnedSlot();
-            PinnedInventories[slot] = lead.Id;
-            player.FaithfulScreens.SetOffset(slot, player.FaithfulScreens.GetOffset("inventory"));
-            player.FaithfulScreens.Close("inventory");
-            player.FaithfulScreens.Open(slot);
-            player.FaithfulScreens.SetPinned(slot, true);
-
-            // The same window, not a new one: no closing and opening sounds.
-            player.InterfaceSounds.SoundScreens.Remove("inventory");
-            player.InterfaceSounds.SoundScreens.Add(slot);
-            _pinnedFrom = lead.Id;
-        }
+        if (player.FaithfulScreens.IsPinned("inventory") && lead is not null) PinInventory(lead);
 
         foreach (var (slot, character) in PinnedInventories.ToArray())
         {
@@ -116,37 +183,92 @@ sealed class InventoryWindows(PlayerInterface player)
             {
                 player.FaithfulScreens.Close(slot);
                 PinnedInventories.Remove(slot);
-                continue;
             }
-
-            if (player.FaithfulScreens.IsPinned(slot)) continue;
-
-            PinnedInventories.Remove(slot);
-
-            if (!player.FaithfulScreens.IsOpen("inventory"))
+            else if (!player.FaithfulScreens.IsPinned(slot))
             {
-                player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset(slot));
-                player.FaithfulScreens.Open("inventory");
-                player.InterfaceSounds.SoundScreens.Add("inventory");
+                Unpin(slot);
             }
-
-            player.InterfaceSounds.SoundScreens.Remove(slot);
-            player.FaithfulScreens.Close(slot);
         }
 
         if (PinnedInventories.Count == 0) _pinnedFrom = CharacterId.None;
         else if (lead is not null && lead.Id != _pinnedFrom && !PinnedInventories.ContainsValue(lead.Id) && !player.FaithfulScreens.IsOpen("inventory"))
-        {
-            player.FaithfulScreens.Open("inventory");
-            if (PinnedInventories.FirstOrDefault(p => p.Value == _pinnedFrom).Key is { } anchor)
-                player.InventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
-
-            _pinnedFrom = CharacterId.None;
-        }
+            OpenBesidePinned();
 
         var shown = PinnedInventories.Values.ToArray();
         if (!shown.SequenceEqual(_pinnedSent))
             player.Say(new ShowInventoryCommand(_pinnedSent = shown) { Tick = player.Session.World.Tick });
+    }
+
+    /// <summary>
+    /// The inventory's pin: the window and its open bag become <paramref name="lead"/>'s pinned window and its bag, where they are.
+    /// </summary>
+    void PinInventory(CharacterSnapshot lead)
+    {
+        string slot = PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key ?? FreePinnedSlot();
+        PinnedInventories[slot] = lead.Id;
+        string bag = PinnedBagOf(slot);
+        bool bagOpen = player.FaithfulScreens.IsOpen("bag") && player.FaithfulScreens.IsRegistered(bag);
+        player.FaithfulScreens.SetOffset(slot, player.FaithfulScreens.GetOffset("inventory"));
+        if (bagOpen) player.FaithfulScreens.SetOffset(bag, player.FaithfulScreens.GetOffset("bag"));
+        player.FaithfulScreens.Close("inventory");
+        player.FaithfulScreens.Open(slot);
+        player.FaithfulScreens.SetPinned(slot, true);
+        if (bagOpen) player.FaithfulScreens.Open(bag);
+
+        // The same windows, not new ones: no closing and opening sounds.
+        player.InterfaceSounds.SoundScreens.Remove("inventory");
+        player.InterfaceSounds.SoundScreens.Add(slot);
+        if (bagOpen) MoveSound("bag", bag);
+        _pinnedFrom = lead.Id;
+    }
+
+    /// <summary>
+    /// Unpinning: the window (and its open bag) goes back to the inventory where it is when the inventory is closed, else it closes.
+    /// </summary>
+    void Unpin(string slot)
+    {
+        PinnedInventories.Remove(slot);
+        string bag = PinnedBagOf(slot);
+
+        if (!player.FaithfulScreens.IsOpen("inventory"))
+        {
+            player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset(slot));
+            player.FaithfulScreens.Open("inventory");
+            player.InterfaceSounds.SoundScreens.Add("inventory");
+            if (player.FaithfulScreens.IsOpen(bag) && WantsBag(InventoryOwner()))
+            {
+                player.FaithfulScreens.SetOffset("bag", player.FaithfulScreens.GetOffset(bag));
+                player.FaithfulScreens.Open("bag");
+                MoveSound(bag, "bag");
+            }
+        }
+
+        player.InterfaceSounds.SoundScreens.Remove(slot);
+        player.FaithfulScreens.Close(slot);
+    }
+
+    /// <summary>
+    /// Opens the inventory for the character selected after pinning, left of the pinned window or of its bag when that is open.
+    /// </summary>
+    void OpenBesidePinned()
+    {
+        player.FaithfulScreens.Open("inventory");
+        if (PinnedInventories.FirstOrDefault(p => p.Value == _pinnedFrom).Key is { } slot)
+        {
+            string bag = PinnedBagOf(slot);
+            string anchor = player.FaithfulScreens.IsRegistered(bag) && player.FaithfulScreens.IsOpen(bag) ? bag : slot;
+            player.InventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
+        }
+
+        _pinnedFrom = CharacterId.None;
+    }
+
+    /// <summary>
+    /// A window that goes on as another screen keeps its open sound's state: no closing and opening sounds for it.
+    /// </summary>
+    void MoveSound(string from, string to)
+    {
+        if (player.InterfaceSounds.SoundScreens.Remove(from)) player.InterfaceSounds.SoundScreens.Add(to);
     }
 
     /// <summary>
@@ -170,6 +292,13 @@ sealed class InventoryWindows(PlayerInterface player)
         if (!player.FaithfulScreens.IsRegistered(slot))
             player.FaithfulScreens.Register(slot, player.TradeWindows.CharacterInventoryLayout!);
 
+        string bag = PinnedBagOf(slot);
+        if (!player.FaithfulScreens.IsRegistered(bag) && BagLayout is not null)
+        {
+            player.FaithfulScreens.Register(bag, BagLayout);
+            player.FaithfulScreens.Follow(bag, slot);
+        }
+
         player.TradeWindows.AnimalWindow.Remove(slot);
         player.FaithfulScreens.Replace(slot, player.TradeWindows.CharacterInventoryLayout!);
         return slot;
@@ -180,7 +309,7 @@ sealed class InventoryWindows(PlayerInterface player)
     /// </summary>
     ItemOwner? WindowOf(string screen) => screen switch
     {
-        _ when IsPinnedInventory(screen) => WindowCharacter(screen) is { } pinned ? ItemOwner.Of(pinned.Id) : null,
+        _ when IsPinnedInventory(screen) || IsPinnedBag(screen) => WindowCharacter(screen) is { } pinned ? ItemOwner.Of(pinned.Id) : null,
         "inventory" or "bag" => InventoryOwner() is { } owner ? ItemOwner.Of(owner.Id) : null,
         "limbs" => LimbsCharacter() is { } limbed ? ItemOwner.Of(limbed.Id) : null,
         "loot" or "loot-bag" => player.TradeWindows.LootBody() is { } body ? ItemOwner.Of(body.Id) : null,
@@ -216,6 +345,10 @@ sealed class InventoryWindows(PlayerInterface player)
         Held = null;
     }
 
+    /// <summary>
+    /// A press over the windows: places the held item, presses a scroll bar's thumb, or lifts the item under it; false when the windows do not take
+    /// it.
+    /// </summary>
     internal bool InventoryPointerDown(Vector2 p)
     {
         if (!player.UiVisible || player.FaithfulScreens.HasModal) return false;
@@ -233,6 +366,9 @@ sealed class InventoryWindows(PlayerInterface player)
         return LiftAt(picked.Screen, picked.Control, p);
     }
 
+    /// <summary>
+    /// The button let go: a drag that lifted an item places it; a click leaves it on the mouse.
+    /// </summary>
     internal void InventoryPointerUp(Vector2 p)
     {
         player.ScrollBars.ScrollDrag = null;
@@ -251,74 +387,13 @@ sealed class InventoryWindows(PlayerInterface player)
     /// </summary>
     bool LiftAt(string screen, UiControl control, Vector2 p)
     {
-        var snapshot = player.Session.CurrentSnapshot;
-        int code;
-        ItemOwner window;
-        CharacterId actor;
-        InventoryItemToken token;
-        HeldItemView view;
-        bool whole;
+        Lift? lift = control.Properties.TryGetValue("TradeItem", out var stockIndex) ? StockLift(stockIndex)
+            : control.Properties.TryGetValue("MachineItem", out var raw) ? MachineLift(raw)
+            : control.Properties.TryGetValue("InventoryItem", out var index) ? InventoryLift(screen, index)
+            : null;
+        if (lift is not { } chosen) return false;
 
-        HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from) =>
-            new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1);
-
-        if (control.Properties.TryGetValue("TradeItem", out var stockIndex))
-        {
-            code = int.Parse(stockIndex, CultureInfo.InvariantCulture);
-            if (snapshot.Trade is not { } trade || trade.Stock.FirstOrDefault(i => i.Index == code) is not { } stock)
-                return false;
-
-            (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
-            view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window);
-        }
-        else if (control.Properties.TryGetValue("MachineItem", out var raw))
-        {
-            code = int.Parse(raw, CultureInfo.InvariantCulture);
-
-            if (player.Production.Machine(player.Production.ShownMachine) is not { } m
-                || (InventoryOwner() ?? player.Selected().FirstOrDefault()) is not { } who)
-            {
-                return false;
-            }
-
-            (window, actor) = (ItemOwner.AtSite(m.Site), who.Id);
-            int k = code - 10;
-
-            if (code >= 1000 && m.Storage?.Items.FirstOrDefault(i => i.Index == code - 1000) is { } stored)
-            {
-                (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
-                    || PressCtrl || stored.Quantity <= 1);
-                view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window);
-            }
-            else if (code == 8 && m.Craft is { Done: [var made, ..] })
-            {
-                (token, whole) = (new(0, made.Record, "out", 0, 0, made.Quantity, made.Quality), PressShift || PressCtrl || made.Quantity <= 1);
-                view = View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge, window);
-            }
-            else if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
-            {
-                (token, whole) = (new(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0), PressShift || PressCtrl || slot.Count <= 1);
-                view = View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window);
-            }
-            else return false;
-        }
-        else if (control.Properties.TryGetValue("InventoryItem", out var index))
-        {
-            code = int.Parse(index, CultureInfo.InvariantCulture);
-            bool loot = TradeWindows.IsLootScreen(screen);
-
-            if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
-                || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))
-            {
-                return false;
-            }
-
-            (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
-            (token, whole) = (new(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality), PressShift || PressCtrl
-                || item.Quantity <= 1);
-            view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window);
-        }
-        else return false;
+        var (code, window, actor, token, whole, view) = chosen;
 
         SayHeld(new LiftItem(actor, window, token, whole) { Tick = player.Session.World.Tick });
         Held = view;
@@ -332,12 +407,122 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
+    /// What a press lifts: the cell's code, the window it comes from, the character who takes it, the item, whether the whole stack goes, and the
+    /// item as the mouse holds it.
+    /// </summary>
+    readonly record struct Lift(int Code, ItemOwner Window, CharacterId Actor, InventoryItemToken Token, bool Whole, HeldItemView View);
+
+    /// <summary>
+    /// The held view of a lifted item: one unit unless the whole stack goes.
+    /// </summary>
+    static HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from,
+        bool whole) =>
+        new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1);
+
+    /// <summary>
+    /// A stock item of the open trade, taken by the customer.
+    /// </summary>
+    Lift? StockLift(string stockIndex)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        int code = int.Parse(stockIndex, CultureInfo.InvariantCulture);
+        if (snapshot.Trade is not { } trade || trade.Stock.FirstOrDefault(i => i.Index == code) is not { } stock)
+            return null;
+
+        var (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
+        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window, whole);
+        return new(code, window, actor, token, whole, view);
+    }
+
+    /// <summary>
+    /// An item of the shown machine (its storage, a bench's finished craft, its output or an input), taken by the inventory's or the selected
+    /// character.
+    /// </summary>
+    Lift? MachineLift(string raw)
+    {
+        int code = int.Parse(raw, CultureInfo.InvariantCulture);
+
+        if (player.Production.Machine(player.Production.ShownMachine) is not { } m
+            || (InventoryOwner() ?? player.Selected().FirstOrDefault()) is not { } who)
+        {
+            return null;
+        }
+
+        var (window, actor) = (ItemOwner.AtSite(m.Site), who.Id);
+        int k = code - 10;
+        InventoryItemToken token;
+        bool whole;
+        HeldItemView view;
+
+        if (code >= 1000 && m.Storage?.Items.FirstOrDefault(i => i.Index == code - 1000) is { } stored)
+        {
+            (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
+                || PressCtrl || stored.Quantity <= 1);
+            view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window, whole);
+        }
+        else if (code == 8 && m.Craft is { Done: [var made, ..] })
+        {
+            (token, whole) = (new(0, made.Record, "out", 0, 0, made.Quantity, made.Quality), PressShift || PressCtrl || made.Quantity <= 1);
+            view = View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge, window, whole);
+        }
+        else if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
+        {
+            (token, whole) = (new(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0), PressShift || PressCtrl || slot.Count <= 1);
+            view = View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window, whole);
+        }
+        else return null;
+
+        return new(code, window, actor, token, whole, view);
+    }
+
+    /// <summary>
+    /// An item of a character window (a loot window's taken by the looter) that may be moved: a grid, slot or limb item.
+    /// </summary>
+    Lift? InventoryLift(string screen, string index)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        int code = int.Parse(index, CultureInfo.InvariantCulture);
+        bool loot = IsLootWindow(screen);
+
+        if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
+            || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))
+        {
+            return null;
+        }
+
+        var (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
+        var (token, whole) = (new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality),
+            PressShift || PressCtrl || item.Quantity <= 1);
+        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole);
+        return new(code, window, actor, token, whole, view);
+    }
+
+    /// <summary>
     /// The grab offset kept at least half a cell inside the item's footprint (<c>FUN_140713560</c>).
     /// </summary>
     static Vector2 ClampGrab(Vector2 grab, HeldItemView item) =>
         new(Math.Clamp(grab.X, 0.5f, MathF.Max(0.5f, item.Width - 0.5f)), Math.Clamp(grab.Y, 0.5f, MathF.Max(0.5f, item.Height - 0.5f)));
 
-    enum DropKind { World, Window, Section }
+    /// <summary>
+    /// Where a held item would go.
+    /// </summary>
+    enum DropKind
+    {
+        /// <summary>
+        /// Nowhere: the world under the pointer.
+        /// </summary>
+        World,
+
+        /// <summary>
+        /// A window, with no section under the pointer.
+        /// </summary>
+        Window,
+
+        /// <summary>
+        /// A window's section, with the snapped cell.
+        /// </summary>
+        Section,
+    }
 
     /// <summary>
     /// Where the held item would go at a point: nowhere (the world), a window without a section under it, or a window's section with the snapped cell
@@ -348,12 +533,19 @@ sealed class InventoryWindows(PlayerInterface player)
     /// <summary>
     /// The section widgets of an item screen and the sections they are (the trader, storage and bench grids are their window's <c>main</c>).
     /// </summary>
-    static (string Widget, string Section)[] SectionsOf(string screen) => (IsPinnedInventory(screen) ? "inventory" : screen) switch
+    static (string Widget, string Section)[] SectionsOf(string screen) => ScreenKind(screen) switch
     {
-        "inventory" or "loot" => [("backpack_attach", "backpack_attach"), ("back", "back"), ("hip", "hip"), ("shirt", "shirt"), ("head", "head"), ("legs", "legs"), ("boots", "boots"),
-            ("armour", "armour"), ("belt", "belt"), ("main", "main")],
+        "inventory" or "loot" =>
+        [
+            ("backpack_attach", "backpack_attach"), ("back", "back"), ("hip", "hip"), ("shirt", "shirt"), ("head", "head"), ("legs", "legs"),
+            ("boots", "boots"), ("armour", "armour"), ("belt", "belt"), ("main", "main"),
+        ],
         "bag" or "loot-bag" => [("backpack_content", "backpack_content")],
-        "limbs" => [("left_arm_replace", "left_arm_replace"), ("right_arm_replace", "right_arm_replace"), ("left_leg_replace", "left_leg_replace"), ("right_leg_replace", "right_leg_replace")],
+        "limbs" =>
+        [
+            ("left_arm_replace", "left_arm_replace"), ("right_arm_replace", "right_arm_replace"), ("left_leg_replace", "left_leg_replace"),
+            ("right_leg_replace", "right_leg_replace"),
+        ],
         "trader" or "bench" or "storage" => [("backpack_content", "main")],
         "building" => [("in1", "in1"), ("Input1Panel", "in1"), ("in2", "in2"), ("Input2Panel", "in2"), ("out", "out"), ("OutputColumn", "out")],
         _ => [],
@@ -387,7 +579,9 @@ sealed class InventoryWindows(PlayerInterface player)
                         && c.Properties.GetValueOrDefault("State") != "disabled") is { } slot)
                 {
                     // A furnace's in1 grid is its storage, the sim's "main".
-                    return Spot(window, name == "in1" && window.Holder == ItemHolder.Site && ProductionWindows.FurnaceGrid(player.Production.Machine(window.Site)) is not null ? "main" : section, slot, topLeft, h);
+                    bool furnaceGrid = name == "in1" && window.Holder == ItemHolder.Site
+                        && ProductionWindows.FurnaceGrid(player.Production.Machine(window.Site)) is not null;
+                    return Spot(window, furnaceGrid ? "main" : section, slot, topLeft, h);
                 }
             }
         }
@@ -395,11 +589,17 @@ sealed class InventoryWindows(PlayerInterface player)
         return none with { Kind = DropKind.Window, Window = window };
     }
 
+    /// <summary>
+    /// The drop in <paramref name="section"/> of <paramref name="window"/> at <paramref name="topLeft"/>: the snapped cell and its area, and whether
+    /// the slot takes the item and it fits.
+    /// </summary>
     DropSpot Spot(ItemOwner window, string section, UiControl slot, Vector2 topLeft, HeldItemView h)
     {
         var b = slot.Bounds;
         var (columns, rows) = GridOf(window, section);
-        var look = window.Holder == ItemHolder.Character ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance : null;
+        var look = window.Holder == ItemHolder.Character
+            ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance
+            : null;
         bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.EquipmentSection, h.BagItems,
             h.WearableBy(look?.Race.StringId, look?.Animal is not null)) is null;
 
@@ -411,9 +611,11 @@ sealed class InventoryWindows(PlayerInterface player)
 
         if (columns == 0) return new(DropKind.Section, window, section, 0, 0, b, slot.Clip, takes);
 
-        float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns, ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Height / rows;
+        float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns;
+        float ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Height / rows;
         bool fits = h.Width <= columns && h.Height <= rows;
-        int x = Math.Clamp((int)MathF.Round((topLeft.X - b.X) / cw), 0, Math.Max(0, columns - h.Width)), y = Math.Clamp((int)MathF.Round((topLeft.Y - b.Y) / ch), 0, Math.Max(0, rows - h.Height));
+        int x = Math.Clamp((int)MathF.Round((topLeft.X - b.X) / cw), 0, Math.Max(0, columns - h.Width));
+        int y = Math.Clamp((int)MathF.Round((topLeft.Y - b.Y) / ch), 0, Math.Max(0, rows - h.Height));
         return new(DropKind.Section, window, section, x, y, new(b.X + x * cw, b.Y + y * ch, h.Width * cw, h.Height * ch), slot.Clip, takes && fits);
     }
 
@@ -557,11 +759,12 @@ sealed class InventoryWindows(PlayerInterface player)
     internal readonly HashSet<CharacterId> BagOpen = [];
 
     /// <summary>
-    /// OPEN BAG: opens or closes the lead character's bag and remembers it for that character.
+    /// OPEN BAG, on the inventory window or a pinned one (<paramref name="who"/>, its character): opens or closes the character's bag and
+    /// remembers it for them.
     /// </summary>
-    internal void ToggleBag()
+    internal void ToggleBag(CharacterSnapshot? who = null)
     {
-        if (InventoryOwner() is not { } lead) return;
+        if ((who ?? InventoryOwner()) is not { } lead) return;
         if (!BagOpen.Remove(lead.Id)) BagOpen.Add(lead.Id);
         if (player.TradeWindows.LootOpenedBag == lead.Id) player.TradeWindows.LootOpenedBag = CharacterId.None;
 
@@ -616,12 +819,46 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// Once a frame: the bag window is open while the inventory is, the lead character wears a bag and left it open (<see cref="BagOpen"/>).
+    /// Once a frame: the inventory's and the pinned windows' bag windows (<see cref="SyncInventoryBag"/>, <see cref="SyncPinnedBag"/>).
     /// </summary>
     void SyncBagScreen()
     {
-        var lead = InventoryOwner();
-        bool want = player.FaithfulScreens.IsOpen("inventory") && lead is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagOpen.Contains(lead.Id);
+        SyncInventoryBag();
+        foreach (string slot in PinnedInventories.Keys) SyncPinnedBag(slot);
+    }
+
+    /// <summary>
+    /// Whether a character window shows <paramref name="shown"/>'s bag: they wear one and left it open (<see cref="BagOpen"/>).
+    /// </summary>
+    bool WantsBag(CharacterSnapshot? shown) => shown is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagOpen.Contains(shown.Id);
+
+    /// <summary>
+    /// A pinned window's bag window is open while the window is and its character wants it (<see cref="WantsBag"/>), beside it on its left.
+    /// </summary>
+    void SyncPinnedBag(string slot)
+    {
+        string bag = PinnedBagOf(slot);
+        if (!player.FaithfulScreens.IsRegistered(bag)) return;
+
+        bool want = player.FaithfulScreens.IsOpen(slot) && WantsBag(WindowCharacter(slot));
+        if (want == player.FaithfulScreens.IsOpen(bag)) return;
+
+        if (!want)
+        {
+            player.FaithfulScreens.Close(bag);
+            return;
+        }
+
+        player.FaithfulScreens.Open(bag);
+        player.InventoryLayout.PlaceInventoryBeside(bag, left: true, anchor: slot);
+    }
+
+    /// <summary>
+    /// The bag window is open while the inventory is and the lead character wants it (<see cref="WantsBag"/>).
+    /// </summary>
+    void SyncInventoryBag()
+    {
+        bool want = player.FaithfulScreens.IsOpen("inventory") && WantsBag(InventoryOwner());
         if (want == player.FaithfulScreens.IsOpen("bag")) return;
 
         if (!want)

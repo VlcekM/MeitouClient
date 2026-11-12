@@ -29,41 +29,114 @@ public readonly record struct TextureEntry(Image Image, ImageAllocation? Allocat
 /// </summary>
 public sealed unsafe class VulkanDevice : IDisposable
 {
+    /// <summary>
+    /// The Khronos validation layer's name, enabled when the options ask for validation and the loader has it.
+    /// </summary>
     const string ValidationLayer = "VK_LAYER_KHRONOS_validation";
 
+    /// <summary>
+    /// What the device was created with.
+    /// </summary>
     readonly VulkanDeviceOptions _options;
+    /// <summary>
+    /// The transient pools of the open one-shot command buffers, by command buffer handle (<see cref="BeginImmediate"/>, <see cref="EndImmediate"/>).
+    /// </summary>
     readonly ConcurrentDictionary<ulong, CommandPool> _immediatePools = new();
+    /// <summary>
+    /// Guards <see cref="_validationLog"/> (the debug callback runs on the driver's threads).
+    /// </summary>
     readonly object _logGate = new();
+    /// <summary>
+    /// The last 50 validation messages, oldest first (<see cref="ValidationLog"/>).
+    /// </summary>
     readonly List<string> _validationLog = new();
+    /// <summary>
+    /// The handle to this device the debug callback receives as its user data.
+    /// </summary>
     GCHandle _selfHandle;
+    /// <summary>
+    /// The debug callback delegate, kept alive as long as the messenger.
+    /// </summary>
     DebugUtilsMessengerCallbackFunctionEXT? _callbackDelegate;
+    /// <summary>
+    /// VK_EXT_debug_utils functions; null when the instance does not have the extension.
+    /// </summary>
     ExtDebugUtils? _debugUtils;
+    /// <summary>
+    /// The validation message callback's messenger.
+    /// </summary>
     DebugUtilsMessengerEXT _messenger;
+    /// <summary>
+    /// The KHR_surface functions; null when headless.
+    /// </summary>
     KhrSurface? _khrSurface;
+    /// <summary>
+    /// Where the pipeline cache is loaded from and saved to; null for no file.
+    /// </summary>
     string? _pipelineCachePath;
+    /// <summary>
+    /// Validation errors counted by the debug callback.
+    /// </summary>
     int _validationErrors;
+    /// <summary>
+    /// Validation warnings counted by the debug callback (performance messages not counted).
+    /// </summary>
     int _validationWarnings;
+    /// <summary>
+    /// Set by the first <see cref="Dispose"/>; a second does nothing.
+    /// </summary>
     bool _disposed;
 
+    /// <summary>
+    /// Stores the options and loads the Vulkan API; the instance and device are made by <see cref="Initialize"/>.
+    /// </summary>
     VulkanDevice(VulkanDeviceOptions options)
     {
         this._options = options;
         Vk = Vk.GetApi();
     }
 
-    // ---- public state --------------------------------------------------------------------------------------
+    #region Public state
 
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     public Vk Vk { get; }
+    /// <summary>
+    /// The Vulkan instance.
+    /// </summary>
     public Instance Instance { get; private set; }
+    /// <summary>
+    /// The physical device picked by <see cref="PickAndCreateDevice"/> (the best-scoring Vulkan 1.3 device).
+    /// </summary>
     public PhysicalDevice PhysicalDevice { get; private set; }
+    /// <summary>
+    /// The logical device.
+    /// </summary>
     public Device Device { get; private set; }
+    /// <summary>
+    /// The physical device's properties (limits, type, API version).
+    /// </summary>
     public PhysicalDeviceProperties Properties { get; private set; }
+    /// <summary>
+    /// The physical device's name.
+    /// </summary>
     public string DeviceName { get; private set; } = "";
+    /// <summary>
+    /// The driver's name and version as the driver reports them ("NVIDIA 581.80"); empty when it reports neither.
+    /// </summary>
+    public string DriverName { get; private set; } = "";
+    /// <summary>
+    /// The physical device's Vulkan API version.
+    /// </summary>
     public uint ApiVersion => Properties.ApiVersion;
     /// <summary>
     /// The surface from <see cref="VulkanDeviceOptions.CreateSurface"/> (default when headless); destroyed on dispose.
     /// </summary>
     public SurfaceKHR Surface { get; private set; }
+    /// <summary>
+    /// Whether there is a surface (false when headless).
+    /// </summary>
     public bool HasSurface => Surface.Handle != 0;
 
     /// <summary>
@@ -82,7 +155,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public KhrSurface? SurfaceExtension => _khrSurface;
 
+    /// <summary>
+    /// The graphics and compute queue (index 0 of <see cref="GraphicsFamily"/>); the frames are submitted to it.
+    /// </summary>
     public Queue GraphicsQueue { get; private set; }
+    /// <summary>
+    /// The queue family of <see cref="GraphicsQueue"/>: the first with graphics and compute that can present to the surface.
+    /// </summary>
     public uint GraphicsFamily { get; private set; }
     /// <summary>
     /// Further queues of the graphics family (index 1.. of the family), as many as <see cref="VulkanDeviceOptions.ExtraGraphicsQueues"/> asked for
@@ -90,29 +169,71 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// device.
     /// </summary>
     public Queue[] ExtraQueues { get; private set; } = [];
+    /// <summary>
+    /// The transfer queue: a dedicated transfer family's when the device has one (<see cref="HasDedicatedTransfer"/>).
+    /// </summary>
     public Queue TransferQueue { get; private set; }
+    /// <summary>
+    /// The queue family of <see cref="TransferQueue"/>.
+    /// </summary>
     public uint TransferFamily { get; private set; }
+    /// <summary>
+    /// Whether <see cref="TransferQueue"/> is on a family of its own rather than the graphics family.
+    /// </summary>
     public bool HasDedicatedTransfer { get; private set; }
     /// <summary>
     /// Held around every queue submission this device makes; take it when submitting yourself.
     /// </summary>
     public object QueueLock { get; } = new();
 
+    /// <summary>
+    /// The device memory allocator.
+    /// </summary>
     public GpuAllocator Allocator { get; private set; } = null!;
+    /// <summary>
+    /// The pipeline cache, loaded from and saved to <see cref="VulkanDeviceOptions.PipelineCachePath"/>.
+    /// </summary>
     public PipelineCache PipelineCache { get; private set; }
+    /// <summary>
+    /// The frame ring: frames in flight, their fences and deferred deletes.
+    /// </summary>
     public FrameRing Frames { get; private set; } = null!;
+    /// <summary>
+    /// The report a lost device writes (<see cref="Check"/>), with the pass markers when tracking.
+    /// </summary>
+    public DeviceFault Faults { get; private set; } = null!;
+    /// <summary>
+    /// What is and was at each GPU address (<c>MEITOU_DIAG_FAULT=1</c>, <see cref="DeviceFault.Tracking"/>); null when not tracked.
+    /// </summary>
+    public GpuAddressLog? AddressLog { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_device_fault is enabled (a lost device then tells its fault).
+    /// </summary>
+    public bool HasDeviceFault { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_device_address_binding_report is enabled (only when tracking: the driver then reports each range it binds).
+    /// </summary>
+    public bool HasAddressBindingReport { get; private set; }
 
-    // The handle tables below: added to from any thread (the allocator's callers, the recording jobs' views) under this lock; read without it
-    // (an index never moves). Slots are not reused: the renderers' caches compare views and buffers by index, so a reused slot would pass for
-    // the old resource. A released one is cleared once no frame in flight can read it, so what it held goes to the GC.
+    /// <summary>
+    /// Guards the handle tables below. They are added to from any thread (the allocator's callers, the recording jobs' views) under this lock and
+    /// read without it (an index never moves). Slots are not reused: the renderers' caches compare views and buffers by index, so a reused slot would
+    /// pass for the old resource. A released one is cleared once no frame in flight can read it, so what it held goes to the GC.
+    /// </summary>
     readonly object _tableGate = new();
 
     /// <summary>
     /// The samplers the renderers hold by index (index 0 is the null sampler).
     /// </summary>
     readonly List<Sampler> _samplerTable = [default];
+    /// <summary>
+    /// The sampler at an index. Any thread.
+    /// </summary>
     public Sampler SamplerAt(int index) => _samplerTable[index];
 
+    /// <summary>
+    /// Adds a sampler to the table and returns its index. Any thread.
+    /// </summary>
     public int AddSampler(Sampler sampler)
     {
         lock (_tableGate)
@@ -126,8 +247,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The views the renderers hold by index (index 0 is the null view).
     /// </summary>
     readonly List<ImageView> _viewTable = [default];
+    /// <summary>
+    /// The view at an index. Any thread.
+    /// </summary>
     public ImageView ViewAt(int index) => _viewTable[index];
 
+    /// <summary>
+    /// Adds a view to the table and returns its index. Any thread.
+    /// </summary>
     public int AddView(ImageView view)
     {
         lock (_tableGate)
@@ -141,8 +268,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The sets the renderers bind by index (index 0 is the null set): the persistent ones (per-draw sets are bound by their own handle).
     /// </summary>
     readonly List<DescriptorSet> _setTable = [default];
+    /// <summary>
+    /// The set at an index. Any thread.
+    /// </summary>
     public DescriptorSet SetAt(int index) => _setTable[index];
 
+    /// <summary>
+    /// Adds a set to the table and returns its index. Any thread.
+    /// </summary>
     public int AddSet(DescriptorSet set)
     {
         lock (_tableGate)
@@ -156,9 +289,18 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The textures the renderers hold by index (index 0 is the null texture).
     /// </summary>
     readonly List<TextureEntry> _textureTable = [default];
+    /// <summary>
+    /// The textures already passed to <see cref="ReleaseTexture"/> whose deferred release has not run yet (a second release is ignored).
+    /// </summary>
     readonly HashSet<int> _releasedTextures = [];
+    /// <summary>
+    /// The texture at an index. Any thread.
+    /// </summary>
     public TextureEntry TextureAt(int index) => _textureTable[index];
 
+    /// <summary>
+    /// Adds a texture to the table and returns its index. Any thread.
+    /// </summary>
     public int AddTexture(Image image, ImageAllocation? allocation, bool owned, TextureDesc desc)
     {
         lock (_tableGate)
@@ -213,8 +355,15 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// not a walk over every view). The cache is read without the lock: every draw asks for its views, and a lock there was contended by the
     /// streaming threads' table adds (6% of the render thread's samples on the hub view).
     /// </summary>
-    readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache = [];
+    readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache =
+        [];
+    /// <summary>
+    /// The cache key of each view in <see cref="_viewCache"/>, by view index (a texture's release removes them from the cache).
+    /// </summary>
     readonly Dictionary<int, (int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle)> _viewKeys = [];
+    /// <summary>
+    /// The views cut on each texture, by texture index.
+    /// </summary>
     readonly Dictionary<int, List<int>> _textureViews = [];
 
     /// <summary>
@@ -222,7 +371,8 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public unsafe GpuView View(GpuTexture texture, int baseLevel, int levels, int baseLayer, int layers, GpuViewType type, GpuSwizzle swizzle)
     {
-        var key = (texture.Index, baseLevel, levels, baseLayer, layers, type, (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
+        var key = (texture.Index, baseLevel, levels, baseLayer, layers, type,
+            (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
         if (_viewCache.TryGetValue(key, out var index)) return new GpuView(index);
 
         lock (_tableGate)
@@ -236,7 +386,8 @@ public sealed unsafe class VulkanDevice : IDisposable
                 ViewType = VkViewType(type),
                 Format = GlConventions.VkFormat(texture.Desc.Format),
                 Components = VkSwizzle(swizzle),
-                SubresourceRange = new ImageSubresourceRange(GlConventions.VkAspect(texture.Desc), (uint)baseLevel, (uint)levels, (uint)baseLayer, (uint)layers),
+                SubresourceRange = new ImageSubresourceRange(GlConventions.VkAspect(texture.Desc), (uint)baseLevel, (uint)levels, (uint)baseLayer,
+                    (uint)layers),
             };
             VulkanException.Check(Vk.CreateImageView(Device, &info, null, out var view), "vkCreateImageView");
             _viewTable.Add(view);
@@ -254,9 +405,18 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The buffers the renderers hold by index (index 0 is the null buffer; a freed one is cleared, <see cref="RemoveBuffer"/>).
     /// </summary>
     readonly List<BufferEntry> _bufferTable = [default];
+    /// <summary>
+    /// The buffer at an index. Any thread.
+    /// </summary>
     public Silk.NET.Vulkan.Buffer BufferAt(int index) => _bufferTable[index].Buffer;
+    /// <summary>
+    /// The buffer and its allocation at an index. Any thread.
+    /// </summary>
     public BufferEntry BufferEntryAt(int index) => _bufferTable[index];
 
+    /// <summary>
+    /// Adds a buffer to the table and returns its index. Any thread.
+    /// </summary>
     public int AddBuffer(BufferEntry buffer)
     {
         lock (_tableGate)
@@ -290,6 +450,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return Vk.GetBufferDeviceAddress(Device, in info);
     }
 
+    /// <summary>
+    /// The Vulkan view type of a view.
+    /// </summary>
     static ImageViewType VkViewType(GpuViewType t) => t switch
     {
         GpuViewType.Texture2DArray => ImageViewType.Type2DArray,
@@ -297,6 +460,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         _ => ImageViewType.Type2D,
     };
 
+    /// <summary>
+    /// The Vulkan component mapping of a view's swizzle.
+    /// </summary>
     static ComponentMapping VkSwizzle(GpuSwizzle s) => new()
     {
         R = VkSwizzleComponent(s.R),
@@ -305,6 +471,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         A = VkSwizzleComponent(s.A),
     };
 
+    /// <summary>
+    /// The Vulkan swizzle of one component.
+    /// </summary>
     static ComponentSwizzle VkSwizzleComponent(GpuSwizzleComponent c) => c switch
     {
         GpuSwizzleComponent.Identity => ComponentSwizzle.Identity,
@@ -331,8 +500,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public ImageView NativeView(GpuTexture texture, int level = 0, int layer = 0) =>
         ViewAt(View(texture, level, 1, layer, 1, GpuViewType.Texture2D, default).Index);
+    /// <summary>
+    /// The frames in flight the device was created with.
+    /// </summary>
     public int FramesInFlight => _options.FramesInFlight;
 
+    /// <summary>
+    /// The validation layer and VK_EXT_debug_utils are both on.
+    /// </summary>
     public bool ValidationEnabled { get; private set; }
     /// <summary>
     /// Synchronisation validation was asked for and the layer took the setting.
@@ -342,7 +517,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// VK_EXT_debug_utils (labels and names), null when the instance does not have it.
     /// </summary>
     public ExtDebugUtils? DebugUtils => _debugUtils;
+    /// <summary>
+    /// Validation errors so far.
+    /// </summary>
     public int ValidationErrors => Volatile.Read(ref _validationErrors);
+    /// <summary>
+    /// Validation warnings so far (performance messages not counted).
+    /// </summary>
     public int ValidationWarnings => Volatile.Read(ref _validationWarnings);
     /// <summary>
     /// The last ~50 validation messages (errors and warnings), oldest first.
@@ -359,18 +540,45 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     // Features and extensions (true = enabled on the device).
+    /// <summary>
+    /// Dynamic rendering (core in Vulkan 1.3; a device without it is not picked).
+    /// </summary>
     public bool HasDynamicRendering { get; private set; }
+    /// <summary>
+    /// Synchronization2 (core in Vulkan 1.3; a device without it is not picked).
+    /// </summary>
     public bool HasSynchronization2 { get; private set; }
+    /// <summary>
+    /// Timeline semaphores (core in Vulkan 1.2; a device without them is not picked).
+    /// </summary>
     public bool HasTimelineSemaphore { get; private set; }
     /// <summary>
     /// Core in Vulkan 1.3: always available.
     /// </summary>
     public bool HasExtendedDynamicState { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state2 is on with its core features.
+    /// </summary>
     public bool HasExtendedDynamicState2 { get; private set; }
+    /// <summary>
+    /// <see cref="HasExtendedDynamicState2"/> with dynamic logic op.
+    /// </summary>
     public bool HasExtendedDynamicState2LogicOp { get; private set; }
+    /// <summary>
+    /// <see cref="HasExtendedDynamicState2"/> with dynamic patch control points.
+    /// </summary>
     public bool HasExtendedDynamicState2PatchControlPoints { get; private set; }
+    /// <summary>
+    /// Line and point polygon modes (the core <c>fillModeNonSolid</c> feature).
+    /// </summary>
     public bool FillModeNonSolid { get; private set; }
+    /// <summary>
+    /// Depth clamp (the core <c>depthClamp</c> feature).
+    /// </summary>
     public bool DepthClamp { get; private set; }
+    /// <summary>
+    /// Anisotropic filtering (the core <c>samplerAnisotropy</c> feature).
+    /// </summary>
     public bool SamplerAnisotropy { get; private set; }
     /// <summary>
     /// Tessellation shaders are on (the core feature; the ground displacement uses them, GroundRelief).
@@ -420,21 +628,57 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// Draws whose shader writes the fragment depth stay at one invocation per pixel on this device (the property is false).
     /// </summary>
     public bool ShadingRateForcedByDepthWrite { get; private set; }
+    /// <summary>
+    /// BC texture compression (the core <c>textureCompressionBC</c> feature).
+    /// </summary>
     public bool TextureCompressionBc { get; private set; }
+    /// <summary>
+    /// Per-attachment blend state (the core <c>independentBlend</c> feature).
+    /// </summary>
     public bool IndependentBlend { get; private set; }
+    /// <summary>
+    /// Cube map arrays (the core <c>imageCubeArray</c> feature).
+    /// </summary>
     public bool ImageCubeArray { get; private set; }
+    /// <summary>
+    /// VK_KHR_push_descriptor is on.
+    /// </summary>
     public bool HasPushDescriptor { get; private set; }
+    /// <summary>
+    /// The most descriptors one push may write (the device's limit; at most 16 on macOS, where MoltenVK binds pushed sets through MSL attributes).
+    /// </summary>
     public uint MaxPushDescriptors { get; private set; }
     /// <summary>
     /// Extension present and all of the five sub-features below supported.
     /// </summary>
     public bool HasExtendedDynamicState3 { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic colour blend enable.
+    /// </summary>
     public bool Eds3ColorBlendEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic colour write mask.
+    /// </summary>
     public bool Eds3ColorWriteMask { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic alpha-to-coverage.
+    /// </summary>
     public bool Eds3AlphaToCoverageEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic polygon mode.
+    /// </summary>
     public bool Eds3PolygonMode { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic depth clamp enable.
+    /// </summary>
     public bool Eds3DepthClampEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_vertex_input_dynamic_state is on.
+    /// </summary>
     public bool HasVertexInputDynamicState { get; private set; }
+    /// <summary>
+    /// VK_KHR_swapchain is on (the device was made with a surface).
+    /// </summary>
     public bool HasSwapchain { get; private set; }
     // What the native renderer API needs (docs/renderer-native.md 1, owner decision 1): enabled when present; GpuFeatures refuses to
     // start without the required ones.
@@ -443,11 +687,26 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// after bind, update unused while pending, non-uniform sampled-image indexing).
     /// </summary>
     public bool HasBindless { get; private set; }
+    /// <summary>
+    /// Multi-draw indirect (the core <c>multiDrawIndirect</c> feature).
+    /// </summary>
     public bool MultiDrawIndirect { get; private set; }
+    /// <summary>
+    /// Indirect draws with a first instance other than 0 (the core <c>drawIndirectFirstInstance</c> feature).
+    /// </summary>
     public bool DrawIndirectFirstInstance { get; private set; }
+    /// <summary>
+    /// Indirect draws with a GPU-written count (Vulkan 1.2 <c>drawIndirectCount</c>).
+    /// </summary>
     public bool DrawIndirectCount { get; private set; }
+    /// <summary>
+    /// <c>gl_DrawID</c> / base vertex and instance in shaders (Vulkan 1.1 <c>shaderDrawParameters</c>).
+    /// </summary>
     public bool ShaderDrawParameters { get; private set; }
 
+    /// <summary>
+    /// The physical device's limits.
+    /// </summary>
     public PhysicalDeviceLimits Limits => Properties.Limits;
 
     /// <summary>
@@ -473,7 +732,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     public (ulong Used, ulong Budget) VideoMemory()
     {
         var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
-        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        var props = new PhysicalDeviceMemoryProperties2
+        {
+            SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null,
+        };
         Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
         ulong used = 0, total = 0;
 
@@ -495,7 +757,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     public List<(MemoryHeapFlags Flags, ulong Size, ulong Usage, ulong Budget)> Heaps()
     {
         var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
-        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        var props = new PhysicalDeviceMemoryProperties2
+        {
+            SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null,
+        };
         Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
         var heaps = new List<(MemoryHeapFlags, ulong, ulong, ulong)>();
 
@@ -526,7 +791,8 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <c>MEITOU_VRAM_BUDGET_MB</c> makes <see cref="VideoMemory"/> report at most that budget (a card with less memory, for testing the
     /// memory-pressure guard, <c>VramGuard</c>, and the viewer's watch on a bigger one).
     /// </summary>
-    static readonly ulong BudgetOverride = ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_BUDGET_MB"), out var mb) && mb > 0 ? mb << 20 : ulong.MaxValue;
+    static readonly ulong BudgetOverride =
+        ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_BUDGET_MB"), out var mb) && mb > 0 ? mb << 20 : ulong.MaxValue;
 
     /// <summary>
     /// One line per feature, for logs and test output.
@@ -535,21 +801,35 @@ public sealed unsafe class VulkanDevice : IDisposable
     {
         var sb = new StringBuilder();
         var v = Properties.ApiVersion;
-        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
-        sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
-        sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} extendedDynamicState={HasExtendedDynamicState}");
-        sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
-        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBc} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
-        sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
-        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
+        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, " +
+            $"validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
+        sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}" +
+            $"{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
+        sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} " +
+            $"extendedDynamicState={HasExtendedDynamicState}");
+        sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, " +
+            $"patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
+        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} " +
+            $"tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBc} independentBlend={IndependentBlend} " +
+            $"imageCubeArray={ImageCubeArray}");
+        sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} " +
+            $"drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
+        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} " +
+            $"swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
-        sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate {MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
-        sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} depthClamp={Eds3DepthClampEnable})");
-        sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns bufferImageGranularity={Limits.BufferImageGranularity}");
+        sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate " +
+            $"{MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
+        sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} " +
+            $"colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} " +
+            $"depthClamp={Eds3DepthClampEnable})");
+        sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns " +
+            $"bufferImageGranularity={Limits.BufferImageGranularity}");
         return sb.ToString();
     }
 
-    // ---- creation ------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Creation
 
     /// <summary>
     /// Creates the device. Throws <see cref="VulkanException"/> when no suitable Vulkan 1.3 device exists.
@@ -570,7 +850,10 @@ public sealed unsafe class VulkanDevice : IDisposable
             if (!NativeLibrary.TryLoad("libvulkan.1.dylib", out _))
             {
                 throw new InvalidOperationException(
-                    $"the Vulkan loader (libvulkan.1.dylib) is not findable on this macOS: DYLD_LIBRARY_PATH='{Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH")}' - the variable is absent from the launch environment, or a restricted launcher stripped it (nohup does); export DYLD_LIBRARY_PATH=/opt/homebrew/lib and launch plainly (a script, a shell function or 'cmd &', not 'nohup cmd &')");
+                    $"the Vulkan loader (libvulkan.1.dylib) is not findable on this macOS: " +
+                    $"DYLD_LIBRARY_PATH='{Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH")}' - the variable is absent from the launch " +
+                    $"environment, or a restricted launcher stripped it (nohup does); export DYLD_LIBRARY_PATH=/opt/homebrew/lib and launch " +
+                    $"plainly (a script, a shell function or 'cmd &', not 'nohup cmd &')");
             }
         }
 
@@ -588,6 +871,10 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the instance, the surface (when the options make one), the device, the allocator, the pipeline cache and the frame ring; the allocator
+    /// may reclaim memory by retiring submitted frames, but only on the thread that created the device.
+    /// </summary>
     void Initialize()
     {
         CreateInstance();
@@ -599,9 +886,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
 
         PickAndCreateDevice();
+
+        // Before the allocator: the log hears of every range from the first.
+        if (HasAddressBindingReport) AddressLog = GpuAddressLog.Create(this, _debugUtils!);
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
         Frames = new FrameRing(this, _options.FramesInFlight);
+        Faults = new DeviceFault(this, AddressLog);
         int renderThread = Environment.CurrentManagedThreadId;
         Allocator.Reclaim = () =>
         {
@@ -613,6 +904,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         _options.DeviceCreated?.Invoke(this);
     }
 
+    /// <summary>
+    /// Whether the loader lists the validation layer.
+    /// </summary>
     bool LayerAvailable()
     {
         uint n = 0;
@@ -674,6 +968,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// The instance, with the validation layer and debug utils where available, and the validation messenger.
+    /// </summary>
     void CreateInstance()
     {
         bool wantValidation = _options.Validation ?? true;
@@ -691,6 +988,25 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool layerSettings = ValidationEnabled && (_options.SyncValidation || _options.GpuValidation)
             && InstanceExtensionAvailable("VK_EXT_layer_settings", ValidationLayer);
 
+        // macOS: the loader hides portability drivers (MoltenVK) from instances that do not opt in
+        // (VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR).
+        bool portability = OperatingSystem.IsMacOS();
+        var extNames = InstanceExtensionNames(debugExt, layerSettings, portability);
+        CreateVkInstance(extNames, layerSettings, portability);
+
+        if (debugExt)
+        {
+            Vk.TryGetInstanceExtension(Instance, out _debugUtils);
+        }
+
+        if (ValidationEnabled) CreateDebugMessenger();
+    }
+
+    /// <summary>
+    /// The instance extensions to enable: debug utils, layer settings, the caller's, the surface's and (macOS) portability enumeration.
+    /// </summary>
+    List<string> InstanceExtensionNames(bool debugExt, bool layerSettings, bool portability)
+    {
         var extNames = new List<string>();
 
         if (debugExt)
@@ -719,15 +1035,19 @@ public sealed unsafe class VulkanDevice : IDisposable
             extNames.Add("VK_KHR_surface");
         }
 
-        // macOS: the loader hides portability drivers (MoltenVK) from instances that do not opt in
-        // (VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR).
-        bool portability = OperatingSystem.IsMacOS();
-
         if (portability && !extNames.Contains("VK_KHR_portability_enumeration"))
         {
             extNames.Add("VK_KHR_portability_enumeration");
         }
 
+        return extNames;
+    }
+
+    /// <summary>
+    /// Creates the Vulkan 1.3 instance with <paramref name="extNames"/>, the validation layer when enabled and its settings.
+    /// </summary>
+    void CreateVkInstance(List<string> extNames, bool layerSettings, bool portability)
+    {
         var appName = (byte*)SilkMarshal.StringToPtr("Meitou");
         var layerPtrs = ValidationEnabled ? (byte**)SilkMarshal.StringArrayToPtr(new[] { ValidationLayer }) : null;
         var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(extNames.ToArray());
@@ -755,12 +1075,26 @@ public sealed unsafe class VulkanDevice : IDisposable
             if (layerSettings)
             {
                 if (_options.SyncValidation)
-                    settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = syncName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                {
+                    settings[settingCount++] = new LayerSettingEXT
+                    {
+                        PLayerName = layerName, PSettingName = syncName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on,
+                    };
+                }
+
                 if (_options.GpuValidation)
-                    settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = gpuName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                {
+                    settings[settingCount++] = new LayerSettingEXT
+                    {
+                        PLayerName = layerName, PSettingName = gpuName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on,
+                    };
+                }
             }
 
-            var layerInfo = new LayerSettingsCreateInfoEXT { SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = settingCount, PSettings = settings };
+            var layerInfo = new LayerSettingsCreateInfoEXT
+            {
+                SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = settingCount, PSettings = settings,
+            };
             var ci = new InstanceCreateInfo
             {
                 SType = StructureType.InstanceCreateInfo,
@@ -790,28 +1124,30 @@ public sealed unsafe class VulkanDevice : IDisposable
 
             SilkMarshal.Free((nint)extPtrs);
         }
-
-        if (debugExt)
-        {
-            Vk.TryGetInstanceExtension(Instance, out _debugUtils);
-        }
-
-        if (ValidationEnabled)
-        {
-            _selfHandle = GCHandle.Alloc(this);
-            _callbackDelegate = DebugCallback;
-            var mi = new DebugUtilsMessengerCreateInfoEXT
-            {
-                SType = StructureType.DebugUtilsMessengerCreateInfoExt,
-                MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
-                MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
-                PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(_callbackDelegate),
-                PUserData = (void*)GCHandle.ToIntPtr(_selfHandle),
-            };
-            VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
-        }
     }
 
+    /// <summary>
+    /// The validation messenger: warnings and errors reach <see cref="DebugCallback"/>.
+    /// </summary>
+    void CreateDebugMessenger()
+    {
+        _selfHandle = GCHandle.Alloc(this);
+        _callbackDelegate = DebugCallback;
+        var mi = new DebugUtilsMessengerCreateInfoEXT
+        {
+            SType = StructureType.DebugUtilsMessengerCreateInfoExt,
+            MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
+            MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt
+                | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
+            PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(_callbackDelegate),
+            PUserData = (void*)GCHandle.ToIntPtr(_selfHandle),
+        };
+        VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
+    }
+
+    /// <summary>
+    /// The validation message callback: counts errors (also written to stderr) and warnings and keeps the last 50 messages.
+    /// </summary>
     static uint DebugCallback(DebugUtilsMessageSeverityFlagsEXT severity, DebugUtilsMessageTypeFlagsEXT type,
         DebugUtilsMessengerCallbackDataEXT* data, void* user)
     {
@@ -849,8 +1185,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         return 0;
     }
 
+    /// <summary>
+    /// A NUL-terminated ANSI string from a Vulkan name array.
+    /// </summary>
     static string Name(byte* p) => Marshal.PtrToStringAnsi((nint)p) ?? "";
 
+    /// <summary>
+    /// Picks the best-scoring physical device (<see cref="ScoreDevice"/>; throws when none is usable) and creates the logical device on it.
+    /// </summary>
     void PickAndCreateDevice()
     {
         uint n = 0;
@@ -891,9 +1233,25 @@ public sealed unsafe class VulkanDevice : IDisposable
         Vk.GetPhysicalDeviceProperties(best, out var props);
         Properties = props;
         DeviceName = Name(props.DeviceName);
+        DriverName = ReadDriverName(best);
         CreateLogicalDevice();
     }
 
+    /// <summary>
+    /// The driver's name and version from Vulkan 1.2's driver properties (<see cref="DriverName"/>).
+    /// </summary>
+    string ReadDriverName(PhysicalDevice d)
+    {
+        var driver = new PhysicalDeviceDriverProperties { SType = StructureType.PhysicalDeviceDriverProperties };
+        var properties = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &driver };
+        Vk.GetPhysicalDeviceProperties2(d, &properties);
+
+        return $"{Name(driver.DriverName)} {Name(driver.DriverInfo)}".Trim();
+    }
+
+    /// <summary>
+    /// The extensions a physical device offers.
+    /// </summary>
     HashSet<string> DeviceExtensions(PhysicalDevice d)
     {
         uint n = 0;
@@ -970,6 +1328,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return score;
     }
 
+    /// <summary>
+    /// The queue families of a physical device.
+    /// </summary>
     QueueFamilyProperties[] QueueFamilies(PhysicalDevice d)
     {
         uint n = 0;
@@ -984,6 +1345,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return fams;
     }
 
+    /// <summary>
+    /// The first queue family with graphics and compute that can present to the surface (any when headless); -1 when there is none.
+    /// </summary>
     int FindGraphicsFamily(PhysicalDevice d)
     {
         var fams = QueueFamilies(d);
@@ -1013,8 +1377,15 @@ public sealed unsafe class VulkanDevice : IDisposable
         return -1;
     }
 
+    /// <summary>
+    /// Whether <see cref="VulkanDeviceOptions.Features12"/> asks for a Vulkan 1.2 feature by name.
+    /// </summary>
     bool Wants12(string feature) => _options.Features12?.Contains(feature) == true;
 
+    /// <summary>
+    /// The logical device on <see cref="PhysicalDevice"/>: what it has is queried in one feature chain, only what the renderer uses is enabled, then
+    /// its queues and the limits read once it exists. The feature structs stay locals of this method: the chain points at them.
+    /// </summary>
     void CreateLogicalDevice()
     {
         var pd = PhysicalDevice;
@@ -1032,6 +1403,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         var rayQuery = new PhysicalDeviceRayQueryFeaturesKHR { SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr };
         var vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr };
         var presentId = new PhysicalDevicePresentIdFeaturesKHR { SType = StructureType.PhysicalDevicePresentIDFeaturesKhr };
+        var fault = new PhysicalDeviceFaultFeaturesEXT { SType = StructureType.PhysicalDeviceFaultFeaturesExt };
+        var binding = new PhysicalDeviceAddressBindingReportFeaturesEXT { SType = StructureType.PhysicalDeviceAddressBindingReportFeaturesExt };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
@@ -1047,14 +1420,15 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extPresentId = _options.CreateSurface != null && _options.DeviceExtensions?.Contains("VK_NV_low_latency2") == true
             && have.Contains("VK_KHR_present_id");
 
+        // A lost device's own account of its fault (issue #319); the address reports go to a debug messenger and only when tracking.
+        bool extFault = have.Contains("VK_EXT_device_fault");
+        bool extBinding = DeviceFault.Tracking && _debugUtils is not null && have.Contains("VK_EXT_device_address_binding_report");
+
         void* chain = null;
 
         void Link<T>(ref T s, bool use) where T : unmanaged
         {
-            if (!use)
-            {
-                return;
-            }
+            if (!use) return;
 
             // Every feature struct starts with sType, pNext; write pNext in place.
             fixed (T* p = &s)
@@ -1076,11 +1450,94 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref rayQuery, extRay);
         Link(ref vrs, extVrs);
         Link(ref presentId, extPresentId);
+        Link(ref fault, extFault);
+        Link(ref binding, extBinding);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
         var core = f2.Features;
 
+        ReadFeatures(in v13, in v12, in v11, in eds2, in eds3, in vid, in bary, in accel, in rayQuery, in core, extEds2, extEds3, extVid, extPush,
+            extBary, extRay);
+        extVrs = extVrs && vrs.AttachmentFragmentShadingRate && ShadingRateAttachmentFormatOk(pd, Format.R8Uint);
+
+        // Turn off everything we did not ask for (the queried structs become the create structs).
+        EnableVersionFeatures(ref v13, ref v12, ref v11);
+        EnableExtensionFeatures(ref eds2, ref eds3, ref vid, ref bary, ref accel, ref rayQuery, ref vrs, extVrs);
+        EnableFaultFeatures(ref fault, ref binding, extFault, extBinding);
+        f2.Features = EnabledCoreFeatures(in core);
+        var names = DeviceExtensionNames(have, extEds2, extEds3, extVid, extPush, extBary, extVrs, extPresentId);
+        if (HasDeviceFault) names.Add("VK_EXT_device_fault");
+        if (HasAddressBindingReport) names.Add("VK_EXT_device_address_binding_report");
+        var fams = PickQueueFamilies(pd);
+        f2.PNext = chain;
+        uint graphicsQueues = CreateDevice(pd, &f2, names, fams);
+        GetQueues(graphicsQueues);
+        QueryDeviceProperties(pd, extVrs);
+        if (ValidationEnabled) NameDeviceObjects();
+    }
+
+    /// <summary>
+    /// Creates <see cref="Device"/> with the enabled features <paramref name="f2"/> (its chain still on the caller's stack), the extensions
+    /// <paramref name="names"/>, the graphics queues and the dedicated transfer queue; returns the graphics queue count.
+    /// </summary>
+    uint CreateDevice(PhysicalDevice pd, PhysicalDeviceFeatures2* f2, List<string> names, QueueFamilyProperties[] fams)
+    {
+        float prio = 1f;
+
+        // 1 + the extra queues the family offers (priorities all 1).
+        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
+        var prios = stackalloc float[(int)graphicsQueues];
+        for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
+
+        var qcis = stackalloc DeviceQueueCreateInfo[2];
+        uint qn = 0;
+        qcis[qn++] = new DeviceQueueCreateInfo
+        {
+            SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = GraphicsFamily, QueueCount = graphicsQueues, PQueuePriorities = prios,
+        };
+
+        if (HasDedicatedTransfer)
+        {
+            qcis[qn++] = new DeviceQueueCreateInfo
+            {
+                SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = TransferFamily, QueueCount = 1, PQueuePriorities = &prio,
+            };
+        }
+
+        var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(names.ToArray());
+
+        try
+        {
+            var dci = new DeviceCreateInfo
+            {
+                SType = StructureType.DeviceCreateInfo,
+                PNext = f2,
+                QueueCreateInfoCount = qn,
+                PQueueCreateInfos = qcis,
+                EnabledExtensionCount = (uint)names.Count,
+                PpEnabledExtensionNames = extPtrs,
+            };
+            VulkanException.Check(Vk.CreateDevice(pd, in dci, null, out var device), "vkCreateDevice");
+            Device = device;
+        }
+        finally
+        {
+            SilkMarshal.Free((nint)extPtrs);
+        }
+
+        return graphicsQueues;
+    }
+
+    /// <summary>
+    /// What the device has, from the queried features and the extensions it lists (true = enabled on the device).
+    /// </summary>
+    void ReadFeatures(in PhysicalDeviceVulkan13Features v13, in PhysicalDeviceVulkan12Features v12, in PhysicalDeviceVulkan11Features v11,
+        in PhysicalDeviceExtendedDynamicState2FeaturesEXT eds2, in PhysicalDeviceExtendedDynamicState3FeaturesEXT eds3,
+        in PhysicalDeviceVertexInputDynamicStateFeaturesEXT vid, in PhysicalDeviceFragmentShaderBarycentricFeaturesKHR bary,
+        in PhysicalDeviceAccelerationStructureFeaturesKHR accel, in PhysicalDeviceRayQueryFeaturesKHR rayQuery, in PhysicalDeviceFeatures core,
+        bool extEds2, bool extEds3, bool extVid, bool extPush, bool extBary, bool extRay)
+    {
         HasDynamicRendering = v13.DynamicRendering;
         HasSynchronization2 = v13.Synchronization2;
         HasTimelineSemaphore = v12.TimelineSemaphore;
@@ -1108,15 +1565,20 @@ public sealed unsafe class VulkanDevice : IDisposable
         HasExtendedDynamicState3 = Eds3ColorBlendEnable && Eds3ColorWriteMask && Eds3AlphaToCoverageEnable && Eds3PolygonMode && Eds3DepthClampEnable;
         HasVertexInputDynamicState = extVid && vid.VertexInputDynamicState;
         HasSwapchain = Surface.Handle != 0;
-        extVrs = extVrs && vrs.AttachmentFragmentShadingRate && ShadingRateAttachmentFormatOk(pd, Format.R8Uint);
-        HasBindless = v12.DescriptorIndexing && v12.RuntimeDescriptorArray && v12.DescriptorBindingPartiallyBound && v12.DescriptorBindingVariableDescriptorCount &&
-            v12.DescriptorBindingSampledImageUpdateAfterBind && v12.DescriptorBindingUpdateUnusedWhilePending && v12.ShaderSampledImageArrayNonUniformIndexing;
+        HasBindless = v12.DescriptorIndexing && v12.RuntimeDescriptorArray && v12.DescriptorBindingPartiallyBound
+            && v12.DescriptorBindingVariableDescriptorCount && v12.DescriptorBindingSampledImageUpdateAfterBind
+            && v12.DescriptorBindingUpdateUnusedWhilePending && v12.ShaderSampledImageArrayNonUniformIndexing;
         MultiDrawIndirect = core.MultiDrawIndirect;
         DrawIndirectFirstInstance = core.DrawIndirectFirstInstance;
         DrawIndirectCount = v12.DrawIndirectCount;
         ShaderDrawParameters = v11.ShaderDrawParameters;
+    }
 
-        // Turn off everything we did not ask for (the queried struct becomes the create struct).
+    /// <summary>
+    /// Turns off every Vulkan 1.1 to 1.3 feature not asked for: the queried structs become the create structs, in place (their chain stays).
+    /// </summary>
+    void EnableVersionFeatures(ref PhysicalDeviceVulkan13Features v13, ref PhysicalDeviceVulkan12Features v12, ref PhysicalDeviceVulkan11Features v11)
+    {
         v13 = new PhysicalDeviceVulkan13Features
         {
             SType = StructureType.PhysicalDeviceVulkan13Features,
@@ -1157,7 +1619,16 @@ public sealed unsafe class VulkanDevice : IDisposable
             UniformAndStorageBuffer16BitAccess = v11.UniformAndStorageBuffer16BitAccess,
             ShaderDrawParameters = ShaderDrawParameters,
         };
+    }
 
+    /// <summary>
+    /// The extension feature structs as create structs, each with only what the device gets enabled.
+    /// </summary>
+    void EnableExtensionFeatures(ref PhysicalDeviceExtendedDynamicState2FeaturesEXT eds2, ref PhysicalDeviceExtendedDynamicState3FeaturesEXT eds3,
+        ref PhysicalDeviceVertexInputDynamicStateFeaturesEXT vid, ref PhysicalDeviceFragmentShaderBarycentricFeaturesKHR bary,
+        ref PhysicalDeviceAccelerationStructureFeaturesKHR accel, ref PhysicalDeviceRayQueryFeaturesKHR rayQuery,
+        ref PhysicalDeviceFragmentShadingRateFeaturesKHR vrs, bool extVrs)
+    {
         // The Link() calls stored pointers to the old locations, which are the same variables: still valid.
         eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT
         {
@@ -1207,24 +1678,58 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = vrs.PNext,
             AttachmentFragmentShadingRate = extVrs,
         };
-        f2.Features = new PhysicalDeviceFeatures
-        {
-            PipelineStatisticsQuery = HasPipelineStatistics,
-            FillModeNonSolid = FillModeNonSolid,
-            DepthClamp = DepthClamp,
-            SamplerAnisotropy = SamplerAnisotropy,
-            TessellationShader = HasTessellation,
-            TextureCompressionBC = TextureCompressionBc,
-            IndependentBlend = IndependentBlend,
-            ImageCubeArray = ImageCubeArray,
-            ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
-            ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
-            ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
-            ShaderInt16 = core.ShaderInt16,
-            MultiDrawIndirect = MultiDrawIndirect,
-            DrawIndirectFirstInstance = DrawIndirectFirstInstance,
-        };
+    }
 
+    /// <summary>
+    /// The fault feature structs as create structs: the fault information without the vendor's binary dump, and the address binding reports, each
+    /// where the device has it (<see cref="HasDeviceFault"/>, <see cref="HasAddressBindingReport"/>).
+    /// </summary>
+    void EnableFaultFeatures(ref PhysicalDeviceFaultFeaturesEXT fault, ref PhysicalDeviceAddressBindingReportFeaturesEXT binding, bool extFault,
+        bool extBinding)
+    {
+        HasDeviceFault = extFault && fault.DeviceFault;
+        HasAddressBindingReport = extBinding && binding.ReportAddressBinding;
+        fault = new PhysicalDeviceFaultFeaturesEXT
+        {
+            SType = StructureType.PhysicalDeviceFaultFeaturesExt,
+            PNext = fault.PNext,
+            DeviceFault = HasDeviceFault,
+        };
+        binding = new PhysicalDeviceAddressBindingReportFeaturesEXT
+        {
+            SType = StructureType.PhysicalDeviceAddressBindingReportFeaturesExt,
+            PNext = binding.PNext,
+            ReportAddressBinding = HasAddressBindingReport,
+        };
+    }
+
+    /// <summary>
+    /// The core features to enable, from the queried <paramref name="core"/>.
+    /// </summary>
+    PhysicalDeviceFeatures EnabledCoreFeatures(in PhysicalDeviceFeatures core) => new()
+    {
+        PipelineStatisticsQuery = HasPipelineStatistics,
+        FillModeNonSolid = FillModeNonSolid,
+        DepthClamp = DepthClamp,
+        SamplerAnisotropy = SamplerAnisotropy,
+        TessellationShader = HasTessellation,
+        TextureCompressionBC = TextureCompressionBc,
+        IndependentBlend = IndependentBlend,
+        ImageCubeArray = ImageCubeArray,
+        ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
+        ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
+        ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
+        ShaderInt16 = core.ShaderInt16,
+        MultiDrawIndirect = MultiDrawIndirect,
+        DrawIndirectFirstInstance = DrawIndirectFirstInstance,
+    };
+
+    /// <summary>
+    /// The device extensions to enable (and whether the memory budget extension is among them).
+    /// </summary>
+    List<string> DeviceExtensionNames(HashSet<string> have, bool extEds2, bool extEds3, bool extVid, bool extPush, bool extBary, bool extVrs,
+        bool extPresentId)
+    {
         var names = new List<string>();
         if (HasSwapchain) names.Add("VK_KHR_swapchain");
         if (extEds2) names.Add("VK_EXT_extended_dynamic_state2");
@@ -1253,7 +1758,14 @@ public sealed unsafe class VulkanDevice : IDisposable
                 names.Add(e);
         }
 
-        // Queues
+        return names;
+    }
+
+    /// <summary>
+    /// The graphics family and a transfer-only family when the device has one (else transfers share the graphics family); returns the families.
+    /// </summary>
+    QueueFamilyProperties[] PickQueueFamilies(PhysicalDevice pd)
+    {
         var fams = QueueFamilies(pd);
         GraphicsFamily = (uint)FindGraphicsFamily(pd);
         TransferFamily = GraphicsFamily;
@@ -1270,44 +1782,14 @@ public sealed unsafe class VulkanDevice : IDisposable
             }
         }
 
-        float prio = 1f;
+        return fams;
+    }
 
-        // 1 + the extra queues the family offers (priorities all 1).
-        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
-        var prios = stackalloc float[(int)graphicsQueues];
-        for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
-
-        var qcis = stackalloc DeviceQueueCreateInfo[2];
-        uint qn = 0;
-        qcis[qn++] = new DeviceQueueCreateInfo { SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = GraphicsFamily, QueueCount = graphicsQueues, PQueuePriorities = prios };
-
-        if (HasDedicatedTransfer)
-        {
-            qcis[qn++] = new DeviceQueueCreateInfo { SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = TransferFamily, QueueCount = 1, PQueuePriorities = &prio };
-        }
-
-        var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(names.ToArray());
-
-        try
-        {
-            f2.PNext = chain;
-            var dci = new DeviceCreateInfo
-            {
-                SType = StructureType.DeviceCreateInfo,
-                PNext = &f2,
-                QueueCreateInfoCount = qn,
-                PQueueCreateInfos = qcis,
-                EnabledExtensionCount = (uint)names.Count,
-                PpEnabledExtensionNames = extPtrs,
-            };
-            VulkanException.Check(Vk.CreateDevice(pd, in dci, null, out var device), "vkCreateDevice");
-            Device = device;
-        }
-        finally
-        {
-            SilkMarshal.Free((nint)extPtrs);
-        }
-
+    /// <summary>
+    /// The device's queues: the graphics queue, the extra graphics queues and the transfer queue (the graphics queue without a family of its own).
+    /// </summary>
+    void GetQueues(uint graphicsQueues)
+    {
         Vk.GetDeviceQueue(Device, GraphicsFamily, 0, out var gq);
         GraphicsQueue = gq;
 
@@ -1331,7 +1813,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         {
             TransferQueue = gq;
         }
+    }
 
+    /// <summary>
+    /// The limits read once the device exists: shading rates, push descriptors and acceleration structures.
+    /// </summary>
+    void QueryDeviceProperties(PhysicalDevice pd, bool extVrs)
+    {
         // Unusable (no attachment feature, no R8_UINT attachment, no listed rate): the extension is not enabled and the feature stays off.
         if (extVrs) QueryShadingRate(pd);
 
@@ -1357,26 +1845,37 @@ public sealed unsafe class VulkanDevice : IDisposable
                 throw new VulkanException("VK_KHR_acceleration_structure was enabled but its entry points did not load");
 
             AccelerationStructures = accelerationStructures;
-            var asProps = new PhysicalDeviceAccelerationStructurePropertiesKHR { SType = StructureType.PhysicalDeviceAccelerationStructurePropertiesKhr };
+            var asProps = new PhysicalDeviceAccelerationStructurePropertiesKHR
+            {
+                SType = StructureType.PhysicalDeviceAccelerationStructurePropertiesKhr,
+            };
             var p2 = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &asProps };
             Vk.GetPhysicalDeviceProperties2(pd, &p2);
             ScratchAlignment = Math.Max(asProps.MinAccelerationStructureScratchOffsetAlignment, 1);
         }
+    }
 
-        if (ValidationEnabled)
+    /// <summary>
+    /// Names the device and its queues for validation messages and capture tools.
+    /// </summary>
+    void NameDeviceObjects()
+    {
+        SetName(ObjectType.Device, (ulong)Device.Handle, "Meitou device");
+        SetName(ObjectType.Queue, (ulong)GraphicsQueue.Handle, "graphics queue");
+
+        if (HasDedicatedTransfer)
         {
-            SetName(ObjectType.Device, (ulong)Device.Handle, "Meitou device");
-            SetName(ObjectType.Queue, (ulong)GraphicsQueue.Handle, "graphics queue");
-
-            if (HasDedicatedTransfer)
-            {
-                SetName(ObjectType.Queue, (ulong)TransferQueue.Handle, "transfer queue");
-            }
+            SetName(ObjectType.Queue, (ulong)TransferQueue.Handle, "transfer queue");
         }
     }
 
-    // ---- fragment shading rate ----
+    #endregion
 
+    #region Fragment shading rate
+
+    /// <summary>
+    /// Whether a format supports being a fragment shading rate attachment and a colour attachment with optimal tiling.
+    /// </summary>
     bool ShadingRateAttachmentFormatOk(PhysicalDevice pd, Format format)
     {
         Vk.GetPhysicalDeviceFormatProperties(pd, format, out var props);
@@ -1431,8 +1930,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         (ShadingRateTexel, MaxShadingRate, HasFragmentShadingRate) = (texel, largest, true);
     }
 
-    // ---- pipeline cache ------------------------------------------------------------------------------------
+    #endregion
 
+    #region Pipeline cache
+
+    /// <summary>
+    /// Creates the pipeline cache from the saved file when it can be read and the device takes it; else an empty one (throws when even that fails).
+    /// </summary>
     void CreatePipelineCache()
     {
         _pipelineCachePath = _options.PipelineCachePath;
@@ -1468,6 +1972,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the pipeline cache from initial data (null for empty); false when the device refuses it.
+    /// </summary>
     bool TryCreateCache(byte[]? data)
     {
         fixed (byte* p = data)
@@ -1490,6 +1997,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes the pipeline cache to its file (through a per-process temporary file, then a move); a cache that cannot be saved is skipped.
+    /// </summary>
     void SavePipelineCache()
     {
         if (_pipelineCachePath == null || PipelineCache.Handle == 0)
@@ -1531,7 +2041,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
-    // ---- helpers -------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Helpers
 
     /// <summary>
     /// Names an object for validation messages and capture tools (no-op without validation).
@@ -1563,6 +2075,16 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     /// <summary>
+    /// <see cref="VulkanException.Check"/> for the calls that tell of a lost device (submissions, waits, the swapchain's): a lost device writes its
+    /// report first (<see cref="DeviceFault.Report"/>).
+    /// </summary>
+    public void Check(Result r, string what)
+    {
+        if (r == Result.ErrorDeviceLost) Faults?.Report(what);
+        VulkanException.Check(r, what);
+    }
+
+    /// <summary>
     /// Frees the buffer once every frame that could use it has finished.
     /// </summary>
     public void DeferFree(BufferAllocation b) => Frames.DeferDelete(() => Allocator.Free(b));
@@ -1578,6 +2100,9 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public delegate* unmanaged<Device, Result> WaitIdleFunction { get; set; }
 
+    /// <summary>
+    /// Waits for the device to go idle, under <see cref="QueueLock"/> (through <see cref="WaitIdleFunction"/> when set).
+    /// </summary>
     public void WaitIdle()
     {
         lock (QueueLock)
@@ -1635,10 +2160,10 @@ public sealed unsafe class VulkanDevice : IDisposable
 
                 lock (QueueLock)
                 {
-                    VulkanException.Check(Vk.QueueSubmit(GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
+                    Check(Vk.QueueSubmit(GraphicsQueue, 1, in si, fence), "vkQueueSubmit");
                 }
 
-                VulkanException.Check(Vk.WaitForFences(Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
+                Check(Vk.WaitForFences(Device, 1, in fence, true, ulong.MaxValue), "vkWaitForFences");
             }
             finally
             {
@@ -1651,8 +2176,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
-    // ---- teardown ------------------------------------------------------------------------------------------
+    #endregion
 
+    #region Teardown
+
+    /// <summary>
+    /// Waits for the device to go idle, then destroys what it made: immediate pools, the frame ring, the pipeline cache (saved first), the allocator,
+    /// the device, the surface, the messenger and the instance.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -1698,6 +2229,8 @@ public sealed unsafe class VulkanDevice : IDisposable
             _messenger = default;
         }
 
+        AddressLog?.Dispose();
+
         if (Instance.Handle != 0)
         {
             Vk.DestroyInstance(Instance, null);
@@ -1711,4 +2244,6 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         Vk.Dispose();
     }
+
+    #endregion
 }

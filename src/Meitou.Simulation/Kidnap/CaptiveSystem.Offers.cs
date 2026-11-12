@@ -59,6 +59,10 @@ public sealed partial class CaptiveSystem
             Offer(world, squad, board, slot, cold, mind.RaceGoals[g].Task.Type);
     }
 
+    /// <summary>
+    /// Offers goal <paramref name="type"/> to a character's next think when it is a captive goal not already wanted that could start now, with
+    /// its desire.
+    /// </summary>
     void Offer(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type)
     {
         var mind = cold.Ai!;
@@ -67,9 +71,14 @@ public sealed partial class CaptiveSystem
         if (OfferDesire(world, squad, cold, type) is > 0 and var desire) mind.CaptiveOffers.Add((type, desire));
     }
 
+    /// <summary>
+    /// Clears the captive offers of the character at <paramref name="slot"/>.
+    /// </summary>
     static void ClearOffers(World world, int slot) => world.Characters.Cold(slot)?.Ai?.CaptiveOffers.Clear();
 
-    // The workers whose job ended in this step's job loop (SlowWorld), offered anew once those jobs are gone.
+    /// <summary>
+    /// The workers whose job ended in this step's job loop (SlowWorld), offered anew once those jobs are gone.
+    /// </summary>
     readonly List<CharacterId> _ended = [];
 
     /// <summary>
@@ -80,8 +89,11 @@ public sealed partial class CaptiveSystem
     {
         var table = world.Characters;
         foreach (var id in _ended)
+        {
             if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { Ai.Squad: { Ai: { } board } squad })
                 KeepOffers(world, squad, board, slot, world.Hour);
+        }
+
         _ended.Clear();
     }
 

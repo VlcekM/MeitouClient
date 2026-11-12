@@ -47,71 +47,88 @@ public static class DdsDecoder
         Span<byte> block = stackalloc byte[16 * 4];
         Span<byte> channel = stackalloc byte[16];
         for (int by = 0; by < blocksY; by++)
+        {
             for (int bx = 0; bx < blocksX; bx++)
             {
                 var src = data.Slice((by * blocksX + bx) * blockBytes, blockBytes);
-                switch (format)
-                {
-                    case DdsFormat.Bc1:
-                        DecodeColourBlock(src, block, allowOneBitAlpha: true);
-                        break;
-                    case DdsFormat.Bc2:
-                        DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
-                        for (int i = 0; i < 16; i++)
-                        {
-                            int a4 = (src[i / 2] >> (i % 2 * 4)) & 0xF;
-                            block[i * 4 + 3] = (byte)(a4 * 17);
-                        }
-                        break;
-                    case DdsFormat.Bc3:
-                        DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
-                        DecodeChannelBlock(src, channel);
-                        for (int i = 0; i < 16; i++) block[i * 4 + 3] = channel[i];
-                        break;
-                    case DdsFormat.Rxgb:
-                        DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
-                        DecodeChannelBlock(src, channel);
-                        for (int i = 0; i < 16; i++)
-                        {
-                            block[i * 4] = channel[i];   // red was stored in alpha
-                            block[i * 4 + 3] = 255;
-                        }
-                        break;
-                    case DdsFormat.Bc7:
-                        Bc7.DecodeBlock(src, block);
-                        break;
-                    case DdsFormat.Bc4:
-                        DecodeChannelBlock(src, channel);
-                        for (int i = 0; i < 16; i++)
-                        {
-                            block[i * 4] = block[i * 4 + 1] = block[i * 4 + 2] = channel[i];
-                            block[i * 4 + 3] = 255;
-                        }
-                        break;
-                    case DdsFormat.Bc5:
-                        DecodeChannelBlock(src, channel);
-                        for (int i = 0; i < 16; i++) block[i * 4] = channel[i];
-                        DecodeChannelBlock(src[8..], channel);
-                        for (int i = 0; i < 16; i++)
-                        {
-                            block[i * 4 + 1] = channel[i];
-                            block[i * 4 + 2] = 0;
-                            block[i * 4 + 3] = 255;
-                        }
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(format), format, null);
-                }
-
-                // Copy the 4x4 block, clipping at the right and bottom edges.
-                for (int y = 0; y < 4; y++)
-                {
-                    int py = by * 4 + y;
-                    if (py >= height) break;
-                    int columns = Math.Min(4, width - bx * 4);
-                    block.Slice(y * 16, columns * 4).CopyTo(rgba.Slice((py * width + bx * 4) * 4, columns * 4));
-                }
+                DecodeBlock(format, src, block, channel);
+                CopyBlock(block, rgba, bx, by, width, height);
             }
+        }
+    }
+
+    /// <summary>
+    /// Decodes one 4x4 block of a block-compressed <paramref name="format"/> into <paramref name="block"/> (RGBA, rows of 16 bytes);
+    /// <paramref name="channel"/> is scratch for the single-channel parts.
+    /// </summary>
+    static void DecodeBlock(DdsFormat format, ReadOnlySpan<byte> src, Span<byte> block, Span<byte> channel)
+    {
+        switch (format)
+        {
+            case DdsFormat.Bc1:
+                DecodeColourBlock(src, block, allowOneBitAlpha: true);
+                break;
+            case DdsFormat.Bc2:
+                DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
+                for (int i = 0; i < 16; i++)
+                {
+                    int a4 = (src[i / 2] >> (i % 2 * 4)) & 0xF;
+                    block[i * 4 + 3] = (byte)(a4 * 17);
+                }
+                break;
+            case DdsFormat.Bc3:
+                DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
+                DecodeChannelBlock(src, channel);
+                for (int i = 0; i < 16; i++) block[i * 4 + 3] = channel[i];
+                break;
+            case DdsFormat.Rxgb:
+                DecodeColourBlock(src[8..], block, allowOneBitAlpha: false);
+                DecodeChannelBlock(src, channel);
+                for (int i = 0; i < 16; i++)
+                {
+                    block[i * 4] = channel[i];   // red was stored in alpha
+                    block[i * 4 + 3] = 255;
+                }
+                break;
+            case DdsFormat.Bc7:
+                Bc7.DecodeBlock(src, block);
+                break;
+            case DdsFormat.Bc4:
+                DecodeChannelBlock(src, channel);
+                for (int i = 0; i < 16; i++)
+                {
+                    block[i * 4] = block[i * 4 + 1] = block[i * 4 + 2] = channel[i];
+                    block[i * 4 + 3] = 255;
+                }
+                break;
+            case DdsFormat.Bc5:
+                DecodeChannelBlock(src, channel);
+                for (int i = 0; i < 16; i++) block[i * 4] = channel[i];
+                DecodeChannelBlock(src[8..], channel);
+                for (int i = 0; i < 16; i++)
+                {
+                    block[i * 4 + 1] = channel[i];
+                    block[i * 4 + 2] = 0;
+                    block[i * 4 + 3] = 255;
+                }
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(format), format, null);
+        }
+    }
+
+    /// <summary>
+    /// Copies the 4x4 block at block column <paramref name="bx"/>, row <paramref name="by"/> into the image, clipping at the right and bottom edges.
+    /// </summary>
+    static void CopyBlock(ReadOnlySpan<byte> block, Span<byte> rgba, int bx, int by, int width, int height)
+    {
+        for (int y = 0; y < 4; y++)
+        {
+            int py = by * 4 + y;
+            if (py >= height) break;
+            int columns = Math.Min(4, width - bx * 4);
+            block.Slice(y * 16, columns * 4).CopyTo(rgba.Slice((py * width + bx * 4) * 4, columns * 4));
+        }
     }
 
     /// <summary>
@@ -150,6 +167,9 @@ public static class DdsDecoder
         }
     }
 
+    /// <summary>
+    /// Expands an RGB565 colour to 8-bit RGBA into <paramref name="rgba"/>, the top bits repeated into the low ones, alpha 255.
+    /// </summary>
     static void Expand565(ushort c, Span<int> rgba)
     {
         int r = c >> 11, g = (c >> 5) & 0x3F, b = c & 0x1F;
@@ -181,6 +201,10 @@ public static class DdsDecoder
         for (int i = 0; i < 16; i++) values[i] = (byte)palette[(int)((bits >> (3 * i)) & 7)];
     }
 
+    /// <summary>
+    /// Decodes an uncompressed surface by its channel <paramref name="masks"/>; <see cref="ArgumentException"/> when <paramref name="data"/> is
+    /// too short.
+    /// </summary>
     static void DecodeUncompressed(DdsPixelMasks masks, ReadOnlySpan<byte> data, int width, int height, Span<byte> rgba)
     {
         int bpp = masks.BytesPerPixel;
@@ -201,8 +225,14 @@ public static class DdsDecoder
         }
     }
 
+    /// <summary>
+    /// One colour channel of an uncompressed format: its bit mask, the shift to its lowest bit and its largest value.
+    /// </summary>
     readonly record struct Channel(uint Mask, int Shift, uint Max)
     {
+        /// <summary>
+        /// The channel of <paramref name="mask"/>; the default (absent) channel for 0.
+        /// </summary>
         public static Channel Of(uint mask) =>
             mask == 0 ? default : new Channel(mask, BitOperations.TrailingZeroCount(mask), mask >> BitOperations.TrailingZeroCount(mask));
 

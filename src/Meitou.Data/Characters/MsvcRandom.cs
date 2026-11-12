@@ -6,6 +6,9 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public sealed class MsvcRandom(uint seed)
 {
+    /// <summary>
+    /// The generator's state, advanced by every draw.
+    /// </summary>
     uint _state = seed;
 
     /// <summary>

@@ -8,7 +8,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public readonly record struct CelestialFrame(Vector3 X, Vector3 Y, Vector3 Z)
 {
+    /// <summary>
+    /// The celestial coordinates of world direction <paramref name="world"/>.
+    /// </summary>
     public Vector3 ToCelestial(Vector3 world) => new(Vector3.Dot(X, world), Vector3.Dot(Y, world), Vector3.Dot(Z, world));
+    /// <summary>
+    /// The world direction of celestial coordinates <paramref name="celestial"/>.
+    /// </summary>
     public Vector3 ToWorld(Vector3 celestial) => X * celestial.X + Y * celestial.Y + Z * celestial.Z;
 }
 
@@ -113,7 +119,8 @@ public static class NightAtmosphere
     public static Vector3 Transmission(float altitudeDegrees)
     {
         float x = AirMass(altitudeDegrees) - 1;
-        return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x)) * Horizon(altitudeDegrees);
+        return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x))
+            * Horizon(altitudeDegrees);
     }
 
     /// <summary>
@@ -136,7 +143,8 @@ public static class NightAtmosphere
 /// One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere
 /// between the magnitudes.
 /// </summary>
-public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
+public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude,
+    float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
 
 /// <summary>
 /// A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.
@@ -162,9 +170,9 @@ public static class StarField
     public const float BrightnessGamma = 0.7f;
 
     /// <summary>
-    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the bright
-    /// layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1 over the whole sphere,
-    /// the real sky has 15). The stars are spread evenly over the sphere.
+    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the
+    /// bright layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1
+    /// over the whole sphere, the real sky has 15). The stars are spread evenly over the sphere.
     /// </summary>
     public static readonly StarLayer[] Layers =
     [
@@ -291,6 +299,9 @@ public static class StarField
 /// </summary>
 public static class StarColours
 {
+    /// <summary>
+    /// Tints in the table.
+    /// </summary>
     public const int TableSize = 32;
     /// <summary>
     /// How much of the blackbody's saturation is kept (0 white, 1 the full colour).
@@ -320,12 +331,16 @@ public static class StarColours
         return rgb / Luminance(rgb);
     }
 
+    /// <summary>
+    /// Rec. 709 luminance of <paramref name="rgb"/>.
+    /// </summary>
     public static float Luminance(Vector3 rgb) => 0.2126f * rgb.X + 0.7152f * rgb.Y + 0.0722f * rgb.Z;
 
     /// <summary>
     /// The colour index distribution of the naked-eye sky, as a mixture: blue (B), white (A and F), yellow and orange (G and K giants), red (M).
     /// </summary>
-    static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix = [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
+    static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix =
+        [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
 
     /// <summary>
     /// The tint of the star at the fraction <paramref name="u"/> of the colour index distribution: its blackbody, desaturated by

@@ -16,6 +16,9 @@ public sealed partial class PostProcess
     /// </summary>
     public bool SunMotion { get; set; } = true;
 
+    /// <summary>
+    /// Works out the sun's motion from frame to frame (<see cref="PrepareSunMotion"/>).
+    /// </summary>
     readonly SunMotionTracker _sunTracker = new();
 
     /// <summary>
@@ -23,6 +26,11 @@ public sealed partial class PostProcess
     /// outer angle, w 1 when on (<see cref="SunMotionTracker"/>).
     /// </summary>
     (Vector4 Sun, Vector4 Motion) _sunMotion;
+
+    /// <summary>
+    /// This frame's sun and its motion (<see cref="PrepareSunMotion"/>), for the merged velocity kernel.
+    /// </summary>
+    internal (Vector4 Sun, Vector4 Motion) SunMotionNow => _sunMotion;
 
     /// <summary>
     /// The sun's motion for this frame's velocity pass, from the frame globals' sun direction and the last frame's.

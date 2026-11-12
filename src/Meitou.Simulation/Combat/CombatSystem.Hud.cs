@@ -7,9 +7,9 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// The combat numbers the HUD's stats tooltips show (<c>FUN_140892120</c>, docs/game/ui-screens.md section 4): the attack and block play rates (CharStats
-/// <c>+0x188</c> / <c>+0x18c</c>), the weapon's cut and blunt damage at the fighter's skills (<c>FUN_140883ba0</c>, <c>FUN_140883c60</c>; fists' for an unarmed
-/// fighter) and the stats window's "Martial arts damage", the four terms of the blow in hand (<c>FUN_1408868b0</c>,
+/// The combat numbers the HUD's stats tooltips show (<c>FUN_140892120</c>, docs/game/ui-screens.md section 4): the attack and block play rates
+/// (CharStats <c>+0x188</c> / <c>+0x18c</c>), the weapon's cut and blunt damage at the fighter's skills (<c>FUN_140883ba0</c>, <c>FUN_140883c60</c>;
+/// fists' for an unarmed fighter) and the stats window's "Martial arts damage", the four terms of the blow in hand (<c>FUN_1408868b0</c>,
 /// <see cref="CombatSystem.HudDamage"/>: the weapon's for an armed fighter).
 /// </summary>
 public readonly record struct HudCombat(float AttackRate, float BlockRate, float Cut, float Blunt, float UnarmedDamage, float Resistance)
@@ -20,8 +20,14 @@ public readonly record struct HudCombat(float AttackRate, float BlockRate, float
     public float Stagger { get; init; }
 }
 
+/// <summary>
+/// What the HUD reads of the fights: the combat numbers, the melee and ranged combat modes, the stats display mode and the weapon in hand.
+/// </summary>
 public sealed partial class CombatSystem
 {
+    /// <summary>
+    /// The drawn-weapon kind of a crossbow (weapon category Bow).
+    /// </summary>
     static readonly WeaponKinds BowKind = HandHold.OfCategory((int)WeaponCategory.Bow).Weapon;
 
     /// <summary>
@@ -54,10 +60,10 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// <c>Character::isInCombatMode(melee, ranged)</c> (<c>FUN_140436610</c>, docs/game/ui-screens.md section 4 "Combat mode"): with <paramref name="melee"/> the
-    /// melee fight's flag (<see cref="MeleeCombatMode"/>), with <paramref name="ranged"/> the ranged controller's <c>combatMode</c>
-    /// (<see cref="RangedCombatMode"/>) while its current target is up (not down: <c>Character</c> slot 6 <c>FUN_1405c9e10</c>, dead or unconscious,
-    /// ragdolled or carried (<see cref="Ragdolls.RagdollSystem.IsRagdoll"/>), playing dead or KO).
+    /// <c>Character::isInCombatMode(melee, ranged)</c> (<c>FUN_140436610</c>, docs/game/ui-screens.md section 4 "Combat mode"): with
+    /// <paramref name="melee"/> the melee fight's flag (<see cref="MeleeCombatMode"/>), with <paramref name="ranged"/> the ranged controller's
+    /// <c>combatMode</c> (<see cref="RangedCombatMode"/>) while its current target is up (not down: <c>Character</c> slot 6 <c>FUN_1405c9e10</c>,
+    /// dead or unconscious, ragdolled or carried (<see cref="Ragdolls.RagdollSystem.IsRagdoll"/>), playing dead or KO).
     /// </summary>
     internal bool IsInCombatMode(CharacterTable table, CharacterId id, CharacterCold cold, bool melee, bool ranged)
     {
@@ -67,7 +73,7 @@ public sealed partial class CombatSystem
         int target = -1, generation = 0;
         if (cold.Gunning is { } key)
         {
-            if (_turrets.TryGetValue(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration);
+            if (_turretManning.TryGet(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration);
         }
         else if (StateOf(id) is { TargetSlot: >= 0 } s)
         {
@@ -94,9 +100,9 @@ public sealed partial class CombatSystem
     internal static bool RangedCombatMode(CharacterCold cold) => cold.Gunning is not null || cold.RangedCombatMode;
 
     /// <summary>
-    /// <c>CharStats::getGUIStatsDisplayMode</c> (<c>FUN_1408840d0</c>): the weapon in hand, else the back section's, else the hip's; none is 1 (Martial Arts);
-    /// a crossbow in ranged mode while not moving (movement <c>+0x24</c>) is 2 (Crossbows, Precision, Perception); fists in hand (CharStats
-    /// <c>+0x1f0</c> 5) in a melee fight is 1; else 0 (Attack, Defense).
+    /// <c>CharStats::getGUIStatsDisplayMode</c> (<c>FUN_1408840d0</c>): the weapon in hand, else the back section's, else the hip's; none is 1
+    /// (Martial Arts); a crossbow in ranged mode while not moving (movement <c>+0x24</c>) is 2 (Crossbows, Precision, Perception); fists in hand
+    /// (CharStats <c>+0x1f0</c> 5) in a melee fight is 1; else 0 (Attack, Defense).
     /// </summary>
     internal int StatsDisplayMode(CharacterId id, CharacterCold cold, bool moving)
     {
@@ -128,8 +134,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The weight <c>calculateWeaponWeightXPMult</c> (<c>FUN_1408838e0</c>) is given: the drawn weapon's item weight (<c>CharStats::setWeapon</c>, Item slot 74,
-    /// <c>+0x120</c>), for a crossbow its <c>weight kg</c> x <c>weapon inventory weight mult</c>.
+    /// The weight <c>calculateWeaponWeightXPMult</c> (<c>FUN_1408838e0</c>) is given: the drawn weapon's item weight (<c>CharStats::setWeapon</c>,
+    /// Item slot 74, <c>+0x120</c>), for a crossbow its <c>weight kg</c> x <c>weapon inventory weight mult</c>.
     /// </summary>
     internal static float HandWeight(CharacterCold cold)
     {

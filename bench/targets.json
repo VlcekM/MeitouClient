@@ -19,5 +19,11 @@
   {"commit": "11b33196", "date": "2026-11-08", "label": "daily 2026-11-08", "kind": "daily", "note": "v0.16.1-nightly.20261108"},
   {"commit": "4e3f2d9b", "date": "2026-11-08", "label": "v0.17.0", "kind": "release", "note": ""},
   {"commit": "ece19099", "date": "2026-11-08", "label": "v0.17.1", "kind": "release", "note": ""},
-  {"commit": "5782c318", "date": "2026-11-09", "label": "daily 2026-11-09", "kind": "daily", "note": "v0.17.2-nightly.20261109"}
+  {"commit": "5782c318", "date": "2026-11-09", "label": "daily 2026-11-09", "kind": "daily", "note": "v0.17.2-nightly.20261109"},
+  {"commit": "175e3558", "date": "2026-11-10", "label": "daily 2026-11-10", "kind": "daily", "note": "v0.17.2-nightly.20261110"},
+  {"commit": "2140fba7", "date": "2026-11-10", "label": "v0.17.2", "kind": "release", "note": ""},
+  {"commit": "fa34a1bf", "date": "2026-11-11", "label": "v0.17.3", "kind": "release", "note": ""},
+  {"commit": "0987d100", "date": "2026-11-11", "label": "daily 2026-11-11", "kind": "daily", "note": "v0.17.4-nightly.20261111"},
+  {"commit": "97c47087", "date": "2026-11-11", "label": "v0.17.4", "kind": "release", "note": ""},
+  {"commit": "e85d0d54", "date": "2026-11-12", "label": "daily 2026-11-12", "kind": "daily", "note": "v0.17.5-nightly.20261112"}
 ]

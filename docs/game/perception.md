@@ -76,6 +76,9 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   override). A second icon's frame is round((1 - x) x (frames - 1)), x = clamp(character +0xd8, 0, 1): the
   `LightLevel` image of `Kenshi_CharacterNameTags` (7 frames, frame 0 full light; **Verified**, kenshi_images.xml), on the
   panel's right in colour (0.942, 0.806, 0.341) (**Verified**, `Kenshi_CharacterNamePanel.layout`). The tag state is set alongside: 3 seen, 2 almost seen, 1 hidden.
+  A name longer than the layout's text box shows whole, "[Drifter-cannibal escapee]" for one (**Observed**). Whether the panel widens to fit
+  it or the text overflows its box, and whether a short name narrows the panel, is **Unknown**; Meitou widens it, the text box stretching and
+  the icons keeping its edges by the layout's aligns (`Stretch`, `Left`, `Right`).
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
@@ -170,10 +173,12 @@ A carried or knocked-out character runs `FUN_140859220` instead of the sense upd
 Meitou (`SenseBlock`, `CharacterFacts.Senses`): written by `AggroSystem`'s look in `Act` for every living character not carried or knocked out (`AwakeLying` aside) on its turn (one in `ScanEveryTicks` = 15, by slot), the looker's
 own slot only, and by `AggroSystem.Force` (serial: the alert, a landed blow, a bolt, an alarm; it also takes an existing entry's threat at once, standing for the pass the original runs before
 its chooser). Engine choices: at most 40 entries (`SenseBlock.Cap`; a new one replaces the one sensed
-longest ago), the gather takes up to 60 new characters within 250 then up to 40 in all within reach (every character it visits counts, sensed or not, in the grid's order; **Measured** in the
+longest ago; when all were sensed at this look a kin or enemy entry replaces a neutral's and an enemy one an ally's, `AggroSystem.Insert`, so a squad
+of more than 40 does not fill its blocks with its own mates and miss the enemy it fights, **Measured** on the #412 save: 75 of 88 Holy Nation
+attackers had no target before, none after; a block can fill with enemies and lose allies in a large battle), the gather takes up to 60 new characters within 250 then up to 40 in all within reach (every character it visits counts, sensed or not, in the grid's order; **Measured** in the
 sandbox with 250 idle neutrals round a player squad: the player's characters kept 0 entries, so a squad mate never sensed its attacked mate and none joined, 15 Protect allies reading
 nothing; with the quota lifted all joined within 10 ticks). So a looker's **kin**, its squad mates and for a player's character every other player character, are sensed at each look
-before the gather, outside the quota, and take the place of a neutral stranger's entry in a full block (`AggroSystem.VisitKin`); so does every **fighter** (`InCombat`, listed per tick in `Sync`) within the look's reach (the sight range or 600 for noise, `AggroSystem.VisitFighters`), whatever its side, so the goals that join other people's fights (34, 15, 288, 143, attack on sight of a fighter) find the attacker and its victim in a crowd; the pass stops at the first fighter the full block cannot take (every entry an ally, enemy or KO). **Measured** in the sandbox (250 idle neutrals of the victim's faction round a player attacking a neutral squad, 600 ticks): crowd members sensing the fight 8 of 250 (the hero) and 0 (the victim) before, 249 and 249 after; look cost 205-260 ms before, 206-219 ms after per 10200 looks; a 300-fighter `--battle` 1217 ms before, 1277 ms after per 24000 looks (a first version without the stop doubled it). Other strangers still wait for the quota; a looker that neither fights nor may attack on sight gathers beyond 250 and works
+before the gather, outside the quota, and take the place of a neutral stranger's entry in a full block (`AggroSystem.VisitKin`); so does every **fighter** (`InCombat`, listed per tick in `Sync`) within the look's reach (the sight range or 600 for noise, `AggroSystem.VisitFighters`), whatever its side but the looker's own squad (visited as kin), so the goals that join other people's fights (34, 15, 288, 143, attack on sight of a fighter) find the attacker and its victim in a crowd; the pass stops at the first enemy fighter the full block cannot take (every entry an enemy or KO) and, once any fighter was refused, skips the looker's own faction. **Measured** in the sandbox (250 idle neutrals of the victim's faction round a player attacking a neutral squad, 600 ticks): crowd members sensing the fight 8 of 250 (the hero) and 0 (the victim) before, 249 and 249 after; look cost 205-260 ms before, 206-219 ms after per 10200 looks; a 300-fighter `--battle` 1217 ms before, 1277 ms after per 24000 looks (a first version without the stop doubled it). Other strangers still wait for the quota; a looker that neither fights nor may attack on sight gathers beyond 250 and works
 the relation part of its tags out only every 4th look (`FarLooks`); slot 125 also counts whoever fights the looker or is fought by it, of any faction (Meitou's scripted fights); the
 threat sums count 1 per threat (no aggression value). Without the Aggro part (sandbox, duel, battle) the look keeps the senses only (`AggroSettings.AttackOnSight` false).
 
@@ -229,7 +234,12 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
-  the merged data). Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
+  the merged data). Skeletons are not a faction rule either: the Holy Nation's kill on sight is the event 3 root `Holy Nation spots skeleton`
+  (`19066-Dialogue.mod`: target not in combat, not an ally, within talking range; children need DC 79 HAS_ROBOT_LIMBS, true for an `is robot`
+  race, and run DA 6), in the packages `Holy Nation Paladin` (Paladin, High Paladin, Holy Sentinel), `Holy Nation Gate Guard`, `holy nation guard` and `Holy Priest`;
+  `Holy Chosen` has no dialogue package and the `Holy Army force` templates no `dialog leader` / `dialog squad`, so the Chosen join only
+  through the squad's TEMP_ENEMY tag (**Verified** by probe of the merged base data). Meitou headless on the #412 save: a Paladin says the line
+  and its 113-member squad attacks within 3 ticks. Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
   bandit faction a town keeps fighting can drop to hostile. A Dust Bandit squad (the player at -10, not hostile) starts its fight through its
   event 3 / 66 lines ([dialogue](dialogue.md)); `Bandit mugging one liner`, `bandit fight picking new target in wilds` and `Bandit Revenge` need
   the speaker outside a non-player town (DC 31 false), `Give us your stuff!` the target, so inside a town's radius (the Hub: 2500) only

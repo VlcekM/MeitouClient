@@ -13,7 +13,14 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 static class AtmosphereShaders
 {
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
+
+    /// <summary>
+    /// A vector as a GLSL <c>vec3</c> literal.
+    /// </summary>
     static string V3(System.Numerics.Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
 
     /// <summary>

@@ -17,6 +17,9 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 internal static class ShopSave
 {
+    /// <summary>
+    /// The PLATOON keys: the original's restock time, and Meitou's stock and fill key.
+    /// </summary>
     public const string RefreshKey = "inventory refresh time", StockKey = "meitou shop", FillsKey = "meitou shop fills";
 
     /// <summary>
@@ -49,12 +52,16 @@ internal static class ShopSave
         var shop = homeShop ?? new Shop { Terms = terms };
         ContainerSave.Read(text, shop.Stock, data.Items);
         shop.Fills = platoon.Ints.GetValueOrDefault(FillsKey);
+
         // At most one refresh away (engine choice): older Meitou saves pushed it out by the save's clock at each load.
         double hours = Math.Clamp(platoon.Floats.GetValueOrDefault(RefreshKey) - world.GameHours, 0, template.VendorsRefreshTime);
         shop.NextRestockTick = world.Tick + (long)Math.Ceiling(hours / BodySystem.HoursPerTick);
         return shop;
     }
 
+    /// <summary>
+    /// A fresh unfilled shop of the squad's template with the saved stock <paramref name="text"/>; null when the template has no shop.
+    /// </summary>
     static Shop? Unfilled(string text, Squad squad, PopulationData data)
     {
         var shop = TradeSystem.UnfilledShop(squad, TradeSystem.TemplateRecord(data, squad.TemplateId));

@@ -26,6 +26,10 @@ static class WwiseCurves
         return points[^1].Y;
     }
 
+    /// <summary>
+    /// The Wwise curve shape <paramref name="interpolation"/> at <paramref name="t"/> (0..1 between two points), 0..1; 4 (linear) and unknown shapes
+    /// are linear.
+    /// </summary>
     public static float Shape(uint interpolation, float t) => interpolation switch
     {
         0 => 1 - MathF.Pow(1 - t, 3),
@@ -40,5 +44,8 @@ static class WwiseCurves
         _ => t,
     };
 
+    /// <summary>
+    /// Decibels to a linear gain; -96 dB and below is silence.
+    /// </summary>
     public static float DbToGain(float db) => db <= -96 ? 0 : MathF.Pow(10, db / 20);
 }

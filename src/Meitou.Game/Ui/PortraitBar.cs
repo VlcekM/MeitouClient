@@ -23,6 +23,9 @@ sealed class PortraitBar(PlayerInterface player)
     /// </summary>
     public const string PortraitTexture = "meitou:portraits";
 
+    /// <summary>
+    /// The portrait atlas's cells.
+    /// </summary>
     internal const int PortraitCells = CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitRows;
 
     /// <summary>
@@ -77,8 +80,12 @@ sealed class PortraitBar(PlayerInterface player)
     /// <summary>
     /// An ImageBox's <c>ImageRect</c> for atlas cell <paramref name="cell"/>: the part of the cell its portrait fills.
     /// </summary>
-    internal string PortraitRect(int cell) => FormattableString.Invariant(
-        $"{cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {PortraitSize} {PortraitSize}");
+    internal string PortraitRect(int cell)
+    {
+        int x = cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell;
+        int y = cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell;
+        return FormattableString.Invariant($"{x} {y} {PortraitSize} {PortraitSize}");
+    }
 
     /// <summary>
     /// The player's characters posed every frame however far (<see cref="CharacterInstance.FullRateAnimation"/>) into <paramref name="into"/>: the
@@ -189,14 +196,18 @@ sealed class PortraitBar(PlayerInterface player)
         return i < members.Count ? members[i].Id : null;
     }
 
+    /// <summary>
+    /// Adds the squad bar to <paramref name="panel"/>'s tab page: the portrait cells in their grid, with a scroll bar when they do not fit.
+    /// </summary>
     internal void AddSquadPortraits(List<UiControl> controls, UiRect panel)
     {
         var members = SquadBarMembers();
         if (members.Count == 0) return;
 
         // The tab's page (the layout's TabItem rectangle inside SquadPanel).
-        var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f, panel.Height * 0.737069f);
-        float scale = player.InventoryScale;
+        var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f,
+            panel.Height * 0.737069f);
+        float scale = player.UiScale;
         var grid = SquadGrid(page, members.Count, scale);
         if (grid.Maximum > 0)
         {
@@ -264,7 +275,12 @@ sealed class PortraitBar(PlayerInterface player)
             if (BackOverlayName(state) is { Length: > 0 } back)
                 controls.Add(PortraitImage($"portrait-back-overlay-{i}", At(6, 5, 124, 124), "BackOverlay", back) with { Clip = page });
 
-            var portrait = new Dictionary<string, string> { ["ImageTexture"] = PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = PortraitRect(i) };
+            var portrait = new Dictionary<string, string>
+            {
+                ["ImageTexture"] = PortraitTexture,
+                ["ImageFlipV"] = "true",
+                ["ImageRect"] = PortraitRect(i),
+            };
             if ((state & PortraitState.Faded) != 0) portrait["Alpha"] = "0.25";
             controls.Add(new($"portrait-{i}", "ImageBox", At(6, 6, 124, 123), "", "", "", true, portrait, Vector4.Zero, Clip: page));
             if (FrontOverlayName(state) is { Length: > 0 } front)
@@ -283,13 +299,22 @@ sealed class PortraitBar(PlayerInterface player)
 
     #region Portrait states
 
-    // The squad portraits' states (docs/game/ui-screens.md "Portrait cells"): the original's per-cell flags and how its
-    // <c>Kenshi_PortraitCharacter</c> cell shows them, the <c>Background</c> (Normal, or a flashing Hurt), the <c>BackOverlay</c> (Combat, Hunger),
-    // the <c>FrontOverlay</c> (Slave, Prison) and the faded portrait.
+    /// <summary>
+    /// The squad portraits' states (docs/game/ui-screens.md "Portrait cells"): the original's per-cell flags and how its
+    /// <c>Kenshi_PortraitCharacter</c> cell shows them, the <c>Background</c> (Normal, or a flashing Hurt), the <c>BackOverlay</c> (Combat, Hunger),
+    /// the <c>FrontOverlay</c> (Slave, Prison) and the faded portrait.
+    /// </summary>
     [Flags]
     enum PortraitState
     {
+        /// <summary>
+        /// No flag.
+        /// </summary>
         None = 0,
+
+        /// <summary>
+        /// The character is selected.
+        /// </summary>
         Selected = 1,
 
         /// <summary>
@@ -302,8 +327,19 @@ sealed class PortraitBar(PlayerInterface player)
         /// </summary>
         Faded = 4,
 
+        /// <summary>
+        /// In combat mode: the <c>Combat</c> back overlay.
+        /// </summary>
         Combat = 8,
+
+        /// <summary>
+        /// Shackled: the <c>Slave</c> front overlay.
+        /// </summary>
         Slave = 0x10,
+
+        /// <summary>
+        /// In a prison: the <c>Prison</c> front overlay.
+        /// </summary>
         Prison = 0x20,
 
         /// <summary>
@@ -311,6 +347,9 @@ sealed class PortraitBar(PlayerInterface player)
         /// </summary>
         Eaten = 0x40,
 
+        /// <summary>
+        /// Hungry (hunger below 1.25): the <c>Hunger</c> back overlay, under Combat.
+        /// </summary>
         Hunger = 0x80,
     }
 
@@ -373,9 +412,15 @@ sealed class PortraitBar(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The back overlay a state shows: Combat, else Hunger; empty for none.
+    /// </summary>
     static string BackOverlayName(PortraitState s) =>
         (s & PortraitState.Combat) != 0 ? "Combat" : (s & PortraitState.Hunger) != 0 ? "Hunger" : "";
 
+    /// <summary>
+    /// The front overlay a state shows: Eaten, else Prison, else Slave; empty for none.
+    /// </summary>
     static string FrontOverlayName(PortraitState s) =>
         (s & PortraitState.Eaten) != 0 ? "Eaten" : (s & PortraitState.Prison) != 0 ? "Prison" : (s & PortraitState.Slave) != 0 ? "Slave" : "";
 

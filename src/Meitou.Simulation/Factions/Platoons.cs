@@ -30,18 +30,33 @@ public enum PlatoonState : byte
 /// </summary>
 public sealed class Platoon
 {
+    /// <summary>
+    /// The platoon's id (never reused).
+    /// </summary>
     public required int Id { get; init; }
     /// <summary>
     /// The town (a position in the population's site list) whose pool it counts against; -1 for a save's wild platoon.
     /// </summary>
     public required int Origin { get; init; }
+    /// <summary>
+    /// The SQUAD_TEMPLATE its members are made from.
+    /// </summary>
     public required string TemplateId { get; init; }
+    /// <summary>
+    /// The faction, a position in the data's factions (-1: none).
+    /// </summary>
     public int Faction { get; init; } = -1;
+    /// <summary>
+    /// The key the members are rolled from (see the class remarks).
+    /// </summary>
     public required ulong Key { get; init; }
     /// <summary>
     /// Members when made: what the pool counts (a save's never-made platoon: its <c>char count</c> until it is made, <see cref="Unmade"/>).
     /// </summary>
     public int Size { get; set; }
+    /// <summary>
+    /// Where it is (X/Z).
+    /// </summary>
     public Vector2 Position { get; set; }
     /// <summary>
     /// The town it is travelling to (-1: none chosen, it waits).
@@ -59,6 +74,9 @@ public sealed class Platoon
     /// The purse while the squad is not loaded (<see cref="Squad.Money"/> while it is; save key <c>money</c>).
     /// </summary>
     public long Money { get; set; }
+    /// <summary>
+    /// Where it is in its life: a stand-in, being made, or loaded (<see cref="PlatoonState"/>).
+    /// </summary>
     public PlatoonState State { get; set; }
     /// <summary>
     /// The squad object while loaded (-1 otherwise).
@@ -77,6 +95,9 @@ public sealed class Platoon
     /// (<see cref="Ai.PlatoonJobs"/>).
     /// </summary>
     public string? Package { get; set; }
+    /// <summary>
+    /// The off-screen job of <see cref="Package"/>.
+    /// </summary>
     public Ai.PlatoonJob Job { get; set; }
     /// <summary>
     /// A short-range patrol's next point (null: none; it goes to <see cref="Target"/> instead).
@@ -172,7 +193,13 @@ public sealed class Platoon
     /// it. Not saved: worked out again.
     /// </summary>
     public List<Vector2>? Route { get; set; }
+    /// <summary>
+    /// The next point of <see cref="Route"/>.
+    /// </summary>
     public int RouteStep { get; set; }
+    /// <summary>
+    /// The goal <see cref="Route"/> was worked out for.
+    /// </summary>
     public Vector2? RouteGoal { get; set; }
 }
 
@@ -183,12 +210,21 @@ public sealed class Platoon
 /// </summary>
 public sealed class StoredSquad
 {
+    /// <summary>
+    /// The squad's name.
+    /// </summary>
     public required string Name { get; init; }
     /// <summary>
     /// A town's own squad (else a roaming one, which travels).
     /// </summary>
     public bool Pinned { get; init; } = true;
+    /// <summary>
+    /// The squad's home building (null: none).
+    /// </summary>
     public Meitou.Data.World.TownBuilding? HomeBuilding { get; set; }
+    /// <summary>
+    /// The squad's shop (null: none).
+    /// </summary>
     public Trading.Shop? Shop { get; set; }
     /// <summary>
     /// The squad's <see cref="Squad.NextHomeFillTick"/>, so an emptied home is not refilled when it comes back.
@@ -211,6 +247,9 @@ public sealed class StoredSquad
     /// The platoon position the members' places belong to (a stand-in that travelled since takes them along), and the tick they were stored at.
     /// </summary>
     public Vector2 Anchor { get; set; }
+    /// <summary>
+    /// The tick the members were stored at (see <see cref="Anchor"/>).
+    /// </summary>
     public long StoredTick { get; set; }
     /// <summary>
     /// The game hours (<see cref="World.GameHours"/>) they were stored at (0 for a save's: not saved), for the residents' schedule.
@@ -238,20 +277,52 @@ public sealed record StoredMember(CharacterCold Cold, Vector3 Position, float Ya
 /// </summary>
 public sealed class PlatoonRegistry
 {
+    /// <summary>
+    /// The platoons by id.
+    /// </summary>
     readonly SortedDictionary<int, Platoon> _platoons = [];
+    /// <summary>
+    /// The next id <see cref="NextId"/> gives.
+    /// </summary>
     int _nextId;
-    // The ids of a save's never-made town squads (Platoon.Unmade), counted down from the top so that they leave every other
-    // platoon's id (and what is rolled from it) as it would be without them, and come last in id order.
+    /// <summary>
+    /// The ids of a save's never-made town squads (Platoon.Unmade), counted down from the top so that they leave every other platoon's id (and what
+    /// is rolled from it) as it would be without them, and come last in id order.
+    /// </summary>
     int _nextReserved = int.MaxValue;
 
+    /// <summary>
+    /// The number of platoons.
+    /// </summary>
     public int Count => _platoons.Count;
+    /// <summary>
+    /// The platoons in id order.
+    /// </summary>
     public IEnumerable<Platoon> All => _platoons.Values;
+    /// <summary>
+    /// The platoon with id <paramref name="id"/>; null when there is none.
+    /// </summary>
     public Platoon? Find(int id) => _platoons.GetValueOrDefault(id);
+    /// <summary>
+    /// Takes the next id.
+    /// </summary>
     public int NextId() => _nextId++;
+    /// <summary>
+    /// Takes the next id of a save's never-made town squad (see <see cref="_nextReserved"/>).
+    /// </summary>
     public int NextReservedId() => _nextReserved--;
+    /// <summary>
+    /// Adds a platoon, replacing one of the same id.
+    /// </summary>
     public void Add(Platoon p) => _platoons[p.Id] = p;
+    /// <summary>
+    /// Removes a platoon; false when it is not there.
+    /// </summary>
     public bool Remove(int id) => _platoons.Remove(id);
 
+    /// <summary>
+    /// Adds the id counters and the platoons to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(_platoons.Count);
@@ -285,7 +356,11 @@ public sealed class PlatoonRegistry
                 // Only for stored squads, so worlds without them hash as before.
                 h.Add(stored.Members.Count);
                 foreach (var m in stored.Members) h.Add(m.Position);
-                if (stored.Dead.Count > 0) { h.Add(0x44656164); h.Add(stored.Dead.Count); }
+                if (stored.Dead.Count > 0)
+                {
+                    h.Add(0x44656164);
+                    h.Add(stored.Dead.Count);
+                }
                 h.Add(stored.Anchor);
                 h.Add(stored.Pinned);
             }

@@ -13,39 +13,88 @@ namespace Meitou.Game.Title;
 /// </summary>
 sealed class FrontendScreens(PlayerInterface player)
 {
+    /// <summary>
+    /// The new-game starts of the game data (<see cref="NewGameStart.LoadAll"/>).
+    /// </summary>
     IReadOnlyList<NewGameStart> _starts = [];
+
+    /// <summary>
+    /// The index of the chosen start in <see cref="_starts"/>.
+    /// </summary>
     int _startIndex;
+
+    /// <summary>
+    /// Lists the save folders (<see cref="ConfigureFrontend"/>).
+    /// </summary>
     Func<IReadOnlyList<SaveSlot>> _saveSlots = () => [];
+
+    /// <summary>
+    /// The saves as last listed.
+    /// </summary>
     internal IReadOnlyList<SaveSlot> Slots = [];
+
+    /// <summary>
+    /// The save selected in the save, load or import window; null for none.
+    /// </summary>
     internal SaveSlot? SelectedSlot;
+
+    /// <summary>
+    /// The selected save's info text (or why it could not be read), and the credits text as the title reads it.
+    /// </summary>
     string _slotDetails = "", _credits = "";
+
+    /// <summary>
+    /// The credits are showing.
+    /// </summary>
     internal bool ShowCredits;
+
     /// <summary>
     /// When the credits were opened (Stopwatch): they scroll by the wall clock.
     /// </summary>
     long _creditsStart;
+
+    /// <summary>
+    /// The selected save's info was read.
+    /// </summary>
     bool _slotReadable;
+
     /// <summary>
     /// The Faithful load window's Load button is live only with a readable save selected (Fixes settings); off, it is always live, as in the game.
     /// </summary>
     public bool FixLoadButton { get; set; } = true;
+
+    /// <summary>
+    /// The selected save's info; null when none is selected or it could not be read.
+    /// </summary>
     SaveSlotInfo? _slotInfo;
+
     /// <summary>
     /// The load and import windows' ticks (ImportGameMenu flags 0x1, 0x4, 0x8, 0x10, 0x20): reset squad positions, buildings, research, dead NPCs,
     /// relations.
     /// </summary>
     readonly bool[] _slotTicks = new bool[5];
+
+    /// <summary>
+    /// The load and import windows' tick widgets, in the order of <see cref="_slotTicks"/>.
+    /// </summary>
     static readonly string[] TickBoxes = ["ResetTickBox", "BuildingsTickBox", "ResearchTickBox", "NPCTickBox", "RelationsTickBox"];
+
     /// <summary>
     /// Meitou's load window tick that leaves the base game's saves out of the list (<see cref="WithSaveFilter"/>).
     /// </summary>
     const string HideKenshiTick = "HideKenshiTickBox";
+
+    /// <summary>
+    /// The load window's tick that leaves the base game's saves out is set.
+    /// </summary>
     bool _hideKenshiSaves;
+
     /// <summary>
     /// The saves the window lists: the save window only Meitou's, the load window without Kenshi's when its tick is set.
     /// </summary>
     SaveSlot[] VisibleSlots(string id) =>
         [.. Slots.Where(s => s.Writable || id != "save" && !(id == "load" && _hideKenshiSaves && player.UiMode == UiMode.Meitou))];
+
     /// <summary>
     /// The import window's ticks as the flag bits of <c>importGame</c> (ticks in the order of <see cref="TickBoxes"/>: 0x1, 0x4, 0x8, 0x10, 0x20).
     /// </summary>
@@ -53,6 +102,7 @@ sealed class FrontendScreens(PlayerInterface player)
         (_slotTicks[0] ? Simulation.Saving.ImportOptions.ResetPositions : 0) | (_slotTicks[1] ? Simulation.Saving.ImportOptions.Buildings : 0)
         | (_slotTicks[2] ? Simulation.Saving.ImportOptions.Research : 0) | (_slotTicks[3] ? Simulation.Saving.ImportOptions.DeadNpcs : 0)
         | (_slotTicks[4] ? Simulation.Saving.ImportOptions.Relations : 0);
+
     /// <summary>
     /// The open message box: ButtonA confirms (captioned <c>Yes</c>), an optional middle choice (ButtonB), and the last button cancels (Esc presses
     /// it).
@@ -65,12 +115,20 @@ sealed class FrontendScreens(PlayerInterface player)
         /// </summary>
         public bool OkOnly { get; init; }
     }
+
+    /// <summary>
+    /// The open message box; null for none.
+    /// </summary>
     internal Confirmation? PendingConfirmation;
+
     /// <summary>
     /// The game data (<see cref="ConfigureFrontend"/>; null without it).
     /// </summary>
     internal GameDatabase? GameData;
 
+    /// <summary>
+    /// Takes the game data (and its new-game starts, the default one chosen), the save lister and the credits text as the title shows it.
+    /// </summary>
     public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText)
     {
         GameData = database;
@@ -80,9 +138,15 @@ sealed class FrontendScreens(PlayerInterface player)
 
         // As the title reads data/credits.txt (FUN_14013d680, docs/game/ui-screens.md "Credits"): empty lines dropped, a "-" line a blank one, each
         // line ended.
-        _credits = string.Concat(creditsText.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 0).Select(l => (l == "-" ? "" : l) + "\n"));
+        _credits = string.Concat(creditsText.Split('\n')
+            .Select(l => l.TrimEnd('\r'))
+            .Where(l => l.Length > 0)
+            .Select(l => (l == "-" ? "" : l) + "\n"));
     }
 
+    /// <summary>
+    /// Opens the title screen with the saves listed again.
+    /// </summary>
     public void ShowTitle()
     {
         player.FaithfulScreens.Open("title");
@@ -95,9 +159,13 @@ sealed class FrontendScreens(PlayerInterface player)
     /// </summary>
     public void ShowMainMenu() => ShowTitle();
 
+    /// <summary>
+    /// Closes every front-end window and the character editor and drops the open message box.
+    /// </summary>
     public void CloseFrontend()
     {
-        foreach (string id in new[] { "title", "menu", "new-game", "save", "load", "import", "message", "editor", "file" }) player.FaithfulScreens.Close(id);
+        foreach (string id in new[] { "title", "menu", "new-game", "save", "load", "import", "message", "editor", "file" })
+            player.FaithfulScreens.Close(id);
 
         player.CharacterEditor.Editor = null;
         player.CharacterEditor.Previews.Clear();
@@ -110,6 +178,9 @@ sealed class FrontendScreens(PlayerInterface player)
     /// </summary>
     internal string CancelButton => PendingConfirmation?.Middle is null ? "ButtonB" : "ButtonC";
 
+    /// <summary>
+    /// Lists the saves again, selects the first and reads its info; an unreadable save folder leaves the list empty with the error as the info.
+    /// </summary>
     void RefreshSlots()
     {
         try
@@ -133,6 +204,9 @@ sealed class FrontendScreens(PlayerInterface player)
     bool OldImportSave =>
         _slotInfo is { } info && Simulation.Saving.SaveImport.AllowedFor(Simulation.Saving.ImportOptions.ResetPositions, info.Version) == 0;
 
+    /// <summary>
+    /// Reads the selected save's info into the info text (the original info panel's five labels), or why it could not be read.
+    /// </summary>
     void ReadSlotDetails()
     {
         _slotReadable = false;
@@ -151,7 +225,8 @@ sealed class FrontendScreens(PlayerInterface player)
             _slotInfo = info;
 
             // The five labels of the original info panel (FUN_14047e390 / FUN_14047e780, docs/game/ui-screens.md section 3), in their order.
-            _slotDetails = $"File version: {info.Version}\nFaction name: {info.Faction}\nFunds: c.{info.Funds.ToString("N0", CultureInfo.InvariantCulture)}\nMembers size: {info.Members}\nLocation: {info.Area}";
+            _slotDetails = $"File version: {info.Version}\nFaction name: {info.Faction}\n"
+                + $"Funds: c.{info.Funds.ToString("N0", CultureInfo.InvariantCulture)}\nMembers size: {info.Members}\nLocation: {info.Area}";
         }
         catch (Exception e) when (e is IOException or FormatException or ArgumentException)
         {
@@ -182,6 +257,7 @@ sealed class FrontendScreens(PlayerInterface player)
     /// Whether a save folder is the one the game in play came from or was last saved to (the host's).
     /// </summary>
     public Func<string, bool>? SaveInUse { get; set; }
+
     /// <summary>
     /// Deletes a save folder (the host's); returns an error to show, or null.
     /// </summary>
@@ -209,6 +285,10 @@ sealed class FrontendScreens(PlayerInterface player)
         });
     }
 
+    /// <summary>
+    /// Opens the save, load or import window <paramref name="id"/> with the saves listed again: the first selected (save; Meitou's load), else none,
+    /// and the ticks reset (the first four off for a save too old to import them).
+    /// </summary>
     internal void OpenSlots(string id)
     {
         RefreshSlots();
@@ -234,182 +314,250 @@ sealed class FrontendScreens(PlayerInterface player)
             player.FaithfulScreens.SetText(id, "SaveEditBox", SelectedSlot?.Name ?? "");   // the selected save's name, ready to overwrite
     }
 
+    /// <summary>
+    /// A click in a front-end window (title or Esc menu, message box, new game, save, load or import); false for any other screen.
+    /// </summary>
     internal bool HandleFrontendAction(MyGuiEvent e)
     {
         if (e.Screen is "title" or "menu")
         {
-            // The title's buttons first close its other windows and the credits (FUN_140914a90); Load and Import close their own window when it is
-            // open, New game leaves its window as it is, Credits starts them again (docs/game/ui-screens.md "Title screen").
-            bool title = e.Screen == "title";
-            bool wasOpen = player.FaithfulScreens.IsOpen(e.Widget switch { "LoadGameButton" => "load", "ImportGameButton" => "import", "NewGameButton" => "new-game", _ => "" });
-            if (title && !(e.Widget == "NewGameButton" && wasOpen)) CloseTitleWindows();
-
-            switch (e.Widget)
-            {
-                case "ResumeButton": player.FaithfulScreens.Close("menu"); break;
-                case "NewGameButton":
-                    if (!wasOpen)
-                    {
-                        player.AdvancedOptions.AdvancedOpen = false;
-                        player.FaithfulScreens.Open("new-game");
-                    }
-
-                    break;
-                case "SaveGameButton": OpenSlots("save"); break;
-                case "LoadGameButton": if (!(title && wasOpen)) OpenSlots("load"); break;
-                case "ImportGameButton":
-                    if (!wasOpen)
-                    {
-                        player.AdvancedOptions.AdvancedOpen = false;
-                        OpenSlots("import");
-                    }
-
-                    break;
-                case "OptionsButton": player.RaiseScreenAction(e); break;
-                case "CreditsButton":
-                    ShowCredits = true;
-                    _creditsStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                    break;
-                case "ContinueButton":
-                    if (Slots.FirstOrDefault() is { } last)
-                        player.RaiseScreenAction(new("load", "LoadButton", "load", last.Folder));
-                    break;
-                case "ExitButton": player.Confirm("EXIT", "Are you sure you want to exit?",
-                    () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit"))); break;
-                // In play the Esc menu's Exit offers the main menu as well (engine choice: the original's in-game Exit dialog is not traced).
-                case "ExitGameButton":
-                    player.Confirm("EXIT", player.Session.World.Player.Exists ? "Return to the main menu or quit the game? Unsaved progress will be lost." : "Return to the main menu or quit the game?",
-                        () => player.RaiseScreenAction(new("menu", "MainMenuButton", "main-menu")), "MAIN MENU",
-                        ("QUIT", () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit"))));
-                    break;
-            }
-
+            TitleAction(e);
             return true;
         }
 
         if (e.Screen == "message")
         {
-            var confirm = PendingConfirmation;
-            PendingConfirmation = null;
-            player.FaithfulScreens.Close("message");
-            if (e.Widget == "ButtonA") confirm?.Confirm();
-            else if (e.Widget == "ButtonB" && confirm?.Middle is { } middle) middle.Act();
-
+            MessageAction(e);
             return true;
         }
 
         if (e.Screen == "new-game")
         {
-            if (player.AdvancedOptions.AdvancedAction(e)) return true;
-
-            if (e.Widget == "CancelButton") player.FaithfulScreens.Close(e.Screen);
-            else if (e.Widget == "LeftButton" && _starts.Count > 0)
-                _startIndex = (_startIndex + _starts.Count - 1) % _starts.Count;
-            else if (e.Widget == "RightButton" && _starts.Count > 0) _startIndex = (_startIndex + 1) % _starts.Count;
-            else if (e.Widget == "AdvancedButton")
-            {
-                player.AdvancedOptions.AdvancedOpen = !player.AdvancedOptions.AdvancedOpen;
-                player.AdvancedOptions.AdvancedHelp = -1;
-            }
-            else if (e.Widget == "BeginButton" && _starts.Count > 0)
-            {
-                void Start() => player.RaiseScreenAction(new("new-game", "BeginButton", "new-game", _starts[_startIndex].Id));
-
-                if (player.Session.World.Player.Exists)
-                    player.Confirm("NEW GAME", "Start a new game? Unsaved progress will be lost.", Start);
-                else
-                    Start();
-            }
-
+            NewGameAction(e);
             return true;
         }
 
         if (e.Screen is "save" or "load" or "import")
         {
-            if (e.Screen == "import" && player.AdvancedOptions.AdvancedAction(e)) return true;
-
-            if (e.Widget == "CancelButton")
-            {
-                player.FaithfulScreens.Close(e.Screen);
-                player.AdvancedOptions.AdvancedOpen = false;
-            }
-            else if (Array.IndexOf(TickBoxes, e.Widget) is var tick and >= 0) { if (!(e.Screen == "import" && tick < 4 && OldImportSave))
-                _slotTicks[tick] = !_slotTicks[tick]; }
-            else if (e.Widget == HideKenshiTick)
-            {
-                _hideKenshiSaves = !_hideKenshiSaves;
-
-                if (SelectedSlot is not null && !VisibleSlots(e.Screen).Contains(SelectedSlot))
-                {
-                    SelectedSlot = null;
-                    ReadSlotDetails();
-                }
-            }
-            else if (e.Widget == "AdvancedButton")
-            {
-                player.AdvancedOptions.AdvancedOpen = !player.AdvancedOptions.AdvancedOpen;
-                player.AdvancedOptions.AdvancedHelp = -1;
-                if (player.AdvancedOptions.AdvancedOpen && e.Screen == "import") ReadSlotDifficulty();
-            }
-            else if (e.Widget == "ImportButton" && SelectedSlot is { } importSlot)
-            {
-                void Import() => player.RaiseScreenAction(new("import", "ImportButton", "import", importSlot.Folder));
-
-                if (!_slotReadable)
-                    player.Notice("This save file is invalid", true);   // the original's message box for a save whose row reads ERROR
-                else if (player.Session.World.Player.Exists)
-                    player.Confirm("IMPORT GAME", "Import this save into a new game? Unsaved progress will be lost.", Import);
-                else
-                    Import();
-            }
-            else if (e.Widget == "GamesList" && e.Action == "select")
-            {
-                SelectedSlot = Slots.FirstOrDefault(s => s.Folder == e.Text);
-                ReadSlotDetails();
-                if (e.Screen == "import" && player.AdvancedOptions.AdvancedOpen) ReadSlotDifficulty();
-                if (e.Screen == "import" && OldImportSave) Array.Fill(_slotTicks, false, 0, 4);
-                if (e.Screen == "save" && SelectedSlot is { } slot)
-                    player.FaithfulScreens.SetText("save", "SaveEditBox", slot.Name);
-            }
-            else if (e.Widget == "LoadButton" && SelectedSlot is { } loadSlot)
-            {
-                void Load() => player.RaiseScreenAction(new("load", "LoadButton", "load", loadSlot.Folder));
-
-                if (player.Session.World.Player.Exists)
-                    player.Confirm("LOAD GAME", "Load this save? Unsaved progress will be lost.", Load);
-                else
-                    Load();
-            }
-            else if (e.Widget == "SaveButton")
-            {
-                string name = player.FaithfulScreens.GetText("save", "SaveEditBox");
-
-                try
-                {
-                    SaveCatalog.ValidateName(name);
-                }
-                catch (ArgumentException ex)
-                {
-                    player.Notice(ex.Message, true);
-                    return true;
-                }
-
-                void Save()
-                {
-                    player.RaiseScreenAction(new("save", "SaveButton", "save", name));
-                    player.FaithfulScreens.Close("save");
-                }
-
-                if (Slots.Any(s => s.Writable && string.Equals(s.Name, name, StringComparison.Ordinal)))
-                    player.Confirm("OVERWRITE SAVE", Loc.Tr("Overwrite save '{1}'?", name), Save);
-                else
-                    Save();
-            }
-
+            SlotAction(e);
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// A button of the title or the Esc menu.
+    /// </summary>
+    void TitleAction(MyGuiEvent e)
+    {
+        // The title's buttons first close its other windows and the credits (FUN_140914a90); Load and Import close their own window when it is
+        // open, New game leaves its window as it is, Credits starts them again (docs/game/ui-screens.md "Title screen").
+        bool title = e.Screen == "title";
+        string window = e.Widget switch
+        {
+            "LoadGameButton" => "load",
+            "ImportGameButton" => "import",
+            "NewGameButton" => "new-game",
+            _ => "",
+        };
+        bool wasOpen = player.FaithfulScreens.IsOpen(window);
+        if (title && !(e.Widget == "NewGameButton" && wasOpen)) CloseTitleWindows();
+
+        switch (e.Widget)
+        {
+            case "ResumeButton": player.FaithfulScreens.Close("menu"); break;
+            case "NewGameButton":
+                if (!wasOpen)
+                {
+                    player.AdvancedOptions.AdvancedOpen = false;
+                    player.FaithfulScreens.Open("new-game");
+                }
+
+                break;
+            case "SaveGameButton": OpenSlots("save"); break;
+            case "LoadGameButton": if (!(title && wasOpen)) OpenSlots("load"); break;
+            case "ImportGameButton":
+                if (!wasOpen)
+                {
+                    player.AdvancedOptions.AdvancedOpen = false;
+                    OpenSlots("import");
+                }
+
+                break;
+            case "OptionsButton": player.RaiseScreenAction(e); break;
+            case "CreditsButton":
+                ShowCredits = true;
+                _creditsStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                break;
+            case "ContinueButton":
+                if (Slots.FirstOrDefault() is { } last)
+                    player.RaiseScreenAction(new("load", "LoadButton", "load", last.Folder));
+                break;
+            case "ExitButton":
+                player.Confirm("EXIT", "Are you sure you want to exit?", () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit")));
+                break;
+            // In play the Esc menu's Exit offers the main menu as well (engine choice: the original's in-game Exit dialog is not traced).
+            case "ExitGameButton":
+                player.Confirm("EXIT", player.Session.World.Player.Exists
+                        ? "Return to the main menu or quit the game? Unsaved progress will be lost."
+                        : "Return to the main menu or quit the game?",
+                    () => player.RaiseScreenAction(new("menu", "MainMenuButton", "main-menu")), "MAIN MENU",
+                    ("QUIT", () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit"))));
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A button of the message box: ButtonA confirms, ButtonB takes the middle choice when there is one; any button closes it.
+    /// </summary>
+    void MessageAction(MyGuiEvent e)
+    {
+        var confirm = PendingConfirmation;
+        PendingConfirmation = null;
+        player.FaithfulScreens.Close("message");
+        if (e.Widget == "ButtonA") confirm?.Confirm();
+        else if (e.Widget == "ButtonB" && confirm?.Middle is { } middle) middle.Act();
+    }
+
+    /// <summary>
+    /// A click in the new game window: its advanced options, the start arrows, Advanced, Begin (asking first in play) and Cancel.
+    /// </summary>
+    void NewGameAction(MyGuiEvent e)
+    {
+        if (player.AdvancedOptions.AdvancedAction(e)) return;
+
+        if (e.Widget == "CancelButton") player.FaithfulScreens.Close(e.Screen);
+        else if (e.Widget == "LeftButton" && _starts.Count > 0)
+            _startIndex = (_startIndex + _starts.Count - 1) % _starts.Count;
+        else if (e.Widget == "RightButton" && _starts.Count > 0) _startIndex = (_startIndex + 1) % _starts.Count;
+        else if (e.Widget == "AdvancedButton")
+        {
+            player.AdvancedOptions.AdvancedOpen = !player.AdvancedOptions.AdvancedOpen;
+            player.AdvancedOptions.AdvancedHelp = -1;
+        }
+        else if (e.Widget == "BeginButton" && _starts.Count > 0)
+        {
+            void Start() => player.RaiseScreenAction(new("new-game", "BeginButton", "new-game", _starts[_startIndex].Id));
+
+            if (player.Session.World.Player.Exists)
+                player.Confirm("NEW GAME", "Start a new game? Unsaved progress will be lost.", Start);
+            else
+                Start();
+        }
+    }
+
+    /// <summary>
+    /// A click in the save, load or import window: the import's advanced options, Cancel, the ticks, the list and the window's own button.
+    /// </summary>
+    void SlotAction(MyGuiEvent e)
+    {
+        if (e.Screen == "import" && player.AdvancedOptions.AdvancedAction(e)) return;
+
+        if (e.Widget == "CancelButton")
+        {
+            player.FaithfulScreens.Close(e.Screen);
+            player.AdvancedOptions.AdvancedOpen = false;
+        }
+        else if (Array.IndexOf(TickBoxes, e.Widget) is var tick and >= 0)
+        {
+            if (!(e.Screen == "import" && tick < 4 && OldImportSave)) _slotTicks[tick] = !_slotTicks[tick];
+        }
+        else if (e.Widget == HideKenshiTick) ToggleHideKenshiSaves(e.Screen);
+        else if (e.Widget == "AdvancedButton")
+        {
+            player.AdvancedOptions.AdvancedOpen = !player.AdvancedOptions.AdvancedOpen;
+            player.AdvancedOptions.AdvancedHelp = -1;
+            if (player.AdvancedOptions.AdvancedOpen && e.Screen == "import") ReadSlotDifficulty();
+        }
+        else if (e.Widget == "ImportButton" && SelectedSlot is { } importSlot) ImportSlot(importSlot);
+        else if (e.Widget == "GamesList" && e.Action == "select") SelectSlot(e);
+        else if (e.Widget == "LoadButton" && SelectedSlot is { } loadSlot) LoadSlot(loadSlot);
+        else if (e.Widget == "SaveButton") SaveToSlot();
+    }
+
+    /// <summary>
+    /// The load window's Kenshi saves tick; a selected save it hides is deselected.
+    /// </summary>
+    void ToggleHideKenshiSaves(string screen)
+    {
+        _hideKenshiSaves = !_hideKenshiSaves;
+
+        if (SelectedSlot is not null && !VisibleSlots(screen).Contains(SelectedSlot))
+        {
+            SelectedSlot = null;
+            ReadSlotDetails();
+        }
+    }
+
+    /// <summary>
+    /// The import window's Import: an unreadable save is refused, in play it asks first.
+    /// </summary>
+    void ImportSlot(SaveSlot importSlot)
+    {
+        void Import() => player.RaiseScreenAction(new("import", "ImportButton", "import", importSlot.Folder));
+
+        if (!_slotReadable)
+            player.Notice("This save file is invalid", true);   // the original's message box for a save whose row reads ERROR
+        else if (player.Session.World.Player.Exists)
+            player.Confirm("IMPORT GAME", "Import this save into a new game? Unsaved progress will be lost.", Import);
+        else
+            Import();
+    }
+
+    /// <summary>
+    /// A row picked in the save list: its details, the import's difficulty and ticks, the save window's name box.
+    /// </summary>
+    void SelectSlot(MyGuiEvent e)
+    {
+        SelectedSlot = Slots.FirstOrDefault(s => s.Folder == e.Text);
+        ReadSlotDetails();
+        if (e.Screen == "import" && player.AdvancedOptions.AdvancedOpen) ReadSlotDifficulty();
+        if (e.Screen == "import" && OldImportSave) Array.Fill(_slotTicks, false, 0, 4);
+        if (e.Screen == "save" && SelectedSlot is { } slot)
+            player.FaithfulScreens.SetText("save", "SaveEditBox", slot.Name);
+    }
+
+    /// <summary>
+    /// The load window's Load, asking first in play.
+    /// </summary>
+    void LoadSlot(SaveSlot loadSlot)
+    {
+        void Load() => player.RaiseScreenAction(new("load", "LoadButton", "load", loadSlot.Folder));
+
+        if (player.Session.World.Player.Exists)
+            player.Confirm("LOAD GAME", "Load this save? Unsaved progress will be lost.", Load);
+        else
+            Load();
+    }
+
+    /// <summary>
+    /// The save window's Save: an invalid name is refused, an existing Meitou save of that name is overwritten after asking.
+    /// </summary>
+    void SaveToSlot()
+    {
+        string name = player.FaithfulScreens.GetText("save", "SaveEditBox");
+
+        try
+        {
+            SaveCatalog.ValidateName(name);
+        }
+        catch (ArgumentException ex)
+        {
+            player.Notice(ex.Message, true);
+            return;
+        }
+
+        void Save()
+        {
+            player.RaiseScreenAction(new("save", "SaveButton", "save", name));
+            player.FaithfulScreens.Close("save");
+        }
+
+        if (Slots.Any(s => s.Writable && string.Equals(s.Name, name, StringComparison.Ordinal)))
+            player.Confirm("OVERWRITE SAVE", Loc.Tr("Overwrite save '{1}'?", name), Save);
+        else
+            Save();
     }
 
     /// <summary>
@@ -435,181 +583,266 @@ sealed class FrontendScreens(PlayerInterface player)
     string SlotDate(SaveSlot s) => player.UiMode == UiMode.Faithful ? s.ModifiedUtc.ToLocalTime().ToString("G", CultureInfo.CurrentCulture)
         : s.ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Binds a front-end window (title or Esc menu, new game, save, load or import, message box); false for any other screen.
+    /// </summary>
     internal bool BindFrontend(string id, UiBindings b)
     {
-        void Enable(params string[] names)
-        {
-            foreach (string name in names)
-            {
-                b.Disabled.Remove(name);
-                b.Actions[name] = name;
-            }
-        }
-
-        void Paragraph(string name, string text)
-        {
-            b.Text[name] = text;
-            b.Properties[name] = new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBox"), ["TextPadding"] = name == "InfoPanel" ? "8 8 8 8" : "12 10 12 10" };
-        }
-
-        if (id is "title" or "menu")
-        {
-            Enable("NewGameButton", "LoadGameButton", "OptionsButton");
-            if (_starts.Count == 0) b.Disabled.Add("NewGameButton");
-
-            if (id == "menu")
-            {
-                Enable("ExitGameButton", "ResumeButton");
-                if (player.Session.World.Player.Exists) Enable("SaveGameButton");
-
-                return true;
-            }
-
-            Enable("ExitButton", "CreditsButton", "ImportGameButton");
-            if (player.UiMode == UiMode.Faithful)
-                foreach (var (widget, caption) in TitleMenu.TitleCaptions) b.Text[widget] = UpperCaption(caption);
-
-            if (player.UiMode == UiMode.Meitou)
-            {
-                foreach (var (widget, at) in player.TitleMenu.MenuLayout(card: Slots.Count > 0 && _slotReadable)) b.Positions[widget] = at;
-            }
-
-            // Continue is shown only when a save exists (docs/game/ui-screens.md section 3), not greyed out.
-            if (Slots.Count > 0 && _slotReadable) Enable("ContinueButton"); else b.Hidden.Add("ContinueButton");
-
-            b.Properties["CreditsPanel"] = new Dictionary<string, string> { ["Visible"] = ShowCredits ? "true" : "false" };
-
-            if (ShowCredits)
-            {
-                // From 0.85 of the panel's height, 25 pixels up a second of wall-clock time (FUN_140914230, FUN_140913880); the text goes on out of
-                // view.
-                var layout = player.FaithfulScreens.Layout("title");
-                var panel = player.CharacterEditor.RealBounds(layout, "CreditsPanel");
-                var view = player.CharacterEditor.RealBounds(layout, "CreditsPanelContent");
-                double seconds = System.Diagnostics.Stopwatch.GetElapsedTime(_creditsStart).TotalSeconds;
-                float scroll = MathF.Round((float)(panel.Height * 0.85 - seconds * 25), MidpointRounding.AwayFromZero);
-                b.Positions["CreditsPanelContent"] = view with { Y = view.Y + scroll, Height = Math.Max(view.Height, _credits.Count(c => c == '\n') * 40 * player.Height / 1080f + 100) };
-                b.Text["CreditsPanelContent"] = _credits;
-            }
-
-            b.Text["VersionText"] = player.UiMode == UiMode.Meitou ? "Meitou" : "Meitou - Faithful UI";
-        }
-        else if (id == "new-game")
-        {
-            player.AdvancedOptions.BindNewGamePanels(b);
-            Enable("CancelButton", "AdvancedButton");
-            b.Text["lbChooseBeginning"] = UpperCaption("Choose your beginning");
-            b.Text["AdvancedButton"] = UpperCaption("Advanced options");
-            b.Text["BeginButton"] = UpperCaption("Begin");
-            b.Text["CancelButton"] = UpperCaption("Cancel");
-            b.Text["DescriptionPanel"] = "";
-
-            if (_starts.Count > 0)
-            {
-                Enable("LeftButton", "RightButton", "BeginButton");
-                var start = _starts[_startIndex];
-                b.Text["TitleTextBox"] = start.Name;
-            }
-        }
-        else if (id is "save" or "load" or "import")
-        {
-            Enable("CancelButton");
-
-            // The original scales its templates' pixel sizes with the screen (Observed: the list's 21-pixel HeightLine is 28 pixels apart at 1440
-            // lines).
-            b.TemplateScale = player.Height / 1080f;
-            PlaceSlotWindow(id, b);
-            b.Text["lbTitle"] = UpperCaption(id switch { "save" => "Save game", "import" => "Import game", _ => "Load game" });
-            b.Text["CancelButton"] = UpperCaption("Cancel");
-            b.Text[id == "save" ? "SaveButton" : id == "import" ? "ImportButton" : "LoadButton"] = UpperCaption(id switch { "save" => "Save", "import" => "Import", _ => "Load" });
-            if (id != "save") b.Text["lbResetSquadPosition"] = Loc.Tr("Reset squad positions");
-
-            if (id == "import")
-            {
-                b.Text["AdvancedButton"] = UpperCaption("Advanced options");
-                foreach (var (label, caption) in new[] { ("lbImportBuildings", "Import Buildings"), ("lbImportResearch", "Import Research"), ("lbImportNPC", "Import Dead NPCs"), ("lbImportRelations", "Import Relations") })
-                    b.Text[label] = Loc.Tr(caption);
-
-                Enable("AdvancedButton");
-                if (SelectedSlot is not null) Enable("ImportButton"); else b.Disabled.Add("ImportButton");
-            }
-
-            // The ticks each window has: load the reset one, import all five, save none.
-            for (int t = 0; t < (id == "import" ? TickBoxes.Length : id == "load" ? 1 : 0); t++)
-            {
-                if (id == "import" && t < 4 && OldImportSave) b.Disabled.Add(TickBoxes[t]); else Enable(TickBoxes[t]);
-
-                b.Properties[TickBoxes[t]] = new Dictionary<string, string> { ["StateSelected"] = _slotTicks[t] ? "true" : "false", ["Checked"] = _slotTicks[t] ? "true" : "false" };
-            }
-
-            if (id == "load" && player.UiMode == UiMode.Meitou)
-            {
-                Enable(HideKenshiTick);
-                b.Properties[HideKenshiTick] = new Dictionary<string, string> { ["StateSelected"] = _hideKenshiSaves ? "true" : "false", ["Checked"] = _hideKenshiSaves ? "true" : "false" };
-            }
-            else if (id == "load")
-            {
-                b.Hidden.Add(HideKenshiTick);
-                b.Hidden.Add("lbHideKenshiSaves");
-            }
-
-            var visibleSlots = VisibleSlots(id);
-
-            // The original's save list (LoadSaveWindow, decompile of FUN_140480100, Observed): two columns, the first filling the width, the second
-            // fixed at 180; the captions are localised strings (the pot has "Name" and "Date", Unknown which the window uses). Initially sorted by
-            // the second, newest first. Meitou adds the save's origin to the name. addColumn takes screen pixels, not the template's (the date is cut
-            // off at 1440 lines in the base game).
-            b.Columns["GamesList"] = [new("Name", 170 / b.TemplateScale, Fill: true), new("Date", 180 / b.TemplateScale)];
-            b.Sorts["GamesList"] = (1, false);
-
-            // Faithful: the folder name as the original shows it; Meitou adds where the save comes from.
-            bool faithful = player.UiMode == UiMode.Faithful;
-            b.Lists["GamesList"] = visibleSlots.Select(s => new UiListItem(s.Folder, $"{s.Name}   {SlotDate(s)}",
-                [faithful ? s.Name : $"{s.Name}   [{(s.Writable ? "Meitou" : "Kenshi")}]", SlotDate(s)],
-                // The original's comparator (FUN_14047cdb0): names without regard to case, dates by their time.
-                [s.Name.ToLowerInvariant(), s.ModifiedUtc.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture)])).ToArray();
-            b.SelectedItems["GamesList"] = Array.FindIndex(visibleSlots, s => s == SelectedSlot);
-            if (faithful) b.Text["InfoPanel"] = ""; else Paragraph("InfoPanel", _slotDetails);
-
-            // The original's Load button is always live (a click without a selection does nothing); the fix waits for a readable save.
-            if (id == "save")
-                Enable("SaveButton");
-            else if (id == "load" && (faithful && !FixLoadButton || SelectedSlot is not null && _slotReadable))
-                Enable("LoadButton");
-
-            b.Properties[id == "save" ? "SaveButton" : "LoadButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
-        }
-        else if (id == "message")
-        {
-            b.Text["Root"] = PendingConfirmation?.Title ?? "";
-            b.Text["MessageText"] = PendingConfirmation?.Text ?? "";
-            b.Text["ButtonA"] = PendingConfirmation?.Yes ?? "YES";
-
-            if (PendingConfirmation is { OkOnly: true })
-            {
-                Enable("ButtonA");
-                b.Hidden.Add("ButtonB");
-                b.Hidden.Add("ButtonC");
-            }
-            else if (PendingConfirmation?.Middle is { } middle)
-            {
-                Enable("ButtonA", "ButtonB", "ButtonC");
-                b.Text["ButtonB"] = middle.Caption;
-                b.Text["ButtonC"] = PendingConfirmation?.Cancel ?? "CANCEL";
-            }
-            else
-            {
-                Enable("ButtonA", "ButtonB");
-                b.Hidden.Add("ButtonC");
-                b.Text["ButtonB"] = PendingConfirmation?.Cancel ?? "CANCEL";
-            }
-
-            b.Properties["MessageText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true" };
-            b.Properties["ButtonA"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
-        }
+        if (id is "title" or "menu") BindTitle(id, b);
+        else if (id == "new-game") BindNewGame(b);
+        else if (id is "save" or "load" or "import") BindSlotWindow(id, b);
+        else if (id == "message") BindMessage(b);
         else return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// Makes the named buttons live: enabled, each its own action.
+    /// </summary>
+    static void Enable(UiBindings b, params string[] names)
+    {
+        foreach (string name in names)
+        {
+            b.Disabled.Remove(name);
+            b.Actions[name] = name;
+        }
+    }
+
+    /// <summary>
+    /// A wrapped text box in the generic text box's ink.
+    /// </summary>
+    void Paragraph(UiBindings b, string name, string text)
+    {
+        b.Text[name] = text;
+        b.Properties[name] = new Dictionary<string, string>
+        {
+            ["WordWrap"] = "true",
+            ["TextAlign"] = "Left Top",
+            ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBox"),
+            ["TextPadding"] = name == "InfoPanel" ? "8 8 8 8" : "12 10 12 10",
+        };
+    }
+
+    /// <summary>
+    /// The title's buttons (with Continue only when a readable save exists) and its credits, or the Esc menu's.
+    /// </summary>
+    void BindTitle(string id, UiBindings b)
+    {
+        Enable(b, "NewGameButton", "LoadGameButton", "OptionsButton");
+        if (_starts.Count == 0) b.Disabled.Add("NewGameButton");
+
+        if (id == "menu")
+        {
+            Enable(b, "ExitGameButton", "ResumeButton");
+            if (player.Session.World.Player.Exists) Enable(b, "SaveGameButton");
+
+            return;
+        }
+
+        Enable(b, "ExitButton", "CreditsButton", "ImportGameButton");
+        if (!player.MeitouMainMenu)
+            foreach (var (widget, caption) in TitleMenu.TitleCaptions) b.Text[widget] = UpperCaption(caption);
+
+        if (player.MeitouMainMenu)
+        {
+            foreach (var (widget, at) in player.TitleMenu.MenuLayout(card: Slots.Count > 0 && _slotReadable)) b.Positions[widget] = at;
+        }
+
+        // Continue is shown only when a save exists (docs/game/ui-screens.md section 3), not greyed out.
+        if (Slots.Count > 0 && _slotReadable) Enable(b, "ContinueButton");
+        else b.Hidden.Add("ContinueButton");
+
+        b.Properties["CreditsPanel"] = new Dictionary<string, string> { ["Visible"] = ShowCredits ? "true" : "false" };
+        if (ShowCredits) BindCredits(b);
+
+        b.Text["VersionText"] = player.UiMode == UiMode.Meitou ? "Meitou" : "Meitou - Faithful UI";
+    }
+
+    /// <summary>
+    /// From 0.85 of the panel's height, 25 pixels up a second of wall-clock time (FUN_140914230, FUN_140913880); the text goes on out of view.
+    /// </summary>
+    void BindCredits(UiBindings b)
+    {
+        var layout = player.FaithfulScreens.Layout("title");
+        var panel = player.CharacterEditor.RealBounds(layout, "CreditsPanel");
+        var view = player.CharacterEditor.RealBounds(layout, "CreditsPanelContent");
+        double seconds = System.Diagnostics.Stopwatch.GetElapsedTime(_creditsStart).TotalSeconds;
+        float scroll = MathF.Round((float)(panel.Height * 0.85 - seconds * 25), MidpointRounding.AwayFromZero);
+        b.Positions["CreditsPanelContent"] = view with
+        {
+            Y = view.Y + scroll,
+            Height = Math.Max(view.Height, _credits.Count(c => c == '\n') * 40 * player.UiScale + 100),
+        };
+        b.Text["CreditsPanelContent"] = _credits;
+    }
+
+    /// <summary>
+    /// The new game window: its advanced options, captions and the chosen start's name.
+    /// </summary>
+    void BindNewGame(UiBindings b)
+    {
+        player.AdvancedOptions.BindNewGamePanels(b);
+        Enable(b, "CancelButton", "AdvancedButton");
+        b.Text["lbChooseBeginning"] = UpperCaption("Choose your beginning");
+        b.Text["AdvancedButton"] = UpperCaption("Advanced options");
+        b.Text["BeginButton"] = UpperCaption("Begin");
+        b.Text["CancelButton"] = UpperCaption("Cancel");
+        b.Text["DescriptionPanel"] = "";
+
+        if (_starts.Count > 0)
+        {
+            Enable(b, "LeftButton", "RightButton", "BeginButton");
+            var start = _starts[_startIndex];
+            b.Text["TitleTextBox"] = start.Name;
+        }
+    }
+
+    /// <summary>
+    /// The save, load or import window: its placement, captions, ticks, the save list and its button.
+    /// </summary>
+    void BindSlotWindow(string id, UiBindings b)
+    {
+        Enable(b, "CancelButton");
+
+        // The original scales its templates' pixel sizes with the screen (Observed: the list's 21-pixel HeightLine is 28 pixels apart at 1440
+        // lines).
+        b.TemplateScale = player.UiScale;
+        PlaceSlotWindow(id, b);
+        BindSlotCaptions(id, b);
+        BindSlotTicks(id, b);
+        bool faithful = BindSlotList(id, b);
+
+        // The original's Load button is always live (a click without a selection does nothing); the fix waits for a readable save.
+        if (id == "save")
+            Enable(b, "SaveButton");
+        else if (id == "load" && (faithful && !FixLoadButton || SelectedSlot is not null && _slotReadable))
+            Enable(b, "LoadButton");
+
+        b.Properties[id == "save" ? "SaveButton" : "LoadButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
+    }
+
+    /// <summary>
+    /// The slot window's title, button and tick captions; the import window's Advanced and Import buttons.
+    /// </summary>
+    void BindSlotCaptions(string id, UiBindings b)
+    {
+        b.Text["lbTitle"] = UpperCaption(id switch { "save" => "Save game", "import" => "Import game", _ => "Load game" });
+        b.Text["CancelButton"] = UpperCaption("Cancel");
+        string button = id == "save" ? "SaveButton" : id == "import" ? "ImportButton" : "LoadButton";
+        b.Text[button] = UpperCaption(id switch { "save" => "Save", "import" => "Import", _ => "Load" });
+        if (id != "save") b.Text["lbResetSquadPosition"] = Loc.Tr("Reset squad positions");
+
+        if (id == "import")
+        {
+            b.Text["AdvancedButton"] = UpperCaption("Advanced options");
+            var ticks = new[]
+            {
+                ("lbImportBuildings", "Import Buildings"),
+                ("lbImportResearch", "Import Research"),
+                ("lbImportNPC", "Import Dead NPCs"),
+                ("lbImportRelations", "Import Relations"),
+            };
+            foreach (var (label, caption) in ticks)
+                b.Text[label] = Loc.Tr(caption);
+
+            Enable(b, "AdvancedButton");
+            if (SelectedSlot is not null) Enable(b, "ImportButton");
+            else b.Disabled.Add("ImportButton");
+        }
+    }
+
+    /// <summary>
+    /// The ticks each window has: load the reset one, import all five, save none; Meitou's load window adds the Kenshi saves tick.
+    /// </summary>
+    void BindSlotTicks(string id, UiBindings b)
+    {
+        for (int t = 0; t < (id == "import" ? TickBoxes.Length : id == "load" ? 1 : 0); t++)
+        {
+            if (id == "import" && t < 4 && OldImportSave) b.Disabled.Add(TickBoxes[t]);
+            else Enable(b, TickBoxes[t]);
+
+            b.Properties[TickBoxes[t]] = new Dictionary<string, string>
+            {
+                ["StateSelected"] = _slotTicks[t] ? "true" : "false",
+                ["Checked"] = _slotTicks[t] ? "true" : "false",
+            };
+        }
+
+        if (id == "load" && player.UiMode == UiMode.Meitou)
+        {
+            Enable(b, HideKenshiTick);
+            b.Properties[HideKenshiTick] = new Dictionary<string, string>
+            {
+                ["StateSelected"] = _hideKenshiSaves ? "true" : "false",
+                ["Checked"] = _hideKenshiSaves ? "true" : "false",
+            };
+        }
+        else if (id == "load")
+        {
+            b.Hidden.Add(HideKenshiTick);
+            b.Hidden.Add("lbHideKenshiSaves");
+        }
+    }
+
+    /// <summary>
+    /// The save list and the info box; returns whether the window is Faithful's.
+    /// </summary>
+    bool BindSlotList(string id, UiBindings b)
+    {
+        var visibleSlots = VisibleSlots(id);
+
+        // The original's save list (LoadSaveWindow, decompile of FUN_140480100, Observed): two columns, the first filling the width, the second
+        // fixed at 180; the captions are localised strings (the pot has "Name" and "Date", Unknown which the window uses). Initially sorted by
+        // the second, newest first. Meitou adds the save's origin to the name. addColumn takes screen pixels, not the template's (the date is cut
+        // off at 1440 lines in the base game).
+        // Meitou: the columns are 170 and 180 pixels at 1080 lines and grow with the UI scale, so the date fits on a 4K screen (#495).
+        b.Columns["GamesList"] = [new("Name", 170, Fill: true), new("Date", 180)];
+        b.Sorts["GamesList"] = (1, false);
+
+        // Faithful: the folder name as the original shows it; Meitou adds where the save comes from.
+        bool faithful = player.UiMode == UiMode.Faithful;
+        b.Lists["GamesList"] = visibleSlots.Select(s => new UiListItem(s.Folder, $"{s.Name}   {SlotDate(s)}",
+            [faithful ? s.Name : $"{s.Name}   [{(s.Writable ? "Meitou" : "Kenshi")}]", SlotDate(s)],
+            // The original's comparator (FUN_14047cdb0): names without regard to case, dates by their time.
+            [s.Name.ToLowerInvariant(), s.ModifiedUtc.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture)])).ToArray();
+        b.SelectedItems["GamesList"] = Array.FindIndex(visibleSlots, s => s == SelectedSlot);
+        if (faithful) b.Text["InfoPanel"] = "";
+        else Paragraph(b, "InfoPanel", _slotDetails);
+
+        return faithful;
+    }
+
+    /// <summary>
+    /// The message box: its title, text and buttons (Ok only, with a middle choice, or Yes and Cancel).
+    /// </summary>
+    void BindMessage(UiBindings b)
+    {
+        b.Text["Root"] = PendingConfirmation?.Title ?? "";
+        b.Text["MessageText"] = PendingConfirmation?.Text ?? "";
+        b.Text["ButtonA"] = PendingConfirmation?.Yes ?? "YES";
+
+        if (PendingConfirmation is { OkOnly: true })
+        {
+            Enable(b, "ButtonA");
+            b.Hidden.Add("ButtonB");
+            b.Hidden.Add("ButtonC");
+        }
+        else if (PendingConfirmation?.Middle is { } middle)
+        {
+            Enable(b, "ButtonA", "ButtonB", "ButtonC");
+            b.Text["ButtonB"] = middle.Caption;
+            b.Text["ButtonC"] = PendingConfirmation?.Cancel ?? "CANCEL";
+        }
+        else
+        {
+            Enable(b, "ButtonA", "ButtonB");
+            b.Hidden.Add("ButtonC");
+            b.Text["ButtonB"] = PendingConfirmation?.Cancel ?? "CANCEL";
+        }
+
+        b.Properties["MessageText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true" };
+        b.Properties["ButtonA"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
     }
 
     // The Faithful frontend windows' placement and their line panels (docs/game/ui-screens.md "Title screen", "Load and save windows", "Start
@@ -630,8 +863,8 @@ sealed class FrontendScreens(PlayerInterface player)
 
         var root = player.FaithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
-        float w = Math.Min(size.Width, player.Width), h = Math.Min(size.Height, player.Height);
-        float x = player.TitleOpen && player.UiMode == UiMode.Faithful ? Math.Min(player.Width / 2f, player.Width - w) : (player.Width - w) / 2;
+        float w = Math.Min(size.Width * player.InterfaceScale, player.Width), h = Math.Min(size.Height * player.InterfaceScale, player.Height);
+        float x = player.TitleOpen && !player.MeitouMainMenu ? Math.Min(player.Width / 2f, player.Width - w) : (player.Width - w) / 2;
         b.Positions[root.Name] = new(x, (player.Height - h) / 2, w, h);
 
         // Meitou: the save list ends above the buttons' row, where the Kenshi saves tick goes (WithSaveFilter).
@@ -651,7 +884,8 @@ sealed class FrontendScreens(PlayerInterface player)
 
         MyGuiWidget[] row =
         [
-            Row("TextBox", "lbHideKenshiSaves", "Kenshi_GenericTextBoxFlat", new(0.0102941f, 0.836923f, 0.58f, 0.123077f), new() { ["Caption"] = "Hide Kenshi saves", ["TextAlign"] = "Left VCenter" }),
+            Row("TextBox", "lbHideKenshiSaves", "Kenshi_GenericTextBoxFlat", new(0.0102941f, 0.836923f, 0.58f, 0.123077f),
+                new() { ["Caption"] = "Hide Kenshi saves", ["TextAlign"] = "Left VCenter" }),
             Row("Button", HideKenshiTick, "Kenshi_TickBoxSkin", new(0.6029412f, 0.844615f, 0.0514706f, 0.107692f), []),
         ];
         return load with { Roots = [root with { Children = [.. root.Children, .. row] }, .. load.Roots.Skip(1)] };
@@ -663,7 +897,8 @@ sealed class FrontendScreens(PlayerInterface player)
     /// start window sets 40), the label from 3 % of the width and 96 % wide, a value right-aligned in 93 % from the same place. The last label of a
     /// <paramref name="lastWraps"/> panel is a wrapped paragraph down to the panel's bottom (the start's description).
     /// </summary>
-    internal void AddDatapanel(List<UiControl> controls, string panel, IReadOnlyList<(string Label, string Value)> lines, bool lastWraps, float rows = 55)
+    internal void AddDatapanel(List<UiControl> controls, string panel, IReadOnlyList<(string Label, string Value)> lines, bool lastWraps,
+        float rows = 55)
     {
         if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
 
@@ -680,11 +915,23 @@ sealed class FrontendScreens(PlayerInterface player)
             var labelBounds = new UiRect(area.X + 0.03f * width, top, (wrap ? 0.96f : value.Length > 0 ? 0.93f : 0.96f) * width,
                 wrap ? area.Y + area.Height - top : pitch);
             controls.Add(new($"{panel}-label-{i}", "TextBox", labelBounds, label, "", "Kenshi_TextboxStandardText", true,
-                new Dictionary<string, string> { ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText"), ["WordWrap"] = wrap ? "true" : "false" }, Vector4.Zero, Pickable: false, Clip: clip));
+                new Dictionary<string, string>
+                {
+                    ["TextAlign"] = "Left Top",
+                    ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText"),
+                    ["WordWrap"] = wrap ? "true" : "false",
+                },
+                Vector4.Zero, Pickable: false, Clip: clip));
             if (value.Length == 0) continue;
 
-            controls.Add(new($"{panel}-value-{i}", "TextBox", new(area.X + 0.03f * width, top, 0.93f * width, pitch), value, "", "Kenshi_TextboxStandardText", true,
-                new Dictionary<string, string> { ["TextAlign"] = "Right Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText") }, Vector4.Zero, Pickable: false, Clip: clip));
+            controls.Add(new($"{panel}-value-{i}", "TextBox", new(area.X + 0.03f * width, top, 0.93f * width, pitch), value, "",
+                "Kenshi_TextboxStandardText", true,
+                new Dictionary<string, string>
+                {
+                    ["TextAlign"] = "Right Top",
+                    ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText"),
+                },
+                Vector4.Zero, Pickable: false, Clip: clip));
         }
     }
 
@@ -714,7 +961,10 @@ sealed class FrontendScreens(PlayerInterface player)
         for (int i = 0; i < controls.Count; i++)
         {
             if (controls[i].Name == "MessageText" || controls[i].Properties.GetValueOrDefault("CaptionOwner") == "MessageText")
-                controls[i] = controls[i] with { Properties = new Dictionary<string, string>(controls[i].Properties) { ["TextColour"] = PlayerInterface.MainColour } };
+            {
+                var properties = new Dictionary<string, string>(controls[i].Properties) { ["TextColour"] = PlayerInterface.MainColour };
+                controls[i] = controls[i] with { Properties = properties };
+            }
         }
     }
 
@@ -728,7 +978,8 @@ sealed class FrontendScreens(PlayerInterface player)
         var start = _starts[_startIndex];
         AddDatapanel(controls, "DescriptionPanel",
         [
-            (Loc.Tr("Difficulty:"), start.Difficulty), (Loc.Tr("Cash:"), "c." + start.Money.ToString(CultureInfo.InvariantCulture)), (Loc.Tr("Play Style:"), start.Style),
+            (Loc.Tr("Difficulty:"), start.Difficulty), (Loc.Tr("Cash:"), "c." + start.Money.ToString(CultureInfo.InvariantCulture)),
+            (Loc.Tr("Play Style:"), start.Style),
             (start.Description, ""),
         ], lastWraps: true, rows: 40);
     }
@@ -743,9 +994,10 @@ sealed class FrontendScreens(PlayerInterface player)
 
         AddDatapanel(controls, "InfoPanel",
         [
-            (Loc.Tr("Date"), SlotDate(slot)), (Loc.Tr("File version"), info.Version.Length > 0 ? info.Version : "Ancient"), (Loc.Tr("Faction name"), info.Faction),
-            (Loc.Tr("Funds"), "c." + info.Funds.ToString(CultureInfo.InvariantCulture)), (Loc.Tr("Members size"), info.Members.ToString(CultureInfo.InvariantCulture)),
-            (Loc.Tr("Location"), info.Area), (Loc.Tr("Day"), info.Day.ToString(CultureInfo.InvariantCulture)),
+            (Loc.Tr("Date"), SlotDate(slot)), (Loc.Tr("File version"), info.Version.Length > 0 ? info.Version : "Ancient"),
+            (Loc.Tr("Faction name"), info.Faction), (Loc.Tr("Funds"), "c." + info.Funds.ToString(CultureInfo.InvariantCulture)),
+            (Loc.Tr("Members size"), info.Members.ToString(CultureInfo.InvariantCulture)), (Loc.Tr("Location"), info.Area),
+            (Loc.Tr("Day"), info.Day.ToString(CultureInfo.InvariantCulture)),
         ], lastWraps: false);
     }
 }

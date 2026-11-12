@@ -84,9 +84,10 @@ not the game speed, so the camera works while the game is paused. Several inputs
   direction is not touched. The pivot then closes on its goal: a gap of 0.1 or less at once, else at **10 × the gap per second**, the
   speed taken when the goal changes (a moving goal is followed with a lag of about 0.1 s). A pivot or eye starting inside geometry
   leaves the height alone (**Observed**). Placing the camera finds the goal at once. Engine: every building's floor-0 ordinary parts
-  within 400 units are the pivot's ground, and a building in the interior view's parts up to the viewed floor (others stay at floor
-  0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
-  ray or the eye's lowering ray. A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
+  within 400 units are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
+  without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
+  floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
+  ray or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
   added or removed (a building; not a ground item's drop or pick-up, which leaves the lists alone, issue #204, **Observed** by code, not measured) lists the zone's buildings again while the known floors keep answering
   (the pivot does not drop to the terrain meanwhile), and an unchanged building keeps its collision.
 - **Default keys** (`controls.cfg`): `camera_forward` W, Up; `camera_back` S, Down; `camera_left` A, Left; `camera_right` D, Right;
@@ -136,7 +137,7 @@ host passes the pointer's place in the window, from Windows, only while the wind
 the Controls settings toggle, first taken from the install's `Edge scrolling`, turns it off).
 Differences, all engine choices: a pitch step is cut into pieces of at most 0.02 rad, each checked against the limits (the game
 overshoots by up to one step); the eye is never left below the clearance by the height lag; tracking is the host's (the pivot
-follows the character; the host draws the character's smoothed position as the target and then lifts it until the eye clears the
+follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the
 ground by the same clearance, as it does for the squad tour's arcs, [viewer.md](../viewer.md#squad-tour)); rotating pins the pointer as the game does (put back after every move, no
 marker drawn); `mouse_rotate` is the middle button or Ctrl (Ctrl+right click is also Meitou's carry binding); the free camera keeps its own
 engine feel (its Q/E turn the view left/right as named, not as the strategy camera's). The sea height clamps the camera's ground

@@ -3,8 +3,14 @@ using System.Numerics;
 
 namespace Meitou.Data.Particles;
 
+/// <summary>
+/// A ParticleUniverse script that does not parse, with the line it failed at.
+/// </summary>
 public sealed class PuScriptException(string message, int line) : Exception($"line {line}: {message}")
 {
+    /// <summary>
+    /// The script line the error was found at.
+    /// </summary>
     public int Line { get; } = line;
 }
 
@@ -13,14 +19,36 @@ public sealed class PuScriptException(string message, int line) : Exception($"li
 /// </summary>
 public sealed class PuProperty(string name, string[] values, PuDynamic? dynamic, int line)
 {
+    /// <summary>
+    /// The property's name.
+    /// </summary>
     public string Name { get; } = name;
+    /// <summary>
+    /// The words after the name; empty when the value is a <c>dyn_*</c> block.
+    /// </summary>
     public string[] Values { get; } = values;
+    /// <summary>
+    /// The value's <c>dyn_*</c> block; null for a plain value.
+    /// </summary>
     public PuDynamic? Dynamic { get; } = dynamic;
+    /// <summary>
+    /// The line of the property in its script.
+    /// </summary>
     public int Line { get; } = line;
 
+    /// <summary>
+    /// The first value as a number (a dynamic value's <see cref="PuDynamic.A"/>); <paramref name="fallback"/> when there is none or it is not
+    /// a number.
+    /// </summary>
     public float Float(float fallback = 0) => Dynamic is { } d ? d.A : Values.Length > 0 && TryFloat(Values[0], out float f) ? f : fallback;
+    /// <summary>
+    /// Whether the first value is <c>true</c>, <c>1</c>, <c>on</c> or <c>yes</c>; <paramref name="fallback"/> when there is no value.
+    /// </summary>
     public bool Bool(bool fallback = false) => Values.Length > 0 ? Values[0] is "true" or "1" or "on" or "yes" : fallback;
 
+    /// <summary>
+    /// <paramref name="s"/> as an invariant float.
+    /// </summary>
     internal static bool TryFloat(string s, out float f) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out f);
 
     public override string ToString() => Dynamic is not null ? $"{Name} {Dynamic.Kind}" : $"{Name} {string.Join(' ', Values)}";
@@ -33,10 +61,25 @@ public sealed class PuProperty(string name, string[] values, PuDynamic? dynamic,
 /// </summary>
 public sealed class PuNode(string kind, string[] args, int line)
 {
+    /// <summary>
+    /// The block's class: <c>system</c>, <c>emitter</c> and so on.
+    /// </summary>
     public string Kind { get; } = kind;
+    /// <summary>
+    /// The words after the class.
+    /// </summary>
     public string[] Args { get; } = args;
+    /// <summary>
+    /// The line the block starts at in its script.
+    /// </summary>
     public int Line { get; } = line;
+    /// <summary>
+    /// The block's properties in order.
+    /// </summary>
     public List<PuProperty> Properties { get; } = [];
+    /// <summary>
+    /// The blocks nested in it, in order.
+    /// </summary>
     public List<PuNode> Children { get; } = [];
 
     /// <summary>
@@ -44,6 +87,9 @@ public sealed class PuNode(string kind, string[] args, int line)
     /// name).
     /// </summary>
     public string Type => Args.Length > 0 ? Args[0] : "";
+    /// <summary>
+    /// The block's name: the first word of a <c>system</c> or <c>technique</c>, else the second; empty when absent.
+    /// </summary>
     public string Name => Kind == "system" || Kind == "technique" ? (Args.Length > 0 ? Args[0] : "") : Args.Length > 1 ? Args[1] : "";
 
     /// <summary>
@@ -55,20 +101,44 @@ public sealed class PuNode(string kind, string[] args, int line)
         return null;
     }
 
+    /// <summary>
+    /// Every property named <paramref name="name"/>, in order.
+    /// </summary>
     public IEnumerable<PuProperty> All(string name) => Properties.Where(p => p.Name == name);
+    /// <summary>
+    /// The nested blocks of class <paramref name="kind"/>, in order.
+    /// </summary>
     public IEnumerable<PuNode> Blocks(string kind) => Children.Where(c => c.Kind == kind);
 
+    /// <summary>
+    /// The last <paramref name="name"/> as a number; <paramref name="fallback"/> when absent or not one.
+    /// </summary>
     public float Float(string name, float fallback = 0) => Find(name)?.Float(fallback) ?? fallback;
+    /// <summary>
+    /// The last <paramref name="name"/> as a boolean; <paramref name="fallback"/> when absent.
+    /// </summary>
     public bool Bool(string name, bool fallback = false) => Find(name)?.Bool(fallback) ?? fallback;
+    /// <summary>
+    /// The first value of the last <paramref name="name"/>; null when absent or empty.
+    /// </summary>
     public string? Word(string name) => Find(name) is { Values.Length: > 0 } p ? p.Values[0] : null;
 
+    /// <summary>
+    /// The last <paramref name="name"/> as a dynamic attribute: its <c>dyn_*</c> block, else a fixed number; null when absent or not a number.
+    /// </summary>
     public PuDynamic? Dynamic(string name) =>
         Find(name) is { } p ? p.Dynamic ?? (p.Values.Length > 0 && PuProperty.TryFloat(p.Values[0], out float f) ? PuDynamic.Fixed(f) : null) : null;
 
+    /// <summary>
+    /// The first three values of the last <paramref name="name"/> as a vector; null when absent or not three numbers.
+    /// </summary>
     public Vector3? Vec3(string name) => Find(name) is { Values.Length: >= 3 } p && PuProperty.TryFloat(p.Values[0], out float x)
         && PuProperty.TryFloat(p.Values[1], out float y) && PuProperty.TryFloat(p.Values[2], out float z)
         ? new Vector3(x, y, z) : null;
 
+    /// <summary>
+    /// The first four values of the last <paramref name="name"/> as a vector; null when absent or not four numbers.
+    /// </summary>
     public Vector4? Vec4(string name) => Find(name) is { Values.Length: >= 4 } p && PuProperty.TryFloat(p.Values[0], out float x)
         && PuProperty.TryFloat(p.Values[1], out float y) && PuProperty.TryFloat(p.Values[2], out float z)
         && PuProperty.TryFloat(p.Values[3], out float w)
@@ -90,6 +160,15 @@ public static class PuScriptReader
     /// </summary>
     public static List<PuNode> Parse(string text)
     {
+        var lines = CodeLines(text);
+        return BuildTree(lines);
+    }
+
+    /// <summary>
+    /// The text's non-empty lines with their comments cut and their whitespace trimmed, each with its 1-based line number.
+    /// </summary>
+    static List<(string Text, int Number)> CodeLines(string text)
+    {
         var lines = new List<(string Text, int Number)>();
         int n = 0;
         foreach (var raw in text.Split('\n'))
@@ -101,6 +180,15 @@ public static class PuScriptReader
             line = line.Trim();
             if (line.Length > 0) lines.Add((line, n));
         }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// The blocks and properties of the code lines, as the top-level blocks.
+    /// </summary>
+    static List<PuNode> BuildTree(List<(string Text, int Number)> lines)
+    {
         var roots = new List<PuNode>();
         var stack = new Stack<PuNode>();
         for (int i = 0; i < lines.Count; i++)

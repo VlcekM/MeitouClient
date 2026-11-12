@@ -17,6 +17,7 @@ internal readonly record struct PickBox(int Bone, Vector3 Min, Vector3 Max)
     {
         var boxes = new Dictionary<int, (Vector3 Min, Vector3 Max)>();
         foreach (var part in model.Parts)
+        {
             foreach (ref readonly var v in part.Vertices.AsSpan())
             {
                 int bone = -1;
@@ -29,10 +30,16 @@ internal readonly record struct PickBox(int Bone, Vector3 Min, Vector3 Max)
                 boxes[bone] = boxes.TryGetValue(bone, out var b) ? (Vector3.Min(b.Min, v.Position), Vector3.Max(b.Max, v.Position)) : (v.Position,
                     v.Position);
             }
+        }
+
         return [.. boxes.Select(b => new PickBox(b.Key, b.Value.Min, b.Value.Max))];
     }
 }
 
+/// <summary>
+/// The characters' picking: rays against the posed pick boxes (<see cref="PickBox"/>), the crossbow's muzzle and the last drawn pose of a character,
+/// for the interface and the ragdolls.
+/// </summary>
 internal sealed partial class CharacterRenderer
 {
     /// <summary>
@@ -40,11 +47,6 @@ internal sealed partial class CharacterRenderer
     /// </summary>
     const float PickPadding = 0.4f;
 
-    /// <summary>
-    /// Where the ray (<paramref name="origin"/>, unit <paramref name="direction"/>) first meets the character <paramref name="key"/>'s posed pick
-    /// boxes (its distance), <see cref="float.PositiveInfinity"/> when it misses, or null when the character is not drawn in the world this frame
-    /// (the caller then has nothing to test). Render thread, after <see cref="Update"/>.
-    /// </summary>
     /// <summary>
     /// Where the crossbow in the character <paramref name="key"/>'s hands fires from: the place of its first loaded bolt (the original's muzzle,
     /// <c>barrel pos</c> in the crossbow's frame), in the world, as last posed; null when it holds no crossbow or was not posed. Render thread, after
@@ -55,8 +57,11 @@ internal sealed partial class CharacterRenderer
         if (!_states.TryGetValue(key, out var s) || !s.RangedDrawn || s.Asset is not { IsIcon: false } asset || s.Posed < 0)
             return null;
         foreach (var part in asset.Parts)
+        {
             if (part.Muzzle && part.AttachIndex >= 0 && part.AttachIndex < s.Attach.Length)
                 return (s.Attach[part.AttachIndex] * s.World).Translation;
+        }
+
         return null;
     }
 
@@ -87,6 +92,11 @@ internal sealed partial class CharacterRenderer
         return (s.World, look, at);
     }
 
+    /// <summary>
+    /// Where the ray (<paramref name="origin"/>, unit <paramref name="direction"/>) first meets the character <paramref name="key"/>'s posed pick
+    /// boxes (its distance), <see cref="float.PositiveInfinity"/> when it misses, or null when the character is not drawn in the world this frame
+    /// (the caller then has nothing to test). Render thread, after <see cref="Update"/>.
+    /// </summary>
     public float? RayHit(long key, Vector3 origin, Vector3 direction)
     {
         if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0)

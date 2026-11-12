@@ -6,10 +6,26 @@ namespace Meitou.Simulation.Movement;
 /// <summary>
 /// The FACTION <c>squad formation</c> values (<c>fcs_enums.def</c> SquadFormation).
 /// </summary>
-public enum SquadFormation { Random = 0, Caravan = 1, Military = 2 }
+public enum SquadFormation
+{
+    /// <summary>
+    /// RANDOM: everyone at a random spot round the head, pushed apart (docs/game/pathfinding.md "Squads travelling together"); also the fallback for
+    /// any other value.
+    /// </summary>
+    Random = 0,
+    /// <summary>
+    /// CARAVAN: a single file behind the head.
+    /// </summary>
+    Caravan = 1,
+    /// <summary>
+    /// MILITARY: blocks of rows behind the head: slaves, animals by size, humans.
+    /// </summary>
+    Military = 2
+}
 
 /// <summary>
-/// One character in a squad's formation: its role (<see cref="SquadRole"/>), whether it is an animal, and its radius (1.5 x the footprint radius, as the original).
+/// One character in a squad's formation: its role (<see cref="SquadRole"/>), whether it is an animal, and its radius (1.5 x the footprint radius, as
+/// the original).
 /// </summary>
 public readonly record struct FormationMember(CharacterId Id, int Role, bool Animal, float Radius);
 
@@ -36,9 +52,9 @@ public static class Formation
 
     /// <summary>
     /// The slot of each character relative to the <paramref name="head"/>, in the original's frame: X behind the head, Y (the world's Z after
-    /// <see cref="ToWorld"/>) across. <paramref name="others"/> are the squad's other members in squad order, <paramref name="slaves"/> those walking with the
-    /// head (the original attaches each slave to its owner; Meitou's slave owner is a faction, so a squad's slaves go with its head, an engine choice).
-    /// <paramref name="draw"/> gives the uniform draws in [0, 1).
+    /// <see cref="ToWorld"/>) across. <paramref name="others"/> are the squad's other members in squad order, <paramref name="slaves"/> those walking
+    /// with the head (the original attaches each slave to its owner; Meitou's slave owner is a faction, so a squad's slaves go with its head, an
+    /// engine choice). <paramref name="draw"/> gives the uniform draws in [0, 1).
     /// </summary>
     public static Dictionary<CharacterId, Vector2> Layout(
         SquadFormation type,
@@ -68,12 +84,14 @@ public static class Formation
     }
 
     /// <summary>
-    /// A slot of <see cref="Layout"/> in the world, for a head heading along <paramref name="heading"/> (unit, X/Z): the original turns −X onto the heading.
+    /// A slot of <see cref="Layout"/> in the world, for a head heading along <paramref name="heading"/> (unit, X/Z): the original turns −X onto
+    /// the heading.
     /// </summary>
     public static Vector2 ToWorld(Vector2 slot, Vector2 heading) => -slot.X * heading + slot.Y * new Vector2(heading.Y, -heading.X);
 
     /// <summary>
-    /// MILITARY: blocks of rows behind the head, rows across, c to a row (c from the number of humans); slaves, then small and big animals, then the humans.
+    /// MILITARY: blocks of rows behind the head, rows across, c to a row (c from the number of humans); slaves, then small and big animals, then
+    /// the humans.
     /// </summary>
     static void Military(Dictionary<CharacterId, Vector2> slots, IReadOnlyList<FormationMember> others, IReadOnlyList<FormationMember> slaves)
     {
@@ -263,8 +281,9 @@ public static class Formation
     }
 
     /// <summary>
-    /// <paramref name="at"/> moved out of every circle it overlaps (with <see cref="ScatterGap"/>), one at a time, starting over after each move; a later move
-    /// keeps the first one's side (it reverses onto it rather than back into an earlier circle). <paramref name="self"/> is its own circle, skipped.
+    /// <paramref name="at"/> moved out of every circle it overlaps (with <see cref="ScatterGap"/>), one at a time, starting over after each move; a
+    /// later move keeps the first one's side (it reverses onto it rather than back into an earlier circle). <paramref name="self"/> is its own
+    /// circle, skipped.
     /// </summary>
     static Vector2 PushApart(List<(Vector2 At, float R)> circles, Vector2 at, float radius, Func<float> draw, int self = -1)
     {

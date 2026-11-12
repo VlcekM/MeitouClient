@@ -16,13 +16,17 @@ static class SolidHits
     /// </summary>
     const float Chunk = 32;
 
+    /// <summary>
+    /// This thread's list for the buildings' triangles near a segment.
+    /// </summary>
     [ThreadStatic]
     static List<Vector3>? s_triangles;
 
     /// <summary>
     /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.
     /// </summary>
-    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep, out bool building, bool roofs = false)
+    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
+        out bool building, bool roofs = false)
     {
         float ground = Terrain(walk, from, seg, terrainStep);
         float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs);

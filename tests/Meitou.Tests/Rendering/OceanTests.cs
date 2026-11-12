@@ -36,7 +36,10 @@ public class OceanTests
 
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
+        }
         catch (Exception e)
             when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {

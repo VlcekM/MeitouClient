@@ -4,12 +4,19 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's captive goals: the captive jobs a think asks for, started by the <see cref="CaptiveSystem"/> in the serial step.
+/// </summary>
 public sealed partial class AiSystem
 {
-    // Resolved in the serial step; starts the captive jobs the think asked for.
+    /// <summary>
+    /// Resolved in the serial step; starts the captive jobs the think asked for.
+    /// </summary>
     CaptiveSystem? _captives;
 
-    // Set by a think that chose a captive goal (<see cref="AiMind.CaptiveAsk"/>).
+    /// <summary>
+    /// Set by a think that chose a captive goal (<see cref="AiMind.CaptiveAsk"/>).
+    /// </summary>
     int _capturing;
 
     /// <summary>
@@ -23,6 +30,9 @@ public sealed partial class AiSystem
         Interlocked.Exchange(ref _capturing, 1);
     }
 
+    /// <summary>
+    /// The serial step's start of the captive jobs the thinks asked for this tick (<see cref="CaptiveSystem.SendGoalJobs"/>), only when one asked.
+    /// </summary>
     void SendCaptiveJobs(World world)
     {
         if (Interlocked.Exchange(ref _capturing, 0) != 0)

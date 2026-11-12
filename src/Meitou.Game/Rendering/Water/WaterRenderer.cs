@@ -30,6 +30,8 @@ public static class WaterContact
 /// </summary>
 public sealed unsafe class WaterRenderer : IDisposable
 {
+    #region Shaders
+
     /// <summary>
     /// Set 2: the water's own values and the bindless indices of its maps (the native frame is set 0 and the table set 1).
     /// </summary>
@@ -94,51 +96,183 @@ public sealed unsafe class WaterRenderer : IDisposable
     [StructLayout(LayoutKind.Explicit, Size = 544)]
     struct WaterConstants
     {
+        /// <summary>
+        /// The water height, the half world, the grid step and the animation time.
+        /// </summary>
         [FieldOffset(0)] public Vector4 Params;
+        /// <summary>
+        /// The eye's x, z, the plane's extent and the lean switch.
+        /// </summary>
         [FieldOffset(16)] public Vector4 CentreExtent;
+        /// <summary>
+        /// The open sea's first parameters (as the parameters A map: scale X, scale Y, invStrength, invOpacity).
+        /// </summary>
         [FieldOffset(32)] public Vector4 SeaA;
+        /// <summary>
+        /// The open sea's second parameters (as the parameters B map: gloss, glow, distortion).
+        /// </summary>
         [FieldOffset(48)] public Vector4 SeaB;
+        /// <summary>
+        /// The open sea's colour, and the water's far distance in w (<c>uWaterFar</c>: the plane's extent over 1.5).
+        /// </summary>
         [FieldOffset(64)] public Vector4 SeaColour;
+        /// <summary>
+        /// The sun's direction.
+        /// </summary>
         [FieldOffset(80)] public Vector4 SunDir;
+        /// <summary>
+        /// The sun's colour.
+        /// </summary>
         [FieldOffset(96)] public Vector4 SunColour;
+        /// <summary>
+        /// The specular glint's light direction (the sun's, or by night the planet's; <see cref="WorldLighting.Glint"/>).
+        /// </summary>
         [FieldOffset(112)] public Vector4 GlintDir;
+        /// <summary>
+        /// The glint's colour (faded by the clouds' shade on the Meitou water).
+        /// </summary>
         [FieldOffset(128)] public Vector4 GlintColour;
+        /// <summary>
+        /// The ocean's three wave cascade lengths and its FFT size (0: not ready).
+        /// </summary>
         [FieldOffset(144)] public Vector4 Ocean;
+        /// <summary>
+        /// The shore field's world rectangle (0: none yet).
+        /// </summary>
         [FieldOffset(160)] public Vector4 ShoreRect;
+        /// <summary>
+        /// The breaking waves' phase and sizes (<see cref="WaveSet.Shore"/>).
+        /// </summary>
         [FieldOffset(176)] public Vector4 Shore;
+        /// <summary>
+        /// Where the open-water waves and the shore waves fade (start, end each).
+        /// </summary>
         [FieldOffset(192)] public Vector4 WaveFade;
+        /// <summary>
+        /// The clarity: the inverse clarity, the far clarity and the clear distance.
+        /// </summary>
         [FieldOffset(208)] public Vector4 Clarity;
+        /// <summary>
+        /// One over the target's size, and whether the reflection and the refraction are read this frame.
+        /// </summary>
         [FieldOffset(224)] public Vector4 ScreenReflect;
+        /// <summary>
+        /// The reflection's view-projection (identity without one).
+        /// </summary>
         [FieldOffset(240)] public Matrix4x4 ReflectionViewProjection;
+        /// <summary>
+        /// The simple sky's sun direction.
+        /// </summary>
         [FieldOffset(304)] public Vector4 SkySun;
+        /// <summary>
+        /// The simple sky's zenith colour.
+        /// </summary>
         [FieldOffset(320)] public Vector4 SkyZenith;
+        /// <summary>
+        /// The simple sky's horizon colour.
+        /// </summary>
         [FieldOffset(336)] public Vector4 SkyHorizon;
+        /// <summary>
+        /// The simple sky's sun colour and twilight.
+        /// </summary>
         [FieldOffset(352)] public Vector4 SkySunColour;
+        /// <summary>
+        /// The coarse heightmap's world rectangle (<see cref="TerrainShaders.HeightFunctions"/>).
+        /// </summary>
         [FieldOffset(368)] public Vector4 CoarseRect;
+        /// <summary>
+        /// The fine heightmap's world rectangle.
+        /// </summary>
         [FieldOffset(384)] public Vector4 FineRect;
+        /// <summary>
+        /// The coarse heightmap's cells, the fine band, and whether there is a fine heightmap.
+        /// </summary>
         [FieldOffset(400)] public Vector4 CoarseCellsFineBand;
+        /// <summary>
+        /// The fine heightmap's cells.
+        /// </summary>
         [FieldOffset(416)] public Vector4 FineCells;
+        /// <summary>
+        /// The scene's near and far planes, and 1 with a scene depth copy this frame (<see cref="CaptureScene"/>).
+        /// </summary>
         [FieldOffset(432)] public Vector4 DepthPlanes;
+        /// <summary>
+        /// The colour map's bindless index (<c>watercolourmap.png</c>).
+        /// </summary>
         [FieldOffset(448)] public uint ColourMap;
+        /// <summary>
+        /// The flow map's bindless index (<c>flowmap.png</c>).
+        /// </summary>
         [FieldOffset(452)] public uint FlowMap;
+        /// <summary>
+        /// The foam lace's bindless index (Meitou).
+        /// </summary>
         [FieldOffset(456)] public uint FoamMap;
+        /// <summary>
+        /// The normal map's bindless index (<c>water.png</c>).
+        /// </summary>
         [FieldOffset(460)] public uint NormalMap;
+        /// <summary>
+        /// The rain ripples' bindless index (<c>rain-ripples.png</c>).
+        /// </summary>
         [FieldOffset(464)] public uint RainMap;
+        /// <summary>
+        /// The baked parameters A map's bindless index.
+        /// </summary>
         [FieldOffset(468)] public uint ParamsA;
+        /// <summary>
+        /// The baked parameters B map's bindless index.
+        /// </summary>
         [FieldOffset(472)] public uint ParamsB;
+        /// <summary>
+        /// The reflection's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(476)] public uint ReflectionMap;
+        /// <summary>
+        /// The refraction's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(480)] public uint RefractionMap;
+        /// <summary>
+        /// The ocean's wave maps (a 2D array), bindless index.
+        /// </summary>
         [FieldOffset(484)] public uint OceanMap;
+        /// <summary>
+        /// The shore field's bindless index.
+        /// </summary>
         [FieldOffset(488)] public uint ShoreMap;
+        /// <summary>
+        /// The river flow map's bindless index (<see cref="RiverFlowBake"/>).
+        /// </summary>
         [FieldOffset(492)] public uint RiverMap;
+        /// <summary>
+        /// The coarse heightmap's bindless index.
+        /// </summary>
         [FieldOffset(496)] public uint HeightCoarse;
+        /// <summary>
+        /// The fine heightmap's bindless index.
+        /// </summary>
         [FieldOffset(500)] public uint HeightFine;
+        /// <summary>
+        /// The scene depth copy's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(504)] public uint SceneDepthMap;
+        /// <summary>
+        /// The contact ripples' surface's bindless index (the stand-in without them).
+        /// </summary>
         [FieldOffset(508)] public uint RippleMap;
+        /// <summary>
+        /// The ripples' window: its centre and size in the world.
+        /// </summary>
         [FieldOffset(512)] public Vector4 RippleWindow;
+        /// <summary>
+        /// The ripples' half side, one over their side in world units, their texel, and 1 while they are drawn.
+        /// </summary>
         [FieldOffset(528)] public Vector4 RippleShape;
     }
 
+    /// <summary>
+    /// The game's water vertex stage: a quad at the water height that follows the eye, half its side past the far plane.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec2 aXZ;
@@ -180,6 +314,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The game's water fragment stage: the biomes' colour and parameters blended per pixel, flow, rain ripples, the reflection, the sun's glint and
+    /// the haze.
+    /// </summary>
     static readonly string Fragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + """
 
         in vec3 vWorld;
@@ -522,6 +660,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         #endif
         """;
 
+    /// <summary>
+    /// The Meitou water's vertex stage: the polar grid around the eye (its outer ring out to the extent), displaced near the eye by the ocean waves
+    /// and the breakers' smooth hump; the undisplaced position goes on for the fragment.
+    /// </summary>
     const string MeitouVertex = "#version 330 core\n" + TerrainShaders.HeightFunctions + MeitouMotion + """
 
         layout(location = 0) in vec2 aXZ;   // the polar grid around the eye; the outer ring is marked by a length over 1e5
@@ -564,6 +706,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The Meitou water's fragment body (after the shared functions), shading the waves and the shore at the undisplaced position.
+    /// </summary>
     const string MeitouBody = """
 
         in vec3 vWorld;
@@ -1163,7 +1308,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
-    static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + MeitouMotion + MeitouBody;
+    /// <summary>
+    /// The Meitou water's fragment stage: the shared functions and <see cref="MeitouBody"/>.
+    /// </summary>
+    static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions
+        + MeitouMotion + MeitouBody;
 
     /// <summary>
     /// The Meitou water with the <c>contactfoam</c> switch's foam (<see cref="WaterContact"/>); the plain program has none of its code.
@@ -1175,6 +1324,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     static string MeitouContactVertex() => NativeVertex(WithContact(MeitouVertex));
 
+    /// <summary>
+    /// <paramref name="source"/> with <c>WATER_CONTACT</c> defined.
+    /// </summary>
     static string WithContact(string source) => source.Insert(source.IndexOf('\n') + 1, "#define WATER_CONTACT\n");
 
     /// <summary>
@@ -1238,6 +1390,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uRippleShape"] = "water.rippleShape",
     };
 
+    /// <summary>
+    /// The uniforms' native forms: the common ones and <see cref="NativeOwn"/>.
+    /// </summary>
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
 
     /// <summary>
@@ -1251,50 +1406,145 @@ public sealed unsafe class WaterRenderer : IDisposable
         return source[..(line + 1)] + ConstantsBlock + source[(line + 1)..];
     }
 
+    /// <summary>
+    /// A water vertex shader in the native model (the constants block put in, the uniforms mapped).
+    /// </summary>
     static string NativeVertex(string source) => NativeShaders.Port(WithConstants(RenderOrigin.Relative(source)), NativeMap);
+
+    /// <summary>
+    /// A water fragment shader in the native model, its albedo for the GI resolve (none).
+    /// </summary>
     static string NativeFragment(string source) => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(WithConstants(source), NativeMap), none: true);
+
+    #endregion
+
+    #region Construction
 
     /// <summary>
     /// The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).
     /// </summary>
     public IGpuContext Gpu { get; }
-    readonly DeviceBuffer _quad;
-    readonly DeviceBuffer? _grid, _gridIndices;
-    readonly uint _gridIndexCount;
-    readonly SampledImage[] _maps;   // colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order of WaterProgram.MapNames
-    readonly Vector4 _seaA, _seaB;
-    readonly Vector3 _seaColour;
-    readonly NativeFrame _frame;
-    readonly WaterProgram _faithful;
-    readonly WaterProgram? _meitou;
-    WaterProgram? _meitouContact;
-    readonly LegacyProgram.Attribute?[] _gridInputs = [];
-    WaterRipples? _ripples;
-    double _rippleHours;
-    HeightSnapshot? _rippleHeights;
-    readonly BindlessTexture[] _mapTextures;
-    readonly BindlessTexture _oceanMap, _shoreMap, _reflectionMap, _refractionMap, _heightCoarse, _heightFine, _sceneDepthMap, _rippleMap;
-    readonly GpuTexture _standInArrayTexture;
-    readonly uint _standInArray;
-    readonly GpuSetLayout _constantsLayout;
-    readonly Dictionary<ulong, GpuSet> _constantSets = [];
-    ulong _constantSetKey;
-    GpuSet _constantSet;
-    readonly WaveSet _waves = new();
-    readonly OceanWaves? _ocean;
-    readonly ShoreField? _shore;
-    readonly float _gridStep;
-    readonly ulong _uniformAlign;
-    GpuTexture? _refraction;
-    long _refractionFrame = -1;
-    GpuTexture? _sceneDepthCopy;
-    long _sceneDepthFrame = -1;
-    Vector2 _sceneDepthPlanes;
 
     /// <summary>
-    /// The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).
+    /// The game's water quad (four corners, a triangle strip).
     /// </summary>
-    public bool Meitou { get; set; } = true;
+    readonly DeviceBuffer _quad;
+
+    /// <summary>
+    /// The Meitou polar grid's vertices and indices (null without the Meitou waves).
+    /// </summary>
+    readonly DeviceBuffer? _grid, _gridIndices;
+
+    /// <summary>
+    /// The grid's index count.
+    /// </summary>
+    readonly uint _gridIndexCount;
+
+    /// <summary>
+    /// The water's maps: colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order
+    /// of <see cref="WaterProgram.MapNames"/>.
+    /// </summary>
+    readonly SampledImage[] _maps;
+
+    /// <summary>
+    /// The open sea's two parameter vectors (as the parameter maps').
+    /// </summary>
+    readonly Vector4 _seaA, _seaB;
+
+    /// <summary>
+    /// The open sea's colour.
+    /// </summary>
+    readonly Vector3 _seaColour;
+
+    /// <summary>
+    /// The frame and view constants of both programs.
+    /// </summary>
+    readonly NativeFrame _frame;
+
+    /// <summary>
+    /// The game's water program (the quad).
+    /// </summary>
+    readonly WaterProgram _faithful;
+
+    /// <summary>
+    /// The Meitou water program (the grid; null without the Meitou waves).
+    /// </summary>
+    readonly WaterProgram? _meitou;
+
+    /// <summary>
+    /// The Meitou water with the contact foam (<see cref="WaterContact"/>), made at its first use.
+    /// </summary>
+    WaterProgram? _meitouContact;
+
+    /// <summary>
+    /// The grid's inputs, for <see cref="_meitouContact"/>.
+    /// </summary>
+    LegacyProgram.Attribute?[] _gridInputs = [];
+
+    /// <summary>
+    /// The contact ripples (made while the contact foam is on), the game hours they last stepped at and the heights they read.
+    /// </summary>
+    WaterRipples? _ripples;
+
+    /// <summary>
+    /// The game hours the ripples last stepped at.
+    /// </summary>
+    double _rippleHours;
+
+    /// <summary>
+    /// The heights the ripples read.
+    /// </summary>
+    HeightSnapshot? _rippleHeights;
+
+    /// <summary>
+    /// The bindless entries of <see cref="_maps"/>.
+    /// </summary>
+    readonly BindlessTexture[] _mapTextures;
+
+    /// <summary>
+    /// The bindless entries of the ocean's maps, the shore field, the reflection, the refraction, the heightmaps and the scene depth copy.
+    /// </summary>
+    readonly BindlessTexture _oceanMap, _shoreMap, _reflectionMap, _refractionMap, _heightCoarse, _heightFine, _sceneDepthMap, _rippleMap;
+
+    /// <summary>
+    /// The one-texel array the ocean's entry reads before its first FFT (every read is gated on the ocean's size).
+    /// </summary>
+    readonly GpuTexture _standInArrayTexture;
+
+    /// <summary>
+    /// The stand-in array's bindless index.
+    /// </summary>
+    readonly uint _standInArray;
+
+    /// <summary>
+    /// The constants set's layout: one uniform buffer, its offset given at bind.
+    /// </summary>
+    readonly GpuSetLayout _constantsLayout;
+
+    /// <summary>
+    /// The breaking waves' phase and the normals' time, stepped by the game time and the wind.
+    /// </summary>
+    readonly WaveSet _waves = new();
+
+    /// <summary>
+    /// The ocean's FFT waves (null without the Meitou waves).
+    /// </summary>
+    readonly OceanWaves? _ocean;
+
+    /// <summary>
+    /// The shore field (null when off).
+    /// </summary>
+    readonly ShoreField? _shore;
+
+    /// <summary>
+    /// The polar grid's spacing over its radius (2π over the segments).
+    /// </summary>
+    readonly float _gridStep;
+
+    /// <summary>
+    /// The constants' alignment in the frame's buffer (the device's, at least 16).
+    /// </summary>
+    readonly ulong _uniformAlign;
 
     /// <summary>
     /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.
@@ -1338,17 +1588,49 @@ public sealed unsafe class WaterRenderer : IDisposable
     public const int DefaultGridSegments = 1024;
 
     /// <summary>
+    /// Out to this radius the Meitou grid is fine enough for the waves; beyond it the water is flat.
+    /// </summary>
+    public const float GridDetailRadius = 6000;
+
+    /// <summary>
     /// One native water program: the vertex layout and buffers its one draw needs.
     /// </summary>
     sealed class WaterProgram : IDisposable
     {
-        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap", "uRiverMap"];
+        /// <summary>
+        /// The water maps' sampler names, in the order of <see cref="_maps"/>.
+        /// </summary>
+        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap",
+            "uRiverMap"];
+
+        /// <summary>
+        /// The native program.
+        /// </summary>
         public readonly NativeProg Program;
+
+        /// <summary>
+        /// The vertex layout of its one stream.
+        /// </summary>
         public readonly VertexLayout Layout;
+
+        /// <summary>
+        /// The vertex buffers by location.
+        /// </summary>
         public readonly GpuBufferBinding[] Vertices;
+
+        /// <summary>
+        /// The topology (the quad's strip, the grid's triangles).
+        /// </summary>
         public readonly PrimitiveType Topology;
+
+        /// <summary>
+        /// The program's GPU handle.
+        /// </summary>
         public GpuProgram Gpu => Program.P;
 
+        /// <summary>
+        /// Makes the native program with the water constants set, its vertex layout and buffers, and checks its samplers against Metal's budget.
+        /// </summary>
         public WaterProgram(IGpuContext gpu, NativeFrame frame, string vertex, string fragment, string name, PrimitiveType topology,
             ReadOnlySpan<LegacyProgram.Attribute?> attributes, GpuSetLayout constants)
         {
@@ -1361,6 +1643,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 SamplerBudget.Require(name, reflection.Samplers, NativeShaders.BindlessSet);
         }
 
+        /// <summary>
+        /// Frees the program.
+        /// </summary>
         public void Dispose() => Program.Dispose();
     }
 
@@ -1369,14 +1654,39 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     sealed class BindlessTexture : IDisposable
     {
+        /// <summary>
+        /// The context whose bindless table holds the entry.
+        /// </summary>
         readonly IGpuContext _gpu;
+
+        /// <summary>
+        /// The kind of the entry (2D or 2D array).
+        /// </summary>
         readonly BindlessKind _kind;
+
+        /// <summary>
+        /// The entry (made on first use).
+        /// </summary>
         BindlessHandle _handle;
+
+        /// <summary>
+        /// The view the entry last held, to update it only on a change.
+        /// </summary>
         SampledTexture _registered;
+
+        /// <summary>
+        /// The entry is registered.
+        /// </summary>
         bool _has;
 
+        /// <summary>
+        /// An entry of <paramref name="kind"/>, registered on first use.
+        /// </summary>
         public BindlessTexture(IGpuContext gpu, BindlessKind kind) => (this._gpu, this._kind) = (gpu, kind);
 
+        /// <summary>
+        /// The entry's index for <paramref name="texture"/>: registered the first time, updated when the view or sampler changed.
+        /// </summary>
         public uint Index(in SampledTexture texture)
         {
             if (!_has)
@@ -1389,14 +1699,23 @@ public sealed unsafe class WaterRenderer : IDisposable
             return _handle.Index;
         }
 
+        /// <summary>
+        /// <see cref="Index"/>, or <paramref name="fallback"/> for a null texture.
+        /// </summary>
         public uint IndexOr(in SampledTexture texture, uint fallback) => texture.IsNull ? fallback : Index(texture);
 
+        /// <summary>
+        /// Frees the entry.
+        /// </summary>
         public void Dispose()
         {
             if (_has) _gpu.Bindless.Free(_handle);
         }
     }
 
+    /// <summary>
+    /// Makes the ocean and shore field when asked, both programs (the grid with the Meitou waves), the bindless entries and the array stand-in.
+    /// </summary>
     WaterRenderer(IGpuContext gpu, SampledImage[] maps, Vector4 seaA, Vector4 seaB, Vector3 seaColour, int gridSegments, int oceanSize,
         bool meitouWaves, bool shoreField)
     {
@@ -1423,30 +1742,89 @@ public sealed unsafe class WaterRenderer : IDisposable
         // A valid one-texel array view for the frames before the ocean's first FFT; the shader gates every read on uOcean.w.
         _standInArrayTexture = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 1, 1, Layers: 1, Kind: TextureKind.Texture2DArray,
             Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "water array stand-in"));
-        _standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(gpu.Samplers.Get(ClampLinear), _standInArrayTexture.View()));
+        _standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(gpu.Samplers.Get(ClampLinear),
+            _standInArrayTexture.View()));
 
+        (_quad, _faithful) = FaithfulWater(gpu);
+        if (meitouWaves) (_grid, _gridIndices, _meitou, _gridIndexCount) = MeitouWater(gpu, gridSegments);
+    }
+
+    /// <summary>
+    /// The game's water: its quad's vertex buffer and its program.
+    /// </summary>
+    (DeviceBuffer Quad, WaterProgram Program) FaithfulWater(IGpuContext gpu)
+    {
         float[] corners = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
-        _quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
-        using (var batch = gpu.Uploads.Begin()) batch.Write(_quad, 0, MemoryMarshal.AsBytes(corners.AsSpan()));
-        LegacyProgram.Attribute?[] quadAttributes = [QuadAttribute(_quad)];
-        _faithful = new WaterProgram(gpu, _frame, NativeVertex(Vertex), NativeFragment(Fragment), "water", PrimitiveType.TriangleStrip, quadAttributes, _constantsLayout);
+        var quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
+        using (var batch = gpu.Uploads.Begin()) batch.Write(quad, 0, MemoryMarshal.AsBytes(corners.AsSpan()));
+        LegacyProgram.Attribute?[] quadAttributes = [QuadAttribute(quad)];
+        var program = new WaterProgram(gpu, _frame, NativeVertex(Vertex), NativeFragment(Fragment), "water", PrimitiveType.TriangleStrip,
+            quadAttributes, _constantsLayout);
+        return (quad, program);
+    }
 
-        if (meitouWaves)
+    /// <summary>
+    /// The Meitou water: the polar grid of <paramref name="gridSegments"/> (<see cref="PolarGrid"/>) as vertex and index buffers, its program and
+    /// its index count.
+    /// </summary>
+    (DeviceBuffer Grid, DeviceBuffer Indices, WaterProgram Program, uint IndexCount) MeitouWater(IGpuContext gpu, int gridSegments)
+    {
+        var (positions, indices) = PolarGrid(gridSegments);
+        var grid = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)positions.Length, BufferUse.Vertex, "water grid");
+        var gridIndices = DeviceBuffer.Create(gpu, sizeof(uint) * (ulong)indices.Length, BufferUse.Index, "water grid indices");
+        using (var batch = gpu.Uploads.Begin())
         {
-            var (positions, indices) = PolarGrid(gridSegments);
-            _grid = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)positions.Length, BufferUse.Vertex, "water grid");
-            _gridIndices = DeviceBuffer.Create(gpu, sizeof(uint) * (ulong)indices.Length, BufferUse.Index, "water grid indices");
-            using (var batch = gpu.Uploads.Begin())
-            {
-                batch.Write(_grid, 0, MemoryMarshal.AsBytes(positions.AsSpan()));
-                batch.Write(_gridIndices, 0, MemoryMarshal.AsBytes(indices.AsSpan()));
-            }
-            LegacyProgram.Attribute?[] gridAttributes = [QuadAttribute(_grid)];
-            _meitou = new WaterProgram(gpu, _frame, NativeVertex(MeitouVertex), NativeFragment(MeitouFragment), "water meitou",
-                PrimitiveType.Triangles, gridAttributes, _constantsLayout);
-            _gridInputs = gridAttributes;
-            _gridIndexCount = (uint)indices.Length;
+            batch.Write(grid, 0, MemoryMarshal.AsBytes(positions.AsSpan()));
+            batch.Write(gridIndices, 0, MemoryMarshal.AsBytes(indices.AsSpan()));
         }
+        LegacyProgram.Attribute?[] gridAttributes = [QuadAttribute(grid)];
+        var program = new WaterProgram(gpu, _frame, NativeVertex(MeitouVertex), NativeFragment(MeitouFragment), "water meitou",
+            PrimitiveType.Triangles, gridAttributes, _constantsLayout);
+        _gridInputs = gridAttributes;
+        return (grid, gridIndices, program, (uint)indices.Length);
+    }
+
+    /// <summary>
+    /// Logs the ocean's and the shore's costs and frees the programs, buffers, entries, maps and captures.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ocean is { Dispatched: > 0 } waves)
+        {
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"water     ocean: {waves.Dispatched} passes ({waves.Size}²), " +
+                $"gpu us per pass {(waves.GpuTimed > 0 ? waves.GpuMicroseconds / waves.GpuTimed : 0):F1} ({waves.GpuTimed} timed)"));
+        }
+        if (_shore is { } field)
+        {
+            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"water     shore bake {field.LastBakeMs:F0} ms, {field.UploadedFields} fields uploaded and " +
+                $"{field.UniformFields} uniform (one texel)"));
+        }
+        _faithful.Dispose();
+        _meitou?.Dispose();
+        _meitouContact?.Dispose();
+        _frame.Dispose();
+        _quad.Dispose();
+        _grid?.Dispose();
+        _gridIndices?.Dispose();
+        foreach (var t in _mapTextures) t.Dispose();
+        _oceanMap.Dispose();
+        _shoreMap.Dispose();
+        _reflectionMap.Dispose();
+        _refractionMap.Dispose();
+        _sceneDepthMap.Dispose();
+        _rippleMap.Dispose();
+        _ripples?.Dispose();
+        _heightCoarse.Dispose();
+        _heightFine.Dispose();
+        Gpu.Bindless.Free(BindlessKind.Texture2DArray, _standInArray);
+        _standInArrayTexture.Dispose();
+        foreach (var t in _maps) t.Dispose();
+        _ocean?.Dispose();
+        _shore?.Dispose();
+        _refraction?.Dispose();
+        _sceneDepthCopy?.Dispose();
     }
 
     /// <summary>
@@ -1488,10 +1866,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         return (positions, indices.ToArray());
     }
 
-    /// <summary>
-    /// Out to this radius the Meitou grid is fine enough for the waves; beyond it the water is flat.
-    /// </summary>
-    public const float GridDetailRadius = 6000;
+    #endregion
+
+    #region Sources
 
     /// <summary>
     /// What <see cref="Create"/> reads and works out on the CPU (about 1.5 s at a cold start): the colour, flow, normal and rain maps, the biome
@@ -1500,12 +1877,39 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     public sealed class Source
     {
+        /// <summary>
+        /// The colour, flow, normal and rain ripple images (null when not found).
+        /// </summary>
         internal RgbaImage? Colour, Flow, Normal, Rain;
+
+        /// <summary>
+        /// The biome water parameters baked per blend-map pixel (A and B).
+        /// </summary>
         internal Vector4[] A = [], B = [];
+
+        /// <summary>
+        /// The blend map's size, and the river map's side.
+        /// </summary>
         internal int BlendWidth, BlendHeight, RiverSize;
+
+        /// <summary>
+        /// The open sea's parameters and colour.
+        /// </summary>
         internal (Vector4 A, Vector4 B, Vector3 Colour) Sea;
+
+        /// <summary>
+        /// The river flow map baked from the world's heights (null: none).
+        /// </summary>
         internal byte[]? River;
+
+        /// <summary>
+        /// The foam lace (<see cref="WaterFoam"/>).
+        /// </summary>
         internal byte[] Foam = [];
+
+        /// <summary>
+        /// Warnings for the log (missing files).
+        /// </summary>
         internal readonly List<string> Messages = [];
     }
 
@@ -1534,7 +1938,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         s.B = BiomeField.Bake(info, blend.Width, blend.Height, blend.Pixels, c => water.TryGetValue(c, out var w) ? B(w) : null, B(fallback));
 
         s.Sea = OpenSea(s.A, s.B, blend.Width, blend.Height, s.Colour);
-        Console.WriteLine($"sea       open-sea water: scale {s.Sea.A.X * 5000:0.#}, {s.Sea.A.Y * 5000:0.#}, gloss {s.Sea.B.X:0.##}, colour {s.Sea.Colour.X:0.##} {s.Sea.Colour.Y:0.##} {s.Sea.Colour.Z:0.##}");
+        Console.WriteLine($"sea       open-sea water: scale {s.Sea.A.X * 5000:0.#}, {s.Sea.A.Y * 5000:0.#}, gloss {s.Sea.B.X:0.##}, " +
+            $"colour {s.Sea.Colour.X:0.##} {s.Sea.Colour.Y:0.##} {s.Sea.Colour.Z:0.##}");
         // The river map: baked from the whole-world heights at the flow map's size (the game's flow map does not follow the rivers); none without them.
         var riverWatch = System.Diagnostics.Stopwatch.StartNew();
         int riverSize = s.Flow?.Width ?? 0;
@@ -1550,8 +1955,9 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
     /// <param name="source">What <see cref="Prepare"/> made (made here when null).</param>
-    public static WaterRenderer Create(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages, ushort[]? coarseHeights = null,
-        int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize, Source? source = null, bool meitouWaves = true, bool shoreField = true)
+    public static WaterRenderer Create(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky,
+        List<string> messages, ushort[]? coarseHeights = null, int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize,
+        Source? source = null, bool meitouWaves = true, bool shoreField = true)
     {
         _ = sky;
         var s = source ?? Prepare(install, db, assets, coarseHeights);
@@ -1559,14 +1965,16 @@ public sealed unsafe class WaterRenderer : IDisposable
         // As the GL textures were made (WorldGl.Texture2D): a found map has mips only where it repeats; the 1 × 1 stand-in for a missing one
         // always had its (single-level) chain and a trilinear filter.
         SampledImage Rgba(RgbaImage? img, bool repeat, byte[] flat, string name) =>
-            img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat, name);
+            img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat,
+                name);
         SampledImage riverMap = s.River is { } river
             ? SampledImage.Rgba8(gpu, s.RiverSize, s.RiverSize, river, repeat: false, mipmaps: false, "water river map")
             : SampledImage.Rgba8(gpu, 1, 1, [128, 128, 0, 0], repeat: false, mipmaps: false, "water river map");
         return new WaterRenderer(gpu,
             [Rgba(s.Colour, false, [0, 32, 64, 255], "water colour map"), Rgba(s.Flow, false, [128, 128, 0, 255], "water flow map"),
              Rgba(s.Normal, true, [128, 255, 128, 255], "water normal map"),
-             SampledImage.Rgba32F(gpu, s.A, s.BlendWidth, s.BlendHeight, "water parameters a"), SampledImage.Rgba32F(gpu, s.B, s.BlendWidth, s.BlendHeight, "water parameters b"),
+             SampledImage.Rgba32F(gpu, s.A, s.BlendWidth, s.BlendHeight, "water parameters a"), SampledImage.Rgba32F(gpu, s.B, s.BlendWidth,
+                 s.BlendHeight, "water parameters b"),
              Rgba(s.Rain, true, [0, 0, 0, 0], "water rain ripples"),
              SampledImage.Rgba8(gpu, WaterFoam.Size, WaterFoam.Size, s.Foam, repeat: true, mipmaps: true, "water foam"), riverMap],
             s.Sea.A, s.Sea.B, s.Sea.Colour, gridSegments, oceanSize, meitouWaves, shoreField);
@@ -1583,7 +1991,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                if (x >= ring && x < width - ring && y >= ring && y < height - ring) { x = width - ring - 1; continue; }
+                if (x >= ring && x < width - ring && y >= ring && y < height - ring)
+                {
+                    x = width - ring - 1;
+                    continue;
+                }
                 int i = y * width + x;
                 var key = (a[i], b[i]);
                 counts[key] = counts.TryGetValue(key, out var c) ? (c.Count + 1, c.Pixel) : (1, i);
@@ -1599,46 +2011,23 @@ public sealed unsafe class WaterRenderer : IDisposable
         return (best.Key.Item1, best.Key.Item2, rgb);
     }
 
+    /// <summary>
+    /// An image of the install's data directory, or null when the file is missing.
+    /// </summary>
     static RgbaImage? Load(GameInstall install, string relative)
     {
         var path = GameFiles.Resolve(Path.Combine(install.DataDirectory, relative));
         return File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
     }
 
-    /// <summary>
-    /// Steps the Meitou water's motion once per frame: <paramref name="gameHours"/> is the game clock (hours since the load; it stands still while
-    /// paused), the wind is the weather's at the camera. Each wave's phase is integrated, so a change of wind changes the waves smoothly.
-    /// </summary>
-    public void Animate(double gameHours, Vector2 windDirection, float windSpeed)
-    {
-        _waves.Step(gameHours, windDirection, windSpeed);
-        if (Meitou) _ocean?.Update(gameHours, windDirection, windSpeed);
-        _rippleHours = gameHours;
-    }
+    #endregion
+
+    #region Settings
 
     /// <summary>
-    /// Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
-    /// terrain's heights of this frame. Nothing while the water is Faithful.
+    /// The Enhancements switch <c>water</c>: the game's flat water (Faithful) or Meitou's waves, breakers and foam (the default).
     /// </summary>
-    internal void Track(Vector3 eye, HeightSnapshot heights)
-    {
-        if (Meitou) _shore?.Update(eye, heights);
-        _rippleHeights = heights;
-    }
-
-    /// <summary>
-    /// Records the Meitou ocean's FFT before the scene host opens (Metal records compute into the same command buffer and
-    /// cannot nest it in a render encoder). The reflection pass has already set <see cref="NearestWater"/>.
-    /// </summary>
-    internal void PrepareFrame()
-    {
-        if (Meitou && OceanInView) _ocean?.Record();   // the FFT only while water near enough to show its detail is in view
-        // The interactive waves only while their switch is on and water within their reach can be in view.
-        if (Meitou && WaterContact.Enabled && _ripples is { } r && _rippleHeights is { } heights && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
-        {
-            r.Record(_rippleHours, heights);
-        }
-    }
+    public bool Meitou { get; set; } = true;
 
     /// <summary>
     /// The Meitou water refracts what lies under it (<see cref="CaptureScene"/> before each of its draws); off: it blends over it as
@@ -1657,29 +2046,6 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// skipped while no water within their reach is in view; unknown gates nothing.
     /// </summary>
     public float NearestWater { get; set; } = float.NaN;
-
-    /// <summary>
-    /// The eye distance past which the fragment stage reads no ocean texture: the open waves' detail fades from 9000 to 14000 units (<c>open</c> in
-    /// <see cref="MeitouFragment"/>; the vertex displacement is gone by <see cref="WaveFadeEnd"/>). The FFT serves nothing beyond it.
-    /// </summary>
-    public const float OceanFadeEnd = 14000;
-
-    /// <summary>
-    /// Whether the ocean's FFT has anything to feed this frame: water within <see cref="OceanFadeEnd"/> is in view, or that is unknown.
-    /// </summary>
-    bool OceanInView => float.IsNaN(NearestWater) || NearestWater <= OceanFadeEnd;
-
-    /// <summary>
-    /// The camera's near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
-    /// transmitted floor colour nor wet sand contributes, so the blended path is opaque and needs no copy. The same
-    /// bound holds for the nearest water in view: with none nearer, the view shows no transmitting water at all.
-    /// </summary>
-    internal bool NeedsRefraction(float near) => Meitou && Refraction &&
-        (!Lean || SliceCanTransmit(near, ClearDistance)) &&
-        (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
-
-    internal static bool SliceCanTransmit(float near, float clearDistance) =>
-        near < Math.Max(Math.Max(clearDistance, 100f) * 1.5f, ShoreFadeEnd);
 
     /// <summary>
     /// The Tab panel's "Water clarity x" (Meitou water; not in the game): the biome's absorption per unit of depth is divided by it, so
@@ -1714,6 +2080,17 @@ public sealed unsafe class WaterRenderer : IDisposable
     public float GlintCloudShade { get; set; } = 0.95f;
 
     /// <summary>
+    /// The eye distance from which the Faithful water is opaque (the game's alpha: 1 from 4000 units), so needs no depth.
+    /// </summary>
+    public const float FaithfulOpaqueDistance = 4000;
+
+    /// <summary>
+    /// The eye distances over which the Meitou open waves fade into the flat water (the grid coarsens with the distance), and over which
+    /// the shore's breakers and foam fade (they read from much further).
+    /// </summary>
+    public const float WaveFadeStart = 3000, WaveFadeEnd = 5500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
+
+    /// <summary>
     /// What is left of the glint at cloud density <paramref name="c"/>: 1 up to c 0.3, easing (smoothstep) to 1 − shade at full cover.
     /// </summary>
     internal static float GlintCloudFade(float shade, float c)
@@ -1722,33 +2099,92 @@ public sealed unsafe class WaterRenderer : IDisposable
         return 1 - Math.Clamp(shade, 0, 1) * t * t * (3 - 2 * t);
     }
 
-    /// <summary>
-    /// The eye distance from which the Faithful water is opaque (the game's alpha: 1 from 4000 units), so needs no depth.
-    /// </summary>
-    public const float FaithfulOpaqueDistance = 4000;
+    #endregion
+
+    #region Motion
 
     /// <summary>
-    /// Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
-    /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
-    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.
+    /// The eye distance past which the fragment stage reads no ocean texture: the open waves' detail fades from 9000 to 14000 units (<c>open</c> in
+    /// <see cref="MeitouFragment"/>; the vertex displacement is gone by <see cref="WaveFadeEnd"/>). The FFT serves nothing beyond it.
     /// </summary>
-    internal bool NeedsDepth(float near)
+    public const float OceanFadeEnd = 14000;
+
+    /// <summary>
+    /// Steps the Meitou water's motion once per frame: <paramref name="gameHours"/> is the game clock (hours since the load; it stands still while
+    /// paused), the wind is the weather's at the camera. Each wave's phase is integrated, so a change of wind changes the waves smoothly.
+    /// </summary>
+    public void Animate(double gameHours, Vector2 windDirection, float windSpeed)
     {
-        if (Gpu is not GpuContext) return false;
-        if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
-        // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam reads the depth.
-        return NeedsRefraction(near) || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
+        _waves.Step(gameHours, windDirection, windSpeed);
+        if (Meitou) _ocean?.Update(gameHours, windDirection, windSpeed);
+        _rippleHours = gameHours;
     }
 
-    /// <summary>
-    /// How far from the eye the contact foam reaches (the shader's ContactFar).
-    /// </summary>
-    const float ContactFar = 1200;
 
     /// <summary>
-    /// Whether the scene needs <see cref="CaptureScene"/> before its water.
+    /// Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
+    /// terrain's heights of this frame. Nothing while the water is Faithful.
     /// </summary>
-    internal bool NeedsCapture(float near) => NeedsRefraction(near) || NeedsDepth(near);
+    internal void Track(Vector3 eye, HeightSnapshot heights)
+    {
+        if (Meitou) _shore?.Update(eye, heights);
+        _rippleHeights = heights;
+    }
+
+
+    /// <summary>
+    /// Records the Meitou ocean's FFT before the scene host opens (Metal records compute into the same command buffer and
+    /// cannot nest it in a render encoder). The reflection pass has already set <see cref="NearestWater"/>.
+    /// </summary>
+    internal void PrepareFrame()
+    {
+        if (Meitou && OceanInView) _ocean?.Record();   // the FFT only while water near enough to show its detail is in view
+        // The interactive waves only while their switch is on and water within their reach can be in view.
+        if (Meitou && WaterContact.Enabled && _ripples is { } r && _rippleHeights is { } heights && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
+        {
+            r.Record(_rippleHours, heights);
+        }
+    }
+
+
+    /// <summary>
+    /// The open waves (for the viewer's statistics and tests).
+    /// </summary>
+    public OceanWaves? Ocean => _ocean;
+
+    /// <summary>
+    /// Whether the ocean's FFT has anything to feed this frame: water within <see cref="OceanFadeEnd"/> is in view, or that is unknown.
+    /// </summary>
+    bool OceanInView => float.IsNaN(NearestWater) || NearestWater <= OceanFadeEnd;
+
+    #endregion
+
+    #region Scene capture
+
+    /// <summary>
+    /// The refraction: this frame's copy of the scene's colour (Meitou).
+    /// </summary>
+    GpuTexture? _refraction;
+
+    /// <summary>
+    /// The frame the refraction was copied in (-1: never).
+    /// </summary>
+    long _refractionFrame = -1;
+
+    /// <summary>
+    /// This frame's copy of the scene's depth.
+    /// </summary>
+    GpuTexture? _sceneDepthCopy;
+
+    /// <summary>
+    /// The frame the depth was copied in (-1: never).
+    /// </summary>
+    long _sceneDepthFrame = -1;
+
+    /// <summary>
+    /// The near and far planes of the copied depth.
+    /// </summary>
+    Vector2 _sceneDepthPlanes;
 
     /// <summary>
     /// Copies the scene drawn so far (the opaque geometry, with no pass open) for the water: at half the size the colour the Meitou water refracts
@@ -1760,47 +2196,129 @@ public sealed unsafe class WaterRenderer : IDisposable
         bool colour = NeedsRefraction(near), depth = sceneDepth is not null && NeedsDepth(near);
         if (!colour && !depth) return;
         var cmd = Gpu.BeginNative("water scene copy");
-        if (colour)
-        {
-            int w = Math.Max(sceneColour.Desc.Width / 2, 1), h = Math.Max(sceneColour.Desc.Height / 2, 1);
-            if (_refraction is not { } r || r.Desc.Width != w || r.Desc.Height != h || r.Desc.Format != sceneColour.Desc.Format)
-            {
-                _refraction?.Dispose();
-                _refraction = Gpu is GpuContext vk
-                    ? vk.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h, Name: "water refraction"), ((CommandList)cmd).Handle)
-                    : Gpu.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h,
-                        Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "water refraction"));
-            }
-            cmd.Blit(sceneColour, _refraction, TextureMinFilter.Linear);
-            _refractionFrame = Gpu.Frame.Number;
-        }
-        if (depth && Gpu is GpuContext vulkan)
-        {
-            var d = sceneDepth!.Desc;
-            if (_sceneDepthCopy is not { } c || c.Desc.Width != d.Width || c.Desc.Height != d.Height || c.Desc.Format != d.Format)
-            {
-                _sceneDepthCopy?.Dispose();
-                _sceneDepthCopy = vulkan.CreateTexture(new TextureDesc(d.Format, d.Width, d.Height,
-                    Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: "water scene depth"), ((CommandList)cmd).Handle);
-            }
-            // Same size and format: a copy (blitting into a depth format is not guaranteed, BLIT_DST), as ShadowPass.CaptureDepth.
-            var region = new Silk.NET.Vulkan.ImageCopy
-            {
-                SrcSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
-                DstSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
-                Extent = new Silk.NET.Vulkan.Extent3D((uint)d.Width, (uint)d.Height, 1),
-            };
-            vulkan.Device.Vk.CmdCopyImage(((CommandList)cmd).Handle, vulkan.Device.NativeImage(sceneDepth), Silk.NET.Vulkan.ImageLayout.General,
-                vulkan.Device.NativeImage(_sceneDepthCopy!), Silk.NET.Vulkan.ImageLayout.General, 1, &region);
-            (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
-        }
+        if (colour) CopyRefraction(cmd, sceneColour);
+        if (depth && Gpu is GpuContext vulkan) CopyDepth(vulkan, cmd, sceneDepth!, near, far);
         Gpu.EndNative(cmd);
     }
 
     /// <summary>
-    /// The open waves (for the viewer's statistics and tests).
+    /// The scene's colour blitted at half its size into the refraction texture (made again when the size or format changed).
     /// </summary>
-    public OceanWaves? Ocean => _ocean;
+    void CopyRefraction(IGpuCommandList cmd, GpuTexture sceneColour)
+    {
+        int w = Math.Max(sceneColour.Desc.Width / 2, 1), h = Math.Max(sceneColour.Desc.Height / 2, 1);
+        if (_refraction is not { } r || r.Desc.Width != w || r.Desc.Height != h || r.Desc.Format != sceneColour.Desc.Format)
+        {
+            _refraction?.Dispose();
+            _refraction = Gpu is GpuContext vk
+                ? vk.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h, Name: "water refraction"), ((CommandList)cmd).Handle)
+                : Gpu.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h,
+                    Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "water refraction"));
+        }
+        cmd.Blit(sceneColour, _refraction, TextureMinFilter.Linear);
+        _refractionFrame = Gpu.Frame.Number;
+    }
+
+    /// <summary>
+    /// The scene's depth copied into the water's own (made again when the size or format changed), with the camera's
+    /// <paramref name="near"/> and <paramref name="far"/> planes it was drawn with.
+    /// </summary>
+    void CopyDepth(GpuContext vulkan, IGpuCommandList cmd, GpuTexture sceneDepth, float near, float far)
+    {
+        var d = sceneDepth.Desc;
+        if (_sceneDepthCopy is not { } c || c.Desc.Width != d.Width || c.Desc.Height != d.Height || c.Desc.Format != d.Format)
+        {
+            _sceneDepthCopy?.Dispose();
+            _sceneDepthCopy = vulkan.CreateTexture(new TextureDesc(d.Format, d.Width, d.Height,
+                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: "water scene depth"), ((CommandList)cmd).Handle);
+        }
+        // Same size and format: a copy (blitting into a depth format is not guaranteed, BLIT_DST), as ShadowPass.CaptureDepth.
+        var region = new Silk.NET.Vulkan.ImageCopy
+        {
+            SrcSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
+            DstSubresource = new Silk.NET.Vulkan.ImageSubresourceLayers(Silk.NET.Vulkan.ImageAspectFlags.DepthBit, 0, 0, 1),
+            Extent = new Silk.NET.Vulkan.Extent3D((uint)d.Width, (uint)d.Height, 1),
+        };
+        vulkan.Device.Vk.CmdCopyImage(((CommandList)cmd).Handle, vulkan.Device.NativeImage(sceneDepth), Silk.NET.Vulkan.ImageLayout.General,
+            vulkan.Device.NativeImage(_sceneDepthCopy!), Silk.NET.Vulkan.ImageLayout.General, 1, &region);
+        (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
+    }
+
+    /// <summary>
+    /// Whether the scene needs <see cref="CaptureScene"/> before its water.
+    /// </summary>
+    internal bool NeedsCapture(float near) => NeedsRefraction(near) || NeedsDepth(near);
+
+    /// <summary>
+    /// The camera's near plane bounds every fragment's eye distance from below. Beyond both cutoffs neither
+    /// transmitted floor colour nor wet sand contributes, so the blended path is opaque and needs no copy. The same
+    /// bound holds for the nearest water in view: with none nearer, the view shows no transmitting water at all.
+    /// </summary>
+    internal bool NeedsRefraction(float near) => Meitou && Refraction &&
+        (!Lean || SliceCanTransmit(near, ClearDistance)) &&
+        (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
+
+    /// <summary>
+    /// Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
+    /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
+    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.
+    /// </summary>
+    internal bool NeedsDepth(float near)
+    {
+        if (Gpu is not GpuContext) return false;
+        if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
+        // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam
+        // reads the depth.
+        return NeedsRefraction(near) || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
+    }
+
+    /// <summary>
+    /// How far from the eye the contact foam reaches (the shader's ContactFar).
+    /// </summary>
+    const float ContactFar = 1200;
+
+    /// <summary>
+    /// Whether water at <paramref name="near"/> can still be see-through: nearer than 1.5 times the clear distance (at least 100) or the shore
+    /// fade's end.
+    /// </summary>
+    internal static bool SliceCanTransmit(float near, float clearDistance) =>
+        near < Math.Max(Math.Max(clearDistance, 100f) * 1.5f, ShoreFadeEnd);
+
+    #endregion
+
+    #region Drawing
+
+    /// <summary>
+    /// The constants sets by frame buffer.
+    /// </summary>
+    readonly Dictionary<ulong, GpuSet> _constantSets = [];
+
+    /// <summary>
+    /// The buffer of the last constants set.
+    /// </summary>
+    ulong _constantSetKey;
+
+    /// <summary>
+    /// The last constants set.
+    /// </summary>
+    GpuSet _constantSet;
+
+    /// <summary>
+    /// Linear, edge-clamped, no mipmaps (the array stand-in).
+    /// </summary>
+    static readonly SamplerDesc ClampLinear = new(TextureMinFilter.Linear, TextureMagFilter.Linear, false,
+        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false,
+        DepthFunction.Always, false, false, 1, 0);
+
+    /// <summary>
+    /// Nearest, edge-clamped (the scene depth copy).
+    /// </summary>
+    static readonly SamplerDesc ClampNearest = ClampLinear with { Min = TextureMinFilter.Nearest, Mag = TextureMagFilter.Nearest };
+
+    /// <summary>
+    /// Straight alpha blending (the water over the scene, when the target has colour).
+    /// </summary>
+    static readonly BlendState AlphaBlend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
     /// <summary>
     /// The water surface: one draw, blended, into the pass VkGl has open. Prepare sets the uniforms and the textures the shader reads (the height
@@ -1819,30 +2337,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         var slice = Gpu.Frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<WaterConstants>(in c)), _uniformAlign);
         var set = ConstantSet(slice.Handle);
         var cmd = Gpu.BeginGuest(meitouWater ? "water meitou" : "water");
-        // What the GL code's Enable(DepthTest), DepthMask(false), Disable(CullFace), Enable(Blend) and BlendFunc made of the pass's state (the
-        // depth test and blending only with the attachment they need, as VkGl's CurrentState).
-        bool hasDepth = targets.Formats.Depth != InternalFormat.None, hasColour = targets.Formats.Colour != InternalFormat.None;
-        var state = Gpu.CurrentState() with
-        {
-            Cull = CullMode.None,
-            DepthTest = hasDepth,
-            DepthWrite = false,
-            Blend = hasColour ? AlphaBlend : BlendState.Off,
-        };
-        cmd.SetViewport(targets.Viewport);
-        cmd.SetScissor(targets.Scissor);
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        var view = new ViewConstants
-        {
-            ViewProjection = RenderOrigin.ViewProjection(viewProjection, eye, relative),
-            Eye = eye,
-            Time = time,
-            LightDir = light.SunDirection,
-            FogColour = light.FogColour,
-            FogDistance = light.FogDistance,
-        };
+        var state = WaterState(targets);
+        SetDynamicState(cmd, targets, state);
+        var view = View(viewProjection, eye, time, light, relative);
         _frame.Bind(cmd, p.Gpu, in view);
         uint offset = (uint)slice.Offset;
         cmd.BindSets(p.Gpu, ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
@@ -1857,6 +2354,55 @@ public sealed unsafe class WaterRenderer : IDisposable
         Gpu.EndGuest(cmd);
     }
 
+    /// <summary>
+    /// What the GL code's Enable(DepthTest), DepthMask(false), Disable(CullFace), Enable(Blend) and BlendFunc made of the pass's state (the
+    /// depth test and blending only with the attachment they need, as VkGl's CurrentState).
+    /// </summary>
+    DrawState WaterState(PassTargets targets)
+    {
+        bool hasDepth = targets.Formats.Depth != InternalFormat.None, hasColour = targets.Formats.Colour != InternalFormat.None;
+        return Gpu.CurrentState() with
+        {
+            Cull = CullMode.None,
+            DepthTest = hasDepth,
+            DepthWrite = false,
+            Blend = hasColour ? AlphaBlend : BlendState.Off,
+        };
+    }
+
+    /// <summary>
+    /// The pass's viewport and scissor and the draw's raster, depth and bias state into <paramref name="cmd"/>.
+    /// </summary>
+    static void SetDynamicState(IGpuCommandList cmd, PassTargets targets, DrawState state)
+    {
+        cmd.SetViewport(targets.Viewport);
+        cmd.SetScissor(targets.Scissor);
+        cmd.SetRaster(state.Cull, state.Front);
+        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+    }
+
+    /// <summary>
+    /// The camera (eye-relative: <paramref name="relative"/>, else from <paramref name="viewProjection"/>), the animation <paramref name="time"/> and
+    /// the light's direction and fog as <see cref="ViewConstants"/>.
+    /// </summary>
+    static ViewConstants View(Matrix4x4 viewProjection, Vector3 eye, float time, WorldLighting light, Matrix4x4? relative)
+    {
+        return new ViewConstants
+        {
+            ViewProjection = RenderOrigin.ViewProjection(viewProjection, eye, relative),
+            Eye = eye,
+            Time = time,
+            LightDir = light.SunDirection,
+            FogColour = light.FogColour,
+            FogDistance = light.FogDistance,
+        };
+    }
+
+    /// <summary>
+    /// The water's constants for a draw: its own values, the light and the sky colours, then the height uniforms (<see cref="SetHeights"/>) and
+    /// the maps' bindless indices (<see cref="SetMaps"/>).
+    /// </summary>
     WaterConstants PrepareConstants(bool meitouWater, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent,
         ReflectionPass? reflection, PassTargets targets)
     {
@@ -1888,6 +2434,17 @@ public sealed unsafe class WaterRenderer : IDisposable
             SkySunColour = new Vector4(colours.SunColour, colours.Twilight),
         };
         var g = Gpu.Globals;
+        SetHeights(ref c, g);
+        SetMaps(ref c, g, reflection, reflect, refract);
+        return c;
+    }
+
+    /// <summary>
+    /// The heights' uniforms from the frame globals (<see cref="TerrainShaders.HeightFunctions"/>), the whole world when the terrain published
+    /// none.
+    /// </summary>
+    static void SetHeights(ref WaterConstants c, FrameGlobals g)
+    {
         float half = (float)WorldLayout.HalfWorldSize;
         var world = new Vector4(-half, -half, half, half);
         c.CoarseRect = ReadGlobal(g, "uCoarseRect", world);
@@ -1898,7 +2455,14 @@ public sealed unsafe class WaterRenderer : IDisposable
         int hasFine = ReadGlobal(g, "uHasFine", 0);
         c.CoarseCellsFineBand = new Vector4(coarseCells, fineBand, hasFine != 0 ? 1f : 0f);
         c.FineCells = new Vector4(fineCells, 0f, 0f);
+    }
 
+    /// <summary>
+    /// The bindless indices of the water's maps, the ocean's and the shore's, the heights, the reflection (<paramref name="reflect"/>), the
+    /// refraction (<paramref name="refract"/>) and the scene's depth; a stand-in for each one absent this frame.
+    /// </summary>
+    void SetMaps(ref WaterConstants c, FrameGlobals g, ReflectionPass? reflection, bool reflect, bool refract)
+    {
         c.ColourMap = _mapTextures[0].Index(_maps[0].Sampled());
         c.FlowMap = _mapTextures[1].Index(_maps[1].Sampled());
         c.NormalMap = _mapTextures[2].Index(_maps[2].Sampled());
@@ -1923,9 +2487,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         var (window, rippleHalf) = _ripples?.Window ?? default;
         c.RippleWindow = window;
         c.RippleShape = new Vector4(rippleHalf, 1f / (WaterRipples.Side * WaterRipples.Texel), WaterRipples.Texel, ripple ? 1f : 0f);
-        return c;
     }
 
+    /// <summary>
+    /// A published uniform's value from the frame globals (<paramref name="fallback"/> when not published).
+    /// </summary>
     static T ReadGlobal<T>(FrameGlobals globals, string name, T fallback) where T : unmanaged
     {
         var value = fallback;
@@ -1933,6 +2499,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         return globals.UniformValue(name)?.TryRead(bytes) == true ? value : fallback;
     }
 
+    /// <summary>
+    /// The constants set for this frame's buffer, made once per buffer.
+    /// </summary>
     GpuSet ConstantSet(GpuBuffer buffer)
     {
         ulong key = (ulong)buffer.Index;
@@ -1943,51 +2512,5 @@ public sealed unsafe class WaterRenderer : IDisposable
         return made;
     }
 
-    /// <summary>
-    /// The eye distances over which the Meitou open waves fade into the flat water (the grid coarsens with the distance), and over which
-    /// the shore's breakers and foam fade (they read from much further).
-    /// </summary>
-    public const float WaveFadeStart = 3000, WaveFadeEnd = 5500, ShoreFadeStart = 7000, ShoreFadeEnd = 10000;
-
-    static readonly SamplerDesc ClampLinear = new(TextureMinFilter.Linear, TextureMagFilter.Linear, false,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false,
-        DepthFunction.Always, false, false, 1, 0);
-
-    static readonly SamplerDesc ClampNearest = ClampLinear with { Min = TextureMinFilter.Nearest, Mag = TextureMagFilter.Nearest };
-
-    static readonly BlendState AlphaBlend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-
-    public void Dispose()
-    {
-        if (_ocean is { Dispatched: > 0 } waves)
-            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     ocean: {waves.Dispatched} passes ({waves.Size}²), gpu us per pass {(waves.GpuTimed > 0 ? waves.GpuMicroseconds / waves.GpuTimed : 0):F1} ({waves.GpuTimed} timed)"));
-        if (_shore is { } field)
-            Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     shore bake {field.LastBakeMs:F0} ms, {field.UploadedFields} fields uploaded and {field.UniformFields} uniform (one texel)"));
-        _faithful.Dispose();
-        _meitou?.Dispose();
-        _meitouContact?.Dispose();
-        _frame.Dispose();
-        _quad.Dispose();
-        _grid?.Dispose();
-        _gridIndices?.Dispose();
-        foreach (var t in _mapTextures) t.Dispose();
-        _oceanMap.Dispose();
-        _shoreMap.Dispose();
-        _reflectionMap.Dispose();
-        _refractionMap.Dispose();
-        _sceneDepthMap.Dispose();
-        _rippleMap.Dispose();
-        _ripples?.Dispose();
-        _heightCoarse.Dispose();
-        _heightFine.Dispose();
-        Gpu.Bindless.Free(BindlessKind.Texture2DArray, _standInArray);
-        _standInArrayTexture.Dispose();
-        foreach (var t in _maps) t.Dispose();
-        _ocean?.Dispose();
-        _shore?.Dispose();
-        _refraction?.Dispose();
-        _sceneDepthCopy?.Dispose();
-    }
+    #endregion
 }

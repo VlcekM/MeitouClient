@@ -10,18 +10,34 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe class Uploader : IGpuUploads
 {
+    /// <summary>
+    /// The context whose frame, staging and device the uploads go through.
+    /// </summary>
     readonly GpuContext _ctx;
 
+    /// <summary>
+    /// The uploads of the context.
+    /// </summary>
     internal Uploader(GpuContext ctx) => this._ctx = ctx;
 
+    /// <summary>
+    /// The frame's upload command buffer; throws when no frame is open.
+    /// </summary>
     CommandBuffer Cmd => _ctx.Frame.Open ? _ctx.Frame.UploadCommands : throw new InvalidOperationException("uploads need an open frame");
 
+    /// <summary>
+    /// Copies <paramref name="data"/> into the buffer at <paramref name="offset"/> through the frame's staging; throws when the frame already drew
+    /// from the buffer or the write passes its end.
+    /// </summary>
     public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
 
         if (target.UsedFrame == _ctx.Frame.Number)
-            throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        {
+            throw new InvalidOperationException(
+                "the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        }
 
         if (offset + (ulong)data.Length > target.Size) throw new ArgumentOutOfRangeException(nameof(data), "write past the end of the buffer");
 
@@ -43,7 +59,10 @@ public sealed unsafe class Uploader : IGpuUploads
         if (offsets.IsEmpty) return;
 
         if (target.UsedFrame == _ctx.Frame.Number)
-            throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        {
+            throw new InvalidOperationException(
+                "the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        }
 
         if (data.Length != stride * offsets.Length) throw new ArgumentException("one record per offset", nameof(data));
 
@@ -58,7 +77,10 @@ public sealed unsafe class Uploader : IGpuUploads
 
         var cmd = Cmd;
         fixed (BufferCopy* p = copies)
-            _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index), (uint)copies.Length, p);
+        {
+            _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index),
+                (uint)copies.Length, p);
+        }
 
         TransferBarrier(cmd);
         _ctx.Frame.Stats.UploadBytes += data.Length;
@@ -81,7 +103,8 @@ public sealed unsafe class Uploader : IGpuUploads
             ImageExtent = new Extent3D(region.Width, region.Height, 1),
         };
         var cmd = Cmd;
-        _ctx.Device.Vk.CmdCopyBufferToImage(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.NativeImage(target), ImageLayout.General, 1, &copy);
+        _ctx.Device.Vk.CmdCopyBufferToImage(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.NativeImage(target), ImageLayout.General, 1,
+            &copy);
         TransferBarrier(cmd);
         _ctx.Frame.Stats.UploadBytes += data.Length;
         if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Desc.Name + (level > 0 ? " mip" : ""), data.Length);
@@ -113,6 +136,9 @@ public sealed unsafe class Uploader : IGpuUploads
         vk.CmdPipelineBarrier2(cmd, &info);
     }
 
+    /// <summary>
+    /// <see cref="TransferBarrier(Vk, CommandBuffer)"/> on the context's device.
+    /// </summary>
     void TransferBarrier(CommandBuffer cmd) => TransferBarrier(_ctx.Device.Vk, cmd);
 }
 
@@ -123,10 +149,22 @@ public sealed unsafe class Uploader : IGpuUploads
 /// </summary>
 public sealed unsafe class UploadBatch : IGpuUploadBatch
 {
+    /// <summary>
+    /// The context the batch's uploads, textures and staging come from.
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// Whether the batch has its own one-shot command buffer (no frame was open when it began).
+    /// </summary>
     readonly bool _immediate;
+    /// <summary>
+    /// The staging buffers of a one-shot batch, freed after its submission.
+    /// </summary>
     readonly List<Core.BufferAllocation> _staging = [];
 
+    /// <summary>
+    /// A batch into the open frame's upload buffer, or, without an open frame, into a new one-shot command buffer.
+    /// </summary>
     internal UploadBatch(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -139,6 +177,7 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
     /// </summary>
     public CommandList Commands { get; }
 
+    /// <inheritdoc/>
     IGpuCommandList IGpuUploadBatch.Commands => Commands;
 
     /// <summary>
@@ -192,6 +231,9 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
         Uploader.TransferBarrier(_ctx.Device.Vk, Commands.Handle);
     }
 
+    /// <summary>
+    /// A new staging buffer with <paramref name="data"/> in it (kept until the batch is disposed), and the data's offset in it.
+    /// </summary>
     (Silk.NET.Vulkan.Buffer Buffer, ulong Offset) Stage(ReadOnlySpan<byte> data)
     {
         var b = _ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Core.MemoryKind.Upload, "upload staging");

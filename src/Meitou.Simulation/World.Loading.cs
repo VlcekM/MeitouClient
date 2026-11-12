@@ -3,6 +3,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's loading step: the nearby population prepared without a tick.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>
@@ -28,11 +31,13 @@ public sealed partial class World
             Characters.Phase = TablePhase.Outside;
             Characters.EndTick();
         }
+
         if (Settings.PublishSnapshots)
         {
             Publish();
             KeepPrevious(Snapshot, _shownBuffer);
         }
+
         return ready;
     }
 }

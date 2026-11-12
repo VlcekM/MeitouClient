@@ -25,6 +25,10 @@ public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
     /// (as uints).
     /// </summary>
     public Vector4[] Vectors { get; } = vectors;
+
+    /// <summary>
+    /// Whether there is no pyramid to test against (a default view).
+    /// </summary>
     public bool IsEmpty => Buffer.IsNull;
 }
 
@@ -59,22 +63,63 @@ public sealed unsafe class HizPyramid : IDisposable
     /// </summary>
     const int FusedLevels = 5;
 
+    /// <summary>
+    /// The context the pyramid is built and read on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The two compute programs: the base kernel (the first <see cref="FusedLevels"/> levels from the depth) and the reduce kernel (the rest).
+    /// </summary>
     readonly GpuProgram _baseProgram, _reduceProgram;
+
+    /// <summary>
+    /// The compute pipelines of <see cref="_baseProgram"/> and <see cref="_reduceProgram"/>.
+    /// </summary>
     readonly GpuComputePipeline _basePipeline, _reducePipeline;
+
+    /// <summary>
+    /// The storage buffer holding every level, 8 bytes a texel; null until the first build.
+    /// </summary>
     DeviceBuffer? _buffer;
+
+    /// <summary>
+    /// Where each level starts in <see cref="_buffer"/>, in texels.
+    /// </summary>
     readonly uint[] _offsets = new uint[MaxLevels];
+
+    /// <summary>
+    /// The level count, the depth's size and level 0's size of the pyramid held.
+    /// </summary>
     int _levelCount, _width, _height, _baseWidth, _baseHeight;
-    // The camera the depth was drawn from.
+
+    /// <summary>
+    /// The camera the depth was drawn from: its eye and view axes.
+    /// </summary>
     Vector3 _eye, _right, _up, _back;
+
+    /// <summary>
+    /// The tangents of half the field of view across and up, of the camera the depth was drawn from.
+    /// </summary>
     float _tanX, _tanY;
+
+    /// <summary>
+    /// The frame the pyramid was last built in; <see cref="long.MinValue"/>: none held.
+    /// </summary>
     long _builtFrame = long.MinValue;
+
+    /// <summary>
+    /// The nearest-filtered, edge-clamped sampler the base kernel reads the depth with.
+    /// </summary>
     readonly GpuSampler _sampler;
 
     #endregion
 
     #region Pyramid
 
+    /// <summary>
+    /// Makes the two compute programs, their pipelines and the depth sampler.
+    /// </summary>
     public HizPyramid(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -96,6 +141,10 @@ public sealed unsafe class HizPyramid : IDisposable
     /// The level count and level 0's size, for the statistics.
     /// </summary>
     public string Describe => HasData ? $"{_levelCount} levels from {_baseWidth} x {_baseHeight}, {_buffer!.Size / 1024} KB" : "none";
+
+    /// <summary>
+    /// The pyramid's storage buffer; null until the first build.
+    /// </summary>
     internal DeviceBuffer? Storage => _buffer;
 
     /// <summary>
@@ -134,6 +183,7 @@ public sealed unsafe class HizPyramid : IDisposable
         KeepCamera(eyePosition, viewRotation, fieldOfView, aspect);
 
         cmd.BeginLabel("hiz");
+
         // The depth was just drawn (the scene's passes, in whichever layout they leave it: GENERAL), and the last frame's cull may still
         // read the buffer.
         cmd.Order();
@@ -143,6 +193,7 @@ public sealed unsafe class HizPyramid : IDisposable
             cmd.Order();
             RecordReduce(cmd, levels);
         }
+
         // The cull reads it in the next frame's pre-frame commands.
         cmd.Order();
         cmd.EndLabel();
@@ -276,33 +327,83 @@ public sealed unsafe class HizPyramid : IDisposable
         return v;
     }
 
+    /// <summary>
+    /// <paramref name="v"/> with component <paramref name="i"/> (0 x, 1 y, 2 z, else w) set to <paramref name="value"/>.
+    /// </summary>
     static Vector4 SetComponent(Vector4 v, int i, float value)
     {
-        switch (i) { case 0: v.X = value; break; case 1: v.Y = value; break; case 2: v.Z = value; break; default: v.W = value; break; }
+        switch (i)
+        {
+            case 0:
+                v.X = value;
+                break;
+            case 1:
+                v.Y = value;
+                break;
+            case 2:
+                v.Z = value;
+                break;
+            default:
+                v.W = value;
+                break;
+        }
+
         return v;
     }
 
+    /// <summary>
+    /// The base kernel's push constants.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct BasePush
     {
+        /// <summary>
+        /// The depth's near and far planes.
+        /// </summary>
         public Vector2 Planes;
+
+        /// <summary>
+        /// The depth's size, level 0's size, the level count, and where the first <see cref="FusedLevels"/> levels start in the buffer.
+        /// </summary>
         public uint Width, Height, BaseWidth, BaseHeight, Levels, Offset0, Offset1, Offset2, Offset3, Offset4;
     }
 
+    /// <summary>
+    /// The reduce kernel's push constants.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct ReducePush
     {
+        /// <summary>
+        /// Level 0's size, the level count, and padding.
+        /// </summary>
         public uint BaseWidth, BaseHeight, Levels, Pad;
+
+        /// <summary>
+        /// Where each of the <see cref="MaxLevels"/> levels starts in the buffer (0 past the level count).
+        /// </summary>
         public OffsetArray Offsets;
 
+        /// <summary>
+        /// <see cref="MaxLevels"/> level offsets inline.
+        /// </summary>
         [System.Runtime.CompilerServices.InlineArray(MaxLevels)]
-        public struct OffsetArray { uint _first; }
+        public struct OffsetArray
+        {
+            /// <summary>
+            /// The first element: the runtime lays the others out after it.
+            /// </summary>
+            uint _first;
+        }
     }
 
     #endregion
 
     #region Disposal
 
+    /// <summary>
+    /// Drops the two programs with their pipelines and the pyramid's buffer.
+    /// </summary>
     public void Dispose()
     {
         foreach (var p in new[] { _baseProgram, _reduceProgram })

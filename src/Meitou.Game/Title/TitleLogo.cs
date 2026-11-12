@@ -9,6 +9,9 @@ namespace Meitou.Game.Title;
 /// </summary>
 static class TitleLogo
 {
+    /// <summary>
+    /// The wordmark's embedded resource name.
+    /// </summary>
     const string Resource = "kenshi-logo.png";
 
     /// <summary>

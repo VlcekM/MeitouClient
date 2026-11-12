@@ -39,7 +39,24 @@ public sealed record ConversationView(CharacterId Npc, CharacterId Player, Chara
 /// already paid; DA_JOIN_SQUAD_WITH_EDIT, the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>); the animal buying window's
 /// confirm, the in-play editor on the bought animals (<see cref="DialogueRequest.Characters"/>, to name them).
 /// </summary>
-public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor, AnimalEditor }
+public enum DialogueRequestKind : byte
+{
+    /// <summary>
+    /// DA_CHARACTER_EDITOR: the surgeon's editor on the player character.
+    /// </summary>
+    CharacterEditor,
+    /// <summary>
+    /// DA_JOIN_SQUAD_WITH_EDIT: the in-play editor on the recruit.
+    /// </summary>
+    RecruitEditor,
+    /// <summary>
+    /// The animal buying confirm: the in-play editor on the bought animals.
+    /// </summary>
+    AnimalEditor
+}
+/// <summary>
+/// A request to the host from an ended conversation: its number (rising), what to open, the player character and the NPC.
+/// </summary>
 public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc)
 {
     /// <summary>
@@ -53,7 +70,13 @@ public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, Characte
 /// </summary>
 public interface IDialogueSource
 {
+    /// <summary>
+    /// The open player conversation as the window shows it; null: none.
+    /// </summary>
     ConversationView? PublishConversation();
+    /// <summary>
+    /// The last request to the host (<see cref="DialogueRequest.Id"/> tells a new one); null: none.
+    /// </summary>
     DialogueRequest? PublishRequest();
     /// <summary>
     /// The open character trading window (DA 41 / 42; null: none).
@@ -74,6 +97,9 @@ public interface IDialogueSource
     IReadOnlyList<SpeechBubble> PublishSpeech() => [];
 }
 
+/// <summary>
+/// Settings of the <see cref="DialogueSystem"/>.
+/// </summary>
 public sealed class DialogueSettings
 {
     /// <summary>
@@ -91,8 +117,17 @@ public sealed class DialogueSettings
     /// choices).
     /// </summary>
     public float AmbientRange { get; init; } = 600;
+    /// <summary>
+    /// Ticks between the NPCs' ambient looks.
+    /// </summary>
     public int AmbientEveryTicks { get; init; } = 30;
+    /// <summary>
+    /// The most ambient lines said per look.
+    /// </summary>
     public int AmbientPerScan { get; init; } = 2;
+    /// <summary>
+    /// Game hours before a squad reacts to the same character again.
+    /// </summary>
     public float AmbientRepeatHours { get; init; } = 0.5f;
     /// <summary>
     /// Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).
@@ -120,26 +155,100 @@ public sealed class DialogueSettings
 /// </summary>
 public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogueSource
 {
+    /// <summary>
+    /// The world's data: dialogue, factions, towns and the game database.
+    /// </summary>
     readonly PopulationData _data;
+    /// <summary>
+    /// The dialogue records (the data's).
+    /// </summary>
     readonly DialogueDatabase _dialogue;
+    /// <summary>
+    /// The game hour each line was last used, by line id (global, as the original's).
+    /// </summary>
     readonly SortedDictionary<string, double> _lastUse = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The permanent chance rolls per character and line: whether it passed.
+    /// </summary>
     readonly SortedDictionary<(CharacterId, string), bool> _permanent = new(Comparer<(CharacterId, string)>.Create((a, b) =>
         a.Item1 != b.Item1 ? CompareIds(a.Item1, b.Item1) : string.CompareOrdinal(a.Item2, b.Item2)));
+    /// <summary>
+    /// Per NPC and event: how often it fired and the game hour of the last time.
+    /// </summary>
     readonly SortedDictionary<(CharacterId, int), (int Count, double Last)> _counters = new(Comparer<(CharacterId, int)>.Create((a, b) =>
         a.Item1 != b.Item1 ? CompareIds(a.Item1, b.Item1) : a.Item2.CompareTo(b.Item2)));
+    /// <summary>
+    /// Per NPC: the id of its pending <c>interrupt</c> dialogue, opened when the player talks to it.
+    /// </summary>
     readonly SortedDictionary<CharacterId, string> _interrupts = new(Comparer<CharacterId>.Create(CompareIds));
+    /// <summary>
+    /// The dice rolled so far (the dialogue RNG's counter).
+    /// </summary>
     ulong _rolls;
+    /// <summary>
+    /// The last request number given (<see cref="DialogueRequest.Id"/>).
+    /// </summary>
     long _requestId;
 
-    // The approach of a Talk order, and the open conversation.
+    /// <summary>
+    /// The NPCs walking up to a player character to talk (<c>DA_TALK_TO_LEADER</c>).
+    /// </summary>
+    readonly ApproachQueue _npcApproaches;
+
+    /// <summary>
+    /// The approach of a Talk order: its talker and target (none: no walk).
+    /// </summary>
     CharacterId _talker = CharacterId.None, _target = CharacterId.None;
+    /// <summary>
+    /// The walk of a Talk order's talker up to its target.
+    /// </summary>
     readonly WalkUp _approach;
+    /// <summary>
+    /// The open player conversation; null: none.
+    /// </summary>
     Conversation? _open;
+    /// <summary>
+    /// The view of <see cref="_open"/> published with the snapshot.
+    /// </summary>
     ConversationView? _view;
+    /// <summary>
+    /// The last request to the host.
+    /// </summary>
     DialogueRequest? _request;
 
+    /// <summary>
+    /// The population system whose states and town levels the line checks read; null: the data's states and no town levels.
+    /// </summary>
     readonly PopulationSystem? _population;
 
+    /// <summary>
+    /// The cultures' illegal goods and the smuggling messages posted (DC_HAS_ILLEGAL_ITEM).
+    /// </summary>
+    readonly IllegalGoods _illegalGoods;
+
+    /// <summary>
+    /// The arrival banter tries (<see cref="AreaArrival"/>) and the last one's result.
+    /// </summary>
+    readonly AreaArrivalDialogue _arrival;
+
+    /// <summary>
+    /// The character trading window (DA 41, 42, 48).
+    /// </summary>
+    readonly CharacterTrading _characterTrading;
+
+    /// <summary>
+    /// The speakers following their targets while they talk (DA_FOLLOW_WHILE_TALKING).
+    /// </summary>
+    readonly TalkFollowers _followers;
+
+    /// <summary>
+    /// The town stalkers (DA_THUG_HUNTER).
+    /// </summary>
+    readonly TownStalkers _stalkers;
+
+    /// <summary>
+    /// Sets up the dialogue system on <paramref name="data"/>'s dialogue (default settings when none are given) and its helpers.
+    /// </summary>
     public DialogueSystem(PopulationData data, DialogueSettings? settings = null, PopulationSystem? population = null)
     {
         this._data = data;
@@ -147,9 +256,23 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _dialogue = data.Dialogue;
         Settings = settings ?? new DialogueSettings();
         _approach = new(Settings.ApproachSeconds);
+        _npcApproaches = new(this);
+        _illegalGoods = new(data);
+        _arrival = new(this, data, _dialogue);
+        _characterTrading = new(this, data);
+        _followers = new(this);
+        _stalkers = new(this, data);
     }
 
+    /// <summary>
+    /// The settings.
+    /// </summary>
     public DialogueSettings Settings { get; }
+
+    /// <summary>
+    /// The result of the last arrival try (<see cref="AreaArrivalDialogue.ArrivalResult"/>).
+    /// </summary>
+    public (int Serial, bool Forget) ArrivalResult => _arrival.ArrivalResult;
 
     /// <summary>
     /// The squads' memories of characters (docs/game/dialogue.md "Squad memory"): written by dialogue effects and player conversations, read by the
@@ -157,36 +280,68 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public SquadMemory Memory { get; } = new();
 
-    static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
+    /// <summary>
+    /// Orders character ids by slot, then generation (the sorted maps' order).
+    /// </summary>
+    internal static int CompareIds(CharacterId a, CharacterId b) =>
+        a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
 
     /// <summary>
     /// One open player conversation.
     /// </summary>
     sealed class Conversation
     {
+        /// <summary>
+        /// The NPC and the player character talking.
+        /// </summary>
         public required CharacterId Npc, Player;
+        /// <summary>
+        /// The event the conversation was fired by.
+        /// </summary>
         public required int Event;
         /// <summary>
         /// The Talk menu's dry run of the pick: conditions post no messages.
         /// </summary>
         public bool DryRun { get; init; }
+        /// <summary>
+        /// The dialogue root the conversation runs.
+        /// </summary>
         public DialogueNode? Root;
         /// <summary>
         /// The NPC-side line on screen and who said it.
         /// </summary>
         public DialogueNode? Line;
+        /// <summary>
+        /// Who said <see cref="Line"/>.
+        /// </summary>
         public CharacterId Speaker;
+        /// <summary>
+        /// The text of <see cref="Line"/> as shown.
+        /// </summary>
         public string Text = "";
+        /// <summary>
+        /// The three interjectors the lines' speakers 1 to 3 name (none for an empty slot).
+        /// </summary>
         public readonly CharacterId[] Interjectors = [CharacterId.None, CharacterId.None, CharacterId.None];
         /// <summary>
         /// The choices: a reply line, or <c>null</c> for <c>[...]</c> (continue <see cref="Line"/>) / <c>[Leave]</c> (when <see cref="Line"/> has no
         /// next).
         /// </summary>
         public readonly List<(DialogueNode? Reply, string Text)> Choices = [];
+        /// <summary>
+        /// The lines said so far, "name: text", for the window's log.
+        /// </summary>
         public readonly List<string> Log = [];
+        /// <summary>
+        /// The conversation has ended (an effect or the last line); the caller closes it.
+        /// </summary>
         public bool Ended;
     }
 
+    /// <summary>
+    /// Takes the Talk orders, the choices and ends of the open conversation, the character trade window, arrivals and dialogue events; then says
+    /// bubbles a choice started and refreshes the view.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
@@ -206,17 +361,20 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                     CancelApproach(world);
                     break;
                 case ConfirmCharacterTrade confirm:
-                    ConfirmTrade(world, confirm.Selected);
+                    _characterTrading.ConfirmTrade(world, confirm.Selected);
                     break;
                 case CloseCharacterTrade:
-                    _characterTrade = null;
+                    _characterTrading.Close();
                     break;
                 case AreaArrival arrival:
-                    Arrive(world, arrival);
+                    _arrival.Arrive(world, arrival);
                     break;
                 case DialogueEvent e:
                     if (e.Event == UnlockMyCageOrShackles && e.Dialogue is null) Freed(world, e.Npc, e.Target);
-                    if (e.Dialogue is { } id) { if (_dialogue.Node(id) is { IsRoot: true } root) StartBubbles(world, e.Npc, e.Target, root, e.Event); }
+                    if (e.Dialogue is { } id)
+                    {
+                        if (_dialogue.Node(id) is { IsRoot: true } root) StartBubbles(world, e.Npc, e.Target, root, e.Event);
+                    }
                     else if (Settings.AmbientEvents) Fire(world, e.Npc, e.Target, e.Event);
                     break;
             }
@@ -226,20 +384,29 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RefreshView(world);
     }
 
+    /// <summary>
+    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the ambient looks, the NPC approaches, followers
+    /// and stalkers, then the Talk order's walk (the conversation opens in talk range).
+    /// </summary>
     public void SlowWorld(World world)
     {
         ExpireSpeech(world);
-        KeepCharacterTrade(world);
+        _characterTrading.KeepCharacterTrade(world);
         Memory.Age(world);
         if (_bubbles.Count > 0) StepBubbles(world);
-        if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0) { SeeOthers(world); SeeGettingUp(world); }
-        if (_approaches.Count > 0) StepApproaches(world);
-        StepFollowers(world);
-        StepStalkers(world);
+        if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0)
+        {
+            SeeOthers(world);
+            SeeGettingUp(world);
+        }
+        if (_npcApproaches.Count > 0) _npcApproaches.Step(world);
+        _followers.StepFollowers(world);
+        _stalkers.StepStalkers(world);
         if (!_talker.IsNone && _open is null)
         {
             var table = world.Characters;
-            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Awake(table, n)) CancelApproach(world);
+            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Awake(table, n))
+                CancelApproach(world);
             else if (InTalkRange(table, p, n))
             {
                 TaskStart.Stand(table, p);
@@ -253,10 +420,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RefreshView(world);
     }
 
+    /// <summary>
+    /// Starts a Talk order's walk: a player character to an awake NPC; a dumb talker refuses, and a hostile NPC without a pending interrupt is
+    /// attacked instead.
+    /// </summary>
     void StartApproach(World world, TalkOrder order)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc || !table.TryResolveNext(order.Target, out int n) || table.Cold(n) is not { IsPlayer: false } nc) return;
+        if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc
+            || !table.TryResolveNext(order.Target, out int n) || table.Cold(n) is not { IsPlayer: false } nc)
+        {
+            return;
+        }
         // The order check (FUN_1405d1940, order 12): a character whose record says dumb refuses to talk to people.
         if (_data.Db.Find(pc.RecordId)?.GetBool("dumb") == true)
         {
@@ -277,6 +452,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _approach.Begin(world, _talker, p, n);
     }
 
+    /// <summary>
+    /// Ends the Talk order's walk and releases its target unless it is in the open conversation.
+    /// </summary>
     void CancelApproach(World world)
     {
         if (!_target.IsNone && _open?.Npc != _target) Release(world, _target);
@@ -300,11 +478,16 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     internal static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        float reach =
+            Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
 
-    static bool Awake(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
+    /// <summary>
+    /// Whether the character is alive, not imprisoned and not incapacitated.
+    /// </summary>
+    internal static bool Awake(CharacterTable table, int slot) =>
+        table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
     /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
@@ -316,10 +499,23 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (table.Next[slot].Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle) TaskStart.Stand(table, slot);
     }
 
-    static void Release(World world, CharacterId id)
+    /// <summary>
+    /// Lets the character's AI take it again (<see cref="CharacterCold.Engaged"/> off).
+    /// </summary>
+    internal static void Release(World world, CharacterId id)
     {
         if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
     }
+
+    /// <summary>
+    /// A player conversation is open.
+    /// </summary>
+    internal bool InConversation => _open is not null;
+
+    /// <summary>
+    /// Whether the open player conversation is with <paramref name="npc"/>.
+    /// </summary>
+    internal bool TalksWith(CharacterId npc) => _open?.Npc == npc;
 
     /// <summary>
     /// The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).
@@ -336,13 +532,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation
     /// (docs/game/dialogue.md "Player conversation").
     /// </summary>
-    void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
+    internal void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
         if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
-        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt ? [interrupt] : SetOf(world, n).For(ev);
+        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
+            ? [interrupt] : SetOf(world, n).For(ev);
         var picked = Pick(world, c, roots);
         if (picked is not { } p)
         {
@@ -367,7 +564,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
         bool animal = cold.Fighter?.IsAnimal ?? cold.Appearance?.Animal is not null;
         string? playerFaction = _data.Relations.Contains(world.Player.Faction) ? _data.Factions[world.Player.Faction].Id : null;
-        return _dialogue.SetFor(cold.RecordId, squad?.TemplateId, squad is not null && squad.Leader == world.Characters.IdOf(slot), cold.IsPlayer, animal, playerFaction);
+        return _dialogue.SetFor(cold.RecordId, squad?.TemplateId, squad is not null && squad.Leader == world.Characters.IdOf(slot),
+            cold.IsPlayer, animal, playerFaction);
     }
 
     /// <summary>
@@ -380,6 +578,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         && (squad.Shop is not null || squad.HomeBuilding is null && _data.Db.Find(squad.TemplateId)?.GetReferences("vendors").Count > 0)
         && (_data.Db.Find(cold.RecordId)?.GetBool("is trader") == true || SetOf(world, slot).Trades);
 
+    /// <inheritdoc/>
     public bool CanTalk(World world, int slot, CharacterId? talker = null)
     {
         if (world.Characters.Cold(slot) is not { IsPlayer: false }) return false;
@@ -391,12 +590,16 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // A dry run of Start's pick (it rolls dice and memoizes permanent chances: both put back), so the menu never offers a Talk that ends in "has
         // nothing to say".
         var (savedRolls, known) = (_rolls, _permanent.Keys.ToList());
-        bool says = Pick(world, new Conversation { Npc = npc, Player = player, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots) is not null;
+        bool says = Pick(world,
+            new Conversation { Npc = npc, Player = player, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots) is not null;
         _rolls = savedRolls;
         foreach (var key in _permanent.Keys.Except(known).ToList()) _permanent.Remove(key);
         return says;
     }
 
+    /// <summary>
+    /// Whether <paramref name="t"/> is a speaker on the NPC's side (itself, an interjector or its whole squad).
+    /// </summary>
     static bool IsNpcSide(Talker t) => t is Talker.Me or Talker.Interjector1 or Talker.Interjector2 or Talker.Interjector3 or Talker.WholeSquad;
 
     /// <summary>
@@ -441,10 +644,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice));
     }
 
+    /// <summary>
+    /// Answers choice <paramref name="index"/> of <paramref name="c"/>: a bail list's pick, a reply said and its next line, or <c>[...]</c>
+    /// and <c>[Leave]</c>.
+    /// </summary>
     void Choose(World world, Conversation c, int index)
     {
         if ((uint)index >= (uint)c.Choices.Count) return;
-        if (_bailList is not null) { ChooseBail(world, c, index); return; }
+        if (_bailList is not null)
+        {
+            ChooseBail(world, c, index);
+            return;
+        }
         var (reply, text) = c.Choices[index];
         DialogueNode? from = c.Line;
         if (reply is not null)
@@ -456,9 +667,17 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (c.Ended) return;
             from = reply;
         }
-        else if (text == LeaveChoice || from is null) { c.Ended = true; return; }
+        else if (text == LeaveChoice || from is null)
+        {
+            c.Ended = true;
+            return;
+        }
         var next = Pick(world, c, from.Children);
-        if (next is not { } p) { c.Ended = true; return; }
+        if (next is not { } p)
+        {
+            c.Ended = true;
+            return;
+        }
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else
         {
@@ -478,27 +697,44 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (_open is not { } c) return;
         _open = null;
         _view = null;
-        if (_bailList is not null) { _bailList = null; Release(world, c.Npc); return; }   // the bail list closing: the conversation was counted already
+
+        // the bail list closing: the conversation was counted already
+        if (_bailList is not null)
+        {
+            _bailList = null;
+            Release(world, c.Npc);
+            return;
+        }
         var key = (c.Npc, c.Event);
         var (count, _) = _counters.GetValueOrDefault(key);
         _counters[key] = (count + 1, world.GameHours);
         // A player conversation (event 1) leaves the speaker's squad remembering the partner (FUN_140674830; other events do not).
-        if (c.Event == DialogueEvents.PlayerTalkToMe && world.Characters.TryResolveNext(c.Npc, out int n) && world.Characters.Cold(n) is { SquadId: >= 0 } nc)
+        if (c.Event == DialogueEvents.PlayerTalkToMe && world.Characters.TryResolveNext(c.Npc, out int n)
+            && world.Characters.Cold(n) is { SquadId: >= 0 } nc)
             Memory.Remember(world, nc.SquadId, c.Player, MemoryTag.None);
         // An arrest the conversation started (DA 29, 30) keeps the guard held.
         if (Arrests?.Arrests.Any(a => a.Guard == c.Npc) != true) Release(world, c.Npc);
         OpenBail(world);
-        OpenCharacterTrade(world);
+        _characterTrading.OpenCharacterTrade(world);
     }
 
+    /// <summary>
+    /// Marks <paramref name="line"/> and the conversation's root used at this game hour.
+    /// </summary>
     void MarkUsed(World world, Conversation c, DialogueNode line)
     {
         _lastUse[line.StringId] = world.GameHours;
         if (c.Root is { } root) _lastUse[root.StringId] = world.GameHours;
     }
 
+    /// <summary>
+    /// The next dialogue roll of <paramref name="who"/>'s (counted by <see cref="_rolls"/>).
+    /// </summary>
     ulong NextRoll(World world, CharacterId who) => Rng.Hash(world.Seed, Rng.Key(who), RngPurpose.Dialogue, _rolls++);
 
+    /// <summary>
+    /// One of the line's texts: none, its only one, or a roll's pick.
+    /// </summary>
     string PickText(World world, CharacterId who, DialogueNode line) =>
         line.Texts.Count switch { 0 => "", 1 => line.Texts[0], var n => line.Texts[Rng.Int(NextRoll(world, who), n)] };
 
@@ -514,12 +750,22 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The character's name; empty when the id no longer resolves.
+    /// </summary>
     string NameOf(World world, CharacterId id) => world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s) is { } c ? c.Name : "";
 
+    /// <summary>
+    /// Rebuilds the published view of the open conversation and the character trade window.
+    /// </summary>
     internal void RefreshView(World world)
     {
-        RefreshCharacterTrade(world);
-        if (_open is not { } c) { _view = null; return; }
+        _characterTrading.RefreshCharacterTrade(world);
+        if (_open is not { } c)
+        {
+            _view = null;
+            return;
+        }
         _view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
             [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
@@ -532,27 +778,91 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// <summary>
     /// A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.
     /// </summary>
-    static string Shown((DialogueNode? Reply, string Text) choice) => choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
+    static string Shown((DialogueNode? Reply, string Text) choice) =>
+        choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
 
+    /// <inheritdoc/>
     public ConversationView? PublishConversation() => _view;
+    /// <inheritdoc/>
     public DialogueRequest? PublishRequest() => _request;
+    /// <inheritdoc/>
+    public CharacterTradeView? PublishCharacterTrade() => _characterTrading.View;
 
+    /// <summary>
+    /// EV_BOUGHT_ME_FROM_SLAVERY.
+    /// </summary>
+    internal const int BoughtMeFromSlavery = 51;
+
+    /// <summary>
+    /// The end of the animal buying confirm (<c>FUN_1406aac20</c> -> <c>FUN_1406e32f0</c>, <b>Verified</b>): the character editor opens in mode 1 on
+    /// the animals that were bought, after the money is taken, and not at all when none was. The host acts on the request (it names them: the
+    /// editor's animal page, <see cref="Editing.CharacterEditing"/>'s name-only edit).
+    /// </summary>
+    internal void OpenAnimalEditor(CharacterId slaver, List<CharacterId> bought)
+    {
+        if (bought.Count == 0) return;
+        _request = new DialogueRequest(++_requestId, DialogueRequestKind.AnimalEditor, bought[0], slaver) { Characters = bought };
+    }
+
+    /// <summary>
+    /// Adds the dialogue state (rolls, line uses, permanent rolls, counters, memories, followers, stalkers, interrupts, bubbles, cooldowns,
+    /// approaches, downs, quiet pairs, the open conversation and the Talk walk) to the world hash; nothing while all are empty.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
-        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0 && _ambientAt.Count == 0 && _approaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone) return;
+        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0
+            && _ambientAt.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0
+            && _stalkers.Count == 0 && _open is null && _talker.IsNone)
+        {
+            return;
+        }
         hasher.Add(0x44696167);
         hasher.Add(_rolls);
-        foreach (var (line, hours) in _lastUse) { hasher.Add(Rng.StableHash(line)); hasher.Add(hours); }
-        foreach (var ((who, line), passed) in _permanent) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); hasher.Add(passed); }
-        foreach (var ((who, ev), (count, last)) in _counters) { hasher.Add(who); hasher.Add(ev); hasher.Add(count); hasher.Add(last); }
+        foreach (var (line, hours) in _lastUse)
+        {
+            hasher.Add(Rng.StableHash(line));
+            hasher.Add(hours);
+        }
+        foreach (var ((who, line), passed) in _permanent)
+        {
+            hasher.Add(who);
+            hasher.Add(Rng.StableHash(line));
+            hasher.Add(passed);
+        }
+        foreach (var ((who, ev), (count, last)) in _counters)
+        {
+            hasher.Add(who);
+            hasher.Add(ev);
+            hasher.Add(count);
+            hasher.Add(last);
+        }
         Memory.Hash(ref hasher);
-        HashActs(ref hasher);
-        foreach (var (who, line) in _interrupts) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); }
-        foreach (var b in _bubbles) { hasher.Add(b.C.Npc); hasher.Add(Rng.StableHash(b.Line.StringId)); hasher.Add(b.DueTick); }
-        foreach (var ((squad, whom), hours) in _ambientAt) { hasher.Add(squad); hasher.Add(whom); hasher.Add(hours); }
-        HashApproaches(ref hasher);
+        _followers.Hash(ref hasher);
+        _stalkers.Hash(ref hasher);
+        foreach (var (who, line) in _interrupts)
+        {
+            hasher.Add(who);
+            hasher.Add(Rng.StableHash(line));
+        }
+        foreach (var b in _bubbles)
+        {
+            hasher.Add(b.C.Npc);
+            hasher.Add(Rng.StableHash(b.Line.StringId));
+            hasher.Add(b.DueTick);
+        }
+        foreach (var ((squad, whom), hours) in _ambientAt)
+        {
+            hasher.Add(squad);
+            hasher.Add(whom);
+            hasher.Add(hours);
+        }
+        _npcApproaches.Hash(ref hasher);
         foreach (var id in _down) hasher.Add(id);
-        foreach (var (npc, pc) in _quiet) { hasher.Add(npc); hasher.Add(pc); }
+        foreach (var (npc, pc) in _quiet)
+        {
+            hasher.Add(npc);
+            hasher.Add(pc);
+        }
         hasher.Add(_talker);
         hasher.Add(_target);
         if (_open is { } c)

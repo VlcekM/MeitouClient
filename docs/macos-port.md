@@ -8,6 +8,14 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
 
 ## Running
 
+- Legacy Mac builds (`-p:MeitouLegacyMac=true`) use .NET 10 for the launcher, game and tools; standard builds use .NET 11.
+  Legacy packages have a `-legacy` suffix and target macOS 13 Ventura and later,
+  including Ventura-only Intel Macs (#555). **Observed** (launcher 1.10.0 Intel release, Mach-O `LC_BUILD_VERSION`): its .NET 11
+  executable requires macOS 14. **Unknown**: execution of the .NET 10 compatibility build on Ventura and Intel GPU support.
+- `package-release.ps1 -Rid osx-x64 -LegacyMac` (or `osx-arm64`) produces the legacy game zip on a Mac.
+  `build-native-macos.sh` rebuilds OpenAL Soft 1.23.1 and GLFW 3.4 for Ventura, replacing their NuGet binaries in legacy publishes
+  (including the launcher's embedded OpenAL). **Observed**: both NuGet libraries declare macOS 14 in `LC_BUILD_VERSION`;
+  shaderc declares 11.7.1, SPIRV-Cross 13.0, and Avalonia/Skia/HarfBuzz at most 11.0.
 - `brew install molten-vk vulkan-loader`; `export DYLD_LIBRARY_PATH=/opt/homebrew/lib` (dlopen's default path
   lacks it). SIP-restricted launchers such as `nohup` strip that variable; GLFW then reports it "doesn't support
   Vulkan". `VulkanDevice.Create` checks for `libvulkan.1.dylib` first and names this cause.

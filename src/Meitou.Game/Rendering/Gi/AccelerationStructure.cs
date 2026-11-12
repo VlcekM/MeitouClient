@@ -21,11 +21,29 @@ public readonly record struct TriangleGeometry(ulong VertexAddress, uint VertexS
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct InstanceRecord
 {
+    /// <summary>
+    /// The 3 x 4 row-major transform.
+    /// </summary>
     public fixed float Transform[12];
+
+    /// <summary>
+    /// The 24-bit custom index, with the 8-bit mask in the top bits.
+    /// </summary>
     public uint CustomIndexAndMask;
+
+    /// <summary>
+    /// The 24-bit hit group offset, with 8 bits of flags in the top bits.
+    /// </summary>
     public uint OffsetAndFlags;
+
+    /// <summary>
+    /// The BLAS's device address.
+    /// </summary>
     public ulong Reference;
 
+    /// <summary>
+    /// The record's size in bytes.
+    /// </summary>
     public const int Size = 64;
 
     /// <summary>
@@ -39,6 +57,7 @@ public unsafe struct InstanceRecord
         {
             CustomIndexAndMask = (customIndex & 0xFFFFFF) | ((uint)mask << 24), OffsetAndFlags = (uint)flags << 24, Reference = blas,
         };
+
         // Vulkan's rows are the transposed columns of the row-vector matrix.
         r.Transform[0] = world.M11;
         r.Transform[1] = world.M21;
@@ -52,22 +71,52 @@ public unsafe struct InstanceRecord
 
 /// <summary>
 /// An acceleration structure (docs/render-gi.md "Acceleration structures"): its storage buffer, its handle and device address. Built into a
-/// command list (<see cref="BuildBottom"/>, <see cref="BuildTop"/>) with a scratch buffer kept on it, freed at <see cref="Dispose"/> once the
+/// command list (<see cref="BuildBottom"/>, <see cref="CreateTop"/>) with a scratch buffer kept on it, freed at <see cref="Dispose"/> once the
 /// frames that may still trace it have finished. Needs <see cref="VulkanDevice.HasRayQuery"/>. Render thread only.
 /// </summary>
 public sealed unsafe class AccelerationStructure : IDisposable
 {
     #region Storage
 
+    /// <summary>
+    /// The device the structure lives on.
+    /// </summary>
     readonly VulkanDevice _device;
+
+    /// <summary>
+    /// The buffer the structure is stored in.
+    /// </summary>
     readonly BufferAllocation _storage;
+
+    /// <summary>
+    /// The build's scratch buffer; null once released (<see cref="ReleaseScratch"/>).
+    /// </summary>
     BufferAllocation? _scratch;
 
+    /// <summary>
+    /// The structure's handle.
+    /// </summary>
     public AccelerationStructureKHR Handle { get; }
+
+    /// <summary>
+    /// The structure's device address, by which a top level refers to a bottom level.
+    /// </summary>
     public ulong Address { get; }
+
+    /// <summary>
+    /// The bytes of the storage and the scratch buffer still held.
+    /// </summary>
     public ulong Bytes => _storage.Size + (_scratch?.Size ?? 0);
+
+    /// <summary>
+    /// Whether the structure is a bottom or a top level.
+    /// </summary>
     public AccelerationStructureTypeKHR Type { get; }
 
+    /// <summary>
+    /// Makes a structure of <paramref name="type"/> in a new device-local buffer of <paramref name="size"/> bytes, with its handle and device
+    /// address.
+    /// </summary>
     AccelerationStructure(VulkanDevice device, AccelerationStructureTypeKHR type, ulong size, string name)
     {
         this._device = device;
@@ -97,9 +146,18 @@ public sealed unsafe class AccelerationStructure : IDisposable
 
     #region Bottom-level
 
-    /// <summary>A bottom-level structure over <paramref name="geometries"/>, built into <paramref name="cmd"/> (prefer fast tracing, or <paramref name="fastBuild"/>; compaction not used).
-    /// <paramref name="updatable"/>: it can be refitted (<see cref="RefitBottom"/>), and keeps its scratch buffer for that.</summary>
-    public static AccelerationStructure BuildBottom(VulkanDevice device, CommandList cmd, ReadOnlySpan<TriangleGeometry> geometries, string name, bool updatable = false, bool fastBuild = false)
+    /// <summary>
+    /// The flags a bottom level was built with, which a refit repeats.
+    /// </summary>
+    BuildAccelerationStructureFlagsKHR _updateFlags;
+
+    /// <summary>
+    /// A bottom-level structure over <paramref name="geometries"/>, built into <paramref name="cmd"/> (prefer fast tracing, or
+    /// <paramref name="fastBuild"/>; compaction not used).
+    /// <paramref name="updatable"/>: it can be refitted (<see cref="RefitBottom"/>), and keeps its scratch buffer for that.
+    /// </summary>
+    public static AccelerationStructure BuildBottom(VulkanDevice device, CommandList cmd, ReadOnlySpan<TriangleGeometry> geometries, string name,
+        bool updatable = false, bool fastBuild = false)
     {
         int n = geometries.Length;
         var geos = stackalloc AccelerationStructureGeometryKHR[Math.Max(n, 1)];
@@ -111,8 +169,6 @@ public sealed unsafe class AccelerationStructure : IDisposable
         made._updateFlags = flags;
         return made;
     }
-
-    BuildAccelerationStructureFlagsKHR _updateFlags;
 
     /// <summary>
     /// Refits a structure made by <see cref="BuildBottom"/> with <c>updatable</c>, in place, over <paramref name="geometries"/>: the same triangles
@@ -143,6 +199,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         _device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
     }
 
+    /// <summary>
+    /// Fills the geometries, their build ranges and their triangle counts for <paramref name="geometries"/>.
+    /// </summary>
     static void FillBottom(ReadOnlySpan<TriangleGeometry> geometries, AccelerationStructureGeometryKHR* geos,
         AccelerationStructureBuildRangeInfoKHR* ranges, uint* counts)
     {
@@ -200,6 +259,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         return top;
     }
 
+    /// <summary>
+    /// The sizes a top level for <paramref name="maxInstances"/> instances built with <paramref name="flags"/> needs.
+    /// </summary>
     static AccelerationStructureBuildSizesInfoKHR TopSizes(VulkanDevice device, uint maxInstances, BuildAccelerationStructureFlagsKHR flags)
     {
         var geo = TopGeometry(0);
@@ -242,6 +304,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         _device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
     }
 
+    /// <summary>
+    /// The scratch buffer's device address, aligned as the device wants it.
+    /// </summary>
     ulong ScratchAddress()
     {
         var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = _scratch!.Buffer };
@@ -249,6 +314,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         return (address + align - 1) / align * align;
     }
 
+    /// <summary>
+    /// The instances geometry of a top level, its records at <paramref name="instancesAddress"/>.
+    /// </summary>
     static AccelerationStructureGeometryKHR TopGeometry(ulong instancesAddress) => new()
     {
         SType = StructureType.AccelerationStructureGeometryKhr,
@@ -264,6 +332,10 @@ public sealed unsafe class AccelerationStructure : IDisposable
         },
     };
 
+    /// <summary>
+    /// Builds a new structure of <paramref name="type"/> over <paramref name="geos"/> into <paramref name="cmd"/>, with a scratch buffer for the
+    /// build (and for refits when <paramref name="keepScratch"/>).
+    /// </summary>
     static AccelerationStructure Build(VulkanDevice device, CommandList cmd, AccelerationStructureTypeKHR type,
         AccelerationStructureGeometryKHR* geos, uint geometryCount,
         AccelerationStructureBuildRangeInfoKHR* ranges, uint* maxPrimitives, BuildAccelerationStructureFlagsKHR flags,
@@ -306,6 +378,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         _scratch = null;
     }
 
+    /// <summary>
+    /// Releases the scratch buffer, and the handle and storage once the frames that may still trace the structure have finished.
+    /// </summary>
     public void Dispose()
     {
         ReleaseScratch();

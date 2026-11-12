@@ -23,11 +23,29 @@ public sealed partial class WorldObjectRenderer
         float Near, bool BackCull,
         bool Site, Vector3 Centre, float Radius);
 
+    /// <summary>
+    /// The draws the last colour pass kept for the outlined buildings (cleared at the next update: the meshes they name may go).
+    /// </summary>
     readonly List<SelectionDraw> _selectionDraws = [];
+
+    /// <summary>
+    /// The scratch list of one building's draws for its mask.
+    /// </summary>
     readonly List<SelectionDraw> _maskDraws = [];
+
+    /// <summary>
+    /// The masks drawn this frame, one per outlined building (<see cref="SelectionMasks"/>).
+    /// </summary>
     readonly List<HoverMask> _selectionMasks = [];
+
+    /// <summary>
+    /// The mask targets (colour, depth), one per outlined building, kept and remade when the size changes.
+    /// </summary>
     readonly List<(GpuTexture Colour, GpuTexture Depth)> _selectionTargets = [];
-    // The buildings the running colour pass keeps draws of (Selected, less those the interior view shows); empty outside one.
+
+    /// <summary>
+    /// The buildings the running colour pass keeps draws of (<c>Selected</c>, less those the interior view shows); empty outside one.
+    /// </summary>
     readonly List<string> _selecting = [];
 
     /// <summary>
@@ -41,6 +59,9 @@ public sealed partial class WorldObjectRenderer
     /// </summary>
     public IReadOnlyList<HoverMask> SelectionMasks => _selectionMasks;
 
+    /// <summary>
+    /// Whether a placement is building <paramref name="key"/> or one of its parts or layout objects.
+    /// </summary>
     static bool Selects(PlacedMesh p, string key) => p.PlacementId == key || p.ParentPlacementId == key;
 
     /// <summary>
@@ -192,6 +213,9 @@ public sealed partial class WorldObjectRenderer
         return (colour, depth);
     }
 
+    /// <summary>
+    /// Frees the mask targets and forgets the masks.
+    /// </summary>
     void DisposeSelection()
     {
         foreach (var (colour, depth) in _selectionTargets)

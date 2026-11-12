@@ -4,11 +4,11 @@
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/martinvlcek)
 
-C#/.NET10 reimplementation of [Kenshi](https://lofigames.com/), aiming to run original content,
+C#/.NET 11 reimplementation of [Kenshi](https://lofigames.com/), aiming to run original content,
 mods and saves unchanged. **No game assets are shipped; an installed legal copy is required.**
 Architecture/research: [docs index](docs/README.md). Website: [meitou.kenshi.wiki](https://meitou.kenshi.wiki/).
 
-[![Contributors](assets/branding/contributors.png?v=58804404)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
+[![Contributors](assets/branding/contributors.png?v=c86af348)](https://github.com/VlcekM/MeitouClient/graphs/contributors)
 
 ## Modding
 
@@ -29,6 +29,11 @@ updates the game and manages mods. Download the newest one for
 
 [macOS Intel](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncher-osx-x64-Setup.pkg) (unsigned, Gatekeeper warns).
 
+For macOS 13 Ventura, use the .NET 10 legacy launcher:
+[Intel](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncherLegacy-osx-x64-legacy-Setup.pkg) or
+[Apple silicon](https://github.com/VlcekM/MeitouClient/releases/latest/download/MeitouLauncherLegacy-osx-arm64-legacy-Setup.pkg).
+It installs the matching legacy game builds; standard builds use .NET 11 and require macOS 14 or later.
+
 By hand: [releases](https://github.com/VlcekM/MeitouClient/releases) for Windows, Linux and macOS, unzip and run
 
 Steam installs, and GOG installs made by GOG Galaxy, Heroic, Lutris or Bottles, are located automatically; otherwise select the Kenshi folder when prompted,
@@ -40,7 +45,7 @@ set KENSHI_PATH, or create git-ignored meitou.local.json in the repo/working/exe
 
 ## Build and run
 
-Building requires the [.NET10 SDK](https://dotnet.microsoft.com/download).
+Building requires the [.NET 11 SDK](https://dotnet.microsoft.com/download).
 
 ```text
 dotnet build -c Release

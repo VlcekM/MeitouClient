@@ -4,9 +4,9 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The interior join sweep (docs/game/pathfinding.md "Join sweep"): per original interior group, whether the original connects it to the exterior (mesh
-/// connections in its streaming set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of its faces, is
-/// reached from the street.
+/// The interior join sweep (docs/game/pathfinding.md "Join sweep"): per original interior group, whether the original connects it to the exterior
+/// (mesh connections in its streaming set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of
+/// its faces, is reached from the street.
 /// </summary>
 internal static class InteriorJoinSweep
 {
@@ -40,7 +40,8 @@ internal static class InteriorJoinSweep
     /// How many of the group's face centres lie in the site's hull (within 2 in plan, 20 in height).
     /// </summary>
     public static int Inside(OriginalInterior group, Site site) =>
-        Centres(group).Count(v => NavGeometry.InsideConvex(site.Hull.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= site.Hull.YMin - 20 && v.Y <= site.Hull.YMax + 20);
+        Centres(group).Count(v =>
+            NavGeometry.InsideConvex(site.Hull.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= site.Hull.YMin - 20 && v.Y <= site.Hull.YMax + 20);
 
     /// <summary>
     /// The site holding most of the group's face centres, or null when none holds any.
@@ -53,6 +54,9 @@ internal static class InteriorJoinSweep
         return Inside(group, site) > 0 ? site : null;
     }
 
+    /// <summary>
+    /// The centres of the group's faces of three or more vertices (vertex averages).
+    /// </summary>
     static IEnumerable<Vector3> Centres(OriginalInterior group) =>
         group.Polygons.Where(p => p.Length >= 3).Select(p => p.Aggregate(Vector3.Zero, (a, i) => a + group.Vertices[i]) / p.Length);
 

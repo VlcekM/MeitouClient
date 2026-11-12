@@ -15,6 +15,9 @@ namespace Meitou.Game.Rendering.Impostors;
 public sealed record ImpostorMaterial(string? Diffuse, string? Normal, string? Diffuse2, string? Normal2, float AlphaThreshold, bool DoubleSided,
     bool Triplanar, Vector2 Tile, float Specular)
 {
+    /// <summary>
+    /// The material's settings as one line of text, for the source's key.
+    /// </summary>
     public string Describe() => string.Create(CultureInfo.InvariantCulture,
         $"{Diffuse}|{Normal}|{Diffuse2}|{Normal2}|{AlphaThreshold:R}|{DoubleSided}|{Triplanar}|{Tile.X:R},{Tile.Y:R}|{Specular:R}");
 }
@@ -25,14 +28,29 @@ public sealed record ImpostorMaterial(string? Diffuse, string? Normal, string? D
 /// </summary>
 public sealed class ImpostorSource
 {
+    /// <summary>
+    /// The FOLIAGE_MESH's name, which names the cache file.
+    /// </summary>
     public required string Name { get; init; }
 
+    /// <summary>
+    /// The mesh file's resolved path.
+    /// </summary>
     public required string MeshPath { get; init; }
 
+    /// <summary>
+    /// The leaves mesh file's resolved path (null: none).
+    /// </summary>
     public string? LeavesPath { get; init; }
 
+    /// <summary>
+    /// The main mesh's material.
+    /// </summary>
     public required ImpostorMaterial Main { get; init; }
 
+    /// <summary>
+    /// The leaves mesh's material (null: no leaves mesh).
+    /// </summary>
     public ImpostorMaterial? Leaves { get; init; }
 
     /// <summary>
@@ -57,8 +75,14 @@ public sealed class ImpostorSource
     /// </summary>
     public int RockBiome { get; init; } = -1;
 
+    /// <summary>
+    /// A rock's biome material identity (see <see cref="RockBiome"/>); null otherwise.
+    /// </summary>
     public string? RockMaterial { get; init; }
 
+    /// <summary>
+    /// Whether this is a TERRAIN-mode rock baked with a biome's material.
+    /// </summary>
     public bool IsRock => RockBiome >= 0;
 
     /// <summary>
@@ -87,8 +111,13 @@ public sealed class ImpostorSource
     /// the mesh and its scales, no textures of its own (the material is the biome's). <see cref="Ineligible"/> still says no for the tools, which
     /// have no terrain to bake with.
     /// </summary>
-    public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) => From(mesh, assets, rockBiome, rockMaterial);
+    public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) =>
+        From(mesh, assets, rockBiome, rockMaterial);
 
+    /// <summary>
+    /// The source of <paramref name="mesh"/> with its files resolved (null when the mesh file is missing); a rock's when <paramref name="rockBiome"/>
+    /// is 0 or more.
+    /// </summary>
     static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets, int rockBiome, string? rockMaterial)
     {
         string? Find(string? name) => name is null ? null : assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
@@ -145,7 +174,8 @@ public sealed class ImpostorSource
 
                 var info = new FileInfo(path);
                 string full = Path.GetFullPath(path).ToLowerInvariant();
-                sb.Append(CultureInfo.InvariantCulture, $"{full}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}\n");
+                sb.Append(CultureInfo.InvariantCulture, $"{full}|{(info.Exists ? info.Length : -1)}|" +
+                    $"{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}\n");
             }
 
             File(MeshPath);
@@ -153,7 +183,8 @@ public sealed class ImpostorSource
             foreach (var t in TexturePaths) File(t);
 
             sb.Append(Main.Describe()).Append('\n').Append(Leaves?.Describe() ?? "-").Append('\n');
-            sb.Append(CultureInfo.InvariantCulture, $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias 1");
+            sb.Append(CultureInfo.InvariantCulture,
+                $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias 1");
 
             // Appended only for rocks: the tree atlases' keys (and so their cache files) stay what they were.
             if (IsRock) sb.Append(CultureInfo.InvariantCulture, $"\nrock {RockBakerVersion} {RockMaterial}\nrock frame {ImpostorClass.RockMaxFrame}");

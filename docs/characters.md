@@ -210,6 +210,9 @@ a scheme. 31 of 103 base FACTIONs have one; 42 of 142 ARMOUR records have `dont 
 Meitou: `ItemColours`, `ItemInstance.ColourId` (factory: the record's; `CharacterAssembly.Dye`: the scheme, for any item outside the main grid), `LoadoutItem.Colour`,
 `CharacterPart.Colour`. Whether the scheme follows a faction change (a recruit) is **Unknown**. Meitou uses the current faction. A vest texture (body layer) takes
 its item's colour like the meshes (the shader has one shirt colour: the first dyed vest's); the original's vest colour source is **Unknown**.
+Vest slot (**Observed**, decompile `FUN_140533b50`): the body's `vestDiffuse` / `vestNormal` / `colorMap` come only from the attachment in the `shirt` slot; an
+ARMOUR in another slot draws its mesh alone, its vest fields unread. All 15 base ARMOURs with a vest texture are shirts (slot 8); the Re Final Fantasy - Viera mod
+sets one on body armour (slot 5) and a collar (slot 14), whose atlas would cover the whole body (#533). Meitou: `CharacterAppearance.AddWorn`, shirt slot only.
 
 ### Crossbows
 
@@ -315,7 +318,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   `squat`), so the default `idle_stand_normal` is 6, as the original's screen shows. RANDOMISE never rolls it (**Verified**: no randomiser writes it).
   The stance clips are 1-frame poses (0.033 s, two keys) with `play speed` 0 (`squat` 0.01), **Verified** by probe on base data; looped at
   real time they flicker between the keys. The preview plays the chosen stance at its `play speed`, cross-faded at `animation blend rate`
-  (Meitou: `PlayerInterface.EditorIdle`, `GameHost.EditorStancePoses`; the original's fade is **Observed** smooth, its rate **Unknown**). In the
+  (Meitou: `PlayerInterface.EditorIdle`, `EditorStances.EditorStancePoses`; the original's fade is **Observed** smooth, its rate **Unknown**). In the
   world a character stands in its stance whenever it fits ([animation.md](animation.md#idle-stance)).
 - **Buttons** (randomisers **Verified** by decompilation, `FUN_1405efa50`, `FUN_1405ef930`): RANDOMISE rolls the current tab: FACE = head and face
   sliders, then face poses; BODY = body sliders and colours, no skin re-roll; HAIR = hair, no faction limits. RANDOMISE ALL = hair, face, body
@@ -352,9 +355,9 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Meitou bar** (the `editorbar` switch, Meitou, optional and off by default, else the platform; both hosts; `EditorBar`, `CharacterEditorHost`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
+- **Meitou bar** (the `editorbar` switch, Meitou, optional and off by default, else the platform; both hosts; `EditorBar`, `EditorBarScene`, `CharacterEditorHost`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
   Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, from records alone (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar`, `BuildingPlacement.Standalone`: no town's material, the part variants of a fixed place; barman from residents `44856-rebirth.mod`, patrons from The Hub's `bar squads`), the frame holding nothing of the world (`WorldObjectRenderer.Isolated`, `GiScene.SkipWorld`), 3000 above the highest ground round the edited character, in the interior view with every floor, at
-  23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldFrame.Gpu.ViewCap`: far plane and
+  23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldGpu.ViewCap`: far plane and
   shadow cascades), short of the world 3000 below; headless 1280x960 Release: 4.0-4.2 ms a frame capped, 5-29 ms uncapped (**Observed**, noisy machine). The shown character stands at a fixed spot of the building's frame facing the counter; up to 5 other
   characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
   in the dark windows. The bar's own people stand and sit in it: its residents' leader (Barman) at a shopkeeper node and first squad member (Ninja Guard) at a guard
