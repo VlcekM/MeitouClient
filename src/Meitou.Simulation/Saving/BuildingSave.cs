@@ -231,7 +231,7 @@ public static class BuildingSave
             foreach (var instance in list.Instances)
                 ReadTownInstance(instance, byId, save, world, playerFactionId, playerIndex, byInstance);
 
-        ReadLevelTowns(save, population, world, playerFactionId, playerIndex, byInstance);
+        ReadLevelTowns(save, population, world, playerFactionId, playerIndex, byInstance, byId);
         NormalizeTownOverlap(world);
         return TownHandles(world);
     }
@@ -241,10 +241,8 @@ public static class BuildingSave
     {
         if (instance.IsRemoved) return;
 
-        var states = TownStates(instance, byId, save)
-            .Where(state => IsPlayerTown(state, instance, playerFactionId))
-            .ToList();
-        if (states.Count == 0) return;
+        var states = TownStates(instance, byId, save).ToList();
+        if (!IsPlayerTown(states, instance.Target, playerFactionId)) return;
 
         var town = byInstance.GetValueOrDefault(instance.Id) ?? world.Buildings.AddTown(instance.Position, playerIndex);
         byInstance[instance.Id] = town;
@@ -261,13 +259,21 @@ public static class BuildingSave
             if (seen.Add(state)) yield return state;
     }
 
-    static bool IsPlayerTown(FcsRecord state, FcsInstance instance, string playerFactionId) =>
-        !state.Bools.GetValueOrDefault("is nest") &&
-        (state.Strings.GetValueOrDefault("faction") == playerFactionId ||
-            instance.Target == PlayerTown.Template && !state.Strings.ContainsKey("faction"));
+    /// <summary>
+    /// Resolves ownership across all linked states: a named foreign owner or nest wins; the template supplies only unspecified ownership.
+    /// </summary>
+    static bool IsPlayerTown(IReadOnlyList<FcsRecord> states, string? template, string playerFactionId)
+    {
+        if (states.Count == 0 || states.Any(state => state.Bools.GetValueOrDefault("is nest"))) return false;
+
+        var owners = states.Select(state => state.Strings.GetValueOrDefault("faction", "")).Where(owner => owner.Length > 0).ToList();
+        if (owners.Any(owner => owner != playerFactionId)) return false;
+
+        return owners.Count > 0 || template == PlayerTown.Template;
+    }
 
     static void ReadLevelTowns(SaveGame save, PopulationData? population, World world, string playerFactionId, int playerIndex,
-        Dictionary<string, PlayerTown> byInstance)
+        Dictionary<string, PlayerTown> byInstance, Dictionary<string, FcsRecord> byId)
     {
         if (population is null) return;
 
@@ -275,7 +281,12 @@ public static class BuildingSave
         {
             var site = population.Sites.FirstOrDefault(candidate => candidate.InstanceId == state.Instance);
             var instance = save.TownInstanceList?.Instances.FirstOrDefault(candidate => candidate.Id == state.Instance);
-            if (state.Handle.IsNull || instance is null && site is null) continue;
+            if (state.Handle.IsNull || instance is { IsRemoved: true } || instance is null && site is null) continue;
+
+            var states = instance is not null
+                ? TownStates(instance, byId, save).ToList()
+                : save.Towns.Where(town => town.Instance == state.Instance).Select(town => town.Record).ToList();
+            if (!IsPlayerTown(states, instance?.Target, playerFactionId)) continue;
 
             var town = byInstance.GetValueOrDefault(state.Instance);
             if (town is null)
@@ -627,17 +638,20 @@ public static class BuildingSave
                 if (live.Contains(instance.Id)) continue;
 
                 var states = TownStates(instance, byId, game).ToList();
-                if (states.Any(state => state.Bools.GetValueOrDefault("is nest")) ||
-                    !states.Any(state => IsPlayerTown(state, instance, playerFactionId))) continue;
+                if (!IsPlayerTown(states, instance.Target, playerFactionId)) continue;
 
                 list.Instances.Remove(instance);
                 RemoveTownStates(game, states);
             }
         }
 
-        var levelStates = game.Towns.Where(town => !town.IsNest && town.FactionId == playerFactionId && !live.Contains(town.Instance) &&
-            game.TownInstanceList?.Instances.Any(instance => instance.Id == town.Instance) != true).Select(town => town.Record).ToList();
-        RemoveTownStates(game, levelStates);
+        foreach (var group in game.Towns.GroupBy(town => town.Instance).ToList())
+        {
+            if (live.Contains(group.Key) || game.TownInstanceList?.Instances.Any(instance => instance.Id == group.Key) == true) continue;
+
+            var states = group.Select(town => town.Record).ToList();
+            if (IsPlayerTown(states, null, playerFactionId)) RemoveTownStates(game, states);
+        }
     }
 
     /// <summary>

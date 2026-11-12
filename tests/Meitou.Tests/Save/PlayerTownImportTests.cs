@@ -131,6 +131,36 @@ public class PlayerTownImportTests
         Assert.Empty(world.Buildings.Towns);
     }
 
+    /// <summary>
+    /// A foreign runtime owner wins over missing or player ownership in another state, in both import passes and when pruning saves.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Mixed_town_ownership_never_imports_or_rewrites_a_foreign_town(bool includePopulation, bool explicitPlayer)
+    {
+        var builder = new SaveBuilder(7);
+        var first = Town(builder, "Town state Ambiguous", "mixed", Player, new Hand(13, 4, 55, 2, 9));
+        if (!explicitPlayer) first.Record.Strings.Remove("faction");
+        var foreign = Town(builder, "Town state Foreign", "mixed", Foreign, new Hand(13, 5, 56, 2, 10));
+        var (_, list) = SaveWithInstances(("mixed", new Vector3(100, 300, 200), [first]));
+        builder.Game.TownInstanceList = list;
+        var db = SyntheticTown.Database();
+        var population = includePopulation ? PopulationData.Create(db, []) : null;
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7, population);
+        Assert.Empty(world.Buildings.Towns);
+
+        BuildingSave.Write(builder.Game, world, Player);
+        Assert.Equal(Foreign, foreign.FactionId);
+        Assert.Single(list.Instances);
+        Assert.Contains(first.Record, builder.Game.Quick.Records);
+        Assert.Contains(foreign.Record, builder.Game.Quick.Records);
+        Assert.Equal(explicitPlayer ? Player : null, first.Record.Strings.GetValueOrDefault("faction"));
+    }
+
     [Fact]
     public void Multiple_town_states_for_one_instance_are_merged()
     {
