@@ -55,6 +55,9 @@ c help                                # one usage line per command; `c help <nam
 - `screenshot <png path>` saves a frame; use a **absolute** path, shrink it (`magick x.png -resize '1280x1280>' -quality 85 x.jpg`) and look only when the picture is the question.
 - UI clicks go by name: `ui-tree` (list of `{i,label,rect,id,screen}`), then `ui-click --id <id>` / `--label <text>`; indices change per page, run a fresh `ui-tree` first.
 
+### Player towns
+`towns`, `town <number|name>` and `machines-power [town]` reply one JSON each (read-only; `Meitou.Simulation.Towns.TownReport`). Town numbers are 1.. over the placed towns in level order, then the player's outposts; `tp <number|name>` and `town` accept both and find outposts by name (Drycoom). A town has `kind` (`placed`/`outpost`), `instance` (saved instance id, null for an outpost no save has named), `owner`, `playerOwned`, `x z radius`, `public`, `level` (outposts), `sites`, `nest`, and for outposts `power {generated, use, charging, draining, batteryCharge, batteryCapacity}`; `town` adds `buildings[]` (outpost: id, building key, complete, indoors, position). `machines-power` lists each machine with site, town, `grid` (null when it is not on a grid), kind, demand, granted, satisfaction. `dismantle-site <site id>` (mutating, debug only) queues the building panel's confirmed Dismantle (`ConfirmDismantle`: refund, furniture lost, the outpost reassessed), not the level editor's clear; it runs on the next tick (`step` when paused). Normal placement is the existing `build` command.
+
 ### Command table (generated from the game's console registrations; `c help <name>` is authoritative)
 | Command | Usage |
 |---|---|
@@ -72,6 +75,7 @@ c help                                # one usage line per command; `c help <nam
 | `clipboard` | `clipboard` |
 | `container-put` | `container-put <container fixture id> "<item>" [qty]` |
 | `craft` | `craft <bench id> [recipe key\|name] [count]` |
+| `dismantle-site` | `dismantle-site <site id>` |
 | `door` | `door <fixture id> \| door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]` |
 | `doors` | `doors [building key]` |
 | `entity-screen` | `entity-screen <id>` |
@@ -102,6 +106,7 @@ c help                                # one usage line per command; `c help <nam
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
 | `layouts` | `layouts <building record id or name> [exterior]` |
 | `loot` | `loot <id>` |
+| `machines-power` | `machines-power [town number\|name]` |
 | `maxstats` | `maxstats` |
 | `money` | `money <delta>` |
 | `mouse` | `mouse <x> <y>` |
@@ -137,7 +142,9 @@ c help                                # one usage line per command; `c help <nam
 | `task` | `task <text>` |
 | `vram` | `vram` (debug: device-local memory in use and the budget, MB) |
 | `terrain-height` | `terrain-height <x> <z> [radius step]` |
-| `tp` | `tp <x> <z> \| tp <town name>` |
+| `town` | `town <number\|name>` |
+| `towns` | `towns` |
+| `tp` | `tp <x> <z> \| tp <town name or number>` |
 | `tpcursor` | `tpcursor` |
 | `trade` | `trade \| trade open <trader id> \| trade buy\|sell <item name> [n] \| trade close` |
 | `ui-click` | `ui-click <label\|index> \| ui-click [--id <widgetId>] [--label <text>] [--screen <name>] [--index <n>]` |
