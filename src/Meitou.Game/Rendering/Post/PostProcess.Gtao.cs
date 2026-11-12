@@ -199,7 +199,7 @@ public sealed unsafe partial class PostProcess
         Bind(bl.P, bl.Ao, b);
         Bind(bl.P, bl.Mask, characters ? _sceneColour : null);
         bl.P.Set(bl.Step, 0f, 1f / a.Height);
-        bl.P.Set(bl.CharacterAo, characters ? PostOptions.SsaoCharacterStrength : 1f);
+        bl.P.Set(bl.CharacterAo, characters ? PostOptions.GtaoCharacterStrength : 1f);
         Draw(bl.P, a);
         if (AmbientOcclusion.Stamps) Stamp("gtao blur");
         (_occlusion.A, _occlusion.B) = (_occlusion.B, _occlusion.A);

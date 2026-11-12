@@ -1016,7 +1016,8 @@ static class PostProcessShaders
                 weights += w[i - 1] * dw;
             }
             float ao = sum / weights;
-            if (uCharacterAo < 1.0) ao = mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo));
+            // Below 1 the characters keep that share of their occlusion; above 1 it is that many times as deep on them.
+            if (uCharacterAo != 1.0) ao = clamp(mix(ao, 1.0, texture(uMask, vUv).a * (1.0 - uCharacterAo)), 0.0, 1.0);
             fragColour = vec4(ao, c.g, 0.0, 1.0);
         }
         """;
