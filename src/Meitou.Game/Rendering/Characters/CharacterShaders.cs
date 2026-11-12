@@ -449,6 +449,7 @@ static class CharacterShaders
             float gearCover = 0.0, gearGloss = 0.0, gearRise = 0.0;
             bool gearWorn = false;
             vec3 gearTint = vec3(0.0);   // a worn item: the wearer's blood colour
+            vec3 gearFilm = vec3(0.0);   // a weapon: the colour of the blood lying on it
             float gearLies = 0.0;        // and how thick it lies
             if (flag(f, {{GearBloody}}u))
             {
@@ -485,7 +486,7 @@ static class CharacterShaders
                     gearGloss = mix(0.25, 0.94, vGearFresh);
                     gearRise = 0.006 * smoothstep(0.0, 0.6, lies) * vGearFresh;
                 }
-                if (!gearWorn) albedo = mix(albedo, gearBlood, gearCover);
+                gearFilm = gearBlood;   // laid below, over the metal
             }
             // A headless body's neck cap (NeckCap): uv is (0, 0) at its centre and 1 at the rim; colour1 the race's blood colour, the diffuse slot the splatter map.
             // Flesh: the fluid darkening into the cut, a bone at the centre. Mechanical (a robot race): a dark metal socket, its core darker, the fluid over it.
@@ -554,6 +555,7 @@ static class CharacterShaders
             if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
             if (gearCover > 0.0)   // blood on a blade or plate is no metal: wet, then dry
             {
+                float lies = gearCover;   // how much of the fragment the film takes
                 if (gearWorn)
                 {
                     // On plate, lacquer and hard leather the blood lies as on a blade: an opaque deep film with an edge, shining. Cloth takes it in: a stain with a soft
@@ -561,14 +563,25 @@ static class CharacterShaders
                     float hard = max(metal, smoothstep(0.3, 0.6, gloss)), thick = smoothstep(0.1, 0.7, gearLies);
                     float soak = smoothstep(0.0, 0.45, gearLies);
                     vec3 dye = gearTint / max(max(gearTint.r, max(gearTint.g, gearTint.b)), 0.05);
-                    vec3 stained = mix(albedo, albedo * dye * mix(0.6, 0.3, thick), soak);
-                    vec3 filmed = mix(albedo, gearTint * 0.8 * mix(0.45, 0.16, thick), gearCover);   // 0.8: the worn items' darkening
-                    albedo = mix(stained, filmed, hard);
+                    albedo = mix(albedo, albedo * dye * mix(0.6, 0.3, thick), soak * (1.0 - hard));
+                    gearFilm = gearTint * 0.8 * mix(0.45, 0.16, thick);   // 0.8: the worn items' darkening
+                    lies = gearCover * hard;
                     gearCover = mix(soak, gearCover, hard);
                     gearGloss = mix(max(gloss, 0.4), 0.92, hard);
                     gearRise *= hard;
                 }
-                metal *= 1.0 - gearCover;
+                // The film lies on top of the metal, after the metal's estimate (which saw the clean surface). The lighting has one albedo, the reflection's colour
+                // where the fragment is metal and the diffuse colour where it is not: mixing steel and blood in it made a pale red metal, pink in the light. So the
+                // albedo is set to what gives the right diffuse light (the film's, over what the bare part had) at the metalness left bare; under any film the bare
+                // metal's reflection takes the blood's colour, as seen through it. The step this leaves at the film's edge is spread over a pixel and a half.
+                if (lies > 0.0)
+                {
+                    float bare = metal * (1.0 - lies);
+                    vec3 over = (albedo * (1.0 - metal) * (1.0 - lies) + gearFilm * lies) / max(1.0 - bare, 1e-3);
+                    albedo = mix(albedo, over, clamp(lies / max(fwidth(lies) * 1.5, 0.02), 0.0, 1.0));
+                    metal = bare;
+                    metalShare *= 1.0 - lies;
+                }
                 gloss = mix(gloss, gearGloss, gearCover);
                 if (gearRise > 0.0)   // the wet film's surface: the normal leans down its slope
                 {
