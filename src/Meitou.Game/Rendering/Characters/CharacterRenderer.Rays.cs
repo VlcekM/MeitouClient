@@ -18,7 +18,9 @@ internal sealed partial class CharacterRenderer
     {
         public long Key;
         public Vector3 Anchor;
-        /// <summary>The sphere the character's pose fits in (the areas of the lamps' per-pixel rays).</summary>
+        /// <summary>The sphere the character and what it carries fit in (the areas of the lamps' per-pixel rays): the body's, grown round every shown part that hangs from
+        /// a bone (a drawn or sheathed weapon, a pole on the back), which the body's own radius leaves out. Short of them the shadow of a long weapon was cut along the
+        /// 64-pixel cells its lamp's pass works on.</summary>
         public Vector3 Centre;
         public float Radius;
         public uint BoneBase;
@@ -74,11 +76,17 @@ internal sealed partial class CharacterRenderer
         // The parts are placed relative to the update's eye; relative to the anchor here, so the character's structure keeps its precision and its shape while it walks.
         var shift = _partOrigin - c.Anchor;
         var parts = l.Asset.Parts;
+        float radius = l.Radius;
         for (int p = 0; p < parts.Count; p++)
         {
             ref readonly var f = ref _partFrames[l.PartBase + p];
-            if (f.Shows) AddRayPart(in l, parts[p], in f, shift, c);
+            if (!f.Shows) continue;
+            AddRayPart(in l, parts[p], in f, shift, c);
+            if (parts[p].Shared) continue;
+            var at = Vector3.Transform(parts[p].Mesh.Centre, f.Model) + _partOrigin;
+            radius = MathF.Max(radius, Vector3.Distance(at, l.Centre) + parts[p].Mesh.Radius * f.Scale);
         }
+        c.Radius = radius * 1.1f;
     }
 
     void AddRayPart(in Live l, AssetPart part, in PartFrame f, Vector3 shift, RayCharacter c)
