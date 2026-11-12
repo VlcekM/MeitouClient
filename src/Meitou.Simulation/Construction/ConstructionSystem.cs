@@ -805,7 +805,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// docs/game/buildings-production.md "Outposts"): the mean of its outdoor buildings, on walkable ground when some is near, then
     /// <see cref="TownRadiusMargin"/> beyond the farthest. Engine choice: a plain mean (the original weighs two building sets, <b>Unknown</b> which);
     /// placement/dismantle reassessment removes a town only when no registered building remains, including indoor/orphan sites. Foliage resources
-    /// are outside this registry. Load-time reassessment preserves an empty saved town.
+    /// are outside this registry. Loading never reassesses: a saved centre and radius stay as saved.
     /// </summary>
     public static void ReassessTown(World world, PlayerTown town, bool mergeOverlaps = true, bool removeEmpty = true)
     {
@@ -827,14 +827,6 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         town.Override = Math.Clamp(radius, TownRadiusMin, TownRadiusMax);
 
         if (mergeOverlaps) MergeOverlappingTown(world, town);
-    }
-
-    /// <summary>
-    /// Reassesses every player town (<see cref="ReassessTown"/>).
-    /// </summary>
-    public static void ReassessTowns(World world)
-    {
-        foreach (var town in world.Buildings.Towns) ReassessTown(world, town, mergeOverlaps: false, removeEmpty: false);
     }
 
     /// <summary>

@@ -143,8 +143,7 @@ public static class BuildingSave
 
         AttachWalls(world, db);
 
-        // Engine choice: towns are reassessed on load (a save may hold a centre that was never moved, as Meitou's before it reassessed).
-        ConstructionSystem.ReassessTowns(world);
+        // The saved centre and radius stay as saved: the original refits a town only on a placement or dismantle (loadGame has no reassessment).
         return made;
     }
 

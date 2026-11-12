@@ -600,6 +600,38 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// Loading keeps a town's saved centre and radius even when its buildings lie elsewhere; the original refits only on a placement or dismantle.
+    /// </summary>
+    [Fact]
+    public void Loading_keeps_the_saved_centre_and_radius()
+    {
+        var builder = new SaveBuilder(7);
+        var handle = new Hand((int)FcsRecordType.Town, 4, 55, 2, 9);
+        var state = Town(builder, "Town state Camp", "camp", Player, handle, false, 1800);
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+        var db = new GameDatabase();
+        var file = new FcsFile();
+        file.Records.Add(new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building });
+        db.Apply(file, "test.mod");
+        using (var source = World())
+        {
+            source.Buildings.Add(Site("1-zone16.16-INGAME", new Vector3(5000, 300, 5000), 0));
+            BuildingSave.Write(builder.Game, source, Player);
+        }
+
+        handle.Write(Assert.Single(builder.Game.Zones.Values).BuildingStates.Single(), "town");
+        using var world = World();
+
+        BuildingSave.Read(builder.Game, world, db, Player, 7);
+
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal(1, Assert.Single(world.Buildings.All).Town);
+        Assert.Equal(new Vector3(100, 300, 200), town.Position);
+        Assert.Equal(1800, town.Override);
+    }
+
+    /// <summary>
     /// Original-save fractional radii survive loading and writing without an integer shadow field.
     /// </summary>
     [Theory]
