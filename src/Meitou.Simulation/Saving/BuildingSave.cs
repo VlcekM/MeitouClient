@@ -557,14 +557,13 @@ public static class BuildingSave
         foreach (var town in towns)
         {
             var instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
-            var state = instance is { States.Count: > 0 } ? byId.GetValueOrDefault(instance.States[0]) : null;
-            if (state is { RecordType: not FcsRecordType.GamestateTown }) state = null;
             if (instance is null)
             {
-                instance = new FcsInstance { Id = QuickId(NextQuick(quick)) };
+                instance = new FcsInstance { Id = town.SaveInstance ?? QuickId(NextQuick(quick)) };
                 list.Instances.Add(instance);
             }
-
+            var states = TownStates(instance, byId, game).ToList();
+            var state = states.FirstOrDefault();
             bool fresh = state is null;
             if (state is null)
             {
@@ -576,35 +575,43 @@ public static class BuildingSave
                 quick.Records.Insert(at < 0 ? quick.Records.Count : at, state);
                 byId[state.StringId] = state;
                 game.Towns.Add(new SaveTown(state));
+                states.Add(state);
             }
 
             instance.Target = PlayerTown.Template;
             instance.Position = town.Position;
             instance.Rotation = new Quaternion(0, 0, 0, 0);
             instance.States.Clear();
-            instance.States.Add(state.StringId);
+            instance.States.AddRange(states.Select(linked => linked.StringId));
 
             var hand = town.SaveHandle ?? (Hand.Read(state, "hand") is { IsNull: false } h
                 ? h
                 : new Hand((int)FcsRecordType.Town, ++container, (int)Rng.Mix(Rng.StableHash(instance.Id) ^ seed), 0, 0));
             hands[town.Number] = hand;
 
-            state.Name = TownStatePrefix + town.Name;
             if (fresh) WriteFreshTownKeys(state);
-
-            state.Bools["public"] = town.Public;   // Town +0x380, the panel's Open to public
-            hand.Write(state, "hand");
-            state.Strings["faction"] = playerFactionId;
-            state.Strings["instance"] = instance.Id;
-            state.Ints["override"] = (int)town.Override;
-            if (world.SystemOf<PopulationSystem>() is { } population)
-                state.Ints["plevel"] = population.TownLevel(world, town.Number);
-            var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
-            state.Ints["zzX0"] = zone.X;
-            state.Ints["zzY0"] = zone.Y;
+            foreach (var linked in states) WriteTownState(world, town, instance.Id, linked, hand, playerFactionId);
         }
 
         return hands;
+    }
+
+    /// <summary>
+    /// Writes the same live town properties to each linked runtime state so neither load pass can restore stale values.
+    /// </summary>
+    static void WriteTownState(World world, PlayerTown town, string instanceId, FcsRecord state, Hand hand, string playerFactionId)
+    {
+        state.Name = TownStatePrefix + town.Name;
+        state.Bools["public"] = town.Public;   // Town +0x380, the panel's Open to public
+        hand.Write(state, "hand");
+        state.Strings["faction"] = playerFactionId;
+        state.Strings["instance"] = instanceId;
+        state.Ints["override"] = (int)town.Override;
+        if (world.SystemOf<PopulationSystem>() is { } population)
+            state.Ints["plevel"] = population.TownLevel(world, town.Number);
+        var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
+        state.Ints["zzX0"] = zone.X;
+        state.Ints["zzY0"] = zone.Y;
     }
 
     /// <summary>
