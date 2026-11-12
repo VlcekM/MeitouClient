@@ -216,6 +216,7 @@ public sealed class StrategyCamera
         // Pan: the keys and the pointer at an edge add up; the direction is unit length whatever it is made of.
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
+        float speed = fwd != 0 || right != 0 ? KeyPanFactor(a) : 1;
         if (_settings.EdgeScroll && EdgePointer is { } p)
         {
             if (p.X < KenshiCamera.EdgeMargin) right -= 1;
@@ -223,7 +224,7 @@ public sealed class StrategyCamera
             if (p.Y < KenshiCamera.EdgeMargin) fwd += 1;
             if (p.Y > 1 - KenshiCamera.EdgeMargin) fwd -= 1;
         }
-        if (fwd != 0 || right != 0) Pan(fwd, right, h);
+        if (fwd != 0 || right != 0) Pan(fwd, right, h * speed);
 
         TurnAndTilt(h, a, share);
         FollowHeight(h);
@@ -274,6 +275,11 @@ public sealed class StrategyCamera
         float target = KenshiCamera.ZoomedDistance(Distance, _settings.ZoomSpeed, input);
         Distance += (target - Distance) * MathF.Min(KenshiCamera.ZoomFollowRate * h, 1);
     }
+
+    /// <summary>
+    /// The pan speed factor of the pan keys: <see cref="CameraSettings.ShiftPanFactor"/> while Shift is held, else 1.
+    /// </summary>
+    float KeyPanFactor(ActionState a) => a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift) ? _settings.ShiftPanFactor : 1;
 
     /// <summary>
     /// Pans along the heading. The game turns the key direction by the pivot's orientation, drops its height and normalises: sideways is

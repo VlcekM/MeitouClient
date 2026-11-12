@@ -138,6 +138,8 @@ The turn and tilt averaging counts its 20 frames in drawn frames, as the game's 
 pixel does not change with the frame rate): a step spanning n drawn frames weighs its samples 1, aⁿ, a²ⁿ, ... over 20 / n samples
 (`StrategyCamera.FramesPerStep`, the host's smoothed frame time). Engine choices: a frame rate under 60 averages as 60 does, and the
 Controls settings' **Camera smoothing** (`UserConfig.CameraSmoothing`, default on; the game has no such option) turns the averaging off.
+Controls settings' **Shift pan boost** (`UserConfig.ShiftPanBoost`, a Faithful / Meitou switch, default on; the game has none) multiplies
+the key pan by **Shift pan speed** (`ShiftPanMultiplier`, 125% to 500%, default 200%) while Shift is held; edge scrolling alone is not boosted.
 Differences, all engine choices: a pitch step is cut into pieces of at most 0.02 rad, each checked against the limits (the game
 overshoots by up to one step); the eye is never left below the clearance by the height lag; tracking is the host's (the pivot
 follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the

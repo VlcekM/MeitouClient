@@ -122,6 +122,10 @@ sealed class UserConfig
     /// The ranges of <see cref="CameraMoveSpeed"/> (150 … 1000) and <see cref="CameraZoomSpeed"/> (10 … 200), the original's.
     /// </summary>
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
+    /// <summary>
+    /// The range and default of <see cref="ShiftPanMultiplier"/>.
+    /// </summary>
+    public const float MinShiftPanMultiplier = 1.25f, MaxShiftPanMultiplier = 5, DefaultShiftPanMultiplier = 2;
 
     /// <summary>
     /// The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that release does not
@@ -391,6 +395,16 @@ sealed class UserConfig
     /// </summary>
     public bool CameraSmoothing { get; set; } = true;
     /// <summary>
+    /// Shift held with the pan keys multiplies the strategy camera's pan speed by <see cref="ShiftPanMultiplier"/> (Controls settings, a Faithful /
+    /// Meitou switch; Faithful off: the game has no such boost).
+    /// </summary>
+    public bool ShiftPanBoost { get; set; } = true;
+    /// <summary>
+    /// The pan speed factor while Shift is held (Controls settings, <see cref="MinShiftPanMultiplier"/> … <see cref="MaxShiftPanMultiplier"/>,
+    /// default 2).
+    /// </summary>
+    public float ShiftPanMultiplier { get; set; } = DefaultShiftPanMultiplier;
+    /// <summary>
     /// The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's
     /// settings.cfg.
     /// </summary>
@@ -566,6 +580,7 @@ sealed class UserConfig
         camera.Smoothing = CameraSmoothing;
         camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
         camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
+        camera.ShiftPanFactor = ShiftPanBoost ? ShiftPanMultiplier : 1;
     }
 
     #endregion

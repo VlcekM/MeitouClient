@@ -45,6 +45,11 @@ sealed class GamePages(SettingsMenu menu)
     Slider? _cameraMoveSpeed, _cameraZoomSpeed;
 
     /// <summary>
+    /// The Shift pan multiplier slider, made on first use.
+    /// </summary>
+    Slider? _shiftPanMultiplier;
+
+    /// <summary>
     /// The audio sliders, made on first use.
     /// </summary>
     Slider[]? _audioSliders;
@@ -106,6 +111,23 @@ sealed class GamePages(SettingsMenu menu)
     Slider CameraZoomSpeed => _cameraZoomSpeed ??= CameraSpeedSlider("Camera zoom speed", UserConfig.MinCameraZoomSpeed,
         UserConfig.MaxCameraZoomSpeed, () => menu.Config.CameraZoomSpeed ?? Data.World.KenshiCamera.DefaultZoomSpeed,
         v => menu.Config.CameraZoomSpeed = v, Data.World.KenshiCamera.DefaultZoomSpeed);
+
+    /// <summary>
+    /// The Shift pan multiplier slider in 25% steps, marked at Meitou's 200%; a change goes to <see cref="SettingsMenu.CameraChanged"/>.
+    /// </summary>
+    Slider ShiftPanMultiplier => _shiftPanMultiplier ??= new("Shift pan speed", UserConfig.MinShiftPanMultiplier,
+        UserConfig.MaxShiftPanMultiplier, () => menu.Config.ShiftPanMultiplier, SetShiftPanMultiplier, "0.00", Text: v => $"{v * 100:0}%",
+        Meitou: UserConfig.DefaultShiftPanMultiplier, Scale: 100, Step: 0.25f);
+
+    /// <summary>
+    /// The Shift pan multiplier, rounded to 25% and clamped, into the config and the camera.
+    /// </summary>
+    void SetShiftPanMultiplier(float v)
+    {
+        float multiplier = Math.Clamp(MathF.Round(v * 4) / 4, UserConfig.MinShiftPanMultiplier, UserConfig.MaxShiftPanMultiplier);
+        menu.Config.ShiftPanMultiplier = multiplier;
+        menu.CameraChanged?.Invoke();
+    }
 
     /// <summary>
     /// A camera speed slider in whole steps, marked at the game's <paramref name="original"/>; a change goes to <see
@@ -348,6 +370,13 @@ sealed class GamePages(SettingsMenu menu)
             "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera).", Slider: CameraMoveSpeed));
         result.Add(new(CameraZoomSpeed.Label, "How fast the wheel and the zoom keys move the camera in and out (the game: 125).",
             Slider: CameraZoomSpeed));
+        result.Add(new("Shift pan boost", "Holding Shift with the camera move keys pans the camera faster (the game has no such boost).",
+            Toggle: new("Shift pan boost", () => menu.Config.ShiftPanBoost, SetShiftPanBoost, Remaster: true, OnOff: true)));
+        if (menu.Config.ShiftPanBoost)
+        {
+            result.Add(new(ShiftPanMultiplier.Label, "The camera's pan speed while Shift is held, of its normal speed.", Slider: ShiftPanMultiplier,
+                Depth: 1));
+        }
         result.Add(new("Invert mouse X", "Reverses the camera's turn, for the mouse and the keys (the game: off).",
             Toggle: new("Invert mouse X", () => menu.Config.InvertX == true, v => { menu.Config.InvertX = v; menu.CameraChanged?.Invoke(); },
                 OnOff: true)));
@@ -364,6 +393,15 @@ sealed class GamePages(SettingsMenu menu)
             Toggle: new("Camera smoothing", () => menu.Config.CameraSmoothing, SetCameraSmoothing)));
         foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
+    }
+
+    /// <summary>
+    /// The Shift pan boost switch, into the config and the camera.
+    /// </summary>
+    void SetShiftPanBoost(bool on)
+    {
+        menu.Config.ShiftPanBoost = on;
+        menu.CameraChanged?.Invoke();
     }
 
     /// <summary>

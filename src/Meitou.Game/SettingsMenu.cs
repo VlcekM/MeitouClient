@@ -1185,6 +1185,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         GamePages.CameraRotateSpeed.Set(Data.World.KenshiCamera.DefaultRotateSpeed);
         Config.EdgeScroll = true;
         Config.CameraSmoothing = true;
+        Config.ShiftPanBoost = true;
+        Config.ShiftPanMultiplier = UserConfig.DefaultShiftPanMultiplier;
         Config.InvertX = false;
         Config.InvertY = true;
         Config.CameraMoveSpeed = Data.World.KenshiCamera.DefaultMoveSpeed;
