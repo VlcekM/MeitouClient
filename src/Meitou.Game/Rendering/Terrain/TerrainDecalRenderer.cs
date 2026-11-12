@@ -379,6 +379,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         if (_instances.Length < decals.Length)
             _instances = new DecalInstance[Math.Max(decals.Length, _instances.Length * 2)];
         int n = 0;
+
+        // The terrain reads a layer with v = the cell's Z fraction from row 0: Vulkan's row 0 is NDC -1, Metal's is NDC +1, so Metal draws mirrored in Y.
+        float rowSign = _gpu.RenderTargetsBottomUp ? 1 : -1;
         foreach (var d in decals)
         {
             var indices = _spriteIndex[(int)d.Type];
@@ -387,8 +390,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
             uint abgr = d.Colour;
             _instances[n++] = new DecalInstance
             {
-                Quad = new Vector4(d.LocalX * 2 / 1000f - 1, d.LocalZ * 2 / 1000f - 1, d.HalfWidth / 10240f * s, d.HalfWidth / 10240f * c),
-                AxisH = new Vector2(d.HalfHeight / 10240f * c, -d.HalfHeight / 10240f * s),
+                Quad = new Vector4(d.LocalX * 2 / 1000f - 1, (d.LocalZ * 2 / 1000f - 1) * rowSign, d.HalfWidth / 10240f * s,
+                        d.HalfWidth / 10240f * c * rowSign),
+                AxisH = new Vector2(d.HalfHeight / 10240f * c, -d.HalfHeight / 10240f * s * rowSign),
                 Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f,
                         MathF.Min((abgr >> 24) / 255f, store.LifeLeft(d))),
                 Sprite = indices[d.Variant],

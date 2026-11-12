@@ -87,6 +87,7 @@ frames); otherwise only the decals placed since are drawn over it (`Appended`). 
 that was visibly stepped, stacked the translucent edge dozens of times and popped when the cell was later redrawn. The
 original likely draws incrementally too (**Observed**, inferred: it clears only for a new cell and keeps a drawn cell's dead decals); a log past twice the cell's decals + 64 forces a redraw.
 A layer is one instanced draw (each decal's texture by bindless index, colour and alpha blended separately in one pass).
+Row order: the terrain shader reads a layer with v = the cell's Z fraction from row 0, and Vulkan's row 0 is NDC −1 but Metal's is NDC +1 (`RenderTargetsBottomUp`), so `DrawLayer` mirrors the quads' Y on Metal. Before this, Metal terrain blood landed in the right cell but mirrored in Z across it (up to ~290 units off). **Observed** (owner, in play on Metal): outdoor blood now appears where the fight is.
 The store finds a pool by a per-cell index of place → first pool there, not a list scan, and keeps each life as the store
 clock's expiry time, so ageing visits only cells with a decal due. Decals
 are saved and loaded as stored (`SaveDecals`, TERRAIN_DECALS in [save.md](../formats/save.md#folder-and-state-mapping));
