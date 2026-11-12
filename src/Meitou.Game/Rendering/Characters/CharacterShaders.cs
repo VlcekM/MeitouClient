@@ -139,6 +139,9 @@ static class CharacterShaders
     /// </summary>
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
 
+    /// <summary>
+    /// The colour and depth passes' vertex program (no motion).
+    /// </summary>
     public static string Vertex() => VertexSource(false);
     /// <summary>
     /// The vertex program for the motion vectors: also skins with last frame's palette (binding 9) and model matrix (locations 12 to 15).
