@@ -368,6 +368,18 @@ sealed class AgentPlay(GameHost host)
             con.Print($"knocked out {who.Length} for {seconds:0.#} s");
         });
 
+        add("ragdoll-dump", "ragdoll-dump [--id <c:slot.gen>]", "debug, paused game only: the first selected character's (or the one given) ragdoll bodies in world space and each joint's twist and swing against its limits (degrees)", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            if (!ControlTargets(args, con, "ragdoll-dump", out var who, out _) || who.Length == 0) return;
+            if (!host.Session.Simulation.IsPaused) { con.Error("ragdoll-dump: the game is running; pause first"); return; }
+            var rag = host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault();
+            string? text = rag?.Describe(who[0]);
+            if (text is null) { con.Error("ragdoll-dump: no ragdoll"); return; }
+            host.AgentChannel.ControlData = JsonSerializer.Serialize(new { text });
+            con.Print(text);
+        });
+
         add("wake", "wake [--id <c:slot.gen>]", "debug: bring the selected characters (or the one given) out of a knock-out at once, conscious and controllable, without healing them (heal first for a wounded vital part, which would put them down again); dead characters are refused, conscious ones skipped (error if none was unconscious)", (args, con) =>
         {
             if (!loaded(con)) return;

@@ -210,6 +210,35 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
 
     public bool WasWhole(CharacterId id) => _ragdolls.TryGetValue(id, out var r) && (r.Mask & RagdollPart.Whole) != 0;
 
+    /// <summary>
+    /// Debug (the console's <c>ragdoll-dump</c>): the character's bodies in world space and each joint's twist angle against its limits, one line each; null without a ragdoll.
+    /// </summary>
+    public string? Describe(CharacterId id)
+    {
+        if (!_ragdolls.TryGetValue(id, out var r) || r.Pose.Length != r.Definition.Bodies.Length) return null;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"mask {r.Mask} tone {r.Tone} frozen {r.Frozen} age {r.Age:0.00}"));
+        var d = r.Definition;
+        for (int b = 0; b < d.Bodies.Length; b++)
+        {
+            var p = r.Pose[b];
+            var up = Vector3.Transform(Vector3.UnitY, p.Rotation);
+            sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"body {d.Bodies[b].Name} dyn={(b < r.Dynamic.Length && r.Dynamic[b])} pos=({p.Position.X:0.00},{p.Position.Y:0.00},{p.Position.Z:0.00}) localY=({up.X:0.00},{up.Y:0.00},{up.Z:0.00})"));
+        }
+        float deg = 180 / MathF.PI;
+        foreach (var j in d.Joints)
+        {
+            var qa = r.Pose[j.A].Rotation * j.BasisA;
+            var qb = r.Pose[j.B].Rotation * j.BasisB;
+            var rel = Quaternion.Conjugate(qa) * qb;
+            if (rel.W < 0) rel = new Quaternion(-rel.X, -rel.Y, -rel.Z, -rel.W);
+            float twist = 2 * MathF.Atan2(rel.Z, rel.W) * deg;
+            float swing = 2 * MathF.Asin(Math.Clamp(MathF.Sqrt(rel.X * rel.X + rel.Y * rel.Y), 0, 1)) * deg;
+            sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"joint {d.Bodies[j.A].Name} -> {d.Bodies[j.B].Name} {j.Type} twist={twist:0.0} swing={swing:0.0} limits=[{j.Low * deg:0},{j.High * deg:0}] swingMax={j.Swing * deg:0}"));
+        }
+        return sb.ToString();
+    }
+
     public BonePose? Publish(CharacterId id) => _ragdolls.TryGetValue(id, out var r) ? r.Published : null;
 
     // A static factory given the system: nothing allocated on a hit. The file itself is read once per path (one a race and sex), not once per look: every

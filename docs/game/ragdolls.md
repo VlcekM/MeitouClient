@@ -273,7 +273,7 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 - **Soft limits**, every ragdoll: each limit gets an inner one 25% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a soft overdamped spring (5 Hz, ratio 3)
   that brakes the joint before the hard stop instead of letting it hit it at full speed.
 - **Relaxed pull**, whole and carried ragdolls of an incapacitated character (not a conscious one's collapsed limbs, which hang loose): a capped `TwistServo` on each joint towards
-  60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees, which way **Unknown**, spine straight; a shoulder's twist to 0, its swing left to
+  60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees of flexion (**Observed**: the hip's clip poses run −130 to +50 with a median of −17, so negative is flexion), spine at its binding pose; a shoulder's twist to 0, its swing left to
   gravity). Unconscious 1.5 Hz with at most 40 torque, dead 0.8 Hz with at most 12 (muscles go slack at death); the head keeps only the file's spring. Re-set when the state
   changes (a knocked-out body dying), removed at the freeze. Gravity beats it, so it shapes the rest pose rather than holding one.
 - **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
@@ -281,6 +281,20 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 - **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
   (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body takes the whole push times the ragdoll's mass over its own (at most 4x: an impulse on it
   alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; no start cap (the physics holds each body to `RagdollPhysics.MaxSpeed`, 200). No bone: the whole push on every body.
+
+### Rest poses of the spine (Observed, no fix shipped)
+
+Reported: knocked-out and dead bodies often end with a bent back. **Observed** (`ragdoll-dump`, a standing character knocked out with no blow, Siwa and Twinblades of `t_flats_shore`, 300 ticks later;
+twist signs: forward flexion is positive for `Spine1 -> Bip01` and negative for `Spine1 -> Spine2` and `Spine2 -> Neck`, whose hinge axis is -X in model space, forward +Z):
+- A forward collapse ends kneeling with the face down and the back rounded: hips -98 to -110, knees 137 to 157, `Spine1 -> Bip01` +34 to +40 (limit 37), `Spine1 -> Spine2` -31 (limit 30), neck -24 to +17.
+  The same pose with Advanced ragdolls off (the file's joints and shapes alone), so the relaxed pull and the soft limits are not its cause (one run each: the rest pose depends strongly on small changes, e.g. the pull
+  or soft limits off gave a flatter body once and the same heap once; thrown bodies end anywhere between 86 degrees of total flexion and 22 of extension; no statistic was taken).
+- The hinge joints agree with the clips for the limbs (a probe of the angle `RagdollJointTests` checks: 0.0 to 0.8% of 696 clip poses of the male skeleton outside the ranges, 3 degrees of slack) but not for the back: `Spine1 -> Bip01` 10% outside
+  (its clip poses run from -8 to +54, median +15, against the file's ±37 about the binding pose; shifting the range by 25 degrees leaves 2%), `Spine1 -> Spine2` 1.3%, `Spine2 -> Neck` 4.2%, `Head -> Neck` 19% (10% with
+  the angle's sign flipped; 5% with the range shifted by -16). **Unknown** whether the original's limits are meant to hold the clips (the limb ranges do), and so whether Meitou's reference angle for these joints is the original's.
+- To find in the binary (reverse engineering, not attempted): how the joint's zero angle is set for a revolute joint (`FUN_1401a81b0`, the actors' local frames at the moment the joint is built and again after `FUN_1407d1800` poses the bodies);
+  whether the bone orientation written back by `FUN_1407d3a30` carries the bind rotation; each body's mass and inertia after the build (`FUN_1401a8be0`: the files give mass 1 and density 0); the solver iteration count and joint limit
+  hardness; whether bodies of one character collide with each other (groups 28-31 are not in their own disabled list).
 
 ## Per frame
 
