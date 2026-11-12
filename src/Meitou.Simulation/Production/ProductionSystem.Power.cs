@@ -95,13 +95,6 @@ public sealed partial class ProductionSystem
                 m.Power = 1;
                 continue;
             }
-            // The original power manager iterates registered towns (FUN_14092d850); NO_TOWN is
-            // not a frame, so an unresolved building town cannot join a shared grid.
-            if (site.Town == 0)
-            {
-                m.Power = 1;
-                continue;
-            }
             if (!_grids.TryGetValue(site.Town, out var grid)) _grids[site.Town] = grid = [];
             grid.Add(m);
         }

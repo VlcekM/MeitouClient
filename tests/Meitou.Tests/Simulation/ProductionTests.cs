@@ -586,18 +586,29 @@ public class ProductionTests
     }
 
     /// <summary>
-    /// A complete machine whose saved town is unresolved does not create Meitou's town power grid.
+    /// Machines without a town share one grid and need a generator: no free power.
     /// </summary>
     [Fact]
-    public void A_no_town_machine_does_not_join_a_power_grid()
+    public void A_no_town_machine_without_a_generator_has_no_power()
     {
-        using var rig = new Rig(Database(), Constants, [Generator, Lamp, Battery], town: 0);
+        using var rig = new Rig(Database(), Constants, [Lamp], town: 0);
+        rig.World.RunTicks(2);
+        Assert.False(rig.Machine(0).HasPower);
+    }
+
+    /// <summary>
+    /// A generator powers the machines without a town through their shared grid.
+    /// </summary>
+    [Fact]
+    public void A_no_town_generator_powers_a_no_town_machine()
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp], town: 0);
         rig.World.RunTick();
         var generator = rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!;
         generator.Inputs[0].Count = 10;
         rig.World.RunTicks(2);
-        Assert.Equal(0, rig.Machine(1).Granted);
-        Assert.False(rig.Machine(2).OnGrid);
+        Assert.True(rig.Machine(1).Granted > 0);
+        Assert.True(rig.Machine(1).HasPower);
     }
 
     /// <summary>
