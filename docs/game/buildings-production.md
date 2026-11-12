@@ -270,11 +270,11 @@ shows the first failing message in this order (**Verified** unless marked):
   `FUN_140931840`): a player town's centre (+0x48) becomes a weighted mean of its buildings' position markers (two building
   sets, the first weighted x4; which buildings each holds is **Unknown**), put on the ground and on the navmesh within 500 (kept
   when no point is found); the radius (+0x51c) becomes the farthest building's X/Z distance from it + 200, at least 1250, clamped
-  to [1000, 20000]. A town with no buildings at all is removed. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player
+  to [1000, 20000]. When both centre-building sets are empty, a broader eligible non-foliage building search determines emptiness; indoor/orphan buildings can keep the town alive. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player
   town (2500 while it is at most 1), and `type`-based radii (table above) otherwise; campaigns' arrival and in-town tests
   (`FUN_140926d50`) use it. So the first building's spot stops being the centre as the base grows. Meitou:
   `ConstructionSystem.ReassessTown`, a plain mean of the town's outdoor sites (engine choice); load reassessment deliberately does not run the merge pass. **Verified** (`FUN_14054d080`, `FUN_140931840`, `FUN_140927060`, `FUN_14092b3c0`): on placement-time reassessment, the first overlapping player-faction town in list order uses `distance² < (radiusA + radiusB)²`; the larger-radius town survives (ties keep the reassessed town), the other town's buildings move to it, and the other town is removed. The survivor is reassessed again, allowing chained merges.
-  **Verified** (`FUN_14054d080`, `FUN_1402a2860`, `FUN_14054fea0`): the placement/dismantle reassessment removes a player town with no buildings; load-time normalization does not apply this empty-town removal.
+  **Verified** (`FUN_14054d080`, `FUN_1402a2860`, `FUN_14054fea0`): the placement/dismantle reassessment removes a player town only when no eligible non-foliage buildings remain (`FUN_1405488f0`); load-time normalization does not apply this empty-town removal. Meitou checks all assigned `BuildSite`s, including indoor/orphan sites; foliage resource nodes live outside that registry.
 - **Slope** (slot 31 `FUN_1404daa20`): ground normal from four rays at the rotated bounding-box corners (outdoors) or
   one ray (indoors); slope = angle from vertical, compared with `max slope` in degrees. With `match slope` (forced for
   interior furniture and nodes) the ghost tilts to the ground and a slope over the limit fails; without it the tilt is

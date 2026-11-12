@@ -804,7 +804,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Moves a player town's centre to its buildings and sizes its radius to them (<c>Town::reassessTownPosition</c>,
     /// docs/game/buildings-production.md "Outposts"): the mean of its outdoor buildings, on walkable ground when some is near, then
     /// <see cref="TownRadiusMargin"/> beyond the farthest. Engine choice: a plain mean (the original weighs two building sets, <b>Unknown</b> which);
-    /// placement/dismantle reassessment removes an empty town, while load-time reassessment preserves an empty saved town.
+    /// placement/dismantle reassessment removes a town only when no registered building remains, including indoor/orphan sites. Foliage resources
+    /// are outside this registry. Load-time reassessment preserves an empty saved town.
     /// </summary>
     public static void ReassessTown(World world, PlayerTown town, bool mergeOverlaps = true, bool removeEmpty = true)
     {
@@ -814,7 +815,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             if (s.Town == town.Number && s.Parent is null) { sum += s.Position; count++; }
         if (count == 0)
         {
-            if (removeEmpty) world.Buildings.RemoveTown(town);
+            if (removeEmpty && !world.Buildings.All.Any(site => site.Town == town.Number)) world.Buildings.RemoveTown(town);
             return;
         }
         var centre = sum / count;
