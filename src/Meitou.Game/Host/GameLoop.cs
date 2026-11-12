@@ -1687,6 +1687,8 @@ sealed class GameLoop(GameHost host)
     {
         float panelsBottom = host.GameOptions.NoPopulation ? 0 : host.Player.HudBottom;
         if (host.DebugMenu.FpsVisible && _fpsText.Length > 0) panelsBottom = DrawLabel(overlay, size, _fpsText, panelsBottom);
+        if (host.Session.Camera is { IsFree: true, Free.SpeedShown: true } rig)
+            panelsBottom = DrawLabel(overlay, size, $"Camera speed {rig.Free.SpeedScale * 100:0}%", panelsBottom);
         // The terrain sandbox: the texture field's tile under the camera.
         if (GroundRelief.FieldCentre is not null && host.Gpu.Terrain.FieldLabelAt(host.Camera.Target.X, host.Camera.Target.Z) is { } tileLabel)
             panelsBottom = DrawLabel(overlay, size, tileLabel, panelsBottom);
