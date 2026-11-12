@@ -446,7 +446,10 @@ static class CharacterShaders
             // vertex is skinned to, in the same mapping as the body (hairColour.rgb the race's blood colour, hairAlpha.xy its scales: an item has no hair). A weapon: the blade
             // (hairAlpha.xyz the axis towards the tip, hairMult.x the axis value at the hilt end, .y one over the length, .z the splatter's scale), the colour, amount and wetness
             // from the instance, thicker towards the tip.
-            float gearCover = 0.0, gearGloss = 0.0;
+            float gearCover = 0.0, gearGloss = 0.0, gearRise = 0.0;
+            bool gearWorn = false;
+            vec3 gearTint = vec3(0.0);   // a worn item: the wearer's blood colour
+            float gearLies = 0.0;        // and how thick it lies
             if (flag(f, {{GearBloody}}u))
             {
                 vec3 gearBlood = vec3(0.0);
@@ -456,9 +459,13 @@ static class CharacterShaders
                     {
                         vec2 bc = vec2(vBlood.x * m.hairAlpha.y, (vBlood.w < 0.0 ? vBlood.z : vBlood.y) * m.hairAlpha.x);
                         vec4 splat = tex(m.tex[19], bc);
-                        gearCover = clamp(splat.a - 1.0 + vBloodAmount, 0.0, 1.0);
-                        gearBlood = splat.rgb * m.hairColour.rgb;
-                        gearGloss = 0.35;
+                        // A wounded part bleeds, so its blood is wet. What it does to the surface depends on the item, so it is laid below, once the item's gloss and
+                        // metal are known.
+                        gearLies = clamp(splat.a - 1.0 + vBloodAmount, 0.0, 1.0);
+                        gearCover = smoothstep(0.0, 0.15, gearLies);
+                        gearTint = m.hairColour.rgb;
+                        gearRise = 0.006 * smoothstep(0.0, 0.6, gearLies);
+                        gearWorn = true;
                     }
                 }
                 else if (vGear.a > 0.0)
@@ -469,11 +476,16 @@ static class CharacterShaders
                     // As the body's: the splatter's own alpha is what shows at the full amount (spatters and runs, never a painted blade), a second, finer copy breaks its tiling.
                     float fine = tex(m.tex[19], (vLocal.yz + 0.5 * vLocal.xy) * m.hairMult.z * 2.7 + 0.37).a;
                     float amount = min(vGear.a, 1.0) * mix(0.55, 1.0, smoothstep(0.4, 1.0, along));
-                    gearCover = clamp(mix(splat.a, splat.a * fine, 0.5) * 1.35 - 1.0 + amount, 0.0, 1.0) * blade;
-                    gearBlood = splat.rgb * vGear.rgb * 0.45;
-                    gearGloss = mix(0.3, 0.85, vGearFresh);
+                    float lies = clamp(mix(splat.a, splat.a * fine, 0.5) * 1.35 - 1.0 + amount, 0.0, 1.0) * blade;   // how thick the blood lies
+                    // Wet blood is a film with an edge: opaque a little way in, a deep dark red, darker where it lies thick, and it stands on the steel with a rounded
+                    // rim (gearRise, its height in world units) that catches the light. Dry it is thinner, flat, dull and brown (its colour comes dried). Tinted by the
+                    // splatter map and blended thinly over steel it read as rust; as bright as the race's colour it turned orange in the sun.
+                    gearCover = smoothstep(0.0, mix(0.35, 0.1, vGearFresh), lies) * mix(0.8, 1.0, vGearFresh);
+                    gearBlood = vGear.rgb * mix(mix(0.6, 0.45, vGearFresh), mix(0.4, 0.16, vGearFresh), smoothstep(0.1, 0.7, lies));
+                    gearGloss = mix(0.25, 0.94, vGearFresh);
+                    gearRise = 0.006 * smoothstep(0.0, 0.6, lies) * vGearFresh;
                 }
-                albedo = mix(albedo, gearBlood, gearCover);
+                if (!gearWorn) albedo = mix(albedo, gearBlood, gearCover);
             }
             // A headless body's neck cap (NeckCap): uv is (0, 0) at its centre and 1 at the rim; colour1 the race's blood colour, the diffuse slot the splatter map.
             // Flesh: the fluid darkening into the cut, a bone at the centre. Mechanical (a robot race): a dark metal socket, its core darker, the fluid over it.
@@ -540,7 +552,32 @@ static class CharacterShaders
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
             if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
-            if (gearCover > 0.0) { metal *= 1.0 - gearCover; gloss = mix(gloss, gearGloss, gearCover); }   // blood on a blade or plate is no metal: wet, then dry
+            if (gearCover > 0.0)   // blood on a blade or plate is no metal: wet, then dry
+            {
+                if (gearWorn)
+                {
+                    // On plate, lacquer and hard leather the blood lies as on a blade: an opaque deep film with an edge, shining. Cloth takes it in: a stain with a soft
+                    // edge that dyes the weave (the cloth's own pattern stays), darker where more went in, hardly shinier. Laid as a film on cloth it read as paint.
+                    float hard = max(metal, smoothstep(0.3, 0.6, gloss)), thick = smoothstep(0.1, 0.7, gearLies);
+                    float soak = smoothstep(0.0, 0.45, gearLies);
+                    vec3 dye = gearTint / max(max(gearTint.r, max(gearTint.g, gearTint.b)), 0.05);
+                    vec3 stained = mix(albedo, albedo * dye * mix(0.6, 0.3, thick), soak);
+                    vec3 filmed = mix(albedo, gearTint * 0.8 * mix(0.45, 0.16, thick), gearCover);   // 0.8: the worn items' darkening
+                    albedo = mix(stained, filmed, hard);
+                    gearCover = mix(soak, gearCover, hard);
+                    gearGloss = mix(max(gloss, 0.4), 0.92, hard);
+                    gearRise *= hard;
+                }
+                metal *= 1.0 - gearCover;
+                gloss = mix(gloss, gearGloss, gearCover);
+                if (gearRise > 0.0)   // the wet film's surface: the normal leans down its slope
+                {
+                    vec3 px = dFdx(vWorld), py = dFdy(vWorld), r1 = cross(py, n), r2 = cross(n, px);
+                    float det = dot(px, r1);
+                    vec3 slope = sign(det) * (dFdx(gearRise) * r1 + dFdy(gearRise) * r2) / max(abs(det), 1e-9);
+                    n = normalize(n - slope * min(1.0, 0.45 / max(length(slope), 1e-4)));   // no steeper than a drop's edge: a hard step in the map drew an outline
+                }
+            }
             if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
             if ((surfaceParts & 8u) != 0u)
             {
