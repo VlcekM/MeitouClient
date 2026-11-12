@@ -272,9 +272,15 @@ public sealed class CharacterAppearance
     public GameRecord? Character { get; private init; }
 
     /// <summary>
-    /// The ANIMAL_CHARACTER this animal was built from (<see cref="BuildAnimal"/>); null for people.
+    /// The ANIMAL_CHARACTER this animal was built from (<see cref="BuildAnimal(GameDatabase, string, GameRecord, GameRecord?)"/>); null for people.
     /// </summary>
     public GameRecord? Animal { get; private init; }
+
+    /// <summary>
+    /// The bag an animal wears (<see cref="BuildAnimal(GameDatabase, string, GameRecord, GameRecord?)"/>), drawn on its skeleton; null for people and
+    /// an animal without one.
+    /// </summary>
+    public GameRecord? AnimalBackpack { get; private init; }
 
     /// <summary>
     /// The RACE whose meshes, textures and attachment points it uses.
@@ -833,19 +839,28 @@ public sealed class CharacterAppearance
     #region Building an animal
 
     /// <summary>
+    /// An animal's look as it is made: wearing the first CONTAINER of its ANIMAL_CHARACTER's <c>backpack</c> list, as a new animal's inventory does
+    /// (<c>ItemFactory.AddAnimalBackpacks</c>).
+    /// </summary>
+    public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal) =>
+        BuildAnimal(db, installRoot, animal, DefaultBackpack(db, animal));
+
+    /// <summary>
     /// An animal's look (docs/game/animals.md "Appearance", <b>Verified</b> against the records): the ANIMAL_CHARACTER names no mesh or texture; its
     /// race does, as a person's: <c>male mesh</c> (every animal race names the same file for both genders, so the male one is used), <c>body texture
     /// male</c>, <c>nm male</c>, and the fur as its <c>hairs</c> ATTACHMENT (a mesh on the body's skeleton, coloured by the race's <c>hair
-    /// colors</c>). No head, no body file, no clothing, no visible weapon (the natural weapon has no mesh). Nothing is rolled: every animal of a
-    /// record looks the same, so callers can share one instance.
+    /// colors</c>). No head, no body file, no clothing, no visible weapon (the natural weapon has no mesh). The worn <paramref name="backpack"/>
+    /// (null: none) is drawn on the body's skeleton like a person's and carries its lantern. Nothing is rolled: every animal of a record wearing the
+    /// same bag looks the same, so callers can share one instance.
     /// </summary>
-    public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal)
+    public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal, GameRecord? backpack)
     {
         var race = animal.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
             .FirstOrDefault(r => r is { Type: FcsRecordType.Race }) ?? throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
             Animal = animal,
+            AnimalBackpack = backpack,
             Race = race,
             Female = false,
             BodyMesh = race.GetPath("male mesh"),
@@ -856,13 +871,19 @@ public sealed class CharacterAppearance
         result.Hair = PickHair(db, race, AttachSlot.Hair, null);
         if (result.Hair is not null) result.AddWorn(result.Hair, false, []);
         result.LoadAttachmentPoints(installRoot, race);
+        if (backpack is null) return result;
 
-        // The record's backpack (a pack beast's luggage) carries a lantern; only its light is shown (the backpack mesh is not drawn on animals yet).
-        foreach (var pack in animal.GetReferences("backpack").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId)))
-            if (pack is not null && CarriedLights.From(db, installRoot, pack, false, new Random(0)) is { } carried)
-                result.Lights.Add(carried);
+        // The bag's mesh (Garru Backpack: pack_beast_luggage.mesh) is skinned to the animal's bones; its physics attachment holds the lantern.
+        result.AddWorn(backpack, false, []);
+        if (CarriedLights.From(db, installRoot, backpack, false, new Random(0)) is { } carried) result.Lights.Add(carried);
         return result;
     }
+
+    /// <summary>
+    /// The first CONTAINER of the animal's <c>backpack</c> list, whatever its values; null when it lists none.
+    /// </summary>
+    static GameRecord? DefaultBackpack(GameDatabase db, GameRecord animal) =>
+        animal.GetReferences("backpack").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(r => r is { Type: FcsRecordType.Container });
 
     #endregion
 

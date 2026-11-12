@@ -121,7 +121,7 @@ on while the daylight factor is 0 (the switch follows slot 164's "not daytime").
 - **Files.** The .phs bodies are in the character's binding-pose model space (a human pelvis is at y 10.4): the belt
   lantern hangs from a spherical joint at the hip, the pack beast's at the top of a pole (y 31).
 - **Meitou** (engine choice): the light sits at the body hanging from the last spherical joint (not `root`), held rigidly
-  relative to the bone; no swing. The lantern meshes (in the .phs points) and the animals' backpack meshes are not drawn.
+  relative to the bone; no swing. The lantern meshes (in the .phs points) are not drawn; an animal's lantern comes from the bag it wears.
 
 ## Effects on buildings
 

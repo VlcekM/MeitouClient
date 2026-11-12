@@ -42,6 +42,11 @@ public interface IAppearanceSource
     CharacterAppearance? Create(string recordId, Loadout loadout, bool? shaved) => Create(recordId, loadout);
 
     /// <summary>
+    /// The look of an ANIMAL_CHARACTER record wearing the CONTAINER <paramref name="backpackId"/> (null: no bag). Null: no look.
+    /// </summary>
+    CharacterAppearance? CreateAnimal(string recordId, string? backpackId) => null;
+
+    /// <summary>
     /// A random name for a <c>named</c> CHARACTER of the sex (<see cref="NamePool"/>); null: none (no lists).
     /// </summary>
     string? RandomName(bool female, ulong roll) => null;
@@ -59,8 +64,8 @@ public interface IAppearanceSource
 public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : IAppearanceSource
 {
     /// <summary>
-    /// One look per ANIMAL_CHARACTER (nothing of an animal's is rolled): every animal of a record shares it, so the renderer builds one asset
-    /// per species.
+    /// One look per ANIMAL_CHARACTER and worn bag (nothing of an animal's is rolled): every animal of a record wearing the same bag shares it, so the
+    /// renderer builds one asset per species and bag. The record's own look (as it is made) is keyed by the record id alone.
     /// </summary>
     readonly ConcurrentDictionary<string, CharacterAppearance?> _animals = new(StringComparer.Ordinal);
 
@@ -79,17 +84,8 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
         {
             if (db.Find(recordId) is { Type: FcsRecordType.AnimalCharacter } animal)
             {
-                return _animals.GetOrAdd(recordId, static (_, s) =>
-                {
-                    try
-                    {
-                        return CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal);
-                    }
-                    catch (KeyNotFoundException)
-                    {
-                        return null;
-                    }
-                }, (db, installRoot, animal));
+                return _animals.GetOrAdd(recordId, static (_, s) => BuildAnimal(() => CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal)),
+                    (db, installRoot, animal));
             }
 
             var options = new CharacterOptions
@@ -103,6 +99,34 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
         catch (Exception e) when (e is IOException or FcsFormatException or KeyNotFoundException or InvalidDataException or UnauthorizedAccessException)
         {
             Warn(recordId, e);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The look of an ANIMAL_CHARACTER wearing the CONTAINER <paramref name="backpackId"/> (null: none), shared by every animal of the record wearing
+    /// it; null when the record is no animal or its look cannot be built.
+    /// </summary>
+    public CharacterAppearance? CreateAnimal(string recordId, string? backpackId)
+    {
+        if (db.Find(recordId) is not { Type: FcsRecordType.AnimalCharacter } animal) return null;
+
+        var backpack = backpackId is null ? null : db.Find(backpackId);
+        return _animals.GetOrAdd($"{recordId}|{backpackId}", static (_, s) =>
+            BuildAnimal(() => CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal, s.backpack)), (db, installRoot, animal, backpack));
+    }
+
+    /// <summary>
+    /// An animal's look from <paramref name="build"/>; null when its record names no race.
+    /// </summary>
+    static CharacterAppearance? BuildAnimal(Func<CharacterAppearance> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (KeyNotFoundException)
+        {
             return null;
         }
     }

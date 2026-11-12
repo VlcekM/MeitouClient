@@ -156,6 +156,10 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
   or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
   **Unknown**. Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it; what is in it can still be taken out.
+- The worn bag is drawn on the animal: Garru Backpack's `pack_beast_luggage.mesh` and rebirth.mod's Bull Backpack `bull_bags.mesh` are skinned to skeletons
+  whose bone handles and names match `pack_beast.skeleton` and `bull.skeleton` (**Verified**, 44 and 37 bones compared), so they share the body's skeleton
+  as a person's clothing does; the material is the CONTAINER's `material` (gar backpack). Meitou: `CharacterAppearance.BuildAnimal` with the bag in
+  `backpack_attach`, one shared look per species and bag (`GeneratedAppearances.CreateAnimal`), swapped when the bag changes.
 - Nothing else ties the bag to the squad: it is an ordinary inventory (feeding from squad mates reads it, [simulation](../simulation.md#items-and-eating)).
 
 Meitou: `ItemFactory.AddAnimalBackpacks`.
