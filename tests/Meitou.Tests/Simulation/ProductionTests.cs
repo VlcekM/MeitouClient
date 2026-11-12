@@ -622,6 +622,30 @@ public class ProductionTests
     }
 
     /// <summary>
+    /// Operating a machine without a town needs power from the grid of the nearest town as well (the order check reads the same grid as the
+    /// machine's power): with no generator there the order is refused, with a fuelled one it runs.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Operating_a_no_town_machine_needs_power_from_the_nearest_towns_grid(bool generatorInNearestTown)
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, PoweredWorkshop], town: 0);
+        var worker = rig.Add(1, StatsEnumerated.Engineering, Unit);
+        var town = rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        rig.World.RunTick();
+        if (generatorInNearestTown)
+        {
+            rig.World.Buildings.Find(rig.Sites[0])!.Town = town.Number;
+            rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        }
+
+        rig.World.RunTicks(6);
+
+        Assert.Equal(generatorInNearestTown, rig.World.CanOrder(Data.Gameplay.Ai.TaskType.OperateMachinery, worker, site: rig.Sites[1]).Can);
+    }
+
+    /// <summary>
     /// A machine without a town in a world with no town at all is never registered: even beside a fuelled generator a machine that draws power gets
     /// none, while one that draws nothing keeps full satisfaction.
     /// </summary>
