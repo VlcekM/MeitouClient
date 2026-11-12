@@ -147,6 +147,10 @@ An import (`SaveImport.Filter`) builds a new save without them, so mods start fr
 **Observed** (2026-11-04, a scratch save written and read back, win-x64). Whether the original game ignores the extra folder is
 **Unknown**.
 
+### Weapon blood
+
+Meitou only (optional "Blood on weapons and gear", [blood-decals.md](../game/blood-decals.md#on-weapons-and-gear-meitou)): `meitou-weapon-blood.json` at the save folder's root, written with the other files (`SaveWeaponBlood`, `SaveGame.WeaponBlood`), kept by a clone, not a field of any original file. UTF-8 JSON `{ "format": 1, "weapons": [ { "hand": [type, C, CS, I, S], "amount", "wet", "colour": [r, g, b], "back" } ] }`: `hand` is the character's save handle (the identity that survives a load), `amount` 0..1, `wet` 0..1, `colour` the victim's blood (0..1). Missing, unreadable or another format reads as no entries. **Observed** (2026-11-12, a scratch save written and read back, win-x64). Whether the original ignores the extra file is **Unknown** (as for [mod data](#mod-data)).
+
 ### Save requests (`FUN_14047c310`)
 
 A queued request (kind at +0xA0 of the request object) is run on the next frame; **Verified** (`FUN_14047c310`): a countdown at +0xA8 (decremented

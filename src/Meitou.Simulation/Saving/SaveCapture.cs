@@ -51,6 +51,12 @@ public sealed class SaveCaptureOptions
     /// record keeps what it had.
     /// </summary>
     public SavedView? View { get; init; }
+
+    /// <summary>
+    /// Told, once the capture has written every character, the handle each character in the world was saved under (the key of Meitou-only state kept
+    /// beside the save, such as the weapon blood: docs/game/blood-decals.md "On weapons and gear").
+    /// </summary>
+    public Action<IReadOnlyDictionary<CharacterId, Hand>>? HandlesWritten { get; init; }
 }
 
 /// <summary>
@@ -126,6 +132,7 @@ public static partial class SaveCapture
         // The wild: the nests made so far in the town list the original's way, and the wild squads in the world as new platoons of their nest or sector.
         WriteWild(builder, world, data, options, clock, buildings, races, campItems);
 
+        options.HandlesWritten?.Invoke(s_memoryPass?.Handles ?? []);
         WriteMemories();
         game.UpdateDerived();
         return game;

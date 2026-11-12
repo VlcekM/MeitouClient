@@ -18,7 +18,7 @@ namespace Meitou.Game.Effects;
 /// become terrain decals in a <see cref="TerrainDecalStore"/> that ages with game time, drawn by the world frame's <see cref="TerrainDecalRenderer"/>
 /// within <c>Decal Range</c> at <c>Decal Resolution</c> (the install's <c>settings.cfg</c>). Display only: the simulation is not affected.
 /// </summary>
-sealed class BloodDecals(GameHost host)
+sealed partial class BloodDecals(GameHost host)
 {
     /// <summary>
     /// The <c>Blood</c> resource group's folders by decal type (<see cref="TerrainDecalType"/>), the game's names for them.
@@ -106,6 +106,7 @@ sealed class BloodDecals(GameHost host)
                         BloodRandom); break;
             }
         }
+        RetryPendingWeapons();
         long ticks = world.Tick - _bloodTick;
         _bloodTick = world.Tick;
         if (ticks > 0 && DecalStore is { } aging && host.Gpu.Decals is { } decals)
@@ -179,6 +180,7 @@ sealed class BloodDecals(GameHost host)
         if (host.Gpu is not null) host.Gpu.DebrisPieces.Clear();
         _bloodQueue.Clear();
         _bloodFor = world;
+        _pendingWeapons = [];
         _bloodTick = world.Tick;
         _debrisClock = host.Session.ShownTick + host.Session.SimulationAlpha;
         if (DecalStore is not { } store) return;

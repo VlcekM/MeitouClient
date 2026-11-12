@@ -53,7 +53,8 @@ internal sealed partial class CharacterRenderer
     /// <summary>
     /// What a character's weapon has on it: the amount of blood (0..1), how wet it still is (1 just struck), the colour of the victim's blood and the
     /// game second it was last stepped. Kept by the character's draw key, not in <see cref="CharState"/>, which is forgotten a second after the
-    /// character leaves the screen. Not saved: a loaded game starts clean.
+    /// character leaves the screen. Saved beside the save (<see cref="Meitou.Data.Save.SaveWeaponBlood"/>, by the host: <see cref="WeaponBloodNow"/>,
+    /// <see cref="RestoreWeaponBlood"/>).
     /// </summary>
     sealed class WeaponBlood
     {
@@ -61,6 +62,10 @@ internal sealed partial class CharacterRenderer
         public Vector3 Colour;
         public double At;
         public bool Back;
+        /// <summary>
+        /// Put back from a save: the clock it was last stepped on is the old world's, so the first step only takes the new world's time as its start.
+        /// </summary>
+        public bool Restored;
     }
 
     readonly Dictionary<long, WeaponBlood> _weaponBlood = [];
@@ -94,6 +99,11 @@ internal sealed partial class CharacterRenderer
     /// </summary>
     void StepWeaponBlood(WeaponBlood w, double now, bool submerged)
     {
+        if (w.Restored)
+        {
+            (w.At, w.Restored) = (now, false);
+            return;
+        }
         float dt = (float)Math.Max(now - w.At, 0);
         w.At = now;
         if (dt <= 0 || w.Amount <= 0) return;
@@ -127,6 +137,28 @@ internal sealed partial class CharacterRenderer
         l.GearAmounts = GearBlood.PackAmounts(w.Amount, w.Wet);
         l.GearBack = w.Back;
     }
+
+    /// <summary>
+    /// The weapon blood of every character, aged to now: the draw key (the host's DrawKey), amount, wetness, the victim's colour and
+    /// whether the weapon on the back is the one.
+    /// </summary>
+    public List<(long Key, float Amount, float Wet, Vector3 Colour, bool Back)> WeaponBloodNow()
+    {
+        var list = new List<(long, float, float, Vector3, bool)>();
+        double now = SoakClock?.Invoke() ?? _poseSeconds;
+        foreach (var (key, w) in _weaponBlood)
+        {
+            StepWeaponBlood(w, now, false);
+            if (w.Amount > 0.004f) list.Add((key, w.Amount, w.Wet, w.Colour, w.Back));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Puts back the blood a save held on the weapon of the character <paramref name="key"/> (a loaded game). Ageing goes on from the first step in the new world.
+    /// </summary>
+    public void RestoreWeaponBlood(long key, float amount, float wet, Vector3 colour, bool back) =>
+        _weaponBlood[key] = new WeaponBlood { Amount = amount, Wet = wet, Colour = colour, Back = back, Restored = true };
 
     /// <summary>
     /// The matrix an instance of <paramref name="part"/> is drawn with and its extra flags: a worn item that takes blood gets the body's amounts in the

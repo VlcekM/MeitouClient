@@ -65,6 +65,7 @@ sealed class GameSaves(GameHost host)
             Levels = host.SaveLevels,
             Seed = host.Session.World.Seed ^ (ulong)++_captures << 20,
             View = new SavedView(view.Pivot, view.Yaw, view.Pitch, view.Distance),
+            HandlesWritten = host.BloodDecals.NoteHandles,
         };
     }
 
@@ -258,6 +259,7 @@ sealed class GameSaves(GameHost host)
             Difficulty.Write(game.Camera);
             WriteWeather(game, (int)clock.Day, clock.HourOfDay);
             host.BloodDecals.WriteDecals(game);
+            host.BloodDecals.WriteWeaponBlood(game);
             host.Player.BiomeBanner.WriteBiome(game.Camera);
             host.Modding.CaptureModData(world, game);
             host.LevelEditorHost.WriteLevelEdits(game);
@@ -484,6 +486,7 @@ sealed class GameSaves(GameHost host)
         host.LevelEditorHost.PendingLevelEdits = read.Result.LevelEdits;   // replayed once the host has met the new world (UpdateBuildings)
         var world = host.Session.World;
         host.BloodDecals.BloodForNewWorld(read.Result.Decals);
+        host.BloodDecals.ReadWeaponBlood(read.Result);
         host.Session.Clock.SetTime(loaded!.Clock.Day, loaded.Clock.HourOfDay);
         // The regions' weather the save holds (docs/formats/save.md "BIOMES"); a save without (an old Meitou one) keeps the schedule rolled from day
         // 0.
