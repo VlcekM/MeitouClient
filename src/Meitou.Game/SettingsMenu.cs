@@ -51,7 +51,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The Graphics tabs: the look tabs, then the quality tabs (<see cref="GraphicsSection"/>).
     /// </summary>
     internal static readonly string[] GraphicsPages =
-        ["Shadows", "Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
+        ["Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
     /// <summary>
     /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
     /// </summary>
@@ -547,7 +547,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
                 "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
-                    or WorldFrame.TracedGrassSwitch => "Shadows",
+                    or WorldFrame.TracedGrassSwitch => "Lighting",
                 "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine"
                     or WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => "Lighting",
                 "Water" or "Water contact foam, wakes and ripples" or "Reflections" => "Water & reflections",
@@ -565,7 +565,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             };
         }
 
-        if (label == WorldFrame.SunShadowsChoice || S("Shadow")) return "Shadows";
+        if (label == WorldFrame.SunShadowsChoice || S("Shadow")) return "Lighting";
         if (WorldFrame.ChoiceSliders.Contains(label) || S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine")) return "Lighting";
         if (S("Water") || S("Far water") || label == WorldFrame.ReflectionRangeSlider || label == WorldFrame.ReflectionSamplesSlider) return "Water & reflections";
         if (S("Terrain") || S("Ground")) return "Terrain";
@@ -725,9 +725,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     static readonly (string Choice, int First, string Label, string[] Options, string Hint, string Section)[] Techniques =
     [
-        (WorldFrame.SunShadowsChoice, 2, "Sun shadows technique", ["Soft cascades", "Ray traced"],
+        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced"],
             "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light).",
-            "Shadows"),
+            "Lighting"),
         (WorldFrame.OcclusionChoice, 1, "Ambient occlusion technique", ["SSAO", "GTAO"],
             "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more.", "Lighting"),
         (WorldFrame.GiChoice, 1, "Indirect light technique", ["Probes", "Probes and cache"],
@@ -755,9 +755,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The sun shadows' master switch: off, the game's cascades, or Meitou's (their technique is the row under it).
+    /// The sun shadows' master switch, the head of the Shadows feature (the lamps' and the contact shadows are under it): off, the game's cascades, or
+    /// Meitou's (their technique is the row under it).
     /// </summary>
-    Entry SunShadowsRow(Slider choice) => new("Sun shadows", "Off, the game's cascades, or Meitou's shadows: soft and to the horizon, or ray traced.", Segmented: true,
+    Entry SunShadowsRow(Slider choice) => new("Shadows", "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside.", Segmented: true,
         Choice: new(() => ["Off", "Faithful", "Meitou"], () => Math.Min((int)MathF.Round(choice.Get()), 2), i => SetEffect(choice, 2, i)), Raw: choice.Label);
 
     /// <summary>

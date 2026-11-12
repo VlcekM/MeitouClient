@@ -31,15 +31,11 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new("Upscaling", WorldFrame.UpscalerSliders[0], [WorldFrame.UpscalerSliders[1], WorldFrame.UpscalerSliders[2], WorldFrame.DlssPresetSlider]),
         new("HDR output", "hdr", ["hdrPaperNits", "hdrPeakNits"]),
 
-        // Shadows
+        // Lighting: the shadows first (the sun's switch heads them; the lamps' and the contact shadows are inside)
         new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.TracedGrassSwitch,
-            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
-            WorldFrame.FifthCascadeSwitch]),
-        new("Contact shadows", "Contact shadows", []),
-        new("Lamp shadows", "Lamp shadows", []),
+            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.FifthCascadeSwitch, "Contact shadows",
+            "Lamp shadows"]),
         new("Soft grazing sun", "Soft grazing sun", []),
-
-        // Lighting
         new("Indirect light", "Indirect light", [SettingsMenu.TechniqueKey(WorldFrame.GiChoice), "Indoor GI", WorldFrame.GiRelocateSwitch,
             WorldFrame.GiCloudShadowsSwitch, WorldFrame.GiCacheSwitch], LauncherHeader: WorldFrame.GiChoice),
         new("Ambient occlusion", "Ambient occlusion", [SettingsMenu.TechniqueKey(WorldFrame.OcclusionChoice), WorldFrame.GtaoQualitySlider],

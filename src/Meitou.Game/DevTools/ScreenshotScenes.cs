@@ -637,7 +637,6 @@ sealed class ScreenshotScenes(GameHost host)
         int Tab(string name) => Array.IndexOf(SettingsMenu.GraphicsPages, name);
         foreach (var page in SettingsMenu.GraphicsPages) Shot(page.ToLowerInvariant().Replace(" & ", "-").Replace(' ', '-'), Tab(page));
         menu.Grouping.ShowcaseOpen("Shadows", "Indirect light", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
-        Shot("shadows-open", Tab("Shadows"));
         Shot("lighting-open", Tab("Lighting"));
         Shot("colour-open", Tab("Colour"));
         Shot("objects-open", Tab("Objects"));

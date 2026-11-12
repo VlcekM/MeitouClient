@@ -72,8 +72,9 @@ grading, bloom). Bloom and the camera effects are optional (`Toggle.Optional`): 
 (`UserConfig.Migrate`) drops layout 1's strengths saved at the game's value with their switch off, and a tone map of 0 (the
 clamp is now the switch's off side). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
 
-Tabs by subject, on two rows: Shadows, Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather,
-Colour, Post FX, Interface (`GraphicsSection`); a feature's distances are on its own tab. Each lists features in `FeatureGroups`
+Tabs by subject, on two rows: Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour,
+Post FX, Interface (`GraphicsSection`); a feature's distances are on its own tab. Lighting starts with the Shadows feature: the
+sun's master switch heads it, the lamps' and the contact shadows are inside. Each lists features in `FeatureGroups`
 order (`GroupRank`, the launcher's too): a row headed by its master switch or a title, its settings folded under it until opened,
 whether the look or the tier sets them (`Role`). A master switch is Faithful | Meitou for an effect of the Meitou look, Off | On
 for an optional one (`Toggle.Optional`), Off | Faithful | Meitou for the sun's shadows. An effect with several techniques keeps

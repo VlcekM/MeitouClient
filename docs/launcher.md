@@ -182,7 +182,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 
 - The schema is also the catalogue the game's own Display and Graphics pages are drawn from ([native-ui](native-ui.md)), so the launcher's
   rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
-- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Shadows, Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour, Post FX, Interface)
+- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour, Post FX, Interface)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
