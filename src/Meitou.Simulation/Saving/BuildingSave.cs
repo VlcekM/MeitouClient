@@ -223,11 +223,14 @@ public static class BuildingSave
         if (save.TownInstanceList is { } list)
             world.Buildings.TownContainerFloor = list.Ints.GetValueOrDefault(TownContainerKey);
 
+        // The original instantiates the towns of the level data first, then the save's list entries (FUN_140373f00), and normalises overlaps in that
+        // order; a level town that also has a list entry is read from the entry, at the level town's place in the order.
+        var read = new HashSet<string>(StringComparer.Ordinal);
+        ReadLevelTowns(save, population, world, db, playerFactionId, playerIndex, byInstance, byId, read);
         if (save.TownInstanceList is { } instances)
-            foreach (var instance in instances.Instances)
+            foreach (var instance in instances.Instances.Where(i => !read.Contains(i.Id)))
                 ReadTownInstance(instance, byId, save, world, db, playerFactionId, playerIndex, byInstance);
 
-        ReadLevelTowns(save, population, world, db, playerFactionId, playerIndex, byInstance, byId);
         NormalizeTownOverlap(world);
         return TownHandles(world);
     }
@@ -316,19 +319,26 @@ public static class BuildingSave
         id == playerFactionId || id is not null && db?.Find(id) is { Type: FcsRecordType.Faction } ? id : null;
 
     /// <summary>
-    /// Imports level towns using the same ordered state rules as dynamic instances when their placements can be resolved.
+    /// Imports the level towns in the population's order, using the same ordered state rules as dynamic instances: a level town with an entry in the
+    /// save's town list is read from that entry. The instance ids read are added to <paramref name="read"/>.
     /// </summary>
     static void ReadLevelTowns(SaveGame save, PopulationData? population, World world, GameDatabase db, string playerFactionId, int playerIndex,
-        Dictionary<string, PlayerTown> byInstance, Dictionary<string, FcsRecord> byId)
+        Dictionary<string, PlayerTown> byInstance, Dictionary<string, FcsRecord> byId, HashSet<string> read)
     {
         if (population is null) return;
 
-        foreach (string instanceId in save.Towns.Select(town => town.Instance).Distinct(StringComparer.Ordinal))
+        var linked = save.Towns.Select(town => town.Instance).ToHashSet(StringComparer.Ordinal);
+        foreach (var site in population.Sites)
         {
-            if (save.TownInstanceList?.Instances.Any(instance => instance.Id == instanceId) == true) continue;
+            string instanceId = site.InstanceId;
+            if (save.TownInstanceList?.Instances.FirstOrDefault(instance => instance.Id == instanceId) is { } entry)
+            {
+                read.Add(instanceId);
+                ReadTownInstance(entry, byId, save, world, db, playerFactionId, playerIndex, byInstance);
+                continue;
+            }
 
-            var site = population.Sites.FirstOrDefault(candidate => candidate.InstanceId == instanceId);
-            if (site is null) continue;
+            if (!linked.Contains(instanceId)) continue;
 
             var states = PlayerTownStates(save, null, instanceId, site.Town.Id, byId, db, playerFactionId);
             if (states is null) continue;

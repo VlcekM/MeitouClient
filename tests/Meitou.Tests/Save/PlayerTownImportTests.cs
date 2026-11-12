@@ -413,6 +413,27 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// The towns of the level data come first in the world list and the save's list entries after (<c>FUN_140373f00</c>), so of two player towns
+    /// each inside the other's radius, load removes the level town (the earlier of the pair) and keeps the dynamic outpost.
+    /// </summary>
+    [Fact]
+    public void A_level_town_comes_before_the_lists_outposts_so_the_overlap_removes_the_level_town()
+    {
+        var db = SyntheticTown.Database();
+        var data = PopulationData.Create(db, [new TownPlacement("level-camp", "30-t", new Vector3(0, 300, 0), null)]);
+        var builder = new SaveBuilder(7);
+        Town(builder, "Town state Level Camp", "level-camp", Player, new Hand((int)FcsRecordType.Town, 8, 58, 4, 12), true, 3000);
+        var dynamic = Town(builder, "Town state Dynamic", "dynamic", Player, new Hand((int)FcsRecordType.Town, 9, 59, 4, 12), true, 3000);
+        var (_, list) = SaveWithInstances(("dynamic", new Vector3(1000, 300, 0), [dynamic]));
+        builder.Game.TownInstanceList = list;
+
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7, data);
+
+        Assert.Equal("Dynamic", Assert.Single(world.Buildings.Towns).Name);
+    }
+
+    /// <summary>
     /// A player-faction town state that was never imported as an outpost survives a save.
     /// </summary>
     [Fact]
