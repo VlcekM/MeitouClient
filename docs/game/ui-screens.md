@@ -1077,6 +1077,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   persistent platoon of `5006-squad.mod` ("Wandering Squad") whose AI packages it runs (the factory `FUN_1407f4420`'s third argument 1 is the persistent flag, **Observed**),
   so `saveGame` writes it with every platoon. Meitou saves it as a homeless persistent platoon ([save](../formats/save.md#wild-and-nest-platoons-meitou-mapping)).
 - Meitou: a portrait clicked without dragging selects the character (engine choice); a box is dragged by its frame.
+- **Observed** (installed `Kenshi_OverviewWindow.layout`, `kenshi_templates.xml`): `DismissCharPanel` expands to a transparent `PanelEmpty` ItemBox;
+  its caption has `NeedMouse=false`. Meitou checks the arranged panel's bounds and clip for portrait drops, with the overview as the top hit screen.
 
 ## 6. Inventory, trade, dialogue, build
 

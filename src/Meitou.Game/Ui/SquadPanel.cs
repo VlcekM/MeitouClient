@@ -355,10 +355,17 @@ sealed class SquadPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether <paramref name="p"/> is over DRAG HERE TO DISMISS.
+    /// Whether <paramref name="p"/> is over DRAG HERE TO DISMISS in the top screen. Its transparent ItemBox and mouse-disabled caption cannot
+    /// be identified by the ordinary widget hit test, so use the arranged drop panel's bounds and clip.
     /// </summary>
-    bool OverDismiss(Vector2 p) =>
-        player.FaithfulScreens.HitTest(p) is { Screen: "overview" } hit && hit.Control.Name is "DismissCharPanel" or "lbSquadsDismiss";
+    bool OverDismiss(Vector2 p)
+    {
+        if (player.FaithfulScreens.HitTest(p) is not { Screen: "overview" }) return false;
+
+        var controls = player.FaithfulScreens.LastFrame.FirstOrDefault(f => f.Id == "overview")?.Controls;
+        return controls?.FirstOrDefault(c => c.Name == "DismissCharPanel") is { } panel
+            && panel.Bounds.Contains(p.X, p.Y) && (panel.Clip is null || panel.Clip.Value.Contains(p.X, p.Y));
+    }
 
     /// <summary>
     /// The button let go over the squads screen: a portrait that did not move selects its character; one dragged onto a portrait goes in at its place
