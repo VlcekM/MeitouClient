@@ -267,6 +267,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | Variable | Read by (file) | Effect |
 |---|---|---|
 | `KENSHI_PATH` | `src/Meitou.Core/Content/GameInstall.cs`, `tools/scripts/*.ps1` | Kenshi install folder. Also used by the test suite through `GameInstall.Locate`; tests skip when it is missing. |
+| `MEITOU_LOG_TIMES` | `src/Meitou.Game/Host/GameLog.cs` | `1`: every log line starts with the seconds since the process started (to time a start or a load). |
 | `MEITOU_MODS_CFG` | `src/Meitou.Game/Host/Program.cs` | Same as `--mods-cfg <file>`; the option wins. |
 | `DYLD_LIBRARY_PATH` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDevice.cs`, `launcher/Meitou.Launcher/MacSupport.cs` | macOS Vulkan loader search path; only named in the error message the viewer prints. The launcher sets it. |
 | `SteamAppId` | `src/Meitou.Game/Host/SteamSession.cs` | Steam app id; the launcher sets it on Windows. |

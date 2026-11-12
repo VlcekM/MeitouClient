@@ -43,7 +43,8 @@ static partial class GameConsole
     {
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ExplainBlocked(e.ExceptionObject as Exception);
         if (GameLog.Open() is not { } file) return;
-        var shared = TextWriter.Synchronized(file);   // one lock for output and error
+        TextWriter shared = TextWriter.Synchronized(file);   // one lock for output and error
+        if (Environment.GetEnvironmentVariable("MEITOU_LOG_TIMES") is { Length: > 0 }) shared = TextWriter.Synchronized(new StampWriter(shared));
         s_log = shared;
         Bind(Console.Out, Console.Error);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => shared.WriteLine($"unhandled {e.ExceptionObject}");

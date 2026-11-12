@@ -118,6 +118,7 @@ sealed partial class GameHost
                 return;
             }
             SetLoadingStep(stage.Step);
+            Console.WriteLine($"loading   stage {stage.Step} starts at {load.Clock.Elapsed.TotalSeconds:0.0} s{(SkyArrival is { } flight ? $" (sky {(flight.AtStars ? "at the stars" : "ascending")})" : "")}");
             load.Waiting = stage.Run();
             load.Shown = false;
         }
@@ -188,7 +189,7 @@ sealed partial class GameHost
         bool charactersReady = Gpu.Characters is not { } characters || !characters.ContentPending &&
             !Session.CurrentSnapshot.Characters.Any(c => AwaitsLook(c, characters));
         bool sceneReady = TitleScreen.TitleVisible ? TitleScreen.TitleSceneReady : populationReady && charactersReady &&
-            Gpu.Streamer is not { Idle: false } && !(Gpu.Objects?.Pending > 0) && !(Gpu.Foliage?.LoadingPending > 0);
+            Gpu.Streamer is not { Idle: false } && !(Gpu.Objects?.LoadingPending > 0) && !(Gpu.Foliage?.LoadingPending > 0);
         _guardSeconds = Gpu.Guard is { Pressure: true } ? _guardSeconds + seconds : 0;
         if (!sceneReady && _guardSeconds >= GuardWait && (TitleScreen.TitleVisible || populationReady))
         {
@@ -216,7 +217,7 @@ sealed partial class GameHost
                     ? TitleScreen.TitleVisible ? characterRenderer.PendingLoads
                         : Session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
                     : 0;
-                Console.WriteLine($"loading   {(TitleScreen.TitleVisible ? "menu" : "game")} still preparing: terrain {(Gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {Gpu.Objects?.Pending ?? 0}{(Gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {Gpu.Foliage?.LoadingPending ?? 0}{(Gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleScreen.TitleVisible ? TitleScreen.TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {Gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
+                Console.WriteLine($"loading   {(TitleScreen.TitleVisible ? "menu" : "game")} still preparing: terrain {(Gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {Gpu.Objects?.LoadingPending ?? 0}{(Gpu.Objects is { LoadingPending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {Gpu.Foliage?.LoadingPending ?? 0}{(Gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleScreen.TitleVisible ? TitleScreen.TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {Gpu.Characters?.PendingLoads ?? 0} assets/textures)")}, streaming {Rendering.Frame.BackgroundWork.Describe()}, guard {(Gpu.Guard is { } gd ? $"{gd.Fraction:0.00} pressure {gd.Pressure}" : "-")}");
             }
             return;
         }

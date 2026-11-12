@@ -12,6 +12,12 @@ public static class BackgroundWork
     sealed class Scheduler : TaskScheduler
     {
         readonly BlockingCollection<Task> _queue = [], _urgent = [];
+        int _running;
+
+        /// <summary>
+        /// Jobs waiting for a thread (urgent, other) and running on one now.
+        /// </summary>
+        public (int Urgent, int Queued, int Running) Load => (_urgent.Count, _queue.Count, Volatile.Read(ref _running));
 
         public Scheduler(int threads)
         {
@@ -23,7 +29,9 @@ public static class BackgroundWork
                     while (true)
                     {
                         BlockingCollection<Task>.TakeFromAny(both, out var task);
-                        TryExecuteTask(task!);
+                        Interlocked.Increment(ref _running);
+                        try { TryExecuteTask(task!); }
+                        finally { Interlocked.Decrement(ref _running); }
                     }
                 })
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();
@@ -48,6 +56,11 @@ public static class BackgroundWork
     public static readonly int Threads = Math.Max(2, Environment.ProcessorCount - 3);
 
     static readonly Scheduler WorkScheduler = new(Threads);
+
+    /// <summary>
+    /// The queue, for the loading log: jobs waiting (urgent, other) and running.
+    /// </summary>
+    public static string Describe() => WorkScheduler.Load is var (urgent, queued, running) ? $"{running}/{Threads} running, {urgent} urgent and {queued} queued" : "";
 
     public static Task<T> Run<T>(Func<T> work) =>
         Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);

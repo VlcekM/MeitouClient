@@ -93,7 +93,7 @@ sealed partial class GameHost
     void ReportLoading(string what)
     {
         if (_loadingFrames == 0) return;
-        Console.WriteLine($"loading   {what}: {_loadingFrames} frames, the longest gap {_longestGap.Ms:0} ms (in the step {_longestGap.Step})");
+        Console.WriteLine($"loading   {what}: {_loadingFrames} frames, the longest gap {_longestGap.Ms:0} ms (in the step {_longestGap.Step}); GCs so far {GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)}, paused {GC.GetTotalPauseDuration().TotalSeconds:0.0} s, {System.Diagnostics.Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds:0.0} CPU-s");
         (_loadingFrames, _lastLoadingFrame, _longestGap) = (0, 0, default);
     }
 

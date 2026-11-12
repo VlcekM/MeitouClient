@@ -127,3 +127,31 @@ sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
     public override void WriteLine(string? value) { first.WriteLine(value); second.WriteLine(value); }
     public override void Flush() { first.Flush(); second.Flush(); }
 }
+/// <summary>
+/// MEITOU_LOG_TIMES=1: each line starts with the seconds since the process started (to time the phases of a start or a load from the log).
+/// </summary>
+sealed class StampWriter(TextWriter inner) : TextWriter
+{
+    static readonly DateTime ProcessStart = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+    bool _atLineStart = true;
+
+    public override Encoding Encoding => inner.Encoding;
+    string Stamp() => $"[{(DateTime.Now - ProcessStart).TotalSeconds,7:0.00}] ";
+    void Begin()
+    {
+        if (!_atLineStart) return;
+        inner.Write(Stamp());
+        _atLineStart = false;
+    }
+    public override void Write(char value) { Begin(); inner.Write(value); _atLineStart = value == '\n'; }
+    public override void Write(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        Begin();
+        inner.Write(value);
+        _atLineStart = value[^1] == '\n';
+    }
+    public override void Write(char[] buffer, int index, int count) => Write(new string(buffer, index, count));
+    public override void WriteLine(string? value) { Begin(); inner.WriteLine(value); _atLineStart = true; }
+    public override void Flush() => inner.Flush();
+}
