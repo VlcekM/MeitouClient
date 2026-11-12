@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
@@ -36,6 +37,13 @@ public sealed class MetalPipelines : IGpuPipelines
     /// <c>LatePipelines</c> counts (the play benchmark's <c>late_pipelines</c> is a frame's increase).
     /// </summary>
     public int LatePipelines { get; private set; }
+
+    /// <summary>
+    /// <c>MEITOU_METAL_TRACE</c>: every pipeline state built and every library compiled (<see cref="MetalStage"/>) is logged with the time Metal took,
+    /// so a hitch in a frame names its shader.
+    /// </summary>
+    internal static readonly bool Trace = Environment.GetEnvironmentVariable("MEITOU_METAL_TRACE") is "1" or "true";
+
 
     /// <summary>
     /// An empty cache on <paramref name="device"/> over <paramref name="shaders"/>.
@@ -99,11 +107,17 @@ public sealed class MetalPipelines : IGpuPipelines
         if (desc.Targets.Depth != InternalFormat.None) d.DepthAttachmentPixelFormat = MetalConventions.Pixel(desc.Targets.Depth);
         if (desc.Vertex.Inputs.Length > 0) d.VertexDescriptor = VertexDescriptor(desc.Vertex);
         NSError error = default;
+        long started = Stopwatch.GetTimestamp();
         var state = _device.NewRenderPipelineState(d, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{desc.Program.Name}: the pipeline '{desc.Name}' failed: {error.LocalizedDescription}");
         _graphics[desc] = state;
         LatePipelines++;
+        if (Trace)
+        {
+            Console.WriteLine($"metal     pipeline #{LatePipelines} {desc.Program.Name} '{desc.Name}' built in " +
+                $"{Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.0} ms");
+        }
         return new GpuPipeline(desc);
     }
 

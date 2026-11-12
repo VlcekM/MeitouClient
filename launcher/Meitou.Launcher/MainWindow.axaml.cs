@@ -207,7 +207,7 @@ public sealed partial class MainWindow : Window
         MetalBudgetRow.IsVisible = OperatingSystem.IsMacOS() && MacSupport.MetalAvailable;
         MetalBudgetHighItem.IsVisible = MacSupport.CanUseHighBudget;
         if (!MacSupport.CanUseHighBudget && config.MetalMemoryBudget == 8120) config.MetalMemoryBudget = 5120;
-        MetalBudgetBox.SelectedIndex = config.MetalMemoryBudget switch { 8120 => 2, 6144 => 1, _ => 0 };
+        MetalBudgetBox.SelectedIndex = config.MetalMemoryBudget switch { 8120 => 3, 6144 => 2, 5120 => 1, _ => 0 };
         MetalBudgetBox.SelectionChanged += MetalBudget_Changed;
         NightlyBox.IsChecked = config.IncludePrereleases;
         AutoUpdateBox.IsChecked = config.AutoUpdateLauncher;
@@ -672,7 +672,7 @@ public sealed partial class MainWindow : Window
         {
             _config.MetalMemoryBudget = mb;
             UpdateMetalBudgetHint();
-            Status(Tr("Metal memory budget: {1} MB.", _config.MetalMemoryBudget));
+            Status(_config.MetalMemoryBudget == 0 ? Tr("Metal memory budget: automatic.") : Tr("Metal memory budget: {1} MB.", _config.MetalMemoryBudget));
         }
     }
 
@@ -685,7 +685,8 @@ public sealed partial class MainWindow : Window
         {
             8120 => "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed.",
             6144 => "Balanced: more resident detail than Safe, with some headroom for macOS and other apps.",
-            _ => "Safe: the conservative default; the guard shortens ranges and evicts caches sooner.",
+            5120 => "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner.",
+            _ => "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident.",
         });
     }
 
@@ -1904,7 +1905,8 @@ public sealed partial class MainWindow : Window
         if (renderer == "metal")
         {
             start.Environment.Remove("DYLD_LIBRARY_PATH");
-            start.Environment["MEITOU_METAL_GPU_BUDGET_MB"] = _config.MetalMemoryBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (_config.MetalMemoryBudget > 0)
+                start.Environment["MEITOU_METAL_GPU_BUDGET_MB"] = _config.MetalMemoryBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
         return true;
     }

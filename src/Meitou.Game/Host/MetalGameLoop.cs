@@ -244,17 +244,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         // The Metal path has no single GPU allocator with a global budget: every cache has its own high-water mark.
         // Travelling through the world can fill the object, foliage and character caches at the same time, so keep the
-        // whole device allocation under a conservative share of what Metal recommends. The guard pauses/evicts caches
+        // whole device allocation under a share of the Mac's memory (MetalMemoryBudget). The guard pauses/evicts caches
         // and shortens the ranges as the ceiling approaches, exactly as it does on Vulkan.
-        _memoryBudget = _ctx.VideoMemoryBudget > 0 ? Math.Min(_ctx.VideoMemoryBudget, 5UL << 30) : 5UL << 30;
+        ulong defaultMb = MetalMemoryBudget.DefaultMb((ulong)GC.GetGCMemoryInfo().TotalAvailableMemoryBytes, _ctx.VideoMemoryBudget);
+        _memoryBudget = defaultMb << 20;
         ulong budgetMb = RequestedBudgetMb();
         if (budgetMb > 0) _memoryBudget = budgetMb << 20;
         _guardEnabled = Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0";
         if (_guardEnabled) Console.WriteLine($"metal     memory guard: {_memoryBudget / 1048576} MB of GPU allocation");
-        if (budgetMb > 5120)
+        if (budgetMb > defaultMb)
         {
-            Console.WriteLine($"warning   metal GPU budget {budgetMb} MB is above the 5120 MB default; full screen and a busy world can exhaust "
-                + "the 16 GB M1 Pro. Use 5120 unless profiling.");
+            Console.WriteLine($"warning   metal GPU budget {budgetMb} MB is above this Mac's {defaultMb} MB default; full screen and a busy world can "
+                + "exhaust its memory. Leave the default unless profiling.");
         }
         _window = _display.Window;
 
@@ -264,7 +265,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
     /// <summary>
     /// The memory guard's ceiling asked for, in MB: <c>--metal-gpu-budget</c>, else <c>MEITOU_METAL_GPU_BUDGET_MB</c> (the launcher's setting); 0 for
-    /// the default.
+    /// the default (<see cref="MetalMemoryBudget.DefaultMb"/>).
     /// </summary>
     ulong RequestedBudgetMb()
     {
@@ -2336,14 +2337,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         MetalGpuCapture? gpuCapture = StartGpuCapture();
         _bench.Lap(5);
 
-        // A live resize can leave the layer without a drawable for a moment: wait for the next one instead of spinning
+        // A live resize can leave the window without pixels for a moment: wait for the next frame instead of spinning
         // the main thread (the window would stop responding to its own resize).
         bool began = _ctx.BeginFrame();
         if (!began)
         {
             if (gpuCapture is not null)
             {
-                // No drawable yet: discard the empty capture and ask for the next frame instead.
+                // No frame yet: discard the empty capture and ask for the next frame instead.
                 gpuCapture.Abort();
                 _gpuCaptureRequested = true;
             }
@@ -2352,7 +2353,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         _bench.FrameBegun();
         SettleBeforeDraw();
-        double drawableWait = _display.LastDrawableWaitMilliseconds;
         long recordStart = Stopwatch.GetTimestamp();
         var backbuffer = _ctx.Backbuffer;
         // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the
@@ -2373,7 +2373,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         bool feedbackShot = host.FeedbackCapture.FeedbackShotRequested && _hud is not null && !_still;
         if (_hud is not null) _hud.FeedbackPanel.ShotWithoutMenus = feedbackShot;
         if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, backbuffer, feedbackShot, pointerMouse, pointerAt);
-        PresentFrame(gpuCapture, drawableWait, recordStart);
+        PresentFrame(gpuCapture, recordStart);
         _bench.FramePresented(_lastRecord);
         TrimManagedHeap(now);
         SavePictures(backbuffer, feedbackShot);
@@ -2878,7 +2878,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// <summary>
     /// Commits the frame with the present, stops a GPU capture and counts the frame.
     /// </summary>
-    void PresentFrame(MetalGpuCapture? gpuCapture, double drawableWait, long recordStart)
+    void PresentFrame(MetalGpuCapture? gpuCapture, long recordStart)
     {
         _ctx.EndFrame();
         if (gpuCapture is not null)
@@ -2888,8 +2888,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         // Mark the covered frame: the next one may run the next stage (which can hold the thread).
         if (host.ActiveSceneLoad is { } pendingLoad) pendingLoad.Shown = true;
-        _lastWait = drawableWait;
-        _lastRecord = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds;
+        _lastWait = _display.LastDrawableWaitMilliseconds;
+        _lastRecord = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds - _lastWait;
         _frames++;
         _worldHasRendered = true;
     }

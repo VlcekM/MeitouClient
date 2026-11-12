@@ -114,8 +114,11 @@ A later `--vsync` keeps vsync on (the frame limit stays off); the summary's run 
   (consecutive frames overlap on the GPU, so whole spans over-count); it arrives when the ring slot is reused, so the last
   three frames have none. Upload batches and the GPU-cull pre-frame are separate command buffers and not in it. No
   `gpu_<stage>` columns: Apple silicon samples counters only at encoder boundaries ([metal-performance-memory](metal-performance-memory.md)).
-- `vram_mb` is `MTLDevice.currentAllocatedSize`. `late_pipelines` counts render pipeline states (all are made on first use).
-- `loop_begin-frame` holds the frame-slot wait and the `nextDrawable` wait; `loop_view` also holds the navmesh,
+- `vram_mb` is `MTLDevice.currentAllocatedSize`. `late_pipelines` counts render pipeline states (all are made on first use);
+  `MEITOU_METAL_TRACE=1` logs each state and each MSL library with its build time.
+- `loop_begin-frame` holds the frame-slot wait; the `nextDrawable` wait comes at the end of the frame (the scene is committed
+  first, so the GPU works while it waits) and is in `loop_render` and the `driver-wait` stage, which `render cpu ms` sums:
+  with vsync on that column reads about the frame's idle time, not CPU work. `loop_view` also holds the navmesh,
   building and interior updates (the Metal loop runs them after the audio).
 - The render-thread stages (`cpu_*`) come from the shared `WorldFrame` laps; `cpu_sim` stays 0 (`update_ms` has the ticks).
 - The summary's run line names the device, scene and window sizes, the upscaler, the pacing, the GPU budget
@@ -133,7 +136,11 @@ A later `--vsync` keeps vsync on (the frame limit stays off); the summary's run 
 | 8120 MB | ok, 65% at the end | 65 / 41.1 | 62 / 29.0 | 66 / 19.9 | 72 / 19.1 | 13.9-16.1 |
 
 The larger budget restores the material cache and the full draw ranges at about the same frame rate (more is drawn
-for the same time); the frame is GPU-bound (busy time about equal to the frame). One pair; not yet a decision.
+for the same time); the frame is GPU-bound (busy time about equal to the frame). One pair. The game's default budget follows
+the Mac's memory ([metal-performance-memory](metal-performance-memory.md#metal-memory-budget-default)).
+
+The tail above 25 ms (10-30 frames a segment) is the world, not the renderer (**Observed**): `RagdollSystem` ticks of up to 37 ms and
+render-thread spikes of 12-45 ms in the same frames, none of them in a frame that made a pipeline.
 
 **Observed** (same machine and save, windowed 1920x1080 pixels, Medium-tier graphics, native, vsync off): every
 segment ran at 59-60 fps with p50 16.7 ms while the GPU was busy 13.0-13.5 ms and the render thread 3-3.5 ms; the rest

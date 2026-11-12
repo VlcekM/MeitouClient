@@ -149,6 +149,19 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
     /// </summary>
     long _version;
 
+    /// <summary>
+    /// The distinct live textures' native handles, the first <see cref="_residentCount"/> of them, as of <see cref="_residentVersion"/>.
+    /// </summary>
+    nint[] _resident = new nint[256];
+    /// <summary>
+    /// How many of <see cref="_resident"/> are valid.
+    /// </summary>
+    int _residentCount;
+    /// <summary>
+    /// The <see cref="_version"/> <see cref="_resident"/> was gathered at; -1 before the first gather.
+    /// </summary>
+    long _residentVersion = -1;
+
     #endregion
 
     #region Construction
@@ -339,18 +352,40 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
     }
 
     /// <summary>
-    /// Tells the encoder which textures the argument buffer's entries hold: a resource the encoder does not know about is not made resident
-    /// and reads as nothing (the manual argument buffer's price).
+    /// The entries' version: what a list compares to know whether its encoder has been told the current textures (<see cref="UseResources"/>).
+    /// </summary>
+    public long Version => _version;
+
+    /// <summary>
+    /// Tells the list's open encoder which textures the argument buffer's entries hold, in one call: a resource the encoder does not know about is
+    /// not made resident and reads as nothing (the manual argument buffer's price). The distinct textures are gathered only when an entry changed.
     /// </summary>
     public void UseResources(MetalCommandList list)
     {
+        if (_residentVersion != _version) GatherResident();
+
+        list.UseResources(_resident, _residentCount);
+    }
+
+    /// <summary>
+    /// Gathers the distinct live textures (a texture can be in several entries, one per sampler) into <see cref="_resident"/>.
+    /// </summary>
+    void GatherResident()
+    {
+        var seen = new HashSet<nint>();
+        _residentCount = 0;
         foreach (var kind in _live)
         {
             foreach (var texture in kind)
             {
-                if (texture is { NativePtr: not 0 } image) list.UseResource(image);
+                if (texture is not { NativePtr: not 0 } image || !seen.Add(image.NativePtr)) continue;
+
+                if (_residentCount == _resident.Length) Array.Resize(ref _resident, _resident.Length * 2);
+                _resident[_residentCount++] = image.NativePtr;
             }
         }
+
+        _residentVersion = _version;
     }
 
     #endregion

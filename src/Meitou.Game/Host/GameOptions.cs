@@ -279,7 +279,7 @@ sealed class GameOptions
                                      quits; frame limit and vsync off (a later --vsync turns vsync on); MEITOU_BENCH_ONLY=a,b keeps those segments;
                                      works with --renderer metal too (GPU time per frame, no GPU stages)
           --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
-                                     default 5120)
+                                     default a third of the Mac's memory, 5120 to 10240)
           --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR

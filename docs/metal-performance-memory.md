@@ -127,6 +127,25 @@ rendering:
 - Re-run the same-window comparison after this step; it may expose the existing GPU headroom without touching the
   renderers.
 
+**Current state.** The scene's command buffer is committed first and the drawable is taken afterwards, for the present pass's own
+command buffer (`MetalContext.Present`, `MetalDisplay.TryNextDrawable`); the slot wait still reuses a slot only after its command buffer
+completed, so the constants ring is safe with the late drawable. `presentDrawable:afterMinimumDuration:` is not used: vsync frames are
+already even. A windowed vsync-off run is held to the display rate by the window server (**Observed**; not the drawable order, an opaque
+layer or the window size): benchmark in full screen.
+
+Bandwidth: render targets that are not storage images are private without `shaderWrite` or `pixelFormatView` usage, so Metal may compress
+them losslessly (`MetalContext.CreateTexture`); the GI albedo attachment and the reflection's multisampled depth are `DontCare` on store
+(`StoreActionFor`). Open: the reflection's multisampled colour is still stored and re-loaded by its resolve pass (folding the resolve into
+the pass would avoid it), the render encoders that split the scene (each reloads colour and depth) are not counted, and an `MTLResidencySet`
+(macOS 15+) is not used for the bindless table (`BindBindlessTable` batches `useResources` once per encoder).
+
+### Metal memory budget default
+
+The guard's default is `MetalMemoryBudget.DefaultMb`: a third of the Mac's memory in 256 MB steps, from 5120 to 10240 MB, never above the
+device's recommended working set (5376 on 16 GB, 8192 on 24 GB). It used to be 5120 on every Mac (chosen for a 16 GB M1 Pro), which on a
+24 GB M6 made the guard clamp the ranges to x0.15 and skip the terrain material cache. The launcher's **Auto** budget passes nothing so
+the game's default applies; its fixed Safe, Balanced and High sizes are unchanged. **Unknown:** how it behaves on a 16 GB Mac.
+
 
 ### A2. Port the GPU-side draw path
 

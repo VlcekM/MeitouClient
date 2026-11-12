@@ -2212,8 +2212,14 @@ msgstr "阴影处、夜间和室内的天光。"
 msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
 msgstr "用曲面细分和视差让地面有真实的起伏，岩石和山丘更平滑。"
 
-msgid "Safe: the conservative default; the guard shortens ranges and evicts caches sooner."
-msgstr "安全：保守的默认值；保护机制会更早缩短距离并清出缓存。"
+msgid "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner."
+msgstr "安全：固定 5120 MB；保护机制会更早缩短距离并清出缓存。"
+
+msgid "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident."
+msgstr "自动：约为这台 Mac 内存的三分之一（5120 至 10240 MB），内存更大的 Mac 能常驻更多内容。"
+
+msgid "Metal memory budget: automatic."
+msgstr "Metal 显存预算：自动。"
 
 msgid "Auto: Vulkan."
 msgstr "自动：Vulkan。"
@@ -2844,8 +2850,8 @@ msgstr "安装 v{1}（已跳过）"
 msgid "Auto (recommended)"
 msgstr "自动（推荐）"
 
-msgid "Safe — 5120 MB (recommended)"
-msgstr "安全 — 5120 MB（推荐）"
+msgid "Safe — 5120 MB"
+msgstr "安全 — 5120 MB"
 
 msgid "Balanced — 6144 MB"
 msgstr "平衡 — 6144 MB"

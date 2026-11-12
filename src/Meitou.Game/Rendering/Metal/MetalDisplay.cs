@@ -302,36 +302,46 @@ public sealed unsafe class MetalDisplay : IDisposable
     long _noDrawableStamp;
 
     /// <summary>
-    /// How long the last <see cref="TryBeginFrame"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
+    /// How long the last <see cref="TryNextDrawable"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
     /// separates this present/swapchain stall from the CPU time spent recording the frame.
     /// </summary>
     public double LastDrawableWaitMilliseconds { get; private set; }
 
     /// <summary>
-    /// Begins a frame: the drawable to draw into and the command buffer to record it in.
+    /// Begins a frame: the command buffer to record it in. The drawable is not taken here but as late as possible (<see cref="TryNextDrawable"/>),
+    /// so the wait for the display to release one does not hold the frame's recording or its GPU work. False while the window has no pixels
+    /// (minimised, mid-resize): the frame is skipped.
     /// </summary>
-    public bool TryBeginFrame(out MTLCommandBuffer command, out CAMetalDrawable drawable)
+    public bool TryBeginFrame(out MTLCommandBuffer command)
     {
         SyncLayer();
         command = default;
-        drawable = default;
-        long started = Stopwatch.GetTimestamp();
-        var next = Layer.NextDrawable;
-        LastDrawableWaitMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        if (next.DrawableID == 0)
-        {
-            long now = Stopwatch.GetTimestamp();
-            if (now - _noDrawableStamp > Stopwatch.Frequency)
-            {
-                _noDrawableStamp = now;
-                Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, " +
-                    $"framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
-            }
-            return false;
-        }
-        drawable = next;
+        var pixels = Window.FramebufferSize;
+        if (pixels.X <= 0 || pixels.Y <= 0) return false;
+
         command = Queue.CommandBuffer();
         return true;
+    }
+
+    /// <summary>
+    /// The layer's next drawable, taken when the frame's scene work is already committed; false (and logged once a second) when none is ready.
+    /// </summary>
+    public bool TryNextDrawable(out CAMetalDrawable drawable)
+    {
+        long started = Stopwatch.GetTimestamp();
+        drawable = Layer.NextDrawable;
+        LastDrawableWaitMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        if (drawable.DrawableID != 0) return true;
+
+        long now = Stopwatch.GetTimestamp();
+        if (now - _noDrawableStamp > Stopwatch.Frequency)
+        {
+            _noDrawableStamp = now;
+            Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, " +
+                $"framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
+        }
+        drawable = default;
+        return false;
     }
 
     /// <summary>
