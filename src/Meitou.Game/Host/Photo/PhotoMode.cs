@@ -339,6 +339,15 @@ sealed class PhotoMode
         var bindings = _host.Session.Bindings;
         bool toggle = bindings.Get(InputAction.TogglePhotoMode).Contains(Binding.Of(key));
         if (!Active) return toggle && Enter();
+        if (Naming is not null)
+        {
+            // A name is being typed: Enter keeps it, Esc drops it, Backspace takes a letter back (all of a proposed name); no other key acts.
+            if (key == Key.Enter) CommitNaming();
+            else if (escape || key == Key.Escape) CancelNaming();
+            else if (key == Key.Backspace) Naming = _namingFresh || Naming.Length == 0 ? "" : Naming[..^1];
+            _namingFresh = false;
+            return true;
+        }
         if (toggle || escape) Leave();
         else if (bindings.Get(InputAction.ToggleInterface).Contains(Binding.Of(key))) PanelShown = !PanelShown;
         else if (key == Key.Enter || bindings.Get(InputAction.Screenshot).Contains(Binding.Of(key))) TakePicture();
@@ -447,11 +456,85 @@ sealed class PhotoMode
     }
 
     /// <summary>
+    /// The name being typed for a preset (the panel shows it in a field), null when none is: a new preset's (<see cref="_namingIndex"/> -1, proposed
+    /// as the first free "Preset n") or a kept one's new name. The first letter typed replaces the proposed name.
+    /// </summary>
+    public string? Naming { get; private set; }
+    int _namingIndex;
+    bool _namingFresh;
+    const int NameLength = 28;
+
+    string FreeName() => Enumerable.Range(1, 999).Select(i => $"Preset {i}").First(n => _store.Presets.All(p => p.Name != n));
+
+    /// <summary>
+    /// Starts typing a name: for a new preset of the settings as they are, or for the kept preset <paramref name="index"/>.
+    /// </summary>
+    public void BeginNaming(int index = -1)
+    {
+        if (index >= _store.Presets.Count) return;
+        (_namingIndex, _namingFresh) = (index, true);
+        Naming = index < 0 ? FreeName() : _store.Presets[index].Name;
+        foreach (var key in Enum.GetValues<Key>()) if (FliesCamera(key)) _host.Session.Input.SetKey(key, false);   // the camera stops while the keys type
+    }
+
+    /// <summary>
+    /// A typed character goes into the name being typed; false when none is.
+    /// </summary>
+    public bool TextInput(char c)
+    {
+        if (!Active || Naming is null) return false;
+        if (char.IsControl(c)) return true;
+        if (_namingFresh) Naming = "";
+        _namingFresh = false;
+        if (Naming.Length < NameLength) Naming += c;
+        return true;
+    }
+
+    /// <summary>
+    /// Keeps the typed name: the new preset is saved under it (one of that name is replaced), or the kept preset takes it (unless another has it).
+    /// </summary>
+    public void CommitNaming()
+    {
+        if (Naming is not { } typed) return;
+        string name = typed.Trim();
+        int index = _namingIndex;
+        Naming = null;
+        if (index < 0) SavePreset(name);
+        else if (index < _store.Presets.Count && name.Length > 0)
+        {
+            if (_store.Presets.Where((p, i) => i != index).Any(p => p.Name == name)) { Say($"{name} exists already"); return; }
+            _store.Presets[index].Name = name;
+            _store.Save();
+            Say($"Renamed to {name}");
+        }
+    }
+
+    public void CancelNaming() => Naming = null;
+
+    /// <summary>
+    /// Opens the folder the pictures are saved to in the system's file browser (made if it is not there yet).
+    /// </summary>
+    public void OpenGallery()
+    {
+        string folder = Path.GetDirectoryName(DefaultPath())!;
+        try
+        {
+            Directory.CreateDirectory(folder);
+            if (_host.WorldOptions.Headless) { Say(folder); return; }   // no desktop to open it on
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = folder, UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Say($"Cannot open {folder}: {e.Message}");
+        }
+    }
+
+    /// <summary>
     /// Keeps the settings as a preset: under <paramref name="name"/> (replacing one of that name), or as the first free "Preset n".
     /// </summary>
     public void SavePreset(string? name = null)
     {
-        name = string.IsNullOrWhiteSpace(name) ? Enumerable.Range(1, 999).Select(i => $"Preset {i}").First(n => _store.Presets.All(p => p.Name != n)) : name.Trim();
+        name = string.IsNullOrWhiteSpace(name) ? FreeName() : name.Trim();
         var values = Values(preset: true);
         if (_store.Presets.FirstOrDefault(p => p.Name == name) is { } old) old.Values = values;
         else _store.Presets.Add(new PhotoPresets.Preset { Name = name, Values = values });
@@ -497,8 +580,13 @@ sealed class PhotoMode
             case "list":
                 con.Print(_store.Presets.Count == 0 ? "no preset" : string.Join(", ", _store.Presets.Select((p, i) => $"{i + 1} {p.Name}")));
                 break;
+            case "name":   // as the panel's Save preset (no argument) or a right click on preset n: the name is then typed (photo type, photo key Enter)
+                if (name.Length > 0 && (index < 0 || index >= _store.Presets.Count)) { con.Error("no such preset"); break; }
+                BeginNaming(name.Length > 0 ? index : -1);
+                con.Print($"naming: {Naming}");
+                break;
             default:
-                con.Error("usage: photo preset save [name] | load <n|name> | delete <n|name> | list");
+                con.Error("usage: photo preset save [name] | load <n|name> | delete <n|name> | name [n|name] | list");
                 break;
         }
     }
@@ -629,8 +717,16 @@ sealed class PhotoMode
             case "key":
                 KeyCommand(args, con);
                 break;
+            case "type":   // characters as the keyboard types them (a preset's name)
+                foreach (char c in string.Join(' ', args.Skip(1))) TextInput(c);
+                con.Print(Naming is null ? "no name is being typed" : $"naming: {Naming}");
+                break;
+            case "gallery":
+                OpenGallery();
+                con.Print(Path.GetDirectoryName(DefaultPath())!);
+                break;
             default:
-                con.Error("usage: photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | shot [file] [--ui] | key <name> [up]");
+                con.Error("usage: photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | shot [file] [--ui] | key <name> [up] | preset ... | type <text> | gallery");
                 break;
         }
     }

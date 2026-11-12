@@ -20,6 +20,7 @@ sealed class PhotoPanel(PhotoMode mode)
 
     const string Hints = "WASD move    Q / E down, up    Right mouse look    Left click focus    Wheel zoom    Ctrl + wheel fly speed    Shift fast    "
         + "Ctrl slow    Z / X roll    V level    Space pause    Tab hide    Enter picture    P / Esc leave";
+    const string PresetHints = "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others";
 
     /// <summary>
     /// The panel's measures in the settings window's units (pixels at a 900-line picture): a bar along the bottom of the picture, its tabs over one row
@@ -32,7 +33,8 @@ sealed class PhotoPanel(PhotoMode mode)
     /// What the last drawn frame laid out for the mouse: a rectangle and what a press on it does; a slider also keeps its setting and the track's
     /// ends, so a drag follows the pointer.
     /// </summary>
-    readonly record struct Hit(UiRect Area, Action Press, PhotoMode.Param? Slider, float TrackLeft, float TrackRight, Action<int>? Step = null);
+    readonly record struct Hit(UiRect Area, Action Press, PhotoMode.Param? Slider, float TrackLeft, float TrackRight, Action<int>? Step = null,
+        Action? Back = null);
 
     readonly List<Hit> _hits = [];
     readonly List<UiControl> _controls = [];
@@ -46,6 +48,10 @@ sealed class PhotoPanel(PhotoMode mode)
     /// The tab shown (an index into <see cref="PhotoMode.Groups"/>).
     /// </summary>
     int _tab;
+    /// <summary>
+    /// The first preset shown in the presets' row (the wheel and the row's arrows move it when not all fit).
+    /// </summary>
+    int _presetFirst;
 
     #endregion
 
@@ -70,7 +76,8 @@ sealed class PhotoPanel(PhotoMode mode)
             if (!hit.Area.Contains(p.X, p.Y)) continue;
             if (back)
             {
-                hit.Step?.Invoke(-1);
+                if (hit.Back is { } alternative) alternative();
+                else hit.Step?.Invoke(-1);
                 break;
             }
 
@@ -185,6 +192,7 @@ sealed class PhotoPanel(PhotoMode mode)
 
         Button("Take picture", R(x + inner - 160, y - 1, 160, 30), () => mode.TakePicture(), primary: true);
         Button("Reset", R(x + inner - 160 - 8 - 90, y, 90, 28), mode.Reset);
+        Button("Gallery", R(x + inner - 160 - 8 - 90 - 8 - 90, y, 90, 28), mode.OpenGallery);
         Fill(R(x, y + 36, inner, 1), SettingsCanvas.MainInk with { W = 0.14f });
 
         y += 46;
@@ -198,16 +206,31 @@ sealed class PhotoPanel(PhotoMode mode)
 
         if (PhotoMode.Groups[_tab] == PhotoMode.LightGroup) Button("Game time", R(at, y + 6, ChoiceWidth, 26), mode.UseGameTime);
         if (PhotoMode.Groups[_tab] == PhotoMode.PresetGroup) DrawPresets(x, y, x + inner);
-        Text(Hints, R(x, top + BarHeight - 28, inner, 16), 11, SettingsCanvas.MutedInk, "Center");
+        Text(PhotoMode.Groups[_tab] == PhotoMode.PresetGroup ? PresetHints : Hints, R(x, top + BarHeight - 28, inner, 16), 11, SettingsCanvas.MutedInk, "Center");
     }
 
     /// <summary>
-    /// The presets' tab: Save preset keeps every tab's settings under the next free name; each preset is a button that takes its settings, with a small
-    /// one beside it that deletes it.
+    /// The presets' tab: Save preset keeps every tab's settings under a name typed in the field that takes the row's place (Enter or OK keeps it, Esc or
+    /// Cancel drops it). Each preset is a button that takes its settings (a right click renames it), with a small one beside it that deletes it. When
+    /// not all fit, the wheel over the row and the arrows at its ends move through them.
     /// </summary>
     void DrawPresets(float x, float y, float right)
     {
-        Button("Save preset", R(x, y + 6, 124, 26), () => mode.SavePreset());
+        if (mode.Naming is { } typed)
+        {
+            Text("Name", R(x, y + 6, 52, 26), 13, SettingsCanvas.MainInk);
+            var field = R(x + 56, y + 6, 300, 26);
+            Surface(field, "primary");
+            bool caret = Environment.TickCount64 / 500 % 2 == 0;
+            Text(typed + (caret ? "|" : ""), new(field.X + 8 * _scale, field.Y, field.Width - 16 * _scale, field.Height), 14, _meitou ? DarkInk : SettingsCanvas.LightInk,
+                translate: false);
+            Button("OK", R(x + 56 + 300 + 10, y + 6, 70, 26), mode.CommitNaming);
+            Button("Cancel", R(x + 56 + 300 + 10 + 70 + 8, y + 6, 90, 26), mode.CancelNaming);
+            Text("Type the preset's name, Enter keeps it, Esc cancels.", R(x + 56 + 300 + 10 + 70 + 8 + 90 + CellGap, y + 6, right - x - 560, 26), 12, SettingsCanvas.MutedInk);
+            return;
+        }
+
+        Button("Save preset", R(x, y + 6, 124, 26), () => mode.BeginNaming());
         x += 124 + CellGap;
         var presets = mode.Presets;
         if (presets.Count == 0)
@@ -216,13 +239,25 @@ sealed class PhotoPanel(PhotoMode mode)
             return;
         }
 
-        for (int i = 0; i < presets.Count && x + 146 <= right; i++)
+        const float slot = 156 + 10, arrow = 26;
+        int fit = Math.Max(1, (int)((right - x + 10) / slot));
+        bool scrolls = presets.Count > fit;
+        if (scrolls) fit = Math.Max(1, (int)((right - x - 2 * (arrow + 8) + 10) / slot));
+        _presetFirst = Math.Clamp(_presetFirst, 0, Math.Max(presets.Count - fit, 0));
+        void Scroll(int by) => _presetFirst = Math.Clamp(_presetFirst + by, 0, Math.Max(mode.Presets.Count - fit, 0));
+        if (scrolls)
+        {
+            Button("<", R(x, y + 6, arrow, 26), () => Scroll(-1), step: d => Scroll(-d), translate: false);
+            x += arrow + 8;
+        }
+        for (int i = _presetFirst; i < presets.Count && i < _presetFirst + fit; i++)
         {
             int index = i;
-            Button(presets[i].Name, R(x, y + 6, 118, 26), () => mode.LoadPreset(index), translate: false);
-            Button("x", R(x + 120, y + 6, 26, 26), () => mode.DeletePreset(index), translate: false);
-            x += 146 + 10;
+            Button(presets[i].Name, R(x, y + 6, 128, 26), () => mode.LoadPreset(index), step: d => Scroll(-d), translate: false, back: () => mode.BeginNaming(index));
+            Button("x", R(x + 130, y + 6, 26, 26), () => mode.DeletePreset(index), step: d => Scroll(-d), translate: false);
+            x += slot;
         }
+        if (scrolls) Button(">", R(right - arrow, y + 6, arrow, 26), () => Scroll(1), step: d => Scroll(-d), translate: false);
     }
 
     /// <summary>
@@ -260,14 +295,15 @@ sealed class PhotoPanel(PhotoMode mode)
             step: d => p.Set(((MathF.Round(p.Get()) + d) % count + count) % count));
     }
 
-    void Button(string label, UiRect at, Action action, bool primary = false, bool selected = false, Action<int>? step = null, bool translate = true)
+    void Button(string label, UiRect at, Action action, bool primary = false, bool selected = false, Action<int>? step = null, bool translate = true,
+        Action? back = null)
     {
         bool hovered = at.Contains(_pointer.X, _pointer.Y), pressed = hovered && _down;
         var drawn = at with { Y = at.Y + (pressed ? _scale : 0) };
         Surface(drawn, primary ? "primary" : "button", selected || pressed, hovered && !selected);
         var ink = primary && _meitou ? DarkInk : hovered || selected ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
         Text(label, new(drawn.X + 8 * _scale, drawn.Y, drawn.Width - 16 * _scale, drawn.Height), primary ? 15 : 13, ink, "Center", translate);
-        _hits.Add(new Hit(at, action, null, 0, 0, step));
+        _hits.Add(new Hit(at, action, null, 0, 0, step, back));
     }
 
     /// <summary>

@@ -664,6 +664,7 @@ sealed class GameLoop(GameHost host)
         else if (_panel?.Visible == true) _panel.TextInput(value);
         else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
         else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
+        else if (_photo.TextInput(value)) { }   // a preset's name being typed
         else host.Player.UiText(value);
     }
 
