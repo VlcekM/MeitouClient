@@ -150,6 +150,41 @@ public class PlayerTownImportTests
         Assert.Equal(new Hand((int)FcsRecordType.Town, 6, 57, 3, 11), town.SaveHandle);
     }
 
+    /// <summary>
+    /// All states linked by id or instance keep the live public/radius values after writing and both town-load passes.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Multiple_town_states_round_trip_the_live_public_flag_and_radius(bool includePopulation)
+    {
+        var builder = new SaveBuilder(7);
+        var first = Town(builder, "Town state First Camp", "merged", Player, Hand.Null, false);
+        var second = Town(builder, "Town state ", "merged", Player, new Hand(13, 6, 57, 3, 11), true, 2800);
+        var (_, list) = SaveWithInstances(("merged", new Vector3(100, 300, 200), [first, second]));
+        builder.Game.TownInstanceList = list;
+        var third = Town(builder, "Town state ", "merged", Player, Hand.Null, true, 2800);
+        var db = SyntheticTown.Database();
+        var population = includePopulation ? PopulationData.Create(db, []) : null;
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7, population);
+        var town = Assert.Single(world.Buildings.Towns);
+        town.Public = false;
+        town.Override = 3400;
+
+        BuildingSave.Write(builder.Game, world, Player);
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, db, Player, 7, population);
+        var restored = Assert.Single(reloaded.Buildings.Towns);
+        Assert.False(restored.Public);
+        Assert.Equal(3400, restored.Override);
+        Assert.All(new[] { first, second, third }, state =>
+        {
+            Assert.False(state.Record.Bools["public"]);
+            Assert.Equal(3400, state.Record.Ints["override"]);
+        });
+    }
+
     [Fact]
     public void A_player_level_town_is_imported_without_a_town_instance_list()
     {
