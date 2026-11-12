@@ -96,7 +96,7 @@ interior). Upsampling rejects the other class so the gain cannot bleed onto outd
 ## Hybrid GI
 
 `gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,cache>` turns it on with
-the listed parts only. Vulkan only. Relocation and clouds: look and cost **Unknown**; the radiance cache: below.
+the listed parts only. Each part is also a plain on / off row under Graphics > Lighting > Indirect light ("GI probes out of walls", "GI cloud shadows", "GI radiance cache"), read each frame. Vulkan only. Relocation and clouds: look and cost **Unknown**; the radiance cache: below.
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
 tile, in `offsets`; relocation reads the frame's rays before the blend. Over a quarter back faces: through the closest back face, half the

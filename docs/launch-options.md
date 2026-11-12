@@ -99,6 +99,8 @@ Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--im
 
 Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.Game/Rendering/Post/PostProcessOptions.cs` (`TryParse`, the post-processing rows), `src/Meitou.Game/Rendering/Frame/Enhancements.cs` (switch ids). Used by the game (after its own options) and by the viewer.
 
+An option whose Effect names a settings row sets that row for the run only: the run neither reads nor saves the row (`GameHost.RunOnlyKeys`). A start-up row (the water grid and FFT size) is read by `Program` before the world loads and applies at the next start; the others apply live.
+
 ### Where and camera
 
 | Option | Value | Default | Effect |
@@ -151,10 +153,10 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `
 | `--no-foliage` | | off | No trees, bushes, rocks or grass. |
 | `--grass-density <x>` | 0.1 to 2 | 1 | Grass blades multiplier. |
 | `--no-water` | | off | No water. |
-| `--water-grid <n>` | 64 to 1024 | 256 | Water grid segments round the eye. |
-| `--water-ocean <n>` | 64, 128 or 256 | 256 | Water FFT size per cascade (128 for integrated GPUs). |
+| `--water-grid <n>` | 64 to 1024 | 1024 | Water grid segments round the eye. Row: Graphics > World > Water (steps of 64), start-up. |
+| `--water-ocean <n>` | 64, 128 or 256 | 256 | Water FFT size per cascade (128 for integrated GPUs). Row: Water wave resolution, start-up. |
 | `--water-reflection <0..4>` | 0 to 4 | 4 | What the water mirrors (0 sky only, 4 includes trees and rocks). |
-| `--reflection-samples <n>` | samples | 4 | Samples per texel of the half-resolution reflection target. |
+| `--reflection-samples <n>` | samples | 4 | Samples per texel of the half-resolution reflection target. Row: Reflection samples (off, 2x, 4x, 8x), live. |
 | `--texture-quality <0..4>` | 0 to 4 | 0 | Drops that many top mips of compressed textures (0 full size). |
 | `--anisotropy <n>` | 1 to 16 | 16 | Maximum anisotropic filtering. |
 | `--shadow-quality <0\|1\|2>` | 0, 1 or 2 | 2 | Shadow map side 1024, 2048 or 4096. |
@@ -162,14 +164,14 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `
 | `--shadow-filter <0\|1\|2>` | 0 to 2 | 2 | Meitou shadow filter (1 and 0 cheaper, for low-end GPUs). |
 | `--no-gi` | | GI on where ray queries exist | No ray-traced probe GI. |
 | `--gi-debug <0..3>` | 0 to 3 | 0 | GI debug views: 1 hit distance, 2 one-bounce lighting, 3 normals. |
-| `--gi-hybrid <parts>` | comma list: `relocate`, `clouds`, `near` | off | The `gihybrid` switch on with these parts only ([render-gi](render-gi.md) "Hybrid GI"). |
-| `--fog <u>` | units | 250000 | Distance where the haze is complete. |
-| `--material-distance <u>` | units | 30000 | Beyond it, terrain shows the biomes' ground colour. |
+| `--gi-hybrid <parts>` | comma list: `relocate`, `clouds`, `cache` | off | The `gihybrid` switch on with these parts only ([render-gi](render-gi.md) "Hybrid GI"). Rows: GI probes out of walls, GI cloud shadows, GI radiance cache (Lighting > Indirect light), live. |
+| `--fog <u>` | units | 250000 | Distance where the haze is complete. Row: Full haze distance (Sky & weather > Haze, 10000 to 1000000), live. |
+| `--material-distance <u>` | units | 30000 | Beyond it, terrain shows the biomes' ground colour. Row: Terrain material distance (World > Draw distances, 2000 to 100000), live. |
 | `--terrain-error <px>` | pixels | 16 (Meitou), 10 (Faithful) | Terrain LOD error allowed near the eye. |
 | `--object-distance <u>` | units | 20000 (Meitou), 12000 (Faithful) | Full-detail draw distance for placed objects. |
 | `--range-large <u>` | units | 50000 | Foliage draw range of the large size class. |
 | `--distant-range <zones>` | zones | 10 | How far distant towns are drawn; 0 for none. |
-| `--impostor-budget <MB>` | MB | 8% of video memory (5% integrated), 48 to 1024 | Video memory for resident impostor atlases. |
+| `--impostor-budget <MB>` | MB | 8% of video memory (5% integrated), 48 to 1024 | Video memory for resident impostor atlases. Row: Impostor memory budget (World > Far impostors, 0 to 2048 MB in steps of 16; the lowest position is automatic), live. |
 | `--no-load-cache` | | off | Do not read or write the load caches (foliage layout, character LOD, world colour map and terrain colour tile caches). |
 | `--low-end` | | off | Potato-PC preset: short draw distances, no shadows, reflections, AO, relief, light shafts or AA, 0.83 render scale, sparse grass and particles, Faithful UI (over `--ui` and the saved mode, which it leaves as saved). Options after it override the graphics. |
 | `--benchmark-baseline` | | off | The settings of benchmarks for the [benchmarks page](../bench/README.md): a 1920x1080 window (implies `--windowed` and `--size 1920x1080`; a later `--size` overrides), the Medium tier, then no GI (indirect light and indoor GI; the device is made without ray queries), ground parallax or tessellation (displacement, rock smoothing, outline refinement), no upscaler, SMAA at render scale 1. Like `--low-end`, the saved graphics are neither applied nor overwritten. Fixed for the run in the game: later graphics options it covers do not take effect (the viewer, which has no tier, honours them). Vulkan only: the Metal renderer applies the saved graphics over it. |
@@ -183,7 +185,6 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `
 | `--render-scale <0.25..1 or name>` | 0.25 to 1; native, ultra-quality, quality, balanced, performance, ultra | 0.67 (Quality) with an upscaler (Meitou), else 1 | Render size per axis. |
 | `--no-fxaa` | | FXAA on | Game's FXAA off when no upscaler runs. |
 | `--smaa` | | off | SMAA instead of FXAA when no upscaler runs. |
-| `--lamp-shadow-lamps <n>` | 2 to 4 | 2 | Most lamps a pixel traces with the `lampshadows` switch ([lamps](render-lights.md#traced-lamp-shadows)). |
 | `--no-heat-haze` | | on | No heat haze. |
 | `--particle-divisor <0\|1\|2\|4>` | | 0 | Weather particles drawn at 1/n of render size; 0 sizes by sprite. Rain and fire stay full size. |
 | `--gtao-quality <0\|1\|2>` | | 1 | The `gtao` switch's budget: 0 half size 2 x 4, 1 half size 3 x 6, 2 render size 3 x 6 ([post](render-post.md) "GTAO"). |

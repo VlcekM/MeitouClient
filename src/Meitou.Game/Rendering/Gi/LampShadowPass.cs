@@ -49,11 +49,11 @@ sealed unsafe class LampShadowPass : IDisposable
     /// <summary>How far under a mover's sphere the ground is taken to be, for how far its shadow reaches.</summary>
     const float GroundMargin = 60;
 
-    public LampShadowPass(GpuContext ctx, int lamps)
+    public LampShadowPass(GpuContext ctx)
     {
         this._ctx = ctx;
         _penumbra = new PenumbraFilter(ctx);
-        _program = ctx.Shaders.Compute(LampShadowShaders.Trace(lamps), "lamp shadow trace",
+        _program = ctx.Shaders.Compute(LampShadowShaders.Trace(LampShadowShaders.MaxLamps), "lamp shadow trace",
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),

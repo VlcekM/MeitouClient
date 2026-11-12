@@ -14,6 +14,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   the game's environment BRDF. No shadows (every face towards the sun is fully lit). Every world shader ends with
   `colour = atmoApply(colour, eye, position)`, the game's haze (sky.md, "Haze"). The post-processing applies the game's auto
   exposure from the measured mean luminance, so the screen brightness follows the game's `0.55 / adapted` with the CONSTANTS band.
+  The distance where the haze is complete (`--fog`, default 250000) is `WorldOptions.FogDistance`, passed to every frame's draw; the "Full haze distance" row (Sky & weather > Haze) sets it live.
   At night the game's haze is black and hides everything past a few thousand units against a black sky; the `night` switch ("Night air", Meitou, default) gives the
   air a faint glow of its own instead (`NightAir` in `NightSky.cs`: airglow plus the planet's light scattered by the air, by the planet's phase): the haze, its ramp the game's,
   fades the far land into it (`hazeTarget`), and the sky pass adds the same colour above the horizon, falling off with the height (`atmoNightAir` in `atmoSky`, replacing SkyX's own

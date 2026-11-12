@@ -19,7 +19,7 @@ choices requiring boundary/material checks. `terrain-late-colour` separates dept
 where occluders justify it. A depth prepass is extra geometry, not automatically a speedup.
 
 **Layer arrays** (`TerrainTextures`), two tiers per texture pair (a BC3 diffuse and a BC1 normal):
-- **Far arrays** hold every pair of the biomes within the material distance at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
+- **Far arrays** hold every pair of the biomes within the material distance (`--material-distance`, default 30000; the "Terrain material distance" row, live: the draw and the streamer read it each frame) at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
   at a fixed index per pair, at most 256 (the array layers every Vulkan device has; a pair past that stays in ground colour). The R8 height array
   and the relief texture use the same index. A biome is drawn once all its pairs are in.
 - **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when

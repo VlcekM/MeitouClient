@@ -290,8 +290,6 @@ public sealed class PostOptions
     public bool CameraEffectsHeld;
     /// <summary>Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the game's: lamps cast no shadows.</summary>
     public bool LampShadows;
-    /// <summary>The most lamps a pixel traces (2, <c>--lamp-shadow-lamps</c>); read once, when the pass is made.</summary>
-    public int LampShadowLamps = 2;
     /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
     public float Exposure = 1;
 
@@ -400,7 +398,7 @@ public sealed class PostOptions
         CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
-        LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
+        LampShadows = other.LampShadows;
     }
 
     /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>cache</c>).</summary>
@@ -439,7 +437,6 @@ public sealed class PostOptions
             case "--gi-hybrid": SetGiHybrid(next()); return true;
             case "--gtao-quality": GtaoQuality = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 2); return true;
             case "--bloom": BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f); Bloom = BloomStrength > 0; return true;
-            case "--lamp-shadow-lamps": LampShadowLamps = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), Gi.LampShadowShaders.MinLamps, Gi.LampShadowShaders.MaxLamps); return true;
             case "--upscaler":
                 Upscale.Explicit = true;
                 Upscale.Kind = ParseUpscaler(next());
@@ -480,7 +477,7 @@ public sealed class PostOptions
         string nightGrade = NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off";
         string bloom = BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off";
         string focus = DepthOfField ? "f/" + DofAperture.ToString("0.##", CultureInfo.InvariantCulture) : "off";
-        string lamps = LampShadows ? $"{LampShadowLamps} lamps" : "off";
+        string lamps = LampShadows ? "on" : "off";
         return $"{Preset}: aa {aa}, heat haze {heatHaze}, ssao {ssao}, contact {(ContactShadows ? "on" : "off")}, reflections {(Ssr ? "on" : "off")}, " +
             $"traced sun {(TracedSun ? "on" : "off")}, shafts {shafts}, exposure x{Exposure:0.##}, tonemap {tonemap}{mix}, grade {grade}, night grade {nightGrade}, " +
             $"bloom {bloom}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";

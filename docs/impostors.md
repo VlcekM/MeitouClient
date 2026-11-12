@@ -31,7 +31,7 @@ pools10s idle. Prepare lazy frame globals outside rendering; warm programs/quad/
 **Verified** pooled output MD5 for267 meshes and split tests; cold-cache validation named views.
 
 Atlas budget min(clamp(share*deviceBudget,48MB,cap),12%budget):discrete8%/1024MB,
-integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget overrides.
+integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget overrides (the "Impostor memory budget" row, 0 to 2048 MB, lowest position automatic; read at each scan).
 Nearest-first plan degrades far mips before excluding; lookahead3s, one-level margin plus
 upscaler bias. Refine on approach, retain old atlas until ready; retry refused upload2s.
 Unwanted atlases unload after 20 s idle; after a jump of 10000+ units between scans (a save loaded from the menu's

@@ -3,6 +3,7 @@ using Meitou.Data.World;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Water;
 using Meitou.Settings;
 
 namespace Meitou.Game.Settings;
@@ -70,8 +71,10 @@ static class LauncherSchema
         Graphics(WorldFrame.SmallFoliageRangeSlider, 200, 40000, 50, 4000) with { Logarithmic = true },
         Graphics(WorldFrame.ImpostorDistanceSlider, 500, 40000, 50, 5000) with { Logarithmic = true },
         Graphics(WorldFrame.LargeImpostorDistanceSlider, 500, 40000, 50, 10000) with { Logarithmic = true },
+        Graphics(WorldFrame.ImpostorBudgetSlider, 0, 2048, 16, 0) with { Suffix = " MB", OffBelow = WorldFrame.ImpostorBudgetFloor, OffText = "Automatic" },
         Multiplier(WorldFrame.GrassDistanceSlider, 0.25f, 80, 1),
         Graphics(WorldFrame.GrassDensitySlider, 0.1f, 2, 0.05f, 1) with { Format = "0.00", Suffix = "x" },
+        Graphics(WorldFrame.MaterialDistanceSlider, 2000, 100000, 500, 30000) with { Logarithmic = true },
         Graphics(WorldFrame.GroundReliefQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         Graphics(WorldFrame.GroundReliefDepthSlider, 0, 80, 0.5f, 20) with { Format = "0.0", Suffix = " cm" },
         Graphics(WorldFrame.GroundDisplaceDistanceSlider, 10, 200, 1, 50) with { Suffix = " m" },
@@ -80,6 +83,9 @@ static class LauncherSchema
         // Water
         Graphics(WorldFrame.WaterReflectionSlider, 0, 4, 1, 2) with { Labels = ["Off", "Landscape", "Characters", "Buildings", "Everything"] },
         Multiplier(WorldFrame.ReflectionRangeSlider, 0.1f, 50, 0.6f),
+        Graphics(WorldFrame.ReflectionSamplesSlider, 0, 3, 1, 2) with { Labels = ["Off", "2x", "4x", "8x"] },
+        Graphics(WorldFrame.WaterGridSlider, 64, 1024, 64, WaterRenderer.DefaultGridSegments) with { Logarithmic = true },
+        Graphics(WorldFrame.WaterOceanSlider, 0, 2, 1, 2) with { Name = "Water wave resolution", Labels = ["64", "128", "256"] },
         Multiplier(WorldFrame.WaterClaritySlider, 0.25f, 8, 0.5f),
         Graphics(WorldFrame.FarWaterClaritySlider, 0, 1, 0.01f, 0.25f) with { Format = "0.00" },
         Graphics(WorldFrame.WaterClearDistanceSlider, 1000, 100000, 100, 10000) with { Logarithmic = true },
@@ -94,6 +100,7 @@ static class LauncherSchema
         Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
         Graphics(WorldFrame.ShadowFilterSlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         Graphics(WorldFrame.HazeStrengthSlider, 0, 3, 0.01f, Enhancements.MeitouHazeStrength) with { Format = "0.00" },
+        Graphics(WorldFrame.HazeDistanceSlider, 10000, 1000000, 1000, 250000) with { Logarithmic = true },
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
         Graphics(WorldFrame.CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, 100, VolumetricClouds.Bottom) with
             { Logarithmic = true },
@@ -175,6 +182,10 @@ static class LauncherSchema
                      .Where(e => !LookPresets.HiddenSwitch(e.Name) && !WorldFrame.ChoiceDrivenSwitches.Contains(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
+        // The hybrid GI's parts (--gi-hybrid), on at start.
+        yield return Switch(WorldFrame.GiRelocateSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.GiCloudShadowsSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.GiCacheSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
         yield return Switch(WorldFrame.CameraEffectsSwitch, "Off", "On", false);

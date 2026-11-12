@@ -718,10 +718,12 @@ sealed partial class GameHost
                     v => foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
                 sliders.Add(new Slider("Large impostor distance (F7 Meitou)", 500, 40000, () => foliage.LargeImpostorDistance,
                     v => foliage.LargeImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+                sliders.Add(WorldFrame.ImpostorBudget(foliage));
             }
             sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => Render.TerrainPixelError,
                 v => Render.TerrainPixelError = v, "0.0", Logarithmic: true,
                 Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
+            sliders.Add(WorldFrame.MaterialDistance(Render, worldGpu.Streamer, WorldOptions));
 
             // Lighting: the same shadow controls the Vulkan settings expose, and the sky switches the Metal sky reads.
             const float shadowsOff = Meitou.Data.World.KenshiShadows.MinRange * 0.9f;
@@ -745,6 +747,7 @@ sealed partial class GameHost
             }
             sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => sky.HazeStrength,
                 v => sky.HazeStrength = v, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHazeStrength));
+            sliders.Add(WorldFrame.HazeDistance(WorldOptions));
             sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => sky.PlanetshineStrength,
                 v => sky.PlanetshineStrength = MathF.Round(v), "0"));
             sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom,
@@ -794,6 +797,7 @@ sealed partial class GameHost
                         3 => "3 buildings", _ => "4 everything" }));
                 sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range,
                     v => reflection.Range = v, "0.00", Logarithmic: true));
+                sliders.Add(WorldFrame.ReflectionSamples(reflection, WorldOptions));
             }
             // Water: the Meitou clarity controls only mean something on the Meitou surface; the faithful surface keeps them hidden.
             if (water is { Meitou: true })
@@ -804,6 +808,7 @@ sealed partial class GameHost
                     v => water.FarClarity = v, "0.00", Text: v => v <= 0 ? "0 (true slant)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
                 sliders.Add(new Slider("Water see-through distance (Meitou, game 4000)", 1000, 100000,
                     () => water.ClearDistance, v => water.ClearDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
+                WorldFrame.AddWaterSizeSliders(sliders, WorldOptions);
             }
 
             // Effects: the composite already supports the game's exposure/tone-map/grading path, even before the rest of

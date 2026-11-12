@@ -22,7 +22,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // Lighting
         new("Shadows", WorldFrame.SunShadowsChoice, [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
             WorldFrame.FifthCascadeSwitch, "Contact shadows"]),
-        new("Indirect light", WorldFrame.GiChoice, ["Indoor GI"]),
+        new("Indirect light", WorldFrame.GiChoice, ["Indoor GI", WorldFrame.GiRelocateSwitch, WorldFrame.GiCloudShadowsSwitch, WorldFrame.GiCacheSwitch]),
         new("Light shafts", "Light shafts", [
             "Light shafts strength", "Light shafts air (0 = none)", "Light shafts air at dawn and dusk (x)", WorldFrame.ShaftQualitySlider]),
         new("Ambient occlusion", WorldFrame.OcclusionChoice, [WorldFrame.GtaoQualitySlider]),
@@ -32,7 +32,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
             "Ambient light", "The sky's light in shade, at night and indoors."),
 
         // Sky & weather
-        new("Haze", "Haze", ["Haze strength (1 = game)"]),
+        new("Haze", "Haze", ["Haze strength (1 = game)", WorldFrame.HazeDistanceSlider]),
         new("Clouds", "Clouds", [WorldFrame.CloudHeightSlider, "Cloud shadows", "Cloud shadows in fog"]),
         new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
         new("Weather particles", WorldFrame.ParticleSliders[0], [WorldFrame.ParticleSliders[1]]),
@@ -47,18 +47,19 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
         // World
         new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",
-            "Object LOD distance x", "Terrain detail: error px (less = finer)"]),
+            "Object LOD distance x", "Terrain detail: error px (less = finer)", WorldFrame.MaterialDistanceSlider]),
         new("Terrain relief", null, ["Ground parallax", WorldFrame.GroundParallaxDepthSlider, "Ground parallax distance (m)", "Ground displacement (tessellation)",
             "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider,
             "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)", "Ground trails"],
             "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
         new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
             "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),
-        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)"]),
+        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)", WorldFrame.ImpostorBudgetSlider]),
         new("Mesh welding", "Mesh welding", []),
         new("Bolt tracers", "Bolt tracers", []),
         new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)",
-            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider, "Water contact foam, wakes and ripples"]),
+            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider, WorldFrame.ReflectionSamplesSlider, WorldFrame.WaterGridSlider,
+            WorldFrame.WaterOceanSlider, "Water contact foam, wakes and ripples"]),
         // Characters: the skin switch, then one row per race (added by Entries)
         new(SkinGroup, "Skin", []),
     ];

@@ -515,7 +515,6 @@ sealed class WorldOptions
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO, ground relief, light shafts or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
           --benchmark-baseline     the benchmarks' settings: a 1920x1080 window, the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (the viewer: options after it override; the game: fixed)
           --no-vsync               start with vsync off (uncapped; Tab slider)
-          --lamp-shadow-lamps <n>  most lamps a pixel traces with the lampshadows switch (2)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
           --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
@@ -1094,6 +1093,11 @@ static partial class WorldFrame
         public WaterRenderer? Water;
 
         /// <summary>
+        /// The options the world was made from (the settings panel's rows for the start-up sizes and the haze distance read and write them; null in tests).
+        /// </summary>
+        public WorldOptions? Options;
+
+        /// <summary>
         /// The weather's wetness, dust and rain for every surface shader (null without a game database).
         /// </summary>
         public WeatherSurfaces? Surfaces;
@@ -1542,7 +1546,7 @@ static partial class WorldFrame
         // WorldFrame.Draw runs a post chain through IWorldPostChain. Vulkan's PostProcess is complete here; Metal supplies its
         // PostComposite/PostTaa slice as a host-constructed chain and leaves the Vulkan-only reflection and GI paths null.
         var post = b.Context is GpuContext vulkanPost ? new PostProcess(vulkanPost, o.Post) : null;
-        var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(b.Context,
+        var gpu = new Gpu { Options = o, Terrain = terrain, Sky = new SkyRenderer(b.Context,
             b.Assets) { CloudCoverage = o.Clouds }, Post = post, PostChain = post };
         post?.LoadHeatHaze(b.Assets);
 
@@ -1814,6 +1818,24 @@ static partial class WorldFrame
     /// </summary>
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
     public const string TextureQualitySlider = "Texture quality 0-4 (game)";
+
+    /// <summary>
+    /// The rows that were command-line options only (docs/launch-options.md); the water's grid and FFT size are made once with the water
+    /// (<c>Program</c> reads the saved ones before the world loads), the rest apply live. Their labels are the <c>meitou.user.json</c> keys.
+    /// </summary>
+    public const string WaterGridSlider = "Water grid segments", WaterOceanSlider = "Water wave resolution (FFT size)",
+        ReflectionSamplesSlider = "Reflection samples", HazeDistanceSlider = "Full haze distance",
+        MaterialDistanceSlider = "Terrain material distance", ImpostorBudgetSlider = "Impostor memory budget (MB)";
+
+    /// <summary>
+    /// The impostor budget slider's positions below this (MB) are the automatic rule.
+    /// </summary>
+    public const float ImpostorBudgetFloor = 8;
+
+    /// <summary>
+    /// The hybrid GI's parts as switches (<see cref="PostOptions.GiRelocate"/>, <see cref="PostOptions.GiCloudShadows"/>, <see cref="PostOptions.GiCache"/>).
+    /// </summary>
+    public const string GiRelocateSwitch = "GI probes out of walls", GiCloudShadowsSwitch = "GI cloud shadows", GiCacheSwitch = "GI radiance cache";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
     // The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
     public const string ObjectDistanceSlider = "Object draw distance", GrassDensitySlider = "Grass density x", WaterReflectionSlider = "Water reflection 0-4 (game)",
@@ -1961,7 +1983,7 @@ static partial class WorldFrame
         AddWaterSliders(sliders, g);
         AddTerrainSliders(sliders, g, r);
         var fifthCascade = g.Shadow is { } shadow ? AddShadowSliders(sliders, shadow) : null;
-        AddSkySliders(sliders, g.Sky);
+        AddSkySliders(sliders, g.Sky, g.Options);
         if (g.Post is { } post) AddPostSliders(sliders, g, post);
 
         // Anisotropic filtering (docs/render-post.md "Texture filtering"): the most any texture is sampled with; the world's textures ask 8x,
@@ -2106,6 +2128,7 @@ static partial class WorldFrame
         sliders.Add(new Slider(LargeImpostorDistanceSlider, 500, 40000, () => foliage.LargeImpostorDistance,
             v => foliage.LargeImpostorDistance = Round50(v), "0",
             Logarithmic: true));
+        sliders.Add(ImpostorBudget(foliage));
         sliders.Add(new Slider(MediumFoliageRangeSlider, 400, 80000, () => foliage.MediumRange, v => foliage.MediumRange = Round50(v), "0",
             Logarithmic: true));
         sliders.Add(new Slider(SmallFoliageRangeSlider, 200, 40000, () => foliage.SmallRange, v => foliage.SmallRange = Round50(v), "0",
@@ -2129,7 +2152,9 @@ static partial class WorldFrame
                 Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters",
                     3 => "3 buildings", _ => "4 everything" }));
             sliders.Add(new Slider(ReflectionRangeSlider, 0.1f, 50, () => reflection.Range, v => reflection.Range = v, "0.00", Logarithmic: true));
+            sliders.Add(ReflectionSamples(reflection, g.Options));
         }
+        if (g.Options is { } options) AddWaterSizeSliders(sliders, options);
 
         // How far the Meitou water lets the floor show through (docs/render-water.md "Clarity"); the Faithful water keeps the game's alpha.
         if (g.Water is { } water)
@@ -2143,6 +2168,58 @@ static partial class WorldFrame
     }
 
     /// <summary>
+    /// The haze distance row (<c>--fog</c>): the options' value goes to every frame's draw. Also the Metal panel's.
+    /// </summary>
+    internal static Slider HazeDistance(WorldOptions options) => new(HazeDistanceSlider, 10000, 1000000, () => options.FogDistance,
+        v => options.FogDistance = MathF.Round(v / 1000) * 1000, "0", Logarithmic: true);
+
+    /// <summary>
+    /// The material distance row (<c>--material-distance</c>): beyond it the terrain shows the biomes' ground colour. The draw's value and the texture
+    /// streamer's are read each frame. Also the Metal panel's.
+    /// </summary>
+    internal static Slider MaterialDistance(WorldRenderOptions r, TerrainStreamer? streamer, WorldOptions? options) =>
+        new(MaterialDistanceSlider, 2000, 100000, () => r.MaterialDistance, v =>
+        {
+            r.MaterialDistance = MathF.Round(v / 500) * 500;
+            if (streamer is not null) streamer.MaterialDistance = r.MaterialDistance;
+            if (options is not null) options.MaterialDistance = r.MaterialDistance;
+        }, "0", Logarithmic: true);
+
+    /// <summary>
+    /// The impostor memory budget row (<c>--impostor-budget</c>), read at each scan: the lowest positions are the automatic rule (docs/impostors.md).
+    /// Also the Metal panel's.
+    /// </summary>
+    internal static Slider ImpostorBudget(FoliageRenderer foliage) => new(ImpostorBudgetSlider, 0, 2048, () => (float)(foliage.ImpostorBudgetMb ?? 0),
+        v => foliage.ImpostorBudgetMb = v < ImpostorBudgetFloor ? null : MathF.Round(v / 16) * 16, "0", Step: 16,
+        Text: v => v < ImpostorBudgetFloor ? "Automatic" : string.Create(CultureInfo.InvariantCulture, $"{MathF.Round(v / 16) * 16:0} MB"));
+
+    /// <summary>
+    /// The reflection's samples per texel as a power of two, 1 (off) to 8 (docs/render-water.md "Shading and reflection"): the targets are made again at the new
+    /// count on the next frame.
+    /// </summary>
+    internal static Slider ReflectionSamples(ReflectionPass reflection, WorldOptions? options) => new(ReflectionSamplesSlider, 0, 3,
+        () => Math.Clamp((int)MathF.Round(MathF.Log2(Math.Max(reflection.Samples, 1))), 0, 3), v =>
+        {
+            reflection.Samples = 1 << Math.Clamp((int)MathF.Round(v), 0, 3);
+            if (options is not null) options.ReflectionSamples = reflection.Samples;
+        }, "0", Text: v => (int)MathF.Round(v) is var i and > 0 ? $"{1 << i}x" : "off");
+
+    /// <summary>
+    /// The Meitou water's grid segments and FFT size: made once with the water, so a new value takes effect at the next start (<c>Program</c> reads
+    /// the saved ones before the world loads).
+    /// </summary>
+    internal static void AddWaterSizeSliders(List<Slider> sliders, WorldOptions options)
+    {
+        static int Segments(float v) => Math.Clamp((int)MathF.Round(v / 64) * 64, 64, 1024);
+        static int FftIndex(float v) => Math.Clamp((int)MathF.Round(v), 0, 2);
+
+        sliders.Add(new Slider(WaterGridSlider, 64, 1024, () => options.WaterGrid, v => options.WaterGrid = Segments(v), "0", Logarithmic: true,
+            Step: 64));
+        sliders.Add(new Slider(WaterOceanSlider, 0, 2, () => MathF.Log2(Math.Max(options.WaterOcean, 64) / 64f), v => options.WaterOcean = 64 << FftIndex(v),
+            "0", Text: v => (64 << FftIndex(v)).ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>
     /// The terrain's pixel error and the ground relief (ours, docs/render-terrain.md "Ground relief": the march's quality, the depth and where each
     /// ends).
     /// </summary>
@@ -2150,6 +2227,7 @@ static partial class WorldFrame
     {
         sliders.Add(new Slider(TerrainErrorSlider, 4, 32, () => r.TerrainPixelError, v => r.TerrainPixelError = v, "0.0", Logarithmic: true,
             Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
+        sliders.Add(MaterialDistance(r, g.Streamer, g.Options));
 
         // The depth drives parallax and displacement; 0 is off.
         sliders.Add(new Slider(GroundReliefQualitySlider, 0, 2, () => GroundRelief.Quality,
@@ -2191,11 +2269,12 @@ static partial class WorldFrame
     /// <summary>
     /// The sky's haze, planetshine, cloud height and ambient light.
     /// </summary>
-    static void AddSkySliders(List<Slider> sliders, SkyRenderer sky)
+    static void AddSkySliders(List<Slider> sliders, SkyRenderer sky, WorldOptions? options)
     {
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider(HazeStrengthSlider, 0, 3, () => sky.HazeStrength, v => sky.HazeStrength = v, "0.00", Faithful: 1,
             Meitou: Enhancements.MeitouHazeStrength));
+        if (options is not null) sliders.Add(HazeDistance(options));
         // Ours (docs/formats/sky.md "Planetshine"): the planet's light at night, a multiple of the physical value.
         sliders.Add(new Slider(PlanetshineStrengthSlider, 0, 200, () => sky.PlanetshineStrength, v => sky.PlanetshineStrength = MathF.Round(v), "0"));
         sliders.Add(new Slider(CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, () => sky.CloudHeight,
@@ -2316,6 +2395,11 @@ static partial class WorldFrame
             toggles.Add(new Toggle(BloomSwitch, () => post.Options.Bloom, v => post.Options.Bloom = v, Remaster: true, OnOff: true, Optional: true));
             toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
                 Remaster: true, OnOff: true, Optional: true));
+
+            // The hybrid GI's parts (--gi-hybrid), plain on / off rows; they act while the Hybrid GI choice is on.
+            toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
+            toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
+            toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
         }
         if (tessellation)
         {

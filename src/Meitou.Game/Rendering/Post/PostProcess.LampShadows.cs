@@ -56,7 +56,7 @@ public sealed unsafe partial class PostProcess
         var scratch = _lampScratch ??= MakeLampLost();
         var filtered = _lampFiltered ??= MakeLampLost();
         CloseSegment();
-        var trace = _lampShadowTrace ??= new Gi.LampShadowPass(Gpu, Options.LampShadowLamps);
+        var trace = _lampShadowTrace ??= new Gi.LampShadowPass(Gpu);
         if (lamps.DebugReference is { } reference && lamps.RowOf(reference.Lamp) is { } debugRow)
         {
             trace.RunReference(scene, lamps, depth.Texture, surface.Texture, lost.Texture, LampShadowViewNow(), debugRow, reference.Truth);

@@ -23,8 +23,24 @@ sealed partial class GameHost
     static readonly HashSet<string> SessionSliders = ["Time of day", "VSync", "Full screen"];
 
     /// <summary>
+    /// The settings rows a command-line option sets for one run (<c>--water-grid</c>, <c>--fog</c>, ...), by option: this run neither reads nor
+    /// writes their saved values.
+    /// </summary>
+    static readonly (string Option, string[] Keys)[] OptionKeys =
+    [
+        ("--water-grid", [WorldFrame.WaterGridSlider]),
+        ("--water-ocean", [WorldFrame.WaterOceanSlider]),
+        ("--reflection-samples", [WorldFrame.ReflectionSamplesSlider]),
+        ("--fog", [WorldFrame.HazeDistanceSlider]),
+        ("--material-distance", [WorldFrame.MaterialDistanceSlider]),
+        ("--impostor-budget", [WorldFrame.ImpostorBudgetSlider]),
+        ("--gi-hybrid", [.. new[] { WorldFrame.GiRelocateSwitch, WorldFrame.GiCloudShadowsSwitch, WorldFrame.GiCacheSwitch }
+            .Select(label => SettingsMenu.SwitchKeyPrefix + label)]),
+    ];
+
+    /// <summary>
     /// The <c>graphics</c> keys this run neither reads from nor writes to meitou.user.json: <see cref="SessionSliders"/>, and the bloom's switch and
-    /// strength when <c>--bloom</c> sets them for one run.
+    /// strength when <c>--bloom</c> sets them for one run, and the rows of the options in <see cref="OptionKeys"/> the command line gives.
     /// </summary>
     internal static HashSet<string> RunOnlyKeys()
     {
@@ -34,6 +50,8 @@ sealed partial class GameHost
             keys.Add(WorldFrame.BloomStrengthSlider);
             keys.Add(SettingsMenu.SwitchKeyPrefix + WorldFrame.BloomSwitch);
         }
+        foreach (var (option, optionKeys) in OptionKeys)
+            if (Environment.GetCommandLineArgs().Contains(option)) keys.UnionWith(optionKeys);
         return keys;
     }
 
