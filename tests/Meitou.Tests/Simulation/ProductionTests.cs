@@ -585,7 +585,9 @@ public class ProductionTests
         Assert.Equal(charge - ticks * rig.World.TickSeconds, battery.Charge, 0.01f);
     }
 
-    /// <summary>A complete machine whose saved town is unresolved does not create Meitou's town power grid.</summary>
+    /// <summary>
+    /// A complete machine whose saved town is unresolved does not create Meitou's town power grid.
+    /// </summary>
     [Fact]
     public void A_no_town_machine_does_not_join_a_power_grid()
     {
@@ -598,7 +600,9 @@ public class ProductionTests
         Assert.False(rig.Machine(2).OnGrid);
     }
 
-    /// <summary>A complete research bench with an unresolved town does not contribute its level.</summary>
+    /// <summary>
+    /// A complete research bench with an unresolved town does not contribute its level.
+    /// </summary>
     [Fact]
     public void A_no_town_research_bench_does_not_raise_the_global_bench_level()
     {
