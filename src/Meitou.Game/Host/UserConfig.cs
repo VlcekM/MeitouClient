@@ -331,12 +331,13 @@ sealed class UserConfig
     /// </summary>
     public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>
-    /// A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs
-    /// at once, as in the game). <c>--load</c> is not paused.
+    /// A loaded or imported save starts paused (Advanced settings, a Faithful / Meitou switch; on by default, Meitou: in the game it runs at once).
+    /// <c>--load</c> is not paused.
     /// </summary>
-    public bool PauseOnLoad { get; set; }
+    public bool PauseOnLoad { get; set; } = true;
     /// <summary>
-    /// The player's animals pick up loose items into their bags (Advanced settings, a plain on/off switch; off by default;
+    /// The player's animals pick up loose items into their bags (Advanced settings, a Faithful / Meitou switch whose
+    /// Faithful side is on, as the game lets animals pick up; off by default, Meitou;
     /// <c>PlayerSystem.AnimalsPickUp</c>).
     /// </summary>
     public bool AnimalsPickUp { get; set; }

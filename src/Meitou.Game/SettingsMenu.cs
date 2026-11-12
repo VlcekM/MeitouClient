@@ -1165,7 +1165,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
-        Config.PauseOnLoad = false;
+        Config.PauseOnLoad = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;

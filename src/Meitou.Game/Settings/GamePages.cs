@@ -592,12 +592,12 @@ sealed class GamePages(SettingsMenu menu)
             Slider: FastestSpeedSlider));
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
-            Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, OnOff: true)));
+            Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
         result.Add(new("Animals pick up items",
-            "Your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). "
-            + "Off, only people pick items up.",
-            Toggle: new("Animals pick up items", () => menu.Config.AnimalsPickUp,
-                v => { menu.Config.AnimalsPickUp = v; menu.AnimalsPickUpChanged?.Invoke(v); }, OnOff: true)));
+            "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). "
+            + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
+            Toggle: new("Animals pick up items", () => !menu.Config.AnimalsPickUp,
+                v => { menu.Config.AnimalsPickUp = !v; menu.AnimalsPickUpChanged?.Invoke(!v); }, Remaster: true)));
         result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
             Toggle: new("Hover outline", () => menu.Config.HoverOutline, v => menu.Config.HoverOutline = v, Remaster: true, OnOff: true)));
         result.Add(new("Building outline",
