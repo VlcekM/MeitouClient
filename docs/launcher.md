@@ -12,6 +12,8 @@ items); the launcher never downloads or hosts mods.
   are, so `/releases/latest` (README's link) is the newest launcher; README's
   setup links are `/releases/latest/download/<name>`, so the Setup/AppImage/pkg names must stay free of the version. Full releases of both pass
   `--notes-start-tag` with the previous tag of their own family, so the generated notes never span the other family's tag.
+- Both manual release workflows accept `build_only`: packages go to workflow artifacts, with no tag, release or announcement;
+  the supplied version needs no changelog section. Mac builds use .NET 10 for [older macOS compatibility](macos-port.md#running).
 - Both tag the commit the run started on with `GITHUB_TOKEN`. **Verified** (throwaway test workflow, 2026-10-22): GitHub refuses that
   token a tag or release (HTTP 403 "Resource not accessible by integration") on a commit whose `.github/workflows/` files differ from
   the current master, as it lacks the `workflows` permission. So pushing a workflow edit while a release runs fails its release step;

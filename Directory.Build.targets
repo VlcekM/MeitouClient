@@ -1,5 +1,19 @@
 <Project>
 
+  <!-- The packaged macOS OpenAL and GLFW binaries require Sonoma. CI builds the same versions for Ventura. -->
+  <PropertyGroup>
+    <MeitouMacNativeDirectory>$(MSBuildThisFileDirectory)macos-runtime/$(RuntimeIdentifier)</MeitouMacNativeDirectory>
+  </PropertyGroup>
+  <Target Name="UseMacNativeLibraries" AfterTargets="ResolvePackageAssets" BeforeTargets="EmbedNativeLibraries"
+          Condition="$(RuntimeIdentifier.StartsWith('osx-')) and Exists('$(MeitouMacNativeDirectory)')">
+    <ItemGroup>
+      <_MacNativeReplacement Include="@(NativeCopyLocalItems)"
+                             Condition="Exists('$(MeitouMacNativeDirectory)/%(Filename)%(Extension)')" />
+      <NativeCopyLocalItems Remove="@(_MacNativeReplacement)" />
+      <NativeCopyLocalItems Include="@(_MacNativeReplacement->'$(MeitouMacNativeDirectory)/%(Filename)%(Extension)')" />
+    </ItemGroup>
+  </Target>
+
   <!-- Local vendor binaries stay outside source control; both executable projects need the same runtime. Each one present is copied: Streamline
        for DLSS, amd_fidelityfx_vk.dll for FSR (the release zips fetch them in tools/scripts/package-release.ps1). -->
   <PropertyGroup>

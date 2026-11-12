@@ -13,6 +13,10 @@ on:
         description: "Mark as a pre-release"
         type: boolean
         default: false
+      build_only:
+        description: "Upload packages as workflow artifacts without tagging or publishing a release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -35,9 +39,15 @@ jobs:
         id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
           v="${INPUT_VERSION#v}"
           [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "bad version '$v'"; exit 1; }
+          if [ "$BUILD_ONLY" = true ]; then
+            echo "version=$v" >> "$GITHUB_OUTPUT"
+            echo "Unreleased launcher build $v." > "$RUNNER_TEMP/changes.md"
+            exit 0
+          fi
           [ -z "$(git tag -l "launcher-v$v")" ] || { echo "tag launcher-v$v already exists"; exit 1; }
           # The version's launcher/CHANGELOG.md section (from "## v<version>" to the next "## "): required.
           awk -v h="## v$v" '$0==h{f=1;next} /^## /{f=0} f' launcher/CHANGELOG.md > "$RUNNER_TEMP/changes.md"
@@ -70,6 +80,12 @@ jobs:
         continue-on-error: true
         with:
           dotnet-version: 11.0.x
+
+      - name: macOS compatibility runtime
+        if: runner.os == 'macOS'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
 
       - name: .NET SDK
         shell: bash
@@ -117,10 +133,12 @@ jobs:
           RID: ${{ matrix.rid }}
           EXE: ${{ matrix.exe }}
         run: |
+          if [ "$RUNNER_OS" = macOS ]; then bash tools/scripts/build-native-macos.sh "$RID"; fi
           # Without libvpx the publish still succeeds, with news videos left out: refuse that.
           find vpx-runtime -path "*/lib/*" \( -name vpx.lib -o -name libvpx.a \) 2>/dev/null | grep -q . || { echo "libvpx missing in vpx-runtime/"; exit 1; }
           dotnet tool install -g vpk --version "$VPK_VERSION"
           dotnet publish launcher/Meitou.Launcher -c Release -r "$RID" --self-contained -p:Version="$VERSION" -o pub
+          if [ "$RUNNER_OS" = macOS ]; then cp "macos-runtime/$RID/LICENSE-OpenAL-Soft.txt" pub/; fi
           # No paid Developer ID: ad-hoc sign the macOS executable so its integrity can be checked. Gatekeeper still warns.
           case "$RID" in osx-*) codesign --force --deep --sign - pub/meitou-launcher ;; esac
           icon=()
@@ -136,6 +154,7 @@ jobs:
           if-no-files-found: error
 
   release:
+    if: ${{ !inputs.build_only }}
     needs: [version, package]
     runs-on: ubuntu-latest
     steps:

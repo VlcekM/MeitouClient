@@ -40,6 +40,12 @@ $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0
 # meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
 # The game goes last: the viewer and meitou-tools reference it and bring copies of its runtimeconfig and deps, which its own publish then replaces.
 $projects = @("tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj", "src/Meitou.Game/Meitou.Game.csproj")
+if ($mac) {
+    bash (Join-Path $PSScriptRoot "build-native-macos.sh") $Rid
+    if ($LASTEXITCODE -ne 0) { throw "macOS native libraries build failed" }
+
+    Copy-Item (Join-Path $root "macos-runtime/$Rid/LICENSE-*.txt") $stage
+}
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
         -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage

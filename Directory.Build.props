@@ -1,7 +1,12 @@
 <Project>
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <!-- .NET 11's macOS binaries require Sonoma; .NET 10 supports Ventura-only Intel Macs. -->
+    <MeitouTargetFramework Condition="'$(MeitouTargetFramework)' == '' and
+                                    ($([MSBuild]::IsOSPlatform('OSX')) or $(RuntimeIdentifier.StartsWith('osx-')))">net10.0</MeitouTargetFramework>
+    <MeitouTargetFramework Condition="'$(MeitouTargetFramework)' == ''">net11.0</MeitouTargetFramework>
+    <TargetFramework>$(MeitouTargetFramework)</TargetFramework>
+    <AppleMinOSVersion Condition="$(RuntimeIdentifier.StartsWith('osx-'))">13.0</AppleMinOSVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

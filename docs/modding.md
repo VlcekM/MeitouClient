@@ -22,7 +22,8 @@ RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in or ported 
 
 ## Writing a mod
 
-A class library for `net11.0` (`net10.0` for releases before the .NET 11 move, 2026-11-11) referencing the release's `MeitouClient.dll`
+A class library matching the release's runtime: `net10.0` for macOS, `net11.0` for Windows/Linux
+(`net10.0` everywhere before the .NET 11 move, 2026-11-11), referencing that platform release's `MeitouClient.dll`
 (the game: the mod contract `Meitou.Modding`, the interface `Meitou.Game.Ui`), `Meitou.Simulation.dll`, `Meitou.Core.dll`,
 `Meitou.Data.dll` and `0Harmony.dll`, all with `Private="false"`: the game supplies them. Releases after v0.17.1 ship these four Meitou
 assemblies, not the earlier eleven, and most namespaces follow folders (`Meitou.Simulation.Population`, `Meitou.Game.Rendering.Terrain`):
