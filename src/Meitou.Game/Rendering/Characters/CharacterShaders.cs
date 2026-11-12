@@ -466,8 +466,11 @@ static class CharacterShaders
                     float along = (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y;
                     float blade = smoothstep(0.3, 0.5, along);
                     vec4 splat = tex(m.tex[19], (vLocal.xy + 0.5 * vLocal.zx) * m.hairMult.z);
-                    gearCover = smoothstep(0.15, 0.6, splat.a - 1.0 + vGear.a * mix(0.9, 2.2, smoothstep(0.4, 1.0, along))) * blade;
-                    gearBlood = splat.rgb * vGear.rgb * 0.6;
+                    // As the body's: the splatter's own alpha is what shows at the full amount (spatters and runs, never a painted blade), a second, finer copy breaks its tiling.
+                    float fine = tex(m.tex[19], (vLocal.yz + 0.5 * vLocal.xy) * m.hairMult.z * 2.7 + 0.37).a;
+                    float amount = min(vGear.a, 1.0) * mix(0.55, 1.0, smoothstep(0.4, 1.0, along));
+                    gearCover = clamp(mix(splat.a, splat.a * fine, 0.5) * 1.35 - 1.0 + amount, 0.0, 1.0) * blade;
+                    gearBlood = splat.rgb * vGear.rgb * 0.45;
                     gearGloss = mix(0.3, 0.85, vGearFresh);
                 }
                 albedo = mix(albedo, gearBlood, gearCover);
