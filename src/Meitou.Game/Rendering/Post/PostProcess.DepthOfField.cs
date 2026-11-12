@@ -58,11 +58,11 @@ public sealed unsafe partial class PostProcess
     sealed class DofFocusPass : FullscreenProgram
     {
         public readonly SamplerSlot Depth, Previous;
-        public readonly UniformHandle Planes, JitterUv, Spot;
+        public readonly UniformHandle Planes, JitterUv, Spot, Centre;
         public DofFocusPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofFocus, "post dof focus")
         {
             (Depth, Previous) = (P.Sampler("uDepth"), P.Sampler("uPrevious"));
-            (Planes, JitterUv, Spot) = (P.Uniform("uPlanes"), P.Uniform("uJitterUv"), P.Uniform("uSpot"));
+            (Planes, JitterUv, Spot, Centre) = (P.Uniform("uPlanes"), P.Uniform("uJitterUv"), P.Uniform("uSpot"), P.Uniform("uCentre"));
         }
     }
 
@@ -92,6 +92,7 @@ public sealed unsafe partial class PostProcess
         Bind(pass.P, pass.Previous, previous);
         pass.P.Set(pass.Planes, _planes.X, _planes.Y);
         pass.P.Set(pass.JitterUv, JitterPixels.X / _width, JitterPixels.Y / _height);
+        pass.P.Set(pass.Centre, Options.LensFocusSpot.X, Options.LensFocusSpot.Y);
         pass.P.Set(pass.Spot, snap ? 1f : 1 - MathF.Exp(-dt / DofFocusSeconds), Options.LensFocus, DofFocusSpot, scene.Width / (float)Math.Max(scene.Height, 1));
         Draw(pass.P, now);
         _dofFocusHeld = true;

@@ -18,21 +18,21 @@ sealed class PhotoPanel(PhotoMode mode)
     static readonly Vector4 DarkInk = new(20 / 255f, 8 / 255f, 6 / 255f, 1);
     static readonly Vector4 Groove = new(0.10f, 0.08f, 0.07f, 1);
 
-    const string Hints = "WASD move    R / F up, down    Right mouse look    Wheel fly speed    Shift fast    Alt slow    Z / X roll    V level    "
-        + "F7 hide panel    Enter picture    P / Esc leave";
+    const string Hints = "WASD move    Q / E down, up    Right mouse look    Left click focus    Wheel zoom    Ctrl + wheel fly speed    Shift fast    "
+        + "Ctrl slow    Z / X roll    V level    Space pause    Tab hide    Enter picture    P / Esc leave";
 
     /// <summary>
     /// The panel's measures in the settings window's units (pixels at a 900-line picture): a bar along the bottom of the picture, its tabs over one row
     /// of five settings at most.
     /// </summary>
-    const float BarWidth = 1200, BarHeight = 138, BarBottom = 26, Pad = 14, TabWidth = 118, TabGap = 6, CellGap = 24, ChoiceWidth = 104;
+    const float BarWidth = 1200, BarHeight = 138, BarBottom = 26, Pad = 14, TabWidth = 104, TabGap = 6, CellGap = 24, ChoiceWidth = 104;
     const int Columns = 5;
 
     /// <summary>
     /// What the last drawn frame laid out for the mouse: a rectangle and what a press on it does; a slider also keeps its setting and the track's
     /// ends, so a drag follows the pointer.
     /// </summary>
-    readonly record struct Hit(UiRect Area, Action Press, PhotoMode.Param? Slider, float TrackLeft, float TrackRight);
+    readonly record struct Hit(UiRect Area, Action Press, PhotoMode.Param? Slider, float TrackLeft, float TrackRight, Action<int>? Step = null);
 
     readonly List<Hit> _hits = [];
     readonly List<UiControl> _controls = [];
@@ -57,16 +57,23 @@ sealed class PhotoPanel(PhotoMode mode)
     public bool Contains(Vector2 p) => mode.PanelShown && _panel.Width > 0 && _panel.Contains(p.X, p.Y);
 
     /// <summary>
-    /// A press at <paramref name="p"/>: what the panel does with it; false when it is outside.
+    /// A press at <paramref name="p"/>: what the panel does with it (<paramref name="back"/>, the right button: a choice steps back); false when it is
+    /// outside.
     /// </summary>
-    public bool MouseDown(Vector2 p)
+    public bool MouseDown(Vector2 p, bool back = false)
     {
         _pointer = p;
         if (!Contains(p)) return false;
-        _down = true;
+        _down = !back;
         foreach (var hit in _hits)
         {
             if (!hit.Area.Contains(p.X, p.Y)) continue;
+            if (back)
+            {
+                hit.Step?.Invoke(-1);
+                break;
+            }
+
             hit.Press();
             if (hit.Slider is not null)
             {
@@ -97,10 +104,31 @@ sealed class PhotoPanel(PhotoMode mode)
     /// </summary>
     public void MouseUp() => (_drag, _down) = (null, false);
 
-    static void Slide(Hit hit, float x)
+    /// <summary>
+    /// The wheel over the panel steps the setting under the pointer: a slider by a fiftieth of its track, a choice by one. True when the pointer is over
+    /// the panel (the wheel is then not the camera's).
+    /// </summary>
+    public bool Wheel(Vector2 p, float notches)
     {
-        var p = hit.Slider!;
-        float t = Math.Clamp((x - hit.TrackLeft) / Math.Max(hit.TrackRight - hit.TrackLeft, 1), 0, 1);
+        _pointer = p;
+        if (!Contains(p)) return false;
+        int steps = notches > 0 ? 1 : -1;
+        foreach (var hit in _hits)
+        {
+            if (!hit.Area.Contains(p.X, p.Y)) continue;
+            if (hit.Slider is { } slider) SetFraction(slider, Fraction(slider) + steps * 0.02f);
+            else hit.Step?.Invoke(steps);
+            break;
+        }
+
+        return true;
+    }
+
+    static void Slide(Hit hit, float x) => SetFraction(hit.Slider!, (x - hit.TrackLeft) / Math.Max(hit.TrackRight - hit.TrackLeft, 1));
+
+    static void SetFraction(PhotoMode.Param p, float t)
+    {
+        t = Math.Clamp(t, 0, 1);
         p.Set(p.Log ? p.Min * MathF.Pow(p.Max / p.Min, t) : p.Min + (p.Max - p.Min) * t);
     }
 
@@ -119,6 +147,7 @@ sealed class PhotoPanel(PhotoMode mode)
         if (!mode.GuidesDrawn(saving)) return;
         float u = Math.Max(0.75f, height / 1080f);
         PhotoGuides.DrawGrid(o, mode.Grid, PhotoGuides.Window(mode.Frame, width, height), Math.Max(1.5f, 1.5f * u));
+        if (mode.FocusSpot is { } spot) PhotoGuides.DrawReticle(o, new Vector2(spot.X * width, spot.Y * height), 16 * u, Math.Max(1.5f, 1.5f * u));
         if (mode.Host.Player.SettingsPainter is not { } painter) return;
 
         // The bars and the grid go under the panel: the painter draws at once, the overlay when it is flushed.
@@ -168,7 +197,32 @@ sealed class PhotoPanel(PhotoMode mode)
         }
 
         if (PhotoMode.Groups[_tab] == PhotoMode.LightGroup) Button("Game time", R(at, y + 6, ChoiceWidth, 26), mode.UseGameTime);
+        if (PhotoMode.Groups[_tab] == PhotoMode.PresetGroup) DrawPresets(x, y, x + inner);
         Text(Hints, R(x, top + BarHeight - 28, inner, 16), 11, SettingsCanvas.MutedInk, "Center");
+    }
+
+    /// <summary>
+    /// The presets' tab: Save preset keeps every tab's settings under the next free name; each preset is a button that takes its settings, with a small
+    /// one beside it that deletes it.
+    /// </summary>
+    void DrawPresets(float x, float y, float right)
+    {
+        Button("Save preset", R(x, y + 6, 124, 26), () => mode.SavePreset());
+        x += 124 + CellGap;
+        var presets = mode.Presets;
+        if (presets.Count == 0)
+        {
+            Text("No preset yet. Save preset keeps the settings of every tab.", R(x, y + 6, right - x, 26), 13, SettingsCanvas.MutedInk);
+            return;
+        }
+
+        for (int i = 0; i < presets.Count && x + 146 <= right; i++)
+        {
+            int index = i;
+            Button(presets[i].Name, R(x, y + 6, 118, 26), () => mode.LoadPreset(index), translate: false);
+            Button("x", R(x + 120, y + 6, 26, 26), () => mode.DeletePreset(index), translate: false);
+            x += 146 + 10;
+        }
     }
 
     /// <summary>
@@ -202,17 +256,18 @@ sealed class PhotoPanel(PhotoMode mode)
     {
         Text(p.Label, R(x, y + 6, width - ChoiceWidth - 8, 26), 13, SettingsCanvas.MainInk);
         int count = choices.Length;
-        Button(PhotoMode.ValueText(p), R(x + width - ChoiceWidth, y + 6, ChoiceWidth, 26), () => p.Set((MathF.Round(p.Get()) + 1) % count));
+        Button(PhotoMode.ValueText(p), R(x + width - ChoiceWidth, y + 6, ChoiceWidth, 26), () => p.Set((MathF.Round(p.Get()) + 1) % count),
+            step: d => p.Set(((MathF.Round(p.Get()) + d) % count + count) % count));
     }
 
-    void Button(string label, UiRect at, Action action, bool primary = false, bool selected = false)
+    void Button(string label, UiRect at, Action action, bool primary = false, bool selected = false, Action<int>? step = null, bool translate = true)
     {
         bool hovered = at.Contains(_pointer.X, _pointer.Y), pressed = hovered && _down;
         var drawn = at with { Y = at.Y + (pressed ? _scale : 0) };
         Surface(drawn, primary ? "primary" : "button", selected || pressed, hovered && !selected);
         var ink = primary && _meitou ? DarkInk : hovered || selected ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
-        Text(label, new(drawn.X + 8 * _scale, drawn.Y, drawn.Width - 16 * _scale, drawn.Height), primary ? 15 : 13, ink, "Center");
-        _hits.Add(new Hit(at, action, null, 0, 0));
+        Text(label, new(drawn.X + 8 * _scale, drawn.Y, drawn.Width - 16 * _scale, drawn.Height), primary ? 15 : 13, ink, "Center", translate);
+        _hits.Add(new Hit(at, action, null, 0, 0, step));
     }
 
     /// <summary>

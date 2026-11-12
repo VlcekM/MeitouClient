@@ -54,6 +54,7 @@ static class CameraEffectShaders
         uniform sampler2D uDepth;
         uniform sampler2D uPrevious;
         uniform vec2 uPlanes, uJitterUv;
+        uniform vec2 uCentre;   // the spot's centre in the picture (PostOptions.LensFocusSpot)
         uniform vec4 uSpot;   // x the ease this frame (1 snaps), y the fallback distance, z the spot's half height as a share of the picture's, w the picture's aspect
         """ + DepthConvention.Glsl + """
         void main()
@@ -62,7 +63,7 @@ static class CameraEffectShaders
             for (int y = -2; y <= 2; y++)
                 for (int x = -2; x <= 2; x++)
                 {
-                    vec2 uv = vec2(0.5) + vec2(float(x) / uSpot.w, float(y)) * 0.5 * uSpot.z;
+                    vec2 uv = uCentre + vec2(float(x) / uSpot.w, float(y)) * 0.5 * uSpot.z;
                     float d = textureLod(uDepth, uv + uJitterUv, 0.0).r;
                     if (!depthIsSky(d)) nearest = min(nearest, depthViewZ(d, uPlanes));
                 }

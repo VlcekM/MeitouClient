@@ -93,7 +93,7 @@ sealed class Birds(GameHost host)
 
     void SetStepInputs(float aspect)
     {
-        double now = host.RealTime.Elapsed.TotalSeconds;
+        double now = host.EffectSeconds;   // still in a paused photo
         _dt = double.IsNaN(_clock) ? 0 : (float)(now - _clock);
         _clock = now;
 

@@ -182,6 +182,24 @@ sealed partial class GameHost(
     internal WorldRenderOptions Render = null!;
     internal readonly Stopwatch RealTime = Stopwatch.StartNew();
 
+    /// <summary>
+    /// The clock of the ambient motion drawn outside the simulation (the foliage's sway, the birds): the frames' clock (real time without one), but in
+    /// photo mode it follows the simulation, still while that is paused and at its speed in slow motion, so a paused picture is still.
+    /// </summary>
+    internal double EffectSeconds
+    {
+        get
+        {
+            double now = AnimClock ? AnimSeconds : RealTime.Elapsed.TotalSeconds;
+            double rate = Photo is { Active: true } ? (Session.Simulation.IsPaused ? 0 : Session.Simulation.Speed) : 1;
+            _effectHeld += (now - _effectAt) * (1 - rate);
+            _effectAt = now;
+            return now - _effectHeld;
+        }
+    }
+
+    double _effectHeld, _effectAt;
+
     internal bool ScreenshotRequested;
 
     /// <summary>
@@ -1166,7 +1184,7 @@ sealed partial class GameHost(
     /// </summary>
     void FeedFrameClocks()
     {
-        double seconds = AnimClock ? AnimSeconds : RealTime.Elapsed.TotalSeconds;
+        double seconds = EffectSeconds;
         if (Gpu.Foliage is { } foliage && WorldOptions.Screenshot is null) foliage.SwaySeconds = seconds;
 
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).

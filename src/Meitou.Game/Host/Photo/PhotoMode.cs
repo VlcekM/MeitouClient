@@ -56,7 +56,7 @@ sealed class PhotoMode
     CharacterId? _follow;
     bool _interfaceWasHidden;
     float _fieldOfView;
-    (double Speed, double Last) _clock;
+    Meitou.Simulation.Session.SimulationClock.SpeedState _clock;
     PhotoControls _controls = new();
 
     /// <summary>
@@ -71,6 +71,10 @@ sealed class PhotoMode
     /// Metres each side of the focus that are wholly sharp (several figures at different distances in focus at a wide aperture).
     /// </summary>
     float _sharpZone;
+    /// <summary>
+    /// Where in the picture the autofocus looks (0..1 from the top left; the centre until a click moves it).
+    /// </summary>
+    Vector2 _focusSpot = new(0.5f);
     /// <summary>
     /// The simulation's speed while it runs in the mode (<see cref="SetGameSpeed"/>).
     /// </summary>
@@ -119,8 +123,9 @@ sealed class PhotoMode
     /// <summary>
     /// The panel's tabs, in order: each setting's <see cref="Param.Group"/> is one of them.
     /// </summary>
-    internal const string CameraGroup = "Camera", FocusGroup = "Focus", LightGroup = "Light", PictureGroup = "Composition", TimeGroup = "Time";
-    internal static readonly string[] Groups = [CameraGroup, FocusGroup, LightGroup, PictureGroup, TimeGroup];
+    internal const string CameraGroup = "Camera", FocusGroup = "Focus", LightGroup = "Light", PictureGroup = "Composition", TimeGroup = "Time",
+        PresetGroup = "Presets";
+    internal static readonly string[] Groups = [CameraGroup, FocusGroup, LightGroup, PictureGroup, TimeGroup, PresetGroup];
 
     /// <summary>
     /// The settings in the panel's order.
@@ -200,7 +205,7 @@ sealed class PhotoMode
         (_dof, _autoFocus, _focusMetres, _aperture, _exposureStops) = (_entryDof, true, 10, _entryAperture, 0);
         UseGameTime();
         (Grid, Frame) = (PhotoGrid.Thirds, PhotoFrame.Off);
-        (_dialogue, _gameSpeed, _sharpZone) = (false, 1, 0);
+        (_dialogue, _gameSpeed, _sharpZone, _focusSpot) = (false, 1, 0, new Vector2(0.5f));
         _controls.FlySpeed = 300;
         SetLive(0);
     }
@@ -224,12 +229,13 @@ sealed class PhotoMode
         _follow = _host.Player.Follow;
         _interfaceWasHidden = _host.AgentChannel.InterfaceHidden;
         _fieldOfView = cam.FieldOfView;
-        _clock = (clock.Speed, clock.LastNonZeroSpeed);
+        _clock = clock.SaveSpeeds();
         rig.TakeOver(new CameraState(cam.Eye, cam.Forward, Vector3.UnitY, cam.Target, cam.Yaw, cam.Pitch, cam.Distance, true), strategy: false);
         _controls = rig.Free.Photo = new PhotoControls();
         var options = _host.WorldOptions.Post;
         (_entryFieldOfView, _entryDof, _entryAperture) = (cam.FieldOfView, options.DepthOfField, options.DofAperture);
         Reset();
+        Remembered();
         _host.Player.Follow = null;
         _host.AgentChannel.InterfaceHidden = true;
         PanelShown = true;
@@ -245,13 +251,13 @@ sealed class PhotoMode
     public void Leave()
     {
         if (!Active) return;
+        Remember();   // before the lens and the clock go back
         var clock = _host.Session.Simulation;
         _host.Session.Camera.Free.Photo = null;
         _host.Session.Camera.Free.Roll = 0;
         _host.Session.Camera.Restore(_rig);
         _host.Camera.FieldOfView = _fieldOfView;
-        clock.SetSpeed(_clock.Last);
-        clock.SetSpeed(_clock.Speed);
+        clock.RestoreSpeeds(_clock);
         _host.Player.Follow = _follow;
         _host.AgentChannel.InterfaceHidden = _interfaceWasHidden;
         End();
@@ -275,7 +281,7 @@ sealed class PhotoMode
     void End()
     {
         var options = _host.WorldOptions.Post;
-        (options.PhotoExposure, options.PhotoDepthOfField, options.LensSharpZone) = (1, null, 0);
+        (options.PhotoExposure, options.PhotoDepthOfField, options.LensSharpZone, options.LensFocusSpot) = (1, null, 0, new Vector2(0.5f));
         (_host.Camera.Roll, _host.Camera.FocusDistance, _host.Camera.Aperture) = (0, null, null);
         (_host.PhotoHour, _host.PhotoLook) = (null, false);
         _host.Player.SpeechBubbles.Hidden = false;
@@ -311,6 +317,7 @@ sealed class PhotoMode
         options.PhotoExposure = MathF.Pow(2, _exposureStops);
         options.PhotoDepthOfField = _dof;
         options.LensSharpZone = _sharpZone * 10;
+        options.LensFocusSpot = _focusSpot;
         options.CinematicView = true;
         _host.PhotoLook = true;
         _host.Player.SpeechBubbles.Hidden = !_dialogue;
@@ -337,26 +344,164 @@ sealed class PhotoMode
         else if (key == Key.Enter || bindings.Get(InputAction.Screenshot).Contains(Binding.Of(key))) TakePicture();
         else if (key is Key.PageUp or Key.PageDown) StepLens(key == Key.PageUp ? -2.5f : 2.5f);
         else if (key == Key.V) _host.Session.Camera.Free.Roll = 0;
+        else if (key is Key.Tab or Key.H) PanelShown = !PanelShown;
+        else if (key == Key.G) Grid = (PhotoGrid)(((int)Grid + 1) % 5);
+        else if (bindings.Get(InputAction.Pause).Contains(Binding.Of(key))) SetLive(_host.Session.Simulation.IsPaused ? 1 : 0);
         else if (FliesCamera(key)) _host.Session.Input.SetKey(key, true);
         return true;
     }
 
     /// <summary>
-    /// The keys that fly the photo camera: the movement, turn and tilt actions' keys, the roll keys, Space (pause) and the speed modifiers.
+    /// The keys the photo camera reads itself (<see cref="FreeCamera.Update"/>): W A S D and the arrows, Q and E, the roll keys, Shift and Ctrl.
     /// </summary>
-    bool FliesCamera(Key key)
-    {
-        if (key is Key.Z or Key.X or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt) return true;
-        InputAction[] flying = [InputAction.MoveForward, InputAction.MoveBack, InputAction.MoveLeft, InputAction.MoveRight, InputAction.MoveUp,
-            InputAction.MoveDown, InputAction.RotateLeft, InputAction.RotateRight, InputAction.PitchUp, InputAction.PitchDown, InputAction.Pause];
-        return flying.Any(a => _host.Session.Bindings.Get(a).Contains(Binding.Of(key)));
-    }
+    static bool FliesCamera(Key key) => key is Key.W or Key.A or Key.S or Key.D or Key.Q or Key.E or Key.Z or Key.X or Key.Up or Key.Down or Key.Left or Key.Right
+        or Key.LeftShift or Key.RightShift or Key.LeftControl or Key.RightControl;
 
     /// <summary>
     /// PageUp zooms the lens in (a narrower view), PageDown out, 2.5 degrees a press.
     /// </summary>
     void StepLens(float degrees) =>
         _host.Camera.FieldOfView = Math.Clamp(_host.Camera.FieldOfView + degrees * MathF.PI / 180, 10 * MathF.PI / 180, 100 * MathF.PI / 180);
+
+    /// <summary>
+    /// The wheel over the picture: the lens, 8 % a notch (away from the user zooms in), or the fly speed with Ctrl.
+    /// </summary>
+    public void Wheel(float notches, bool speed)
+    {
+        if (speed) _controls.FlySpeed = Math.Clamp(_controls.FlySpeed * MathF.Pow(1.2f, notches), PhotoControls.MinSpeed, PhotoControls.MaxSpeed);
+        else _host.Camera.FieldOfView = Math.Clamp(_host.Camera.FieldOfView * MathF.Pow(0.92f, notches), 10 * MathF.PI / 180, 100 * MathF.PI / 180);
+    }
+
+    /// <summary>
+    /// A left click on the picture: the autofocus looks there from now on (a place in the picture, 0..1 from its top left), with the depth of field on.
+    /// </summary>
+    public void FocusAt(Vector2 place)
+    {
+        _focusSpot = Vector2.Clamp(place, new Vector2(0.02f), new Vector2(0.98f));
+        (_dof, _autoFocus) = (true, true);
+        Say("Focus point set");
+    }
+
+    /// <summary>
+    /// Where the autofocus looks, while it is what focuses the lens (the panel marks it); null otherwise.
+    /// </summary>
+    public Vector2? FocusSpot => Active && _dof && _autoFocus ? _focusSpot : null;
+
+    #endregion
+
+    #region Remembered settings and presets
+
+    readonly PhotoPresets _store = new();
+
+    /// <summary>
+    /// The settings a new session of the mode does not start with: the roll and the drawn hour belong to one picture, the simulation starts paused.
+    /// </summary>
+    internal static readonly string[] NotRemembered = ["roll", "hour", "live"];
+
+    internal IReadOnlyList<PhotoPresets.Preset> Presets => _store.Presets;
+
+    /// <summary>
+    /// The settings by their <c>photo set</c> names, and the focus point: all but the simulation's state for a preset (the hour only while one is
+    /// drawn), without <see cref="NotRemembered"/> for the next session.
+    /// </summary>
+    Dictionary<string, float> Values(bool preset)
+    {
+        var values = new Dictionary<string, float>();
+        foreach (var p in Params)
+        {
+            if (p.Name == "live" || !preset && NotRemembered.Contains(p.Name)) continue;
+            if (p.Name == "hour" && _host.PhotoHour is null) continue;
+            values[p.Name] = p.Get();
+        }
+
+        (values["spotx"], values["spoty"]) = (_focusSpot.X, _focusSpot.Y);
+        return values;
+    }
+
+    void Take(IReadOnlyDictionary<string, float> values, bool preset)
+    {
+        // The focus mode last: setting a focus distance turns the autofocus off.
+        foreach (var p in Params)
+            if (p.Name is not ("live" or "focusmode") && values.TryGetValue(p.Name, out float v)) p.Set(v);
+        if (values.TryGetValue("focusmode", out float auto)) _autoFocus = auto >= 0.5f;
+        if (preset && !values.ContainsKey("hour")) UseGameTime();
+        if (values.TryGetValue("spotx", out float x) && values.TryGetValue("spoty", out float y)) _focusSpot = new Vector2(x, y);
+    }
+
+    /// <summary>
+    /// On entering: the settings the mode was left with (the file is read each time: another run may have written it).
+    /// </summary>
+    void Remembered()
+    {
+        _store.Load();
+        Take(_store.Last, preset: false);
+    }
+
+    /// <summary>
+    /// On leaving: the settings are kept for the next time.
+    /// </summary>
+    void Remember()
+    {
+        _store.Last = Values(preset: false);
+        _store.Save();
+    }
+
+    /// <summary>
+    /// Keeps the settings as a preset: under <paramref name="name"/> (replacing one of that name), or as the first free "Preset n".
+    /// </summary>
+    public void SavePreset(string? name = null)
+    {
+        name = string.IsNullOrWhiteSpace(name) ? Enumerable.Range(1, 999).Select(i => $"Preset {i}").First(n => _store.Presets.All(p => p.Name != n)) : name.Trim();
+        var values = Values(preset: true);
+        if (_store.Presets.FirstOrDefault(p => p.Name == name) is { } old) old.Values = values;
+        else _store.Presets.Add(new PhotoPresets.Preset { Name = name, Values = values });
+        _store.Save();
+        Say($"Saved {name}");
+    }
+
+    public void LoadPreset(int index)
+    {
+        if (index < 0 || index >= _store.Presets.Count) return;
+        Take(_store.Presets[index].Values, preset: true);
+        Say(_store.Presets[index].Name);
+    }
+
+    public void DeletePreset(int index)
+    {
+        if (index < 0 || index >= _store.Presets.Count) return;
+        string name = _store.Presets[index].Name;
+        _store.Presets.RemoveAt(index);
+        _store.Save();
+        Say($"Deleted {name}");
+    }
+
+    void PresetCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        string verb = args.Count > 1 ? args[1].ToLowerInvariant() : "list";
+        string name = string.Join(' ', args.Skip(2));
+        int index = int.TryParse(name, out int n) ? n - 1 : _store.Presets.FindIndex(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        switch (verb)
+        {
+            case "save":
+                SavePreset(name);
+                con.Print($"{_store.Presets.Count} presets");
+                break;
+            case "load" when index >= 0 && index < _store.Presets.Count:
+                LoadPreset(index);
+                con.Print($"loaded {_store.Presets[index].Name}");
+                break;
+            case "delete" when index >= 0 && index < _store.Presets.Count:
+                DeletePreset(index);
+                con.Print($"{_store.Presets.Count} presets");
+                break;
+            case "list":
+                con.Print(_store.Presets.Count == 0 ? "no preset" : string.Join(", ", _store.Presets.Select((p, i) => $"{i + 1} {p.Name}")));
+                break;
+            default:
+                con.Error("usage: photo preset save [name] | load <n|name> | delete <n|name> | list");
+                break;
+        }
+    }
 
     #endregion
 
@@ -474,6 +619,9 @@ sealed class PhotoMode
             case "panel":
                 PanelShown = args.Count < 2 || args[1].Equals("on", StringComparison.OrdinalIgnoreCase);
                 con.Print(PanelShown ? "panel shown" : "panel hidden");
+                break;
+            case "preset":
+                PresetCommand(args, con);
                 break;
             case "shot":
                 ShotCommand(args, con);

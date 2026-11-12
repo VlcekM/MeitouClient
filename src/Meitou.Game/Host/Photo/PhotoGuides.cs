@@ -75,6 +75,28 @@ static class PhotoGuides
     }
 
     /// <summary>
+    /// The focus point's mark: the four corners of a square round it, white with a dark edge.
+    /// </summary>
+    public static void DrawReticle(DebugOverlay o, Vector2 at, float half, float thickness)
+    {
+        var ink = new Vector4(1, 1, 1, 0.85f);
+        float arm = half * 0.45f, t = thickness / 2;
+        for (int corner = 0; corner < 4; corner++)
+        {
+            int sx = (corner & 1) == 0 ? -1 : 1, sy = (corner & 2) == 0 ? -1 : 1;
+            float cx = at.X + sx * half, cy = at.Y + sy * half;
+            // A dark edge under each stroke, so the mark shows on sand and sky alike.
+            for (int pass = 0; pass < 2; pass++)
+            {
+                float e = pass == 0 ? t : 0;
+                var colour = pass == 0 ? new Vector4(0, 0, 0, 0.55f) : ink;
+                o.Rect(MathF.Min(cx, cx - sx * arm) - e, cy - t - e, MathF.Max(cx, cx - sx * arm) + e, cy + t + e, colour);
+                o.Rect(cx - t - e, MathF.Min(cy, cy - sy * arm) - e, cx + t + e, MathF.Max(cy, cy - sy * arm) + e, colour);
+            }
+        }
+    }
+
+    /// <summary>
     /// The grid's lines inside the picture window <paramref name="w"/> (<see cref="Window"/>): white with a dark edge, so they show on sky and shade.
     /// </summary>
     public static void DrawGrid(DebugOverlay o, PhotoGrid grid, Vector4 w, float thickness)

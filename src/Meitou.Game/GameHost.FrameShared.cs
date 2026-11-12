@@ -68,8 +68,9 @@ sealed partial class GameHost
     /// <summary>
     /// A key or button bound to Orbit (middle button or Ctrl by default) is down.
     /// </summary>
-    internal bool OrbitHeld() => Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld)
-        || PhotoLook && Session.Input.IsHeld(Binding.Of(MouseButton.Right));
+    internal bool OrbitHeld() => PhotoLook
+        ? Session.Input.IsHeld(Binding.Of(MouseButton.Right)) || Session.Input.IsHeld(Binding.Of(MouseButton.Middle))   // photo mode's own: Orbit's key is its slow modifier
+        : Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>
     /// The button the interface sees for a physical one: the Select button is its left, the Command button its right (each falls back to its own

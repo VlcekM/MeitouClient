@@ -932,7 +932,8 @@ sealed class GameLoop(GameHost host)
             if (host.Covered || PanelLive() && _panel?.Scroll(wheel.Y) == true) return;
             if (_photo.Active)
             {
-                if (!_photo.Panel.Contains(Pixels(_orbitAnchor ?? m.Position))) host.Session.Input.AddWheel(wheel.Y);
+                // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
+                if (!_photo.Panel.Wheel(Pixels(_orbitAnchor ?? m.Position), wheel.Y)) _photo.Wheel(wheel.Y, Held(SilkKey.ControlLeft, SilkKey.ControlRight));
                 return;
             }
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
@@ -974,12 +975,26 @@ sealed class GameLoop(GameHost host)
     }
 
     /// <summary>
-    /// Photo mode's press: the panel takes the left button; no click reaches the world (no selecting, no orders), the camera sees the buttons.
+    /// Photo mode's press: the panel takes the left button (the right one steps a choice back), a left click on the picture sets the focus point; no
+    /// click reaches the world (no selecting, no orders), the camera sees the other buttons.
     /// </summary>
     void PhotoPointerDown(EngineButton? physical, Vector2 at)
     {
         if (physical == EngineButton.Left && _photo.Panel.MouseDown(at)) return;
-        if (_photo.Panel.Contains(at)) return;
+        if (_photo.Panel.Contains(at))
+        {
+            if (physical == EngineButton.Right) _photo.Panel.MouseDown(at, back: true);   // a choice steps back
+            return;
+        }
+
+        if (physical == EngineButton.Left)
+        {
+            // A click on the picture is where the lens focuses.
+            var size = FramebufferSizeNow();
+            _photo.FocusAt(new Vector2(at.X / Math.Max(size.X, 1), at.Y / Math.Max(size.Y, 1)));
+            return;
+        }
+
         if (physical is { } button) host.Session.Input.SetMouseButton(button, true);
     }
 

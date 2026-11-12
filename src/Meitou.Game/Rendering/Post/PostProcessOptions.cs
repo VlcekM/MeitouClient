@@ -291,6 +291,10 @@ public sealed class PostOptions
     /// Half the depth of a zone round the focus that is wholly sharp, world units (photo mode's Sharp zone; 0: a thin lens, sharp at the focus alone).
     /// </summary>
     public float LensSharpZone;
+    /// <summary>
+    /// Where in the picture the autofocus looks (0..1 from its top left): the centre, or the point photo mode's click chose.
+    /// </summary>
+    public System.Numerics.Vector2 LensFocusSpot = new(0.5f);
     /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
     public bool CameraEffectsEverywhere;
     /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>

@@ -103,11 +103,13 @@ public sealed class FreeCamera
     public void Update(float dt, ActionState a)
     {
         float look = Photo?.LookScale ?? 1;
-        float turn = (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
-        float tilt = (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
+        // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): the mouse alone turns the view there.
+        bool photoMode = Photo is not null;
+        float turn = photoMode ? 0 : (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
+        float tilt = photoMode ? 0 : (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
         Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * look * dt);
         Pitch += tilt * _settings.RotateSpeed * look * dt;
-        if (a.Held(InputAction.Orbit) || Photo is not null && a.Input.IsDown(MouseButton.Right))
+        if (photoMode ? a.Input.IsDown(MouseButton.Right) || a.Input.IsDown(MouseButton.Middle) : a.Held(InputAction.Orbit))
         {
             Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity * look);
             Pitch += a.MouseDelta.Y * _settings.MouseSensitivity * look;
@@ -118,13 +120,21 @@ public sealed class FreeCamera
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
         float up = (a.Held(InputAction.MoveUp) ? 1 : 0) - (a.Held(InputAction.MoveDown) ? 1 : 0);
+        if (photoMode)
+        {
+            // Whatever the game's keys are bound to: W A S D and the arrows move, Q goes down and E up.
+            fwd = Down(a, Key.W, Key.Up) - Down(a, Key.S, Key.Down);
+            right = Down(a, Key.D, Key.Right) - Down(a, Key.A, Key.Left);
+            up = Down(a, Key.E, Key.E) - Down(a, Key.Q, Key.Q);
+        }
+
         var f = Forward;
         var flat = new Vector3(f.X, 0, f.Z);
         flat = flat.LengthSquared() < 1e-6f ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) : Vector3.Normalize(flat);
         var side = Vector3.Cross(flat, Vector3.UnitY);
         var wish = f * fwd + side * right + Vector3.UnitY * up;
         bool shift = a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift);
-        float factor = Photo is { } p ? (shift ? p.FastFactor : 1) * (a.Input.IsDown(Key.LeftAlt) || a.Input.IsDown(Key.RightAlt) ? p.SlowFactor : 1)
+        float factor = Photo is { } p ? (shift ? p.FastFactor : 1) * (a.Input.IsDown(Key.LeftControl) || a.Input.IsDown(Key.RightControl) ? p.SlowFactor : 1)
             : shift ? 2 : 1;
         var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * factor : Vector3.Zero;
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
@@ -133,13 +143,14 @@ public sealed class FreeCamera
     }
 
     /// <summary>
-    /// Photo mode's extras: the roll keys (Z banks left, X right) and the wheel's fly speed.
+    /// Photo mode's extra: the roll keys (Z banks left, X right).
     /// </summary>
+    static float Down(ActionState a, Key first, Key second) => a.Input.IsDown(first) || a.Input.IsDown(second) ? 1 : 0;
+
     void UpdatePhoto(PhotoControls photo, float dt, ActionState a)
     {
         float bank = (a.Input.IsDown(Key.X) ? 1 : 0) - (a.Input.IsDown(Key.Z) ? 1 : 0);
         Roll = Math.Clamp(Roll + bank * photo.RollSpeed * dt, -PhotoControls.MaxRoll, PhotoControls.MaxRoll);
-        if (a.Wheel != 0) photo.FlySpeed = Math.Clamp(photo.FlySpeed * MathF.Pow(1.2f, a.Wheel), PhotoControls.MinSpeed, PhotoControls.MaxSpeed);
     }
 
     /// <summary>
