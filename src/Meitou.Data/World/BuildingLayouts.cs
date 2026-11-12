@@ -106,6 +106,26 @@ public sealed class BuildingLayouts
     }
 
     /// <summary>
+    /// The layout names housing takes <paramref name="building"/> to offer, case kept (the original compares them exactly; Verified): for an
+    /// interior, the names of the interior layouts associated with it or a building it shares interiors with (<c>FUN_14055ad40</c>); for an
+    /// exterior, the rest of each <c>interiors.level</c> string id <c>EXT-&lt;building&gt;-&lt;name&gt;</c> of those buildings
+    /// (<c>FUN_14055b330</c> looks that id up, reading neither the record's name nor its <c>is exterior</c>).
+    /// </summary>
+    public IEnumerable<string> Offered(GameRecord building, bool exterior)
+    {
+        if (!exterior) return Names(building, exterior: false);
+
+        var names = new List<string>();
+        foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
+        {
+            string prefix = $"EXT-{id}-";
+            names.AddRange(_interiors?.Records.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Select(k => k[prefix.Length..]) ?? []);
+        }
+
+        return names;
+    }
+
+    /// <summary>
     /// The layout's objects whose target is a BUILDING of the game data, in instance id order.
     /// </summary>
     public IEnumerable<LayoutItem> Items(GameRecord layout) => Placed(layout, FcsRecordType.Building);

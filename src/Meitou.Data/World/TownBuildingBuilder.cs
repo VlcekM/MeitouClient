@@ -197,14 +197,15 @@ public sealed class TownBuildingBuilder
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
 
     /// <summary>
-    /// The layout names a building record can take (case ignored), cached by record and side; empty without layouts.
+    /// The layout names housing takes a building record to offer (<see cref="BuildingLayouts.Offered"/>, case kept), cached by record and side;
+    /// empty without layouts.
     /// </summary>
     static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior,
         Dictionary<(string, bool), IReadOnlySet<string>> cache)
     {
         if (layouts is null) return new HashSet<string>();
         if (!cache.TryGetValue((record.StringId, exterior), out var set))
-            cache[(record.StringId, exterior)] = set = new HashSet<string>(layouts.Names(record, exterior), StringComparer.OrdinalIgnoreCase);
+            cache[(record.StringId, exterior)] = set = new HashSet<string>(layouts.Offered(record, exterior), StringComparer.Ordinal);
         return set;
     }
 }

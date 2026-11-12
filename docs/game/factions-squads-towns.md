@@ -440,12 +440,16 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **When**: at zone populate (`FUN_140a0e760`) per non-player town, the zone's buildings sorted by handle serial, a signed int, lowest first
   (**Verified**, comparator `0x140a089d0`: hand +0x18, the field `FUN_1400d1c20` fills from `rand()`).
 - **Candidates**: buildings of the town ([membership](../formats/zones.md#town-membership)) with an `interior` reference, not player-owned, holding no residents template
-  or the default one; walls (`links together`, a vfunc override) never, gates (`is wall gate`) only for entries naming
+  or the default one (**Verified**, `FUN_14092e870`: so a home of an entry whose template is also the default resident is taken again by a
+  later entry, and the first entry's squad is lost: Holy Farm's `farm village residential`, priority 1, loses its L-House to the priority 0
+  `holy materials storage`); walls (`links together`, a vfunc override) never, gates (`is wall gate`) only for entries naming
   `building`s. Level data agrees: 1946 walls, none with a resident. Player-owned is ownership now: a house the player bought
   houses nobody, and its squads moved out when it was bought ([purchase](ui-screens.md#selected-building)).
 - **Driver** (`FUN_1409370d0`): re-owns the buildings to the town's faction; priority 5 down to 0, each entry with count
   left gets one building per pass, passes repeat while one placed and has more. An entry with no building left makes
-  no more squads (Stack: civilians v0 9, 2 made). Then every free building whose interiors take the default resident's
+  no more squads (Stack: civilians v0 9, 2 made). A squad counts only when the housing succeeds (**Verified**): a chosen building that refuses
+  (a gate not offering the template's `layout interior`, which the chooser does not test for gates) stays free, is chosen again, and the entry
+  houses nobody more. Then every free building whose interiors take the default resident's
   `layout interior` gets it (`FUN_14092e4b0`).
 - **Layouts** (**Verified**, decompile): housing (`FUN_14092e4b0`, called only by the driver, → `FUN_140552140`, called only by it) re-owns the home
   to the template's `faction` (else the town's), clears its interior and exterior objects, sets the interior layout name (LayoutInterior vfunc 12
@@ -459,13 +463,21 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   template's `building name` when it has one. Each home has one template (the chooser skips buildings holding another), so the last housing wins:
   the default resident pass only takes buildings with none. Buildings housed by nobody keep the level state's names. **Observed**, saves (METARU,
   autosaves 1 and 2, redev, Beep Fan Club 1; level buildings of the saved zones): the saved interior name equals the saved `squad template`'s
-  `layout interior` for 318 of 324 standing homes in METARU (6 differ, e.g. `ninja guards` homes at 26.13 named `Bar`: **Unknown** why), and the level
-  state's for 590 of 592 buildings with no template. Meitou's housing (base data) changes 83 homes' interior name, clears 7, names 136 the level state
-  leaves empty (every Ash Dome, Cat-Lon's Exile and Ashland Domes I..IV, and the Ancient Tech Lab at zone 2.46: templates `Throne`, `lab`, `Lab no.2`);
-  exteriors: 20 replaced, 20 cleared, 33 named.
-- **Chooser** (`FUN_14092e870`): a template with `layout interior` needs a building offering it (own layouts or
+  `layout interior` for 318 of 324 standing homes in METARU, and the level
+  state's for 590 of 592 buildings with no template. The 6 that differ are saved under a `housemates` template of the home's own (`ninja guards` in
+  the World's End bars, `lost armoury security`, `hive soldiers`, `Tech Hunter Guards small`; **Observed**, when the building's template becomes
+  the housemate's is **Unknown**, not modelled). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
+  leaves empty (among them every Ash Dome, Cat-Lon's Exile and Ashland Domes I..IV, and the Ancient Tech Lab at zone 2.46: templates `Throne`, `lab`,
+  `Lab no.2`); exteriors: 86 replaced, 50 cleared, 67 named.
+- **Chooser** (`FUN_14092e870`, **Verified**): a template with `layout interior` needs a building offering it (own layouts or
   `shares interiors with`; gates exempt); without one, an entry naming buildings takes only those. Weight 1, x 0.4 when
   `layout exterior` is not offered, x 10 named in `building`, x 0.05 in `building dislike`; highest wins, first on a tie.
+  Offered, names compared exactly (case matters: Barracks UC's exterior `banners` matches no `Banners` layout): an interior by an interior layout
+  record of that name whose `associated building` is the building or one it shares interiors with (`FUN_14055ad40`); an exterior by an
+  `interiors.level` record with the string id `EXT-<building id>-<name>` for one of those buildings (`FUN_14055b330`, which reads neither the
+  record's name nor `is exterior`; the exterior loaders `FUN_14055b4d0` / `FUN_14055c7b0` find the layout the same way). Base data: the id
+  and the name / `associated building` disagree for one record, `EXT-3793-TwoStorey.mod-Barracks`, associated with the Bughouse. Meitou:
+  `BuildingLayouts.Offered` for housing; its exterior loader still finds layouts by name and `associated building`.
 - **Squads** (`FUN_14057f820`): `housemates` (v0, or Rand(v0, v1) when v1 > 0) first, then the squad. Platoon point: a
   random free node of NodeType 0 (SHOPKEEPER), else 2 (GUARD_POST), else 1 (GENERAL), else the building. Characters
   (`FUN_140583a10`): a GENERAL node, else SHOPKEEPER, at node + (0, 10, 0), else the platoon point. The squad's home is the building.
@@ -478,9 +490,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   looks the `residents template` up only when the string is empty (**Verified**, disassembly `0x14055312d`: `cmp [node+0x38], 0; jne` past the
   lookup), so a level building starts with none and every town is housed afresh from its table. The outcome is the same in every new game: a
   level building's handle serial is its level state's `handleS` (**Verified**: all 412 / 473 level buildings of the saves METARU / redev carry
-  it), and the rule above over the buildings in that order gives the saved `residents template` of 373 of 397 / 405 of 439 homes; the level
-  data's own names match 233 / 249. The rest (**Unknown**): gates saved with none, Stoat, Sho-Battai, Heng, World's End `ninja guards`, the Lost
-  Armoury. Destroyed buildings stay candidates (the Hub's ruins house squatters).
+  it), and the rules here over the buildings in that order give the saved `residents template` of every home of the unmodded saves: METARU 380
+  of 380, redev 420 of 420, autosave1 360 of 360, autosave2 38 of 38 (a home saved under its housemate's template counted as its own, see
+  Layouts); the level data's own names match 232 / 248 / 221 / 38. Destroyed buildings stay candidates (the Hub's ruins house squatters).
 - **Meitou**: `ResidentHomes.Assign` takes the buildings in that serial order (ties and stateless buildings by key), so the boot can lay out the
   [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts, display `name` and `squad template` as above (`ResidentRuins.Apply`, before anything reads the
   levels: renderer, lamps, effects, navmesh and `NavmeshTool`, homes). Later changes lay a
