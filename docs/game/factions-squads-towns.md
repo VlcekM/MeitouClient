@@ -437,7 +437,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   resident and the built flag (`residents override` is read only after that). The bar squads come from the same table
   (`FUN_1409fcd20` calls it first and loops over its entry count), so they are empty too. Base data: 4 of the 22 faction-less TOWN
   records have residents (housecamp raider variants, Skinhouse overrides); they get none. Meitou: the helpers in `PopulationSystem.Build.cs`.
-- **When**: at zone populate (`FUN_140a0e760`) per non-player town, the zone's buildings sorted by handle serial (random-looking).
+- **When**: at zone populate (`FUN_140a0e760`) per non-player town, the zone's buildings sorted by handle serial, a signed int, lowest first
+  (**Verified**, comparator `0x140a089d0`: hand +0x18, the field `FUN_1400d1c20` fills from `rand()`).
 - **Candidates**: buildings of the town ([membership](../formats/zones.md#town-membership)) with an `interior` reference, not player-owned, holding no residents template
   or the default one; walls (`links together`, a vfunc override) never, gates (`is wall gate`) only for entries naming
   `building`s. Level data agrees: 1946 walls, none with a resident. Player-owned is ownership now: a house the player bought
@@ -473,12 +474,16 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   at the first failure, at most v0. Each at a random node of the town's node map (`FUN_14038b000`), else the town
   position; no home. That map (NodeList +0x50) is filled by `FUN_14038b650` with nodes the game creates itself next to objects
   (record `1186-gamedata.base`, "Node Guardpost", node type 2). **Verified** (`FUN_14038b650`, called from the door's point update `FUN_14029cc90`): the objects are door buildings; the node is put just outside the door (the door point `+0x3bc` pushed out along `+0x3bc - +0x3c8`, as state 126, [locks](locks.md)), and skipped when an existing node of that list lies within a small distance (`DAT_14167c308`). `FUN_14038b000` picks uniformly among the town's nodes. **Node pair per door** (**Verified**, `FUN_14038b650` disassembly and its constants): the outer point (door point `+0x3bc` + 1.1 x (`+0x3bc` - `+0x3c8`), 48 from the leaf) is shifted 19 along cross(way through, up) and 19 the other way, one node each (Y = the point's Y - 10; the second, opposite node is made unconditionally); nothing is made when a node of the list lies within 1.0 (3D) of the first position. The sign of the side axis (the `DAT_142248210` constant read as up) is **Observed**. Meitou (`TownGuardNodes`, door spots from `IDoorGate`): the nodes in building order, doors by index; the original's order is that of the doors' first point update, not reproducible (**Unknown**). A bar squad always takes a node of that map (**Verified**: `FUN_1409fcd20` never reads a bar's own nodes), else the town's position; Meitou does the same.
-- **New game vs level data**: level-data building states carry `residents template` / `squad template`; save 2 against
-  them has the same multiset per town but shuffled across buildings (223 same, 125 moved), so a new game rerolls homes
-  (**Observed**). Destroyed buildings stay candidates (the Hub's ruins house squatters).
-- **Meitou engine choices**: buildings are taken in a fixed order (a hash of their keys), not rerolled per game, so the boot can lay out the
+- **New game vs level data**: level-data building states carry `residents template` / `squad template`, but the state reader `FUN_140552b70`
+  looks the `residents template` up only when the string is empty (**Verified**, disassembly `0x14055312d`: `cmp [node+0x38], 0; jne` past the
+  lookup), so a level building starts with none and every town is housed afresh from its table. The outcome is the same in every new game: a
+  level building's handle serial is its level state's `handleS` (**Verified**: all 412 / 473 level buildings of the saves METARU / redev carry
+  it), and the rule above over the buildings in that order gives the saved `residents template` of 373 of 397 / 405 of 439 homes; the level
+  data's own names match 233 / 249. The rest (**Unknown**): gates saved with none, Stoat, Sho-Battai, Heng, World's End `ninja guards`, the Lost
+  Armoury. Destroyed buildings stay candidates (the Hub's ruins house squatters).
+- **Meitou**: `ResidentHomes.Assign` takes the buildings in that serial order (ties and stateless buildings by key), so the boot can lay out the
   [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts, display `name` and `squad template` as above (`ResidentRuins.Apply`, before anything reads the
-  levels: renderer, lamps, effects, navmesh and `NavmeshTool`, homes); the level data's assignment is kept where it fits the rules. Later changes lay a
+  levels: renderer, lamps, effects, navmesh and `NavmeshTool`, homes). Later changes lay a
   building out afresh (`TownBuildings.Relay`, `FixtureRegistry.Layouts.cs`): its beds, nodes, fixtures and item slots come from the new names, which its
   placement carries to the renderer, navmesh overlay, lamps, effects and indoor sight, and a save writes into its state. A town override's own zone
   (not the player's buildings) takes the replacement's housing: a home its template's layouts, `name` and `squad template`, any other building its level files' (as the original reads

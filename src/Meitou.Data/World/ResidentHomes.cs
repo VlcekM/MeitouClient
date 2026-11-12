@@ -5,8 +5,8 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// Which building of a town each resident entry's squads get (docs/game/factions-squads-towns.md "Town residents"), and the buildings that assignment
-/// ruins (docs/game/buildings-production.md "Ruined by residents"). Pure and seed-free, so the level data's ruins, laid out at boot, and the
-/// population's homes, made when a town loads, agree.
+/// ruins (docs/game/buildings-production.md "Ruined by residents"). Pure and seed-free, as the original's is for level buildings, so the level
+/// data's ruins, laid out at boot, and the population's homes, made when a town loads, agree.
 /// </summary>
 public static class ResidentHomes
 {
@@ -71,14 +71,13 @@ public static class ResidentHomes
     /// <summary>
     /// Houses the town's resident entries in <paramref name="buildings"/> (those that can house, are not <paramref name="playerFactionId"/>'s in the
     /// level data and not among <paramref name="playerOwned"/>, the keys of those the player owns now, such as a house bought); returns each housed
-    /// building with its template, in housing order. Order of the buildings: by a hash of their keys (<b>engine choice</b>: the original's is its
-    /// handles' serials, which are random, so it rerolls homes at a new game; a fixed order lets the boot lay out the ruins the homes make). Steps:
+    /// building with its template, in housing order. Order of the buildings: by their handles' serials (<see cref="Order"/>), as the original's.
+    /// The level state's <c>residents template</c> is not read: the original's state reader drops a non-empty one (<c>FUN_140552b70</c>, Verified),
+    /// so a new game houses every town afresh. Steps:
     /// <list type="number">
-    /// <item>priorities 5 down to 0: first (<b>engine choice</b>) a building whose level-data state names a template of this priority keeps it while
-    /// the entry has squads left (the level data's assignment is one the original's rules made); then the original's rule (Observed,
-    /// <c>FUN_1409370d0</c>, <c>FUN_14092e870</c>): each entry of the priority one building per pass, passes repeated while one placed a squad and
-    /// has more; the building is the free one of the highest weight, the first of them on a tie; an entry with no building left makes no
-    /// more squads;</item>
+    /// <item>priorities 5 down to 0 (Verified, <c>FUN_1409370d0</c>, <c>FUN_14092e870</c>): each entry of the priority one building per pass,
+    /// passes repeated while one placed a squad and has more; the building is the free one of the highest weight, the first of them on a tie; an
+    /// entry with no building left makes no more squads;</item>
     /// <item>every free building left gets the <c>default resident</c> when it takes the template's <c>layout interior</c>.</item>
     /// </list>
     /// </summary>
@@ -89,38 +88,25 @@ public static class ResidentHomes
         var entries = MakeEntries(db, Entries(town, faction));
         var housed = new List<(TownBuilding Building, SquadTemplate Template)>();
         var taken = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        for (int priority = 5; priority >= 0; priority--)
-        {
-            KeepLevelHomes(entries, priority, order, taken, housed);
-            HousePriority(entries, priority, order, taken, housed);
-        }
+        for (int priority = 5; priority >= 0; priority--) HousePriority(entries, priority, order, taken, housed);
+
         HouseDefault(db, town, faction, order, taken, housed);
         return housed;
     }
 
     /// <summary>
     /// The buildings that may house residents, in housing order: those that can house, not the player's in the level data and not among
-    /// <paramref name="playerOwned"/>, by <see cref="KeyHash"/> of their keys (then by key).
+    /// <paramref name="playerOwned"/>, by their handle's serial as a signed int, lowest first (the original sorts the zone's buildings so before it
+    /// houses a town, <c>FUN_140a0e760</c> with the comparator at <c>0x140a089d0</c>, Verified). A level building's serial is its level state's
+    /// <c>handleS</c>, which the original keeps (Verified against saves, docs/game/factions-squads-towns.md "Town residents"); ties, and
+    /// buildings with no state, by key (engine choice).
     /// </summary>
     static List<TownBuilding> Order(IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned)
     {
         bool Candidate(TownBuilding b) =>
             b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId) && playerOwned?.Contains(b.Key) != true;
-        return [.. buildings.Where(Candidate).OrderBy(b => KeyHash(b.Key)).ThenBy(b => b.Key, StringComparer.Ordinal)];
-    }
 
-    /// <summary>
-    /// FNV-1a over the key's characters: stable across runs and platforms.
-    /// </summary>
-    static ulong KeyHash(string key)
-    {
-        ulong h = 14695981039346656037UL;
-        foreach (char c in key)
-        {
-            h ^= c;
-            h *= 1099511628211UL;
-        }
-        return h;
+        return [.. buildings.Where(Candidate).OrderBy(b => b.HandleSerial).ThenBy(b => b.Key, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -144,23 +130,6 @@ public static class ResidentHomes
             });
         }
         return entries;
-    }
-
-    /// <summary>
-    /// The level data's homes of this priority's entries first (engine choice, see Assign).
-    /// </summary>
-    static void KeepLevelHomes(List<Entry> entries, int priority, List<TownBuilding> order, HashSet<TownBuilding> taken,
-        List<(TownBuilding, SquadTemplate)> housed)
-    {
-        foreach (var b in order)
-        {
-            if (b.ResidentsTemplate.Length == 0 || taken.Contains(b)) continue;
-            if (entries.FirstOrDefault(e => e.Id == b.ResidentsTemplate && e.Count > 0 && e.Priority == priority) is not { } e || Weight(e, b) <= 0)
-                continue;
-            e.Count--;
-            taken.Add(b);
-            housed.Add((b, e.Template));
-        }
     }
 
     /// <summary>
