@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Game.DevTools;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Host.Photo;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Foliage;
@@ -75,6 +76,11 @@ sealed class GameLoop(GameHost host)
     internal SettingsMenu? Panel => _panel;
 
     bool _cinemaHolds;
+
+    /// <summary>
+    /// Photo mode (docs/viewer.md "Photo mode"): while it is on it owns the camera, the interface's visibility and the pause.
+    /// </summary>
+    PhotoMode _photo = null!;
     SquadTour _tour = null!;
     bool _tourFollows;
     bool _cinemaWasPlaying, _cinemaWasRecording;
@@ -450,6 +456,11 @@ sealed class GameLoop(GameHost host)
         _cinema.LensKeys = () => host.Session.Camera.IsFree || _cinemaHolds;
         _cinema.Load();
         _tour = new SquadTour();
+        _photo = host.Photo = new PhotoMode(host)
+        {
+            Allowed = PhotoAllowed,
+            Entering = () => _cinemaHolds = false,
+        };
         // A double click on a squad member more than FlightDistance from the view flies there (Advanced settings "Character flights").
         host.Player.FlyTo = id =>
         {
@@ -471,6 +482,12 @@ sealed class GameLoop(GameHost host)
             EndTour();
         };
     }
+    /// <summary>
+    /// Photo mode starts only over a running game scene: not the title, a loading cover, a duel, a flight of the cinema or a squad tour.
+    /// </summary>
+    bool PhotoAllowed() => !host.Covered && !host.TitleScreen.TitleVisible && !host.Duel.IsDuel && host.SkyArrival is null
+        && !host.GameOptions.NoPopulation && !_cinema.Playing && !_cinema.Recording && !_tour.Active;
+
     Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? host.TrackedPosition(c) : null;
 
     void EndTour()
@@ -671,7 +688,7 @@ sealed class GameLoop(GameHost host)
             host.Loading?.SkipSplash();
             return;
         }
-        if (ModalKey(keyboard, k) || InterfaceKey(keyboard, k)) return;
+        if (ModalKey(keyboard, k) || PhotoKey(k) || InterfaceKey(keyboard, k)) return;
         if (KeyMap.Map(k) is { } uiKey && host.Player.UiKey(uiKey, CtrlDown(keyboard), _shiftDown)) return;
         GameKey(keyboard, k);
     }
@@ -734,6 +751,18 @@ sealed class GameLoop(GameHost host)
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// A key while photo mode is on or starts it (see <see cref="PhotoMode.KeyDown"/>); not while a text field has the keyboard, not in the terrain
+    /// sandbox (P is its patrol key) or with a window open over the game.
+    /// </summary>
+    bool PhotoKey(SilkKey k)
+    {
+        if (host.Player.UiEditing || host.GameOptions.NoPopulation) return false;
+        if (ModalKeyOf(k) is not { } key) return _photo.Active;
+        if (!_photo.Active && (host.Sandbox.IsSandbox || host.Player.ModalOpen)) return false;
+        return _photo.KeyDown(key, k == SilkKey.Escape);
     }
 
     /// <summary>
@@ -901,6 +930,11 @@ sealed class GameLoop(GameHost host)
         mouse.Scroll += (m, wheel) =>
         {
             if (host.Covered || PanelLive() && _panel?.Scroll(wheel.Y) == true) return;
+            if (_photo.Active)
+            {
+                if (!_photo.Panel.Contains(Pixels(_orbitAnchor ?? m.Position))) host.Session.Input.AddWheel(wheel.Y);
+                return;
+            }
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
@@ -913,6 +947,11 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void PointerDown(EngineButton? physical, Vector2 at)
     {
+        if (_photo.Active)
+        {
+            PhotoPointerDown(physical, at);
+            return;
+        }
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
         bool select = physical is { } pressed && host.PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
         if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true) { _panelDrag = true; return; }
@@ -935,10 +974,26 @@ sealed class GameLoop(GameHost host)
     }
 
     /// <summary>
+    /// Photo mode's press: the panel takes the left button; no click reaches the world (no selecting, no orders), the camera sees the buttons.
+    /// </summary>
+    void PhotoPointerDown(EngineButton? physical, Vector2 at)
+    {
+        if (physical == EngineButton.Left && _photo.Panel.MouseDown(at)) return;
+        if (_photo.Panel.Contains(at)) return;
+        if (physical is { } button) host.Session.Input.SetMouseButton(button, true);
+    }
+
+    /// <summary>
     /// The release of a pointer button (see <see cref="PointerDown"/>).
     /// </summary>
     void PointerUp(EngineButton? physical, Vector2 at)
     {
+        if (_photo.Active)
+        {
+            _photo.Panel.MouseUp();
+            if (physical is { } photoButton) host.Session.Input.SetMouseButton(photoButton, false);
+            return;
+        }
         bool cinemaDrag = _cinema.MouseUp();
         if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
@@ -969,7 +1024,7 @@ sealed class GameLoop(GameHost host)
             _lastMouse = p;
             return;
         }
-        if (_cinema.MouseMove(Pixels(p)))
+        if (_cinema.MouseMove(Pixels(p)) || _photo.Active && !host.OrbitHeld() && _photo.Panel.MouseMove(Pixels(p)))
         {
             _lastMouse = p;
             return;
@@ -1141,10 +1196,12 @@ sealed class GameLoop(GameHost host)
     void MoveCamera(double dt)
     {
         host.AgentWorld.ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
+        if (_photo.Active && (host.Covered || host.TitleScreen.TitleVisible)) _photo.Abandon();   // its world is gone
         if (!_cinemaHolds) host.ApplyCamera(host.Session.CameraAt());
         _cinema.Advance(_cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
         // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
         host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
+        _photo.Apply();
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
         host.Session.ViewEye = _cinemaHolds ? host.Camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
@@ -1428,6 +1485,11 @@ sealed class GameLoop(GameHost host)
         if (_overlay is not null && !covered)
             _cinema.Draw(_overlay, size.X, size.Y,
                 shot || take || feedbackShot || (host.AgentChannel.InterfaceHidden && !_cinema.EditorVisible), showStatus: false);
+        if (_overlay is not null && !covered && _photo.Active)
+        {
+            _photo.Panel.Draw(_overlay, size.X, size.Y, shot || take || feedbackShot);
+            _overlay.Flush(size.X, size.Y);
+        }
         // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics
         // hidden too.
         if (ui && _overlay is not null && !covered && !shot && !feedbackShot)
@@ -1614,8 +1676,11 @@ sealed class GameLoop(GameHost host)
             FramebufferCapture.SavePng(_display.Context, picture, takeFile, size.X, size.Y, topDown: topDown);
             _cinema.FrameDone();
         }
-        else if (shot && host.AgentChannel.ShotPath is not null)
+        else if (shot && host.AgentChannel.ShotPath is { } shotPath)
+        {
             host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
+            host.Photo?.PictureSaved(shotPath);
+        }
         else if (shot && GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)
             SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
         else if (shot) SaveScreenshot(_display.Context, picture, size.X, size.Y, topDown: topDown);

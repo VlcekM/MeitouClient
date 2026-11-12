@@ -37,12 +37,23 @@ public sealed class FreeCamera
     /// </summary>
     public float ReportedDistance { get; set; } = Data.World.KenshiCamera.InitialDistance;
 
+    /// <summary>
+    /// Radians the view is banked about its direction (photo mode; the rest of the game keeps it 0). Positive banks right.
+    /// </summary>
+    public float Roll { get; set; }
+
+    /// <summary>
+    /// Photo mode's controls (null: the game's free flight): a fixed fly speed that does not follow the height, the factors of the fast and slow
+    /// modifiers, the turn of the view by the right button besides Orbit, and the roll keys.
+    /// </summary>
+    public PhotoControls? Photo { get; set; }
+
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>
     /// The speed at the current height above the ground, units per second.
     /// </summary>
-    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight,
+    public float Speed => Photo?.FlySpeed ?? Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight,
         _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
 
     /// <summary>
@@ -54,6 +65,7 @@ public sealed class FreeCamera
         Velocity = Vector3.Zero;
         Yaw = from.Yaw;
         Pitch = Math.Clamp(MathF.Asin(Math.Clamp(-from.Forward.Y, -1f, 1f)), -PitchLimit, PitchLimit);
+        Roll = 0;
         ReportedDistance = from.Distance;
         KeepAboveGround();
     }
@@ -69,16 +81,18 @@ public sealed class FreeCamera
 
     public void Update(float dt, ActionState a)
     {
+        float look = Photo?.LookScale ?? 1;
         float turn = (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
         float tilt = (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
-        Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * dt);
-        Pitch += tilt * _settings.RotateSpeed * dt;
-        if (a.Held(InputAction.Orbit))
+        Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * look * dt);
+        Pitch += tilt * _settings.RotateSpeed * look * dt;
+        if (a.Held(InputAction.Orbit) || Photo is not null && a.Input.IsDown(MouseButton.Right))
         {
-            Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity);
-            Pitch += a.MouseDelta.Y * _settings.MouseSensitivity;
+            Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity * look);
+            Pitch += a.MouseDelta.Y * _settings.MouseSensitivity * look;
         }
         Pitch = Math.Clamp(Pitch, -PitchLimit, PitchLimit);
+        if (Photo is { } photo) UpdatePhoto(photo, dt, a);
 
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
@@ -89,9 +103,35 @@ public sealed class FreeCamera
         var side = Vector3.Cross(flat, Vector3.UnitY);
         var wish = f * fwd + side * right + Vector3.UnitY * up;
         bool shift = a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift);
-        var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * (shift ? 2 : 1) : Vector3.Zero;
+        float factor = Photo is { } p ? (shift ? p.FastFactor : 1) * (a.Input.IsDown(Key.LeftAlt) || a.Input.IsDown(Key.RightAlt) ? p.SlowFactor : 1)
+            : shift ? 2 : 1;
+        var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * factor : Vector3.Zero;
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
         Position += Velocity * dt;
+        KeepAboveGround();
+    }
+
+    /// <summary>
+    /// Photo mode's extras: the roll keys (Z banks left, X right) and the wheel's fly speed.
+    /// </summary>
+    void UpdatePhoto(PhotoControls photo, float dt, ActionState a)
+    {
+        float bank = (a.Input.IsDown(Key.X) ? 1 : 0) - (a.Input.IsDown(Key.Z) ? 1 : 0);
+        Roll = Math.Clamp(Roll + bank * photo.RollSpeed * dt, -PhotoControls.MaxRoll, PhotoControls.MaxRoll);
+        if (a.Wheel != 0) photo.FlySpeed = Math.Clamp(photo.FlySpeed * MathF.Pow(1.2f, a.Wheel), PhotoControls.MinSpeed, PhotoControls.MaxSpeed);
+    }
+
+    /// <summary>
+    /// Stands the camera at <paramref name="eye"/> looking along <paramref name="yaw"/> and <paramref name="pitch"/> (the strategy camera's
+    /// conventions), at rest and level.
+    /// </summary>
+    public void Place(Vector3 eye, float yaw, float pitch)
+    {
+        Position = eye;
+        Velocity = Vector3.Zero;
+        Yaw = Interp.WrapAngle(yaw);
+        Pitch = Math.Clamp(pitch, -PitchLimit, PitchLimit);
+        Roll = 0;
         KeepAboveGround();
     }
 
@@ -132,4 +172,32 @@ public sealed class FreeCamera
         }
         return null;
     }
+}
+
+/// <summary>
+/// Photo mode's flight (<see cref="FreeCamera.Photo"/>): the speed is its own, set by the wheel, and does not follow the height above the ground.
+/// </summary>
+public sealed class PhotoControls
+{
+    public const float MinSpeed = 5, MaxSpeed = 30000, MaxRoll = MathF.PI / 2;
+
+    /// <summary>
+    /// Units per second (10 units are a metre) at the normal pace.
+    /// </summary>
+    public float FlySpeed = 300;
+
+    /// <summary>
+    /// What Shift and Alt multiply the speed by.
+    /// </summary>
+    public float FastFactor = 4, SlowFactor = 0.2f;
+
+    /// <summary>
+    /// Radians per second of the roll keys.
+    /// </summary>
+    public float RollSpeed = 0.7f;
+
+    /// <summary>
+    /// The turn of the view by a mouse movement or key, relative to a 50 degree lens: a narrow lens turns less.
+    /// </summary>
+    public float LookScale = 1;
 }

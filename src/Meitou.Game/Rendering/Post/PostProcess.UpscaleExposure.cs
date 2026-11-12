@@ -51,7 +51,7 @@ public sealed unsafe partial class PostProcess
         bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), adapted.View));
         bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _upscaleExposure.Texture.View()));
         bool auto = AutoExposure is not null && _adaptedValid;
-        var push = new UpscaleExposurePush { Exposure = Options.Exposure, Key = ExposureKey, Auto = auto ? 1 : 0 };
+        var push = new UpscaleExposurePush { Exposure = Options.ExposureApplied, Key = ExposureKey, Auto = auto ? 1 : 0 };
         cmd.Order();
         cmd.BindPipeline(_upscaleExposurePipeline!.Value);
         cmd.BindProgramResources(_upscaleExposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));

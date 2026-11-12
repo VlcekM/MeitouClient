@@ -68,6 +68,18 @@ Record-path samples manual flight each second plus endpoints. Numpad* letterbox2
 Shift+Enter records numbered PNGs to C:/Temp/meitou-take-<time>, fixed1/60s camera/world motion;
 render duration does not alter film time. Recording excludes UI/editor and uses an open flight.
 
+## Photo mode
+
+Game only (`PhotoMode`, `InputAction.TogglePhotoMode`, default **P**, rebindable; also the console command `photo`; not in `--duel`, the terrain sandbox, over the title or a loading cover, or during a cinema flight or squad tour). Engine choice, no original counterpart.
+
+- **Contract:** entering pauses the simulation, hides the interface (F7's flag) and cuts the free camera to the drawn eye and view. Leaving (P, Esc, `photo off`) restores the strategy camera's pivot, yaw, pitch and boom (`CameraRig.Save`/`Restore`; the free camera's pose if it was flying), the pause speed, the interface flag, the followed character, the lens and every setting below. Nothing is saved or reaches the simulation; the game clock, weather and world keep their own time.
+- **Camera:** WASD/arrows move along the view, R/F up and down, right mouse (or Orbit) looks, wheel sets the fly speed (a fixed 30 m/s default, not height-scaled), Shift x4, Alt x0.2, Q/E and ,/. turn, Z/X roll, V levels, PageUp/PageDown lens 2.5 deg. Mouse turn scales with the lens. The eye keeps `FreeClearance` above the ground and sea. Left clicks never select or order; unmapped keys are dropped.
+- **Panel** (left, drawn with the debug overlay in the settings window's inks; F7 hides it): the settings below, Take picture (Enter or F8), Game time, Reset. Space pauses or runs the simulation (the "Simulation" row).
+- **Picture:** PNG to `Pictures/Meitou/Meitou <date time>.png` at the drawn size, with frame bars, without panel, grid and message; a line shows the path.
+- **Settings** (`photo set <name> <value>`): `fov` 10..100 deg, `roll` -90..90 deg (positive banks right: the horizon's right end rises), `dof` off|on (`PostOptions.PhotoDepthOfField`), `focusmode` manual|auto, `focus` 0.3..1000 m (or `auto`), `aperture` f/0.25..22, `exposure` -3..+3 EV (`PostOptions.PhotoExposure`, on top of the saved brightness), `hour` 0..24 or `game` (`GameHost.PhotoHour`: the sun, sky, stars and lamps draw this hour; the weather schedule keeps the game hour), `grid` off|thirds|golden|cross|diagonals, `frame` off|2.39:1|16:9|4:3|1:1|4:5, `speed` 0.5..3000 m/s, `live` paused|running. Also `photo on|off|toggle|get|reset|cam x y z yaw pitch|panel on|off|key <name> [up]|shot [file] [--ui]` (`--ui` keeps panel and grid in the file, for checking).
+- **Roll:** `WorldCamera.Roll` turns the view's up (`Up`); shadows, post passes, sky, reflection and upscaler vectors read the view matrix. The cone tests that take only the forward direction (fog volumes' sky test, the simulation's `CameraViewCommand`) use `CullCone`, a cone holding the rolled frustum. **Verified** by screenshots (roll +-20 deg: sky, moons, shadows, water turn together).
+- **Verified** (headless 2560x1440, `t_flats_shore`): enter/leave restores camera, pause and brightness; fov, roll, exposure, hour, depth of field, grids, frames, panel clicks, key flight. **Unknown:** the right-drag look and pointer pinning in a real window; a real keyboard.
+
 ## Squad tour
 
 Game only (`SquadTour`, not --duel): numpad / flies the camera over the squad bar members in order, keeping the view's yaw, pitch and

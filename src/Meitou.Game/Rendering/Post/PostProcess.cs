@@ -978,7 +978,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.SceneSize, plainScaled ? _postColour.Width : 0f, plainScaled ? _postColour.Height : 0f);
         c.P.Set(c.Sharpen, Temporal && _sharpenAfter ? 2 * Math.Clamp(o.Upscale.Sharpness, 0, 1) : 0f);
         c.P.Set(c.Auto, auto ? 1 : 0);
-        c.P.Set(c.Exposure, o.Exposure);
+        c.P.Set(c.Exposure, o.ExposureApplied);
         c.P.Set(c.UseAo, ao && !_aoApplied ? 1 : 0);   // applied before the particles: only the debug view still reads it
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Tone, (int)o.ToneMapUsed);

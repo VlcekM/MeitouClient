@@ -93,6 +93,31 @@ public sealed class CameraRig
     }
 
     /// <summary>
+    /// What <see cref="Save"/> keeps of the rig: the strategy camera's placement, and the free camera's state when it was flying.
+    /// </summary>
+    public readonly record struct Saved(Vector2 PivotXz, float Yaw, float Pitch, float Distance, bool WasFree, CameraState Free);
+
+    /// <summary>
+    /// The rig as it is now, for <see cref="Restore"/>.
+    /// </summary>
+    public Saved Save() => new(Strategy.PivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance, IsFree, Free.State);
+
+    /// <summary>
+    /// Cuts back to the rig <paramref name="saved"/>: the strategy camera where it stood (whatever the free camera did since), or the free camera
+    /// where it flew.
+    /// </summary>
+    public void Restore(Saved saved)
+    {
+        if (!saved.WasFree)
+        {
+            Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
+            return;
+        }
+        Strategy.Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
+        TakeOver(saved.Free, false);
+    }
+
+    /// <summary>
     /// Moves the strategy pivot without a cut: the view keeps its own yaw, pitch and boom, and the next tick blends from where it was (a camera that
     /// follows).
     /// </summary>

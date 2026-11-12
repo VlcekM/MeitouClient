@@ -218,7 +218,7 @@ sealed class PostComposite : IDisposable
         p.Bind(_sceneSlot, _sceneSampler with { View = scene.View() });
         p.Bind(_aoSlot, _ctx.Dummy(p.SamplerInfo(_aoSlot)));
         p.Bind(_adaptedSlot, _plainSampler with { View = _adaptB!.View() });
-        p.Set(_exposure, o.Exposure);
+        p.Set(_exposure, o.ExposureApplied);
         p.Set(_useAo, 0);
         p.Set(_dither, o.Dither ? 1 : 0);
         p.Set(_auto, 1);

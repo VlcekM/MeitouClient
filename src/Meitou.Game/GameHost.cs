@@ -926,8 +926,8 @@ sealed partial class GameHost(
         Camera.Pitch = s.Pitch;
         Camera.Distance = s.Distance;
 
-        // A cinema key's lens goes with the camera it held.
-        (Camera.FocusDistance, Camera.Aperture) = (null, null);
+        // A cinema key's lens goes with the camera it held; the roll is photo mode's, which sets it again after this.
+        (Camera.FocusDistance, Camera.Aperture, Camera.Roll) = (null, null, 0);
     }
 
     /// <summary>
@@ -1221,7 +1221,7 @@ sealed partial class GameHost(
         if (TickAhead) Session.BeginTickAhead();
         try
         {
-            WorldFrame.Draw(Gpu, Scene, Camera, Render, width, height, PresentationHour ?? hour, gameTime, WorldOptions.FogDistance, weatherHour: hour);
+            WorldFrame.Draw(Gpu, Scene, Camera, Render, width, height, PhotoHour ?? PresentationHour ?? hour, gameTime, WorldOptions.FogDistance, weatherHour: hour);
         }
         finally
         {

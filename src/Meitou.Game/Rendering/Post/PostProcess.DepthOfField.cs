@@ -217,7 +217,7 @@ public sealed unsafe partial class PostProcess
     /// <summary>The picture through the lens, or <paramref name="scene"/> when the depth of field does not run (off, another camera).</summary>
     Target2D RunDepthOfField(Target2D scene)
     {
-        if (!Options.DepthOfField || !CameraEffectsLive) return scene;
+        if (!(Options.PhotoDepthOfField ?? Options.DepthOfField) || !CameraEffectsLive) return scene;
         EnsureDepthOfField(scene);
         float maxCoc = MathF.Min(MathF.Max(scene.Height * PostOptions.DofMaxCocShare, 2), PostOptions.DofMaxCocPixels);
 

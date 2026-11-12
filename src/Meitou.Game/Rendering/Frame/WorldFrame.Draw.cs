@@ -414,7 +414,8 @@ static partial class WorldFrame
         {
             gpu.Particles?.CollectFogVolumes(gpu.EffectFogs);
             float aspect = f.RenderWidth / (float)Math.Max(f.RenderHeight, 1);
-            fogVolumes.Update(f.Eye, camera.Forward, camera.FieldOfView, aspect, gpu.Sky.HazeDistance, f.Sun.Y, true, gpu.EffectFogs,
+            var (coneFov, coneAspect) = camera.CullCone(aspect);
+            fogVolumes.Update(f.Eye, camera.Forward, coneFov, coneAspect, gpu.Sky.HazeDistance, f.Sun.Y, true, gpu.EffectFogs,
                 gpu.Sky.FogCullDistance);
             gpu.Sky.CloudShadowScale = fogVolumes.CloudShadowScale;
         }

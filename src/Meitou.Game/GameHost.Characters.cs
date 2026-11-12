@@ -42,7 +42,8 @@ sealed partial class GameHost
     void SendView()
     {
         if (Battle.IsBattle) return;
-        Session.World.Commands.Enqueue(new Simulation.Bodies.CameraViewCommand(Camera.Eye, Camera.Forward, Camera.FieldOfView, ViewAspect,
+        var (fieldOfView, aspect) = Camera.CullCone(ViewAspect);
+        Session.World.Commands.Enqueue(new Simulation.Bodies.CameraViewCommand(Camera.Eye, Camera.Forward, fieldOfView, aspect,
             NpcRange) { Tick = Session.World.Tick });
     }
 

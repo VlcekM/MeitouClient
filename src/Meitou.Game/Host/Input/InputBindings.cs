@@ -86,6 +86,10 @@ public enum InputAction
     /// Meitou's own: the selection sits down to rest, and the carriers put their bodies down (no binding in the game).
     /// </summary>
     Rest, PutDown,
+    /// <summary>
+    /// Meitou's own: photo mode on and off (docs/viewer.md "Photo mode").
+    /// </summary>
+    TogglePhotoMode,
     Quit,
 }
 
@@ -195,6 +199,7 @@ public sealed class InputBindings
         Set(InputAction.Prospect);
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
+        Set(InputAction.TogglePhotoMode, Key.P);
         Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
         // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
         Set(InputAction.Select, MouseButton.Left);

@@ -299,6 +299,21 @@ public sealed class PostOptions
     public float Exposure = 1;
 
     /// <summary>
+    /// Photo mode's exposure compensation, a linear factor on top of <see cref="Exposure"/> (the player's saved brightness is left alone; 1 outside it).
+    /// </summary>
+    public float PhotoExposure = 1;
+
+    /// <summary>
+    /// Photo mode's depth of field: on or off whatever <see cref="DepthOfField"/> says; null outside it.
+    /// </summary>
+    public bool? PhotoDepthOfField;
+
+    /// <summary>
+    /// The exposure the passes apply: <see cref="Exposure"/> with photo mode's compensation.
+    /// </summary>
+    public float ExposureApplied => Exposure * PhotoExposure;
+
+    /// <summary>
     /// Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it);
     /// 1, 1, 1 in play.
     /// </summary>

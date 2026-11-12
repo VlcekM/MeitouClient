@@ -32,6 +32,22 @@ sealed partial class GameHost
     internal SceneLoad? ActiveSceneLoad;
     internal SkyArrival? SkyArrival;
     internal float? PresentationHour;
+
+    /// <summary>
+    /// Photo mode's hour of day, drawn in place of the game clock's (the sun, sky, stars and lamps follow it; the clock, the weather and the
+    /// simulation do not); null outside photo mode or while it shows the game's own time.
+    /// </summary>
+    internal float? PhotoHour;
+
+    /// <summary>
+    /// Photo mode is on: the right button turns the view like the Orbit action.
+    /// </summary>
+    internal bool PhotoLook;
+
+    /// <summary>
+    /// The photo mode (null before the interactive loop makes it).
+    /// </summary>
+    internal Host.Photo.PhotoMode? Photo;
     /// <summary>
     /// The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.
     /// </summary>

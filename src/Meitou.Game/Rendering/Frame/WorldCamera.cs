@@ -21,6 +21,12 @@ public sealed class WorldCamera
     /// </summary>
     public float Pitch { get; set; } = 0.5f;
     public float Distance { get; set; } = 2000;
+
+    /// <summary>
+    /// Radians the picture is turned about the view direction (photo mode; 0 keeps the horizon level). Positive banks the camera to the right (the view's up turns
+    /// clockwise as seen), so the horizon's right end rises.
+    /// </summary>
+    public float Roll { get; set; }
     public float FieldOfView { get; set; } = 50 * MathF.PI / 180;
     /// <summary>The depth of field's focus, world units from the eye, as a cinema key sets it; null: the target's distance.</summary>
     public float? FocusDistance { get; set; }
@@ -60,10 +66,26 @@ public sealed class WorldCamera
     }
     public Vector3 Forward => -Back;
 
+    /// <summary>
+    /// The view's up direction: world up turned by <see cref="Roll"/> about <see cref="Forward"/>.
+    /// </summary>
+    public Vector3 Up => Roll == 0 ? Vector3.UnitY : Vector3.Transform(Vector3.UnitY, Quaternion.CreateFromAxisAngle(Forward, Roll));
+
+    /// <summary>
+    /// A vertical field of view and aspect whose cone holds the view's frustum at any <see cref="Roll"/> (the frustum itself when level), for the tests
+    /// that take a cone from <see cref="Forward"/> and assume the horizon is level.
+    /// </summary>
+    public (float FieldOfView, float Aspect) CullCone(float aspect)
+    {
+        if (Roll == 0) return (FieldOfView, aspect);
+        float tanY = MathF.Tan(FieldOfView * 0.5f), tanX = tanY * aspect;
+        return (2 * MathF.Atan(MathF.Sqrt(tanX * tanX + tanY * tanY)), 1);
+    }
+
     /// <summary>Looks along <see cref="Forward"/> (at <see cref="Target"/>): the rotation from the angles, built at the origin, not from the float eye, whose rounding
     /// steps would turn the view by up to half a float step over the distance (a quarter pixel at 15 units from the target at 50000) every time the eye
     /// crosses one; nor from a look-at point beside the far eye (eye + forward rounds to the eye's float step, a turn of a few pixels).</summary>
-    public Matrix4x4 View => Matrix4x4.CreateTranslation(-Eye) * Matrix4x4.CreateLookAt(Vector3.Zero, Forward, Vector3.UnitY);
+    public Matrix4x4 View => Matrix4x4.CreateTranslation(-Eye) * Matrix4x4.CreateLookAt(Vector3.Zero, Forward, Up);
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
 

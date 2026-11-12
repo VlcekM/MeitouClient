@@ -430,6 +430,14 @@ sealed class AgentChannel(GameHost host)
             con.Print($"queued {path}");
         });
 
+        Add("photo", "photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | key <name> [up] | shot [file] [--ui]",
+            "photo mode (docs/viewer.md): the free camera with lens, roll, exposure, drawn time of day, grids and frames; shot saves a picture without the panel and grid (--ui keeps them)",
+            (args, con) =>
+            {
+                if (host.Photo is { } photo) photo.Command(args, con);
+                else con.Error("photo mode is not available here");
+            });
+
         Add("quit", "quit", "end the interactive loop and exit cleanly (as closing the window does)", (_, con) => { host.DevConsoleHost.ControlQuit = true; con.Print("quitting"); });
 
         Add("mouse", "mouse <x> <y>", "headless runs only: put the pointer at screen pixel x y (hover, tooltips and picking follow it; a window's real pointer is not moved)", (args, con) =>

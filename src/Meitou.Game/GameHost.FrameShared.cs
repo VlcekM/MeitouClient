@@ -68,7 +68,8 @@ sealed partial class GameHost
     /// <summary>
     /// A key or button bound to Orbit (middle button or Ctrl by default) is down.
     /// </summary>
-    internal bool OrbitHeld() => Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
+    internal bool OrbitHeld() => Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld)
+        || PhotoLook && Session.Input.IsHeld(Binding.Of(MouseButton.Right));
 
     /// <summary>
     /// The button the interface sees for a physical one: the Select button is its left, the Command button its right (each falls back to its own
