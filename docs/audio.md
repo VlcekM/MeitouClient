@@ -578,7 +578,7 @@ main theme or the remembered biome music, seconds until the timer next posts it,
     all, and the nearest one's name and distance.
   - **Characters and interface.** `UpdateAudio` also calls `CharacterAudio.Update` (`GameSound.Characters`, [Characters](#characters-footsteps-combat-voices)); the interface sounds are on from `AttachAudio`, also on the
     title screen (`UiAudio`). `VO_Bank` loads with the first character. The `--quit-after` log shows `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
-  - Not in screenshots, the headless paths or tests: only the interactive run creates the audio.
+  - Not in screenshots, `--headless`, the other headless paths or tests: only the interactive run creates the audio.
 
 ## Tools
 

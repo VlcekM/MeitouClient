@@ -10,7 +10,7 @@ namespace Meitou.Game.Audio;
 sealed class GameSound(GameHost host)
 {
     /// <summary>
-    /// The audio being made on a worker; null once attached or with <c>--no-audio</c>.
+    /// The audio being made on a worker; null once attached or with <c>--no-audio</c> or <c>--headless</c>.
     /// </summary>
     Task<(AudioSystem? Audio, string? Error)>? _audioStart;
 
@@ -46,11 +46,11 @@ sealed class GameSound(GameHost host)
 
     /// <summary>
     /// Starts making the audio on a worker (the codebook library and the sound device) while the window and the world load; nothing with
-    /// <c>--no-audio</c>.
+    /// <c>--no-audio</c> or <c>--headless</c>.
     /// </summary>
     internal void BeginAudio()
     {
-        if (host.WorldOptions.NoAudio) return;
+        if (host.WorldOptions.NoAudio || host.WorldOptions.Headless) return;
         // The sliders as saved, else the install's settings.cfg (read once, here, so the settings menu shows the same values).
         var settings = host.Config.Audio ??= AudioSettings.FromInstall(host.Install);
         _audioStart = Task.Run(() =>
@@ -76,7 +76,7 @@ sealed class GameSound(GameHost host)
     {
         if (_audioStart is null)
         {
-            Console.WriteLine("audio     off (--no-audio)");
+            Console.WriteLine(host.WorldOptions.Headless ? "audio     off (--headless)" : "audio     off (--no-audio)");
             return;
         }
         var (made, error) = _audioStart.GetAwaiter().GetResult();

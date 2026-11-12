@@ -125,7 +125,7 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` (`Parse`, `Usag
 | `--fly-to <x>,<z>` | world X,Z | | With `--screenshot`: fly there first, then take the picture. |
 | `--windowed` | | off (full screen) | Bordered window; maximised unless `--size` is given. |
 | `--hidden-window` | | off | Window never shown (implies `--windowed`): for unattended runs such as `--play-bench`; frames are drawn and presented as usual. |
-| `--headless` | | off | No window, swapchain or presentation: the interactive loop draws into an offscreen picture of `--size` (default 1920x1080), 30 fps unless `--fps-limit`. For the agent channel and its screenshot command. Also `MEITOU_HEADLESS=1`. |
+| `--headless` | | off | No window, swapchain or presentation: the interactive loop draws into an offscreen picture of `--size` (default 1920x1080), 30 fps unless `--fps-limit`; no sound. For the agent channel and its screenshot command. Also `MEITOU_HEADLESS=1`. |
 | `--monitor <n>` | 1-based | not set | Window on monitor n. |
 | `--show-keys` | | off | Start with the key list open (F10). |
 | `--play-shots` | | off | Fly the saved camera keys on a loop. |
