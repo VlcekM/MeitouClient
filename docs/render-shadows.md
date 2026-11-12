@@ -85,6 +85,11 @@ and skip 3 footprints plus 0.5. Queries, each after the last missed:
   foot see the sun through the cliff; the coarse grid (`0x08`) from 320 along the ray. Back faces are skipped as the probes skip them, but not from interiors (bit 9);
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, fading out by amount (not noise) over the last quarter of its reach.
 
+**Characters** (receiver class 3): a low-poly body's facet can face away from the sun while its smooth shading (and skin's band past the terminator) is still lit; a
+ray from it stopped inside the body, a dark triangle (**Observed** on a face: eye corners, nostrils, the temple). There the ray starts under the facet, the nearest back of a
+face within 0.8 units (`BodyChord`) is where it leaves the body, and blockers count from that point on. A shadow edge on a character is at least 0.015 units wide each way
+(`BodyPenumbra`): the body's own shadows are polygons, and skin spreads light that far.
+
 **Penumbra** (`PenumbraFilter`, shared with the lamps, no history): the rays write, where blocked, the penumbra's radius at the receiver (the sun's tangent 0.00465, the real
 0.267 degrees, times the blocker's distance; KenshiNative's 0.015 widened far penumbrae threefold). A pixel the light does not reach (turned away from it: its term is 0, or no traced
 pixel) is no receiver: the filter keeps it and no neighbour reads it. Read as lit (no ray is asked there), a ripple's far slopes lit their sunward neighbours inside a

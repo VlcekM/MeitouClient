@@ -70,6 +70,8 @@ static class TracedSunShaders
     const float FineTerrainLift = 3, FineTerrainLiftPerUnit = 0.002f, CoarseTerrainBlind = 320;
     /// <summary>World units: the most the drawn ground's relief displaces it from the heightmap (GroundRelief's max depth at the deepest setting), what <c>terrainOrigin</c> takes back.</summary>
     const float ReliefAmplitude = 12;
+    /// <summary>On a character (docs/render-shadows.md "Traced sun"): how far a ray from under a turned facet may go before the back of a face blocks it (a body's thickness), and a shadow edge's least half width (world units; skin spreads light some millimetres).</summary>
+    const float BodyChord = 0.8f, BodyPenumbra = 0.015f;
 
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
@@ -145,6 +147,18 @@ static class TracedSunShaders
             return HIT_T(q);
         }
 
+        // From under a character's facet that is turned from the sun: the ray crosses the body and leaves it by the back of its far side, which must not block (a dark
+        // triangle on a low-poly face, where the smooth shading is still lit). The nearest back of a face within a body's thickness is where it leaves; the blockers are
+        // looked for from there on (a strand of hair, a hat, a wall).
+        float bodyBlocks(vec3 o, vec3 dir)
+        {
+            rayQueryEXT q;
+            rayQueryInitializeEXT(q, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullFrontFacingTrianglesEXT, {{(int)Solids}}, o, 0.0, dir, {{F(BodyChord)}});
+            while (rayQueryProceedEXT(q)) { }
+            float leaves = HIT_T(q);
+            return solidBlocks(o, dir, leaves > 0.0 ? leaves + 0.002 : 0.0);
+        }
+
         // The ground's height fields. Their back faces are skipped as the probes' rays skip them (the drawn ground lies under the grid in a hollow), but an interior's are not: a room
         // dug into a hillside lies under the ground on purpose.
         float terrainBlocks(vec3 o, vec3 dir, uint mask, float tMin, bool interior)
@@ -205,7 +219,8 @@ static class TracedSunShaders
             vec3 o = p.eye.xyz + at + side * clearance;
             float tMin = card ? max(clearance, 0.5 + pixel * 3.0) : blade ? max(pixel * 2.0, 0.25) : clearance;
 
-            float t = solidBlocks(o, dir, tMin);
+            // A character's facet turned from the sun while its shading still takes it (the smooth normal's terminator lies past the facets', skin's light further still).
+            float t = receiver == 3u && dot(side, dir) < 0.0 ? bodyBlocks(p.eye.xyz + at - side * (0.002 + pixel * 0.25), dir) : solidBlocks(o, dir, tMin);
             if (t <= 0.0)
             {
                 vec3 ground = terrainOrigin(o, dist);
@@ -232,7 +247,10 @@ static class TracedSunShaders
             vec3 term = texelFetch(uTerm, px, 0).rgb;
             if ((surface.w & 65536u) == 0u || max(term.r, max(term.g, term.b)) < 1e-5) { imageStore(uOut, px, vec4(1.0, 1.0, 1.0, -1.0)); return; }
             vec2 v = visibility(px);
-            imageStore(uOut, px, vec4(v.xxx, v.y * p.eye.w));
+            // On a character a shadow's edge is at least BodyPenumbra wide: light spreads that far under skin, and the low-poly body's own shadows are polygons.
+            float spread = v.y * p.eye.w;
+            if (v.y > 0.0 && ((surface.w >> 17u) & 3u) == 3u) spread = max(spread, {{F(BodyPenumbra)}});
+            imageStore(uOut, px, vec4(v.xxx, spread));
         }
         """;
 

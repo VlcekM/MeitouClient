@@ -11,7 +11,8 @@ static class CharacterSurface
     public const string Prototypes = """
         bool surfaceOn = false;
         uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal
-        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo);
+        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo, float share);
+        vec3 surfaceSunTraced(vec3 sun, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
         vec3 surfaceAmbient(vec3 sky);
 
@@ -19,7 +20,7 @@ static class CharacterSurface
 
     /// <summary>The atmosphere text with the two hooks only the character fragment has, so no other program's text changes.</summary>
     public static string Lighting() => Hook(Hook(NativeShaders.AtmosphereFunctions,
-        "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;", "if (surfaceOn) lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse) + surfaceAmbient(envDiffuse);"),
+        "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;", "if (surfaceOn) { lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse, 1.0 - tracedShare) + surfaceAmbient(envDiffuse); if (tracedShare > 0.0) tracedSunOut += surfaceSunTraced(tracedSun, albedo * fresnelDiffuse); }"),
         "specular += radiance * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / 3.14159265358979;", "if (surfaceOn) specular += radiance * surfaceSpecular(l);");
 
     static string Hook(string text, string anchor, string added)
@@ -131,12 +132,13 @@ static class CharacterSurface
             return skinShare * (vec3(oil) + skinAlbedo * (view.fogDistance > 0.0 ? ATMO_PI : 1.0) * fuzz);
         }
         // Light through a thin part (ears, fingers), in the units of the diffuse N.L: its share of skin, facing away from the light. A thin part curves tightly and is about
-        // two radii thick (the curvature bake), and passes exp(-thickness / 0.25 units); the colour is the skin's own, as skinDiffuse's.
+        // two radii thick (the curvature bake), and passes exp(-thickness / 0.05 units): red light's reach in skin is some 5 mm, so an ear or a finger glows and a nose
+        // or a cheek does not (with 0.25 the whole nose and the eye sockets glowed orange); the colour is the skin's own, as skinDiffuse's.
         vec3 skinThrough(vec3 l)
         {
             float back = clamp(-dot(skinGeometric, l), 0.0, 1.0);
-            if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.8) return vec3(0.0);
-            return skinHue() * skinShare * back * exp(-skinThickness / 0.25) * 0.8;
+            if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.35) return vec3(0.0);
+            return skinHue() * skinShare * back * exp(-skinThickness / 0.05) * 0.8;
         }
         // The sun on skin beyond what kenshiLight gave it, in the units of the diffuse N.L. visible: its shadow here. In a shadow's penumbra the light under the skin bleeds
         // into the dark side, warm. The band past the terminator and the light through a thin part entered elsewhere, so the fragment's own shadow (its own body) must not
@@ -198,14 +200,23 @@ static class CharacterSurface
             return added;
         }
 
-        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo)
+        // sun: the share of the sun the cascades shadow (share of it: none while the rays take it all, surfaceSunTraced has theirs).
+        vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo, float share)
         {
             vec3 l = uAtmoLight.xyz;
             vec3 added = sun * surfaceSpecular(l);
-            if (skinShare <= 0.0) return added;
-            vec3 open = uAtmoSunLight * sunScale * atmoCloudShadow(vWorld);
+            if (skinShare <= 0.0 || share <= 0.0) return added;
+            vec3 open = uAtmoSunLight * sunScale * atmoCloudShadow(vWorld) * share;
             float visible = clamp((sun.r + sun.g + sun.b) / max(open.r + open.g + open.b, 1e-5), 0.0, 1.0);
             return added + ATMO_PI * open * diffuseAlbedo * skinSunExtra(l, visible);
+        }
+        // The same for the sun written apart, which the rays shadow (the traced sun): the highlights and the light through a thin part. The band past the terminator is in
+        // the diffuse term already and the rays start past a body's own turned facets (TracedSunShaders), so nothing is asked at an entry point: a strand of hair's shadow
+        // stays dark (the entry point's shadow, a coarse one, lit the band inside it, red).
+        vec3 surfaceSunTraced(vec3 sun, vec3 diffuseAlbedo)
+        {
+            vec3 l = uAtmoLight.xyz;
+            return sun * surfaceSpecular(l) + ATMO_PI * sun * diffuseAlbedo * skinThrough(l);
         }
 
         // How much of a body fragment is eyeball (KenshiNative's knEyeWeight): a head texel, bare (share: not painted over, and only where the race's skin is on, so no robot's
