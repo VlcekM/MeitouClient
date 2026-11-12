@@ -787,7 +787,8 @@ Order 228 "Stealth KO" (verb list `FUN_14079b2d0`), `Task_StealthKO` (vtable slo
 - The attacker walks to the target's position minus the target's heading, a unit vector (+0xd0 of its movement object `+0x640`,
   written normalised by `FUN_140665250`; **Verified**), so to a point 1 behind it; the goal is re-issued every update, also while it walks.
   Within 14 of it the swing starts and the attacker turns to face the target. The task ends at once, silently, only when the target
-  senses the attacker (`FUN_140855830` = its sense entry's +0x38 flag); a fighting target does not end it, and the swing has no
+  senses the attacker (`FUN_140855830` = its sense entry's +0x38 flag) or is down (vfunc 0x30 `isDown`, [carry-loot](carry-loot.md); tested every
+  update before the state logic, **Verified**), so the verb offered on an unconscious target walks nowhere, rolls nothing and trains nothing; a fighting target does not end it, and the swing has no
   distance end (the roll is made however far the target has walked; **Verified**, no distance test in `FUN_14034cd80`). A
   sleeping or caged target (+0x2f8 ≠ 0 with a bed/cage handle at +0x300) is walked to at the building's `getPositionMarker(attacker position)` (slot 0x470: the nearest use node with two or more, else the marker `+0x26c`; **Verified**). `FUN_1405c68a0` (the move helper, mode 0) runs every update before the state logic in states 0 to 3, so the attacker keeps walking toward the goal through the swing; the `knockout` ANIMATION has `disables movement` false (base data), so only reaching the point stops it. Meitou: `CarrySystem.ScheduleKnockOuts` re-aims through the swing, `FixtureRegistry.PositionMarker`.
 - Swing: clip `knockout` at x1.2 (record `knockout`, anim `stealthKO` in rebirth.mod); at 0.5 of it the roll, at 0.85

@@ -167,7 +167,7 @@ Offsets on the `Character` object; all **Observed** unless the row says otherwis
 | `+0x650` -> `+0x318` | the medical object; its byte `+0x165` = right arm usable, `+0x166` = left arm usable | section 1.2 |
 | `+0x5bc` byte | dead | set by the death function `FUN_1407a6200` ("{1} is dead.", "{1} has died from blood loss.") |
 | `+0x5b9` byte | unconscious (inferred) | no writer found; every reader pairs it with dead as "cannot act" (`FUN_1407944d0`, `FUN_140997c70`, `FUN_1408cdf50`, `isReadyForAction` `FUN_140998550`) |
-| vtable slot 6 (`+0x30`), `CharacterAnimal::vfunc_6` `FUN_1405c9e10` | `isDown`: dead, `+0x5b9`, ragdolled or carried, or posture (slot 109, `+0xe0`, [ragdolls](ragdolls.md#forced-crawl): 3 playing dead, 4 KO) of 3 or more | Meitou `CarrySystem.IsDown` |
+| vtable slot 6 (`+0x30`), `CharacterAnimal::vfunc_6` `FUN_1405c9e10` | `isDown`: dead, `+0x5b9`, ragdolled or carried, or posture (slot 109, `+0xe0`, [ragdolls](ragdolls.md#forced-crawl): 3 playing dead, 4 KO) of 3 or more | Meitou: the stealth KO's `CarrySystem.CanBeSwungAt` (dead or unconscious, carried) |
 
 ### 3.2 Goals and their target finders
 

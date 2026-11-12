@@ -106,6 +106,13 @@ public sealed partial class CarrySystem
         cold is { Medical.Dead: false, Race: not null } && cold.CarriedBy.IsNone && !CharacterFacts.Animal(cold);
 
     /// <summary>
+    /// A target the task goes on against: one that <see cref="CanBeKnockedOut"/> and is not down. The original's update ends the task silently on
+    /// every tick its target is down (vfunc 0x30 <c>isDown</c>, checked before the swing state logic, <c>FUN_14034cd80</c>, <b>Verified</b>), so an
+    /// unconscious target is offered the verb but never swung at, rolled or trained on.
+    /// </summary>
+    static bool CanBeSwungAt(CharacterCold cold) => CanBeKnockedOut(cold) && cold.Medical is { Incapacitated: false };
+
+    /// <summary>
     /// The chance in per cent that a stealth knock-out lands (<c>FUN_1408852f0</c>, <b>Verified</b> literals; docs/game/combat.md "Stealth
     /// knock-out"). X = the attacker's assassination minus the target's best of: assassination, half its thievery, half its stealth term x 100, half
     /// its melee defence, its toughness (each skill times its injury multiplier); then 100 x (X + K) / 2K with K = 30 for X >= 0 and 15 below,
@@ -184,7 +191,7 @@ public sealed partial class CarrySystem
             // Only the target's sensing the attacker cancels the walk (FUN_14034cd80, no combat-state test of either side: orders beat goals); the
             // roll's fight zero is in Strike.
             if (cold.Medical is not { Incapacitated: false } || !table.TryResolveNext(cold.CarryTarget, out int t) || table.Cold(t) is not { } target
-                || !CanBeKnockedOut(target) || Senses(world, table, t, i))
+                || !CanBeSwungAt(target) || Senses(world, table, t, i))
             {
                 End(world, i);
                 continue;
@@ -266,7 +273,7 @@ public sealed partial class CarrySystem
         if (before < KnockoutStrikeAt * length && cold.LiftTime >= KnockoutStrikeAt * length)
         {
             // The swing has no distance end: a target that walked off mid-swing is still rolled (FUN_14034cd80); one that went down is not.
-            if (!CanBeKnockedOut(target))
+            if (!CanBeSwungAt(target))
             {
                 End(world, i);
                 return;
