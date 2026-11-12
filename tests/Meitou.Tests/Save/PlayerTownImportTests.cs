@@ -138,6 +138,54 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// A player building whose town handle is one a non-player building of the save carries (a level town's, or NO_TOWN's, which faction-less
+    /// buildings carry) loads as kept in that town (<see cref="BuildSite.ForeignTown"/>) and round-trips so; a handle nothing else carries (its
+    /// outpost is gone) stays unresolved and takes the nearest town. Original Beep Fan Club 1: the player's Wind Generator II 1099 outside Goonrock's
+    /// radius carries the NO_TOWN handle of 176 faction-less buildings; 355 of its player buildings had the null handle.
+    /// </summary>
+    [Theory]
+    [InlineData("nofac", true, true)]
+    [InlineData(Foreign, true, false)]
+    [InlineData("nofac", false, false)]
+    public void A_handle_a_non_player_building_carries_keeps_the_building_in_that_town(string carrierOwner, bool carried, bool noTown)
+    {
+        var builder = new SaveBuilder(7);
+        var handle = new Hand((int)FcsRecordType.Town, 511, -1064864767, 0, 0);
+        var record = new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building };
+        var db = new GameDatabase();
+        var file = new FcsFile();
+        file.Records.Add(record);
+        db.Apply(file, "test.mod");
+        using (var source = World())
+        {
+            source.Buildings.Add(Site("1-zone16.16-INGAME", Vector3.Zero, 0));
+            BuildingSave.Write(builder.Game, source, Player);
+        }
+        var zone = Assert.Single(builder.Game.Zones.Values);
+        handle.Write(zone.BuildingStates.Single(), "town");
+        if (carried)
+        {
+            var other = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, StringId = "carrier-state" };
+            handle.Write(other, "town");
+            other.Strings["owner faction ID"] = carrierOwner;
+            zone.File.Records.Add(other);
+            var instance = new FcsInstance { Id = "2-zone16.16-INGAME", Target = "building", Position = new Vector3(500, 0, 0) };
+            instance.States.Add("carrier-state");
+            zone.BuildingList!.Instances.Add(instance);
+        }
+
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7);
+        var site = Assert.Single(world.Buildings.All);
+
+        Assert.Equal(0, site.Town);
+        Assert.Equal(carried, site.ForeignTown is not null);
+        Assert.Equal(noTown, site.InNoTown);
+        BuildingSave.Write(builder.Game, world, Player);
+        Assert.Equal(carried ? handle : Hand.Null, Hand.Read(zone.BuildingStates.First(s => s.StringId != "carrier-state"), "town"));
+    }
+
+    /// <summary>
     /// The template id alone does not supply player ownership when both state and template lack a faction.
     /// </summary>
     [Fact]

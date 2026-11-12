@@ -59,6 +59,10 @@ public static class BuildingSave
     /// A town without a material of its own uses this one (docs/formats/zones.md "Materials"; the template has none).
     /// </summary>
     const string DefaultTownMaterial = "742-gamedata.base";
+    /// <summary>
+    /// The owner faction id of a building with no faction (the original's <c>nofac</c>, the faction of NO_TOWN).
+    /// </summary>
+    const string NoFaction = "nofac";
 
     /// <summary>
     /// Whether a building instance is the player's: a registry id, a state that is not a town's construction and the player faction as its owner.
@@ -83,6 +87,7 @@ public static class BuildingSave
         var idOf = ParentIds(save, states, playerFactionId);
         var handles = save.BuildHandles();
         var townOf = ReadTowns(save, world, db, playerFactionId, playerIndex, population);
+        var foreign = ForeignTownHands(save, states, playerFactionId, townOf);
         int made = 0;
         foreach (var zone in save.Zones.Values)
         {
@@ -117,6 +122,8 @@ public static class BuildingSave
                         : null;
                 float y = state.Floats.TryGetValue("world Y pos", out float absolute) ? absolute : instance.Position.Y;
                 var townHand = Hand.Read(state, "town");
+                int town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, CS: townHand.Cs));
+                bool live = town == 0 && !townHand.IsNull && foreign.TryGetValue((townHand.C, townHand.Cs), out _);
                 reg.Add(new BuildSite
                 {
                     Id = instance.Id,
@@ -126,7 +133,9 @@ public static class BuildingSave
                     Rotation = instance.Rotation,
                     Floor = state.Ints.GetValueOrDefault("floornum"),
                     Parent = parent,
-                    Town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, CS: townHand.Cs)),
+                    Town = town,
+                    ForeignTown = live ? townHand : null,
+                    InNoTown = live && foreign[(townHand.C, townHand.Cs)],
                     Owner = playerIndex,
                     Materials = materials,
                     Target = target,
@@ -420,6 +429,35 @@ public static class BuildingSave
     }
 
     /// <summary>
+    /// The town handles of the save that name a live town which is no player outpost, each with whether it is NO_TOWN: a handle a non-player
+    /// building state carries (a level town's, or NO_TOWN's, which faction-less buildings across the whole world carry; <b>Observed</b>, 3015 and 177
+    /// building states of the original's save) and the handle of a non-player town state. A player-owned building with one of them was kept in that
+    /// town by the original (it resolves), unlike one whose own outpost is gone (the original saves that as the null handle).
+    /// </summary>
+    static Dictionary<(int C, int CS), bool> ForeignTownHands(SaveGame save, IReadOnlyDictionary<string, FcsRecord> states, string playerFactionId,
+        Dictionary<(int C, int CS), int> townOf)
+    {
+        var found = new Dictionary<(int C, int CS), bool>();
+        foreach (var state in states.Values)
+        {
+            if (!state.Strings.TryGetValue("owner faction ID", out var owner) || owner == playerFactionId) continue;
+
+            var hand = Hand.Read(state, "town");
+            if (hand.IsNull || townOf.ContainsKey((hand.C, hand.Cs))) continue;
+
+            found[(hand.C, hand.Cs)] = found.GetValueOrDefault((hand.C, hand.Cs)) || owner == NoFaction;
+        }
+
+        foreach (var town in save.Towns)
+        {
+            var hand = town.Handle;
+            if (!hand.IsNull && town.FactionId != playerFactionId && !townOf.ContainsKey((hand.C, hand.Cs))) found.TryAdd((hand.C, hand.Cs), false);
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The squared horizontal distance between two saved town centres.
     /// </summary>
     static float DistanceSquaredXz(Vector3 a, Vector3 b)
@@ -447,7 +485,8 @@ public static class BuildingSave
         if (reg.Count == 0) return townHands;
 
         foreach (var site in reg.All.Where(s => s.LevelPlacement is null))
-            WriteSite(game, site, playerFactionId, seed, townHands.GetValueOrDefault(site.Town, Hand.Null), world.Fixtures, world.Walkability);
+            WriteSite(game, site, playerFactionId, seed, site.Town == 0 && site.ForeignTown is { } kept ? kept : townHands.GetValueOrDefault(site.Town, Hand.Null),
+                world.Fixtures, world.Walkability);
 
         WriteParents(game, world);
         return townHands;

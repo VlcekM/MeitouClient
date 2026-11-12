@@ -80,6 +80,18 @@ public sealed class BuildSite
     /// </summary>
     public int Town { get; set; }
     /// <summary>
+    /// The save's <c>town</c> handle when it named a live town that is not a player outpost (a level town, or <c>NO_TOWN</c>, the canonical town of
+    /// a building outside every town; <b>Observed</b>, the original's save of a player generator outside every radius carries NO_TOWN's handle,
+    /// shared by the faction-less buildings of the whole world): the original keeps such a building in that town, so it belongs to no player outpost
+    /// and is never given the nearest one (<see cref="TownLookup.KeyOf"/>). Null: none. Written back as read.
+    /// </summary>
+    public Data.Save.Hand? ForeignTown { get; set; }
+    /// <summary>
+    /// <see cref="ForeignTown"/> is <c>NO_TOWN</c> (the handle faction-less buildings carry): no power frame, so a machine there is never registered
+    /// (<b>Verified</b>, <c>FUN_14092d850</c>: NO_TOWN is no frame).
+    /// </summary>
+    public bool InNoTown { get; set; }
+    /// <summary>
     /// The owning faction, a position in the world's faction list.
     /// </summary>
     public int Owner { get; set; }
@@ -186,6 +198,7 @@ public sealed class BuildSite
         h.Add(Paused);
         if (Destroyed || Ruined) { h.Add(0x44657374); h.Add(Destroyed); h.Add(Ruined); }
         if (Town != 0) { h.Add(0x546F776E); h.Add(Town); }
+        if (ForeignTown is not null) { h.Add(0x466F7265); h.Add(InNoTown); }
         if (!Public) h.Add(0x50726976);
         if (Upgrading) h.Add(0x55706772);
         h.Add(Materials.Length);

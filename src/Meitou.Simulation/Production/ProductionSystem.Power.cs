@@ -104,13 +104,15 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The town whose power frame a site's machine joins (<c>FUN_140296940</c> and <c>FUN_1409f9180</c>, <b>Observed</b>): the town of its building,
-    /// else the nearest town by horizontal distance, whatever its owner and however far, a nest excluded. A player town's key is its number; a town
+    /// else (no handle, or one whose town is gone) the nearest town by horizontal distance, whatever its owner and however far, a nest excluded;
+    /// <see cref="NoPowerTown"/> for a building whose handle is NO_TOWN (<see cref="BuildSite.InNoTown"/>, no frame). A player town's key is its number; a town
     /// of the level data (an NPC town, whose machines Meitou gives a frame of their own) is <c>-(index + 1)</c>; <see cref="NoPowerTown"/> when the
     /// world has none. A tie goes to the player town, then to the lower index.
     /// </summary>
     int PowerTown(World world, BuildSite site)
     {
         if (site.Town != 0) return site.Town;
+        if (site.InNoTown) return NoPowerTown;
         if (_powerTowns.TryGetValue(site.Id, out var known) && known.Layout == _townLayout) return known.Town;
 
         int found = TownLookup.NearestKey(world, site.Position);

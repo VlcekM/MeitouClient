@@ -622,6 +622,26 @@ public class ProductionTests
     }
 
     /// <summary>
+    /// A generator whose saved town is NO_TOWN joins no frame (the original: NO_TOWN is no frame; Goonrock's Wind Generator II 1099 outside the
+    /// radius), so it powers nothing, while the same generator with no handle at all joins the nearest town's grid.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_generator_in_no_town_powers_no_grid(bool inNoTown)
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp], town: 0);
+        rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        var site = rig.World.Buildings.Find(rig.Sites[0])!;
+        if (inNoTown) (site.ForeignTown, site.InNoTown) = (new Data.Save.Hand((int)FcsRecordType.Town, 511, -3, 0, 0), true);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, site)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+
+        Assert.Equal(!inNoTown, rig.Machine(1).HasPower);
+    }
+
+    /// <summary>
     /// Operating a machine without a town needs power from the grid of the nearest town as well (the order check reads the same grid as the
     /// machine's power): with no generator there the order is refused, with a fuelled one it runs.
     /// </summary>

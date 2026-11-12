@@ -6,7 +6,8 @@ namespace Meitou.Simulation.Construction;
 
 /// <summary>
 /// Which town a building or a point belongs to (<c>FUN_1400f6c20</c>, <c>FUN_1409f9100</c>, <c>FUN_1409f9180</c>, <b>Observed</b>): the town of the
-/// building's root object when its handle resolves, else the NEAREST non-nest town by horizontal distance, whatever its owner and however far.
+/// building's root object when its handle resolves (a player outpost, a level town or NO_TOWN), else the NEAREST non-nest town by horizontal
+/// distance, whatever its owner and however far (a null handle, or one whose town is gone).
 /// </summary>
 public static class TownLookup
 {
@@ -45,14 +46,15 @@ public static class TownLookup
 
     /// <summary>
     /// The town a building belongs to: its <see cref="BuildSite.Town"/> while that outpost exists; a building of the level data without one is
-    /// <see cref="LevelOwned"/> (its level town's, by its saved handle in the original); any other building (a handle that is null or dangling, as
+    /// <see cref="LevelOwned"/> (its level town's, by its saved handle in the original), and so is a building whose saved handle names a live town that
+    /// is no player outpost (<see cref="BuildSite.ForeignTown"/>: a level town or NO_TOWN); any other building (a handle that is null or dangling, as
     /// after an overlapping outpost was removed on load) takes the nearest town (<see cref="NearestKey"/>).
     /// </summary>
     public static int KeyOf(World world, BuildSite site)
     {
         if (site.Town != 0 && world.Buildings.FindTown(site.Town) is not null) return site.Town;
 
-        return site.LevelPlacement is not null ? LevelOwned : NearestKey(world, site.Position);
+        return site.LevelPlacement is not null || site.ForeignTown is not null ? LevelOwned : NearestKey(world, site.Position);
     }
 
     /// <summary>

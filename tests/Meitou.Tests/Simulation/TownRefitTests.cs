@@ -168,6 +168,39 @@ public class TownRefitTests
     }
 
     /// <summary>
+    /// A building whose saved handle names a live town that is no outpost (a level town, or NO_TOWN) is kept there by the original: the nearest outpost
+    /// neither counts it in its radius nor adopts it (original Wind Generator II 1099 at Goonrock: the refit radius was the farthest other building
+    /// plus 200, 2545.56), while a building with no handle at all still takes the nearest town.
+    /// </summary>
+    [Fact]
+    public void A_building_in_a_live_foreign_town_is_not_the_nearest_towns()
+    {
+        using var world = World();
+        var town = world.Buildings.AddTown(new Vector3(0, 300, 0), Player);
+        Add(world, House, 0, 0, town.Number);
+        Add(world, Storage, 1500, 0, town.Number);
+        var kept = new BuildSite
+        {
+            Id = world.Buildings.NewId(new Meitou.Data.World.ZoneCoordinate(32, 32)), Record = Storage, Position = new Vector3(2500, 300, 0), Owner = Player,
+            Materials = [], Complete = true, Target = 1, Progress = 1, ForeignTown = new Meitou.Data.Save.Hand((int)FcsRecordType.Town, 511, -77, 0, 0), InNoTown = true,
+        };
+        world.Buildings.Add(kept);
+
+        ConstructionSystem.ReassessTown(world, town);
+
+        Assert.Equal(TownLookup.LevelOwned, TownLookup.KeyOf(world, kept));
+        Assert.Null(TownLookup.PlayerTownOf(world, kept));
+        Assert.Equal(1700, town.Radius, 0.5f);
+
+        world.Buildings.Remove(kept);
+        var orphan = Add(world, Storage, 2500, 0, 0);
+        ConstructionSystem.ReassessTown(world, town);
+
+        Assert.Same(town, TownLookup.PlayerTownOf(world, orphan));
+        Assert.Equal(2700, town.Radius, 0.5f);
+    }
+
+    /// <summary>
     /// A building with no town handle belongs to the nearest town: the refit counts it (centre, radius), the town is not removed for holding only
     /// such buildings, and a dismantle of one reassesses that town.
     /// </summary>
