@@ -68,11 +68,11 @@ public class PlayerTownImportTests
     /// <summary>
     /// Adds a town state with explicit ownership, handle, public flag and optional radius.
     /// </summary>
-    static SaveTown Town(SaveBuilder builder, string name, string instance, string faction, Hand handle, bool publicTown = true, int? overrideRadius = null)
+    static SaveTown Town(SaveBuilder builder, string name, string instance, string faction, Hand handle, bool publicTown = true, float? overrideRadius = null)
     {
         var town = builder.AddTown(name, instance, faction, isNest: false, zone: null, hand: handle);
         town.Record.Bools["public"] = publicTown;
-        if (overrideRadius is { } radius) town.Record.Ints["override"] = radius;
+        if (overrideRadius is { } radius) town.Record.Floats["override"] = radius;
         return town;
     }
 
@@ -239,7 +239,7 @@ public class PlayerTownImportTests
         Assert.All(new[] { first, second, third }, state =>
         {
             Assert.False(state.Record.Bools["public"]);
-            Assert.Equal(3400, state.Record.Ints["override"]);
+            Assert.Equal(3400, state.Record.Floats["override"]);
         });
     }
 
@@ -373,7 +373,35 @@ public class PlayerTownImportTests
 
         BuildingSave.Write(builder.Game, world, Player);
 
-        Assert.Equal(3400, state.Record.Ints["override"]);
+        Assert.Equal(3400, state.Record.Floats["override"]);
+    }
+
+    /// <summary>
+    /// Original-save fractional radii survive loading and writing without an integer shadow field.
+    /// </summary>
+    [Theory]
+    [InlineData(2652.530029296875f)]
+    [InlineData(2186.80908203125f)]
+    public void Original_float_radius_round_trips(float radius)
+    {
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Camp", "camp", Player, new Hand(13, 4, 55, 2, 9), false, radius);
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal(radius, town.Override);
+        town.Override = radius + 0.25f;
+        state.Record.Ints["override"] = 999;
+
+        BuildingSave.Write(builder.Game, world, Player);
+
+        Assert.False(state.Record.Ints.ContainsKey("override"));
+        Assert.Equal(radius + 0.25f, state.Record.Floats["override"]);
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, new GameDatabase(), Player, 7);
+        Assert.Equal(radius + 0.25f, Assert.Single(reloaded.Buildings.Towns).Override);
     }
 
     /// <summary>
