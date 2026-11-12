@@ -77,13 +77,13 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
-    /// A resolved NPC-town handle stays valid for research; missing and normalized-away player-town handles stay unresolved across saves.
+    /// NPC-town, missing and normalized-away player-town handles map to town zero across saves without a custom unresolved flag.
     /// </summary>
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void Building_town_resolution_distinguishes_NPC_houses_from_missing_towns(bool unresolved, bool removedOutpost)
+    public void Non_outpost_building_handles_round_trip_as_town_zero(bool unresolved, bool removedOutpost)
     {
         var builder = new SaveBuilder(7);
         var handle = new Hand((int)FcsRecordType.Town, 4, 55, 2, 9);
@@ -108,14 +108,16 @@ public class PlayerTownImportTests
         }
         var state = Assert.Single(builder.Game.Zones.Values).BuildingStates.Single();
         handle.Write(state, "town");
+        state.Bools["meitou unresolved town"] = true;
         using var world = World();
         BuildingSave.Read(builder.Game, world, db, Player, 7);
-        Assert.Equal(unresolved, Assert.Single(world.Buildings.All).UnresolvedTown);
+        Assert.Equal(0, Assert.Single(world.Buildings.All).Town);
 
         BuildingSave.Write(builder.Game, world, Player);
         using var reloaded = World();
         BuildingSave.Read(builder.Game, reloaded, db, Player, 7);
-        Assert.Equal(unresolved, Assert.Single(reloaded.Buildings.All).UnresolvedTown);
+        Assert.Equal(0, Assert.Single(reloaded.Buildings.All).Town);
+        Assert.False(state.Bools.ContainsKey("meitou unresolved town"));
     }
 
     /// <summary>

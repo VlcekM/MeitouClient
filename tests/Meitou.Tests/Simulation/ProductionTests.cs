@@ -601,15 +601,14 @@ public class ProductionTests
     }
 
     /// <summary>
-    /// A complete research bench with an unresolved town does not contribute its level.
+    /// A complete player research bench with an unresolved town contributes its level.
     /// </summary>
     [Fact]
-    public void A_no_town_research_bench_does_not_raise_the_global_bench_level()
+    public void A_no_town_research_bench_raises_the_global_bench_level()
     {
         using var rig = new Rig(Database(), Constants, [Bench], town: 0);
-        rig.World.Buildings.Find(rig.Sites[0])!.UnresolvedTown = true;
         rig.World.RunTick();
-        Assert.Equal(0, rig.World.Research.BenchLevel);
+        Assert.Equal(1, rig.World.Research.BenchLevel);
     }
 
     /// <summary>
@@ -635,20 +634,19 @@ public class ProductionTests
     }
 
     /// <summary>
-    /// An operated unresolved bench cannot advance research queued while another valid bench was available.
+    /// An operated player bench with an unresolved town advances queued research.
     /// </summary>
     [Fact]
-    public void An_unresolved_bench_cannot_advance_queued_research()
+    public void An_unresolved_bench_advances_queued_research()
     {
         using var rig = new Rig(Database(), Constants, [Bench], town: 0);
-        rig.World.Buildings.Find(rig.Sites[0])!.UnresolvedTown = true;
         var worker = rig.Add(0, StatsEnumerated.Science, Unit);
         rig.World.Research.Enqueue(Study);
         rig.World.Commands.Enqueue(new OperateOrder([worker], rig.Sites[0]) { Tick = rig.World.Tick });
         rig.World.RunTicks(120);
 
-        Assert.Equal(0, rig.World.Research.Queue[0].Seconds);
-        Assert.Equal(0, rig.World.Research.Rate);
+        Assert.True(rig.World.Research.Queue[0].Seconds > 0);
+        Assert.True(rig.World.Research.Rate > 0);
     }
 
     // ------------------------------------------------------------------ ore
