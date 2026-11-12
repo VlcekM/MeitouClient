@@ -1164,6 +1164,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.DoorsCloseBehind = true;
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
+        Config.BloodyFootprints = false;
         DoorsCloseChanged?.Invoke(true);
         Config.PauseOnLoad = false;
         Config.AnimalsPickUp = false;

@@ -331,6 +331,10 @@ sealed class UserConfig
     /// </summary>
     public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>
+    /// Wet blood transfers to footwear or bare feet and leaves temporary tracks on the terrain. Off by default.
+    /// </summary>
+    public bool BloodyFootprints { get; set; }
+    /// <summary>
     /// A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs
     /// at once, as in the game). <c>--load</c> is not paused.
     /// </summary>

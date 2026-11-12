@@ -484,6 +484,10 @@ sealed class GamePages(SettingsMenu menu)
     /// </summary>
     internal void AdvancedRows(List<SettingsMenu.Entry> result)
     {
+        result.Add(new("Bloody footprints",
+            "Walking through fresh blood leaves temporary tracks on the ground. Requires Blood to be enabled.",
+            Toggle: new("Bloody footprints", () => menu.Config.BloodyFootprints, v => menu.Config.BloodyFootprints = v, OnOff: true)));
+
         // A graphics switch that changes play: the stealth sight counts the lamps it lights, so no look preset or Faithful sets it.
         if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Interior lamps") is { } lamps)
             result.Add(new("Interior lamps", SettingHints.ToggleHint(lamps.Label), Toggle: lamps));

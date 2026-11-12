@@ -191,6 +191,7 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     {
         this._gpu = gpu;
         this._sprites = sprites;
+        _soles = new FootprintSoles(gpu);
         _frame = new NativeFrame(gpu);
         _program = _frame.Program(Vertex, Fragment, "terrain decals");
         _spriteIndex = [.. sprites.Select(list => Enumerable.Repeat(uint.MaxValue, list.Length).ToArray())];
@@ -202,8 +203,8 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// </summary>
     public static TerrainDecalRenderer Create(IGpuContext gpu, IReadOnlyList<IReadOnlyList<string>> files)
     {
-        var sprites = new SampledImage?[4][];
-        for (int t = 0; t < 4; t++)
+        var sprites = new SampledImage?[(int)TerrainDecalType.Footprint + 1][];
+        for (int t = 0; t < (int)TerrainDecalType.Footprint; t++)
         {
             var list = t < files.Count ? files[t] : [];
             sprites[t] = new SampledImage?[list.Count];
@@ -216,6 +217,7 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
                 }
             }
         }
+        sprites[(int)TerrainDecalType.Footprint] = [];
         return new TerrainDecalRenderer(gpu, sprites);
     }
 

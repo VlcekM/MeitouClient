@@ -217,8 +217,10 @@ public sealed class TerrainDecalStore
     /// </summary>
     public void Add(TerrainDecalType type, Vector3 at, Vector2 direction, float size, uint abgr, float life, Random random)
     {
+        if ((int)type >= _sizes.Length || !(life > 0)) return;
+
         var variants = _sizes[(int)type];
-        if (variants.Length == 0 || !(life > 0)) return;
+        if (variants.Length == 0) return;
         float angle = MathF.Atan2(direction.X, direction.Y);
         var decal = new TerrainDecal(0, type, (byte)random.Next(variants.Length), 0, 0, 0, 0, (short)(int)(angle * 1000), abgr, _clock + life);
         Place(decal, new Vector2(at.X, at.Z), size);

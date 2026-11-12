@@ -144,3 +144,17 @@ The `bloodsurfaces` switch (Meitou, default; Faithful: terrain only, as the game
 - Cost, **Observed** (Hub battle with about 100 surface decals in view, 2560x1440, Vulkan, wall-clock per frame): +0.35 ms (6.88 to 7.24 ms), two extra depth copies and pass splits plus the pass, made only while a kept mark is within `Decal Range` (`SurfacesNear`). Low impact.
 - **Observed** (owner, in play): works inside buildings and on their floors.
 - Depth convention: each scene texel's view depth comes from `depthViewZ` (`DepthConvention.Glsl`): Vulkan's scene depth is reversed, `z = n f / (n + d (f - n))`. **Unknown** for this pass on real data: the earlier **Verified** probe (flat sandbox floor, stored depth 0.9377 at three camera distances) checked the former 0.5..1 storage and has not been rerun. The camera's near plane is a quarter of its distance, so a wrong mapping rebuilt positions far off at play distance and showed blood only in close-ups. The texel's ray is rebuilt from the jittered projection (the upscaler's jitter moved out of the texel centre).
+
+## Bloody footprints (Meitou)
+
+Settings > Advanced > Bloody footprints is off by default. When enabled, wet blood
+from terrain pools and splashes transfers to a walking character’s feet. Turning it
+off removes existing prints and clears the blood on the soles immediately.
+Boots and bare feet have separate left and right marks. Each foot leaves up to four
+progressively lighter prints on dry terrain. They expire in game time, including in view,
+and stay outside the native save format. The effect uses the existing Blood setting.
+The sole masks are projected directly onto terrain pixels using scene depth, so their
+detail is independent of the terrain blood atlas resolution. Equipped boot meshes
+supply the sole outlines and sizes when available. Foot and toe bones orient a
+grounded print, with a distance-based stride when the pose is unavailable.
+Blood coverage varies per stamp and breaks up as the sole dries.
