@@ -245,6 +245,9 @@ public class ProductionTests
         public ProductionSystem Production { get; }
         public List<string> Sites { get; } = [];
 
+        /// <summary>
+        /// Creates machines on town 1 so power fixtures use a shared grid; town 0 models furniture without a player outpost.
+        /// </summary>
         public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1)
         {
             Items = new ItemFactory(db, constants);
