@@ -192,6 +192,57 @@ public class ConstructionTests
         return hashes;
     }
 
+    /// <summary>
+    /// Dismantling a loaded outpost's last building removes its saved instance and states, even with no other player towns left.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_dismantled_outpost_does_not_return_after_saving(bool keepOtherTown)
+    {
+        const string player = "204-gamedata.base";
+        var save = new SaveBuilder(7).Game;
+        using (var source = new Rig())
+        {
+            var town = source.World.Buildings.AddTown(HutAt, Rig.PlayerFaction);
+            if (keepOtherTown) source.World.Buildings.AddTown(HutAt + new Vector3(8000, 0, 0), Rig.PlayerFaction);
+            source.World.Buildings.Add(new BuildSite
+            {
+                Id = SiteId(1, HutAt), Record = Hut, Position = HutAt, Town = town.Number, Owner = Rig.PlayerFaction,
+                Materials = [], Complete = true, Target = 1, Progress = 1,
+            });
+            BuildingSave.Write(save, source.World, player);
+        }
+        var original = save.TownInstanceList!.Instances[0];
+        var oldStates = original.States.ToArray();
+        var builder = new SaveBuilder(save, 7);
+        var npc = builder.AddTown("NPC", "npc", "foreign", false, null, hand: new Hand(13, 100, 100, 0, 0));
+        var nest = builder.AddTown("Nest", "nest", "foreign", true, null, hand: new Hand(85, 101, 101, 0, 0));
+        save.TownInstanceList.Instances.Add(new FcsInstance { Id = "npc", Target = "npc", States = { npc.Record.StringId } });
+        save.TownInstanceList.Instances.Add(new FcsInstance { Id = "nest", Target = "nest", States = { nest.Record.StringId } });
+
+        using var rig = new Rig();
+        BuildingSave.Read(save, rig.World, rig.Db, player, Rig.PlayerFaction);
+        var worker = rig.Add(HutAt.X, HutAt.Z + 10, Unit);
+        var site = Assert.Single(rig.World.Buildings.All);
+        rig.Say(new DismantleOrder([worker], site.Id) { Tick = rig.World.Tick });
+        for (int t = 0; t < 3000 && rig.World.Buildings.Count > 0; t++) rig.World.RunTick();
+        Assert.Empty(rig.World.Buildings.All);
+        Assert.Equal(keepOtherTown ? 1 : 0, rig.World.Buildings.Towns.Count);
+
+        BuildingSave.Write(save, rig.World, player);
+        save.Reindex();
+        using var reloaded = new Rig();
+        BuildingSave.Read(save, reloaded.World, reloaded.Db, player, Rig.PlayerFaction);
+        Assert.Equal(keepOtherTown ? 1 : 0, reloaded.World.Buildings.Towns.Count);
+        Assert.DoesNotContain(save.TownInstanceList.Instances, instance => instance.Id == original.Id);
+        Assert.DoesNotContain(save.Quick.Records, state => oldStates.Contains(state.StringId));
+        Assert.Contains(npc.Record, save.Quick.Records);
+        Assert.Contains(nest.Record, save.Quick.Records);
+        Assert.Contains(save.TownInstanceList.Instances, instance => instance.Id == "npc");
+        Assert.Contains(save.TownInstanceList.Instances, instance => instance.Id == "nest");
+    }
+
     // ------------------------------------------------------------------ a site built, a building taken apart
 
     [Fact]

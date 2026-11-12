@@ -564,6 +564,8 @@ id `<n>-quick.save-INGAME`), written from the town manager's player-town list (+
 (`FUN_14036b710`). **Observed** in `Beep Fan Club 1/quick.save`: the list has 127 entries, including two
 `player_town_template` outposts and 125 nests; the outpost states are unnamed (`0`) and omit `faction`.
 
+**Meitou:** saving removes obsolete player-outpost instances and their linked town states, including when no live outposts remain; foreign towns and nests are preserved. This reconciles the held save with the live player-town list that the original writer enumerates.
+
 An outpost's entry (**Verified** by code, `Town::vfunc_17` `14036eb20` with `FUN_140386d20`): id = the town's stored
 instance id, or a new `<n>-quick.save-INGAME` (kept on the town, so later saves reuse it); target = the town's TOWN
 record (`player_town_template`); position = the town's, absolute; quaternion (0, 0, 0, 0); state `<id>-S5e`. Its
