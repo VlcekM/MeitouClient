@@ -496,13 +496,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
         if (kitless)
         {
+            patientCold.StuckBolts = null;   // bolts go with the first update that finds no open wound (FUN_14064d800 -> FUN_14052bc10)
             // Without a kit every part takes 1 HP a second, organic or robotic alike, and nothing drains (FUN_140649a00). Done as with a kit: once
             // the parts are bandaged up,
             // healing turns bandage into flesh and float dust leaves a sliver of room every update, which would keep the treatment going for ever.
             if (body.BandageRoom(race, false) + body.BandageRoom(race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
             {
                 Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
-                patientCold.StuckBolts = null;
                 End(world, m);
                 return;
             }
@@ -518,7 +518,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (robot && body.BandageRoom(race, true) <= Done)
         {
             Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
-            patientCold.StuckBolts = null;   // the bolts go when first aid has nothing left to do (FUN_14064d800 -> FUN_14052bc10)
             End(world, m);   // nothing left to bandage
             return;
         }
@@ -528,6 +527,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             End(world, m);   // no kit of the right kind within reach
             return;
         }
+        patientCold.StuckBolts = null;   // bolts go with the first update that finds no open wound (FUN_14064d800 -> FUN_14052bc10)
         float skill = SkillOf(robot);
         float quality = Items.Info(kit.Item.Record)?.Quality ?? 0;
         float bandaged = body.Treat(dt, skill, quality, robot, ctx, out int touched);

@@ -908,7 +908,7 @@ terrain hits under |dot(normal, dir)| 0.1 vanish; objects and buildings land wit
 the landed bolt with the longest flight time (`Harpoon +0x60`, summed per flight frame in `FUN_1404380e0`; the first of equals) goes. In a character (`FUN_1406508d0` -> wound record -> `FUN_14052bfa0`): every hitting bolt sticks, attached to the
 struck part's `bone name` (or `bone name 2` half the time, `FUN_140649fd0`; the root without the bone) at 0.6 x a random vertex of the body on the
 bolt's side (back when it flew the way the character faces), keeping its world orientation in the bone's frame; no timer, cap or `harpoonLimit`;
-all go at once when first aid leaves no wound (`FUN_14064d800` -> `FUN_14052bc10`) or the appearance reloads; not recoverable. Meitou: the debris
+all go at once on the first first-aid update that finds no open wound record (**Verified**, decompile: `FUN_14064d800` sets the character's clear flag `+0x68` whenever its wound list `+0x178` is empty, the patient alive and the kit null or of the patient's kind; the per-frame character update `FUN_140538d30` then calls `FUN_14052bc10`, which recycles every bolt in the list `+0x50`) so not at the end of bandaging, and not while wounds are being closed (bolts hit open a wound, so they stay until the last one closes), or when the appearance reloads (**Observed**: other callers of `FUN_14052bc10` are vtable slots, not checked); not recoverable. Meitou: the debris
 renderer draws them (in flight interpolated between ticks); a stuck bolt sits 2 units back along its flight from its bone's origin (engine choice for
 the random vertex), not saved.
 Meitou `tracers` switch (default; Faithful: none, as the game): a semi-transparent streak behind each drawn bolt in flight (`GameHost.AddTracers`, drawn by

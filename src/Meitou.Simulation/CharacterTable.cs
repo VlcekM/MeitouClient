@@ -322,7 +322,7 @@ public sealed class CharacterCold
     public float Age => Stats?.Scale ?? 1;
 
     /// <summary>
-    /// The bolts stuck in the character (docs/game/combat.md "Bolt visuals"): shown on their bones until first aid has nothing left to bandage. A
+    /// The bolts stuck in the character (docs/game/combat.md "Bolt visuals"): shown on their bones until a first-aid update finds no open wound left to close. A
     /// visual: not hashed, not saved (the original keeps them in its appearance only).
     /// </summary>
     public List<StuckBolt>? StuckBolts { get; set; }
