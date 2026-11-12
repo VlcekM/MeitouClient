@@ -7,6 +7,7 @@ using Meitou.Game.Host;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
 using Meitou.Simulation.Population;
+using Meitou.Simulation.Towns;
 using SilkKey = Silk.NET.Input.Key;
 
 namespace Meitou.Game.DevTools;
@@ -236,21 +237,14 @@ sealed class DevConsoleHost(GameHost host)
     }
 
     /// <summary>
-    /// The placed town a typed name means (ignoring case): the exact name, else the shortest name starting with it. Its position is the town's centre
-    /// as the level data places it.
+    /// The town a typed number or name means (<see cref="TownReport.Find"/>: a placed town or a player outpost); null when none or no world is
+    /// loaded. Its position is the town's centre.
     /// </summary>
-    TownSite? ConsoleTown(string typed, out List<string> others)
+    TownEntry? ConsoleTown(string typed, out List<string> others)
     {
         others = [];
-        if (host.PopData is not { } data || typed.Length == 0) return null;
-        var named = data.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null) && s.Town.Name.Length > 0).ToList();
-        var exact = named.Where(s => string.Equals(s.Town.Name, typed, StringComparison.OrdinalIgnoreCase)).ToList();
-        var hits = exact.Count > 0 ? exact : [.. named.Where(s => s.Town.Name.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(s => s.Town.Name.Length)
-            .ThenBy(s => s.Town.Name, StringComparer.Ordinal)];
-        if (hits.Count == 0) return null;
-        others = [.. hits.Select(s => s.Town.Name).Distinct().Where(n => n != hits[0].Town.Name).Take(5)];
-        return hits[0];
+        if (host.Covered || host.Player.TitleOpen) return null;
+        return TownReport.Find(host.Session.World, host.PopData, typed, out others);
     }
 
     /// <summary>
@@ -410,8 +404,8 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("tpcursor", "tpcursor", "teleport the selected characters to the point under the cursor", ConsoleTpcursor);
 
-        Add("tp", "tp <x> <z> | tp <town name>", "teleport the selected characters to world X Z, or to a town (name or its start, ignoring case; "
-            + "the town's centre)", ConsoleTp, ConsoleTownNames);
+        Add("tp", "tp <x> <z> | tp <town name or number>", "teleport the selected characters to world X Z, or to a town (a placed town or a "
+            + "player outpost: name or its start, ignoring case, or its number from towns; the town's centre)", ConsoleTp, ConsoleTownNames);
 
         Add("kill", "kill [--id <c:slot.gen>] | kill --radius <m> [<x> <z>] [--animals]", "kill the selected characters, or the one given by --id; "
             + "--radius kills every living character within <m> metres (max 2000) of X Z, or of the selected (else first) squad member, "
@@ -441,14 +435,16 @@ sealed class DevConsoleHost(GameHost host)
         i == 0 ? DevConsole.Commands.Select(x => x.Name).Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : [];
 
     /// <summary>
-    /// Completion for <c>tp</c>: the names of the placed towns (no nest markers or null towns) matching the typed text.
+    /// Completion for <c>tp</c>: the names of the placed towns (no nest markers or null towns) and the player's outposts matching the typed text.
     /// </summary>
-    IEnumerable<string> ConsoleTownNames(int i, string typed) => host.PopData is { } d
-        ? ConsoleMatch(d.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null)).Select(s => s.Town.Name)
-            .Where(n => n.Length > 0)
-            .Distinct()
-            .Order(StringComparer.OrdinalIgnoreCase), typed)
-        : [];
+    IEnumerable<string> ConsoleTownNames(int i, string typed)
+    {
+        if (host.PopData is not { } d) return [];
+
+        var names = d.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null)).Select(s => s.Town.Name);
+        if (!host.Covered && !host.Player.TitleOpen) names = names.Concat(host.Session.World.Buildings.Towns.Select(t => t.Name));
+        return ConsoleMatch(names.Where(n => n.Length > 0).Distinct().Order(StringComparer.OrdinalIgnoreCase), typed);
+    }
 
     /// <summary>
     /// The <c>help</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
@@ -701,7 +697,7 @@ sealed class DevConsoleHost(GameHost host)
         }
 
         Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: town.Position),
-            $" ({town.Town.Name}){(others.Count > 0 ? $"; also matches {string.Join(", ", others)}" : "")}");
+            $" ({town.Name}){(others.Count > 0 ? $"; also matches {string.Join(", ", others)}" : "")}");
         if (!host.DebugMenu.DebugFailed) host.DebugMenu.CentreCameraOn(town.Position.X, town.Position.Z);
     }
 

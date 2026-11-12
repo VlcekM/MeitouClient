@@ -256,6 +256,7 @@ sealed class AgentWorld(GameHost host)
             + "<name>", ControlQuickload);
         RegisterControlBaseCommands(Add);
         host.AgentPlay.RegisterControlPlayCommands(Add);
+        host.AgentTowns.RegisterControlTownCommands(Add);
         RegisterControlNavCommands(Add);
         host.RegisterControlGraphicsCommands(Add);
         host.RegisterControlInteriorCommands(Add);
