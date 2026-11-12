@@ -680,7 +680,9 @@ static class CharacterShaders
                 // Hair is no receiver of the traced lamp shadows (kenshiLight's bit 19): its cards shadow each other into black, and its own shading has no single surface.
                 if (m.shading == 2u) giAlbedoOut.w &= ~524288u;
                 // Skin tells the lamp pass its share and its row of the scattering table (bits 28-31 and 20-27), for the band to be taken back with a blocked lamp's light.
-                else if ((giAlbedoOut.w & 524288u) != 0u && skin > 0.0)
+                // What is worn says so (bit 20; skin has its table row there), for the characters' traced occlusion (CharacterOcclusionPass).
+                else if ((giAlbedoOut.w & 524288u) != 0u && skin <= 0.0) giAlbedoOut.w |= flag(f, 16384u) ? 1048576u : 0u;
+                else if ((giAlbedoOut.w & 524288u) != 0u)
                     giAlbedoOut.w |= (uint(sqrt(clamp(min(curvature, 2.0) * {{F(SkinCurvatureScale)}}, 0.0, 1.0)) * 255.0 + 0.5) << 20) | (uint(clamp(skin, 0.0, 1.0) * 15.0 + 0.5) << 28);
             }
             // The studio (Meitou, the previewsun switch; the editor's stage and the portraits, a fog distance of -4): a fixed warm sun and a sky over a sunlit

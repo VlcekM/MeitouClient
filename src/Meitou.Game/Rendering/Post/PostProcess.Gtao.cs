@@ -57,14 +57,13 @@ public sealed unsafe partial class PostProcess
 
     sealed class GtaoApplyPass : FullscreenProgram
     {
-        public readonly SamplerSlot Ao, Depth, Surface, Packed, Traced;
-        public readonly UniformHandle Size, AoSize, NearFar, Curve, Character, TracedOn;
+        public readonly SamplerSlot Ao, Depth, Surface;
+        public readonly UniformHandle Size, AoSize, NearFar, Curve;
 
         public GtaoApplyPass(GpuContext gpu, bool surface) : base(gpu, GtaoShaders.Apply(surface), "post gtao apply")
         {
-            (Ao, Depth, Surface, Packed, Traced) = (P.Sampler("uAo"), P.Sampler("uDepth"), P.Sampler("uSurface"), P.Sampler("uPacked"), P.Sampler("uTraced"));
-            (Size, AoSize, NearFar, Curve, Character, TracedOn) = (P.Uniform("uSize"), P.Uniform("uAoSize"), P.Uniform("uNearFar"), P.Uniform("uCurve"), P.Uniform("uCharacter"),
-                P.Uniform("uTracedOn"));
+            (Ao, Depth, Surface) = (P.Sampler("uAo"), P.Sampler("uDepth"), P.Sampler("uSurface"));
+            (Size, AoSize, NearFar, Curve) = (P.Uniform("uSize"), P.Uniform("uAoSize"), P.Uniform("uNearFar"), P.Uniform("uCurve"));
         }
     }
 
@@ -109,11 +108,6 @@ public sealed unsafe partial class PostProcess
         // A half-size texel's gather read the depth texel past its centre (GtaoShaders.GatherMain's floor): a quarter of that texel.
         float shift = _occlusion.B.Width < _width ? 0.25f : 0f;
         p.P.Set(p.Curve, PostOptions.GtaoPower, PostOptions.GtaoStrength, PostOptions.GtaoAlbedo, shift);
-        Bind(p.P, p.Packed, _gtaoPacked);
-        p.P.Set(p.Character, PostOptions.GtaoStrength, _gtaoPacked is null ? 0f : 1f);
-        var traced = CharacterVisibilityNow;
-        Bind(p.P, p.Traced, traced);
-        p.P.Set(p.TracedOn, traced is null ? 0f : 1f, PostOptions.CharacterOcclusionStrength);
         Draw(p.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, AoMultiplyState);
         Stamp("ssao");
         CloseSegment();

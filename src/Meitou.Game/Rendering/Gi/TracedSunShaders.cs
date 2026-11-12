@@ -54,8 +54,11 @@ static class TracedSunShaders
             float cut = g.sunMap != 0u ? g.sunCut : g.alphaThreshold;
             if (cut <= 0.0 || map == 0u) return true;
             uvec3 tri = Triangle(offsetBy(g.indices, uint(primitive) * 12u)).v;
-            vec4 texel = textureLod(textures2D[nonuniformEXT(map)], casterUv(g, tri, bary), lod);
-            return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= cut;
+            // What a character wears (its record's tint 204 in red, CharacterRenderer.AddRayPart) casts as cloth: the cut-out read coarsely, kept from a quarter of
+            // it on. Hole by hole a hood's weave let single rays through, a stipple of sun on the face under it; a real opening still lets the light pass.
+            bool worn = g.kind == {{GeometryRecord.Character}}u && (g.charTint & 255u) == 204u;
+            vec4 texel = textureLod(textures2D[nonuniformEXT(map)], casterUv(g, tri, bary), worn ? max(lod, 4.0) : lod);
+            return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= (worn ? 0.25 * cut : cut);
         }
         """;
     const byte Solids = Objects | Foliage | SmallFoliage | Characters | Moving;

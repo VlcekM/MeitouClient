@@ -381,7 +381,10 @@ public sealed class PostOptions
     public const float GtaoFalloff = 0.17f, GtaoThickness = 0.9f;
     /// <summary>GTAO's curve after the blur (KenshiNative's defaults): the visibility to this power, then this much of it reaches the picture.</summary>
     public const float GtaoPower = 1.6f, GtaoStrength = 0.55f;
-    /// <summary>The characters' traced occlusion (<c>Gi.CharacterOcclusionPass</c>): how far its rays look, world units, and how much of it reaches the picture.</summary>
+    /// <summary>The characters' traced occlusion on (docs/render-post.md "Traced occlusion on characters"). Off: not calibrated against a reference yet, a hooded face
+    /// came out too dark and blotched round the eyes.</summary>
+    public bool CharacterOcclusion;
+    /// <summary>The characters' traced occlusion (<c>Gi.CharacterOcclusionPass</c>): how far its rays look, world units, and how much of the blocked ambient light is taken back.</summary>
     public const float CharacterOcclusionRadius = 8f, CharacterOcclusionStrength = 1f;
     /// <summary>The albedo of GTAO's multi-bounce term where no lit fragment wrote one to the surface target.</summary>
     public const float GtaoAlbedo = 0.35f;
@@ -431,7 +434,7 @@ public sealed class PostOptions
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
         LampShadows = other.LampShadows;
-        TracedGrass = other.TracedGrass;
+        TracedGrass = other.TracedGrass; CharacterOcclusion = other.CharacterOcclusion;
     }
 
     /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>cache</c>).</summary>

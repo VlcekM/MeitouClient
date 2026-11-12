@@ -263,10 +263,6 @@ static class GtaoShaders
         uniform vec2 uAoSize;       // the occlusion's size
         uniform vec2 uNearFar;      // of the scene depth
         uniform vec4 uCurve;        // x the contrast's exponent, y the strength, z the albedo where no fragment wrote one, w the half-size gather's shift in its texels
-        uniform sampler2D uPacked;  // the gather's depth at the render size: negative on a character's pixel (Pack)
-        uniform vec2 uCharacter;    // x: the strength on a character's pixel, y: 1 while uPacked is bound
-        uniform sampler2D uTraced;  // the characters' traced visibility at the render size (Gi.CharacterOcclusionPass)
-        uniform vec2 uTracedOn;     // x: 1 while uTraced is bound, y: how much of it reaches the picture
 
         """;
 
@@ -306,25 +302,7 @@ static class GtaoShaders
             float d = texelFetch(uDepth, px, 0).r;
             if (depthIsSky(d)) { fragColour = vec4(1.0); return; }
             float v = visibilityAt(px, depthViewZ(d, uNearFar));
-            // The curve after the blur (the blur averages visibilities). A character takes its own strength: the scene's leaves over half the light of a spot that sees
-            // nothing, which the probes make up for on the surfaces their rays see; they see no character.
-            bool character = uCharacter.y > 0.5 && texelFetch(uPacked, px, 0).r < 0.0;
-            v = mix(1.0, pow(max(v, 0.0), uCurve.x), character ? uCharacter.x : uCurve.y);
-            if (character && uTracedOn.x > 0.5)
-            {
-                // The traced visibility over a 4 x 4 block of the character's own pixels: the block holds every turn of the rays' set (CharacterOcclusionPass), so its
-                // mean has no pattern left and is the same every frame.
-                float sum = 0.0, count = 0.0;
-                for (int dy = -2; dy < 2; dy++)
-                    for (int dx = -2; dx < 2; dx++)
-                    {
-                        ivec2 q = clamp(px + ivec2(dx, dy), ivec2(0), ivec2(uSize) - 1);
-                        if (texelFetch(uPacked, q, 0).r >= 0.0) continue;
-                        sum += texelFetch(uTraced, q, 0).r;
-                        count += 1.0;
-                    }
-                if (count > 0.0) v *= mix(1.0, sum / count, uTracedOn.y);
-            }
+            v = mix(1.0, pow(max(v, 0.0), uCurve.x), uCurve.y);   // the curve after the blur: the blur averages visibilities
             fragColour = vec4(multiBounce(v, albedoAt(px)), 1.0);
         }
         """;

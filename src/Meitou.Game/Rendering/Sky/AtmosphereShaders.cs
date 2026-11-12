@@ -588,7 +588,7 @@ static class AtmosphereShaders
             {
                 uvec2 o = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
                 uvec3 c = uvec3(sqrt(clamp(albedo, 0.0, 1.0)) * 255.0 + 0.5);
-                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 524288u | (giAlbedoOut.w & 458752u));
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 524288u | (giInterior ? 512u : 0u) | (giAlbedoOut.w & 458752u));
             }
             #endif
             #ifndef GI_IN_SHADER
