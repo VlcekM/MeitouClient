@@ -859,7 +859,9 @@ static partial class WorldFrame
         bool apart = !traced && gpu.Post is { ContactSunReady: true } && gpu.Probes is not null;
         if (apart) gpu.Probes!.SunApart = true;
         // The traced lamps' shadows fall on the characters too, which mark themselves as receivers while the pass will run (PostProcess.RunLampShadows).
-        bool lampReceivers = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 } && gpu.Gi is { Top: not null } && gpu.Probes is not null;
+        // The same mark makes them the receivers of their traced occlusion (PostProcess.RunCharacterOcclusion).
+        bool lampReceivers = gpu.Gi is { Top: not null } && gpu.Probes is not null
+            && (gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 } || gpu.Post is { CharacterOcclusionWanted: true });
         if (lampReceivers) gpu.Probes!.LampReceivers = true;
 
         DrawSceneTerrain(ref f, s);
@@ -1177,6 +1179,7 @@ static partial class WorldFrame
         post.RunGiResolve();
         StageClock.Lap(14, "gi resolve");
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
+        gpu.Post?.RunCharacterOcclusion(gpu.GiActive ? gpu.Gi : null);
         StageClock.Lap(StageClock.LampShadows);
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");

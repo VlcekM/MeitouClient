@@ -387,6 +387,8 @@ public sealed class PostOptions
     /// ray sees a character, so this is all the occlusion a face under a hood or an armpit gets.
     /// </summary>
     public const float GtaoCharacterStrength = 2.5f;
+    /// <summary>The characters' traced occlusion (<c>Gi.CharacterOcclusionPass</c>): how far its rays look, world units, and how much of it reaches the picture.</summary>
+    public const float CharacterOcclusionRadius = 8f, CharacterOcclusionStrength = 1f;
     /// <summary>The albedo of GTAO's multi-bounce term where no lit fragment wrote one to the surface target.</summary>
     public const float GtaoAlbedo = 0.35f;
     /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
