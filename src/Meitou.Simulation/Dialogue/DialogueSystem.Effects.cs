@@ -593,9 +593,10 @@ public sealed partial class DialogueSystem
         if (_dialogue.WordSwap(token) is not { } swap) return "";
         // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one
         // when that is the owner; run a second time when the first finds nothing; the picked line and its parents (the swap, a root it came through)
-        // are stamped used (FUN_140675630).
+        // are stamped used (FUN_140675630). The walk's line checks get the no-retarget flag, so a RACENAME line for another member's race never
+        // hands the conversation to that member (#567).
         var walkTarget = c.Player.IsNone || c.Player == me ? other : c.Player;
-        var picked = Pick(world, c, swap.Children, 0, walkTarget) ?? Pick(world, c, swap.Children, 0, walkTarget);
+        var picked = Pick(world, c, swap.Children, 0, walkTarget, retarget: false) ?? Pick(world, c, swap.Children, 0, walkTarget, retarget: false);
         if (picked is not { } p) return "";
         double now = world.GameHours;
         _lastUse[p.Line.StringId] = now;
