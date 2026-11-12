@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Population;
@@ -118,6 +119,49 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// The templates of the squads that took a building as their home since the boot or the load, by building key (<see cref="StampResidents"/>).
+    /// </summary>
+    readonly Dictionary<string, string> _residentStamps = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The squad template <paramref name="b"/> carries now (the original's <c>Building+0xf0</c>; "" none), saved as its <c>residents template</c>
+    /// and <c>squad template</c>: the last squad's that took it as home (<see cref="StampResidents"/>), else a town override's housing, else a
+    /// loaded save's, else the boot's housing (<see cref="TownBuilding.ResidentsTemplate"/>).
+    /// </summary>
+    public string ResidentsTemplate(TownBuilding b) =>
+        _residentStamps.TryGetValue(b.Key, out string? stamped) ? stamped
+        : b.Naming is { } naming ? naming.SquadTemplate
+        : Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) ?? b.ResidentsTemplate;
+
+    /// <summary>
+    /// A squad of <paramref name="templateId"/> made from its template takes <paramref name="home"/> as its home: the building carries its template
+    /// from now on, whoever's it carried (<c>FUN_140553210</c>, Verified: the squad factory calls it each time it makes a squad's members, so a
+    /// housemate squad made after the home's own leaves the building with the housemate's).
+    /// </summary>
+    public void StampResidents(TownBuilding home, string templateId) => _residentStamps[home.Key] = templateId;
+
+    /// <summary>
+    /// Writes the template each town building carries into its saved record, as <c>residents template</c> and <c>squad template</c> (the original
+    /// writes the same id under both, Observed: all 18518 building states of the save METARU). A building whose template is not its record's loses
+    /// the record's <c>residents</c> handle, which named the squad of the old one; the platoon writer names the new squad
+    /// (<c>SaveCapture</c>).
+    /// </summary>
+    public void WriteResidents(PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
+    {
+        foreach (var b in data.Sites.SelectMany(s => s.Buildings))
+        {
+            if (!states.TryGetValue(b.Key, out var state)) continue;
+
+            string template = ResidentsTemplate(b);
+            if (state.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey, "") != template || Saved?.ContainsKey(b.Key) != true)
+                Hand.Null.Write(state, "residents");
+
+            state.Strings[ResidentRuins.ResidentsTemplateKey] = template;
+            state.Strings[ResidentRuins.SquadTemplateKey] = template;
+        }
+    }
+
+    /// <summary>
     /// The price of a property for the player; null when it is not for sale to the player (unowned, the player's, bought, in a town of the player's
     /// or hostile owner, or of a type that sells none).
     /// </summary>
@@ -131,9 +175,9 @@ public sealed partial class FixtureRegistry
             || data.SiteFactions[p.Site] == player || data.Relations.IsHostile(p.Owner, player)) return null;
         var saved = Saved?.GetValueOrDefault(building);
         var state = p.Building.LevelState;
-        bool sale = saved?.Bools.TryGetValue("sell home", out bool savedSale) == true ? savedSale
-            : state?.Bools.TryGetValue("sell home", out bool levelSale) == true ? levelSale
-            : data.Db.Find(p.Building.ResidentsTemplate)?.GetBool("sell home") ?? (saved is null && state is null);
+
+        // FUN_14029c500 (Verified): a building that carries no template is for sale, else its template's `sell home` decides.
+        bool sale = data.Db.Find(ResidentsTemplate(p.Building))?.GetBool("sell home") ?? true;
         bool inside = saved is not null ? saved.Bools.GetValueOrDefault("is inside building") : state?.GetBool("is inside building") ?? false;
         if (!sale || inside || data.Db.Find(p.Building.BuildingId) is not { } record) return null;
         bool destroyed = IsDestroyed(p.Building);
@@ -209,6 +253,7 @@ public sealed partial class FixtureRegistry
         ApplyTownRuins(world, data, site, reset);
         if (Saved is { } saved && reset.Any(saved.ContainsKey))
             Saved = saved.Where(s => !reset.Contains(s.Key)).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
+        foreach (string key in reset) _residentStamps.Remove(key);
 
         foreach (var b in town.Buildings)
             if (reset.Contains(b.Key)) _resetBuildings[b.Key] = (b, data, LevelOwner(b));

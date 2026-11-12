@@ -629,8 +629,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     non-empty, so wind generators and benches get no line) a `Kenshi_Button2` toggle of width 0.3 (Public in Good, Private in BadBright; slot 83 `FUN_140546ef0` flips the byte +0xc8 read by slot
     82, `General_Click`). `For sale:` with a button `c.{1,num}` (both Good) when slot 88 (`FUN_14029c500`) is true: a building of class 0xb with no
     parent whose interior (+0x1f0) has its +0x2c byte clear and type 1, 2 or 3 (**Unknown** which these are), owned by a faction neither the player's nor
-    hostile to it (relation owner to player <= -30, `FUN_1406b26d0`, **Verified**: allied and neutral owners sell), and its state's bool `sell home`
-    set (true without a state). Price (`FUN_1407ad300`): int(f × target × the owner FACTION's float
+    hostile to it (relation owner to player <= -30, `FUN_1406b26d0`, **Verified**: allied and neutral owners sell), and the bool `sell home` of the
+    SQUAD_TEMPLATE the building carries (+0xf0, [whose](factions-squads-towns.md#whose-template-a-home-carries)) set; a building carrying none is for sale (**Verified**, `FUN_14029c500`; no level or saved building state has a `sell home` key). Price (`FUN_1407ad300`): int(f × target × the owner FACTION's float
     `building cost mult` × 400), f = 0.375 when slot 102 (+0x330) answers true, else 1. That slot reads the destroyed byte +0x1a1
     ([construction state](buildings-production.md#construction-state), **Verified** there against `FUN_1405595a0`). The button (slot 80
     `FUN_1407ad410`) asks "Do you want to buy this building for c.{1,num}?".

@@ -88,7 +88,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | Key | Type | Value |
 |---|---|---|
 | `name` | string | display name; housing replaces it ([town residents](../game/factions-squads-towns.md#town-residents)) |
-| `residents` handle, `residents template` | handle, string | null / empty for a new building |
+| `residents` handle, `residents template` | handle, string | the platoon whose home it is and that platoon's SQUAD_TEMPLATE ([which](../game/factions-squads-towns.md#whose-template-a-home-carries)); null / empty with no residents. The reader `FUN_140552b70` drops a non-empty `residents template` (level data's is never used) |
 | `floornum` | int | floor |
 | `destroyed` | bool | +0x1a1 |
 | `town` | handle | its town (outpost), only when the building is not inside another one (**Observed** condition) |
@@ -106,7 +106,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `version` | int | |
 | `world Y pos` | float | absolute height the building stood at; written, never read ([placement height](#placement-height)) |
 | `foliage` | bool | |
-| `squad template` | string | |
+| `squad template` | string | the same id as `residents template` (**Observed**, every saved state) |
 | `isInsideBuilding` | handle | parent building |
 | `internalbuildings-<i>` | handle | buildings inside it |
 | `is inside building` | bool | |

@@ -1039,8 +1039,7 @@ Rules of `For sale:` and the price: [selected building](ui-screens.md#selected-b
 (`HousePurchaseTests.The_Hub_has_a_ruined_Storm_House_for_4800_in_the_original_data`): The Hub's ruined Storm Houses have
 interior meshes but no functionality record, their level states lack `sell home` while their resident templates
 (`44421-rebirth.mod`, `44426-rebirth.mod`) set it; target 16, owner's `building cost mult` 2: 0.375 × 16 × 2 × 400 = 4,800.
-Meitou reads `sell home` from the saved state, else the level state, else the resident template; **Unknown** whether the
-original falls back to the template.
+`sell home` is the flag of the template the building carries, and a building carrying none is for sale (`FixtureRegistry.SalePrice`).
 
 ## Ruined by residents
 

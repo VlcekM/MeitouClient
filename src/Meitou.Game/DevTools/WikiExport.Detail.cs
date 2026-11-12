@@ -721,8 +721,7 @@ static partial class WikiExport
         int? function = TownBuildings.FunctionOf(db, record, functions)?.GetInt("function");
         if (function != 19 && !(function is null && record.GetReferences("interior").Count > 0)) return null;
         var state = b.LevelState;
-        bool sale = state?.Bools.TryGetValue("sell home", out bool levelSale) == true ? levelSale
-            : db.Find(b.ResidentsTemplate)?.GetBool("sell home") ?? state is null;
+        bool sale = db.Find(b.ResidentsTemplate)?.GetBool("sell home") ?? true;
         if (!sale || (state?.GetBool("is inside building") ?? false)) return null;
         float multiplier = db.Find(owner.Id)?.GetFloat("building cost mult", 1) ?? 1;
         float price = (b.Destroyed ? 0.375f : 1) * BuildingBuildData.From(record).Target * multiplier * 400;

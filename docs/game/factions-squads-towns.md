@@ -480,16 +480,28 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (the id reads `Mechanical SIgn`), Outpost s-III `Banners` x12 (`banners`), Old Storm House `Slave Sign` x7 (the record's id names the Storm
   House), Y-House `banners`, Bughouse `Barracks` (`EXT-3793-TwoStorey.mod-Barracks` is the Old Storm House's by id). Meitou:
   `BuildingLayouts.Names` for housing, `BuildingLayouts.Find` for loading (exteriors by id; interiors by name and `associated building`).
-- <a id="whose-template-a-home-carries"></a>**Whose template a home carries** (**Verified**, `FUN_140553210`, called by the platoon's home
-  setter `FUN_1407ec9e0`, which the squad factory `FUN_14057f4c0` and other callers use): a building keeps one residents handle (+0xd0) and one
-  template (+0xf0), and every platoon that takes the building as its home overwrites both with its own; the building designation is taken only
-  while the building has none. A home whose template has `housemates` is the home of several platoons (the housemate squads and the template's
-  own), so the building ends up carrying the template of whichever took it last. At housing that is the home's own (housemates are made first);
-  in saves a few carry a housemate's instead (**Observed**, METARU: 6 of 380 homes, `ninja guards` in two World's End `Adventurer Waystation
-  Bar`s, `lost armoury security` x2, `hive soldiers`, `Tech Hunter Guards small`), which later setter ran is **Unknown**. Effect: the saved
-  `residents template` / `squad template` name the housemate, and anything that reads the building's template (its squads made again by
-  `FUN_14057f820`, the chooser's free test) sees the housemate's. Meitou keeps the housing template for a home (`TownBuilding`, `Squad.HomeBuilding`)
-  and does not model the overwrite.
+- <a id="whose-template-a-home-carries"></a>**Whose template a home carries**: a building keeps one residents handle (+0xd0) and one squad
+  template (+0xf0), and `FUN_140553210(building, platoon)` overwrites both with the platoon's (the building designation only while the building
+  has none). A home whose template has `housemates` is the home of several platoons, so it carries the template of whichever called last.
+  - **When** (**Verified**): housing makes each platoon unloaded and sets its home (`FUN_14057f4c0` -> home setter `FUN_1407ec9e0`), housemates
+    first, so the home's own template is on the building. A platoon's members are made later, at its activation (`FUN_1404ffad0`, flag +0x114)
+    and again whenever it is remade (the [remake mark](#off-screen-world), `regenerates`), by the squad factory `FUN_140583a10`, which calls
+    `FUN_140553210` each time: the last platoon of the home to be made or remade leaves its template on the building. A load restores the pair:
+    the state reader takes the `residents` handle, and the system message queue binds platoons to their buildings again (`FUN_1407b65b0`, case 1,
+    which also calls `FUN_140553210`; in which order for a home of several platoons is **Unknown**).
+  - **Observed**, unmodded saves: `squad template` equals `residents template` in every building state and is set exactly on the states with a
+    `residents` handle (METARU 18518 states, 381 set; redev 21320, 421). Of METARU's 32 homes with platoons of several templates, 26 carry their own
+    template and 6 a housemate's (`ninja guards` in two World's End `Adventurer Waystation Bar`s, `lost armoury security` x2, `hive soldiers`,
+    `Tech Hunter Guards small`): all guard squads. Whether those were remade after losses or only activated after their home's own squad is
+    **Unknown** (the save does not tell).
+  - **Read by** (**Verified**): the squads made for a building (`FUN_14057f820`), the chooser's free test, and
+    [For sale](ui-screens.md#selected-building) (`FUN_14029c500`: the template's `sell home`).
+  - Meitou: `FixtureRegistry.ResidentsTemplate`: the boot's housing (`ResidentRuins.Apply` writes it into the level state as `residents template`
+    and `squad template`, and empties both for a town building nobody is housed in, since the original drops the level state's), a loaded save's
+    state, a town override's housing, then the template of each squad made from its template with that home (`StampResidents`: a remade squad
+    `PopulationSystem.Regenerate`, a save's never-made one `MakeUnmade`). A save writes it under both keys and names the platoon of that template as
+    `residents` (`WriteResidents`, `SaveCapture.NameResidents`). A new game's squads are all made at once, housemates first, so every home starts
+    with its own template.
 - **Squads** (`FUN_14057f820`): `housemates` (v0, or Rand(v0, v1) when v1 > 0) first, then the squad. Platoon point: a
   random free node of NodeType 0 (SHOPKEEPER), else 2 (GUARD_POST), else 1 (GENERAL), else the building. Characters
   (`FUN_140583a10`): a GENERAL node, else SHOPKEEPER, at node + (0, 10, 0), else the platoon point. The squad's home is the building.

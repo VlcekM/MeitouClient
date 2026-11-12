@@ -194,7 +194,9 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public bool RuinedByResidents { get; init; }
     /// <summary>
-    /// The level data's <c>residents template</c> of its state (a SQUAD_TEMPLATE id; empty when none).
+    /// The <c>residents template</c> of its level state (a SQUAD_TEMPLATE id; empty when none): once the boot housed the towns
+    /// (<see cref="ResidentRuins.Apply"/>), the template of the residents housed in it. Later changes:
+    /// <c>FixtureRegistry.ResidentsTemplate</c>.
     /// </summary>
     public string ResidentsTemplate { get; init; } = "";
     /// <summary>
