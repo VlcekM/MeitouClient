@@ -405,6 +405,32 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// The full runtime name takes precedence over its record label and survives a rename and reload.
+    /// </summary>
+    [Fact]
+    public void Runtime_town_name_survives_a_rename_round_trip()
+    {
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Stale label", "camp", Player, new Hand(13, 4, 55, 2, 9));
+        state.Record.Strings["name"] = "Runtime name";
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal("Runtime name", town.Name);
+        town.Name = "Renamed camp";
+
+        BuildingSave.Write(builder.Game, world, Player);
+
+        Assert.Equal("Renamed camp", state.Record.Strings["name"]);
+        state.Record.Name = "Town state Another stale label";
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, new GameDatabase(), Player, 7);
+        Assert.Equal("Renamed camp", Assert.Single(reloaded.Buildings.Towns).Name);
+    }
+
+    /// <summary>
     /// Placement/dismantle reassessment drops an outpost whose last building was removed.
     /// </summary>
     [Fact]

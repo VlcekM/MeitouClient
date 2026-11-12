@@ -311,7 +311,7 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Combines linked town properties in save order, keeping the first name and nonnull handle.
+    /// Combines linked town properties in save order, restoring runtime names and keeping the first nonnull handle.
     /// </summary>
     static void ApplyTownStates(PlayerTown town, string instanceId, Vector3 position, IEnumerable<FcsRecord> states)
     {
@@ -320,7 +320,8 @@ public static class BuildingSave
         foreach (var state in states)
         {
             string name = TownName(state);
-            if (town.Name == PlayerTown.DefaultName && name.Length > 0) town.Name = name;
+            if (name.Length > 0 && (state.Strings.GetValueOrDefault("name", "").Length > 0 || town.Name == PlayerTown.DefaultName))
+                town.Name = name;
             if (state.Bools.ContainsKey("public")) town.Public = state.Bools["public"];
             if (state.Floats.TryGetValue("override", out float radius)) town.Override = radius;
 
@@ -330,10 +331,11 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Extracts the saved display name when the state uses the original town-state prefix.
+    /// Restores the runtime display name, with a record-label fallback for older Meitou saves.
     /// </summary>
     static string TownName(FcsRecord state)
     {
+        if (state.Strings.GetValueOrDefault("name") is { Length: > 0 } name) return name;
         if (!state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal)) return "";
 
         return state.Name[TownStatePrefix.Length..].TrimEnd();
@@ -637,6 +639,7 @@ public static class BuildingSave
     static void WriteTownState(World world, PlayerTown town, string instanceId, FcsRecord state, Hand hand, string playerFactionId)
     {
         state.Name = TownStatePrefix + town.Name;
+        state.Strings["name"] = town.Name;
         state.Bools["public"] = town.Public;   // Town +0x380, the panel's Open to public
         hand.Write(state, "hand");
         state.Strings["faction"] = playerFactionId;
