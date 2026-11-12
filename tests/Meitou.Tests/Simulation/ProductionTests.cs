@@ -11,6 +11,7 @@ using Meitou.Simulation.Construction;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 using static Meitou.Tests.Bodies.BodyFixtures;
@@ -248,19 +249,22 @@ public class ProductionTests
         /// <summary>
         /// Creates machines on town 1 so power fixtures use a shared grid; town 0 models furniture without a player outpost.
         /// </summary>
-        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1)
+        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1,
+            PopulationData? population = null, float spacing = 30)
         {
             Items = new ItemFactory(db, constants);
             var walk = new OpenGroundWalkability(SyntheticTown.Ground);
             Production = new ProductionSystem(db, constants, BodyOptions.Default, Items, null);
             World = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, PublishSnapshots = snapshots, MinPartitionSize = 1 }, walk,
-                [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]);
+                population is null
+                    ? [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]
+                    : [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production, new PopulationSystem(population)]);
             World.Player.Faction = PlayerFaction;
             World.Research.Set(db, []);
             for (int i = 0; i < records.Length; i++)
             {
                 // 30 apart: a character at one building is within the trading range (40) of the next.
-                var p = At + new Vector3(i * 30, 0, 0);
+                var p = At + new Vector3(i * spacing, 0, 0);
                 string id = World.Buildings.NewId(WorldLayout.ZoneOf(p.X, p.Z));
                 World.Buildings.Add(new BuildSite { Id = id, Record = records[i], Position = p, Owner = PlayerFaction, Town = town, Materials = [], Complete = true });
                 Sites.Add(id);
@@ -586,29 +590,77 @@ public class ProductionTests
     }
 
     /// <summary>
-    /// Machines without a town share one grid and need a generator: no free power.
+    /// A machine without a town joins the grid of the nearest town (any owner, no distance cap) and needs a generator there: no free power.
     /// </summary>
     [Fact]
     public void A_no_town_machine_without_a_generator_has_no_power()
     {
         using var rig = new Rig(Database(), Constants, [Lamp], town: 0);
+        rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
         rig.World.RunTicks(2);
         Assert.False(rig.Machine(0).HasPower);
     }
 
     /// <summary>
-    /// A generator powers the machines without a town through their shared grid.
+    /// A generator of the nearest town powers a machine without a town; one of a farther town does not.
     /// </summary>
-    [Fact]
-    public void A_no_town_generator_powers_a_no_town_machine()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_no_town_machine_is_powered_by_the_nearest_towns_generator_only(bool generatorInNearestTown)
     {
         using var rig = new Rig(Database(), Constants, [Generator, Lamp], town: 0);
+        var near = rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        var far = rig.World.Buildings.AddTown(At + new Vector3(9000, 0, 0), PlayerFaction);
+        rig.World.Buildings.Find(rig.Sites[0])!.Town = generatorInNearestTown ? near.Number : far.Number;
         rig.World.RunTick();
         var generator = rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!;
         generator.Inputs[0].Count = 10;
         rig.World.RunTicks(2);
-        Assert.True(rig.Machine(1).Granted > 0);
-        Assert.True(rig.Machine(1).HasPower);
+        Assert.Equal(generatorInNearestTown, rig.Machine(1).Granted > 0);
+        Assert.Equal(generatorInNearestTown, rig.Machine(1).HasPower);
+    }
+
+    /// <summary>
+    /// A machine without a town in a world with no town at all is never registered: even beside a fuelled generator a machine that draws power gets
+    /// none, while one that draws nothing keeps full satisfaction.
+    /// </summary>
+    [Fact]
+    public void A_no_town_machine_in_a_world_without_towns_gets_no_power()
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp, Bench], town: 0);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+        Assert.Equal(0, rig.Machine(1).Power);
+        Assert.Equal(1, rig.Machine(2).Power);
+    }
+
+    /// <summary>
+    /// A machine without a town joins the frame of the nearest town of the level data when that is nearer than any player town (a bought house in
+    /// an NPC town): a generator beside that town powers it, one beside a far player town does not.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_no_town_machine_joins_a_nearer_npc_towns_grid(bool generatorBesideNpcTown)
+    {
+        var db = Database();
+        var file = new FcsFile();
+        var town = Rec("30-t", FcsRecordType.Town, "Npc Town");
+        town.Ints["type"] = (int)TownType.Town;
+        file.Records.Add(town);
+        db.Apply(file, "town.mod");
+        float spacing = generatorBesideNpcTown ? 30 : 20000;
+        var population = PopulationData.Create(db, [new TownPlacement("npc", "30-t", At + new Vector3(spacing, 0, 0), null)]);
+        using var rig = new Rig(db, Constants, [Generator, Lamp], town: 0, population: population, spacing: spacing);
+        rig.World.Buildings.AddTown(At + new Vector3(generatorBesideNpcTown ? 90000 : 0, 0, 0), PlayerFaction);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(6);   // the frames run one town per tick
+
+        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).Granted > 0);
+        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).HasPower);
     }
 
     /// <summary>

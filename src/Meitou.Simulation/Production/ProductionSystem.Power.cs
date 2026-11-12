@@ -1,6 +1,9 @@
+using System.Numerics;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Production;
 
@@ -74,12 +77,76 @@ public sealed partial class ProductionSystem
     int _powerCursor;
 
     /// <summary>
+    /// The grid key of a machine that has no town at all (a machine in a world without any town).
+    /// </summary>
+    const int NoPowerTown = 0;
+    /// <summary>
+    /// The grid each town-less site was resolved to, with the player towns' layout it was resolved for (<see cref="_townLayout"/>).
+    /// </summary>
+    readonly Dictionary<string, (int Town, int Layout)> _powerTowns = new(StringComparer.Ordinal);
+    /// <summary>
+    /// A hash of the player towns' numbers and centres this tick; a cached <see cref="_powerTowns"/> entry is valid for one layout.
+    /// </summary>
+    int _townLayout;
+
+    /// <summary>
+    /// The town whose power frame a site's machine joins (<c>FUN_140296940</c> and <c>FUN_1409f9180</c>, <b>Observed</b>): the town of its building,
+    /// else the nearest town by horizontal distance, whatever its owner and however far, a nest excluded. A player town's key is its number; a town
+    /// of the level data (an NPC town, whose machines Meitou gives a frame of their own) is <c>-(index + 1)</c>; <see cref="NoPowerTown"/> when the
+    /// world has none. A tie goes to the player town, then to the lower index.
+    /// </summary>
+    int PowerTown(World world, BuildSite site)
+    {
+        if (site.Town != 0) return site.Town;
+        if (_powerTowns.TryGetValue(site.Id, out var known) && known.Layout == _townLayout) return known.Town;
+
+        int found = NoPowerTown;
+        float best = float.MaxValue;
+        var at = new Vector2(site.Position.X, site.Position.Z);
+        foreach (var t in world.Buildings.Towns)
+        {
+            float d = Vector2.DistanceSquared(new Vector2(t.Position.X, t.Position.Z), at);
+            if (d < best) (found, best) = (t.Number, d);
+        }
+
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites is { } sites)
+        {
+            foreach (var t in sites)
+            {
+                if (t.Town.Type is TownType.Nest or TownType.NestMarker) continue;
+
+                float d = Vector2.DistanceSquared(new Vector2(t.Position.X, t.Position.Z), at);
+                if (d < best) (found, best) = (-(t.Index + 1), d);
+            }
+        }
+
+        _powerTowns[site.Id] = (found, _townLayout);
+        return found;
+    }
+
+    /// <summary>
+    /// A hash of the player towns' numbers and centres, to invalidate the resolved <see cref="PowerTown"/>s when one moves or is added or removed.
+    /// </summary>
+    static int TownLayout(World world)
+    {
+        var hash = new HashCode();
+        foreach (var t in world.Buildings.Towns)
+        {
+            hash.Add(t.Number);
+            hash.Add(t.Position);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
     /// The power step: every machine's indoor, active, wind and rain state, each town's grid sharing its power (<see cref="ShareOneTown"/>), the
     /// generators' fuel burnt, then each machine's health, research multiplier and efficiency.
     /// </summary>
     void PowerTick(World world, float dt)
     {
         foreach (var list in _grids.Values) list.Clear();
+        _townLayout = TownLayout(world);
         foreach (var m in world.Machines.All)
         {
             // Slot 59 (isIndoors): interior furniture standing in a building; slot 164: a light building outdoors works only while it is not daytime.
@@ -95,7 +162,15 @@ public sealed partial class ProductionSystem
                 m.Power = 1;
                 continue;
             }
-            if (!_grids.TryGetValue(site.Town, out var grid)) _grids[site.Town] = grid = [];
+            int town = PowerTown(world, site);
+            if (town == NoPowerTown)
+            {
+                // No town at all: the original never registers the machine, so a machine that draws power gets none.
+                m.Power = Rated(world, m) == 0 ? 1 : 0;
+                continue;
+            }
+
+            if (!_grids.TryGetValue(town, out var grid)) _grids[town] = grid = [];
             grid.Add(m);
         }
 
@@ -116,13 +191,13 @@ public sealed partial class ProductionSystem
             m.Health = site is { Target: > 0 } s ? Math.Clamp(s.Progress / s.Target, 0, 1) : 1;
             m.ProductionMult = UpgradeOf(world, m).ProductionMult;
             m.Efficiency = built ? Efficiency(world, m) : 0;
-            m.HasPower = built && HasPower(world, m, Site(world, m.Site)!.Town);
+            m.HasPower = built && HasPower(world, m, PowerTown(world, Site(world, m.Site)!));
             m.Rotation = !built ? 0 : m.Data.IsGenerator ? (m.PowerOn ? Output(world, m) * 0.01f : 0) : m.Efficiency;
             if (m.Data.IsBattery)
             {
                 // The battery's word reads its town grid's flows, not its own (FUN_140300b40).
                 TownPower grid = default;
-                m.OnGrid = site is not null && _townPower.TryGetValue(site.Town, out grid);
+                m.OnGrid = site is not null && _townPower.TryGetValue(PowerTown(world, site), out grid);
                 m.GridCharging = grid.Charging > 0;
                 m.GridDraining = grid.Draining > 0;
             }
