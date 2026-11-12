@@ -230,7 +230,7 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
         Resolved?.Placement.LayoutName(LevelState, exterior)
         ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
     /// <summary>
-    /// The names of the interior and exterior layouts housing takes its record to offer (<see cref="BuildingLayouts.Offered"/>), case kept.
+    /// The names of the interior and exterior layouts housing takes its record to offer (<see cref="BuildingLayouts.Names"/>), case kept.
     /// </summary>
     public IReadOnlySet<string> InteriorLayouts { get; init; } = EmptyNames;
     /// <summary>

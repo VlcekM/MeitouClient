@@ -242,7 +242,7 @@ zone the save has no file of, round its centre, as its own camp's (`PopulationSy
   building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
   a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_*
-  contents; the game's building layout lookup (the 13 unresolved exterior names); the caller and the flag of the nest scatter.
+  contents; the caller and the flag of the nest scatter.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
 - `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
 - Building assembly leftovers: rolls drawn by part-material collections inside the seeded sequence (EFFECT

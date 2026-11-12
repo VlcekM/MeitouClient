@@ -464,9 +464,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   the default resident pass only takes buildings with none. Buildings housed by nobody keep the level state's names. **Observed**, saves (METARU,
   autosaves 1 and 2, redev, Beep Fan Club 1; level buildings of the saved zones): the saved interior name equals the saved `squad template`'s
   `layout interior` for 318 of 324 standing homes in METARU, and the level
-  state's for 590 of 592 buildings with no template. The 6 that differ are saved under a `housemates` template of the home's own (`ninja guards` in
-  the World's End bars, `lost armoury security`, `hive soldiers`, `Tech Hunter Guards small`; **Observed**, when the building's template becomes
-  the housemate's is **Unknown**, not modelled). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
+  state's for 590 of 592 buildings with no template. The 6 that differ are [homes saved under a housemate's template](#whose-template-a-home-carries). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
   leaves empty (among them every Ash Dome, Cat-Lon's Exile and Ashland Domes I..IV, and the Ancient Tech Lab at zone 2.46: templates `Throne`, `lab`,
   `Lab no.2`); exteriors: 86 replaced, 50 cleared, 67 named.
 - **Chooser** (`FUN_14092e870`, **Verified**): a template with `layout interior` needs a building offering it (own layouts or
@@ -475,9 +473,23 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   Offered, names compared exactly (case matters: Barracks UC's exterior `banners` matches no `Banners` layout): an interior by an interior layout
   record of that name whose `associated building` is the building or one it shares interiors with (`FUN_14055ad40`); an exterior by an
   `interiors.level` record with the string id `EXT-<building id>-<name>` for one of those buildings (`FUN_14055b330`, which reads neither the
-  record's name nor `is exterior`; the exterior loaders `FUN_14055b4d0` / `FUN_14055c7b0` find the layout the same way). Base data: the id
-  and the name / `associated building` disagree for one record, `EXT-3793-TwoStorey.mod-Barracks`, associated with the Bughouse. Meitou:
-  `BuildingLayouts.Offered` for housing; its exterior loader still finds layouts by name and `associated building`.
+  record's name nor `is exterior`). The loader finds a layout by string id too (`Layout::loadLayout` `FUN_1405512a0`, the id from vfunc 14:
+  exterior `FUN_14054c080` `EXT-<building id>-<name>`, interior `FUN_14054bda0` `<building id>-<name>`, each falling back to the buildings in
+  `shares interiors with`, vfunc 15), so the interior test (by name) and the loader (by id) can disagree; base data: they agree for all 907
+  named level-data interiors after housing, while 34 of 342 named exteriors find no record and show nothing: Storm House `Mechanical Sign` x13
+  (the id reads `Mechanical SIgn`), Outpost s-III `Banners` x12 (`banners`), Old Storm House `Slave Sign` x7 (the record's id names the Storm
+  House), Y-House `banners`, Bughouse `Barracks` (`EXT-3793-TwoStorey.mod-Barracks` is the Old Storm House's by id). Meitou:
+  `BuildingLayouts.Names` for housing, `BuildingLayouts.Find` for loading (exteriors by id; interiors by name and `associated building`).
+- <a id="whose-template-a-home-carries"></a>**Whose template a home carries** (**Verified**, `FUN_140553210`, called by the platoon's home
+  setter `FUN_1407ec9e0`, which the squad factory `FUN_14057f4c0` and other callers use): a building keeps one residents handle (+0xd0) and one
+  template (+0xf0), and every platoon that takes the building as its home overwrites both with its own; the building designation is taken only
+  while the building has none. A home whose template has `housemates` is the home of several platoons (the housemate squads and the template's
+  own), so the building ends up carrying the template of whichever took it last. At housing that is the home's own (housemates are made first);
+  in saves a few carry a housemate's instead (**Observed**, METARU: 6 of 380 homes, `ninja guards` in two World's End `Adventurer Waystation
+  Bar`s, `lost armoury security` x2, `hive soldiers`, `Tech Hunter Guards small`), which later setter ran is **Unknown**. Effect: the saved
+  `residents template` / `squad template` name the housemate, and anything that reads the building's template (its squads made again by
+  `FUN_14057f820`, the chooser's free test) sees the housemate's. Meitou keeps the housing template for a home (`TownBuilding`, `Squad.HomeBuilding`)
+  and does not model the overwrite.
 - **Squads** (`FUN_14057f820`): `housemates` (v0, or Rand(v0, v1) when v1 > 0) first, then the squad. Platoon point: a
   random free node of NodeType 0 (SHOPKEEPER), else 2 (GUARD_POST), else 1 (GENERAL), else the building. Characters
   (`FUN_140583a10`): a GENERAL node, else SHOPKEEPER, at node + (0, 10, 0), else the platoon point. The squad's home is the building.
