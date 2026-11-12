@@ -38,7 +38,7 @@ sealed class TitleScreen(GameHost host)
     internal bool TitleCharactersReady => host.ActiveCharacters is not { } characters ||
         _titleAppearances.Length > 0 && _titleAppearances.All(characters.IsPrepared) && !characters.ContentPending;
     internal bool TitleSceneReady => TitleCharactersReady && (host.Gpu is null || host.Gpu.Streamer is not { Idle: false } &&
-        !(host.Gpu.Objects?.Pending > 0) && !(host.Gpu.Foliage?.Pending > 0));
+        !(host.Gpu.Objects?.LoadingPending > 0) && !(host.Gpu.Foliage?.Pending > 0));
     internal Func<ParticleRenderer>? TitleParticleFactory;
     ParticleRenderer? _titleParticles;
     IReadOnlyList<WeatherEffectEntry>? _titleDust;

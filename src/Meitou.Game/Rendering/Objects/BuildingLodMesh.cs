@@ -215,6 +215,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// Decodes running or wanted, and meshes whose upload is queued.
     /// </summary>
     public int Pending => _running.Count + _wanted.Count + _reshaping.Count + _reshapeQueued;
+    /// <summary>
+    /// <see cref="Pending"/> as a loading screen waits for it: the remakes that coarsen a mesh (memory housekeeping, nothing to see) are left out; a
+    /// camera at rest kept two of them running for tens of seconds.
+    /// </summary>
+    public int LoadingPending => _running.Count + _wanted.Count + _reshaping.Count(m => m.Upgrade) + _upgradesQueued;
     public bool Idle => _running.Count == 0 && _wanted.Count == 0 && _reshaping.Count == 0 && _reshapeQueued == 0;
 
     // ---- distance-based streaming of the finest LOD level (docs/renderer-native.md 8.12) ----
@@ -224,6 +229,10 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// Reshaped meshes whose upload is queued (until the swap).
     /// </summary>
     int _reshapeQueued;
+    /// <summary>
+    /// How many of <see cref="_reshapeQueued"/> make a mesh finer (the others coarsen one).
+    /// </summary>
+    int _upgradesQueued;
     /// <summary>
     /// Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.
     /// </summary>
@@ -778,9 +787,12 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             for (int i = 0; i < inner.Prepared.Count; i++) QueuePart(innerGpu, inner.Prepared[i], $"mesh {mesh.Key} manual {level} part {i} (reshaped)");
         }
         _reshapeQueued++;
+        bool upgrade = mesh.Upgrade;
+        if (upgrade) _upgradesQueued++;
         uploads.Add(() =>
         {
             _reshapeQueued--;
+            if (upgrade) _upgradesQueued--;
             if (mesh.Gpu is not { } old || mesh.Status != ObjectMesh.State.Resident || old.Manual.Length != fresh.Manual.Length)
             {
                 DeleteBuffers(fresh);

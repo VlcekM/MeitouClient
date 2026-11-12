@@ -474,6 +474,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public int Pending => _streamer.Pending + _meshes.Pending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
 
+    /// <summary>
+    /// <see cref="Pending"/> as the loading screen waits for it (<see cref="ObjectMeshCache.LoadingPending"/>).
+    /// </summary>
+    public int LoadingPending => _streamer.Pending + _meshes.LoadingPending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
+
     int _unresolvedInRange;
     /// <summary>
     /// What <see cref="Pending"/> is made of, for the loading log.
