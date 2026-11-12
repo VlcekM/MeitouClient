@@ -87,7 +87,7 @@ and skip 3 footprints plus 0.5. Queries, each after the last missed:
 
 **Characters** (receiver class 3): a low-poly body's facet can face away from the sun while its smooth shading (and skin's band past the terminator) is still lit; a
 ray from it stopped inside the body, a dark triangle (**Observed** on a face: eye corners, nostrils, the temple). There the ray starts under the facet, the nearest back of a
-face within 0.8 units (`BodyChord`) is where it leaves the body, and blockers count from that point on. A shadow edge on a character is at least 0.015 units wide each way
+face within 0.8 units (`BodyChord`) is where it leaves the body, and blockers count from that point on. Its sun-facing facets skip blockers within 0.03 units (`BodyContact`: a crease between two facets drew hair-thin dark lines and notches). A shadow edge on a character is at least 0.025 units wide each way
 (`BodyPenumbra`): the body's own shadows are polygons, and skin spreads light that far.
 
 **Penumbra** (`PenumbraFilter`, shared with the lamps, no history): the rays write, where blocked, the penumbra's radius at the receiver (the sun's tangent 0.00465, the real

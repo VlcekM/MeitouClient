@@ -71,7 +71,7 @@ static class TracedSunShaders
     /// <summary>World units: the most the drawn ground's relief displaces it from the heightmap (GroundRelief's max depth at the deepest setting), what <c>terrainOrigin</c> takes back.</summary>
     const float ReliefAmplitude = 12;
     /// <summary>On a character (docs/render-shadows.md "Traced sun"): how far a ray from under a turned facet may go before the back of a face blocks it (a body's thickness), and a shadow edge's least half width (world units; skin spreads light some millimetres).</summary>
-    const float BodyChord = 0.8f, BodyPenumbra = 0.015f;
+    const float BodyChord = 0.8f, BodyPenumbra = 0.025f, BodyContact = 0.03f;
 
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
@@ -220,6 +220,8 @@ static class TracedSunShaders
             float tMin = card ? max(clearance, 0.5 + pixel * 3.0) : blade ? max(pixel * 2.0, 0.25) : clearance;
 
             // A character's facet turned from the sun while its shading still takes it (the smooth normal's terminator lies past the facets', skin's light further still).
+            // Its facets that face the sun skip what lies within BodyContact: a crease between two facets (a brow on a nose, an eyelid) drew a hair-thin dark line.
+            if (receiver == 3u) tMin = max(tMin, {{F(BodyContact)}});
             float t = receiver == 3u && dot(side, dir) < 0.0 ? bodyBlocks(p.eye.xyz + at - side * (0.002 + pixel * 0.25), dir) : solidBlocks(o, dir, tMin);
             if (t <= 0.0)
             {
