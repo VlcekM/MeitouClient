@@ -47,6 +47,10 @@ public static class BuildingSave
     /// </summary>
     const string TownStatePrefix = "Town state ";
     /// <summary>
+    /// Meitou's key on the town instance list for the highest outpost handle container ever given (the original has none).
+    /// </summary>
+    const string TownContainerKey = "meitou town container";
+    /// <summary>
     /// The suffix of a player town's GAMESTATE_TOWN state id.
     /// </summary>
     const string TownStateSuffix = "-S5e";   // the hex of GAMESTATE_TOWN (94)
@@ -218,7 +222,10 @@ public static class BuildingSave
         var byInstance = new Dictionary<string, PlayerTown>(StringComparer.Ordinal);
 
         if (save.TownInstanceList is { } list)
-            foreach (var instance in list.Instances)
+            world.Buildings.TownContainerFloor = list.Ints.GetValueOrDefault(TownContainerKey);
+
+        if (save.TownInstanceList is { } instances)
+            foreach (var instance in instances.Instances)
                 ReadTownInstance(instance, byId, save, world, db, playerFactionId, playerIndex, byInstance);
 
         ReadLevelTowns(save, population, world, db, playerFactionId, playerIndex, byInstance, byId);
@@ -611,7 +618,7 @@ public static class BuildingSave
         if (towns.Count == 0) return hands;
 
         FcsRecord? list = null;
-        int container = game.Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C).DefaultIfEmpty(0).Max();
+        int container = Math.Max(world.Buildings.TownContainerFloor, game.Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C).DefaultIfEmpty(0).Max());
         foreach (var town in towns)
         {
             FcsInstance? instance = null;
@@ -668,6 +675,8 @@ public static class BuildingSave
             foreach (var linked in states) WriteTownState(world, town, id, linked, hand, playerFactionId);
         }
 
+        world.Buildings.TownContainerFloor = container;
+        if (list is not null) list.Ints[TownContainerKey] = container;
         return hands;
     }
 

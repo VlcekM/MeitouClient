@@ -410,6 +410,43 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// A removed outpost's number is never given to a later outpost.
+    /// </summary>
+    [Fact]
+    public void A_removed_outposts_number_is_not_reused()
+    {
+        // Catches CampaignTown.OfPlayer(number) in AI state pointing at a different, later outpost.
+        using var world = World();
+        world.Buildings.AddTown(Vector3.Zero, 7);
+        var last = world.Buildings.AddTown(new Vector3(9000, 300, 0), 7);
+        ConstructionSystem.ReassessTown(world, last);
+        Assert.Single(world.Buildings.Towns);
+
+        Assert.Equal(3, world.Buildings.AddTown(new Vector3(20000, 300, 0), 7).Number);
+    }
+
+    /// <summary>
+    /// A removed outpost's handle container is not reused by a later outpost, also after a save and reload.
+    /// </summary>
+    [Fact]
+    public void A_removed_outposts_handle_container_is_not_reused()
+    {
+        var builder = new SaveBuilder(7);
+        using var world = World();
+        var first = world.Buildings.AddTown(Vector3.Zero, 7);
+        int firstContainer = BuildingSave.Write(builder.Game, world, Player)[first.Number].C;
+        ConstructionSystem.ReassessTown(world, first);
+        BuildingSave.Write(builder.Game, world, Player);
+
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, new GameDatabase(), Player, 7);
+        var second = reloaded.Buildings.AddTown(new Vector3(9000, 300, 0), 7);
+        int secondContainer = BuildingSave.Write(builder.Game, reloaded, Player)[second.Number].C;
+
+        Assert.NotEqual(firstContainer, secondContainer);
+    }
+
+    /// <summary>
     /// Load normalization excludes the exact radius boundary and preserves sparse town numbers.
     /// </summary>
     [Fact]

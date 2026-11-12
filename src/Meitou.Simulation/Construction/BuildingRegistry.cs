@@ -332,11 +332,22 @@ public sealed partial class BuildingRegistry
     public PlayerTown? FindTown(int number) => number > 0 ? _towns.Find(t => t.Number == number) : null;
 
     /// <summary>
+    /// The highest town number ever given in this world; numbers of removed towns are never reused (the AI's campaign state holds them).
+    /// </summary>
+    int _lastTownNumber;
+
+    /// <summary>
+    /// The highest town handle container ever given to an outpost: saved, so a removed outpost's container is never reused.
+    /// </summary>
+    internal int TownContainerFloor { get; set; }
+
+    /// <summary>
     /// Makes a player town with the next number.
     /// </summary>
     public PlayerTown AddTown(Vector3 position, int owner, string name = PlayerTown.DefaultName)
     {
-        int number = _towns.Count == 0 ? 1 : _towns.Max(t => t.Number) + 1;
+        int number = Math.Max(_lastTownNumber, _towns.Count == 0 ? 0 : _towns.Max(t => t.Number)) + 1;
+        _lastTownNumber = number;
         var town = new PlayerTown { Number = number, Name = name, Position = position, Owner = owner };
         _towns.Add(town);
         Revision++;
