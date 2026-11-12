@@ -239,7 +239,7 @@ Head (`body part type` 3) and the blow's rule above holds (Dismemberment >= Rare
 as before and `MedicalState.Decapitated` is set (event `Decapitated`, after `Died`). Ranged hits and executions take the same path; ticks and being eaten do not.
 No blood loss, XP, dialogue or item: the look loses the head's body vertices (its `bone name` `Bip01 Head`; the neck is the chest's), hair, beard and hat
 (the hat stays in the inventory) ([characters](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl)). No race has a
-neck stump, so the hole is closed by a cap made from the body (`NeckCap`: the rim between visible and head triangles, fanned to its centre, skinned as the rim).
+neck stump, so the hole is closed by a cap made from the body (`NeckCap`: the rim between visible and head triangles, fanned to its centre, skinned as the rim). The head's own cap carries the head mark (a cut-off head draws its head vertices only). The cap keeps its own metal and gloss: the held items' metal estimate (Advanced materials) took the pale bone for bare metal.
 Its look comes from race data, so a mod's race works the same: `blood colour` tints it; `is robot` (skeletons, robots) makes it a metal socket under that fluid,
 else flesh with a bone at the centre. **Observed** (headless probe of the base bodies): `human_male`, `human_female`, `bone_male` and hive `Stick_person` get one 18 to 22 triangle cap at
 neck height, `robot.mesh` a 5 triangle one; Skeleton MkII and Log Head none (their head is a separate shell, the body stays closed). A race without a Head part (No-Head MkII) is never decapitated.
@@ -247,7 +247,7 @@ neck height, `robot.mesh` a 5 triangle one; Skeleton MkII and Log Head none (the
 The head falls (`Decapitation`, drawing only): when the renderer last drew the character with its head and it is now listed headless, the old look's
 `SeveredHead` (the body's head vertices only, instance flag 29, with hair, beard, hat and its own cap over the rim of its all-head triangles) keeps that frame's bones,
 taken at the cut (`CharacterRenderer.HoldPose`), turns about the head bone and drops (gravity 98.1, as the limbs) 3 to 7 units aside, thrown with the downing blow's ragdoll speed (with "Advanced ragdolls"; `CharacterSnapshot.Knockdown`, [ragdolls](ragdolls.md#initial-state); it then drifts and tumbles that way, spinning 0.1 rad/s faster per unit/s), its clock starting once its look
-is drawn. It lands 1.3 above the walkable ground (sandbox floor, terrain, building floor) or a body lying there (spheres round its bones, as last drawn; not its own
+is drawn. It moves as a ball over a height (`Decapitation.Step`, steps of 1/120 s): a landing faster than 6 units/s throws it back up with 0.32 of its speed, takes 0.3 of its speed across the ground and half its tumble; on the ground it rolls the way it goes, turning by the ground it covers, slowing by 28 units/s2 until it rests under 0.4 units/s. Its floor is 1.3 above the walkable ground (sandbox floor, terrain, building floor) or a body lying there (spheres round its bones, as last drawn; not its own
 neck and head, nothing above where it fell from). It is no item and not saved: a load or new game clears the heads (a corpse loaded headless drops none); past the
 dropped-items limit the oldest goes. Both caps are made with each person's body mesh on the loading worker (`CharacterContent.CapMesh`) and uploaded on first use.
 Saved as `meitou decapitated` ([save](../formats/save.md#limbs-medical_state-limbs)).

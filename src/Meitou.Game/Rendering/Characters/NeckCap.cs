@@ -76,7 +76,7 @@ internal static class NeckCap
             {
                 var d = (at - centre) / reach;
                 return source with { Position = at, Normal = normal, Uv = new Vector2(Vector3.Dot(d, u), Vector3.Dot(d, w)), Tangent = new Vector4(u,
-                    1), Colour = source.Colour with { Y = 0, Z = 0 } };
+                    1), Colour = source.Colour with { Y = head ? CharacterContent.HeadBit : 0, Z = 0 } };   // a cut-off head draws its head vertices only
             }
             uint centreIndex = (uint)vertices.Count;
             vertices.Add(Cap(default, centre));

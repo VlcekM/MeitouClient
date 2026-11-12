@@ -411,6 +411,7 @@ static class CharacterShaders
             }
             // A headless body's neck cap (NeckCap): uv is (0, 0) at its centre and 1 at the rim; colour1 the race's blood colour, the diffuse slot the splatter map.
             // Flesh: the fluid darkening into the cut, a bone at the centre. Mechanical (a robot race): a dark metal socket, its core darker, the fluid over it.
+            float woundRelief = 0.0, woundMetal = 0.0, woundGloss = 0.0;
             if (flag(f, {{Wound}}u))
             {
                 float r = length(uv);
@@ -425,12 +426,29 @@ static class CharacterShaders
                 }
                 else
                 {
-                    albedo = mix(fluid * 0.35, fluid, splat * smoothstep(0.0, 1.0, r));
-                    albedo = mix(vec3(0.75, 0.70, 0.60), albedo, smoothstep(0.12, 0.18, r));
-                    gloss = 0.7;
+                    // Flesh: wet, lumpy (the splatter map as its height, at two sizes), darker in its hollows and towards the middle; the bone dry and matte, its marrow dark.
+                    float fine = flag(f, 1u) ? tex(m.tex[0], uv * 1.7 + 0.31).a : 0.5;
+                    float lump = mix(splat, fine, 0.4);
+                    albedo = mix(fluid * 0.3, fluid * 0.9, lump * smoothstep(0.0, 1.0, r));
+                    // A paler layer under the skin at the rim; the bone's outline uneven, its marrow soft and dark.
+                    albedo = mix(albedo, mix(fluid, vec3(0.85, 0.62, 0.50), 0.55), 0.7 * smoothstep(0.82, 0.97, r));
+                    float rough = r + (lump - 0.5) * 0.12;
+                    float bone = 1.0 - smoothstep(0.20, 0.26, rough), marrow = 1.0 - smoothstep(0.05, 0.14, rough);
+                    albedo = mix(albedo, mix(vec3(0.78, 0.72, 0.60), fluid * 0.45, marrow * 0.8), bone);
+                    gloss = mix(0.75, mix(0.3, 0.6, marrow), bone);
+                    woundRelief = 1.0 - bone;
                 }
                 skin = 0.0;
                 nm = vec4(0.5, 0.5, 1.0, 0.5);
+                if (woundRelief > 0.0 && flag(f, 1u))
+                {
+                    const float e = 0.03;
+                    float h0 = mix(splat, tex(m.tex[0], uv * 1.7 + 0.31).a, 0.4);
+                    float hx = mix(tex(m.tex[0], (uv + vec2(e, 0.0)) * 0.5 + 0.5).a, tex(m.tex[0], (uv + vec2(e, 0.0)) * 1.7 + 0.31).a, 0.4);
+                    float hy = mix(tex(m.tex[0], (uv + vec2(0.0, e)) * 0.5 + 0.5).a, tex(m.tex[0], (uv + vec2(0.0, e)) * 1.7 + 0.31).a, 0.4);
+                    nm.xy = 0.5 + clamp(vec2(h0 - hx, h0 - hy) * 2.5 * woundRelief, -0.35, 0.35);
+                }
+                woundMetal = metal; woundGloss = gloss;
             }
             if (cut) discard;
             if (view.fogDistance < -4.5) { fragColour = vec4(0.0); return; }   // a studio depth draw (CharacterRenderer.Studio): the cut-outs only
@@ -456,6 +474,7 @@ static class CharacterShaders
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
             if (surfaceOn) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
+            if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
             if (surfaceOn)
             {
                 eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
