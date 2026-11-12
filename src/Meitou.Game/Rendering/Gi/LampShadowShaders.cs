@@ -36,7 +36,7 @@ static class LampShadowShaders
             float v = lampSkinRow * {{((Characters.SkinScattering.Height - 1f) / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}} + {{(0.5f / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}};
             vec3 s = textureLod(textures2D[nonuniformEXT(uint(uSkinLut + 0.5))], vec2(u, v), 0.0).rgb;
             float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
-            return vec3(lambert) + extra * lampSkinHue * lampSkinShare * {{Characters.CharacterShaders.SkinBandStrength.ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture)}};
+            return vec3(lambert) + extra * lampSkinHue * lampSkinHue * lampSkinShare;
         }
         // The skin a receiver's fragment wrote (0 share: not skin, or no character).
         void lampSkinOf(uvec4 surface)
