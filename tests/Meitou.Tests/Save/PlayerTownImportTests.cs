@@ -520,13 +520,14 @@ public class PlayerTownImportTests
         var first = world.Buildings.AddTown(new Vector3(0, 300, 0), 7);
         var second = world.Buildings.AddTown(new Vector3(1000, 300, 0), 7);
         world.Player.Faction = 7;
-        first.Override = 1000;
-        second.Override = 3000;
         second.Name = "Larger";
         second.Public = true;
         second.SaveHandle = new Hand(13, 4, 55, 2, 9);
         world.Buildings.Add(Site("first", new Vector3(0, 300, 0), first.Number));
-        world.Buildings.Add(Site("second", new Vector3(1000, 300, 0), second.Number));
+
+        // The refit gives the second town the radius 3000 (two buildings 2800 from its centre, plus the margin) and the first one 1250.
+        world.Buildings.Add(Site("second-a", new Vector3(-1800, 300, 0), second.Number));
+        world.Buildings.Add(Site("second-b", new Vector3(3800, 300, 0), second.Number));
 
         ConstructionSystem.ReassessTown(world, first);
 
@@ -535,6 +536,28 @@ public class PlayerTownImportTests
         Assert.Equal("Larger", second.Name);
         Assert.True(second.Public);
         Assert.Equal(new Hand(13, 4, 55, 2, 9), second.SaveHandle);
+    }
+
+    /// <summary>
+    /// A placement or dismantle also refits every other player town and removes an empty one before it scans for overlaps.
+    /// </summary>
+    [Fact]
+    public void Placement_reassessment_refits_the_other_player_towns_and_removes_an_empty_one()
+    {
+        using var world = World();
+        world.Player.Faction = 7;
+        var touched = world.Buildings.AddTown(new Vector3(0, 300, 0), 7);
+        var stale = world.Buildings.AddTown(new Vector3(50000, 300, 0), 7);
+        var empty = world.Buildings.AddTown(new Vector3(-50000, 300, 0), 7);
+        stale.Override = 5000;
+        world.Buildings.Add(Site("touched", touched.Position, touched.Number));
+        world.Buildings.Add(Site("stale", new Vector3(60000, 300, 0), stale.Number));
+
+        ConstructionSystem.ReassessTown(world, touched);
+
+        Assert.DoesNotContain(empty, world.Buildings.Towns);
+        Assert.Equal(60000, stale.Position.X);
+        Assert.Equal(1250, stale.Override);
     }
 
     /// <summary>
@@ -548,11 +571,12 @@ public class PlayerTownImportTests
         var current = world.Buildings.AddTown(new Vector3(0, 300, 0), 7);
         var first = world.Buildings.AddTown(new Vector3(2000, 300, 0), 7);
         var nearer = world.Buildings.AddTown(new Vector3(100, 300, 0), 7);
-        first.Override = 3000;
-        nearer.Override = 2000;
         world.Buildings.Add(Site("current", current.Position, current.Number));
         world.Buildings.Add(Site("first", first.Position, first.Number));
-        world.Buildings.Add(Site("nearer", nearer.Position, nearer.Number));
+
+        // The refit gives the nearer town the radius 2000, which beats the merged town's 1250.
+        world.Buildings.Add(Site("nearer-a", new Vector3(-1700, 300, 0), nearer.Number));
+        world.Buildings.Add(Site("nearer-b", new Vector3(1900, 300, 0), nearer.Number));
 
         ConstructionSystem.ReassessTown(world, current);
 
