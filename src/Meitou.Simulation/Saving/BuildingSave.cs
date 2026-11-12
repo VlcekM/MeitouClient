@@ -327,6 +327,7 @@ public static class BuildingSave
 
             var town = byInstance.GetValueOrDefault(instanceId) ?? world.Buildings.AddTown(site.Position, playerIndex);
             byInstance[instanceId] = town;
+            town.IsLevelTown = true;
             ApplyTownStates(town, instanceId, site.Position, states);
         }
     }
@@ -607,45 +608,61 @@ public static class BuildingSave
         RemoveObsoleteTowns(game, world, playerFactionId, byId, db);
         if (towns.Count == 0) return hands;
 
-        var list = game.TownInstanceList ?? AddTownInstanceList(game, quick);
+        FcsRecord? list = null;
         int container = game.Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C).DefaultIfEmpty(0).Max();
         foreach (var town in towns)
         {
-            var instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
-            if (instance is null)
+            FcsInstance? instance = null;
+            string id;
+            if (town.IsLevelTown && town.SaveInstance is { } levelId) id = levelId;
+            else
             {
-                instance = new FcsInstance { Id = town.SaveInstance ?? QuickId(NextQuick(quick)) };
-                list.Instances.Add(instance);
+                list ??= game.TownInstanceList ?? AddTownInstanceList(game, quick);
+                instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
+                if (instance is null)
+                {
+                    instance = new FcsInstance { Id = town.SaveInstance ?? QuickId(NextQuick(quick)) };
+                    list.Instances.Add(instance);
+                }
+
+                id = instance.Id;
             }
-            var states = TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList();
+
+            var states = instance is null
+                ? game.Towns.Where(saved => saved.Instance == id && !saved.IsNest).Select(saved => saved.Record).ToList()
+                : TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList();
             var state = states.FirstOrDefault();
             bool fresh = state is null;
             if (state is null)
             {
                 int n = NextQuick(quick);
-                state = new FcsRecord { Type = (int)FcsRecordType.GamestateTown, Id = n, StringId = instance.Id + TownStateSuffix };
+                state = new FcsRecord { Type = (int)FcsRecordType.GamestateTown, Id = n, StringId = id + TownStateSuffix };
 
                 // With the other town states, before the list (the original's order).
-                int at = quick.Records.IndexOf(list);
+                int at = list is null ? -1 : quick.Records.IndexOf(list);
                 quick.Records.Insert(at < 0 ? quick.Records.Count : at, state);
                 byId[state.StringId] = state;
                 game.Towns.Add(new SaveTown(state));
                 states.Add(state);
             }
 
-            instance.Target = PlayerTown.Template;
-            instance.Position = town.Position;
-            instance.Rotation = new Quaternion(0, 0, 0, 0);
-            instance.States.Clear();
-            instance.States.AddRange(states.Select(linked => linked.StringId));
+            // A level town is saved only by its full runtime state; the level placement itself is not a dynamic instance (docs/formats/save.md).
+            if (instance is not null)
+            {
+                instance.Target = PlayerTown.Template;
+                instance.Position = town.Position;
+                instance.Rotation = new Quaternion(0, 0, 0, 0);
+                instance.States.Clear();
+                instance.States.AddRange(states.Select(linked => linked.StringId));
+            }
 
             var hand = town.SaveHandle ?? (Hand.Read(state, "hand") is { IsNull: false } h
                 ? h
-                : new Hand((int)FcsRecordType.Town, ++container, (int)Rng.Mix(Rng.StableHash(instance.Id) ^ seed), 0, 0));
+                : new Hand((int)FcsRecordType.Town, ++container, (int)Rng.Mix(Rng.StableHash(id) ^ seed), 0, 0));
             hands[town.Number] = hand;
 
             if (fresh) WriteFreshTownKeys(state);
-            foreach (var linked in states) WriteTownState(world, town, instance.Id, linked, hand, playerFactionId);
+            foreach (var linked in states) WriteTownState(world, town, id, linked, hand, playerFactionId);
         }
 
         return hands;

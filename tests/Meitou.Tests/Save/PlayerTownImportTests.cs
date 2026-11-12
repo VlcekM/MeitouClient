@@ -364,6 +364,31 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// A player outpost imported from a level town is written back through its runtime state only, not as a dynamic placement with the same id.
+    /// </summary>
+    [Fact]
+    public void A_level_town_outpost_is_written_without_a_dynamic_instance()
+    {
+        // Catches a level placement and a dynamic instance with one id both instantiating after reload.
+        var db = SyntheticTown.Database();
+        var data = PopulationData.Create(db, [new TownPlacement("level-outpost", "30-t", SyntheticTown.Centre, null)]);
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Level Camp", "level-outpost", Player, new Hand((int)FcsRecordType.Town, 8, 58, 4, 12), false, 1900);
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7, data);
+        world.Buildings.Towns.Single().Name = "Renamed";
+
+        BuildingSave.Write(builder.Game, world, Player);
+
+        Assert.True(builder.Game.TownInstanceList is null || builder.Game.TownInstanceList.Instances.All(i => i.Id != "level-outpost"));
+        Assert.Equal("Renamed", state.Record.Strings["name"]);
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, db, Player, 7, data);
+        var town = Assert.Single(reloaded.Buildings.Towns);
+        Assert.Equal(("Renamed", 1900f), (town.Name, town.Override));
+    }
+
+    /// <summary>
     /// Load normalization excludes the exact radius boundary and preserves sparse town numbers.
     /// </summary>
     [Fact]

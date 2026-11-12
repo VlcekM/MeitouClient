@@ -249,6 +249,10 @@ public sealed class PlayerTown
     /// </summary>
     public string? SaveInstance { get; set; }
     /// <summary>
+    /// Whether it was imported from a level town placement: saved by its runtime state alone, with no dynamic town-list entry; not hashed.
+    /// </summary>
+    public bool IsLevelTown { get; set; }
+    /// <summary>
     /// The save's town handle <c>hand*</c> (null until a save has named it); not hashed.
     /// </summary>
     public Data.Save.Hand? SaveHandle { get; set; }
