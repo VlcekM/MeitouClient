@@ -51,6 +51,11 @@ public sealed unsafe class MetalDisplay : IDisposable
     static readonly Selector ToggleFullScreenSelector = new("toggleFullScreen:");
 
     /// <summary>
+    /// The <c>setBackgroundColor:</c> selector.
+    /// </summary>
+    static readonly Selector BackgroundColorSelector = new("setBackgroundColor:");
+
+    /// <summary>
     /// The <c>setCollectionBehavior:</c> selector.
     /// </summary>
     static readonly Selector CollectionBehaviorSelector = new("setCollectionBehavior:");
@@ -81,6 +86,11 @@ public sealed unsafe class MetalDisplay : IDisposable
     /// When <see cref="_fullScreenWanted"/> was asked for (Stopwatch ticks; 0 before any request).
     /// </summary>
     long _fullScreenAskedStamp;
+
+    /// <summary>
+    /// <see cref="FullScreenTransitions.Count"/> when <see cref="_fullScreenWanted"/> was asked for.
+    /// </summary>
+    int _transitionsAtRequest;
 
     /// <summary>
     /// The window the game draws into.
@@ -121,6 +131,12 @@ public sealed unsafe class MetalDisplay : IDisposable
         var nsWindow = getCocoaWindow((WindowHandle*)Window.Native!.Glfw!.Value);
         this._nsWindow = nsWindow;
         SendUInteger(nsWindow, CollectionBehaviorSelector.SelPtr, FullScreenPrimaryBehavior);
+        FullScreenTransitions.Observe(nsWindow);
+
+        // Black, not AppKit's grey, wherever the layer has no picture yet: the moment between the window showing and its first frame, and the
+        // edge a resize or the full-screen animation uncovers before the next frame.
+        var black = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSColor"), "blackColor");
+        MsgSendPtr(nsWindow, BackgroundColorSelector.SelPtr, black);
 
         // The layer has to fill the view (NSViewWidthSizable | NSViewHeightSizable) or the drawable covers only part of
         // the window; its drawable size then follows the view's bounds times the scale factor, retina included.
@@ -223,6 +239,13 @@ public sealed unsafe class MetalDisplay : IDisposable
         : (ObjectiveC.ulong_objc_msgSend(_nsWindow, "styleMask") & FullScreenStyleMask) != 0;
 
     /// <summary>
+    /// The animation into or out of the full-screen Space last asked for is still running: AppKit has not said it ended, and it was asked for less
+    /// than <see cref="FullScreenTransition"/> ago (a refused or failed request ends nothing).
+    /// </summary>
+    public bool FullScreenTransitioning => _fullScreenAskedStamp != 0 && FullScreenTransitions.Count == _transitionsAtRequest
+        && Stopwatch.GetElapsedTime(_fullScreenAskedStamp) < FullScreenTransition;
+
+    /// <summary>
     /// Enters or leaves native macOS full screen. A Space of its own, not a window covering the monitor: Cmd+Tab and Ctrl+Left/Right switch
     /// away from it, and AppKit hides the menu bar and the Dock itself. A window that is not shown yet ignores the request.
     /// </summary>
@@ -231,6 +254,7 @@ public sealed unsafe class MetalDisplay : IDisposable
         if (on == FullScreen) return;
         _fullScreenWanted = on;
         _fullScreenAskedStamp = Stopwatch.GetTimestamp();
+        _transitionsAtRequest = FullScreenTransitions.Count;
         MsgSendPtr(_nsWindow, ToggleFullScreenSelector.SelPtr, IntPtr.Zero);
         Console.WriteLine($"window    {(on ? "entering" : "leaving")} native full screen");
     }

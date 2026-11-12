@@ -12,9 +12,14 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     /// <summary>
-    /// The display the loading frames are drawn on; null once the loading screen ended.
+    /// The Vulkan display the loading frames are drawn on (the warm-up measures its frames); null on Metal and once the loading screen ended.
     /// </summary>
     VulkanDisplay? _loadingDisplay;
+    /// <summary>
+    /// The window the start's loading frames are drawn in; null without a window (headless), once the loading screen ended, and on Metal once the
+    /// start has loaded.
+    /// </summary>
+    ILoadingCanvas? _loadingCanvas;
     /// <summary>
     /// The overlay the loading screen draws with; null once it ended.
     /// </summary>
@@ -89,7 +94,28 @@ sealed partial class GameHost
         if (LoadingOverlay is not null)
             Loading = LoadingScreen.Create(LoadingOverlay, Assets.Find, Install.DataDirectory,
                 (GameOptions.UiMode ?? Config.UiMode) == Data.Ui.UiMode.Faithful);
+        if (display.Window is { } window && LoadingOverlay is not null)
+            _loadingCanvas = new VulkanLoadingCanvas(display, window, LoadingOverlay);
         LoadingSteps = StartSteps;
+    }
+
+    /// <summary>
+    /// The Metal start: <see cref="LoadingStep"/> and <see cref="AwaitLoading{T}"/> draw the loading screen (made by the Metal loop) on
+    /// <paramref name="canvas"/> until <see cref="EndLoadingFrames"/>.
+    /// </summary>
+    internal void BeginLoadingFrames(ILoadingCanvas canvas)
+    {
+        _loadingCanvas = canvas;
+        LoadingSteps = StartSteps;
+    }
+
+    /// <summary>
+    /// The Metal start has loaded: how smooth its loading frames were, and no more of them (the loop's own frames draw the screen's exit).
+    /// </summary>
+    internal void EndLoadingFrames()
+    {
+        ReportLoading("start");
+        _loadingCanvas = null;
     }
 
     /// <summary>
@@ -129,7 +155,7 @@ sealed partial class GameHost
     /// </summary>
     internal bool LoadingFrame()
     {
-        if (_loadingDisplay?.Window is not { } window || Loading is null || LoadingOverlay is null) return true;
+        if (_loadingCanvas is not { } canvas || Loading is null) return true;
         // The longest time the window went without a frame (the measure of a frozen screen), and the step it was in.
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_lastLoadingFrame != 0
@@ -139,16 +165,15 @@ sealed partial class GameHost
             Console.WriteLine($"loading   no frame for {held:0} ms in the step {_lastFrameStep}");
         (_lastLoadingFrame, _lastFrameStep) = (now, _currentStep);
         _loadingFrames++;
-        window.DoEvents();
-        if (window.IsClosing) return false;
-        var size = window.FramebufferSize;
-        if (_loadingDisplay.BeginFrame(size.X, size.Y))
+        canvas.Window.DoEvents();
+        if (canvas.Window.IsClosing) return false;
+        var size = canvas.Window.FramebufferSize;
+        if (canvas.BeginLoadingFrame(size.X, size.Y))
         {
-            LoadingOverlay.Target = _loadingDisplay.Backbuffer;
             LoadBar.Update(Loading.Faithful ? PendingLoads() : 0);
             Loading.LoadBar = LoadBar;
             Loading.Draw(size.X, size.Y);
-            _loadingDisplay.Present();
+            canvas.PresentLoadingFrame();
         }
         return true;
     }
@@ -169,7 +194,7 @@ sealed partial class GameHost
     /// <summary>
     /// Waits for <paramref name="work"/> drawing loading frames, as <see cref="AwaitLoading{T}"/>; its exception is thrown here.
     /// </summary>
-    void AwaitLoading(Task work) => AwaitLoading(work.ContinueWith(t =>
+    internal void AwaitLoading(Task work) => AwaitLoading(work.ContinueWith(t =>
     {
         t.GetAwaiter().GetResult();
         return true;
@@ -182,7 +207,7 @@ sealed partial class GameHost
     {
         Loading?.Dispose();
         LoadingOverlay?.Dispose();
-        (Loading, LoadingOverlay, _loadingDisplay) = (null, null, null);
+        (Loading, LoadingOverlay, _loadingDisplay, _loadingCanvas) = (null, null, null, null);
     }
 
     /// <summary>

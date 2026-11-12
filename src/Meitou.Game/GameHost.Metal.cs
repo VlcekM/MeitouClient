@@ -31,16 +31,9 @@ sealed partial class GameHost
             return 2;
         }
         MetalRenderer = true;
-        // The banks and the output device load on a worker while the window, the world and the renderers are made.
+        // The banks and the output device load on a worker while the window, the world and the renderers are made; the loop reads the world on
+        // another behind its loading screen.
         Sound.BeginAudio();
-        var loaded = LoadScene is not null ? LoadScene() : Scene;
-        if (loaded is null)
-        {
-            Console.Error.WriteLine("metal     the world could not be read");
-            return 1;
-        }
-        if (LoadScene is not null) Scene = OwnedScene = loaded;
-
         _metal = new MetalGameLoop(this, start);
         return _metal.Run();
     }
