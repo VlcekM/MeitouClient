@@ -129,6 +129,12 @@ public sealed unsafe partial class PostProcess
         public DofFarPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofFar, "post dof far") => Prepared = P.Sampler("uPrepared");
     }
 
+    sealed class DofFarFilterPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Far;
+        public DofFarFilterPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofFarFilter, "post dof far filter") => Far = P.Sampler("uFar");
+    }
+
     sealed class DofNearPass : FullscreenProgram
     {
         public readonly SamplerSlot Prepared, Dilated;
@@ -143,15 +149,16 @@ public sealed unsafe partial class PostProcess
     DofTilePass? _dofTile;
     DofDilatePass? _dofDilate;
     DofFarPass? _dofFar;
+    DofFarFilterPass? _dofFarFilter;
     DofNearPass? _dofNear;
     DofCompositePass? _dofComposite;
-    Target2D? _dofPrepared, _dofTiles, _dofDilated, _dofFarField, _dofNearField, _dofOutput;
+    Target2D? _dofPrepared, _dofTiles, _dofDilated, _dofFarField, _dofFarSmooth, _dofNearField, _dofOutput;
 
     void FreeDepthOfField()
     {
         // Released after the frames in flight.
-        foreach (var t in (ReadOnlySpan<Target2D?>)[_dofPrepared, _dofTiles, _dofDilated, _dofFarField, _dofNearField, _dofOutput]) t?.Texture.Dispose();
-        _dofPrepared = _dofTiles = _dofDilated = _dofFarField = _dofNearField = _dofOutput = null;
+        foreach (var t in (ReadOnlySpan<Target2D?>)[_dofPrepared, _dofTiles, _dofDilated, _dofFarField, _dofFarSmooth, _dofNearField, _dofOutput]) t?.Texture.Dispose();
+        _dofPrepared = _dofTiles = _dofDilated = _dofFarField = _dofFarSmooth = _dofNearField = _dofOutput = null;
         foreach (var t in _dofFocus) t?.Texture.Dispose();
         (_dofFocus[0], _dofFocus[1], _dofFocusHeld) = (null, null, false);
     }
@@ -169,6 +176,7 @@ public sealed unsafe partial class PostProcess
         _dofTiles = Make(batch, tw, th, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post dof tiles");
         _dofDilated = Make(batch, tw, th, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post dof dilated");
         _dofFarField = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof far");
+        _dofFarSmooth = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof far smooth");
         _dofNearField = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof near");
         _dofOutput = Make(batch, scene.Width, scene.Height, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof");
         for (int i = 0; i < 2; i++) _dofFocus[i] = Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post dof focus");
@@ -179,7 +187,7 @@ public sealed unsafe partial class PostProcess
         Bind(p.P, p.Focus, focus);
         // The autofocus's lens in the shader: ThinLens.InfinityCoc with the focus left to the texel.
         float focal = ThinLens.FocalLength(_fovNow);
-        p.P.Set(p.Auto, focal * focal / MathF.Max(Options.LensAperture, 0.01f) / ThinLens.SensorHeight * scene.Height * 0.25f, focal, Options.LensAutoFocus ? 1f : 0f);
+        p.P.Set(p.Auto, focal * focal / MathF.Max(Options.LensAperture, 0.01f) / ThinLens.SensorHeight * scene.Height * 0.25f, focal, Options.LensAutoFocus ? 1f : 0f, MathF.Max(Options.LensSharpZone, 0));
         Bind(p.P, p.Scene, scene);
         Bind(p.P, p.Depth, _sceneDepth);
         p.P.Set(p.Planes, _planes.X, _planes.Y);
@@ -207,6 +215,9 @@ public sealed unsafe partial class PostProcess
         var far = _dofFar ??= new DofFarPass(Gpu);
         Bind(far.P, far.Prepared, _dofPrepared);
         Draw(far.P, _dofFarField!);
+        var smooth = _dofFarFilter ??= new DofFarFilterPass(Gpu);
+        Bind(smooth.P, smooth.Far, _dofFarField);
+        Draw(smooth.P, _dofFarSmooth!);
 
         var near = _dofNear ??= new DofNearPass(Gpu);
         Bind(near.P, near.Prepared, _dofPrepared);
@@ -230,7 +241,7 @@ public sealed unsafe partial class PostProcess
 
         var composite = _dofComposite ??= new DofCompositePass(Gpu);
         SetLens(composite, scene, maxCoc, focus);
-        Bind(composite.P, composite.FarField, _dofFarField);
+        Bind(composite.P, composite.FarField, _dofFarSmooth);
         Bind(composite.P, composite.NearField, _dofNearField);
         Draw(composite.P, _dofOutput!);
         Stamp("dof");
@@ -239,6 +250,6 @@ public sealed unsafe partial class PostProcess
 
     void DisposeDepthOfField()
     {
-        foreach (var p in new FullscreenProgram?[] { _dofPrepare, _dofTile, _dofDilate, _dofFar, _dofNear, _dofComposite, _dofFocusPass }) p?.P.Dispose();
+        foreach (var p in new FullscreenProgram?[] { _dofPrepare, _dofTile, _dofDilate, _dofFar, _dofFarFilter, _dofNear, _dofComposite, _dofFocusPass }) p?.P.Dispose();
     }
 }

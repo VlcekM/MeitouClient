@@ -23,10 +23,10 @@ sealed class PhotoPanel(PhotoMode mode)
 
     /// <summary>
     /// The panel's measures in the settings window's units (pixels at a 900-line picture): a bar along the bottom of the picture, its tabs over one row
-    /// of four settings.
+    /// of five settings at most.
     /// </summary>
-    const float BarWidth = 1040, BarHeight = 138, BarBottom = 26, Pad = 14, TabWidth = 118, TabGap = 6, CellGap = 24, ChoiceWidth = 124;
-    const int Columns = 4;
+    const float BarWidth = 1200, BarHeight = 138, BarBottom = 26, Pad = 14, TabWidth = 118, TabGap = 6, CellGap = 24, ChoiceWidth = 104;
+    const int Columns = 5;
 
     /// <summary>
     /// What the last drawn frame laid out for the mouse: a rectangle and what a press on it does; a slider also keeps its setting and the track's

@@ -287,6 +287,10 @@ public sealed class PostOptions
     /// names a focus. <see cref="LensFocus"/> is then what it falls back to on the sky.
     /// </summary>
     public bool LensAutoFocus;
+    /// <summary>
+    /// Half the depth of a zone round the focus that is wholly sharp, world units (photo mode's Sharp zone; 0: a thin lens, sharp at the focus alone).
+    /// </summary>
+    public float LensSharpZone;
     /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
     public bool CameraEffectsEverywhere;
     /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>

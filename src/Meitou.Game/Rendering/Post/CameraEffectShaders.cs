@@ -18,7 +18,7 @@ static class CameraEffectShaders
         uniform vec2 uPlanes, uJitterUv;
         uniform vec3 uLens;    // the CoC at infinity, the focus distance, the largest CoC
         uniform sampler2D uFocus;   // the autofocus (DofFocus): one texel, the focus distance
-        uniform vec3 uAuto;         // autofocus: x the CoC at infinity times (the focus in mm less the focal length), y the focal length in mm, z 1 on
+        uniform vec4 uAuto;         // autofocus: x the CoC at infinity times (the focus in mm less the focal length), y the focal length in mm, z 1 on; w the sharp zone's half depth
         """ + DepthConvention.Glsl + """
 
         // The lens now: x the CoC at infinity, y the focus distance (the autofocus's when it is on, ThinLens.InfinityCoc's rule).
@@ -34,7 +34,10 @@ static class CameraEffectShaders
             vec2 lens = dofLens();
             if (depthIsSky(d)) return min(lens.x, uLens.z);
             float z = depthViewZ(d, uPlanes);
-            return clamp(lens.x * (z - lens.y) / z, -uLens.z, uLens.z);
+            // The sharp zone (PostOptions.LensSharpZone) is taken out of the distance from the focus: what lies in it is sharp, the blur starts at its ends.
+            float off = z - lens.y;
+            off = sign(off) * max(abs(off) - uAuto.w, 0.0);
+            return clamp(lens.x * off / max(lens.y + off, 1e-3), -uLens.z, uLens.z);
         }
 
         """;
@@ -168,8 +171,10 @@ static class CameraEffectShaders
             float coc = max(centre.a, 0.0);
             if (coc < 0.5) { fragColour = vec4(centre.rgb, coc); return; }
             int rings = dofRings(coc);
-            float spin = dofSpin(gl_FragCoord.xy), total = 1.0;
-            vec3 sum = centre.rgb;
+            // A sample's light is spread over its own disc: its weight is one over that disc's area. Weighed alike, a blurred figure in front of a more
+            // blurred background gave the background's pixels next to it a few taps among hundreds, and kept a sharp outline.
+            float spin = dofSpin(gl_FragCoord.xy), total = 1.0 / max(coc * coc, 1.0);
+            vec3 sum = centre.rgb * total;
             for (int k = 1; k <= rings; k++)
             {
                 float r = coc * float(k) / float(rings), turn = TAU / float(8 * k), start = (spin + 0.5 * float(k)) * turn;
@@ -178,7 +183,8 @@ static class CameraEffectShaders
                 for (int j = 0; j < 8 * k; j++)
                 {
                     vec4 t = textureLod(uPrepared, vUv + dir * r * texel, 0.0);
-                    float w = clamp(max(t.a, 0.0) - r + 1.0, 0.0, 1.0);
+                    float reach = max(t.a, 0.0);
+                    float w = clamp(reach - r + 1.0, 0.0, 1.0) / max(reach * reach, 1.0);
                     sum += t.rgb * w;
                     total += w;
                     dir = vec2(dir.x * c - dir.y * s, dir.x * s + dir.y * c);
@@ -195,6 +201,36 @@ static class CameraEffectShaders
     /// Premultiplied, so the upsample fades
     /// an edge instead of darkening it.
     /// </summary>
+    /// <summary>
+    /// Depth of field, after the far gather: a 5 x 5 binomial over the gathered field, its step growing with the texel's CoC (a quarter texel in focus,
+    /// one texel from a CoC of 4), each tap weighed by how blurred it is. The gather weighs a sample by one over its disc's area, and its few taps then
+    /// leave a grain that this takes away; in-focus texels pass unchanged.
+    /// </summary>
+    public const string DofFarFilter = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uFar;
+        void main()
+        {
+            vec4 centre = textureLod(uFar, vUv, 0.0);
+            if (centre.a < 1.0) { fragColour = centre; return; }
+            vec2 step = clamp(centre.a * 0.25, 0.25, 1.0) / vec2(textureSize(uFar, 0));
+            const float k[5] = float[5](1.0, 4.0, 6.0, 4.0, 1.0);
+            vec3 sum = vec3(0.0);
+            float total = 0.0;
+            for (int y = 0; y < 5; y++)
+                for (int x = 0; x < 5; x++)
+                {
+                    vec4 t = textureLod(uFar, vUv + vec2(float(x - 2), float(y - 2)) * step, 0.0);
+                    float w = k[x] * k[y] * clamp(t.a, 0.0, 1.0);
+                    sum += t.rgb * w;
+                    total += w;
+                }
+            fragColour = vec4(sum / max(total, 1e-4), centre.a);
+        }
+        """;
+
     public const string DofNear = """
         #version 330 core
         in vec2 vUv;

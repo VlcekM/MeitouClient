@@ -68,6 +68,10 @@ sealed class PhotoMode
     /// </summary>
     bool _dialogue;
     /// <summary>
+    /// Metres each side of the focus that are wholly sharp (several figures at different distances in focus at a wide aperture).
+    /// </summary>
+    float _sharpZone;
+    /// <summary>
     /// The simulation's speed while it runs in the mode (<see cref="SetGameSpeed"/>).
     /// </summary>
     float _gameSpeed = 1;
@@ -136,6 +140,8 @@ sealed class PhotoMode
             v => $"{v:0.0} m", Log: true, Enabled: () => !_autoFocus, Group: FocusGroup),
         new("aperture", "Aperture", 0.25f, 22, () => _aperture, v => _aperture = Math.Clamp(MathF.Round(v * 20) / 20, 0.25f, 22),
             v => $"f/{v:0.0#}", Log: true, Group: FocusGroup),
+        new("sharpzone", "Sharp zone", 0, 30, () => _sharpZone, v => _sharpZone = Math.Clamp(MathF.Round(v * 10) / 10, 0, 30), v => $"{v:0.0} m",
+            Group: FocusGroup),
         new("exposure", "Exposure", -3, 3, () => _exposureStops, v => _exposureStops = Math.Clamp(MathF.Round(v * 10) / 10, -3, 3),
             v => $"{v:+0.0;-0.0;0.0} EV", Group: LightGroup),
         new("hour", "Time of day", 0, 24 - 1 / 60f, () => _host.PhotoHour ?? (float)_host.Session.Clock.HourOfDay,
@@ -194,7 +200,7 @@ sealed class PhotoMode
         (_dof, _autoFocus, _focusMetres, _aperture, _exposureStops) = (_entryDof, true, 10, _entryAperture, 0);
         UseGameTime();
         (Grid, Frame) = (PhotoGrid.Thirds, PhotoFrame.Off);
-        (_dialogue, _gameSpeed) = (false, 1);
+        (_dialogue, _gameSpeed, _sharpZone) = (false, 1, 0);
         _controls.FlySpeed = 300;
         SetLive(0);
     }
@@ -269,7 +275,7 @@ sealed class PhotoMode
     void End()
     {
         var options = _host.WorldOptions.Post;
-        (options.PhotoExposure, options.PhotoDepthOfField) = (1, null);
+        (options.PhotoExposure, options.PhotoDepthOfField, options.LensSharpZone) = (1, null, 0);
         (_host.Camera.Roll, _host.Camera.FocusDistance, _host.Camera.Aperture) = (0, null, null);
         (_host.PhotoHour, _host.PhotoLook) = (null, false);
         _host.Player.SpeechBubbles.Hidden = false;
@@ -304,6 +310,7 @@ sealed class PhotoMode
         camera.Aperture = _aperture;
         options.PhotoExposure = MathF.Pow(2, _exposureStops);
         options.PhotoDepthOfField = _dof;
+        options.LensSharpZone = _sharpZone * 10;
         options.CinematicView = true;
         _host.PhotoLook = true;
         _host.Player.SpeechBubbles.Hidden = !_dialogue;
