@@ -86,6 +86,96 @@ sealed partial class GameHost
     }
 
     /// <summary>
+    /// How many layers <see cref="BlendLayers"/> draws between two ticks: the current ones and those of the last tick that are gone from this one.
+    /// </summary>
+    internal static int DrawnLayerCount(CharacterSnapshot? before, CharacterSnapshot c)
+    {
+        int count = c.Animations.Count;
+        if (before is null || before.Animations.Count == 0) return count;
+
+        ulong used = 0;
+        for (int i = 0; i < count; i++) used |= MatchedBefore(before, c.Animations[i].Name, used, out int k) ? 1UL << k : 0;
+        for (int k = 0; k < Math.Min(before.Animations.Count, 64); k++)
+            if ((used >> k & 1) == 0 && before.Animations[k].Weight > 0) count++;
+        return count;
+    }
+
+    static bool MatchedBefore(CharacterSnapshot before, string name, ulong used, out int index)
+    {
+        for (index = 0; index < before.Animations.Count && index < 64; index++)
+            if ((used >> index & 1) == 0 && before.Animations[index].Name == name) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// The layers to draw between the last tick (<paramref name="before"/>) and this one (<paramref name="c"/>) at <paramref name="alpha"/>, into
+    /// <paramref name="into"/> (<see cref="DrawnLayerCount"/> long). The simulation keeps each body half's weights at a total of 1, which the renderer relies on
+    /// (it adds the layers up with no normalising, the rest of the weight being the binding pose), so the whole weight vector is interpolated: a layer
+    /// that is new this tick fades in from 0 and one that is gone from this tick fades out to 0 (at its last tick's clip time), instead of the layer
+    /// appearing for the whole span or vanishing at its start, which dropped the total for a frame and pulled the pose towards the binding one (a
+    /// pop at each change of gait or action, plain in slow motion). A layer's clip time moves by the shorter way round its clip (<see cref="LayerTime"/>).
+    /// </summary>
+    internal static void BlendLayers(CharacterSnapshot? before, CharacterSnapshot c, float alpha, CharacterPose[] into)
+    {
+        int count = c.Animations.Count;
+        if (before is null || before.Animations.Count == 0)
+        {
+            for (int i = 0; i < count; i++) into[i] = new CharacterPose(c.Animations[i].Name, c.Animations[i].Time, c.Animations[i].Weight);
+            return;
+        }
+
+        // The gone layers keep their place in the order (the renderer adds rotations in order): after the current layer paired with the last tick's
+        // layer before them.
+        int paired = Math.Min(before.Animations.Count, 64);
+        Span<int> anchors = stackalloc int[paired];
+        Span<int> current = stackalloc int[count];
+        ulong used = 0;
+        int last = -1;
+        anchors.Fill(-1);
+        for (int i = 0; i < count; i++)
+        {
+            current[i] = MatchedBefore(before, c.Animations[i].Name, used, out int k) ? k : -1;
+            if (current[i] >= 0) used |= 1UL << k;
+        }
+
+        for (int k = 0; k < paired; k++)
+        {
+            anchors[k] = last;
+            if ((used >> k & 1) != 0) last = current.IndexOf(k);
+        }
+
+        int put = 0;
+        PutGone(before, used, anchors, -1, alpha, into, ref put);
+        for (int i = 0; i < count; i++)
+        {
+            var layer = c.Animations[i];
+            if (current[i] >= 0)
+            {
+                var old = before.Animations[current[i]];
+                into[put++] = new CharacterPose(layer.Name, LayerTime(old, layer, alpha), old.Weight + (layer.Weight - old.Weight) * alpha);
+            }
+            else into[put++] = new CharacterPose(layer.Name, layer.Time, layer.Weight * alpha);
+
+            PutGone(before, used, anchors, i, alpha, into, ref put);
+        }
+    }
+
+    /// <summary>
+    /// The last tick's layers that are gone from this tick and whose place is after the current layer <paramref name="anchor"/> (-1: before the first), fading out.
+    /// </summary>
+    static void PutGone(CharacterSnapshot before, ulong used, ReadOnlySpan<int> anchors, int anchor, float alpha, CharacterPose[] into, ref int put)
+    {
+        for (int k = 0; k < anchors.Length && put < into.Length; k++)
+        {
+            var old = before.Animations[k];
+            if ((used >> k & 1) != 0 || anchors[k] != anchor || old.Weight <= 0) continue;
+
+            into[put++] = new CharacterPose(old.Name, old.Time, old.Weight * (1 - alpha));
+        }
+    }
+
+    /// <summary>
     /// The facing a character is drawn at: its drawn body's, which follows the facing at a limited rate (<see cref="CharacterSnapshot.DrawYaw"/>).
     /// </summary>
     static float DrawnYaw(CharacterSnapshot c) => float.IsNaN(c.DrawYaw) ? c.Yaw : c.DrawYaw;
@@ -233,21 +323,8 @@ sealed partial class GameHost
                 yaw = CarrierYaw(current, c, yaw, alpha);
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
-            var poses = new CharacterPose[c.Animations.Count];
-            for (int i = 0; i < poses.Length; i++)
-            {
-                var layer = c.Animations[i];
-                float time = layer.Time, weight = layer.Weight;
-                if (before is not null)
-                    for (int k = 0; k < before.Animations.Count; k++)   // indexed: a foreach over the interface boxes its enumerator
-                        if (before.Animations[k] is var old && old.Name == layer.Name)
-                        {
-                            time = LayerTime(old, layer, alpha);
-                            weight = old.Weight + (layer.Weight - old.Weight) * alpha;
-                            break;
-                        }
-                poses[i] = new CharacterPose(layer.Name, time, weight);
-            }
+            var poses = new CharacterPose[DrawnLayerCount(before, c)];
+            BlendLayers(before, c, alpha, poses);
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
                 ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
             list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer));
@@ -387,24 +464,11 @@ sealed partial class GameHost
             // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
             // either.
             bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
-            var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept
-                : _posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
-            for (int i = 0; i < poses.Length; i++)
-            {
-                var layer = c.Animations[i];
-                float time = layer.Time, weight = layer.Weight;
-                // Between ticks the clip time and weight move on from the last snapshot (a wrap of a looping clip goes through the wrap: LayerTime).
-                if (before is not null)
-                    // Indexed: a foreach over the list's interface boxed an enumerator per layer per frame.
-                    for (int k = 0; k < before.Animations.Count; k++)
-                        if (before.Animations[k] is var old && old.Name == layer.Name)
-                        {
-                            time = LayerTime(old, layer, alpha);
-                            weight = old.Weight + (layer.Weight - old.Weight) * alpha;
-                            break;
-                        }
-                poses[i] = new CharacterPose(layer.Name, time, weight);
-            }
+            int drawn = !posed ? 0 : DrawnLayerCount(before, c);
+            var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == drawn ? kept
+                : _posesBySlot[c.Id.Slot] = new CharacterPose[drawn];
+            // Between ticks the layers' clip times and weights move on from the last snapshot (BlendLayers).
+            if (posed) BlendLayers(before, c, alpha, poses);
             if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
             else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
