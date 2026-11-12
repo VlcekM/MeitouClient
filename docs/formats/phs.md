@@ -97,7 +97,7 @@ Joint (raw 0x264-byte struct; offsets):
   0x74 float maxForce, 0x78 float maxTorque   used only when > 0 (breakable)
   0x7c bool collision between the two actors
   0x80 int32 unknown (4)   0xe8 float unknown (0.4)
-  0xdc int32 projection (1 = NX_JPM_POINT_MINDIST), 0xe0 distance, 0xe4 angle
+  0xdc int32 projection (1 = NX_JPM_POINT_MINDIST; 0 with distance and angle 0 in every joint of the human ragdoll: none), 0xe0 distance, 0xe4 angle
   0xf8 bool motor (revolute): 0xfc velocity × 1e5, 0x100 max force × 1e5
   0x108 bool spring 1: 0x10c target, 0x110 spring, 0x114 damper
   0x118 bool spring 2: 0x11c target, 0x120 spring, 0x124 damper

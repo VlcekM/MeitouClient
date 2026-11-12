@@ -22,7 +22,7 @@ internal struct BodyTag
 
 /// <summary>
 /// The contact rules (docs/game/ragdolls.md, "Collision groups" and the materials): ragdolls collide with each other, with the ground and the buildings, but two bodies of one
-/// ragdoll joined by a joint do not (no shipped joint turns that on). Friction 1 as the game's ragdoll material; its restitution of 0.05 is left out (Bepu has none).
+/// ragdoll joined by a joint do not (no shipped joint turns that on). Friction 4: the game's ragdoll material has dynamic friction 1 under an SDK dynamic friction scaling of 4 (its static 20 x 4 has no Bepu match; restitution 0.05 is left out, Bepu has none).
 /// </summary>
 internal struct ContactRules : INarrowPhaseCallbacks
 {
@@ -101,7 +101,7 @@ internal struct Integration : IPoseIntegratorCallbacks
 /// </summary>
 internal sealed class RagdollPhysics : IDisposable
 {
-    public const float Gravity = 98.1f, LinearDamping = 0.05f, AngularDamping = 0.01f, Friction = 1;
+    public const float Gravity = 98.1f, LinearDamping = 0.05f, AngularDamping = 0.01f, Friction = 4;
     /// <summary>
     /// The largest speed a contact pushes bodies apart with (engine choice: 2 m/s).
     /// </summary>
