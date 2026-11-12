@@ -270,7 +270,7 @@ shows the first failing message in this order (**Verified** unless marked):
   `FUN_14054fea0` and town merge `FUN_140931840`). Only for a town of the player faction. The buildings of a town are those whose root object's town handle resolves to it, else the NEAREST non-nest town by
   horizontal distance (`FUN_1400f6c20`; so a building left with a dangling handle by a load that removed an overlapping outpost belongs to the nearest town and is counted at the next refit). The building
   function keys come from the constructors (house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
-  `(4 x sum of the marker positions of the houses (19) and gates (21) + 1 x sum of the top-level REFINERY (4) buildings that are not foliage) / (4 nA + nB)`, all three coordinates; with no such building
+  `(4 x sum of the marker positions of the houses (19) and gates (21) + 1 x sum of the top-level REFINERY (4) buildings that are not foliage) / (4 nA + nB)`, X and Z (the move, slot 32 `FUN_140933b90`, sets the town's Y to the terrain height; **Observed**, round-4 parity); with no such building
   nothing changes (no centre, no radius; the town is removed only when it has no building at all). It is then put on the closest navmesh point within a 500 box (doors and water excluded) and
   **keeps its old position when none is found**. The radius (+0x51c) is the farthest building's X/Z distance from the new position + 200 over every building that is not a wall piece (gates, doors, storage, turrets
   and children count; wall pieces never do), from 1250, clamped to [1000, 20000]. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player town (2500 while it is at most 1), and `type`-based radii

@@ -116,6 +116,22 @@ public class TownRefitTests
     }
 
     /// <summary>
+    /// A refit puts the town's height on the terrain at its new position (slot 32 <c>FUN_140933b90</c>), not on the buildings' mean height.
+    /// </summary>
+    [Fact]
+    public void A_refitted_centre_takes_the_terrain_height()
+    {
+        using var world = World((x, _) => 100 + x / 10);
+        var town = world.Buildings.AddTown(new Vector3(0, 300, 0), Player);
+        Add(world, House, 1000, 0, town.Number);
+
+        ConstructionSystem.ReassessTown(world, town);
+
+        Assert.Equal(1000, town.Position.X, 0.5f);
+        Assert.Equal(200, town.Position.Y, 0.5f);
+    }
+
+    /// <summary>
     /// With nothing walkable within 500 the town keeps its old position, and the radius is still refitted.
     /// </summary>
     [Fact]
