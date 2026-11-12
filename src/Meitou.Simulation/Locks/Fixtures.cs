@@ -117,6 +117,10 @@ public sealed record DoorPick(string Id, string Building, int Door, int Owner, V
     /// The host building's yaw (see <see cref="HostRecord"/>).
     /// </summary>
     public float Yaw { get; init; }
+    /// <summary>
+    /// The host building's whole placement turn, tilt included, where known (<see cref="Fixture.Rotation"/>; null: <see cref="Yaw"/> about +Y).
+    /// </summary>
+    public Quaternion? Rotation { get; init; }
 }
 
 /// <summary>
@@ -319,6 +323,11 @@ public sealed class Fixture
     /// hashed or saved.
     /// </summary>
     public bool IsGate { get; init; }
+    /// <summary>
+    /// Doors: the building's whole placement turn, tilt included, where it is known (null: a turn of <see cref="Yaw"/> about +Y); it places the leaf
+    /// (<see cref="FixtureRegistry.DoorSpotOf"/>). Derived from the data, not hashed or saved.
+    /// </summary>
+    public Quaternion? Rotation { get; init; }
     /// <summary>
     /// Doors: where the leaf is in the world, once the door gate has told it (<see cref="FixtureRegistry.DoorSpotOf"/>); derived from the data, not
     /// hashed or saved.

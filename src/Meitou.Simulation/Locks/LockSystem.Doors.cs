@@ -62,9 +62,10 @@ public sealed class DoorLockJob(string door, bool locking)
 /// <list type="bullet">
 /// <item><b>Engine choice</b>: the original's walk needs its destination and location "accessible" (states 59, 60), which Task_OpenDoor (84, 85)
 /// makes true by opening the door (the walker faces the door, a locked one fails the task); here the walk itself opens it: a walker within
-/// <see cref="OpenReach"/> of a closed door whose current or next path leg crosses the leaf's plane within its width (plus <see cref="DoorSlack"/>).
-/// At a locked one the walker stops, within <see cref="LockedReach"/> on its current leg. The walker does not wait for the leaf (the navmesh lets
-/// paths through closed unlocked doors).</item>
+/// <see cref="OpenReach"/> of a closed door's leaf whose current or next path leg crosses the leaf's plane within its width (plus
+/// <see cref="DoorSlack"/>). At a locked one the walker stops, within <see cref="LockedReach"/> of the leaf on its current leg. Both reaches run from
+/// the nearest point of the leaf, not its centre: a gate's leaf is 70 wide and more, and a walker crossing it off centre was never stopped (#560).
+/// The walker does not wait for the leaf (the navmesh lets paths through closed unlocked doors).</item>
 /// <item>The original closes no door behind a walker (<b>Observed</b>: only Task_CloseDoor, Task_LockDoor and the door panel start a close, and only
 /// the lock tasks need a closed door). Meitou (<see cref="DoorsCloseBehind"/>): a door a walker opened closes <see cref="AutoCloseSeconds"/> after
 /// the last character went through or stood in it, unless it wants its lock.</item>
@@ -445,7 +446,7 @@ public sealed partial class LockSystem
             if (watch && !f.AutoOpened) continue;
             if (fixtures.DoorSpotOf(f) is not { } spot) continue;
             var scan = new WalkerScan { World = world, Door = f, Spot = spot, Watch = watch, OpenerFaction = -1 };
-            world.Grid.Query(spot.Centre.X, spot.Centre.Z, OpenReach, ref scan, static (int slot, ref WalkerScan s) =>
+            world.Grid.Query(spot.Centre.X, spot.Centre.Z, OpenReach + spot.HalfWidth, ref scan, static (int slot, ref WalkerScan s) =>
             {
                 if (s.Opened || s.Passed) return;
                 var table = s.World.Characters;
@@ -461,7 +462,7 @@ public sealed partial class LockSystem
                 }
 
                 if (((MoveFlags)n.Flags & MoveFlags.HasPath) == 0 || c.Medical is { Incapacitated: true }) return;
-                float away = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(s.Spot.Centre.X, s.Spot.Centre.Z));
+                float away = FromLeaf(n.Position, s.Spot);
                 if (away > OpenReach) return;
                 if (s.Door.Lock is { EffectivelyLocked: true })
                 {
@@ -570,6 +571,18 @@ public sealed partial class LockSystem
         var normal = new Vector2(door.Normal.X, door.Normal.Z);
         float through = Vector2.Dot(d, normal);
         return MathF.Abs(through) <= DoorDepth && (d - normal * through).Length() <= door.HalfWidth + DoorSlack;
+    }
+
+    /// <summary>
+    /// How far <paramref name="at"/> is from the leaf's closed width in X/Z: its centre line, <see cref="DoorSpot.HalfWidth"/> each way along the
+    /// wall.
+    /// </summary>
+    static float FromLeaf(Vector3 at, DoorSpot door)
+    {
+        var d = new Vector2(at.X - door.Centre.X, at.Z - door.Centre.Z);
+        var along = new Vector2(-door.Normal.Z, door.Normal.X);
+        float t = Math.Clamp(Vector2.Dot(d, along), -door.HalfWidth, door.HalfWidth);
+        return (d - along * t).Length();
     }
 
     /// <summary>

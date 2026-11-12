@@ -309,7 +309,7 @@ public sealed partial class FixtureRegistry
     public IReadOnlyList<DoorPick> DoorPicks => _doorPicks
             ??= [.. _all.Where(f => f.Kind == FixtureKind.Door).Select(f
                     => new DoorPick(f.Id, f.Building, f.DoorIndex, f.Owner, DoorSpotOf(f)?.Centre ?? f.Position, DoorSpotOf(f)?.Slide
-                            ?? Vector3.Zero) { HostRecord = f.HostRecordId, Origin = f.Position, Yaw = f.Yaw })];
+                            ?? Vector3.Zero) { HostRecord = f.HostRecordId, Origin = f.Position, Yaw = f.Yaw, Rotation = f.Rotation })];
 
     /// <summary>
     /// The doors of each building, rebuilt with <see cref="DoorPicks"/> (both in the serial phases; read in parallel ones after).
@@ -494,7 +494,7 @@ public sealed partial class FixtureRegistry
         // A destroyed building has no doors and no lock of its own (docs/game/locks.md "Doors"); its interior's fixtures stay.
         if (record is not null && !IsDestroyed(b))
         {
-            AddDoors(world, db, record, b.Key, site, owner, faction, b.Position, b.Yaw, list);
+            AddDoors(world, db, record, b.Key, site, owner, faction, b.Position, b.Yaw, b.Resolved?.Placement.Rotation, list);
             if (Lockable(db, record) is { } own)
                 list.Add(Make(world, db, own, b.Key, b.Key, record, site, owner, faction, b.Position, b.Yaw));
         }
@@ -632,7 +632,7 @@ public sealed partial class FixtureRegistry
     /// <c>hardness</c>.
     /// </summary>
     void AddDoors(World world, GameDatabase db, GameRecord record, string instance, int site, int owner, FactionData? faction, Vector3 at, float yaw,
-            List<Fixture> list)
+            Quaternion? rotation, List<Fixture> list)
     {
         var doorRefs = record.GetReferences("doors");
         bool gate = TownBuildings.IsGate(db, record, _functions);
@@ -650,6 +650,7 @@ public sealed partial class FixtureRegistry
                 Owner = owner,
                 Position = at,
                 Yaw = yaw,
+                Rotation = rotation is { } turn && turn.LengthSquared() > 1e-12f ? Quaternion.Normalize(turn) : null,
                 DoorIndex = i,
                 WantsLock = door?.GetBool("always locks") ?? false,
                 HostRecordId = record.StringId,
@@ -677,7 +678,7 @@ public sealed partial class FixtureRegistry
         var faction = site.Owner >= 0 && site.Owner < data.Factions.Count ? data.Factions[site.Owner] : null;
         var list = new List<Fixture>();
         float yaw = TownBuildings.YawOf(site.Rotation);
-        AddDoors(world, data.Db, record, site.Id, -1, site.Owner, faction, site.Position, yaw, list);
+        AddDoors(world, data.Db, record, site.Id, -1, site.Owner, faction, site.Position, yaw, site.Rotation, list);
         if (own is { } kind)
         {
             var made = Make(world, data.Db, kind, site.Id, site.Id, record, -1, site.Owner, faction, site.Position, yaw, host: record.StringId);
@@ -1222,12 +1223,26 @@ public sealed partial class FixtureRegistry
         door.SpotAsked = true;
         if (_doors.DoorSpotOf(door.HostRecordId, door.DoorIndex) is { } local)
         {
-            var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, door.Yaw);
-            door.Spot = local with { Centre = door.Position + Vector3.Transform(local.Centre, turn), Normal = Vector3.Transform(local.Normal, turn),
-                    Slide = Vector3.Transform(local.Slide, turn) };
+            // The whole placement turn: a gate's leaf high on a tilted building (an Ancient Lab Ramp Gate, 231 up, placed 8-10° off level) landed
+            // 30-40 units off its leaf with the yaw alone (#560). The normal stays horizontal.
+            var turn = door.Rotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitY, door.Yaw);
+            door.Spot = local with
+            {
+                Centre = door.Position + Vector3.Transform(local.Centre, turn),
+                Normal = Level(Vector3.Transform(local.Normal, turn), local.Normal),
+                Slide = Vector3.Transform(local.Slide, turn),
+            };
         }
 
         return door.Spot;
+
+        static Vector3 Level(Vector3 n, Vector3 upright)
+        {
+            if (n.Y == 0) return n;
+
+            var flat = n with { Y = 0 };
+            return flat.LengthSquared() > 1e-12f ? Vector3.Normalize(flat) : upright;
+        }
     }
 
     /// <summary>

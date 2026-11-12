@@ -400,7 +400,8 @@ public sealed partial class FixtureRegistry
         if (!_byBuilding.TryGetValue(site.Id, out var list)
             || list.Any(f => f.Kind == FixtureKind.Door) || p.Data.Db.Find(site.Record) is not { } record) return;
         var doors = new List<Fixture>();
-        AddDoors(world, p.Data.Db, record, site.Id, p.Site, p.Owner, p.Data.Factions[p.Owner], site.Position, p.Building.Yaw, doors);
+        AddDoors(world, p.Data.Db, record, site.Id, p.Site, p.Owner, p.Data.Factions[p.Owner], site.Position, p.Building.Yaw,
+            p.Building.Resolved?.Placement.Rotation, doors);
         foreach (var door in doors)
         {
             list.Add(door);
