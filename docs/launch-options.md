@@ -29,6 +29,19 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off. Works with `--load` or `--new-game`. |
 | `--settings-schema <file>` | path | | Writes the launcher's settings description and exits. Must be the first two arguments; no log or window. |
 | `--recommend-preset <file>` | path | | Writes the quality preset for this computer (`HardwareProbe`, [launcher](launcher.md#graphics)) as JSON and exits. Must be the first two arguments; no log or window. |
+| `--wiki-export <dir>` | folder | | Writes the agent wiki's generated JSON (zones, towns, factions, squads, NPCs, items, buildings, shops, characters, research, animals, spawns...) from the game data, mods included, and exits ([agent playtest](agent-playtest.md)). |
+| `--facts-only` | | off | With `--wiki-export`: no description text, only names, ids, numbers, positions, conditions and relations. |
+
+### Agent channel (debug)
+
+[Agent playtest](agent-playtest.md); not for benchmarks or release play.
+
+| Option | Value | Default | Effect |
+|---|---|---|---|
+| `--control-dir <dir>` | folder | `MEITOU_CONTROL_DIR` | Polls `<dir>/cmd` (lines `<id> <console command>`) and appends results to `<dir>/out`. |
+| `--exec "<cmd; cmd>"` | console commands | none | Run once, in order, after the world has loaded and settled. The first failing command prints `setup failed: ...`, skips the rest and makes the run exit 3. Also `--setup`. |
+| `--screenshot-after <s>` | seconds | none | After the setup: wait s seconds, save one frame and quit; exit 0, 3 setup failed (no picture), 4 picture not written. |
+| `--screenshot-out <png>` | file | `<control-dir>/shot.png`, else `./meitou-shot.png` | Where `--screenshot-after` saves. |
 
 ### Graphics and UI
 
@@ -40,6 +53,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--ui <faithful\|meitou>` | | `meitou.user.json` (meitou) | UI mode, independent of graphics. |
 | `--ui-showcase` | | off | With `--screenshot`: HUD, inventory, stats, map, menus, a trade and a conversation, in either UI mode. |
 | `--ui-panel <name>` | panel name | none | With `--screenshot`: open one panel (hud, hud-expanded, inventory, stats, overview, menu, title, ...). |
+| `--settings-showcase` | | off | With `--screenshot`: the settings menu's Graphics page (every tab, a changed preset, the preset list, Save as, Low quality, Faithful). |
 | `--title-preview` | | off | With `--screenshot`: the staged Meitou title scene. Sets UI mode and main menu style to Meitou. |
 
 ### Sandbox, scenes, duel and battle
@@ -111,6 +125,7 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` (`Parse`, `Usag
 | `--fly-to <x>,<z>` | world X,Z | | With `--screenshot`: fly there first, then take the picture. |
 | `--windowed` | | off (full screen) | Bordered window; maximised unless `--size` is given. |
 | `--hidden-window` | | off | Window never shown (implies `--windowed`): for unattended runs such as `--play-bench`; frames are drawn and presented as usual. |
+| `--headless` | | off | No window, swapchain or presentation: the interactive loop draws into an offscreen picture of `--size` (default 1920x1080), 30 fps unless `--fps-limit`. For the agent channel and its screenshot command. Also `MEITOU_HEADLESS=1`. |
 | `--monitor <n>` | 1-based | not set | Window on monitor n. |
 | `--show-keys` | | off | Start with the key list open (F10). |
 | `--play-shots` | | off | Fly the saved camera keys on a loop. |
@@ -181,6 +196,7 @@ Authority: `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` (`Parse`, `Usag
 | `--no-fxaa` | | FXAA on | Game's FXAA off when no upscaler runs. |
 | `--smaa` | | off | SMAA instead of FXAA when no upscaler runs. |
 | `--no-heat-haze` | | on | No heat haze. |
+| `--bloom <x>` | 0 to 0.25 | preset | Bloom strength; 0 turns bloom off. |
 | `--particle-divisor <0\|1\|2\|4>` | | 0 | Weather particles drawn at 1/n of render size; 0 sizes by sprite. Rain and fire stay full size. |
 
 ### Meitou and Faithful switches
@@ -235,7 +251,7 @@ Authority: `tools/Meitou.Tools/Program.cs` (dispatch and usage), with the option
 | `image-diff <a.png> <b.png> [diff.png]` | | Mean difference and share of pixels over 12/255. |
 | `world-map <png> [step]` | step, default 16 | Top-down world map. |
 
-`navmesh` options: `--zone x,z`, `--town name`, `--around n`, `--geometry`, `--obj f.obj`, `--png f.png`, `--scale u`, `--box x0,z0,x1,z1`, `--path x0,z0,x1,z1` with `--from-y y`, `--to-y y`, `--closed`, `--near x,z,radius` (the buildings, map features, carvers and solids reaching the point), `--probe x,z[;x,z...]` (the column at each point: gathered triangles, solids, our and the original's polygons), `--probe x,z,radius,step` (a map of ground both meshes keep), `--feature-tops` (per map feature of the zone: walkable top samples the original and we keep), `--regions` (the original tile's regions and ours, islands the original lacks and the bridges where ours runs on past its mesh end, within `--box`), `--base` (the base game's records and levels only, whatever mods the install enables; the navigation tests load the install's records with the base game's levels), `--route x0,z0,x1,z1` (the long-range route with building footprints, then with map features too), `--ragdoll` (the zone's ragdoll collision triangles, map features' among them), `--no-interiors`, `--interior key` (one building's interior: parts, components, coverage), `--compare-interiors x,z ... | towns` (the original tiles' interior faces our kept polygons cover, and per group whether the original connects it and ours is reached from the street, SEALED where only the original is; `towns` adds every zone with a town; per group under 90 % the building and its uncovered faces by height, pruned or absent; with `--around n` the neighbours resolved too; `--verbose` each face and the furniture standing on original faces), `--repeat n`, `--fingerprint` (SHA-256 of the cache files), `--compare x,z ...`, `--own-only` (the building's own shapes only, no furniture or neighbouring buildings), `--verbose` (a failed `--path` also prints the polygons that reach the goal without clearance); build settings (`NavBuildSettings`): `--cell u`, `--climb u`, `--tile n` (cells per tile), `--min-region n`, `--merge-region n` (region areas in cells), `--simplify e` (contour error in cells).
+`navmesh` options: `--zone x,z`, `--town name`, `--around n`, `--geometry`, `--obj f.obj`, `--png f.png`, `--scale u`, `--box x0,z0,x1,z1`, `--path x0,z0,x1,z1` with `--from-y y`, `--to-y y`, `--closed`, `--near x,z,radius` (the buildings, map features, carvers and solids reaching the point), `--probe x,z[;x,z...]` (the column at each point: gathered triangles, solids, our and the original's polygons), `--probe x,z,radius,step` (a map of ground both meshes keep), `--feature-tops` (per map feature of the zone: walkable top samples the original and we keep), `--regions` (the original tile's regions and ours, islands the original lacks and the bridges where ours runs on past its mesh end, within `--box`), `--base` (the base game's records and levels only, whatever mods the install enables; the navigation tests load the install's records with the base game's levels), `--route x0,z0,x1,z1` (the long-range route with building footprints, then with map features too), `--ragdoll` (the zone's ragdoll collision triangles, map features' among them), `--no-interiors`, `--interior key` (one building's interior: parts, components, coverage), `--compare-interiors x,z ... | towns` (the original tiles' interior faces our kept polygons cover, and per group whether the original connects it and ours is reached from the street, SEALED where only the original is; `towns` adds every zone with a town; per group under 90 % the building and its uncovered faces by height, pruned or absent; with `--around n` the neighbours resolved too; `--verbose` each face and the furniture standing on original faces), `--repeat n`, `--fingerprint` (SHA-256 of the cache files), `--compare x,z ...`, `--own-only` (the building's own shapes only, no furniture or neighbouring buildings), `--verbose` (a failed `--path` also prints the polygons that reach the goal without clearance); `--survey-interiors zones|towns` (per building interior, the area both meshes, only ours (by height over the hull's base) and only the original's keep, summed by building type) with `--name text` (list placements whose type contains it), `--png dir` (per listed placement: height images of each side, a difference image, both meshes as OBJ, two vertical sections), `--section x,z` (where the sections cut), `--border` (hulls over the zone's border too); build settings (`NavBuildSettings`): `--cell u`, `--cell-height u`, `--climb u`, `--tile n` (cells per tile), `--min-region n`, `--merge-region n` (region areas in cells), `--simplify e` (contour error in cells), `--edge n` (longest contour edge), `--monotone` (monotone instead of watershed regions).
 
 `weather` options: `--region name`, `--at x,z`, `--days d0 d1`, `--seed n`, `--list` (regions and calendars), `--extents`.
 
@@ -262,6 +278,8 @@ These have no user-facing docs; options are from their top-level argument loops.
 |---|---|---|
 | `KENSHI_PATH` | `src/Meitou.Core/Content/GameInstall.cs`, `tools/scripts/*.ps1` | Kenshi install folder. Also used by the test suite through `GameInstall.Locate`; tests skip when it is missing. |
 | `MEITOU_MODS_CFG` | `src/Meitou.Game/Host/Program.cs` | Same as `--mods-cfg <file>`; the option wins. |
+| `MEITOU_CONTROL_DIR` | `src/Meitou.Game/DevTools/Agents/AgentChannel.cs` | Same as `--control-dir <dir>`; the option wins. |
+| `MEITOU_HEADLESS` | `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` | `1`: same as `--headless`. |
 | `DYLD_LIBRARY_PATH` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDevice.cs`, `launcher/Meitou.Launcher/MacSupport.cs` | macOS Vulkan loader search path; only named in the error message the viewer prints. The launcher sets it. |
 | `SteamAppId` | `src/Meitou.Game/Host/SteamSession.cs` | Steam app id; the launcher sets it on Windows. |
 | `SteamGameId` | launcher only | Set for Steam's overlay; not read by project code. |
