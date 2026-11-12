@@ -246,7 +246,7 @@ sealed class LookPresets(SettingsMenu menu)
     {
         "Interior lamps" => "Advanced",
         "Anti-aliasing" or "Weather particles" => "Hidden",
-        "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows" => "Light",
+        "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows" => "Light",
         "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
         "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
             or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
@@ -498,6 +498,8 @@ sealed class LookPresets(SettingsMenu menu)
                 // The Meitou quality switches as the tier has them, then the active preset's look.
                 SetMeitouSwitches(tier);
                 ApplyLook(ActiveLook);
+                // The traced techniques follow the indirect light, which the look has just set.
+                menu.Tiers.ApplyTracedSwitches(tier < QualityTiers.CustomPreset ? tier : QualityTiers.HighPreset);
             }
 
             if (tier < QualityTiers.CustomPreset)

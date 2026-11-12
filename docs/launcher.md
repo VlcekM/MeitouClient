@@ -182,7 +182,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 
 - The schema is also the catalogue the game's own Display and Graphics pages are drawn from ([native-ui](native-ui.md)), so the launcher's
   rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
-- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Sky & weather, Colour, World, Characters)
+- Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Shadows, Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour, Post FX, Interface)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
@@ -210,9 +210,11 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
   headless Vulkan device (the GPU it would pick), reads the memory and the cores, and writes `{ preset, summary, gpu, integrated,
   videoMemoryMb, memoryMb, cores, problem }`; the launcher saves `preset` as above and shows `summary`. Without Vulkan (a Metal-only Mac)
-  the memory and cores decide alone. The thresholds (`HardwareProbe.Recommend`) are a judgement, **Unknown** whether they suit: integrated
-  GPU (Apple's: under 16 GB memory), under 3 GB video memory, 8 GB memory or 4 threads is Low; under 6 GB, 12 GB or 6 threads Medium;
-  under 10 GB video memory High; else Ultra. Observed: Intel Iris Xe (integrated) is Low, in 2.5 s.
+  the memory and cores decide alone. The rule (`HardwareProbe.Recommend`) is a judgement, **Unknown** whether it suits: integrated
+  GPU (Apple's: under 16 GB memory), under 3 GB video memory, 8 GB memory or 4 threads is Low; a GeForce by its model against the
+  classes the tiers are meant for (`GeForceTier`: RTX 3060 Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090
+  Extreme, other series by their place among these, a laptop GPU a class lower); any other card by video memory (under 6 GB Medium,
+  under 12 GB High, under 24 GB Ultra, else Extreme); under 12 GB memory or 6 threads Medium at most. Observed: Intel Iris Xe (integrated) is Low, in 2.5 s.
 - The launcher detects once by itself (`PresetDetected` in `launcher.json`): when the version Play starts can detect and the game has no
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.

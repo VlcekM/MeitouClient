@@ -18,17 +18,61 @@ static class HardwareProbe
         long MemoryMb, int Cores, string? Problem);
 
     /// <summary>
-    /// The preset for the hardware. The thresholds are a judgement, not measured: an integrated GPU (but Apple's with 16 GB or more), under 3 GB
-    /// of video memory, under 8 GB of memory or under 4 cores is Low; under 6 GB of video memory, 12 GB of memory or 6 cores Medium; under
-    /// 10 GB of video memory High; else Ultra.
+    /// The preset for the hardware. A judgement, not measured, but for the classes the tiers are meant for (<see cref="QualityTiers.LowPreset"/>):
+    /// an integrated GPU (but Apple's with 16 GB or more), under 3 GB of video memory, under 8 GB of memory or under 4 cores is Low; a GeForce by
+    /// its model (<see cref="GeForceTier"/>); any other card by its video memory (under 6 GB Medium, under 12 GB High, under 24 GB Ultra, else
+    /// Extreme); under 12 GB of memory or 6 cores is Medium at most.
     /// </summary>
-    public static string Recommend(bool integrated, bool apple, long videoMemoryMb, long memoryMb, int cores)
+    public static string Recommend(bool integrated, bool apple, long videoMemoryMb, long memoryMb, int cores, string gpu = "")
     {
-        var names = QualityTiers.PresetChoices;   // Low, Medium, High, Ultra
+        var names = QualityTiers.PresetChoices;   // Low, Medium, High, Ultra, Extreme
         if (apple) return names[memoryMb >= 16 * 1024 ? 1 : 0];
-        if (integrated || videoMemoryMb < 3 * 1024 || memoryMb < 8 * 1024 || cores < 4) return names[0];
-        if (videoMemoryMb < 6 * 1024 || memoryMb < 12 * 1024 || cores < 6) return names[1];
-        return names[videoMemoryMb < 10 * 1024 ? 2 : 3];
+        if (integrated || videoMemoryMb < 3 * 1024 || memoryMb < 8 * 1024 || cores < 4) return names[QualityTiers.LowPreset];
+
+        int tier = GeForceTier(gpu) ?? (videoMemoryMb < 6 * 1024 ? QualityTiers.MediumPreset
+            : videoMemoryMb < 12 * 1024 ? QualityTiers.HighPreset
+            : videoMemoryMb < 24 * 1024 ? QualityTiers.UltraPreset
+            : QualityTiers.ExtremePreset);
+        if (memoryMb < 12 * 1024 || cores < 6) tier = Math.Min(tier, QualityTiers.MediumPreset);
+        return names[tier];
+    }
+
+    /// <summary>
+    /// A GeForce's tier by its model ("NVIDIA GeForce RTX 4070 Ti SUPER"), from its place against the classes the tiers are meant for; null for
+    /// any other name or a series not listed (the video memory decides). A GTX has no ray tracing; a laptop GPU sits a class under its name.
+    /// </summary>
+    internal static int? GeForceTier(string gpu)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(gpu, @"(RTX|GTX)\s*(\d\d)(\d)0\s*(Ti)?\s*(SUPER)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+
+        int series = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), model = m.Groups[3].Value[0] - '0';
+        bool ti = m.Groups[4].Success, super = m.Groups[5].Success;
+        const int low = QualityTiers.LowPreset, medium = QualityTiers.MediumPreset, high = QualityTiers.HighPreset, ultra = QualityTiers.UltraPreset,
+            extreme = QualityTiers.ExtremePreset;
+        int? tier = m.Groups[1].Value.Equals("GTX", StringComparison.OrdinalIgnoreCase)
+            ? series == 10 && model == 8 && ti ? medium : low
+            : (series, model) switch
+            {
+                (20, 6 or 7) => medium,
+                (20, 8) => ti || super ? high : medium,
+                (30, 5) => low,
+                (30, 6) => medium,
+                (30, 7) => high,
+                (30, 8) => ti ? ultra : high,
+                (30, 9) => ultra,
+                (40, 5) => low,
+                (40, 6) => ti ? high : medium,
+                (40, 7) => ti ? ultra : high,
+                (40, 8) => super ? extreme : ultra,
+                (40, 9) => extreme,
+                (50, 5) => medium,
+                (50, 6) => high,
+                (50, 7) => ti ? ultra : high,
+                (50, 8 or 9) => extreme,
+                _ => null,
+            };
+        return tier is { } t && gpu.Contains("Laptop", StringComparison.OrdinalIgnoreCase) ? Math.Max(t - 1, low) : tier;
     }
 
     /// <summary>
@@ -56,7 +100,7 @@ static class HardwareProbe
             problem = e.Message;
         }
         bool apple = appleSilicon || gpu.StartsWith("Apple", StringComparison.Ordinal);
-        string preset = Recommend(integrated, apple, videoMemoryMb, memoryMb, cores);
+        string preset = Recommend(integrated, apple, videoMemoryMb, memoryMb, cores, gpu);
         // An integrated GPU's device-local heap is a share of the system's memory, not memory of its own.
         string what = gpu.Length == 0 ? "GPU not found" : integrated ? $"{gpu} (integrated)"
             : $"{gpu} ({videoMemoryMb / 1024.0:0.#} GB video memory)";
