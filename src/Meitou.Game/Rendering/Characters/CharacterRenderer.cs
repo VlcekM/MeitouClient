@@ -341,6 +341,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         public Matrix4x4 World;
         public Vector3 Centre;
         public float Radius;
+        /// <summary>The water's mark on the character, as its instances' flags carry it (<see cref="SoakBits"/>).</summary>
+        public uint Soak;
         public int BoneBase, AttachBase, LayerStart, LayerCount;
         /// <summary>
         /// Its parts' first entry in <see cref="CharacterRenderer._partFrames"/> (one per asset part).
@@ -435,6 +437,55 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// Off screen at the last update (<see cref="Live.OffScreen"/>).
         /// </summary>
         public bool OffScreen;
+        /// <summary>
+        /// The water's mark (<see cref="Soaked"/>): how high it reaches up the body's own mesh, its strength (1 down to 0), the seconds left before
+        /// it fades, and the clock it was last stepped at (NaN: never).
+        /// </summary>
+        public float SoakHeight = -1, SoakStrength, SoakTimer;
+        public double SoakAt = double.NaN;
+    }
+
+    /// <summary>The game's seconds (stopped while paused, faster at the fast speeds): what the water's mark dries by. The pose clock without one.</summary>
+    public Func<double>? SoakClock { get; set; }
+
+    /// <summary>
+    /// The mark the water leaves on a character (docs/character-renderer.md "Wetness"; the game's <c>waterLine</c>): it reaches 1.1 times as high up
+    /// the body as the water was deep over the character's place, at full strength for 300 s after the deepest wade, the last 40 fading; while it
+    /// fades in shallower water its height comes down a unit a second. A character first seen is marked by the water it stands in.
+    /// </summary>
+    void Soaked(ref Live l, CharState state)
+    {
+        const float lasts = 300, fades = 40;
+        double now = SoakClock?.Invoke() ?? _poseSeconds;
+        float depth = 1.1f * (Meitou.Data.World.WorldWater.Height - l.World.Translation.Y);
+        if (double.IsNaN(state.SoakAt))
+        {
+            (state.SoakHeight, state.SoakStrength, state.SoakTimer) = depth > 0 ? (depth, 1, lasts) : (-1, 0, 0);
+        }
+        else if (depth >= state.SoakHeight)
+        {
+            (state.SoakHeight, state.SoakStrength, state.SoakTimer) = (MathF.Max(depth, -1), 1, lasts);
+        }
+        else if (state.SoakStrength > 0)
+        {
+            float dt = (float)Math.Clamp(now - state.SoakAt, 0, 1);
+            state.SoakTimer -= dt;
+            if (state.SoakTimer < fades) state.SoakStrength = MathF.Max(state.SoakStrength - dt / fades, 0);
+            if (state.SoakStrength < 0.9f && depth > 0) state.SoakHeight -= dt;
+        }
+
+        state.SoakAt = now;
+        l.Soak = SoakBits(state.SoakHeight, state.SoakStrength);
+    }
+
+    /// <summary>
+    /// A mark in the instance flags' bits 1 to 11 (CharacterShaders.Vertex): its height in half units (6 bits: 31.5 units and up is the whole body),
+    /// then its strength (5 bits).
+    /// </summary>
+    internal static uint SoakBits(float height, float strength)
+    {
+        uint h = (uint)Math.Clamp(MathF.Round(height * 2), 0, 63), s = (uint)MathF.Round(Math.Clamp(strength, 0, 1) * 31);
+        return h == 0 || s == 0 ? 0 : (h | s << 6) << 1;
     }
 
     /// <summary>
@@ -955,6 +1006,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         (state.InWorld, state.Centre, state.Radius) = (!far, l.Centre, l.Radius);
         state.PreviousWorld = state.HasWorld ? state.World : l.World;
         (state.World, state.HasWorld) = (l.World, true);
+        if (far) l.Soak = 0; else Soaked(ref l, state);
 
         // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the
         // same bones). A new asset (other gear, another rig) is posed at once: its parts' attach matrices and its arrays' sizes come from it. The

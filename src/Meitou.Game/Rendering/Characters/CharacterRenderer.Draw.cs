@@ -340,7 +340,7 @@ internal sealed unsafe partial class CharacterRenderer
                 Model = part.IsBody ? WithBlood(model, l.Blood) : model,
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
-                Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+                Flags = (interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset),
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
             if (_motionPass)
@@ -575,7 +575,7 @@ internal sealed unsafe partial class CharacterRenderer
             Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model,
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
-            Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+            Flags = (l.Interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset),
             MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };

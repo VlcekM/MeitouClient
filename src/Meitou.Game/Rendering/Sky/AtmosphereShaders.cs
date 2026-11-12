@@ -109,7 +109,7 @@ static class AtmosphereShaders
         uniform sampler2D uAtmoClouds;
         uniform sampler2D uAtmoCloudsTile;
         {{CloudShadow}}
-        uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours)
+        uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours), w the water's height
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
         uniform sampler2D uWeatherDustNoise;   // the dust noise (Turbulent.dds), sampled at world.xz * 0.002
         uniform sampler2D uWeatherGround;      // the terrain's whole-world ground colour map: the dust colour (the BIOMES `ground colour` where the object is)

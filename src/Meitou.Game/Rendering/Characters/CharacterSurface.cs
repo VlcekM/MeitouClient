@@ -214,13 +214,18 @@ static class CharacterSurface
             return share * (1.0 - smoothstep(0.02, 0.1, tone)) * smoothstep(0.5, 0.7, headGloss) * smoothstep(2.5, 4.5, curvature);
         }
 
-        // The game's wetness in the rain (common/wet.hlsl makeWet, character.hlsl: skin takes a fifth of the absorbance), as the world's objects have it; indoors dry; no water
+        // The game's wetness in the rain (common/wet.hlsl makeWet, character.hlsl: skin takes a fifth of the absorbance), as the world's objects have it; indoors dry; and the water's
         // line. The eye is wet already: it keeps its colour and takes the sky's wide lobe, not the island's mirror of the landscape (KenshiNative's eyes2).
-        void wetSurface(inout vec3 albedo, inout float gloss, float metal, float skin)
+        void wetSurface(inout vec3 albedo, inout float gloss, float metal, float skin, float soak)
         {
             vec4 wet = vec4(albedo, gloss);
-            if (view.fogDistance > 0.0 && vInterior == 0u && uWeatherWet.x > 0.0)
-                makeWet(wet, uWeatherWet.x, (1.0 - gloss) * (1.0 - metal) * (1.0 - 0.8 * skin), -1.0e4, 0.5);
+            if (view.fogDistance > 0.0)
+            {
+                // By the weather out of doors and by the mark the water left; what is under the water now is darker and does not shine.
+                float amount = max(vInterior == 0u ? uWeatherWet.x : 0.0, soak), under = uWeatherWet.w - vWorld.y;
+                if (amount > 0.0 || under > -0.5)
+                    makeWet(wet, amount, max(1.0 - 2.0 * gloss, 0.0) * (1.0 - metal) * (1.0 - 0.8 * skin), under, 0.5);
+            }
             albedo = mix(wet.rgb, albedo, eyeShare);
             gloss = mix(wet.a, 0.4, eyeShare);
         }

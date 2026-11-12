@@ -58,7 +58,7 @@ static class CharacterShaders
         ArmourMetal = 1 << 27,
         // A prosthetic (LIMB_REPLACEMENT with its own material): judged as a held item, by colour and its painted gloss, so a wooden or organic limb stays as it is.
         LimbMetal = 1 << 28;
-    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
+    // Instance flag (CharInstance.Flags; bit 0 interior, 1-11 the water's mark (CharacterRenderer.SoakBits), 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
     // vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
     // A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
@@ -136,6 +136,7 @@ static class CharacterShaders
         //MOTION_OUT
         out vec4 vColour;
         out vec4 vBlood;        // the blood mapping of character.hlsl (cylinder projection of the part in its own space), before the race scale
+        out float vSoak;        // how wet the water's mark leaves the vertex (0..1)
         out float vBloodAmount; // the blood amount of the vertex's body part (the instance carries the parts': two 8-bit amounts in the w of each matrix row)
 
         void main()
@@ -181,6 +182,9 @@ static class CharacterShaders
                 float pair = k < 2u ? aInstance0.w : k < 4u ? aInstance1.w : k < 6u ? aInstance2.w : aInstance3.w;
                 vBloodAmount = float((uint(pair + 0.5) >> (8u * (k & 1u))) & 255u) / 255.0;
             }
+            // The water's mark (skin.hlsl waterLine): wet below its height on the mesh as it is modelled (not as it is posed), by its strength.
+            uint soak = (aInstanceData.z >> 1) & 2047u;
+            vSoak = clamp(float(soak & 63u) * 0.5 - aPosition.y, 0.0, 1.0) * float(soak >> 6) / 31.0;
             gl_Position = view.viewProjection * p;
             // Boots over one prosthetic leg (COLLAPSE_SIDE): flags bits 16-17, 1 collapses the x >= 0 half, 2 the x < 0 half.
             uint hideSide = (aInstanceData.z >> 16) & 3u;
@@ -246,6 +250,7 @@ static class CharacterShaders
         in float vHidden;
         in vec4 vColour;
         in vec4 vBlood;
+        in float vSoak;
         in float vBloodAmount;
         layout(location = 0) out vec4 fragColour;
 
@@ -479,8 +484,8 @@ static class CharacterShaders
             {
                 eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
                 skin *= 1.0 - eyeShare;
-                wetSurface(albedo, gloss, metal, skin);
             }
+            wetSurface(albedo, gloss, surfaceOn ? metal : 0.0, skin, vSoak);
             if (surfaceOn && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
             clothSheen = surfaceOn ? sheen * 0.25 : 0.0;

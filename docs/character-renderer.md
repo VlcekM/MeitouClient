@@ -86,8 +86,16 @@ game data, `docs/features/characters.md` "Eyes"). Port of the surface of its eye
 to 4.5 up in place of its race list; hive shells stay out by curvature, **Unknown** until measured) takes no skin terms, gloss 0.4 for the sky, and a bounded tear-film catchlight from the
 sun and the lamps. Not ported: eyes2's refracted iris and eyes3's drawn iris: KenshiNative turned them off after play (they often looked worse than the game's eye), and eyes3 needs a
 table per head mesh, against the modded-race rule.
-**Rain** (port of `makeWet`, KenshiNative's `skin-wet.md` start: Meitou's characters had no wetness): `uWeatherWet.x` on albedo and gloss, outdoors, absorbance
-(1 − gloss)(1 − metal), a fifth on skin. Not ported: its drops and film (a baked drop map, a G-buffer path) and the water line (no water height here).
+**Wetness** (the game's, in both looks; `CharacterSurface.wetSurface`, `CharacterRenderer.Soaked`). The original (**Verified**: `deferred/skin.hlsl`, `deferred/character.hlsl`,
+`common/wet.hlsl`; the exe's per-frame character renderer update, `FUN_14052c450`): a vertex is wet by `max(z, saturate(x - y of the vertex on the mesh as modelled) * y)`
+of a per-character vector (Ogre custom parameter 1, on the body and on every attached item): **z** follows the weather's `wetness` at 0.1 a game second (0 indoors; a roof
+counts as outdoors), **x** is 1.1 times the water's depth over the character's place and **y** the mark's strength: while the depth is at least x, x takes it, y is 1 and a
+timer is 300 s; else the timer runs down, under 40 s y falls by 1/40 a second, and once y is under 0.9 in shallower water x falls by 1 a second. The fragment then calls
+`makeWet` with absorbance `1 - 2 gloss` (a body's times `0.2 + 0.8 clothing`) and the water's height less the fragment's (edge 0.5): under the water darker, no shine.
+Here: the mark is kept per character (`CharState`, the game clock) and rides in the instance flags (height in half units up to 31.5, strength in 32 steps); the weather's share
+is the frame's `uWeatherWet.x`, off indoors at once (not over 10 s); the water's height is `uWeatherWet.w`. A character not listed for 60 updates starts again from the water it
+stands in. With Advanced materials the absorbance is also times (1 - metal) and the eye keeps its colour. **Observed** (offscreen, Flats Lagoon, a swim then the shore): the
+clothes darker and glossier up to the chest, the shoulders dry. Not ported: KenshiNative's drops and film (a baked drop map, a G-buffer path).
 **Face shadows**: nothing to port: KenshiNative's fault was the traced hair's alpha channel, and here the shadow caster cuts by the hair's own `alphaChannel`
 (`CharacterShaders.DepthFragment`) and no ray sees characters.
 
