@@ -146,6 +146,8 @@ internal sealed unsafe class GiScene : IDisposable
     public bool SkipWorld { get; set; }
     /// <summary>How far from the eye the grass is traced (<see cref="TracedGrass"/>): where the traced sun's share ends, set before <see cref="Update"/>.</summary>
     public float GrassReach { get; set; } = TracedGrass.MinRange;
+    /// <summary>The skin scattering table's bindless index (<c>CharacterRenderer.SkinTable</c>; 0: skin shades plainly), for the lamps' shadow pass.</summary>
+    public uint SkinTable { get; set; }
     /// <summary>Whether the traced sun sees grass at all (<c>PostOptions.TracedGrass</c>).</summary>
     public bool GrassShadows { get; set; } = true;
     /// <summary>The interior masks near the eye, whose grass leaves the traced scene (<see cref="InteriorMaskRenderer.Cuts"/>).</summary>

@@ -19,6 +19,38 @@ static class LampShadowShaders
         """;
 
     /// <summary>
+    /// A character's skin takes a lamp as the colour pass gave it (<c>CharacterShaders.lampSkinDiffuse</c>, <c>LAMP_SKIN</c>): N.L and the band the scattering table adds
+    /// past the terminator, from the share and the table row the fragment wrote to the surface target (its bits 28-31 and 20-27) and the albedo's hue. The shading
+    /// normal stands for the smoothed ones of the red and green lookups. So a blocked lamp's whole term is taken back: with N.L alone the band stayed, and skin in a
+    /// lamp's shadow glowed red.
+    /// </summary>
+    static readonly string SkinTerm = $$"""
+        #define LAMP_SKIN
+        float lampSkinShare = 0.0, lampSkinRow = 0.0;
+        vec3 lampSkinHue = vec3(1.0);
+        vec3 lampSkinDiffuse(vec3 n, vec3 l)
+        {
+            float lambert = clamp(dot(n, l), 0.0, 1.0);
+            if (lampSkinShare <= 0.0 || uSkinLut < 0.5) return vec3(lambert);
+            float u = (dot(n, l) * 0.5 + 0.5) * {{((Characters.SkinScattering.Width - 1f) / Characters.SkinScattering.Width).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}} + {{(0.5f / Characters.SkinScattering.Width).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}};
+            float v = lampSkinRow * {{((Characters.SkinScattering.Height - 1f) / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}} + {{(0.5f / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}};
+            vec3 s = textureLod(textures2D[nonuniformEXT(uint(uSkinLut + 0.5))], vec2(u, v), 0.0).rgb;
+            float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
+            return vec3(lambert) + extra * lampSkinHue * lampSkinHue * lampSkinShare;
+        }
+        // The skin a receiver's fragment wrote (0 share: not skin, or no character).
+        void lampSkinOf(uvec4 surface)
+        {
+            lampSkinShare = (surface.w & 524288u) != 0u ? float(surface.w >> 28) / 15.0 : 0.0;
+            lampSkinRow = float((surface.w >> 20) & 255u) / 255.0;
+            vec3 c = vec3(float(surface.z & 255u), float(surface.z >> 8), float(surface.w & 255u)) / 255.0;
+            c *= c;
+            lampSkinHue = c / max(max(c.r, max(c.g, c.b)), 1e-3);
+        }
+
+        """;
+
+    /// <summary>
     /// <c>lampLight</c> with <c>LAMP_VISIBILITY</c> turned into a note of each lamp's diffuse term (radiance and <c>diffuseNl</c> are its locals where the macro
     /// expands), so the terms are the world's by construction: attenuation, spot cone, room clip. The strongest <c>LAMP_SLOTS</c> stay, in order.
     /// </summary>
@@ -172,6 +204,7 @@ static class LampShadowShaders
             total0 = total1 = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             lampBody = (surface.w & 524288u) != 0u;
+            lampSkinOf(surface);
             if ((surface.w & LAMP_RECEIVER) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
             float z = depthAt(px);
             if (z <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0);
@@ -335,7 +368,7 @@ static class LampShadowShaders
             vec3 uUp;       float uPhase;
             vec3 uBack;     float pad0;
             vec3 uGiEye;    float pad1;
-            vec3 uOrigin;   float pad2;         // of the traced scene
+            vec3 uOrigin;   float uSkinLut;     // of the traced scene; the skin scattering table's bindless index (0: none)
             vec2 uNearPlanes;
             vec2 uTan;
             vec2 uFullSize;
@@ -372,7 +405,7 @@ static class LampShadowShaders
         }
         #define LAMP_ONLY int(uRayMask.y)
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampOneNote(lamp, radiance * diffuseNl, toLamp, d, emitter)
-        {{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
+        {{SkinTerm}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
         {{GiShaders.OctDirection}}
         {{GiShaders.HitBuffers}}
         {{TracedSunShaders.CasterCutout}}
@@ -388,6 +421,7 @@ static class LampShadowShaders
             vec3 total = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             lampBody = (surface.w & 524288u) != 0u;
+            lampSkinOf(surface);
             float z = (surface.w & LAMP_RECEIVER) == 0u ? 0.0 : depthAt(px);
             if (z > 0.0)
             {
@@ -438,7 +472,7 @@ static class LampShadowShaders
             vec3 uUp;       float uPhase;       // the frame's step of the sample pattern
             vec3 uBack;     float pad0;
             vec3 uGiEye;    float pad1;
-            vec3 uOrigin;   float pad2;         // of the traced scene
+            vec3 uOrigin;   float uSkinLut;     // of the traced scene; the skin scattering table's bindless index (0: none)
             vec2 uNearPlanes;
             vec2 uTan;
             vec2 uFullSize;
@@ -452,7 +486,7 @@ static class LampShadowShaders
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 8) uniform sampler2D uLightData;
         const int LAMP_SLOTS = {{Math.Clamp(lamps, MinLamps, MaxLamps)}};
-        {{Constants}}{{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}{{Picks}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
+        {{Constants}}{{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}{{Picks}}{{SkinTerm}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
         {{GiShaders.OctDirection}}
         {{GiShaders.HitBuffers}}
         {{TracedSunShaders.CasterCutout}}
@@ -514,6 +548,7 @@ static class LampShadowShaders
             vec3 shown = vec3(0.0, 0.0, 0.15);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             lampBody = (surface.w & 524288u) != 0u;
+            lampSkinOf(surface);
             float z = (surface.w & LAMP_RECEIVER) == 0u ? 0.0 : depthAt(px);
             int lamp = int(uRayMask.y);
             if (z > 0.0)

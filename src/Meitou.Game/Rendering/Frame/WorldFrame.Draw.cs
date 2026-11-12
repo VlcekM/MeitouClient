@@ -581,6 +581,7 @@ static partial class WorldFrame
             var heights = gpu.Terrain.Snapshot();
             gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
             gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
+            gi.SkinTable = gpu.Characters?.SkinTable ?? 0;
             gi.GrassReach = TracedReach(ref f);
             gi.GrassShadows = gpu.Post?.Options.TracedGrass ?? true;
             // Traced, the objects cast as far as the cascades reached (the probes see them too).

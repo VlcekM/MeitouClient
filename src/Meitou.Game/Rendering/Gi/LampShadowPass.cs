@@ -115,7 +115,7 @@ sealed unsafe class LampShadowPass : IDisposable
             Up = new Vector4(view.Up, view.Phase),
             Back = new Vector4(view.Back, 0),
             Eye = new Vector4(view.Eye, 0),
-            Origin = new Vector4(scene.Origin, 0),
+            Origin = new Vector4(scene.Origin, scene.SkinTable),
             PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
             Size = new Vector4(view.Size, lamps.Tiles is null ? TracedSunShaders.LampMask : TracedSunShaders.LampMovers, 0),
         };
@@ -290,7 +290,7 @@ sealed unsafe class LampShadowPass : IDisposable
                 Up = new Vector4(view.Up, view.Phase),
                 Back = new Vector4(view.Back, 0),
                 Eye = new Vector4(view.Eye, 0),
-                Origin = new Vector4(scene.Origin, 0),
+                Origin = new Vector4(scene.Origin, scene.SkinTable),
                 PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
                 Size = new Vector4(view.Size, TracedSunShaders.LampMovers, row),
                 Rect = new Vector4(slot, listBase, 0, 0),
