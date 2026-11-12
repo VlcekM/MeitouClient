@@ -355,6 +355,7 @@ public static class BuildingSave
                 town.Name = name;
             if (state.Bools.ContainsKey("public")) town.Public = state.Bools["public"];
             if (state.Floats.TryGetValue("override", out float radius)) town.Override = radius;
+            else if (state.Ints.TryGetValue("override", out int oldRadius)) town.Override = oldRadius;   // earlier Meitou builds wrote an integer
 
             var hand = Hand.Read(state, "hand");
             if (!hand.IsNull && town.SaveHandle is null) town.SaveHandle = hand;
@@ -369,7 +370,7 @@ public static class BuildingSave
         if (state.Strings.GetValueOrDefault("name") is { Length: > 0 } name) return name;
         if (!state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal)) return "";
 
-        return state.Name[TownStatePrefix.Length..].TrimEnd();
+        return state.Name[TownStatePrefix.Length..];
     }
 
     /// <summary>

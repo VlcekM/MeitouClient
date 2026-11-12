@@ -447,6 +447,44 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// A save written by an earlier Meitou build keeps its integer radius and the exact label name, trailing spaces included.
+    /// </summary>
+    [Fact]
+    public void An_old_meitou_save_restores_the_integer_radius_and_untrimmed_name()
+    {
+        // Catches an old outpost falling back to the default radius and losing trailing spaces of its name.
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Camp  ", "camp", Player, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9));
+        state.Record.Ints["override"] = 1800;
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+
+        var town = Assert.Single(world.Buildings.Towns);
+        Assert.Equal(("Camp  ", 1800f), (town.Name, town.Override));
+    }
+
+    /// <summary>
+    /// A float radius wins over an old integer one.
+    /// </summary>
+    [Fact]
+    public void A_float_radius_wins_over_an_integer_radius()
+    {
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Camp", "camp", Player, new Hand((int)FcsRecordType.Town, 4, 55, 2, 9), true, 2652.5f);
+        state.Record.Ints["override"] = 1800;
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+
+        Assert.Equal(2652.5f, Assert.Single(world.Buildings.Towns).Override);
+    }
+
+    /// <summary>
     /// Load normalization excludes the exact radius boundary and preserves sparse town numbers.
     /// </summary>
     [Fact]
