@@ -2852,6 +2852,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     uint Texture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, _textureBias, _textureStandIn);
 
+    /// <summary>
+    /// A grass sprite, sampled without the upscaler's LOD bias (docs/render-foliage.md "Grass under the upscalers"): a level sharper, its strands are thinner than a
+    /// pixel, which the temporal upscalers smear into a veil as soon as the camera moves.
+    /// </summary>
+    uint GrassTexture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, 0, _textureStandIn);
+
     readonly List<MeshDraw> _meshDraws = [];
 
     static uint IdOf(WorldTexture? t) => t?.Key ?? 0;
@@ -3295,7 +3301,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (ref readonly var d in CollectionsMarshal.AsSpan(_grassDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(d.Sprite);
+            pc.Sprite = GrassTexture(d.Sprite);
             pc.ColourMap = Texture(d.Colour);
             var buffer = d.Buffer;
             job.Draws[job.Count++] = new GrassJob.Draw { Push = pc, Vertices = d.Vertices, Instances = (uint)buffer.Shown,
@@ -3530,7 +3536,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (ref readonly var d in CollectionsMarshal.AsSpan(_motionDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(d.Sprite);
+            pc.Sprite = GrassTexture(d.Sprite);
             pc.NearDepth = nearDepth;
             var buffer = d.Buffer;
             Push(cmd, p, in pc, ref last, ref pushed);

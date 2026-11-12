@@ -344,7 +344,7 @@ public sealed unsafe partial class FoliageRenderer
         for (int i = 0; i < rows.Length; i++)
         {
             ref var r = ref rows[i];
-            r.Sprite = Texture(r.Sprite);
+            r.Sprite = GrassTexture(r.Sprite);
             r.ColourMap = Texture(r.ColourMap);
             r.NearDepth = nearDepth;
         }
