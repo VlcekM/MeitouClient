@@ -206,6 +206,7 @@ static class FoliageShaders
         uniform vec3 uFogColour;
         uniform float uFogDistance;
         uniform bool uWireframe;
+        uniform float uGrassRayReach;   // how far the traced sun's rays see grass (0: they see none)
         out vec4 fragColour;
         void main()
         {
@@ -243,6 +244,16 @@ static class FoliageShaders
             // World view, game sky: the game's deferred lighting of what foliage.hlsl writes for grass: normal straight up, gloss 0 (grass_fs zeroes the
             // diffuse alpha before writing it × 0.6; only rain would raise it).
             atmoReceiver = 1;
+            // Past the reach of the traced sun's rays no blade shades another, and the grass read flat and bright beside the near, shaded grass. There the sun on a blade is
+            // what the grass over it lets down: all of it at the tip, less towards the root and under a low sun (Beer's law through the blades above); the sky's light a
+            // little less towards the root too. It comes in over the band where the rays' grass fades out (TracedSunShaders: the last quarter of the reach).
+            if (uGrassRayReach > 0.0)
+            {
+                float far = smoothstep(0.7, 1.0, distance(uEye.xz, vWorld.xz) / uGrassRayReach);
+                float depth = clamp(vUv.y, 0.0, 1.0);   // 0 at the tip, 1 at the root
+                atmoSelfShadow = mix(1.0, exp(-0.55 * depth / max(l.y, 0.4)), far);
+                albedo *= mix(1.0, 1.0 - 0.25 * depth, far);
+            }
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), grassGloss, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);

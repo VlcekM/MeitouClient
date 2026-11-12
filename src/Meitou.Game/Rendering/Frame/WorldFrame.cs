@@ -1448,6 +1448,8 @@ static partial class WorldFrame
         gpu.DebugShadows = o.DebugShadows;
 
         b.Step("gi");
+        // The grass fragment's far shading starts where the traced sun's rays stop seeing grass.
+        if (context is GpuContext reachContext) reachContext.Globals.PublishUniform("uGrassRayReach", () => gpu.GiActive ? gpu.Gi?.GrassRayParams.X ?? 0f : 0f);
         if ((o.GiDebug > 0 || o.Gi) && context is GpuContext giContext) CreateGi(gpu, giContext, o);
         else if (context is GpuContext plainContext) PublishReflectionSurfaces(gpu, plainContext);
         AttachGuard(gpu, context, vramSample);

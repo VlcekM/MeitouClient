@@ -157,6 +157,7 @@ sealed unsafe class TracedGrass : IDisposable
     public void Update(Func<IGpuCommandList> open, FoliageRenderer foliage, Vector3 eye, long frame, IReadOnlyList<InteriorMaskCut> cuts, float reach)
     {
         _range = Math.Clamp(reach, MinRange, MaxRange);
+        _eye = eye;
         foliage.RayGrass(eye, _range, _patches);
         _shown.Clear();
         _swayed.Clear();
@@ -202,12 +203,39 @@ sealed unsafe class TracedGrass : IDisposable
         // A patch come within the sway's reach is built again to be refittable.
         if (have && entry!.Blades == blades && entry.CutHash == hash && (entry.Updatable || !Sways(patch))) return entry;
         int newTriangles = blades * (patch.Cross ? 2 : 1) * 2;
-        if (builds >= MaxBuilds || triangles + newTriangles > MaxBuildTriangles || _bytes >= MaxBytes) return entry;   // the old one holds until there is budget
+        if (builds >= MaxBuilds || triangles + newTriangles > MaxBuildTriangles) return entry;   // the old one holds until there is budget
+        // At the memory's limit the nearest patches keep theirs: the patches come nearest first, so the farthest structure not yet asked for this frame goes for this one.
+        // Refused instead, a field of dense grass filled the memory and a patch walked up to stayed without shadows, flat, until the ones left behind aged out.
+        if (_bytes >= MaxBytes && !MakeRoom(frame, patch.Distance)) return entry;
         builds++;
         triangles += newTriangles;
         if (have) Drop(patch.Key, entry!);
         return Build(open, foliage, patch, blades, hash, frame);
     }
+
+    /// <summary>Drops the farthest structures that no patch nearer than <paramref name="distance"/> has asked for this frame until the memory is under its limit; false when none is left to drop.</summary>
+    bool MakeRoom(long frame, float distance)
+    {
+        while (_bytes >= MaxBytes)
+        {
+            object? farthestKey = null;
+            Entry? farthest = null;
+            float far = distance;
+            foreach (var (key, e) in _entries)
+            {
+                if (e.LastUsed == frame) continue;   // asked for this frame: nearer than this patch
+                float d = Vector2.Distance(new Vector2(e.Corner.X, e.Corner.Z), new Vector2(_eye.X, _eye.Z));
+                if (d > far) (farthestKey, farthest, far) = (key, e, d);
+            }
+
+            if (farthest is null) return false;
+            Drop(farthestKey!, farthest);
+        }
+
+        return true;
+    }
+
+    Vector3 _eye;
 
     /// <summary>The masks that may hold a card of this page, into <see cref="_pageCuts"/>, and their hash.</summary>
     int CollectCuts(in FoliageRenderer.RayGrassPatch patch, IReadOnlyList<InteriorMaskCut> cuts)
