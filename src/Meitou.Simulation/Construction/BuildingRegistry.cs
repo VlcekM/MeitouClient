@@ -80,6 +80,10 @@ public sealed class BuildSite
     /// </summary>
     public int Town { get; set; }
     /// <summary>
+    /// A saved town handle failed to resolve. Town 0 alone also represents valid furniture in a bought NPC-town house; a later nonzero town wins.
+    /// </summary>
+    public bool UnresolvedTown { get; set; }
+    /// <summary>
     /// The owning faction, a position in the world's faction list.
     /// </summary>
     public int Owner { get; set; }
@@ -186,6 +190,7 @@ public sealed class BuildSite
         h.Add(Paused);
         if (Destroyed || Ruined) { h.Add(0x44657374); h.Add(Destroyed); h.Add(Ruined); }
         if (Town != 0) { h.Add(0x546F776E); h.Add(Town); }
+        if (Town == 0 && UnresolvedTown) h.Add(0x4e6f546f);
         if (!Public) h.Add(0x50726976);
         if (Upgrading) h.Add(0x55706772);
         h.Add(Materials.Length);

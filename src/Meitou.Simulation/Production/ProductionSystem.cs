@@ -903,7 +903,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             m.LastOperators = m.Operators;
             m.Operators = 0;
-            if (m.Data.IsResearch && Site(world, m.Site) is { Complete: true } site && site.Owner == world.Player.Faction && site.Town != 0)
+            if (m.Data.IsResearch && CanResearch(world, m))
                 bench = Math.Max(bench, m.Data.TechLevel);
         }
 
@@ -1565,11 +1565,19 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
+    /// A complete player bench counts in a player outpost or a bought NPC house, but not with an unresolved saved town.
+    /// </summary>
+    bool CanResearch(World world, Machine machine) => Site(world, machine.Site) is { Complete: true } site &&
+        site.Owner == world.Player.Faction && (site.Town != 0 || !site.UnresolvedTown);
+
+    /// <summary>
     /// One operator's work at a research bench (<b>Observed</b>, <c>FUN_14029b8d0</c> and <c>FUN_140836b70</c>): <c>rate x s</c>, x 0.6 for each
     /// earlier contribution this tick, adds that x dt seconds to the first queued research, which completes past <c>hours x G/24</c>.
     /// </summary>
     bool ResearchStep(World world, Machine m, float s, float dt, ref int k)
     {
+        if (!CanResearch(world, m)) return false;
+
         var research = world.Research;
         float c = m.Data.Rate * WorkFactor(world, m) * s;
         for (int i = 0; i < k; i++) c *= ResearchFalloff;

@@ -600,8 +600,48 @@ public class ProductionTests
     public void A_no_town_research_bench_does_not_raise_the_global_bench_level()
     {
         using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        rig.World.Buildings.Find(rig.Sites[0])!.UnresolvedTown = true;
         rig.World.RunTick();
         Assert.Equal(0, rig.World.Research.BenchLevel);
+    }
+
+    /// <summary>
+    /// Furniture in a bought NPC-town house has no player outpost number but still unlocks and advances research.
+    /// </summary>
+    [Fact]
+    public void A_bought_house_bench_unlocks_and_advances_research()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        var worker = rig.Add(0, StatsEnumerated.Science, Unit, (Book, 2));
+        rig.World.RunTick();
+        Assert.Equal(1, rig.World.Research.BenchLevel);
+
+        rig.Put(worker, Book, 0, -1);
+        rig.World.RunTick();
+        rig.World.Commands.Enqueue(new QueueResearch(Study) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+        Assert.Single(rig.World.Research.Queue);
+
+        rig.World.Commands.Enqueue(new OperateOrder([worker], rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.RunTicks(120);
+        Assert.True(rig.World.Research.Queue[0].Seconds > 0);
+    }
+
+    /// <summary>
+    /// An operated unresolved bench cannot advance research queued while another valid bench was available.
+    /// </summary>
+    [Fact]
+    public void An_unresolved_bench_cannot_advance_queued_research()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        rig.World.Buildings.Find(rig.Sites[0])!.UnresolvedTown = true;
+        var worker = rig.Add(0, StatsEnumerated.Science, Unit);
+        rig.World.Research.Enqueue(Study);
+        rig.World.Commands.Enqueue(new OperateOrder([worker], rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.RunTicks(120);
+
+        Assert.Equal(0, rig.World.Research.Queue[0].Seconds);
+        Assert.Equal(0, rig.World.Research.Rate);
     }
 
     // ------------------------------------------------------------------ ore

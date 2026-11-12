@@ -56,6 +56,48 @@ public class PlayerTownImportTests
         return town;
     }
 
+    /// <summary>
+    /// A resolved NPC-town handle stays valid for research; missing and normalized-away player-town handles stay unresolved across saves.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Building_town_resolution_distinguishes_NPC_houses_from_missing_towns(bool unresolved, bool removedOutpost)
+    {
+        var builder = new SaveBuilder(7);
+        var handle = new Hand((int)FcsRecordType.Town, 4, 55, 2, 9);
+        if (!unresolved) Town(builder, "Town state NPC", "npc", Foreign, handle);
+        if (removedOutpost)
+        {
+            var first = Town(builder, "Town state Removed", "removed", Player, handle);
+            var second = Town(builder, "Town state Survivor", "survivor", Player, new Hand((int)FcsRecordType.Town, 5, 56, 2, 10));
+            var (_, list) = SaveWithInstances(("removed", Vector3.Zero, [first]), ("survivor", new Vector3(100, 300, 0), [second]));
+            builder.Game.TownInstanceList = list;
+        }
+
+        var record = new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building };
+        var db = new GameDatabase();
+        var file = new FcsFile();
+        file.Records.Add(record);
+        db.Apply(file, "test.mod");
+        using (var source = World())
+        {
+            source.Buildings.Add(Site("1-zone16.16-INGAME", Vector3.Zero, 0));
+            BuildingSave.Write(builder.Game, source, Player);
+        }
+        var state = Assert.Single(builder.Game.Zones.Values).BuildingStates.Single();
+        handle.Write(state, "town");
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, db, Player, 7);
+        Assert.Equal(unresolved, Assert.Single(world.Buildings.All).UnresolvedTown);
+
+        BuildingSave.Write(builder.Game, world, Player);
+        using var reloaded = World();
+        BuildingSave.Read(builder.Game, reloaded, db, Player, 7);
+        Assert.Equal(unresolved, Assert.Single(reloaded.Buildings.All).UnresolvedTown);
+    }
+
     [Fact]
     public void A_template_town_without_a_faction_is_imported_with_its_saved_properties()
     {
