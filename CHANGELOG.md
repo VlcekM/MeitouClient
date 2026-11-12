@@ -3,6 +3,33 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.18.0
+
+- Town residents move into the same homes, shops and house layouts as in a vanilla new game; signs the original never shows are gone
+- A building remembers the last squad made at it, as the original's: For sale shows its home, and saves keep it
+- Pack animals show the bag they wear (Garru Backpack, Bull Backpack) (#581)
+- Swamp House floors are no longer black (#583)
+- Camera: the scroll wheel sets the free camera's speed, shown for 3 s; Shift pans faster (200%, Faithful / Meitou switch)
+- Camera turning lags less above 60 fps; Controls gets a Camera smoothing toggle (#531)
+- Pause after loading and Animals pick up items are Faithful / Meitou switches; Meitou pauses after a load and keeps animals from picking up
+- Space resumes the game after the pause button
+- Bloody footprints after walking through blood
+- Turret gunners man the turret from within its use range, not from 15 m off (#580)
+- Stealth KO on an unconscious target ends at once, with no swing or assassination XP, as the original's
+- Fighters attack targets standing just off the navmesh edge (#559)
+- Eaten limbs leave no severed limb item (#564)
+- Saves: a character from a removed mod loads as an Exile, as the original's (#577)
+- The Slaves start keeps its escaped slaves, and new player slaves get the Obedient Slave job; Rebirth's hunger and escapes match the original (#515)
+- Trading with your own squad member no longer closes the window (#511); a race word in a trader's line no longer switches the speaker (#567)
+- Town furniture and camp buildings are selected with a left click, and selected furniture shows its town (#512)
+- Fitted prosthetic limbs can be taken from loot windows (#554); dismissing a character onto the squad panel works again (#556)
+- The sand at the Watchtower's foot no longer counts as indoors (#578); windmills no longer sink when placed (#557)
+- The Settings window scales up to fill high-DPI screens (#573); the empty general storage heading is hidden (#561)
+- Code mods can add equipment slots (#570)
+- --headless plays no sound
+- macOS: loading and blood decals fixed; separate .NET 10 packages for older Macs (Ventura) (#555)
+- Contributors panel redrawn
+
 ## v0.17.4
 
 - Stolen items stay stolen when dropped and picked up, and through a save, even from empty houses or towns that have unloaded (#544)
