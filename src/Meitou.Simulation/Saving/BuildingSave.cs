@@ -239,6 +239,7 @@ public static class BuildingSave
 
         var town = byInstance.GetValueOrDefault(instance.Id) ?? world.Buildings.AddTown(instance.Position, playerIndex);
         byInstance[instance.Id] = town;
+        world.Buildings.ImportedTownInstances.Add(instance.Id);
         ApplyTownStates(town, instance.Id, instance.Position, states);
     }
 
@@ -327,6 +328,7 @@ public static class BuildingSave
 
             var town = byInstance.GetValueOrDefault(instanceId) ?? world.Buildings.AddTown(site.Position, playerIndex);
             byInstance[instanceId] = town;
+            world.Buildings.ImportedTownInstances.Add(instanceId);
             town.IsLevelTown = true;
             ApplyTownStates(town, instanceId, site.Position, states);
         }
@@ -689,33 +691,33 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Reconciles saved player outposts with the live registry, preserving foreign towns and nests.
+    /// Reconciles saved player outposts with the live registry: removes only what was imported as a player town and is gone now, preserving
+    /// foreign towns, nests and player-faction states that were never imported.
     /// </summary>
     static void RemoveObsoleteTowns(SaveGame game, World world, string playerFactionId, Dictionary<string, FcsRecord> byId, GameDatabase? db)
     {
+        var imported = world.Buildings.ImportedTownInstances;
         var live = world.Buildings.Towns.Select(town => town.SaveInstance).OfType<string>().ToHashSet(StringComparer.Ordinal);
         if (game.TownInstanceList is { } list)
         {
             foreach (var instance in list.Instances.ToList())
             {
-                if (live.Contains(instance.Id)) continue;
-
-                var states = TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList();
-                if (PlayerTownStates(game, instance, instance.Id, instance.Target, byId, db, playerFactionId) is null) continue;
+                if (live.Contains(instance.Id) || !imported.Contains(instance.Id)) continue;
 
                 list.Instances.Remove(instance);
-                RemoveTownStates(game, states);
+                RemoveTownStates(game, TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList());
             }
         }
 
         foreach (var group in game.Towns.GroupBy(town => town.Instance).ToList())
         {
-            if (live.Contains(group.Key) || game.TownInstanceList?.Instances.Any(instance => instance.Id == group.Key) == true) continue;
+            if (live.Contains(group.Key) || !imported.Contains(group.Key)) continue;
+            if (game.TownInstanceList?.Instances.Any(instance => instance.Id == group.Key) == true) continue;
 
-            var states = group.Where(town => !town.IsNest).Select(town => town.Record).ToList();
-            string? template = world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(site => site.InstanceId == group.Key)?.Town.Id;
-            if (PlayerTownStates(game, null, group.Key, template, byId, db, playerFactionId) is not null) RemoveTownStates(game, states);
+            RemoveTownStates(game, group.Where(town => !town.IsNest).Select(town => town.Record).ToList());
         }
+
+        imported.ExceptWith(imported.Where(id => !live.Contains(id)).ToList());
     }
 
     /// <summary>

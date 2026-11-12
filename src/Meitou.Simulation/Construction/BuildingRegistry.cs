@@ -318,6 +318,11 @@ public sealed partial class BuildingRegistry
     public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
+    /// The save instance ids loaded as player towns; a save removes only these when their town is gone (bookkeeping, not hashed).
+    /// </summary>
+    internal HashSet<string> ImportedTownInstances { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The player towns (outposts), in creation order.
     /// </summary>
     public IReadOnlyList<PlayerTown> Towns => _towns;

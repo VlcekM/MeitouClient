@@ -389,6 +389,27 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// A player-faction town state that was never imported as an outpost survives a save.
+    /// </summary>
+    [Fact]
+    public void A_never_imported_player_faction_town_state_is_not_deleted_on_save()
+    {
+        // Catches pruning of states whose level site is unknown (a mod town) or whose instance is empty.
+        var builder = new SaveBuilder(7);
+        var unknown = Town(builder, "Town state Mod town", "mod-town", Player, new Hand((int)FcsRecordType.Town, 8, 58, 4, 12));
+        var empty = Town(builder, "Town state Nowhere", "", Player, new Hand((int)FcsRecordType.Town, 9, 59, 4, 12));
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, SyntheticTown.Database(), Player, 7, PopulationData.Create(SyntheticTown.Database(), []));
+        Assert.Empty(world.Buildings.Towns);
+
+        BuildingSave.Write(builder.Game, world, Player);
+
+        Assert.Contains(unknown.Record, builder.Game.Quick.Records);
+        Assert.Contains(empty.Record, builder.Game.Quick.Records);
+        Assert.Contains(unknown, builder.Game.Towns);
+    }
+
+    /// <summary>
     /// Load normalization excludes the exact radius boundary and preserves sparse town numbers.
     /// </summary>
     [Fact]
