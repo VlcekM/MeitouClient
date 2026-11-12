@@ -183,15 +183,16 @@ sealed partial class GameHost(
     internal readonly Stopwatch RealTime = Stopwatch.StartNew();
 
     /// <summary>
-    /// The clock of the ambient motion drawn outside the simulation (the foliage's sway, the birds): the frames' clock (real time without one), but in
-    /// photo mode it follows the simulation, still while that is paused and at its speed in slow motion, so a paused picture is still.
+    /// The clock of the ambient motion drawn outside the simulation (the foliage's sway, the birds): the frames' clock (real time without one) at the
+    /// simulation's rate, still while that is paused and faster or slower with its speed, as the water and the particles are (the frame's game time).
+    /// The title screen feeds the sway its own clock.
     /// </summary>
     internal double EffectSeconds
     {
         get
         {
             double now = AnimClock ? AnimSeconds : RealTime.Elapsed.TotalSeconds;
-            double rate = Photo is { Active: true } ? (Session.Simulation.IsPaused ? 0 : Session.Simulation.Speed) : 1;
+            double rate = Session.Simulation.IsPaused ? 0 : Session.Simulation.Speed;
             _effectHeld += (now - _effectAt) * (1 - rate);
             _effectAt = now;
             return now - _effectHeld;
