@@ -810,11 +810,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     internal enum Tone { None, Dead, Unconscious }
 
     /// <summary>
-    /// Soft limits: each limit gets an inner one this share of its range in from either end, a soft overdamped spring that brakes the joint as it nears the hard stop
-    /// (engine choice, tuned by eye).
+    /// Soft limits: each limit gets an inner one this share of its range in from either end, a firm spring (20 Hz, critically damped) that stops the joint a quarter of its range short of the
+    /// hard stop (engine choice). A weak overdamped one (5 Hz, ratio 3) lets a collapsing back creep into the file's lumbar and thoracic stops (docs/game/ragdolls.md "Rest poses of the spine").
     /// </summary>
     const float SoftBand = 0.25f;
-    static readonly SpringSettings SoftLimit = new(5, 3);
+    static readonly SpringSettings SoftLimit = new(20, 1);
     /// <summary>
     /// The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an
     /// elbow about 45).
