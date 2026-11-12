@@ -408,6 +408,37 @@ public class ConstructionTests
         }
     }
 
+    /// <summary>
+    /// A batch placement reassesses once, with the last placed building's town (<c>FUN_1404d72a0</c>, docs/game/buildings-production.md
+    /// "Outposts"): a shed beside town A and one beside far town C, with A overlapping B, merge nothing, as only C's merge scan runs; a batch whose
+    /// last shed is beside A merges A and B.
+    /// </summary>
+    [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 2)]
+    public void A_batch_runs_the_merge_scan_once_for_the_last_buildings_town(bool lastBesideA, int towns)
+    {
+        using var rig = new Rig();
+        foreach (var x in new[] { 0f, 2000f, 30000f })
+        {
+            var town = rig.World.Buildings.AddTown(new Vector3(x, 300, 0), Rig.PlayerFaction);
+            town.Override = 1500;
+            var member = new BuildSite
+            {
+                Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = new Vector3(x, 300, 0), Town = town.Number,
+                Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
+            };
+            rig.World.Buildings.Add(member);
+        }
+
+        float first = lastBesideA ? 30050 : 50, last = lastBesideA ? 50 : 30050;
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, new Vector3(first, 300, 40), Quaternion.Identity),
+            new PlannedBuilding(Shed, new Vector3(last, 300, 40), Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+
+        Assert.Equal(towns, rig.World.Buildings.Towns.Count);
+    }
+
     // ------------------------------------------------------------------ walls
 
     /// <summary>

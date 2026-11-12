@@ -397,7 +397,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Places the plans, gives the walls their town and attaches them, reassesses the towns touched, then orders the selection to build the last
+    /// Places the plans, gives the walls their town and attaches them, reassesses once with the last placed building's town, then orders the selection to build the last
     /// building placed.
     /// </summary>
     void PlaceAll(World world, PlaceBuildings place)
@@ -409,8 +409,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
         TownForWalls(world, placed);
         AttachWalls(world.Buildings, Data, placed);
-        foreach (var town in placed.Select(s => TownLookup.PlayerTownOf(world, s)).Distinct())
-            TownRefit.Reassess(world, town, this);
+        // Once, with the last placed building's town (FUN_1404d72a0), not once per town the batch touched.
+        if (placed.Count > 0) TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
 
         // Confirm ends by sending the selection to build the last building created (FUN_1404d72a0: order 2 through FUN_1407f9e20, Shift ignored).
         if (placed.Count > 0) OrderBuild(world, world.Player.Selection.ToArray(), Root(reg, placed[^1]), queued: false);
