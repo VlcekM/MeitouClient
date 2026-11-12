@@ -306,6 +306,12 @@ static class CharacterShaders
     public const float SkinScatterScale = 30;
 
     /// <summary>
+    /// How much of the band the scattering table adds past the terminator is kept, in the skin's own hue (the albedo over its brightest channel). At 1 in the
+    /// hue squared, skin under several lamps was orange all round and red in shade.
+    /// </summary>
+    public const float SkinBandStrength = 0.6f;
+
+    /// <summary>
     /// The skin's curvature (1 / radius in world units) to the table's axis (<see cref="SkinScattering.MaxInverseRadiusMm"/> at 1): 1 unit = 100 mm
     /// (docs/formats/terrain.md, Observed: decimetres fit the bodies' sizes), times <see cref="SkinScatterScale"/>.
     /// </summary>
@@ -375,7 +381,7 @@ static class CharacterShaders
             // only the warm band past the terminator is wanted.
             float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
             vec3 hue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 1e-3);
-            return vec3(lambert) + extra * hue * hue * share;
+            return vec3(lambert) + extra * hue * share * {{F(SkinBandStrength)}};
         }
 
         // The lamps' diffuse term (LampShaders, LAMP_SKIN): the same skin as the sun's, from what main sets before lighting (no skin: plain N.L).

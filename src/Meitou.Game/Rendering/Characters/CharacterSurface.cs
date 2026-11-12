@@ -128,7 +128,7 @@ static class CharacterSurface
             float nh = clamp(dot(surfaceNormal, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
             float fresnel = 0.028 + 0.972 * pow(1.0 - lh, 5.0);
             float oil = min(nl * (0.6 * lobeD(nh, 0.22) + 0.4 * lobeD(nh, 0.42)) * fresnel * 0.25 / max(lh * lh, 0.1), 1.5);
-            float fuzz = pow(1.0 - nv, 3.0) * nl * 0.35;
+            float fuzz = pow(1.0 - nv, 3.0) * nl * 0.15;
             return skinShare * (vec3(oil) + skinAlbedo * (view.fogDistance > 0.0 ? ATMO_PI : 1.0) * fuzz);
         }
         // Light through a thin part (ears, fingers), in the units of the diffuse N.L: its share of skin, facing away from the light. A thin part curves tightly and is about
@@ -138,7 +138,7 @@ static class CharacterSurface
         {
             float back = clamp(-dot(skinGeometric, l), 0.0, 1.0);
             if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.35) return vec3(0.0);
-            return skinHue() * skinShare * back * exp(-skinThickness / 0.05) * 0.8;
+            return skinHue() * skinShare * back * exp(-skinThickness / 0.05) * 0.5;
         }
         // The sun on skin beyond what kenshiLight gave it, in the units of the diffuse N.L. visible: its shadow here. In a shadow's penumbra the light under the skin bleeds
         // into the dark side, warm. The band past the terminator and the light through a thin part entered elsewhere, so the fragment's own shadow (its own body) must not
@@ -180,7 +180,7 @@ static class CharacterSurface
             float nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0), edge = 1.0 - nv;
             vec3 added = vec3(0.0);
             if (strandStrength > 0.0) added += strandTint * sky * strandStrength * 0.3 * strandLobe(normalize(vec3(0.0, 1.0, 0.0) + surfaceView), (strandGrain - 0.5) * 0.4, 8.0);
-            if (skinShare > 0.0 && (surfaceParts & 4u) != 0u) added += skinAlbedo * sky * skinShare * 0.5 * edge * edge * edge;
+            if (skinShare > 0.0 && (surfaceParts & 4u) != 0u) added += skinAlbedo * sky * skinShare * 0.15 * edge * edge * edge;
             if (clothSheen > 0.0) added += clothSheen * clothTint * sky * 0.8 * edge * edge;
             if (eyeShare > 0.0)
             {
