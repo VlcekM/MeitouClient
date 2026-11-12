@@ -53,7 +53,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             vec3 up; float tanY;
             vec3 back; uint depth;
             vec2 planes; uint terrainDepth; uint staticDepth;
-            vec2 jitter;
+            vec2 jitter; float rowSign;
         } pc;
         void main()
         {
@@ -91,17 +91,17 @@ public sealed unsafe partial class TerrainDecalRenderer
             vec3 up; float tanY;
             vec3 back; uint depth;
             vec2 planes; uint terrainDepth; uint staticDepth;
-            vec2 jitter;
+            vec2 jitter; float rowSign;
         } pc;
         """ + DepthConvention.Glsl + """
 
         // The surface point under a depth texel, relative to the eye, and its linear depth. The depth was drawn with the projection moved by the jitter: the texel's ray
-        // is the unjittered one at its centre less that move.
+        // is the unjittered one at its centre less that move. A top-down target (Metal) has NDC +1 at row 0: rowSign -1 turns the row into the projection's NDC.
         vec3 posAt(ivec2 t, vec2 size, out float z)
         {
             t = clamp(t, ivec2(0), ivec2(size) - 1);
             z = depthViewZ(texelFetch(textures2D[pc.depth], t, 0).r, pc.planes);
-            vec2 uvn = (vec2(t) + 0.5) / size * 2.0 - 1.0 - pc.jitter;
+            vec2 uvn = ((vec2(t) + 0.5) / size * 2.0 - 1.0) * vec2(1.0, pc.rowSign) - pc.jitter;
             vec2 xy = uvn * vec2(pc.tanX, pc.tanY) * z;
             return xy.x * pc.right + xy.y * pc.up - z * pc.back;
         }
@@ -237,6 +237,11 @@ public sealed unsafe partial class TerrainDecalRenderer
         /// The projection's jitter (NDC).
         /// </summary>
         public Vector2 Jitter;
+
+        /// <summary>
+        /// 1 when the targets' row 0 is the bottom (Vulkan), −1 when it is the top (Metal): the sign from a texel row to the projection's NDC Y.
+        /// </summary>
+        public float RowSign;
     }
 
     /// <summary>
@@ -760,6 +765,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             TerrainDepth = _terrainDepthIndex,
             StaticDepth = _staticDepthIndex,
             Jitter = jitterNdc,
+            RowSign = _gpu.RenderTargetsBottomUp ? 1 : -1,
         };
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
         Span<GpuBufferBinding> buffers =
