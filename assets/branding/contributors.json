@@ -9,7 +9,7 @@
   },
   "rockchinq": {
     "commits": 13,
-    "areas": "Town houses, Town repairs, Shopkeeper routines, Trading and buyback, Character stats, New-game options, Build orders"
+    "areas": "Town houses, Trading, Shopkeepers"
   },
   "hazzael": {
     "commits": 6,
@@ -48,11 +48,11 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 23,
-    "areas": "Captive slavery, Chests, Appearance, Logging, Name tags, Animal inventory, Save loading, Beds, Research UI, Help button, Medic finders, Carried bodies, Bolts, Jobs"
+    "commits": 28,
+    "areas": "Animals, Medics, Inventory, Rendering"
   },
   "robgreen490": {
     "commits": 4,
-    "areas": "UI scaling, Inventory UI, Branch merges"
+    "areas": "UI scaling, Inventory rendering"
   }
 }
