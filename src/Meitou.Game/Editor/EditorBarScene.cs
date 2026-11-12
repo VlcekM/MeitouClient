@@ -61,10 +61,10 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
 
     /// <summary>
-    /// The neutral fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): a little grey light all round, so faces read in the
-    /// lamplight.
+    /// The fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): none. A grey light all round on the characters alone made them
+    /// brighter than the room, as if they glowed.
     /// </summary>
-    static readonly Vector3 EditorBarCharacterFill = new(0.04f);
+    static readonly Vector3 EditorBarCharacterFill = Vector3.Zero;
 
     /// <summary>
     /// When the bar's room was first found laid out (real seconds); null before.
@@ -159,9 +159,11 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         EditorBar = bar;
         objects.AddRuntime(bar.Placement);
         var lamps = WorldLights.ForBuilding(db, world.Levels, new ResolvedBuilding(bar.Placement, record, bar.Origin, false), world.Layouts);
-        // The room's neutral fill: a white point light under the roof at a share of the lamps' mean power, lit day and night.
+        // The room's fill: a point light under the roof in the lamps' own colour at a share of their mean power, lit day and night. White and at half their
+        // power it read as a spotlight on the character: skin that shone and seemed to glow in a warm, dim room.
         float power = lamps.Count > 0 ? lamps.Average(l => l.Intensity) * EditorBar.FillShare : 1;
-        lamps.Add(new WorldLight(bar.FillAt, Vector3.One, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
+        var fillColour = lamps.Count > 0 ? new Vector3(lamps.Average(l => l.Colour.X), lamps.Average(l => l.Colour.Y), lamps.Average(l => l.Colour.Z)) : Vector3.One;
+        lamps.Add(new WorldLight(bar.FillAt, fillColour, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
             WorldLightEffect.None, WorldLightRule.WhenBuildingOn, true, 0, "meitou:editor-fill", record.StringId, EditorBar.Key));
         host.ActiveLamps?.SetRuntime(EditorBar.Key, lamps);
         objects.Staged = bar.Ground;

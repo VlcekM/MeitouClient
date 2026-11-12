@@ -366,8 +366,9 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   the edited character's stance preview follows the same rule.
   Base data has none: its seat clips loop (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data).
   The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`). The bar stands on
-  `FLatTop_Pillar01.mesh` scaled to 1500 each way with its top at the bar's ground, with 14 shrubs round it. A white point light under the roof (half the
-  lamps' mean power, radius 220) and a grey character fill (0.04) light the room neutrally. The camera is the stage's
+  `FLatTop_Pillar01.mesh` scaled to 1500 each way with its top at the bar's ground, with 14 shrubs round it. A point light under the roof in the lamps' own colour (a quarter of
+  their mean power, radius 220) fills the room; the characters take no fill of their own (**Observed**, a bare Greenlander: white, at half the lamps' power and
+  with a grey fill of 0.04 on the characters alone, the skin shone and seemed to glow in the warm, dim room). The camera is the stage's
   orbit, moved across instead of shifting the projection. The stage covers the bar until its parts, the streaming and the characters are in, or at most 3 s
   after its room is laid out (the counts are global and can stay up under memory pressure). With the switch off, the stage. Metal: compiled, not yet seen on a Mac.
 - **Keys**: `in editor` true while open; a mode 0 character without a body file is randomised on open (Meitou's start characters are already

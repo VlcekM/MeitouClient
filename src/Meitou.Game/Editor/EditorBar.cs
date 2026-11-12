@@ -78,9 +78,9 @@ sealed class EditorBar
     /// </summary>
     const float ShrubNear = 140, ShrubFar = 700;
     /// <summary>
-    /// The room's neutral fill: a white point light under the roof, this share of the bar's own lamps' mean power, reaching this far.
+    /// The room's fill: a point light under the roof in the lamps' colour, this share of the bar's own lamps' mean power, reaching this far.
     /// </summary>
-    public const float FillShare = 0.5f, FillRadius = 220;
+    public const float FillShare = 0.25f, FillRadius = 220;
     /// <summary>
     /// How high under the roof the fill light hangs (units, in the building's frame).
     /// </summary>
