@@ -652,6 +652,7 @@ sealed partial class GameHost(
             GeneratedLod = WorldOptions.CharacterLod,
             SkinShading = WorldOptions.SkinShading,
             Chars2 = WorldOptions.Chars2,
+            SurfaceParts = WorldOptions.Chars2Parts,
             SkinRaces = Config.SkinRaces,
             EnhancedIcons = WorldOptions.MeitouIcons,
             // The frame clock DrawWorld gives the foliage sway: a recorded flight poses the same every take.

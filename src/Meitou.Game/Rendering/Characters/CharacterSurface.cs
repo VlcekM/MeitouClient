@@ -10,6 +10,7 @@ static class CharacterSurface
     /// <summary>Ahead of the atmosphere text: what its two hooks (<see cref="Lighting"/>) call.</summary>
     public const string Prototypes = """
         bool surfaceOn = false;
+        uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
         vec3 surfaceAmbient(vec3 sky);
@@ -121,7 +122,7 @@ static class CharacterSurface
         vec3 skinLight(vec3 l)
         {
             float nl = dot(surfaceNormal, l), nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0);
-            if (skinShare <= 0.0 || nl <= 0.0) return vec3(0.0);
+            if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || nl <= 0.0) return vec3(0.0);
             vec3 h = normalize(l + surfaceView);
             float nh = clamp(dot(surfaceNormal, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
             float fresnel = 0.028 + 0.972 * pow(1.0 - lh, 5.0);
@@ -134,7 +135,7 @@ static class CharacterSurface
         vec3 skinThrough(vec3 l)
         {
             float back = clamp(-dot(skinGeometric, l), 0.0, 1.0);
-            if (skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.8) return vec3(0.0);
+            if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || back <= 0.0 || skinThickness >= 0.8) return vec3(0.0);
             return skinHue() * skinShare * back * exp(-skinThickness / 0.25) * 0.8;
         }
         // The sun on skin beyond what kenshiLight gave it, in the units of the diffuse N.L. visible: its shadow here. In a shadow's penumbra the light under the skin bleeds
@@ -142,6 +143,7 @@ static class CharacterSurface
         // cut them: their shadow is asked where the light went in, across the part, the chord 2 r cos of a sphere of the curvature's radius. A real caster still shades them.
         vec3 skinSunExtra(vec3 l, float visible)
         {
+            if ((surfaceParts & 4u) == 0u) return vec3(0.0);
             vec3 extra = skinHue() * skinShare * clamp(dot(surfaceNormal, l), 0.0, 1.0) * 0.5 * (sqrt(visible) - visible);
             vec3 through = skinThrough(l);
             if (max(skinSunBand.r, max(skinSunBand.g, skinSunBand.b)) + through.r + through.g + through.b < 1e-3) return extra;
@@ -176,7 +178,7 @@ static class CharacterSurface
             float nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0), edge = 1.0 - nv;
             vec3 added = vec3(0.0);
             if (strandStrength > 0.0) added += strandTint * sky * strandStrength * 0.3 * strandLobe(normalize(vec3(0.0, 1.0, 0.0) + surfaceView), (strandGrain - 0.5) * 0.4, 8.0);
-            if (skinShare > 0.0) added += skinAlbedo * sky * skinShare * 0.5 * edge * edge * edge;
+            if (skinShare > 0.0 && (surfaceParts & 4u) != 0u) added += skinAlbedo * sky * skinShare * 0.5 * edge * edge * edge;
             if (clothSheen > 0.0) added += clothSheen * clothTint * sky * 0.8 * edge * edge;
             if (eyeShare > 0.0)
             {

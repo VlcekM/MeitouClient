@@ -72,7 +72,7 @@ static class CharacterShaders
     const string PushMembers = """
             vec3 flatColour;
             uint depthIndex;
-            vec4 fill;          // rgb; a: the chars2 switch (CharacterSurface)
+            vec4 fill;          // rgb; a: the chars2 switch's parts (CharacterSurface: 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal; 0 off)
             uint skinLut;       // the skin scattering table's bindless index (SkinScattering), 0: the switch is off
         """;
 
@@ -308,7 +308,9 @@ static class CharacterShaders
             float curvature = vCurvature;
             if (vHidden > 0.0) discard;
             if (pc.depthIndex != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
-            surfaceOn = pc.fill.a > 0.5 && (view.fogDistance >= 0.0 || view.fogDistance < -2.5);   // the chars2 switch: never the game's own stage or an icon
+            // The chars2 switch's parts: never on the game's own stage or an icon.
+            surfaceParts = view.fogDistance >= 0.0 || view.fogDistance < -2.5 ? uint(pc.fill.a + 0.5) : 0u;
+            surfaceOn = surfaceParts != 0u;
             if (surfaceOn)
             {
                 vec3 gx = dFdx(geometric), gy = dFdy(geometric);
@@ -478,17 +480,17 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
-            if (surfaceOn) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
+            if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
             if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
-            if (surfaceOn)
+            if ((surfaceParts & 8u) != 0u)
             {
                 eyeShare = eyeOf(uv.y, headTone, headGloss, curvature, skin);
                 skin *= 1.0 - eyeShare;
             }
             wetSurface(albedo, gloss, surfaceOn ? metal : 0.0, skin, vSoak);
-            if (surfaceOn && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
+            if ((surfaceParts & 1u) != 0u && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
-            clothSheen = surfaceOn ? sheen * 0.25 : 0.0;
+            clothSheen = (surfaceParts & 2u) != 0u ? sheen * 0.25 : 0.0;
             clothTint = sqrt(clamp(albedo, 0.0, 1.0));
             vec3 colour;
             giInterior = vInterior != 0u;
@@ -664,7 +666,7 @@ struct CharacterPush
     public Vector3 FlatColour;
     public uint DepthIndex;
     /// <summary>
-    /// The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w 1 while the <c>chars2</c> switch is on).
+    /// The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w the <c>chars2</c> switch's parts, <see cref="CharacterRenderer.SurfaceParts"/>, 0 while it is off).
     /// </summary>
     public Vector4 Fill;
     /// <summary>

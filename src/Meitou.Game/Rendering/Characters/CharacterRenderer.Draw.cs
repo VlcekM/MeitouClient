@@ -213,7 +213,7 @@ internal sealed unsafe partial class CharacterRenderer
             _previousBones.Binding]);
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? 1 : 0),
+        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
             SkinLut = SkinShading ? _skinScattering.Index : 0 };
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];

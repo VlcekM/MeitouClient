@@ -185,6 +185,24 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     bool _chars2;
 
     /// <summary>
+    /// Which parts of the <c>chars2</c> shading are on (the settings' rows under Advanced materials): 1 hair highlights, 2 cloth sheen, 4 skin,
+    /// 8 eyes, 16 metal. A change redraws the portraits.
+    /// </summary>
+    public int SurfaceParts
+    {
+        get => _surfaceParts;
+        set
+        {
+            if (_surfaceParts == value) return;
+            _surfaceParts = value;
+            _portraitShown.Clear();
+        }
+    }
+
+    public const int SurfaceHair = 1, SurfaceCloth = 2, SurfaceSkin = 4, SurfaceEyes = 8, SurfaceMetal = 16, SurfaceAll = 31;
+    int _surfaceParts = SurfaceAll;
+
+    /// <summary>
     /// The skin scattering table's bindless index while the Skin switch is on, else 0 (a severed limb's skin: <see cref="DebrisRenderer"/>).
     /// </summary>
     public uint SkinTable => SkinShading ? _skinScattering.Index : 0;

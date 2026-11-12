@@ -260,7 +260,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky & weather",
                 "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
                     or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
-                "Skin" or "Character levels" or "Item icons" => "Characters",
+                "Skin" or "Character levels" or "Item icons" or "Advanced materials" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch
+                    or WorldFrame.MaterialSkinSwitch or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch => "Characters",
                 _ => "World",
             };
         }

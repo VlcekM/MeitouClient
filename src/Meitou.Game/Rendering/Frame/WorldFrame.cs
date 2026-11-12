@@ -215,6 +215,8 @@ sealed class WorldOptions
     public bool SkinShading = true;
     /// <summary>The <c>chars2</c> switch's Meitou side, off by default: hair, cloth, skin and eye shading (<c>CharacterRenderer.Chars2</c>).</summary>
     public bool Chars2;
+    /// <summary>Which parts of it are on (<c>CharacterRenderer.SurfaceParts</c>): all by default.</summary>
+    public int Chars2Parts = Characters.CharacterRenderer.SurfaceAll;
     /// <summary>The <c>interiorlamps</c> switch's Meitou side: interior lamps shine by day too (<c>WorldLamps.InteriorAllDay</c>).</summary>
     public bool InteriorLamps = true;
 
@@ -1835,6 +1837,9 @@ static partial class WorldFrame
     /// <summary>
     /// The hybrid GI's parts as switches (<see cref="PostOptions.GiRelocate"/>, <see cref="PostOptions.GiCloudShadows"/>, <see cref="PostOptions.GiCache"/>).
     /// </summary>
+    /// <summary>The parts of Advanced materials (<c>chars2</c>), plain on / off rows under it.</summary>
+    public const string MaterialHairSwitch = "Hair highlights", MaterialClothSwitch = "Cloth sheen", MaterialSkinSwitch = "Skin sheen and glow",
+        MaterialEyesSwitch = "Eye catchlights", MaterialMetalSwitch = "Metal on characters";
     public const string GiRelocateSwitch = "GI probes out of walls", GiCloudShadowsSwitch = "GI cloud shadows", GiCacheSwitch = "GI radiance cache";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
     // The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
@@ -2400,6 +2405,20 @@ static partial class WorldFrame
             toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
             toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
             toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
+        }
+        if (g.Characters is not null && g.Options is { } materials)
+        {
+            // The Advanced materials' parts; they act while it is on.
+            foreach (var (label, bit) in new[] { (MaterialHairSwitch, Characters.CharacterRenderer.SurfaceHair), (MaterialClothSwitch, Characters.CharacterRenderer.SurfaceCloth),
+                (MaterialSkinSwitch, Characters.CharacterRenderer.SurfaceSkin), (MaterialEyesSwitch, Characters.CharacterRenderer.SurfaceEyes),
+                (MaterialMetalSwitch, Characters.CharacterRenderer.SurfaceMetal) })
+            {
+                toggles.Add(new Toggle(label, () => (materials.Chars2Parts & bit) != 0, v =>
+                {
+                    materials.Chars2Parts = v ? materials.Chars2Parts | bit : materials.Chars2Parts & ~bit;
+                    if (g.Characters is { } c) c.SurfaceParts = materials.Chars2Parts;
+                }));
+            }
         }
         if (tessellation)
         {

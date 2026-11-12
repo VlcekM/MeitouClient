@@ -66,6 +66,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
             WorldFrame.WaterOceanSlider, "Water contact foam, wakes and ripples"]),
         // Characters: the skin switch, then one row per race (added by Entries)
         new(SkinGroup, "Skin", []),
+        new("Advanced materials", "Advanced materials", [WorldFrame.MaterialHairSwitch, WorldFrame.MaterialClothSwitch, WorldFrame.MaterialSkinSwitch,
+            WorldFrame.MaterialEyesSwitch, WorldFrame.MaterialMetalSwitch]),
     ];
 
     /// <summary>
