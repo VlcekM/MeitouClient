@@ -23,6 +23,7 @@ static class SettingHints
         "Full screen" => "Fill the monitor with a borderless game window.",
         "Grading" => "Apply the scene's colour and contrast adjustments.",
         "Texture quality" => "Texture resolution; terrain changes need a restart.",
+        "Blood decals drawn" => "The most blood marks on walls and objects and bloody footprints drawn in a frame, the nearest first.",
         "Anisotropic filtering" => "Keep textures sharp when viewed at an angle.",
         "Metal upscaling" => "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the "
             + "fallback when MetalFX is unavailable.",
@@ -107,6 +108,7 @@ static class SettingHints
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows in fog, so foggy places stay lit.",
         "Blood on surfaces" => "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors.",
+        "Bloody footprints" => "Leave fading tracks on the ground after walking through fresh blood.",
         "Skin" => "Let sunlight soften and warm under bare skin instead of ending at a hard edge.",
         "Ground parallax" => "Give the ground texture depth.",
         "Ground displacement (tessellation)" => "Raise the nearby ground into real bumps and ridges that cast shadows.",

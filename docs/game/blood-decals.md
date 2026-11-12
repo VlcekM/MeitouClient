@@ -144,3 +144,11 @@ The `bloodsurfaces` switch (Meitou, default; Faithful: terrain only, as the game
 - Cost, **Observed** (Hub battle with about 100 surface decals in view, 2560x1440, Vulkan, wall-clock per frame): +0.35 ms (6.88 to 7.24 ms), two extra depth copies and pass splits plus the pass, made only while a kept mark is within `Decal Range` (`SurfacesNear`). Low impact.
 - **Observed** (owner, in play): works inside buildings and on their floors.
 - Depth convention: each scene texel's view depth comes from `depthViewZ` (`DepthConvention.Glsl`): Vulkan's scene depth is reversed, `z = n f / (n + d (f - n))`. **Unknown** for this pass on real data: the earlier **Verified** probe (flat sandbox floor, stored depth 0.9377 at three camera distances) checked the former 0.5..1 storage and has not been rerun. The camera's near plane is a quarter of its distance, so a wrong mapping rebuilt positions far off at play distance and showed blood only in close-ups. The texel's ray is rebuilt from the jittered projection (the upscaler's jitter moved out of the texel centre). Row order: Vulkan's target row 0 is NDC −1, Metal's is NDC +1 (`RenderTargetsBottomUp`), so the row's NDC Y takes `RowSign` (−1 on Metal).
+
+## Bloody footprints (Meitou)
+
+The `footprints` switch (Meitou, default; Faithful: none, as the game; `BloodFootprints`), not a game behaviour. A walking character's feet pick up the colour of a wet terrain pool or splash (its opaque inner ellipse) and each foot leaves up to four progressively lighter prints on dry terrain. The prints expire in game time and stay out of both save formats; switching it off clears the prints and the blood on the soles. It needs the `Blood` setting.
+
+- Masks: an equipped boot's sole outline (the convex hull of its mesh's lowest band of vertices, `FootprintSoles`), else generic boot and barefoot masks (`FootprintTexture`). The foot and toe bones place and turn a grounded print; a distance-based stride when the pose is not available.
+- Drawn by the surface-blood pass on terrain pixels only (scene depth equal to the terrain's), so the print's detail does not depend on `Decal Resolution`. The terrain depth copy runs while a print is within `Decal Range` and in view.
+- `Blood decals drawn` (Tab panel, 64 to 2048, default 512): the most surface decals and prints drawn in a frame, the nearest kept.

@@ -309,6 +309,12 @@ sealed class WorldOptions
     public bool MeitouBloodSurfaces = true;
 
     /// <summary>
+    /// The <c>footprints</c> switch's Meitou side: wet blood a character walks through leaves temporary prints on the terrain
+    /// (<c>BloodFootprints</c>); false: none, as the game.
+    /// </summary>
+    public bool MeitouFootprints = true;
+
+    /// <summary>
     /// The <c>tracers</c> switch's Meitou side: a semi-transparent streak behind each bolt in flight (the game's <c>GameHost.AddTracers</c>); false:
     /// the bolt alone, as the game.
     /// </summary>
@@ -648,7 +654,8 @@ sealed class WorldOptions
         () => o.MeitouIcons, v => o.MeitouIcons = v,
         () => o.MeitouBlood, v => o.MeitouBlood = v,
         () => o.MeitouBloodSurfaces, v => o.MeitouBloodSurfaces = v,
-        () => o.MeitouTracers, v => o.MeitouTracers = v);
+        () => o.MeitouTracers, v => o.MeitouTracers = v,
+        () => o.MeitouFootprints, v => o.MeitouFootprints = v);
 
     /// <summary>
     /// The world options from the command line (<see cref="WorldCommandLine.Parse"/>); null for <c>--help</c>.

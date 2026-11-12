@@ -1,7 +1,7 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The four kinds of terrain blood decal (docs/game/blood-decals.md), the folders of the <c>Blood</c> resource group in this order.
+/// Terrain blood decals (docs/game/blood-decals.md): the four native <c>Blood</c> folders followed by Meitou effects.
 /// </summary>
 public enum TerrainDecalType : byte
 {
@@ -21,6 +21,10 @@ public enum TerrainDecalType : byte
     /// 3 <c>smear</c>: behind a bleeding character that moves.
     /// </summary>
     Smear = 3,
+    /// <summary>
+    /// A temporary imprint left by a bloodied foot. Kept out of native saves.
+    /// </summary>
+    Footprint = 4,
 }
 
 /// <summary>

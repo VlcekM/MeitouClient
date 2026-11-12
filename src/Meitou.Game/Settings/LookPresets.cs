@@ -315,7 +315,7 @@ sealed class LookPresets(SettingsMenu menu)
             or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider => "Medium impact",
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)"
             or "Cloud shadows in fog" or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)"
-            or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Item icons" or "Fog" or "Bolt tracers"
+            or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Bloody footprints" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
             or "Light shafts air (0 = none)" => "Low impact",
         "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Mesh welding" => "Faster with Meitou",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Medium impact",
