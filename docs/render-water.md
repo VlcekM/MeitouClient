@@ -48,8 +48,8 @@ age, less foam) leaves a sheet with holes, then irregular clusters, then dots; B
 current and, on still water, wanders half a unit over about a minute. The waterline: no still foam
 ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
 waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's
-edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water: the
-normal map's slopes ×0.3 and the open sea's waves ×0.08 (by exposure), so their sun glint stays small; the far glitter keeps its mean only (its mask showed
+edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water keep
+the open sea's waves ×0.3 (by exposure) and the normal map's slopes whole (×0.08 and ×0.3 left a lagoon as flat as a mirror: rejected by the user); the far glitter keeps its mean only (its mask showed
 the foam texture's cells, still, in a band of distance); the swash's sun glint ×0.25. **Observed** (offscreen sequences, Bark lake): crests come in from the open water, bend into the
 bay and stop at the pier. Cost **Observed** (viewer bench, 2560x1440 with the default upscaler, RTX, Bark beach, 400 frames): the water stage 0.28 to 0.31 ms;
 the bake 260 ms on its worker. **Unknown**: piers whose collision is posts block a little of the swell; the one fixed direction leaves lee shores calm.

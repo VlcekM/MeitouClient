@@ -478,7 +478,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         // How much of the open sea's waves reach p: none in the shallows and on the shore (the breakers take over), fewer in sheltered water.
         float oceanScale(Shore s)
         {
-            return smoothstep(2.0, 40.0, s.depth) * smoothstep(-10.0, 150.0, s.dist) * mix(0.08, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist))) * (1.0 - s.river);
+            return smoothstep(0.5, 20.0, s.depth) * smoothstep(-10.0, 150.0, s.dist) * mix(0.3, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist))) * (1.0 - s.river);
         }
 
         // A breaker's height over its phase: a front (g below 0.5, the shore side) that steepens as it nears the break, and a long back.
@@ -768,8 +768,6 @@ public sealed unsafe class WaterRenderer : IDisposable
             float rough = texture(uFoamMap, p * 0.00035 + vec2(uTime * 0.02, 0.0)).g;
             // Near the eye the ocean's own slopes carry the detail; the game's map takes over with the distance.
             nm.xz *= (0.55 + 0.9 * rough) * mix(0.35, 1.0, smoothstep(1500.0, 6000.0, dist));
-            // A pond or a sheltered bay has little fetch: its surface is nearly smooth, so the sun's reflection on it stays small.
-            nm.xz *= mix(1.0, mix(0.3, 1.0, max(s.open, smoothstep(400.0, 1500.0, s.dist))), fade);
             nm.y *= pa.z;
             float rain = uWeatherWet.y * clamp(toEyeDir.y * 2.0 - dist * 0.0001, 0.0, 1.0);
             if (rain > 0.0)
