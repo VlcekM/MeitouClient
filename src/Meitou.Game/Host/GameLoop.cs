@@ -1354,7 +1354,7 @@ sealed class GameLoop(GameHost host)
             ?? (_headlessTarget ??= _display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
             Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
         host.Gpu.Post!.Target = backbuffer;
-        host.Gpu.Post.Options.HdrPeak = _display.HdrActive ? PostOptions.HdrPeakFor(host.Config.HdrPeakNits, host.Config.HdrPaperNits) : 0;
+        host.Gpu.Post.Options.HdrPeak = _display.HdrActive ? PostOptions.HdrPeakFor(host.Config.HdrPeakNits, host.Config.HdrPaperNitsNow) : 0;
         // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
         if (_frameGen is FrameGeneration && _display.FrameGenerationLayer is null)
         { _frameGen.Dispose(); _frameGen = null; }   // the layer fell back to the plain swapchain
@@ -1554,7 +1554,7 @@ sealed class GameLoop(GameHost host)
 
         // Pictures saved from an HDR frame are the SDR composite, the shown one the PQ composite.
         var finalPicture = worldAlone ? null : !hdrShown || capturing ? _uiLayer!.Composite(backbuffer) : null;
-        var shownPicture = hdrShown ? _uiLayer!.CompositeHdr(backbuffer, host.Config.HdrPaperNits) : finalPicture;
+        var shownPicture = hdrShown ? _uiLayer!.CompositeHdr(backbuffer, host.Config.HdrPaperNitsNow) : finalPicture;
         StageClock.UiPart(StageClock.UiComposite);
         if (GpuContext.DiagSubmit) _display.Context.SubmitAndWait();
         _display.Present(shownPicture);

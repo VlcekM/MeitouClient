@@ -171,9 +171,9 @@ halo round the character against the far ground; the rest of the picture is the 
 
 ## HDR output
 
-The Display page's `HDR output` row (the launcher and the in-game menu), `--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). `HDR white brightness` and `HDR peak brightness` (`hdrPaperNits` 80 to 500, `hdrPeakNits` 200 to 4000) are read every frame. The swapchain takes HDR10
+The Display page's `HDR output` row (the launcher and the in-game menu), `--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). `HDR white brightness` and `HDR peak brightness` (`hdrPaperNits` 80 to 500, below 80 automatic and the default: the white Windows shows SDR content at on its first display with HDR on, `WindowsHdr.SdrWhiteNits`, asked once a second, 200 where it cannot say; `hdrPeakNits` 200 to 4000) are read every frame. The swapchain takes HDR10
 (10-bit PQ) when the display lists it, else stays SDR. The backbuffer and LDR targets are then RGBA16F, the composite keeps the look's tone curve and lifts its highlights: the shoulder (and the game's clip) become `hdrShoulder` (the SDR picture below 0.8, then a roll-off to `PostOptions.HdrPeak`), ACES and the hybrid are multiplied by `hdrGain`, the HDR shoulder over the SDR one (1 below 0.8), and `UiLayer.CompositeHdr` decodes gamma 2.2, places white at
-`hdrPaperNits` (200), converts to BT.2020 and encodes PQ; `hdrPeakNits` (1000) sets the ceiling. Saved pictures use the SDR composite.
+`hdrPaperNits`, converts to BT.2020 and encodes PQ; `hdrPeakNits` (1000) sets the ceiling. Saved pictures use the SDR composite.
 Limits: no HDR metadata; pictures presented without the interface layer (the first loading screen) show gamma values as PQ. **Observed** (2026-11-12, AOC CQ27G2S over DisplayPort, Windows HDR on, RTX 4090): the swapchain takes `A2B10G10R10` HDR10 and the picture shows. The look is **Unknown**: that display's HDR mode shifts the colours of the Windows desktop too.
 ### GTAO
 

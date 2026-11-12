@@ -309,7 +309,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal const string HdrName = "HDR output", HdrPaperName = "HDR white brightness", HdrPeakName = "HDR peak brightness";
     internal const string HdrHint = "Sends an HDR10 picture to a display that takes one (Windows: HDR turned on for that monitor): highlights keep going above white. "
         + "Not with frame generation. Takes effect at start-up.";
-    internal const string HdrPaperHint = "How bright white is in HDR (the interface, sunlit ground), in nits. 200 suits a lit room; raise it if the picture looks dim.";
+    internal const string HdrPaperHint = "How bright white is in HDR (the interface, sunlit ground), in nits. Automatic follows Windows's SDR content brightness, so the game is as bright as the desktop.";
     internal const string HdrPeakHint = "The brightest your display shows, in nits: the highlights roll off up to it.";
 
     internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
@@ -442,8 +442,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)Config.FrameGenerationMethod,
                 i => Config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
             result.Add(new(HdrName, HdrHint, Toggle: new(HdrName, () => Config.Hdr, v => Config.Hdr = v, OnOff: true), Raw: "hdr"));
-            result.Add(new(HdrPaperName, HdrPaperHint, Slider: new Slider(HdrPaperName, 80, 500, () => Config.HdrPaperNits,
-                v => Config.HdrPaperNits = MathF.Round(v / 10) * 10, "0"), Raw: "hdrPaperNits"));
+            // The lowest position is automatic: the white Windows shows SDR content at.
+            result.Add(new(HdrPaperName, HdrPaperHint, Slider: new Slider(HdrPaperName, UserConfig.HdrPaperAuto - 10, 500,
+                () => Config.HdrPaperNits >= UserConfig.HdrPaperAuto ? Config.HdrPaperNits : UserConfig.HdrPaperAuto - 10,
+                v => Config.HdrPaperNits = v < UserConfig.HdrPaperAuto ? 0 : MathF.Round(v / 10) * 10, "0",
+                Text: v => v < UserConfig.HdrPaperAuto ? Loc.Tr("Automatic ({0})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture)) : v.ToString("0", CultureInfo.InvariantCulture)),
+                Raw: "hdrPaperNits"));
             result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 200, 4000, () => Config.HdrPeakNits,
                 v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits"));
         }

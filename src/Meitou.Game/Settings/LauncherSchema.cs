@@ -229,7 +229,8 @@ static class LauncherSchema
         new()
         {
             Key = Key(nameof(UserConfig.HdrPaperNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPaperName, Description = SettingsMenu.HdrPaperHint,
-            Default = defaults.HdrPaperNits, Shown = defaults.HdrPaperNits, Min = 80, Max = 500, Step = 10, Suffix = " nits",
+            Default = UserConfig.HdrPaperAuto - 10, Shown = UserConfig.HdrPaperAuto - 10, Min = UserConfig.HdrPaperAuto - 10, Max = 500, Step = 10, Suffix = " nits",
+            OffBelow = UserConfig.HdrPaperAuto, OffText = "Automatic",
         },
         new()
         {

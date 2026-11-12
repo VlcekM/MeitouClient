@@ -74,7 +74,16 @@ sealed class UserConfig
     /// <summary>
     /// HDR output: the nits of the picture's white (the interface, sunlit ground) and of the display's peak.
     /// </summary>
-    public float HdrPaperNits { get; set; } = 200;
+    public float HdrPaperNits { get; set; }
+
+    /// <summary>
+    /// The picture's white in nits this frame: <see cref="HdrPaperNits"/>, or under <see cref="HdrPaperAuto"/> what Windows shows SDR white at (200 where it cannot say).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public float HdrPaperNitsNow => HdrPaperNits >= HdrPaperAuto ? HdrPaperNits : Rendering.Display.WindowsHdr.SdrWhiteNits() ?? 200;
+
+    /// <summary>A <see cref="HdrPaperNits"/> below this is automatic.</summary>
+    public const float HdrPaperAuto = 80;
 
     public float HdrPeakNits { get; set; } = 1000;
 
