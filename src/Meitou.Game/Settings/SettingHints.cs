@@ -146,6 +146,7 @@ static class SettingHints
         WorldFrame.MaterialMetalSwitch => "Weapons, armour plates, prosthetics and robots read as metal.",
         WorldFrame.MaterialBeadsSwitch => "Drops of water stand on wet skin, leather and metal, in the rain and after a swim.",
         WorldFrame.WetWorldSwitch => "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original.",
+        WorldFrame.TracedGrassSwitch => "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
         "Blood on weapons and gear" => "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them.",

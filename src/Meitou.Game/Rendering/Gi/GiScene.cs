@@ -146,6 +146,8 @@ internal sealed unsafe class GiScene : IDisposable
     public bool SkipWorld { get; set; }
     /// <summary>How far from the eye the grass is traced (<see cref="TracedGrass"/>): where the traced sun's share ends, set before <see cref="Update"/>.</summary>
     public float GrassReach { get; set; } = TracedGrass.MinRange;
+    /// <summary>Whether the traced sun sees grass at all (<c>PostOptions.TracedGrass</c>).</summary>
+    public bool GrassShadows { get; set; } = true;
     /// <summary>The interior masks near the eye, whose grass leaves the traced scene (<see cref="InteriorMaskRenderer.Cuts"/>).</summary>
     public IReadOnlyList<InteriorMaskCut> InteriorCuts { get; set; } = [];
     TracedGrass? _grass;
@@ -550,7 +552,7 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>The traced sun's grass: its structures, within their budget, and its instances (nearest first, after everything else).</summary>
     void UpdateGrass(Vector3 eye, FoliageRenderer? foliage)
     {
-        if (!Casters || foliage is null)
+        if (!Casters || foliage is null || !GrassShadows)
         {
             _grass?.Release();
             return;

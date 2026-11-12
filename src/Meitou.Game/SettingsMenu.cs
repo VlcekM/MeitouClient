@@ -546,7 +546,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             {
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
-                "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch => "Shadows",
+                "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
+                    or WorldFrame.TracedGrassSwitch => "Shadows",
                 "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine"
                     or WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => "Lighting",
                 "Water" or "Water contact foam, wakes and ripples" or "Reflections" => "Water & reflections",
@@ -686,8 +687,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// Whether a Graphics row acts now: a setting of an effect shows only while that effect is on, and one of a technique only with that technique
-    /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade; the screen-space contact shadows with
-    /// the cascades; the cache's parts with the hybrid indirect light).
+    /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade; the grass shadows with
+    /// them; the screen-space contact shadows with the cascades; the cache's parts with the hybrid indirect light).
     /// </summary>
     bool RowShown(string label)
     {
@@ -698,6 +699,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             WorldFrame.ShadowMapSlider => sun is not (0 or 3),
             WorldFrame.ShadowFilterSlider or WorldFrame.FifthCascadeSwitch => sun is -1 or 2,
             "Contact shadows" => sun != 3,
+            WorldFrame.TracedGrassSwitch => sun is -1 or 3,
             "Indoor GI" => gi != 0,
             WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => gi is -1 or 2,
             WorldFrame.GtaoQualitySlider => occlusion is -1 or 2,

@@ -32,7 +32,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new("HDR output", "hdr", ["hdrPaperNits", "hdrPeakNits"]),
 
         // Shadows
-        new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
+        new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.TracedGrassSwitch,
+            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
             WorldFrame.FifthCascadeSwitch]),
         new("Contact shadows", "Contact shadows", []),
         new("Lamp shadows", "Lamp shadows", []),

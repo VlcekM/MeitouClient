@@ -338,6 +338,11 @@ static partial class WorldFrame
     public const string WetWorldSwitch = "Rain drops and puddles";
 
     /// <summary>
+    /// The traced sun shadows' grass (<see cref="PostOptions.TracedGrass"/>), a plain on / off row under them.
+    /// </summary>
+    public const string TracedGrassSwitch = "Traced grass shadows";
+
+    /// <summary>
     /// The hybrid GI's parts as switches (<see cref="PostOptions.GiRelocate"/>, <see cref="PostOptions.GiCloudShadows"/>,
     /// <see cref="PostOptions.GiCache"/>).
     /// </summary>
@@ -937,6 +942,8 @@ static partial class WorldFrame
             toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
             toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
             toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
+            // The traced sun shadows' grass, a plain on / off row; it acts while the sun's shadows are traced.
+            toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));
         }
         if (g.Foliage is { } farGrass) toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v, Remaster: true, OnOff: true));
         if (g.Surfaces is { } wetWorld) toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v, Remaster: true, OnOff: true, Optional: true));

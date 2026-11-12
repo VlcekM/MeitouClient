@@ -307,7 +307,7 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     internal static string? ImpactOf(string label) => label switch
     {
-        "Indirect light" or "Hybrid GI" or "Clouds" or "Shadows" or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
+        "Indirect light" or "Hybrid GI" or "Clouds" or "Shadows" or WorldFrame.TracedGrassSwitch or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
             or WorldFrame.ShadowDistanceSlider or "Large foliage range (F6 Meitou)" or WorldFrame.WaterReflectionSlider => "High impact",
         "Ambient occlusion" or "Ground-truth occlusion" or WorldFrame.GtaoQualitySlider or "Lamp shadows" or "Light shafts" or "Water" or "Ground parallax" or "Ground displacement (tessellation)"
             or "Ground displacement distance (m)" or "Ground parallax distance (m)" or WorldFrame.ShadowMapSlider

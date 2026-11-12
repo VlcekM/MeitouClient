@@ -366,6 +366,8 @@ public sealed class PostOptions
     /// <summary>The contact shadows' parameters for their pass; a strength of 0 turns them off.</summary>
     public System.Numerics.Vector4 ContactParams =>
         new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);
+    /// <summary>The traced sun's grass shadows (docs/render-shadows.md "Traced sun shadows"): off, its rays see no grass, the larger part of its cost in grassland.</summary>
+    public bool TracedGrass = true;
     /// <summary>The <c>gtao</c> switch (docs/render-post.md "GTAO"): with <see cref="Ssao"/> on, the occlusion is the horizon search instead; off by default in every preset.</summary>
     public bool Gtao;
     /// <summary>GTAO's budget: 0 low, 1 medium, 2 high (the Tab panel's slider). It sets the slices, the steps and whether the gather runs at the render size.</summary>
@@ -427,6 +429,7 @@ public sealed class PostOptions
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
         LampShadows = other.LampShadows;
+        TracedGrass = other.TracedGrass;
     }
 
     /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>cache</c>).</summary>

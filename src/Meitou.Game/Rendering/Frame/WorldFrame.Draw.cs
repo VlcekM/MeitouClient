@@ -582,6 +582,7 @@ static partial class WorldFrame
             gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
             gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
             gi.GrassReach = TracedReach(ref f);
+            gi.GrassShadows = gpu.Post?.Options.TracedGrass ?? true;
             // Traced, the objects cast as far as the cascades reached (the probes see them too).
             // Through a lens longer than the game's what is far is drawn large, so the casters reach as much further (to 24000 at most: past it stand distant meshes).
             float lens = Meitou.Data.Ogre.MeshLod.LensFactor(f.Camera.FieldOfView);
