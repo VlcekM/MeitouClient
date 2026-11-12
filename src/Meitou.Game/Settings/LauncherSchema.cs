@@ -202,16 +202,13 @@ static class LauncherSchema
         new()
         {
             Key = Key(nameof(UserConfig.FrameGeneration)), Kind = SettingKind.Toggle, Name = "Frame generation",
-            Description = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-                + "Works with TAA, FSR and DLSS upscaling. Turns on and off at start-up.",
+            Description = "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay.",
             Default = defaults.FrameGeneration ? 1 : 0, On = "On", Off = "Off",
         },
         new()
         {
             Key = Key(nameof(UserConfig.FrameGenerationVendor)), Kind = SettingKind.Slider, Name = "Frame generation by",
-            Description = "FSR 3: AMD's, any GPU, needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). "
-                + "DLSS: NVIDIA's, Windows with an RTX 40 or later, needs Streamline's frame generation DLLs "
-                + "(sl.dlss_g.dll, nvngx_dlssg.dll, sl.reflex.dll, sl.pcl.dll) and turns Reflex on. Takes effect at start-up.",
+            Description = "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs.",
             Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1, Labels = ["FSR 3", "DLSS"],
         },
     ];
@@ -282,6 +279,7 @@ static class LauncherSchema
         var sliders = GraphicsSliders().ToList();
         var switches = Switches().ToList();
         var display = DisplaySection(defaults, sliders);
+        display.Groups = FeatureGrouping.LauncherGroups([.. display.Settings.Select(s => s.Key)]);
         return new SettingsSchema
         {
             SettingsVersion = UserConfig.CurrentVersion,

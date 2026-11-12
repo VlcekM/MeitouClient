@@ -28,6 +28,8 @@ whose rays it uses), Ambient occlusion (Off / SSAO / GTAO), Global illumination 
 and writes the switches it stands for, which keep their saved keys and get no rows of their own; the screen-space contact shadows, in the Shadows group,
 have no row where the device traces rays. The looks and the tiers set the switches, not the choices.
 
+A row whose setting is read at start-up only (`SettingsMenu.RestartKeys`: frame generation, HDR output, texture quality, the water grid and its wave resolution) carries a tag beside its name: "Needs restart", and a filled "Restart to apply" once its value is no longer the one the game started with. The Display page folds the upscaler's and the HDR output's settings under their rows, as the Graphics features. An optional effect's switch is Off | On.
+
 Graphics (`LookPresets`, `QualityTiers`, `FeatureGrouping`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:
 - **Look**: Faithful | Meitou (`faithfulLook`). Faithful is the game as it ships: every Faithful / Meitou effect switch off,

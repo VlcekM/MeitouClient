@@ -19,6 +19,10 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
     internal static readonly FeatureGroup[] FeatureGroups =
     [
+        // Display
+        new("Upscaling", WorldFrame.UpscalerSliders[0], [WorldFrame.UpscalerSliders[1], WorldFrame.UpscalerSliders[2], WorldFrame.DlssPresetSlider]),
+        new("HDR output", "hdr", ["hdrPaperNits", "hdrPeakNits"]),
+
         // Lighting
         new("Shadows", WorldFrame.SunShadowsChoice, [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
             WorldFrame.FifthCascadeSwitch, "Contact shadows"]),
@@ -160,7 +164,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
             });
 
             string name = header.Label;
-            if (open) output.AddRange(members.Select(m => m with { Depth = 1, Label = WithinGroup(m.Label, name) }));
+            // A member that sits under another already (a mode's custom value) goes one step further in.
+            if (open) output.AddRange(members.Select(m => m with { Depth = m.Depth + 1, Label = WithinGroup(m.Label, name) }));
         }
 
         return output;

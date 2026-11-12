@@ -259,9 +259,23 @@ sealed class SettingsCanvas(SettingsMenu menu)
         var nameInk = entry.Changed ? Brass : MainInk;
         Text(entry.Label, R(212 + indent, y + 2, 456 - indent, entry.Hint.Length > 0 ? labelHeight + 1 : row - 4), labelSize, nameInk,
             clip: menu.Viewport, wrap: labelWrap);
+        // The restart tag at the column's right end, the impact left of it.
+        float tagRoom = 0;
+        if (entry.Tag is { } tag)
+        {
+            var plate = R(668 - TagWidth, y + 4, TagWidth, 16);
+            Rect(plate, entry.TagHot ? Brass : Brass with { W = 0.16f }, menu.Viewport);
+            if (!entry.TagHot) Rect(plate with { Height = menu.Scale }, Brass with { W = 0.5f }, menu.Viewport);
+            Text(tag, plate, 11, entry.TagHot ? new Vector4(0.08f, 0.07f, 0.05f, 1) : Brass, "HCenter VCenter", menu.Viewport);
+            tagRoom = TagWidth + 8;
+        }
+
         if (entry.Impact is { } impact)
-            Text(impact, R(212, y + 2, 456, 20), 11, ImpactInk(impact), "Right VCenter", menu.Viewport);
+            Text(impact, R(212, y + 2, 456 - tagRoom, 20), 11, ImpactInk(impact), "Right VCenter", menu.Viewport);
     }
+
+    /// <summary>The width of a row's tag ("Restart to apply").</summary>
+    const float TagWidth = 104;
 
     /// <summary>
     /// The ink of an impact note: brass for high, the main ink for medium, muted otherwise.
@@ -320,6 +334,11 @@ sealed class SettingsCanvas(SettingsMenu menu)
             {
                 Segmented(R(920, y + (row - 22) / 2, 180, 22), meitou ? 1 : 0, i => remaster.Set(i == 1));
             }
+        }
+        // An optional effect (in neither look): Off | On, whatever words its sides have.
+        else if (entry.Toggle is { Optional: true } optional)
+        {
+            Segmented(R(920, y + (row - 22) / 2, 180, 22), optional.Get() ? 1 : 0, i => optional.Set(i == 1), "Off", "On");
         }
         // A switch with its own words (Hear from: Character / Camera): one button showing the current side.
         else if (entry.Toggle is { Text: { } words } worded)

@@ -102,7 +102,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
         InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
         string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
-        bool Locked = false);
+        bool Locked = false, string? Tag = null, bool TagHot = false);
     internal sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null, string Label = "");
 
     /// <summary>
@@ -269,7 +269,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow"))
             return "Lighting";
-        if (S("Haze") || S("Heat haze") || label == WorldFrame.HazeDistanceSlider || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
+        if (S("Haze") || S("Heat haze") || label == WorldFrame.HazeDistanceSlider || label == WorldFrame.CloudHeightSlider
+            || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Depth of field")) return "Colour";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
@@ -299,18 +300,37 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         };
     }
 
-    internal const string TickAheadHint = "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
-        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
-    const string FrameGenerationTemplate = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-        + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's frame generation DLLs and turns Reflex on. "
-        + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
+    internal const string TickAheadHint = "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay.";
+    const string FrameGenerationTemplate = "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}";
 
     /// <summary>The HDR output rows of the Display page and of the launcher (docs/render-post.md "HDR output").</summary>
-    internal const string HdrName = "HDR output", HdrPaperName = "HDR white brightness", HdrPeakName = "HDR peak brightness";
-    internal const string HdrHint = "Sends an HDR10 picture to a display that takes one (Windows: HDR turned on for that monitor): highlights keep going above white. "
-        + "Not with frame generation. Takes effect at start-up.";
-    internal const string HdrPaperHint = "How bright white is in HDR (the interface, sunlit ground), in nits. Automatic follows Windows's SDR content brightness, so the game is as bright as the desktop.";
-    internal const string HdrPeakHint = "The brightest your display shows, in nits: the highlights roll off up to it.";
+    internal const string HdrName = "HDR output", HdrPaperName = "White brightness", HdrPeakName = "Peak brightness";
+    internal const string HdrHint = "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation.";
+    internal const string HdrPaperHint = "Brightness of white, in nits. Automatic matches the Windows desktop.";
+    internal const string HdrPeakHint = "Your display's brightest level, in nits.";
+
+    /// <summary>
+    /// The settings read once, when the game starts (by their row's key): their row says so, and says it louder once the value is no longer the one
+    /// the game started with.
+    /// </summary>
+    static readonly HashSet<string> RestartKeys = ["frameGeneration", "hdr", WorldFrame.TextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
+
+    /// <summary>The value each restart setting had when its row was first built (the menu is made with the game).</summary>
+    readonly Dictionary<string, float> _atStart = [];
+
+    /// <summary>
+    /// <paramref name="row"/> with its restart tag when its setting is read at start-up only (<see cref="RestartKeys"/>).
+    /// </summary>
+    Entry Restarting(Entry row)
+    {
+        if (row.Raw is not { } key || !RestartKeys.Contains(key) || row.Label == "Custom value") return row;
+
+        float now = row.Toggle is { } toggle ? toggle.Get() ? 1 : 0 : row.Choice is { } choice ? choice.Current() : row.Slider?.Get() ?? 0;
+        if (!_atStart.TryGetValue(key, out float start)) _atStart[key] = start = now;
+
+        bool pending = MathF.Abs(now - start) > 1e-4f;
+        return row with { Tag = pending ? "Restart to apply" : "Needs restart", TagHot = pending };
+    }
 
     internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
 
@@ -420,11 +440,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             }
         }
 
-        return Grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)]);
+        return Grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length).Select(Restarting)]);
     }
 
     /// <summary>
-    /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their sliders.
+    /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their
+    /// sliders, and the upscaler's and the HDR output's settings fold under their rows.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
@@ -447,15 +468,16 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 () => Config.HdrPaperNits >= UserConfig.HdrPaperAuto ? Config.HdrPaperNits : UserConfig.HdrPaperAuto - 10,
                 v => Config.HdrPaperNits = v < UserConfig.HdrPaperAuto ? 0 : MathF.Round(v / 10) * 10, "0",
                 Text: v => v < UserConfig.HdrPaperAuto ? Loc.Tr("Automatic ({0})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture)) : v.ToString("0", CultureInfo.InvariantCulture)),
-                Raw: "hdrPaperNits"));
+                Raw: "hdrPaperNits", Locked: !Config.Hdr));
             result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 200, 4000, () => Config.HdrPeakNits,
-                v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits"));
+                v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits", Locked: !Config.Hdr));
         }
 
         result.RemoveAll(e => !ShownNow(e));
         result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
-        result = [.. result.SelectMany(Modes.ModeEntries)];
-        return result;
+        result = [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
+        // As the Graphics tabs: a feature's settings fold under its row (HDR output, the upscaler).
+        return Grouping.Grouped(result);
     }
 
     /// <summary>
