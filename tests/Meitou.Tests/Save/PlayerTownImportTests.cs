@@ -533,6 +533,33 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
+    /// Removing the last outdoor site preserves a town with indoor sites, including furniture whose parent no longer exists.
+    /// </summary>
+    [Theory]
+    [InlineData("last-outdoor")]
+    [InlineData("unloaded-house")]
+    public void Dismantle_reassessment_preserves_a_town_with_indoor_or_orphan_sites(string parent)
+    {
+        using var world = World();
+        var town = world.Buildings.AddTown(new Vector3(100, 300, 200), 7);
+        town.Name = "Still occupied";
+        var outdoor = Site("last-outdoor", town.Position, town.Number);
+        var indoor = Site("indoor", town.Position, town.Number);
+        indoor.Parent = parent;
+        world.Buildings.Add(outdoor);
+        world.Buildings.Add(indoor);
+        world.Buildings.Remove(outdoor);
+
+        ConstructionSystem.ReassessTown(world, town);
+
+        Assert.Same(town, Assert.Single(world.Buildings.Towns));
+        Assert.Equal("Still occupied", town.Name);
+        world.Buildings.Remove(indoor);
+        ConstructionSystem.ReassessTown(world, town);
+        Assert.Empty(world.Buildings.Towns);
+    }
+
+    /// <summary>
     /// Placement/dismantle reassessment drops an outpost whose last building was removed.
     /// </summary>
     [Fact]
