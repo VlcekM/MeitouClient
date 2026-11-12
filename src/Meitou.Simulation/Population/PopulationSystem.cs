@@ -271,7 +271,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             // a severed leg may close the boots (FUN_14064edc0 -> validateInventorySections)
             if (cut.Limb is 2 or 3) InventoryCommands.ValidateSections(world, cut.Character, cold);
             _assembly.RefreshEquipment(cold);
-            DropSeveredLimb(world, cut.Character, cold, cut.Limb);
+            if (cut.Drops) DropSeveredLimb(world, cut.Character, cold, cut.Limb);
         }
     }
 

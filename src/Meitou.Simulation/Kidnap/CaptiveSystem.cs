@@ -1817,16 +1817,17 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb is announced to the renderer
-    /// and the character cries event 70 (leg) or 71 (arm).
+    /// and the character cries event 70 (leg) or 71 (arm). The limb's item drops when <paramref name="limbDrops"/>: the rack's does
+    /// (<c>FUN_14029af90</c> severs with the item flag 1), an eaten one's does not (<c>FUN_140650370</c>: 0), <b>Verified</b> by decompile.
     /// </summary>
-    static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events)
+    static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events, bool limbDrops)
     {
         foreach (var e in events)
         {
             if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(world.Characters, c);
             else if (e.Kind == MedicalEventKind.PartSevered)
             {
-                world.Characters.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot));
+                world.Characters.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot, limbDrops));
                 world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70
                         : 71) { Tick = world.Tick + 1 });
             }
@@ -1853,7 +1854,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
-        ApplyBodyEvents(world, j.Captive, c, medical, events);
+        ApplyBodyEvents(world, j.Captive, c, medical, events, limbDrops: false);
 
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
         if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction))
