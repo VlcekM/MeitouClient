@@ -63,6 +63,13 @@ public interface IWalkability
     bool IsOnSurface(float x, float z, float nearY) => IsWalkable(x, z, nearY);
 
     /// <summary>
+    /// Where a walker at <paramref name="at"/> stands on the surface: <paramref name="at"/> itself, or for one standing off the surface beside a
+    /// polygon (<see cref="IsWalkable(float, float, float)"/> but not <see cref="IsOnSurface"/>) the nearest point of that polygon,
+    /// <paramref name="inset"/> inside its edge, at the walker's height. Default: <paramref name="at"/>.
+    /// </summary>
+    Vector3 SurfacePoint(Vector3 at, float inset) => at;
+
+    /// <summary>
     /// <see cref="IsWalkable(float, float, float)"/> and, in <paramref name="y"/>, <see cref="GroundHeight(float, float, float)"/> (also when not
     /// walkable), answered together: a step asks both of the same spot.
     /// </summary>

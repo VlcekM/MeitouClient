@@ -58,6 +58,8 @@ static class SaveProbe
         switch (mode, a.Count)
         {
             case ("near", >= 1): Near(probe, float.Parse(a[0])); return true;
+            case ("crowd", >= 1): Crowd(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
+            case ("fight", >= 1): Fight(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
@@ -84,6 +86,62 @@ static class SaveProbe
     {
         foreach (int i in probe.Near(probe.LeaderPosition, radius)) Console.WriteLine(probe.Who(i));
     }
+
+    /// <summary>
+    /// Every character within <paramref name="radius"/> of the player's squad leader every <paramref name="interval"/> ticks,
+    /// <paramref name="rounds"/> times: whether it is down, its goal, what it carries and whom it fights.
+    /// </summary>
+    static void Crowd(ProbeWorld probe, float radius, int rounds, int interval)
+    {
+        for (int round = 0; round < rounds; round++)
+        {
+            Console.WriteLine($"tick {probe.World.Tick}");
+            foreach (int i in probe.Near(probe.LeaderPosition, radius))
+            {
+                var c = probe.Characters.Cold(i)!;
+                Console.WriteLine($"  {probe.Who(i)}{Down(c)} in={c.InSomething} carrying={c.Carrying} lifting={c.CarryTarget} behaviour={c.Ai?.Behaviour} "
+                    + $"goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} target={Target(probe, i)}");
+            }
+
+            probe.PrintMessages();
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The fight round the character in <paramref name="slot"/> every <paramref name="interval"/> ticks, <paramref name="rounds"/> times: its own
+    /// combat state and body, then everyone who targets it with the gap to it and the blows thrown and landed.
+    /// </summary>
+    static void Fight(ProbeWorld probe, int slot, int rounds, int interval)
+    {
+        var t = probe.Characters;
+        var combat = probe.World.Systems.OfType<CombatSystem>().First();
+        for (int round = 0; round < rounds; round++)
+        {
+            var at = t.Next[slot].Position;
+            var parts = t.Cold(slot)?.Medical?.PartSpan.ToArray().Select(p => $"{p.Flesh:F0}/{p.MaxHp:F0}") ?? [];
+            Console.WriteLine($"tick {probe.World.Tick} {probe.Who(slot)}{Down(t.Cold(slot)!)} {FightLine(combat.StateOf(t.IdOf(slot)))} "
+                + $"parts=[{string.Join(" ", parts)}]");
+            foreach (int i in probe.Near(at, 400))
+            {
+                var s = combat.StateOf(t.IdOf(i));
+                if (i == slot || s.TargetSlot != slot) continue;
+
+                var p = t.Next[i].Position;
+                Console.WriteLine($"  {i} '{t.Cold(i)!.Name}' {(CharacterTask)t.Next[i].Task} gap={Vector2.Distance(new(p.X, p.Z), new(at.X, at.Z)):F1} "
+                    + $"dy={p.Y - at.Y:F1} {FightLine(s)}");
+            }
+
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The fields of a combat state that say why blows do or do not land.
+    /// </summary>
+    static string FightLine(CombatSlot s) =>
+        $"engaged={s.Engaged} circle={s.CircleState} tech={s.AttackTech} reach={s.Reach:F1} thrown={s.Thrown} landed={s.Landed} parried={s.Parried} "
+        + $"evaded={s.Evaded} taken={s.Taken} blocks={s.Blocks} dodges={s.Dodges} ranged={s.Ranged}";
 
     /// <summary>
     /// The characters named like <paramref name="name"/>, with their squad once and then their task, AI and fight target every 40 ticks,
@@ -432,6 +490,8 @@ static class SaveProbe
         Console.Error.WriteLine("""
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
+              crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
+              fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
               nests                    the wild layout's nests whose first candidate spot the original would refuse
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks

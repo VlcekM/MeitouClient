@@ -51,6 +51,12 @@ public sealed partial class CombatSystem
     const float SteerLineRadius = 0.1f;
 
     /// <summary>
+    /// How far inside its polygon's edge the line test puts a fighter that stands off it (<see cref="IWalkability.SurfacePoint"/>): clear of the
+    /// swept circle, so the edge it stands by does not stop the sweep at any angle.
+    /// </summary>
+    const float SteerLineInset = 2 * SteerLineRadius;
+
+    /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
     /// </summary>
     struct Choice
@@ -405,8 +411,9 @@ public sealed partial class CombatSystem
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
     /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
-    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). Last tick's places; any thread after
-    /// Sight's update.
+    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
+    /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
+    /// line to it, so nobody steered or swung at it (#559). Last tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
@@ -422,7 +429,10 @@ public sealed partial class CombatSystem
         for (float d = SteerLineStep; d < length; d += SteerLineStep)
             if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
 
-        return world.Walkability.Slide(from, leg, SteerLineRadius) == leg;
+        var start = world.Walkability.SurfacePoint(from, SteerLineInset);
+        var end = world.Walkability.SurfacePoint(to, SteerLineInset);
+        var line = new Vector2(end.X - start.X, end.Z - start.Z);
+        return world.Walkability.Slide(start, line, SteerLineRadius) == line;
     }
 
     /// <summary>

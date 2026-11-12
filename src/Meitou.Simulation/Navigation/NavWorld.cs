@@ -271,13 +271,23 @@ public sealed class NavWorld
     /// </summary>
     public bool TryEdgeHeight(float x, float z, float nearY, float edge, out float height)
     {
-        height = 0;
+        bool found = TryEdgePoint(x, z, nearY, edge, out var point);
+        height = point.Y;
+        return found;
+    }
+
+    /// <summary>
+    /// The nearest point of the polygon <see cref="TryEdgeHeight"/> picks, with the polygon's height there.
+    /// </summary>
+    public bool TryEdgePoint(float x, float z, float nearY, float edge, out Vector3 point)
+    {
+        point = default;
         if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
 
         var m = _meshes[slot];
         if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0)) return false;
 
-        height = ClosestPoint(m, p, new Vector3(x, nearY, z)).Y;
+        point = ClosestPoint(m, p, new Vector3(x, nearY, z));
         return true;
     }
 

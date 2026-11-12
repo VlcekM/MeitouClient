@@ -167,6 +167,22 @@ public sealed partial class NavmeshWalkability : IWalkability
     }
 
     /// <inheritdoc/>
+    public Vector3 SurfacePoint(Vector3 at, float inset)
+    {
+        var w = _world;
+        if (!w.Contains(WorldLayout.ZoneOf(at.X, at.Z)) || IsOnSurface(at.X, at.Z, at.Y)) return at;
+        if (!w.TryEdgePoint(at.X, at.Z, at.Y, EdgeTolerance, out var edge)) return at;
+
+        // Over the polygon itself (its layer out of reach of the walker's height): no edge to come in from.
+        var inward = new Vector2(edge.X - at.X, edge.Z - at.Z);
+        float off = inward.Length();
+        if (off < 1e-4f) return at;
+
+        inward *= inset / off;
+        return new Vector3(edge.X + inward.X, at.Y, edge.Z + inward.Y);
+    }
+
+    /// <inheritdoc/>
     public bool TryStand(float x, float z, float nearY, out float y)
     {
         var w = _world;
