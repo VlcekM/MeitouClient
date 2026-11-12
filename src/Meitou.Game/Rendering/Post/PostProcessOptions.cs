@@ -348,10 +348,10 @@ public sealed class PostOptions
     public const float SsaoFadeEnd = 6600;
 
     /// <summary>
-    /// How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. They still darken the ground
-    /// round them.
+    /// How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. All of it: at a quarter a face
+    /// under a hood, an armpit or the skin under a collar kept nearly the open skin's ambient light and seemed lit from inside.
     /// </summary>
-    public const float SsaoCharacterStrength = 0.25f;
+    public const float SsaoCharacterStrength = 1f;
 
     /// <summary>
     /// How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a

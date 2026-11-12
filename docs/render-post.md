@@ -135,7 +135,7 @@ NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGenerat
 
 ## SSAO, fog and layers
 
-SSAO reads the scene depth; character mask controls character occlusion (default strength0.25).
+SSAO reads the scene depth; the character mask sets the characters' own share of the occlusion (`SsaoCharacterStrength`, 1: all of it. **Observed**, a hooded character in shade and in the editor, SSAO and GTAO at low and high quality: at 0.25 the face under the hood kept nearly the open skin's ambient light; at 1 the hood, the arms and the bust shade the body, with no noise or halo seen close up).
 `ssao-mask-skip` may omit a mask read only when no character was drawn. The taps read the mask from a half-size R8 copy of the scene colour's
 alpha (`SsaoMask`), not the scene colour: **Observed** (Nsight, 2560x1440) SSAO 0.35 ms, L2-bound, 0.2 ms of it the scattered scene-colour reads;
 GPU frame -0.15 ms, the picture within 4 levels. Sky/far-depth edges and
