@@ -166,6 +166,7 @@ sealed class ProductionWindows(PlayerInterface player)
     {
         b.Text["Root"] = "STORAGE";
         b.Text["TypeText"] = m?.StorageLimitName ?? "";
+        if (string.IsNullOrEmpty(m?.StorageLimitName)) b.Hidden.Add("TypeText");
 
         if (m is { StorageCapacity: > 0 } cap)
         {

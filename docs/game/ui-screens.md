@@ -817,6 +817,10 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
 | Research | research inventory (`FUN_140155910`) | `Kenshi_InventoryResearchWindow` |
 | Building (houses), Door, Gateway, Wall | none (slot 48 returns 0) | - |
 
+**Observed** (issue #561 screenshot; installed `Kenshi_InventoryGenericWindow.layout` read): the generic storage layout's `TypeText` uses
+`Kenshi_GenericTextBoxFlat`, which draws a panel even with an empty caption. Meitou hides it when there is no restricted-item name, so general
+storage has no blank heading panel over its inventory grid.
+
 `Kenshi_GenericBuildingWindow` (**Verified**, layout read): Window `Kenshi_WindowCX` captioned "BUILDING NAME", layer Window; `CraftingPanel`
 (`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (layout INPUTS / OUTPUT, but the constructor `FUN_140155f90` **Verified** overwrites them with the translated `Input` / `Inputs` by the input count, hidden at 0, and `Output`), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
 slot `inN`, `InputNProgressBar`), output (`out` slot, `OutputProgressBar`, `OutputText`, `OutputDataPanel`). The `inN` / `out` inventory
