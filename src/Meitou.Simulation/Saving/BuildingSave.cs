@@ -266,7 +266,8 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Removes the player-built buildings of the save that the world no longer has, with their state records and their slots, and a live site's
+    /// Removes the player-built buildings of the save that the world no longer has, with their state records (the building's and, listed before it,
+    /// the inventory's: <b>Observed</b>, docs/formats/save.md "Zone files") and their slots, and a live site's
     /// entry in a zone other than the one it is written in (<paramref name="live"/> maps each site to that zone, null for a level house's).
     /// </summary>
     static void RemoveDismantled(SaveGame game, string playerFactionId, Dictionary<string, ZoneCoordinate?> live)
@@ -281,11 +282,15 @@ public static class BuildingSave
             {
                 if (live.TryGetValue(instance.Id, out var home) && (home is null || home == zone.Coordinate)) continue;
 
-                var state = instance.States.Count > 0 ? byId.GetValueOrDefault(instance.States[0]) : null;
+                var state = instance.States
+                    .Select(id => byId.GetValueOrDefault(id))
+                    .FirstOrDefault(r => r?.RecordType == FcsRecordType.GamestateBuilding);
                 if (!IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;
 
                 list.Instances.Remove(instance);
-                zone.File.Records.Remove(state!);
+                foreach (string id in instance.States)
+                    if (byId.GetValueOrDefault(id) is { } owned) zone.File.Records.Remove(owned);
+
                 if (Hand.Read(state!, "handle") is { IsNull: false } h && zone.File.SlotLists.Count > 0)
                     zone.File.SlotLists[0] = [.. zone.File.SlotLists[0].Where(slot => slot != h.I)];
             }
