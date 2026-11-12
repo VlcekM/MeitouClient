@@ -111,7 +111,7 @@ public static class TownReport
     }
 
     /// <summary>
-    /// The <c>machines-power</c> reply: <c>{count, machines[]}</c>, each machine with its site, town and grid (the town number whose grid it joins,
+    /// The <c>machines-power</c> reply: <c>{count, machines[]}</c>, each machine with its site, town and grid (the key of the grid it joins, as the production system shares it,
     /// null when none: unfinished, town work or no power part) and the power it gets; <paramref name="town"/> limits it to one outpost.
     /// </summary>
     public static string MachinesJson(World world, TownEntry? town)
@@ -277,13 +277,13 @@ public static class TownReport
     }
 
     /// <summary>
-    /// One machine: site, building record and name, town (outpost number or 0), grid (the outpost whose power grid it is on, else null), its power
+    /// One machine: site, building record and name, town (outpost number or 0), grid (the key of the power grid it is on, as the production system shares it; null when not on one), its power
     /// part (<c>consumer</c>, <c>generator</c>, <c>battery</c> or <c>none</c>), demand and granted power, the satisfaction (granted / demand, 1 with no
     /// demand), whether it has power now, and its power switch.
     /// </summary>
     static void WriteMachine(Utf8JsonWriter w, World world, Machine m, BuildSite? site)
     {
-        bool onGrid = site is { Complete: true, Town: > 0 } && !ProductionSystem.IsTownWork(m.Site)
+        bool onGrid = site is { Complete: true } && !ProductionSystem.IsTownWork(m.Site)
             && (m.Data.IsConsumer || m.Data.IsGenerator || m.Data.IsBattery);
         w.WriteStartObject();
         w.WriteString("site", m.Site);
@@ -291,7 +291,7 @@ public static class TownReport
         w.WriteString("name", m.Data.Name);
         w.WriteNumber("town", site?.Town ?? 0);
         w.WriteString("townName", site is { } s && world.Buildings.FindTown(s.Town) is { } t ? t.Name : null);
-        if (onGrid) w.WriteNumber("grid", site!.Town);
+        if (onGrid) w.WriteNumber("grid", world.SystemOf<ProductionSystem>()?.GridOf(world, site!) ?? site!.Town);
         else w.WriteNull("grid");
         w.WriteString("kind", m.Data.IsBattery ? "battery" : m.Data.IsGenerator ? "generator" : m.Data.IsConsumer ? "consumer" : "none");
         w.WriteNumber("demand", R2(m.Demand));

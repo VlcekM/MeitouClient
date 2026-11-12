@@ -137,6 +137,12 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// The key of the grid a site's machine joins (what <see cref="PowerTick"/> shares, see <see cref="PowerTown"/>): its town's number, a level
+    /// town's negative key, 0 for a machine with no town. Read by the agent control channel's <c>machines-power</c>.
+    /// </summary>
+    public int GridOf(World world, BuildSite site) => PowerTown(world, site);
+
+    /// <summary>
     /// The power step: every machine's indoor, active, wind and rain state, each town's grid sharing its power (<see cref="ShareOneTown"/>), the
     /// generators' fuel burnt, then each machine's health, research multiplier and efficiency.
     /// </summary>
