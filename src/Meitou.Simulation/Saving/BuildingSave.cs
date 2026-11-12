@@ -546,11 +546,12 @@ public static class BuildingSave
     {
         var hands = new Dictionary<int, Hand>();
         var towns = world.Buildings.Towns;
-        if (towns.Count == 0) return hands;
-
         var quick = game.Quick;
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in quick.Records) byId[r.StringId] = r;
+        RemoveObsoleteTowns(game, world, playerFactionId, byId);
+        if (towns.Count == 0) return hands;
+
         var list = game.TownInstanceList ?? AddTownInstanceList(game, quick);
         int container = game.Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C).DefaultIfEmpty(0).Max();
         foreach (var town in towns)
@@ -604,6 +605,41 @@ public static class BuildingSave
         }
 
         return hands;
+    }
+
+    /// <summary>
+    /// Reconciles saved player outposts with the live registry, preserving foreign towns and nests.
+    /// </summary>
+    static void RemoveObsoleteTowns(SaveGame game, World world, string playerFactionId, Dictionary<string, FcsRecord> byId)
+    {
+        var live = world.Buildings.Towns.Select(town => town.SaveInstance).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        if (game.TownInstanceList is { } list)
+        {
+            foreach (var instance in list.Instances.ToList())
+            {
+                if (live.Contains(instance.Id)) continue;
+
+                var states = TownStates(instance, byId, game).ToList();
+                if (states.Any(state => state.Bools.GetValueOrDefault("is nest")) ||
+                    !states.Any(state => IsPlayerTown(state, instance, playerFactionId))) continue;
+
+                list.Instances.Remove(instance);
+                RemoveTownStates(game, states);
+            }
+        }
+
+        var levelStates = game.Towns.Where(town => !town.IsNest && town.FactionId == playerFactionId && !live.Contains(town.Instance) &&
+            game.TownInstanceList?.Instances.Any(instance => instance.Id == town.Instance) != true).Select(town => town.Record).ToList();
+        RemoveTownStates(game, levelStates);
+    }
+
+    /// <summary>
+    /// Removes obsolete town states from both the serialized records and their indexed views.
+    /// </summary>
+    static void RemoveTownStates(SaveGame game, List<FcsRecord> states)
+    {
+        foreach (var state in states) game.Quick.Records.Remove(state);
+        game.Towns.RemoveAll(town => states.Contains(town.Record));
     }
 
     /// <summary>
