@@ -52,8 +52,10 @@ parts of people (`CharacterShaders.Skin`; not animals; stumps included) whose ra
 bare. Per race (`CharacterRenderer.SkinRaces`, settings Graphics > Skin, `meitou.user.json` `skinRaces`: only races changed from the default): every
 person race of the loaded data (RACE records no ANIMAL_CHARACTER uses, mods included) is on unless RACE `is robot`. World and Meitou
 stage (fog distance -3) and the portraits (the plain model, fog distance 0: their fixed key light is near the camera, so the glow stays on the
-shadowed cheek, jaw and neck); the game's stage and icons keep N·L. Lamps too: the character shader defines `LAMP_SKIN`, and
-`LampShaders.lampLight` takes each lamp's diffuse from `lampSkinDiffuse` (the same term, per-fragment inputs set in `main`); the specular keeps
+shadowed cheek, jaw and neck); the game's stage and icons keep N·L. Lamps: the character shader defines `LAMP_SKIN`, and
+`LampShaders.lampLight` takes each lamp's diffuse from `lampSkinDiffuse`: plain N·L (plus the light through thin parts), not the band
+(**Observed**, the editor's bar, a thin bare Greenlander: with the band every lamp filled the sides turned from it with the skin's hue,
+one lamp alone lit the whole body evenly, armpit and under the chin too, and the traced lamp shadows, which take back N·L alone, left it); the specular keeps
 N·L. Faithful: push `skinLut` 0, unchanged.
 Limits: the sun shadow is not scattered, so the band past the terminator ends at the shadow edge; no back-lit
 translucency (ears). The `chars2` switch lifts both (below).
@@ -79,7 +81,7 @@ a cast shadow's penumbra warms by (√v − v) / 2. With the traced sun (`surfac
 is in that term already and the rays pass a body's own turned facets ([render-shadows](render-shadows.md) "Traced sun"), so no second lookup. Before, the forward pass saw no
 sun at all there (the highlights were missing) and the band, asked at the entry point's coarse shadow, filled the shadows of hair strands with red (**Observed**, close-up). Thin parts: the bake's thickness (`MarkThickness`, vertex colour W: a ray straight in, to where it leaves by the back of a surface; **Observed**: curvature is as high on a nose and eyelids as on an ear, which glowed red with the sun behind) under 0.35 units, facing away from the light, passing exp(-thickness / 0.05) (red light reaches some 5 mm in skin; at 0.25 a nose and the eye sockets glowed, **Observed**). Before: curvature 3 to 9 (a guess at the bake's values on ears and
 fingers: it reads the mesh's edges, so **Unknown** until measured on the meshes), facing away from the light, thickness 2 / curvature, passing exp(-thickness / 0.25) (a look,
-the idea from KenshiNative's skin3; it measures thickness with a ray, which has no characters here), 0.8 at most. Lamps: the same term through `lampSkinDiffuse`; they have no shadow, so no second lookup and the penumbra does not apply.
+the idea from KenshiNative's skin3; it measures thickness with a ray, which has no characters here), 0.8 at most. Lamps: the same term through `lampSkinDiffuse`; no second lookup and the penumbra does not apply.
 
 **Water beads** (`wetBeads`, the Advanced materials part `Water beads`, bit 32; engine choice, the game has a wet film only): where the weather or the water's mark leaves a surface wet, drops stand on it. The drops are the wet world's ([weather.md "Wet world"](formats/weather.md), `wetDrops`): the character hands it the mesh's own space (`vBind`, the modelled position; the mesh's X and Y axes in the world come as `vAxisX` and `vColour`) times the mesh's scale (`vAxisX`'s length), so the drops stay on the body as it moves and have one size on any mesh. The share of cells holding a drop follows the wetness, less on what absorbs (cloth: the game's absorbance); rain wets what faces up. Not on hair or eyes, not under the water. **Verified** by pictures, t_flats_shore: after a swim (blades, leather, human and Shek skin, the part on and off) and in forced rain (a face at three times 2 s apart: drops grow, run down with a track, none vanishes at once).
 
