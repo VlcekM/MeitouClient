@@ -67,6 +67,17 @@ public static class MeshLod
     }
 
     /// <summary>
+    /// The game's lens (its vertical field of view, radians): what the mesh files' LOD distances are judged at.
+    /// </summary>
+    public const float GameLens = 50 * MathF.PI / 180;
+
+    /// <summary>
+    /// A lens's factor on the LOD value: 1 at the game's lens and wider, under 1 through a longer one (the ratio of the half angles' tangents), so
+    /// what a long lens draws as large as the game's lens would from nearer takes that nearer level. Engine choice: the game's LOD knows distance alone.
+    /// </summary>
+    public static float LensFactor(float fieldOfView) => MathF.Min(1, MathF.Tan(fieldOfView * 0.5f) / MathF.Tan(GameLens * 0.5f));
+
+    /// <summary>
     /// The <c>distance_sphere</c> LOD value: distance from <paramref name="eye"/> to the bounds' centre minus the radius, × bias.
     /// </summary>
     public static float Value(Vector3 eye, Vector3 boundsCentre, float radius, float bias = 1) =>

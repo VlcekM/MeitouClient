@@ -142,6 +142,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public float LodBias { get; set; } = 1;
     /// <summary>
+    /// The lens's share of the LOD value (<see cref="MeshLod.LensFactor"/>, set with the view): under 1 through a lens longer than the game's.
+    /// </summary>
+    public float LensLod { get; private set; } = 1;
+    /// <summary>
     /// Further factor on the LOD value in the shadow cascades (a shadow hides detail: coarser levels sooner).
     /// </summary>
     public float ShadowLodBias { get; set; } = 2;
@@ -641,9 +645,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public void SetView(int width, int height, float fieldOfView)
     {
         _content.Textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
-        _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height,
-            fieldOfView);   // the generated levels are placed by their deviation in rendered pixels
-        _viewPixelsPerRadian = _content.LodPixelsPerRadian;
+        // The generated levels are placed by their deviation in rendered pixels, at the game's lens at the narrowest: a longer lens (photo mode, the cinema's
+        // zoom) draws a far character large, and the levels, picked by distance, then come as much sooner as the lens is narrower (LensLod).
+        _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, MathF.Max(fieldOfView, MeshLod.GameLens));
+        _viewPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, fieldOfView);
+        LensLod = MeshLod.LensFactor(fieldOfView);
         _viewKnown = true;
     }
 

@@ -244,7 +244,12 @@ static partial class WorldFrame
     {
         var gpu = f.Gpu;
         // the generated object levels are placed by the pixel size too
-        if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = f.Render.TerrainPixelScale;
+        // (at the game's lens at the narrowest: through a longer one the levels, picked by distance, come sooner by the lens's factor instead)
+        if (gpu.Objects is { } lodObjects)
+        {
+            lodObjects.LensLod = Meitou.Data.Ogre.MeshLod.LensFactor(f.Camera.FieldOfView);
+            lodObjects.LodPixelsPerRadian = f.Render.TerrainPixelScale * lodObjects.LensLod;
+        }
 
         // The object textures' mip streaming measures pixels at the render size.
         gpu.Objects?.SetView(f.RenderWidth, f.RenderHeight, f.Camera.FieldOfView);

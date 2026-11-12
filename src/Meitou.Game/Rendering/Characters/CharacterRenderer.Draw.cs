@@ -329,7 +329,7 @@ internal sealed unsafe partial class CharacterRenderer
                 level = FileLevel(part, MeshLod.Value(eye - origin, centre, part.FileRadius * modelScale));
             else
             {
-                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, _depthPass ? LodBias * ShadowLodBias : LodBias);
+                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, (_depthPass ? LodBias * ShadowLodBias : LodBias) * LensLod);
                 if (_depthPass)
                     value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
                 level = GeneratedLevel(part, value, _depthPass);
@@ -531,7 +531,7 @@ internal sealed unsafe partial class CharacterRenderer
             chunk.Count = chunk.Characters = chunk.Parts = 0;
         }
 
-        float bias = depth ? LodBias * ShadowLodBias : LodBias;
+        float bias = (depth ? LodBias * ShadowLodBias : LodBias) * LensLod;
         for (int i = from; i < to; i++)
         {
             ref var l = ref _live[i];

@@ -229,6 +229,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public float LodPixelsPerRadian { get; set; }
 
+    /// <summary>
+    /// The lens's share of the LOD value (<see cref="MeshLod.LensFactor"/>, set each frame by the world frame): under 1 through a lens longer than the game's.
+    /// </summary>
+    public float LensLod { get; set; } = 1;
+
 
     /// <summary>
     /// Colour batches are drawn nearest first (Meitou, with the reach switch: early depth rejection of the shading of what a nearer batch covers);
@@ -591,7 +596,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         _selectionDraws.Clear();   // kept for one frame's outline at most: the meshes they name may go now
         _eyeNow = eye;
-        _meshes.LodBias = LodBias;
+        _meshes.LodBias = LodBias * LensLod;
         if (LodPixelsPerRadian > 0) _meshes.PixelsPerRadian = LodPixelsPerRadian;
         _meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
