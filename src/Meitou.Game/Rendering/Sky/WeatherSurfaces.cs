@@ -45,6 +45,11 @@ internal sealed class WeatherSurfaces : IDisposable
     /// characters' water beads move by it (<c>uWetClock</c>); the host sets it.
     /// </summary>
     public float Seconds;
+    /// <summary>
+    /// The world's surfaces show their wetness (Meitou, the "Rain drops and puddles" row; docs/formats/weather.md "Wet world"): drops and runs on
+    /// objects, puddles on the ground. Off: the game's wet look only.
+    /// </summary>
+    public bool WetWorld = true;
 
     /// <summary>
     /// The shader's <c>rainAmount</c>.
@@ -59,6 +64,7 @@ internal sealed class WeatherSurfaces : IDisposable
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, Meitou.Data.World.WorldWater.Height));
         g.PublishUniform("uWetClock", () => Seconds);
+        g.PublishUniform("uWetWorld", () => WetWorld ? 1f : 0f);
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }

@@ -137,6 +137,136 @@ static class AtmosphereShaders
             frag.rgb *= 1.0 - max(darken, 0.0) * 0.5;
             frag.a = mix(frag.a, 0.5, clamp(shine, 0.0, 1.0));
         }
+        // ---- the wet world (Meitou, docs/formats/weather.md "Wet world"; uWetWorld 1 with the row on) ----
+        uniform float uWetClock;   // game seconds wrapping at 4096 (WeatherSurfaces.Seconds)
+        uniform float uWetWorld;
+        // Three numbers in 0..1 from a cell's whole coordinates (an integer hash: one of floats repeated across a large surface).
+        vec3 wetHash(vec3 cell, uint salt)
+        {
+            uvec3 v = uvec3(ivec3(cell)) + salt * 0x9E3779B9u;
+            v = v * 1664525u + 1013904223u;
+            v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+            v ^= v >> 16u;
+            v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+            return vec3(v) * (1.0 / 4294967296.0);
+        }
+        // A smooth noise in 0..1 of a position (the hash at the cell's corners, blended).
+        float wetNoise(vec3 p)
+        {
+            vec3 c = floor(p), f = p - c;
+            f = f * f * (3.0 - 2.0 * f);
+            float x00 = mix(wetHash(c, 7u).x, wetHash(c + vec3(1.0, 0.0, 0.0), 7u).x, f.x);
+            float x10 = mix(wetHash(c + vec3(0.0, 1.0, 0.0), 7u).x, wetHash(c + vec3(1.0, 1.0, 0.0), 7u).x, f.x);
+            float x01 = mix(wetHash(c + vec3(0.0, 0.0, 1.0), 7u).x, wetHash(c + vec3(1.0, 0.0, 1.0), 7u).x, f.x);
+            float x11 = mix(wetHash(c + vec3(0.0, 1.0, 1.0), 7u).x, wetHash(c + vec3(1.0, 1.0, 1.0), 7u).x, f.x);
+            return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+        }
+        // One size of drops standing on a surface: p a position that stays with the surface, in world units (1 = 10 cm); in each cell one drop at most, anywhere
+        // in it. n the surface's normal, fall the way down along it (its length the slope), lit the way to the sun along it, all in p's space. As on wet skin and
+        // metal no drop is a disc: its outline wobbles, on a slope it hangs (longer above than below), it is a flat cap (it meets the surface at about 40
+        // degrees). Without rain the drops stand as they are. In the rain a drop swells from nothing over most of its time, then on a slope lets go: it runs
+        // down (up to two cells, faster as it goes, growing thinner), leaving a narrow track that it drains, and is gone at the end of its run as the cell's
+        // next drop starts; on the flat it spreads out into the film instead. Nothing appears or vanishes at once.
+        // bead: the drop's normal, cover: how much of the fragment it takes, lens: where in the drop the fragment lies along the light (-1 far side, 1 near side).
+        void wetDropLayer(vec3 p, float cell, float rMin, float rMax, float hold, float rain, vec3 n, vec3 fall, vec3 lit, inout vec3 bead, inout float cover, inout float lens)
+        {
+            float steep = length(fall);
+            vec3 down = fall / max(steep, 1e-4), side = cross(n, down);
+            float runs = rain > 0.0 ? smoothstep(0.15, 0.6, steep) : 0.0;
+            int rows = runs > 0.0 ? 3 : 1;   // a running drop comes from up to two cells up the slope
+            for (int k = 0; k < rows; k++)
+            {
+                vec3 base = floor((p - down * (float(k) * cell)) / cell - 0.5);
+                for (int i = 0; i < 8; i++)
+                {
+                    vec3 c = base + vec3(float(i & 1), float((i >> 1) & 1), float(i >> 2));
+                    vec3 h = wetHash(c, 0u), j = wetHash(c, 1u);
+                    if (h.z > hold) continue;
+                    float size = cell * mix(rMin, rMax, h.y * h.y), r = size * sqrt(0.4 + 0.6 * h.x), slide = 0.0, fade = 1.0;
+                    if (rain > 0.0)
+                    {
+                        // The rates divide the clock's wrap (4096 s), so no drop jumps when it wraps.
+                        float phase = fract(h.x + uWetClock * (2.0 + floor(j.z * 6.0)) / 64.0);
+                        const float grow = 0.72;
+                        float u = max(phase - grow, 0.0) / (1.0 - grow);
+                        r = size * sqrt(min(phase / grow, 1.0));
+                        slide = cell * 2.0 * runs * u * u;
+                        r *= mix(1.0 + 0.3 * u, 1.0 - 0.45 * u, runs);
+                        fade = mix(1.0 - u, 1.0 - smoothstep(0.7, 1.0, u), runs);
+                    }
+                    if (r < 1e-4 || fade <= 0.0) continue;
+                    vec3 d = p - (c + j) * cell - down * slide;
+                    float off = dot(d, n);
+                    if (abs(off) > cell * 0.45) continue;
+                    vec3 along = d - n * off;
+                    float up = -dot(along, down), across = dot(along, side);
+                    // The track behind a running drop: a thin ridge of water, narrower towards where the drop started.
+                    if (slide > 0.0 && up > 0.0 && up < slide)
+                    {
+                        float w = r * 0.38 * (1.0 - 0.6 * up / slide), lat = across + r * 0.12 * sin(up * (5.0 / r) + h.z * 6.2832);
+                        float track = smoothstep(w, w * 0.5, abs(lat)) * fade * 0.85;
+                        if (track > cover) { cover = track; bead = normalize(n + side * (lat / w) * 0.7); lens = dot(side, lit) * lat / w; }
+                    }
+                    along += r * 0.2 * sin(along.yzx * (2.3 / r) + h.zxy * 6.2832);
+                    up = -dot(along, down);
+                    if (up > 0.0) along += down * up * (1.0 - 1.0 / (1.0 + 2.2 * steep * h.x));
+                    float rho = length(along);
+                    if (rho >= r) continue;
+                    float mask = smoothstep(r, r * 0.8, rho) * fade, sphere = r * 1.5;
+                    if (mask <= cover) continue;
+                    cover = mask;
+                    bead = normalize(along / sqrt(sphere * sphere - rho * rho) + n);
+                    lens = dot(along, lit) / r;
+                }
+            }
+        }
+        // The drops on a wet surface, two sizes of them (radius 1.1 to 3.7 mm; 0.4 to 1 mm where a pixel is under 0.6 mm): how much of the fragment a drop takes.
+        // p in world units staying with the surface, pixel the length of p a pixel covers (the fragment stage's derivatives: these functions also reach vertex
+        // stages); hold how much of the surface holds drops, rain the weather's rainAmount; n, below (the way down) and sun (towards it) in p's space. How many
+        // drops stand varies from place to place (two noises, 7 cm and 40 cm), so a large surface is no even field of them.
+        float wetDrops(vec3 p, float pixel, float hold, float rain, vec3 n, vec3 below, vec3 sun, out vec3 bead, out float lens)
+        {
+            bead = n;
+            lens = 0.0;
+            float shown = 1.0 - smoothstep(0.006, 0.02, pixel);
+            if (shown <= 0.0 || hold <= 0.02) return 0.0;
+            hold *= mix(0.45, 1.5, wetNoise(p / 0.7)) * mix(0.7, 1.3, wetNoise(p / 4.0));
+            vec3 fall = below - n * dot(below, n), lit = sun - n * dot(sun, n);
+            lit /= max(length(lit), 1e-3);
+            float cover = 0.0;
+            wetDropLayer(p, 0.11, 0.1, 0.34, hold, rain, n, fall, lit, bead, cover, lens);
+            if (pixel < 0.006) wetDropLayer(p, 0.035, 0.12, 0.3, hold, rain, n, fall, lit, bead, cover, lens);
+            return cover * shown;
+        }
+        // A wet object's surface. p stays with the surface (small numbers: an object's vertex less its origin), pixel the length of p a pixel covers; dryGloss its
+        // gloss before the wetness; wet the weather's wetness, rain its rainAmount; sun towards the sun. What does not take the water in (a glossy surface) holds
+        // it on top:
+        // - on a wall the water runs down unevenly: darker, shinier tracks (the dust noise stretched 30 times down the wall, drifting down in the rain);
+        // - what faces the sky keeps a film of it (gloss up to 0.8);
+        // - close by, drops stand on it (wetDrops).
+        void wetObject(vec3 p, float pixel, float dryGloss, float wet, float rain, vec3 sun, inout vec3 n, inout vec3 albedo, inout float gloss)
+        {
+            float sheds = 1.0 - clamp(1.0 - 2.0 * dryGloss, 0.0, 1.0);
+            float amount = max(wet, rain);
+            float wall = 1.0 - smoothstep(0.3, 0.7, abs(n.y));
+            if (wall > 0.0)
+            {
+                vec3 side = normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(1e-4, 0.0, 0.0));
+                float track = texture(uWeatherDustNoise, vec2(dot(p, side) * 0.31, p.y * 0.011 + uWetClock * rain * (16.0 / 4096.0))).x;
+                float run = smoothstep(0.45, 0.75, track) * wall * amount * mix(0.35, 1.0, sheds);
+                albedo *= 1.0 - 0.18 * run;
+                gloss = mix(gloss, max(gloss, 0.78), run);
+            }
+            float film = smoothstep(0.6, 0.95, n.y) * smoothstep(0.3, 0.9, amount) * sheds;
+            gloss = mix(gloss, max(gloss, 0.8), film);
+            float hold = amount * mix(0.3, 1.0, smoothstep(-0.2, 0.6, n.y)) * mix(0.2, 1.0, sheds);
+            vec3 bead;
+            float lens, cover = wetDrops(p, pixel, hold, rain, n, vec3(0.0, -1.0, 0.0), sun, bead, lens);
+            if (cover <= 0.0) return;
+            n = normalize(mix(n, bead, 0.8 * cover));
+            gloss = mix(gloss, 0.9, cover);
+            albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
+        }
         // objects.hlsl / triplanar.hlsl: how far a surface is covered by dust (0..1). n: its normal, gloss: the diffuse alpha before `specular mult`, amount: dustAmount.x (.y inside).
         float dustCover(vec3 n, float gloss, vec3 world, float amount)
         {

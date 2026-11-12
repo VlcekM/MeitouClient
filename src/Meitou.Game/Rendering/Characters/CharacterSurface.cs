@@ -243,50 +243,9 @@ static class CharacterSurface
             gloss = mix(wet.a, 0.4, eyeShare);
         }
 
-        // Drops of water on a wet character (docs/character-renderer.md "Water beads"): where the weather or the water's mark leaves the surface wet, drops stand on it.
-        // They sit in the mesh's own space (vBind), so they stay put on the body as it moves: in each cell one drop at most, its place, size and life from the cell's number;
-        // two sizes of cell, a few large drops among many small ones. As on wet skin and metal, no drop is a disc: its outline wobbles, on a slope it hangs (longer above
-        // than below), it is a flat cap (it meets the surface at about 40 degrees), and being clear it gathers the light on the side away from the lamp and is a little
-        // darker on the side towards it. In the rain a drop swells and runs off, again and again; without it the drops stand as they are until the surface dries. Cloth, which
-        // soaks the water up, holds few. Gone where a drop would be under a pixel wide.
-        // frame.wetClock: game seconds, wrapping at 4096 (WeatherSurfaces.Seconds).
-        vec3 beadHash(vec3 c)
-        {
-            vec3 q = fract(c * vec3(0.1031, 0.1030, 0.0973));
-            q += dot(q, q.yxz + 33.33);
-            return fract((q.xxy + q.yxx) * q.zyx);
-        }
-        // One size of drops: cell wide, radii rMin to rMax of it. bead: the drop's normal in the mesh's space, cover: how much of the fragment it takes, lens: where in
-        // the drop the fragment lies along the light (-1 the far side, 1 the near side).
-        void beadLayer(float cell, float rMin, float rMax, float hold, float rain, vec3 nb, vec3 fall, vec3 lit, inout vec3 bead, inout float cover, inout float lens)
-        {
-            vec3 base = floor(vBind / cell - 0.5);
-            float steep = length(fall);
-            vec3 down = fall / max(steep, 1e-4);
-            for (int i = 0; i < 8; i++)
-            {
-                vec3 c = base + vec3(float(i & 1), float((i >> 1) & 1), float(i >> 2));
-                vec3 h = beadHash(c);
-                if (h.z > hold * 0.75) continue;
-                // The rates divide the clock's wrap (4096 s), so no drop jumps when it wraps.
-                float life = rain > 0.0 ? fract(h.x + frame.wetClock * (2.0 + floor(h.y * 6.0)) / 64.0) : 0.4 + 0.6 * h.x;
-                float r = cell * mix(rMin, rMax, h.y * h.y) * sqrt(life);
-                vec3 d = vBind - (c + 0.25 + 0.5 * beadHash(c + 7.31)) * cell;
-                float off = dot(d, nb);
-                if (abs(off) > cell * 0.45) continue;
-                vec3 along = d - nb * off;
-                along += r * 0.2 * sin(along.yzx * (2.3 / r) + h.zxy * 6.2832);
-                float up = -dot(along, down);
-                if (up > 0.0) along += down * up * (1.0 - 1.0 / (1.0 + 2.2 * steep * h.x));
-                float rho = length(along);
-                if (rho >= r) continue;
-                float mask = smoothstep(r, r * 0.8, rho), sphere = r * 1.5;
-                if (mask <= cover) continue;
-                cover = mask;
-                bead = normalize(along / sqrt(sphere * sphere - rho * rho) + nb);
-                lens = dot(along, lit) / r;
-            }
-        }
+        // Drops of water on a wet character (docs/character-renderer.md "Water beads"): where the weather or the water's mark leaves the surface wet, drops stand on it
+        // (AtmosphereShaders wetDrops: the world's objects wear the same). They sit in the mesh's own space (vBind), so they stay put on the body as it moves, taken
+        // to world units by the mesh's scale (vAxisX's length), so a large or scaled mesh wears drops of the same size. Cloth, which soaks the water up, holds few.
         void wetBeads(inout vec3 n, inout vec3 albedo, inout float gloss, float dryGloss, float metal, float skin, float soak)
         {
             if (view.fogDistance <= 0.0 || uWeatherWet.w > vWorld.y) return;   // not the world's view, or under the water
@@ -295,21 +254,11 @@ static class CharacterSurface
             float absorbs = max(1.0 - 2.0 * dryGloss, 0.0) * (1.0 - metal) * (1.0 - 0.8 * skin);
             float hold = max(soak, fromSky) * (1.0 - 0.8 * absorbs) * (1.0 - eyeShare);
             if (hold <= 0.02) return;
-            float pixel = max(length(dFdx(vBind)), length(dFdy(vBind)));
-            float shown = 1.0 - smoothstep(0.006, 0.02, pixel);
-            if (shown <= 0.0) return;
-            vec3 X = normalize(vAxisX), Y = normalize(vColour.xyz), Z = normalize(cross(X, Y));
-            vec3 nb = vec3(dot(n, X), dot(n, Y), dot(n, Z));
-            // The way down along the surface (its length the slope) and the way to the light along it, in the mesh's space.
-            vec3 below = -vec3(X.y, Y.y, Z.y), fall = below - nb * dot(below, nb);
-            vec3 sun = uAtmoLight.xyz, lit = vec3(dot(sun, X), dot(sun, Y), dot(sun, Z));
-            lit -= nb * dot(lit, nb);
-            lit /= max(length(lit), 1e-3);
-            vec3 bead = nb;
-            float cover = 0.0, lens = 0.0;
-            beadLayer(0.11, 0.1, 0.34, hold, rain, nb, fall, lit, bead, cover, lens);
-            if (pixel < 0.006) beadLayer(0.035, 0.12, 0.3, hold, rain, nb, fall, lit, bead, cover, lens);
-            cover *= shown;
+            float scale = length(vAxisX);
+            vec3 X = vAxisX / max(scale, 1e-6), Y = normalize(vColour.xyz), Z = normalize(cross(X, Y));
+            vec3 nb = vec3(dot(n, X), dot(n, Y), dot(n, Z)), sun = uAtmoLight.xyz, bead;
+            float lens, cover = wetDrops(vBind * scale, max(length(dFdx(vBind)), length(dFdy(vBind))) * scale, hold, rain, nb, -vec3(X.y, Y.y, Z.y),
+                vec3(dot(sun, X), dot(sun, Y), dot(sun, Z)), bead, lens);
             if (cover <= 0.0) return;
             n = normalize(mix(n, X * bead.x + Y * bead.y + Z * bead.z, 0.8 * cover));
             gloss = mix(gloss, 0.9, cover);

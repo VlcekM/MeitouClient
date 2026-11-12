@@ -37,6 +37,7 @@ static class BuildingLodShaders
             flat out float vScaffold;
             out float vBuildY;
             flat out float vScaffoldTiling;
+            out vec3 vWetPos;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """);
         v = Replace(v, @"void\s+main\s*\(\s*\)\s*\{", """
@@ -60,6 +61,9 @@ static class BuildingLodShaders
         // apart (a ruin's plaster over its wall, plates over planks) fought for depth (docs/render-objects.md "Precision").
         v = Replace(v, @"gl_Position\s*=\s*uViewProjection\s*\*\s*p\s*;", """
                 vec4 local = skin * vec4(aPosition, 1.0);
+                // The vertex less the instance's origin, in the world's orientation, moved by a few units the origin picks (so two of a mesh do not wear the
+                // same drops): where the wet world's drops and runs sit (AtmosphereShaders wetObject), small numbers at any place in the world.
+                vWetPos = mat3(uModel) * local.xyz + fract(aInstance3.xyz * 0.371) * 7.0;
                 gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """);
         return v;
@@ -75,6 +79,7 @@ static class BuildingLodShaders
             in vec2 vRange;
             flat in float vInterior;
             flat in float vScaffold;
+            in vec3 vWetPos;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             float ditherValue() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             vec3 instanceTint(float v) { float p = -v - 1.0; return vec3(mod(p, 256.0), mod(floor(p / 256.0), 256.0), floor(p / 65536.0)) * (1.275 / 255.0); }
@@ -123,6 +128,16 @@ static class BuildingLodShaders
                 }
                 if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;
             """ + ScaffoldTest);
+        // The wet world (Meitou): runs, a film and drops on what the rain wets (the world's view only).
+        f = Literal(f, """
+            albedo = wetSurface.rgb;
+            glossLit = wetSurface.a;
+            """, """
+            albedo = wetSurface.rgb;
+            float dryGloss = glossLit;
+            glossLit = wetSurface.a;
+            if (uWetWorld > 0.5 && uFogDistance > 0.0 && (uSurface & 2u) == 0u) wetObject(vWetPos, max(length(dFdx(vWetPos)), length(dFdy(vWetPos))), dryGloss, uWeatherWet.x, uWeatherWet.y, normalize(uLightDir), n, albedo, glossLit);
+            """);
         // The viewer's plain lighting is overwritten by the game sky's lighting: compute it only where it is used (the same values).
         f = Literal(f, "uniform sampler2D uNormal;\n", "uniform sampler2D uNormal;\nuniform sampler2D uMetal;\nuniform uint uMetalMap;\n");
         f = Literal(f, "if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);\n", "");

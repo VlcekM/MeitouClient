@@ -272,3 +272,21 @@ Evidence scopes below apply only to their named sources/checks.
 - Effect placers on the map (Verified: records and `features.dat`); a hidden MAP_FEATURES record still makes its effects: [zones.md](zones.md#placement-files-and-assembly)
 - Base-game data (Verified: merged base records, 2026-10-05)
 - Effects on characters (Verified (decompiled), FUN_1405cf790 and the functions named there; Verified probe of the merged data, 2026-10-23)
+
+## Wet world (Meitou)
+
+**Verified** (install `data/materials`: `common/wet.hlsl`, grep `makeWet`): the original wets bodies (`character.hlsl`), creatures, worn items (`skin.hlsl`),
+objects and buildings (`objects.hlsl`), foliage and the terrain (`terrainfp4.hlsl`) with the one `makeWet`: a darkening and a gloss towards 0.5. Nothing else.
+
+The optional row "Rain drops and puddles" (`WeatherSurfaces.WetWorld`, `uWetWorld`, on; off: the original's look) adds, in `AtmosphereShaders`:
+- `wetDrops` (shared by characters and objects): drops in cells of a position that stays with the surface, in world units; two sizes (cells 11 mm, radius
+  1.1 to 3.7 mm; cells 3.5 mm, radius 0.4 to 1 mm, only where a pixel is under 0.6 mm), one at most per cell, placed anywhere in it by an integer hash (a
+  float hash repeated over large surfaces); how many stand varies with two noises (7 cm, 40 cm). Shape: a wobbling outline, a tail up the slope, a flat cap
+  (about 40 degrees at the rim), brighter away from the sun. Without rain they stand still. In the rain a drop grows from nothing over 72 % of its period (9
+  to 32 s by `uWetClock`), then on a slope runs down up to two cells, thinning, leaving a narrow track, and is gone as the next starts; on the flat it spreads
+  out. Gone where a pixel is over 2 mm of surface.
+- `wetObject` (world objects, `BuildingLodShaders`; position = the vertex less the instance's origin, `vWetPos`): on walls, uneven darker and shinier tracks
+  (the dust noise stretched down the wall, drifting in the rain); a film on what faces the sky (gloss to 0.8); the drops. Scaled by how little the surface
+  absorbs (its dry gloss).
+- **Observed** (hidden run, t_flats_shore, forced wetness 1 rain 40, a placed Small Shack): the wall darker with vertical variation at 70 units.
+- Not done: puddles on the terrain, foliage. **Unknown**: the look on metal buildings and at night.

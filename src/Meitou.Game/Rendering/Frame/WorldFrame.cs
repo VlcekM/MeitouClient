@@ -1844,6 +1844,8 @@ static partial class WorldFrame
         MaterialEyesSwitch = "Eye catchlights", MaterialMetalSwitch = "Metal on characters", MaterialBeadsSwitch = "Water beads";
     /// <summary>Grass keeps its cover at a distance (<c>FoliageRenderer.GrassFarCover</c>), a plain on / off row.</summary>
     public const string GrassCoverSwitch = "Far grass cover";
+    /// <summary>The world's surfaces show their wetness (<c>WeatherSurfaces.WetWorld</c>), a plain on / off row.</summary>
+    public const string WetWorldSwitch = "Rain drops and puddles";
     public const string GiRelocateSwitch = "GI probes out of walls", GiCloudShadowsSwitch = "GI cloud shadows", GiCacheSwitch = "GI radiance cache";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
     // The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
@@ -2411,6 +2413,7 @@ static partial class WorldFrame
             toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
         }
         if (g.Foliage is { } farGrass) toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v));
+        if (g.Surfaces is { } wetWorld) toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v));
         if (g.Characters is not null && g.Options is { } materials)
         {
             // The Advanced materials' parts; they act while it is on.

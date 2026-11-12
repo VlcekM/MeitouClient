@@ -194,6 +194,7 @@ static class LauncherSchema
         yield return Switch(WorldFrame.MaterialMetalSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.WetWorldSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
         yield return Switch(WorldFrame.CameraEffectsSwitch, "Off", "On", false);

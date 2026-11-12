@@ -98,6 +98,7 @@ static partial class NativeShaders
             uint atmoCloudsTile;
             float grassRayReach;
             float wetClock;
+            float wetWorld;
         } frame;
 
         """;
@@ -222,7 +223,7 @@ static partial class NativeShaders
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
-        ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock",
+        ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock", ["uWetWorld"] = "frame.wetWorld",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
@@ -395,7 +396,7 @@ static partial class NativeShaders
 /// <summary>
 /// The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 8704)]
+[StructLayout(LayoutKind.Explicit, Size = 8720)]
 unsafe struct FrameConstants
 {
     [FieldOffset(0)] public Vector4 AtmoSun;
@@ -459,6 +460,8 @@ unsafe struct FrameConstants
     [FieldOffset(8696)] public float GrassRayReach;
     /// <summary>Game seconds wrapping at 4096 (<c>uWetClock</c>, <c>WeatherSurfaces.Seconds</c>): what the characters' water beads swell and run off by.</summary>
     [FieldOffset(8700)] public float WetClock;
+    /// <summary>1 while the world shows its wetness: drops, runs and puddles (<c>uWetWorld</c>, <c>WeatherSurfaces.WetWorld</c>).</summary>
+    [FieldOffset(8704)] public float WetWorld;
 
     /// <summary>
     /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
@@ -470,7 +473,7 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
-        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16), ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4),
+        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16), ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4), ("uWetWorld", 8704, 4),
     ];
 
     /// <summary>
