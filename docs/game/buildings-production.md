@@ -262,6 +262,8 @@ shows the first failing message in this order (**Verified** unless marked):
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
 - **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`, `FUN_1406bd000`): the saved `town` handle is resolved as a handle; when its town was removed or never existed, the building stores the canonical null town. It is not reassigned by position on first use, a tick, another placement or dismantling. It is absent from the player-town panel and town ownership association until a later placement operation assigns it.
 
+  **Meitou research:** `BuildSite.UnresolvedTown` distinguishes failed saved handles from town-0 furniture in bought NPC houses. Only the former is excluded from both bench level and operated research progress; a later player-town assignment restores eligibility.
+
   **Power** (**Verified**, `FUN_14092d850`): the power manager advances frames from the registered town list; `NO_TOWN` is not a frame. Thus an unresolved building town does not share a grid with other unresolved buildings or contribute to a town's power/battery totals. Production's complete-building tick and the exact input/output effect of the missing town remain **Unknown** from the traced call chain.
 - **Centre, radius and placement-time merge** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
   `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` / `FUN_14054fea0` and town merge
