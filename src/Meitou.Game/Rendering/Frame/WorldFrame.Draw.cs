@@ -811,7 +811,7 @@ static partial class WorldFrame
         var post = f.Post;
         var camera = f.Camera;
         float near = camera.ClipNear, far = camera.ViewDistance;
-        post.SetCamera(f.Eye, f.View, camera.FieldOfView, f.Aspect);
+        post.SetCamera(f.Eye, f.View, camera.FieldOfView, f.Aspect, f.EyeResidual);
         post.BeginScene(near, far, camera.FieldOfView, f.Aspect);
         post.Options.LensFocus = camera.FocusDistance ?? camera.Distance;
         post.Options.LensAutoFocus = camera.FocusDistance is null;

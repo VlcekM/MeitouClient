@@ -794,6 +794,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // The camera this frame and last (eye-relative views), and the scene's reprojection and planes.
     Matrix4x4 _viewRotation, _previousRotation;
     Vector3 _eyeNow, _previousEye;
+    // What the float eyes leave out of the eye the scene is drawn from (WorldCamera.EyeResidual), and the eye's step since the previous frame with it.
+    Vector3 _eyeRestNow, _previousRest;
+    Vector3 EyeStep => (_eyeNow - _previousEye) + (_eyeRestNow - _previousRest);
     float _fovNow, _aspectNow, _previousFov, _previousAspect;
     bool _previousValid;
     Matrix4x4 _toPrevious;
@@ -803,9 +806,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The main camera of this frame, before <see cref="BeginScene"/>: for the motion vectors (reprojection into the previous frame).
     /// </summary>
-    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio)
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio, Vector3 eyeResidual = default)
     {
         _eyeNow = eye;
+        _eyeRestNow = eyeResidual;
         _viewRotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         (_fovNow, _aspectNow) = (fieldOfView, aspectRatio);
     }
@@ -821,7 +825,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var standard = Matrix4x4.CreatePerspectiveFieldOfView(_fovNow, _aspectNow, near, far);
         var now = DepthConvention.Apply(Jitter.Apply(standard, JitterPixels, _width, _height));
         var previous = DepthConvention.Perspective(_previousFov, _previousAspect, near, far);
-        return Reprojection.ClipToPrevious(_viewRotation, _eyeNow, now, _previousRotation, _previousEye, previous);
+        return Reprojection.ClipToPrevious(_viewRotation, EyeStep, now, _previousRotation, previous);
     }
 
     /// <summary>
@@ -1020,7 +1024,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _pendingStamps.Enqueue(set);
             _stamps = null;
         }
-        (_previousRotation, _previousEye, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _fovNow, _aspectNow, Temporal);
+        (_previousRotation, _previousEye, _previousRest, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _eyeRestNow, _fovNow, _aspectNow, Temporal);
     }
 
     /// <summary>
@@ -1643,8 +1647,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 Sharpness = Options.Upscale.Sharpness,
                 Reset = reset,
                 ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                        _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
                 Eye = _eyeNow,
                 Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
                 Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
@@ -1722,9 +1726,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
                 Aspect = _aspectNow,
                 ViewToClip = FullProjection(_fovNow, _aspectNow),
-                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                        _previousRotation, _previousEye,
-                    FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+                ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                        _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
             });
         }
         return output;

@@ -117,7 +117,7 @@ interface IWorldPostChain
     /// <summary>
     /// The main camera, before <see cref="BeginScene"/>, for the exposure, fog volumes, shafts and reprojection.
     /// </summary>
-    void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect);
+    void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect, Vector3 eyeResidual = default);
 
     /// <summary>
     /// The scene's projection (<see cref="DepthConvention.Perspective"/>), called after <see cref="SetCamera"/>: sets

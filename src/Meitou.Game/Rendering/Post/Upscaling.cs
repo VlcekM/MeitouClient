@@ -210,12 +210,20 @@ public static class Reprojection
     /// are what each frame drew with (this frame's jittered, the previous one's not, so the motion carries no jitter).
     /// </summary>
     public static Matrix4x4 ClipToPrevious(Matrix4x4 rotation, Vector3 eye, Matrix4x4 projection, Matrix4x4 previousRotation, Vector3 previousEye,
-        Matrix4x4 previousProjection)
+        Matrix4x4 previousProjection) => ClipToPrevious(rotation, eye - previousEye, projection, previousRotation, previousProjection);
+
+    /// <summary>
+    /// As above from the eye's step since the previous frame. The scene is drawn from an eye kept in double precision (<c>WorldCamera.EyeResidual</c>),
+    /// so the step must be that eye's: the float eye moves in steps of its grid (0.004 units at 50000) while the picture moves smoothly, and a
+    /// reprojection by the float step is off by up to a step each frame, a pixel or more for what is near: temporal filters blur and generated frames
+    /// shake.
+    /// </summary>
+    public static Matrix4x4 ClipToPrevious(Matrix4x4 rotation, Vector3 eyeStep, Matrix4x4 projection, Matrix4x4 previousRotation, Matrix4x4 previousProjection)
     {
         if (!Matrix4x4.Invert(rotation * projection, out var inverse)) return Matrix4x4.Identity;
 
         var previousView = previousRotation;
-        var shift = Vector3.TransformNormal(eye - previousEye, previousRotation);
+        var shift = Vector3.TransformNormal(eyeStep, previousRotation);
         previousView.M41 = shift.X;
         previousView.M42 = shift.Y;
         previousView.M43 = shift.Z;

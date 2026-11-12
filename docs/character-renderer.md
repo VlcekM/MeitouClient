@@ -116,6 +116,8 @@ its float rounding (every system's origin) and `EyeResidual` the rest, which the
 so an orbit or zoom round a fixed target moves the eye smoothly instead of by steps; the strategy camera's eye clearance lifts the target only for a shortfall
 over 0.001 (the ground read under the eye wavers by a few ten-thousandths frame to frame). Every other scene pass follows the same convention: [renderer-native.md "Render origin"](renderer-native.md#render-origin).
 
+The camera reprojection (`Reprojection.ClipToPrevious`: the velocity pass, the upscaler's and frame generation's `ClipToPrevClip`) takes the eye's step with the residuals (`PostProcess.EyeStep`). By the float eyes alone it was off by up to a float step each frame, a pixel or more for what is within 10 units. **Unknown**: not seen on screen (frame generation does not run in a hidden session).
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render

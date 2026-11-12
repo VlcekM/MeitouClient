@@ -135,7 +135,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         CharactersDrawn = true;
     }
 
-    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect)
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect, Vector3 eyeResidual = default)
     {
         this._eye = eye;
         this._view = view;
