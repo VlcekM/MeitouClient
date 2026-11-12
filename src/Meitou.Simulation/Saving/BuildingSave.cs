@@ -322,7 +322,7 @@ public static class BuildingSave
             string name = TownName(state);
             if (town.Name == PlayerTown.DefaultName && name.Length > 0) town.Name = name;
             if (state.Bools.ContainsKey("public")) town.Public = state.Bools["public"];
-            if (state.Ints.ContainsKey("override")) town.Override = state.Ints["override"];
+            if (state.Floats.TryGetValue("override", out float radius)) town.Override = radius;
 
             var hand = Hand.Read(state, "hand");
             if (!hand.IsNull && town.SaveHandle is null) town.SaveHandle = hand;
@@ -641,7 +641,8 @@ public static class BuildingSave
         hand.Write(state, "hand");
         state.Strings["faction"] = playerFactionId;
         state.Strings["instance"] = instanceId;
-        state.Ints["override"] = (int)town.Override;
+        state.Ints.Remove("override");
+        state.Floats["override"] = town.Override;
         if (world.SystemOf<PopulationSystem>() is { } population)
             state.Ints["plevel"] = population.TownLevel(world, town.Number);
         var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
@@ -701,7 +702,7 @@ public static class BuildingSave
 
         state.Ints["artifacts count"] = 0;
         state.Ints["plevel"] = 0;
-        state.Ints["override"] = 0;
+        state.Floats["override"] = 0;
         state.Strings["building material"] = DefaultTownMaterial;
         state.Strings["replacementTown"] = "";
     }
