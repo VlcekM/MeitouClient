@@ -1,3 +1,4 @@
+using Meitou.Data.World;
 using Meitou.Simulation.Movement;
 using System.Diagnostics;
 using System.Globalization;
@@ -165,6 +166,30 @@ sealed class AgentPlay(GameHost host)
             if (host.Gpu.Characters is not { } crowd) { con.Error("bloody: no character renderer"); return; }
             foreach (var id in who) for (int i = 0; i < hits; i++) crowd.WeaponHit(host.DrawKey(id), colour, 0.3f);
             con.Print($"bloodied the weapons of {who.Length}");
+        });
+
+        add("bloodmark", "bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]", "debug: one blood mark of the 'Blood on surfaces' row at that place (a splash is centred there, the others lie on a floor at that height)", (args, con) =>
+        {
+            if (!loaded(con)) return;
+            int count = 1;
+            int at = args.ToList().IndexOf("--count");
+            if (at >= 0 && at + 1 < args.Count && int.TryParse(args[at + 1], out count)) args = [.. args.Take(at), .. args.Skip(at + 2)];
+            if (host.Gpu.Decals is not { Surfaces: true } surfaces) { con.Error("bloodmark: needs the 'Blood on surfaces' row on"); return; }
+            var type = args.Count > 0 ? args[0].ToLowerInvariant() switch { "splash" => (TerrainDecalType?)TerrainDecalType.Splash, "pool" or "drip" => TerrainDecalType.Pool, "smear" => TerrainDecalType.Smear, _ => null } : null;
+            if (type is null || args.Count < 4 || !AgentWorld.Num(args[1], out float x) || !AgentWorld.Num(args[2], out float y) || !AgentWorld.Num(args[3], out float z)) { con.Error("usage: bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]"); return; }
+            float size = 0.4f; uint colour = 0x8A0303;
+            if (args.Count > 4 && !AgentWorld.Num(args[4], out size)) { con.Error("bloodmark: bad size"); return; }
+            if (args.Count > 5 && !uint.TryParse(args[5], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out colour)) { con.Error("bloodmark: bad colour"); return; }
+            var dir = new Vector2(0, 1);
+            if (args.Count > 7 && AgentWorld.Num(args[6], out float dx) && AgentWorld.Num(args[7], out float dz)) dir = new Vector2(dx, dz);
+            uint abgr = 0xFF000000 | (colour & 0xFF) << 16 | (colour >> 8 & 0xFF) << 8 | colour >> 16 & 0xFF;
+            for (int i = 0; i < count; i++)
+            {
+                // More than one: spread over 60 x 60 units round the place (a crowd of marks, for the caps).
+                var spread = count > 1 ? new Vector3(host.BloodDecals.BloodRandom.NextSingle() * 60 - 30, 0, host.BloodDecals.BloodRandom.NextSingle() * 60 - 30) : default;
+                surfaces.AddSurface(type.Value, new Vector3(x, y, z) + spread, dir, size, abgr, host.BloodDecals.BloodRandom);
+            }
+            con.Print($"{surfaces.SurfaceCount} surface marks kept");
         });
 
         RegisterControlPlayMoreCommands(add, loaded);
