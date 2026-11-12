@@ -86,6 +86,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     VramGuard? _memoryGuard;
 
     /// <summary>
+    /// The play benchmark's hooks in this loop (inert without <c>--play-bench</c>).
+    /// </summary>
+    MetalPlayBench _bench = null!;
+
+    /// <summary>
     /// MEITOU_METAL_NO_TAA: the diagnostic native view without jitter or temporal resolve.
     /// </summary>
     bool _noTaaRequested;
@@ -179,8 +184,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         using var display = OpenDisplay();
         using var ctx = OpenContext();
         SetUpMemoryAndWindow();
+
         ReadSwitches();
         CreatePostChain();
+        _bench = new MetalPlayBench(host, ctx, BenchDescription);
         ShowWindow();
         if (LoadWorld() is { } exit) return exit;
 
@@ -240,9 +247,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // whole device allocation under a conservative share of what Metal recommends. The guard pauses/evicts caches
         // and shortens the ranges as the ceiling approaches, exactly as it does on Vulkan.
         _memoryBudget = _ctx.VideoMemoryBudget > 0 ? Math.Min(_ctx.VideoMemoryBudget, 5UL << 30) : 5UL << 30;
-        if (ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_BUDGET_MB"), NumberStyles.None, CultureInfo.InvariantCulture,
-                out ulong budgetMb) && budgetMb > 0)
-            _memoryBudget = budgetMb << 20;
+        ulong budgetMb = RequestedBudgetMb();
+        if (budgetMb > 0) _memoryBudget = budgetMb << 20;
         _guardEnabled = Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0";
         if (_guardEnabled) Console.WriteLine($"metal     memory guard: {_memoryBudget / 1048576} MB of GPU allocation");
         if (budgetMb > 5120)
@@ -251,7 +257,33 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 + "the 16 GB M1 Pro. Use 5120 unless profiling.");
         }
         _window = _display.Window;
+
         _ctx.Samplers.MaxAnisotropy = host.WorldOptions.Anisotropy;
+    }
+
+
+    /// <summary>
+    /// The memory guard's ceiling asked for, in MB: <c>--metal-gpu-budget</c>, else <c>MEITOU_METAL_GPU_BUDGET_MB</c> (the launcher's setting); 0 for
+    /// the default.
+    /// </summary>
+    ulong RequestedBudgetMb()
+    {
+        if (host.GameOptions.MetalGpuBudgetMb is { } option) return option;
+
+        string? variable = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_BUDGET_MB");
+        return ulong.TryParse(variable, NumberStyles.None, CultureInfo.InvariantCulture, out ulong mb) ? mb : 0;
+    }
+
+    /// <summary>
+    /// The play benchmark's run line: the device, the scene and window sizes, the upscaler, the pacing, the GPU budget and the memory guard.
+    /// </summary>
+    string BenchDescription()
+    {
+        var window = _window.FramebufferSize;
+        string pacing = _display.VSync ? "vsync on" : _fpsLimit > 0 ? $"vsync off, frame cap {_fpsLimit}" : "frame limit and vsync off";
+        string guard = _memoryGuard?.Status ?? "guard off";
+        return string.Create(CultureInfo.InvariantCulture, $"Metal {_ctx.Device.Name}, scene {_ctx.SceneWidth}x{_ctx.SceneHeight} in {window.X}x{window.Y}, "
+            + $"{_upscaling.UpscalerStatusText()}; {pacing}; GPU budget {_memoryBudget >> 20} MB ({guard} at the end)");
     }
 
     /// <summary>
@@ -301,6 +333,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _metalFxSpatial = MetalFxSpatialUpscaler.TryCreate(_ctx);
         MetalUpscalerMode mode = ChooseUpscalerMode();
 
+
         _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial);
         _upscaling.ApplyMode(mode);
         if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: native scene, no jitter");
@@ -319,6 +352,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     MetalUpscalerMode ChooseUpscalerMode()
     {
+
         MetalUpscalerMode mode = host.Config.MetalUpscaler;
         float scale = Math.Clamp(host.Config.MetalRenderScale, 0.33f, 1f);
         if (_noTaaRequested)
@@ -506,6 +540,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void Shutdown()
     {
+        _bench.Finish(_window.FramebufferSize);
+
         // Let the queue finish before the renderers release views, buffers and bindless entries; a quit during a
         // streaming upload otherwise freed resources the GPU was still reading and could fault on the way out.
         SaveSettings();
@@ -1172,6 +1208,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     SettingsMenu? _settings;
 
+
     /// <summary>
     /// The settings dialog over Metal's live settings, with the saved values.
     /// </summary>
@@ -1228,6 +1265,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void ApplySavedSettings(SettingsPanel settingsValues, SettingsMenu settings)
     {
+
         // The saved graphics values are the same keys the Vulkan panel uses. The Metal display choices have their own
         // config fields, and a command-line upscaler/scale stays explicit for this run.
         var metalDisplayKeys = new HashSet<string>(StringComparer.Ordinal)
@@ -2269,6 +2307,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _display.Activate();
         while (!_window.IsClosing && !_quit)
         {
+            _bench.Lap(PlayBench.BenchTail);
             _window.DoEvents();
             if (_window.IsClosing) break;
             if (!Frame()) break;
@@ -2288,12 +2327,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(pointerMouse.Position);
         ShowLoadBar();
         CountFps(dt);
+        if (!_still && !_bench.BeginFrame(dt)) return false;
         bool highlighting = false;
         if (!_still) highlighting = AdvanceWorld(dt);
         else if (!ShowStillPanel(size)) return false;
         // Ctrl+/ records the next complete frame for Xcode. Start before BeginFrame makes the command buffer and stop
         // after EndFrame commits the present, so the trace holds exactly one frame rather than the three in flight.
         MetalGpuCapture? gpuCapture = StartGpuCapture();
+        _bench.Lap(5);
+
         // A live resize can leave the layer without a drawable for a moment: wait for the next one instead of spinning
         // the main thread (the window would stop responding to its own resize).
         bool began = _ctx.BeginFrame();
@@ -2308,6 +2350,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             Thread.Sleep(1);
             return true;
         }
+        _bench.FrameBegun();
         SettleBeforeDraw();
         double drawableWait = _display.LastDrawableWaitMilliseconds;
         long recordStart = Stopwatch.GetTimestamp();
@@ -2331,6 +2374,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_hud is not null) _hud.FeedbackPanel.ShotWithoutMenus = feedbackShot;
         if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, backbuffer, feedbackShot, pointerMouse, pointerAt);
         PresentFrame(gpuCapture, drawableWait, recordStart);
+        _bench.FramePresented(_lastRecord);
         TrimManagedHeap(now);
         SavePictures(backbuffer, feedbackShot);
         if (!CaptureStill(backbuffer)) return false;
@@ -2410,6 +2454,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         AdvanceSession(dt);
         FollowWithCamera(dt);
+        _bench.Lap(3);
         // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover
         // outlines agree.
         bool ctrlHeld = Ctrl();
@@ -2436,23 +2481,34 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
         host.Session.Camera.Strategy.EdgePointer = host.Covered || _hud is not null && host.TitleScreen.TitleVisible || _settings?.Visible == true ||
             _hud is { UiVisible: false } or { UiCapturesPointer: true } ? null : WindowPointer.InWindow(_window);
+
         // The duel restarts between ticks when Backspace asks or its measured lap ends; its sun then holds at the lap's hour.
+        if (_hud is not null) host.Duel.DuelFrame(false);
+        AdvanceTicks(dt);
         if (_hud is not null)
         {
-            host.Duel.DuelFrame(false);
-            if (!host.Covered) host.Session.Advance(dt);
-            host.Duel.DuelHoldClock();
             host.WorldNews();
-        }
-        else if (!host.Covered) host.Session.Advance(dt);
-        if (_hud is not null)
-        {
             host.Saves.HandleSaves(dt);
             host.NewGame.HandleNewGame();
             host.NewGame.HandleMainMenu();
         }
         host.StepSceneLoad();
         host.AdvanceSkyArrival(dt);
+        _bench.Lap(2);
+    }
+
+    /// <summary>
+    /// The world's ticks for the frame (none while covered) and the duel's held clock, timed for the play benchmark (its tick profile on).
+    /// </summary>
+    void AdvanceTicks(double dt)
+    {
+        if (_bench.Active) host.Session.World.Profile.Enabled = true;
+        long started = Stopwatch.GetTimestamp();
+
+        if (!host.Covered) host.Session.Advance(dt);
+        if (_hud is not null) host.Duel.DuelHoldClock();
+
+        _bench.Updated(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
     }
 
     /// <summary>
@@ -2512,6 +2568,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.ApplySkyArrival();
         }
         if (!host.Covered) host.Sound.UpdateAudio(dt);
+        _bench.Lap(4);
         host.UpdateNav();
         host.DebugOverlays.UpdateNavOverlay();
         // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.

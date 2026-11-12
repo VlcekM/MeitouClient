@@ -84,6 +84,9 @@ commitment, not a proven single leak.
 
 ### A0. Measure the frame first
 
+The repeatable measure is now `--play-bench` on Metal with the frozen bench save ([bench](bench.md#play-benchmark)):
+per-frame interval, sections, render-thread stages, command-buffer GPU time and allocation; A/B by build or option.
+
 - Add/keep a trace that prints, per frame: total frame time, command-buffer GPU time, CPU record time, and
   `NextDrawable` wait. `MEITOU_METAL_TRACE=1` already prints CPU/GPU and resource counts.
 - Take one `dotnet-trace --profile dotnet-sampled-thread-time` capture while the window is frontmost; separate
@@ -124,9 +127,11 @@ rendering:
 - Re-run the same-window comparison after this step; it may expose the existing GPU headroom without touching the
   renderers.
 
+
 ### A2. Port the GPU-side draw path
 
-The mesh/rock cull is now ported and live on Metal: `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
+The mesh/rock cull is ported but opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`; status in
+[metal-gpu-cull-plan](metal-gpu-cull-plan.md)): `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
 backend-neutral, and `MetalFrame.PreFrame` is a command buffer of its own committed before the frame. The remaining
 A2 work is grass and the other indirect draw producers; the concrete plan is in
 [metal-gpu-cull-plan](metal-gpu-cull-plan.md).
@@ -381,7 +386,8 @@ MEITOU_METAL_TRACE=1 ...
 ... --render-scale 0.83
 ... --render-scale native
 
-# Validation gate (not a performance run)
+# Validation gate (not a performance run). Observed 2026-11-12 (M6, macOS 27.2): it aborts at master bb829167 with
+# "Fragment Function(fragment_main): missing Buffer binding at index 30 for pc[0]" (a push-constant block not pushed)
 MTL_DEBUG_LAYER=1 dotnet run --project src/Meitou.Game -c Release -- \
   --renderer metal --screenshot /tmp/metal-gate.png --no-population --time 8 \
   --distance 2000 --pitch 45 --faithful clouds,cloudshadows --no-gi

@@ -32,6 +32,12 @@ public sealed class MetalPipelines : IGpuPipelines
     readonly Dictionary<ComputePipelineDesc, MTLComputePipelineState> _computes = [];
 
     /// <summary>
+    /// The render pipeline states made so far: Metal makes every one on its first use, nothing ahead, as the Vulkan library's
+    /// <c>LatePipelines</c> counts (the play benchmark's <c>late_pipelines</c> is a frame's increase).
+    /// </summary>
+    public int LatePipelines { get; private set; }
+
+    /// <summary>
     /// An empty cache on <paramref name="device"/> over <paramref name="shaders"/>.
     /// </summary>
     public MetalPipelines(MTLDevice device, MetalShaders shaders)
@@ -97,6 +103,7 @@ public sealed class MetalPipelines : IGpuPipelines
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{desc.Program.Name}: the pipeline '{desc.Name}' failed: {error.LocalizedDescription}");
         _graphics[desc] = state;
+        LatePipelines++;
         return new GpuPipeline(desc);
     }
 

@@ -298,6 +298,19 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public double LastGpuMilliseconds { get; private set; }
 
     /// <summary>
+    /// Called with a frame's number and its command buffer's GPU milliseconds once it has completed, when its ring slot is taken by a later frame
+    /// (the play benchmark's per-frame GPU time); null by default. Only the part after the previous frame's end counts: consecutive command
+    /// buffers overlap on the GPU, so their whole spans add up to more than the GPU's busy time. The upload batches and the GPU cull's pre-frame
+    /// are command buffers of their own and are not in it.
+    /// </summary>
+    public Action<long, double>? OnGpuFrame { get; set; }
+
+    /// <summary>
+    /// The GPU end time (seconds) of the last frame reported to <see cref="OnGpuFrame"/>.
+    /// </summary>
+    double _reportedGpuEnd;
+
+    /// <summary>
     /// <c>objc_msgSend</c> for a selector that returns a double (a command buffer's GPU start and end times).
     /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
@@ -329,6 +342,26 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         double start = Time_objc_msgSend(command.NativePtr, GpuStartTime.SelPtr);
         double end = Time_objc_msgSend(command.NativePtr, GpuEndTime.SelPtr);
         return end > start ? (end - start) * 1000 : 0;
+    }
+
+    /// <summary>
+    /// Tells <see cref="OnGpuFrame"/> the GPU time of the frame a slot held, before the slot takes the next frame (the slot wait has seen its
+    /// command complete).
+    /// </summary>
+    void ReportGpuFrame(MetalFrame frame)
+    {
+        if (OnGpuFrame is not { } report || frame.Number == 0) return;
+
+        var command = frame.Command;
+        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Completed) return;
+
+        double start = Time_objc_msgSend(command.NativePtr, GpuStartTime.SelPtr);
+        double end = Time_objc_msgSend(command.NativePtr, GpuEndTime.SelPtr);
+        if (end <= start) return;
+
+        double own = end - Math.Max(start, Math.Min(_reportedGpuEnd, end));
+        _reportedGpuEnd = Math.Max(_reportedGpuEnd, end);
+        report(frame.Number, own * 1000);
     }
 
     /// <summary>
@@ -1147,6 +1180,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     {
         _frameNumber++;
         _slot = (_slot + 1) % FrameRingDepth;
+        ReportGpuFrame(_frames[_slot]);
         Retain_objc_retain(command.NativePtr);   // the frame pool drains at the end of this frame
         _frames[_slot].Begin(_frameNumber, command, drawable);
         _bindless.BeginFrame(_slot);

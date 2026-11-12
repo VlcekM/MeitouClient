@@ -83,8 +83,7 @@ shared code is upstream's; the Metal adaptations are:
   scissor stay. The overview map uploads compressed instead of decoding it in the opening frame.
 - `GameHost.Metal` follows the shared `tickAhead` setting around `WorldFrame.Draw`, runs the rotor update through
   `UpdateBuildings`, and takes the new town/build/readout interface callbacks through `ConfigurePlayerInterface`.
-  `MetalContext.Finish` tolerates a still that never opened a frame. `--play-bench` is rejected as Vulkan-only
-  because its late-pipeline and display timings are Vulkan's.
+  `MetalContext.Finish` tolerates a still that never opened a frame.
 - The launcher keeps the Metal/Auto/Vulkan selector and Metal memory budget while taking upstream's Steam app-id
   handling and Debug-build selection.
 

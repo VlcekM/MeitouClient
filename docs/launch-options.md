@@ -26,7 +26,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--ticks <n>` | count | 0 | With `--screenshot`: run n control ticks before the picture. |
 | `--quit-after <s>` | seconds | none | Close after s seconds and print the frame rate (smoke test). |
 | `--no-precompile` | | off | Compile methods on first call, not ahead on a background thread. |
-| `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off. Works with `--load` or `--new-game`. |
+| `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off (a later `--vsync` turns vsync on). Works with `--load` or `--new-game`, on Vulkan and Metal ([bench](bench.md#play-benchmark)). |
 | `--settings-schema <file>` | path | | Writes the launcher's settings description and exits. Must be the first two arguments; no log or window. |
 | `--recommend-preset <file>` | path | | Writes the quality preset for this computer (`HardwareProbe`, [launcher](launcher.md#graphics)) as JSON and exits. Must be the first two arguments; no log or window. |
 | `--wiki-export <dir>` | folder | | Writes the agent wiki's generated JSON (zones, towns, factions, squads, NPCs, items, buildings, shops, characters, research, animals, spawns...) from the game data, mods included, and exits ([agent playtest](agent-playtest.md)). |
@@ -50,6 +50,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--fps-limit <n>` | integer | 150 (`meitou.user.json`) | Frame limit when vsync is off; 0 is unlimited. |
 | `--vsync` / `--no-vsync` | | `meitou.user.json` (off) | Vsync for this run. |
 | `--renderer <vulkan\|metal>` | vulkan or metal | vulkan | Renderer for the whole frame. Metal is macOS only; the launcher appends this. |
+| `--metal-gpu-budget <MB>` | MB above 0 | `MEITOU_METAL_GPU_BUDGET_MB`, else 5120 | Metal: the memory guard's GPU allocation ceiling for this run; wins over the environment variable. |
 | `--ui <faithful\|meitou>` | | `meitou.user.json` (meitou) | UI mode, independent of graphics. |
 | `--ui-showcase` | | off | With `--screenshot`: HUD, inventory, stats, map, menus, a trade and a conversation, in either UI mode. |
 | `--ui-panel <name>` | panel name | none | With `--screenshot`: open one panel (hud, hud-expanded, inventory, stats, overview, menu, title, ...). |
@@ -318,7 +319,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
 | `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
 | `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/Host/MetalGameLoop.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
-| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
+| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS; `--metal-gpu-budget` wins over it. |
 | `MEITOU_METAL_NO_TAA` | `Host/MetalGameLoop.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
 | `MEITOU_METALFX` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX upscaler (same as `--upscaler metalfx`). |
 | `MEITOU_METALFX_SPATIAL` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX spatial mode. |

@@ -813,8 +813,8 @@ default.
 - **Tick ahead and rotors.** The live Metal loop sets the shared `tickAhead` mode (Dynamic/Always) and wraps
   `WorldFrame.Draw` in `BeginTickAhead`/`EndTickAhead`; stills, the title and the editor keep it off. `UpdateBuildings`
   also runs upstream's rotor pass, so wind generators and other `ROTATION_OUTPUT` parts turn on Metal.
-- **Play benchmark.** `--play-bench` is Vulkan-only: Metal rejects it with a message because the report's late-pipeline
-  and display timings are Vulkan's.
+- **Play benchmark.** `--play-bench` runs on Metal too (`MetalPlayBench`); what its report holds there is in
+  [bench](bench.md#play-benchmark).
 - **UI/input scope.** `MetalGameLoop` boots `PlayerInterface` for presentation (`LoadUi`, `ArrangeUi`, `Draw`),
   portraits, item icons and the map callbacks. It wires the panels' keyboard/pointer controls (I/C, M/T/Y, Esc,
   F7, F10 settings, hover/click/scroll), the strategy camera (WASD/arrows, Q/E, wheel, middle drag, edge scroll),

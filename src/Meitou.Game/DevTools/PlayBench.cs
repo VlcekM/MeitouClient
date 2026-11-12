@@ -15,7 +15,8 @@ namespace Meitou.Game.DevTools;
 /// trading, a container, doors, a pick-up, path requests, the squad walking, a fight, looting, the interface panels cold and warm, a horizon view,
 /// the overview) and records per frame the interval, the update and the world ticks (their steps and systems, <see cref="TickProfile"/>), the render
 /// thread's stages and the GPU's (<see cref="FrameProfiler"/>), the garbage collections, allocation and memory; then it writes frames.csv and
-/// summary.md and quits. The frame limit and vsync are off for it.
+/// summary.md and quits. The frame limit and vsync are off for it (a later <c>--vsync</c> turns vsync back on). The Metal loop drives the same hooks
+/// (MetalPlayBench) and gives the frames' GPU time (<see cref="PlayBenchGpu"/>) and the video memory (<see cref="VideoMemoryMb"/>) itself.
 /// </summary>
 sealed class PlayBench(GameHost host)
 {
@@ -61,6 +62,11 @@ sealed class PlayBench(GameHost host)
         public double GpuTotal;
 
         /// <summary>
+        /// Whether the frame's GPU time has been read back (the stages too on Vulkan; only the total on Metal).
+        /// </summary>
+        public bool GpuKnown;
+
+        /// <summary>
         /// The generation 0, 1 and 2 collections since the last frame.
         /// </summary>
         public int Gc0, Gc1, Gc2;
@@ -71,7 +77,8 @@ sealed class PlayBench(GameHost host)
         public double AllocMb, PauseMs, WorkingSetMb;
 
         /// <summary>
-        /// This process's video memory (<c>VulkanDevice.VideoMemory</c>), MB: read every 30 frames (a driver call), carried between; NaN on Metal.
+        /// This process's video memory, MB (Vulkan: <c>VulkanDevice.VideoMemory</c>; Metal: the device's allocated size): read every 30 frames (a
+        /// driver call), carried between.
         /// </summary>
         public double VramMb = double.NaN;
 
@@ -206,6 +213,21 @@ sealed class PlayBench(GameHost host)
     BenchFrame? _benchCurrent;
 
     /// <summary>
+    /// The recorded frames' indices by the backend's frame number, until their GPU time arrives (<see cref="PlayBenchGpu"/>, frames later).
+    /// </summary>
+    readonly Dictionary<long, int> _gpuTags = [];
+
+    /// <summary>
+    /// The video memory in MB, where the backend reads it itself (Metal); null: Vulkan's device.
+    /// </summary>
+    internal Func<double>? VideoMemoryMb { get; set; }
+
+    /// <summary>
+    /// The summary's run line in place of the Vulkan device and upscaler (Metal: its device, sizes, upscaler, pacing and memory budget).
+    /// </summary>
+    internal Func<string>? RunDescription { get; set; }
+
+    /// <summary>
     /// The camera pivot when the script started, and the direction from it towards the world's centre.
     /// </summary>
     Vector2 _benchOrigin, _benchDirection;
@@ -252,7 +274,7 @@ sealed class PlayBench(GameHost host)
             if (profiler is not null) profiler.OnGpuFrame = (tag, stages, total) =>
             {
                 if (tag >= 0 && tag < _benchFrames.Count)
-                    (_benchFrames[(int)tag].Gpu, _benchFrames[(int)tag].GpuTotal) = ([.. stages], total);
+                    (_benchFrames[(int)tag].Gpu, _benchFrames[(int)tag].GpuTotal, _benchFrames[(int)tag].GpuKnown) = ([.. stages], total, true);
             };
             Console.WriteLine($"bench     the script starts: {_benchScript.Length} segments, {_benchScript.Sum(s => s.Seconds):0} s, "
                 + $"leader {_benchLeader}, from {_benchOrigin.X:0}, {_benchOrigin.Y:0}");
@@ -334,11 +356,42 @@ sealed class PlayBench(GameHost host)
         }
         (_benchGcAt, _benchAllocAt, _benchPauseAt) = (gc, alloc, pause);
         f.WorkingSetMb = Environment.WorkingSet / 1048576.0;
-        if (_benchFrames.Count % 30 == 0 && host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk)
-            _benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
+        if (_benchFrames.Count % 30 == 0) _benchVramMb = ReadVideoMemoryMb();
         f.VramMb = _benchVramMb;
         _benchFrames.Add(f);
         _benchCurrent = null;
+    }
+
+    /// <summary>
+    /// This process's video memory in MB: the backend's own reading, else the Vulkan device's; the last value when there is neither.
+    /// </summary>
+    double ReadVideoMemoryMb()
+    {
+        if (VideoMemoryMb is { } read) return read();
+        return host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device.VideoMemory().Used / 1048576.0 : _benchVramMb;
+    }
+
+    /// <summary>
+    /// The frame being recorded is the backend's frame <paramref name="backendFrame"/>: its GPU time comes later (<see cref="PlayBenchGpu"/>).
+    /// </summary>
+    internal void PlayBenchGpuTag(long backendFrame)
+    {
+        if (_benchCurrent is null) return;
+
+        // A frame whose time never comes (a failed command) is not kept for ever.
+        if (_gpuTags.Count > 64) _gpuTags.Clear();
+        _gpuTags[backendFrame] = _benchFrames.Count;
+    }
+
+    /// <summary>
+    /// The GPU time of the backend's frame <paramref name="backendFrame"/>, once it has completed (Metal: when its ring slot is reused).
+    /// </summary>
+    internal void PlayBenchGpu(long backendFrame, double ms)
+    {
+        if (!_gpuTags.Remove(backendFrame, out int index) || index >= _benchFrames.Count) return;
+
+        var f = _benchFrames[index];
+        (f.GpuTotal, f.GpuKnown) = (ms, true);
     }
 
     /// <summary>
@@ -429,9 +482,7 @@ sealed class PlayBench(GameHost host)
         var ci = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
         var stages = StageClock.Names;
-        string device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
-        sb.Append(ci, $"# Play benchmark\n\n{_benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {host.WorldOptions.Post.Upscale.Kind} "
-            + $"at {host.WorldOptions.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
+        sb.Append(ci, $"# Play benchmark\n\n{_benchFrames.Count} frames, {sz.X}x{sz.Y}, {RunLine()}.\n\n");
         if (host.Gpu.Shadow is { Meitou: true } shadowPass)
             sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
         sb.Append("| segment | frames | fps | frame ms p50 | p95 | p99 | max | update ms | ticks/frame | sim ms/tick | gpu ms | render cpu ms | "
@@ -442,7 +493,7 @@ sealed class PlayBench(GameHost host)
             if (fs.Count < 2) continue;
             var ms = fs.Select(f => f.FrameMs).ToList();
             double seconds = ms.Sum() / 1000, ticks = fs.Sum(f => f.Ticks), sim = fs.Sum(f => f.Steps.Sum());
-            var gpuMs = fs.Where(f => f.Gpu is not null).Select(f => f.GpuTotal).ToList();
+            var gpuMs = fs.Where(f => f.GpuKnown).Select(f => f.GpuTotal).ToList();
             sb.Append(ci, $"| {_benchScript[s].Name} | {fs.Count} | {fs.Count / seconds:0} | {P(ms, 0.5):0.0} | {P(ms, 0.95):0.0} | "
                 + $"{P(ms, 0.99):0.0} | {ms.Max():0.0} | {fs.Average(f => f.UpdateMs):0.00} | {ticks / fs.Count:0.0} "
                 + $"| {(ticks > 0 ? sim / ticks : 0):0.00} | "
@@ -462,7 +513,7 @@ sealed class PlayBench(GameHost host)
                 .OrderByDescending(x => x.Ms).Take(n).Where(x => x.Ms >= 0.01).Select(x => string.Create(ci, $"{x.Name} {x.Ms:0.00}")));
             sb.Append("- game loop ms/frame: ").Append(Top(f => f.Sections, BenchSections, 9)).Append('\n');
             sb.Append("- render thread ms/frame: ").Append(Top(f => f.Cpu, stages, 8)).Append('\n');
-            sb.Append("- GPU ms/frame: ").Append(Top(f => f.Gpu, stages, 8)).Append('\n');
+            if (fs.Any(f => f.Gpu is not null)) sb.Append("- GPU ms/frame: ").Append(Top(f => f.Gpu, stages, 8)).Append('\n');
             sb.Append("- world tick ms/frame: ").Append(Top(f => f.Steps, TickProfile.PhaseNames, 6)).Append('\n');
             double frames = fs.Count;
             var systems = _benchSystems.Where(kv => kv.Key.Segment == s).OrderByDescending(kv => kv.Value).Take(8)
@@ -479,6 +530,19 @@ sealed class PlayBench(GameHost host)
         if (vram.Count > 0)
             sb.Append(ci, $"Video memory: peak {vram.Max(f => f.VramMb):0} MB, at the end {vram[^1].VramMb:0} MB.\n");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The summary's description of the run: the backend's own (<see cref="RunDescription"/>), else the Vulkan device, the upscaler and the pacing.
+    /// </summary>
+    string RunLine()
+    {
+        if (RunDescription is { } describe) return describe();
+
+        string device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
+        string pacing = host.GameOptions.VSync == true ? "vsync on" : "frame limit and vsync off";
+        var upscale = host.WorldOptions.Post.Upscale;
+        return string.Create(CultureInfo.InvariantCulture, $"{device}, upscaler {upscale.Kind} at {upscale.EffectiveScale:0.00}; {pacing}");
     }
 
     /// <summary>
