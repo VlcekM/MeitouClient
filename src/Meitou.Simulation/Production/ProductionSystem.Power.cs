@@ -32,10 +32,14 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<int, TownPower> _townPower = [];
     /// <summary>
-    /// The towns of the level data (negative grid keys) whose machines this tick have no generator among them: their supply is not modelled, so
-    /// they count as powered (<see cref="PowerTick"/>). Not saved.
+    /// The generation of each town of the level data (negative grid keys) that holds a player machine this tick: what its placed generators give
+    /// (<see cref="NpcGeneration"/>). A scratch map.
     /// </summary>
-    readonly HashSet<int> _assumedSupply = [];
+    readonly Dictionary<int, float> _npcSupply = [];
+    /// <summary>
+    /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
+    /// </summary>
+    readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -161,7 +165,7 @@ public sealed partial class ProductionSystem
             grid.Add(m);
         }
 
-        AssumeNpcSupply();
+        NpcGeneration(world);
         ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
         {
@@ -193,27 +197,49 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A machine that resolves to a town of the level data (<see cref="PowerTown"/>, a negative key) whose grid holds no generator is fully powered
-    /// and takes no part in the sharing (engine choice, original <b>Unknown</b>: whether an NPC town's frame has generation of its own is not
-    /// established, and the earlier shared town-0 grid never left such a machine without power on a map with any generator; the NPC towns' own
-    /// generators are not modelled). A generator among them (one the player built there) makes the grid an ordinary one.
+    /// The generation of each town of the level data that a player machine resolved to (<see cref="PowerTown"/>, a negative key; <b>Observed</b>,
+    /// <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, so an NPC town's frame has the output of the generators
+    /// placed in it): a wind generator gives its rated output x its blades' wind share (nothing below 1), a fuel generator nothing (the base game
+    /// places 47 of them, all with an empty tank; the placed fuel and the switch are not read). The NPC town's own consumers (lights, machines) are
+    /// not modelled, so the player's machine takes its water-filling share of the generation alone; with no running generator it gets 0.
     /// </summary>
-    void AssumeNpcSupply()
+    void NpcGeneration(World world)
     {
-        _assumedSupply.Clear();
-        foreach (var (town, grid) in _grids)
+        _npcSupply.Clear();
+        foreach (var town in _grids.Where(g => g.Key < 0 && g.Value.Count > 0).Select(g => g.Key))
+            _npcSupply[town] = NpcOutput(world, -town - 1);
+    }
+
+    /// <summary>
+    /// What the generators placed in the level-data town of <paramref name="index"/> give now (<see cref="NpcGeneration"/>).
+    /// </summary>
+    float NpcOutput(World world, int index)
+    {
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return 0;
+
+        float total = 0;
+        foreach (var b in site.Buildings)
         {
-            if (town >= 0 || grid.Any(m => m.Data.IsGenerator)) continue;
-            _assumedSupply.Add(town);
-            foreach (var m in grid) m.Power = 1;
+            if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true, IsWind: true } data) continue;
+
+            var rotor = Rotor(b);
+            var here = world.Weather?.At(b.Position.X, b.Position.Z);
+            float output = rotor is { } r && here is { } w ? data.PowerOutput * RotorSpec.WindShare(w.WindSpeed, r.Min, r.Max) : 0;
+            if (output >= 1) total += output;
         }
 
-        foreach (var town in _assumedSupply)
-        {
-            _grids.Remove(town);
-            _townPower.Remove(town);
-            _townSupply.Remove(town);
-        }
+        return total;
+    }
+
+    /// <summary>
+    /// The rotor of a placed wind generator, read once.
+    /// </summary>
+    (float Min, float Max)? Rotor(TownBuilding b)
+    {
+        if (_npcRotors.TryGetValue(b.Key, out var known)) return known;
+
+        var rotor = _db.Find(b.BuildingId) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(_db, record, b.Position) : null;
+        return _npcRotors[b.Key] = rotor;
     }
 
     /// <summary>
@@ -288,8 +314,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// State 93 <c>BUILDING_HAS_POWER</c> (<c>FUN_140596ab0</c>, <b>Verified</b>), a start condition of operating (87, 221) and manning a turret (146):
-    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share. An NPC town's machine
-    /// always has it (engine choice: NPC towns have no power grid here).
+    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share.
     /// </summary>
     bool Powered(World world, BuildSite site, Machine m) => IsTownWork(site.Id) || HasPower(world, m, PowerTown(world, site));
 
@@ -302,7 +327,7 @@ public sealed partial class ProductionSystem
     {
         if (m.Data.IsGenerator || Rated(world, m) == 0) return true;
         if (!m.PowerOn) return false;
-        if (_assumedSupply.Contains(town) || !_townSupply.TryGetValue(town, out var supply)) return true;
+        if (!_townSupply.TryGetValue(town, out var supply)) return true;
         return supply.Generators || (m.GetsBattery && _batteryMode.GetValueOrDefault(town) && supply.Batteries);
     }
 
@@ -333,6 +358,7 @@ public sealed partial class ProductionSystem
             }
         }
 
+        supply += _npcSupply.GetValueOrDefault(town);
         float generated = supply;
         _townSupply[town] = (generated > 0, batteries > 0);
         consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));

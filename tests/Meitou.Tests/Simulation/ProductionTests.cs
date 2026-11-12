@@ -663,7 +663,7 @@ public class ProductionTests
     /// <summary>
     /// A machine without a town joins the frame of the nearest town of the level data when that is nearer than any player town (a bought house in
     /// an NPC town): a generator beside that town powers it, one beside a far player town does not feed it; with no generator in that town's grid
-    /// the machine counts as powered (engine choice, the NPC town's own supply is not modelled), so it never loses power to the town grid.
+    /// the machine gets no power (the NPC town's frame has only the generation placed in it, and a player machine needs some).
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -685,8 +685,28 @@ public class ProductionTests
         rig.World.RunTicks(6);   // the frames run one town per tick
 
         Assert.Equal(generatorBesideNpcTown, rig.Machine(1).Granted > 0);
-        Assert.True(rig.Machine(1).HasPower);
-        Assert.Equal(1, rig.Machine(1).Power);
+        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).HasPower);
+        Assert.Equal(generatorBesideNpcTown ? 1 : 0, rig.Machine(1).Power);
+    }
+
+    /// <summary>
+    /// An NPC town's frame has the generation of the generators placed in it: a fuel generator in the town's level data gives nothing (the base
+    /// game's 47 have an empty tank), so a player machine that resolves there gets no power, its order check fails and it is not powered.
+    /// </summary>
+    [Fact]
+    public void A_machine_in_an_npc_town_with_only_a_fuel_generator_has_no_power()
+    {
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone)
+        {
+            Buildings = [new TownBuilding("gen", Generator, "Generator", at, 0, false, false, []) { Zone = zone }],
+        };
+        var population = new PopulationData { Db = Database(), Sites = [site], Factions = [] };
+        using var rig = new Rig(Database(), Constants, [Lamp], town: 0, population: population);
+        rig.World.RunTicks(6);
+
+        Assert.Equal((0f, 0f, false), (rig.Machine(0).Granted, rig.Machine(0).Power, rig.Machine(0).HasPower));
     }
 
     /// <summary>
@@ -1182,6 +1202,35 @@ public class ProductionTests
                 (tower.Accepts(water, FcsRecordType.Item), tower.Accepts(iron, FcsRecordType.Item), ore.Accepts(water, FcsRecordType.Item),
                 ore.Accepts(iron, FcsRecordType.Item)));
         Assert.Equal((100f, 100f), (tower.StackBonusMult, ore.StackBonusMult));
+    }
+
+    /// <summary>
+    /// An NPC town's wind generator (the installed Wind Generator, 1999, rated 50, wind 10 to 50) powers a player machine that resolves to the town:
+    /// at wind 30 it gives half its output, at no wind nothing (docs/game/buildings-production.md "Power").
+    /// </summary>
+    [Theory, Slow]
+    [InlineData(30f, true)]
+    [InlineData(0f, false)]
+    public void An_npc_towns_installed_wind_generator_powers_a_machine_that_resolves_there(float wind, bool powered)
+    {
+        var db = InstallData.BaseGame;
+
+        Assert.SkipWhen(db is null, "Kenshi install not found");
+
+        var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0 }).StringId;
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone)
+        {
+            Buildings = [new TownBuilding("wind", "1999-gamedata.base", "Wind Generator", at, 0, false, false, []) { Zone = zone }],
+        };
+        var population = new PopulationData { Db = db, Sites = [site], Factions = [] };
+        using var rig = new Rig(db, GameConstants.FromDatabase(db), [consumer], town: 0, population: population);
+        rig.World.Weather = new Wind(wind);
+        rig.World.RunTicks(6);
+
+        Assert.Equal(powered, rig.Machine(0).HasPower);
+        Assert.Equal(powered, rig.Machine(0).Granted > 0);
     }
 
     /// <summary>
