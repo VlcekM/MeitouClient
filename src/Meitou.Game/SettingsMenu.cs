@@ -443,7 +443,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             result.Add(new(HdrName, HdrHint, Toggle: new(HdrName, () => Config.Hdr, v => Config.Hdr = v, OnOff: true), Raw: "hdr"));
             result.Add(new(HdrPaperName, HdrPaperHint, Slider: new Slider(HdrPaperName, 80, 500, () => Config.HdrPaperNits,
                 v => Config.HdrPaperNits = MathF.Round(v / 10) * 10, "0"), Raw: "hdrPaperNits"));
-            result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 400, 4000, () => Config.HdrPeakNits,
+            result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 200, 4000, () => Config.HdrPeakNits,
                 v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits"));
         }
 

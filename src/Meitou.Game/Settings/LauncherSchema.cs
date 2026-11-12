@@ -223,7 +223,7 @@ static class LauncherSchema
         new()
         {
             Key = Key(nameof(UserConfig.HdrPeakNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPeakName, Description = SettingsMenu.HdrPeakHint,
-            Default = defaults.HdrPeakNits, Shown = defaults.HdrPeakNits, Min = 400, Max = 4000, Step = 50, Suffix = " nits",
+            Default = defaults.HdrPeakNits, Shown = defaults.HdrPeakNits, Min = 200, Max = 4000, Step = 50, Suffix = " nits",
         },
     ];
 

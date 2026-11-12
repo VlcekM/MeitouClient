@@ -1214,6 +1214,14 @@ static class PostProcessShaders
             float span = uHdrPeak - K;
             return c * ((K + span * (1.0 - exp(-(m - K) / span))) / m);
         }
+        // HDR output: how much the HDR shoulder leaves of a value over what the SDR shoulder leaves of it.
+        float hdrGain(float m)
+        {
+            const float K = 0.8;
+            if (m <= K) return 1.0;
+            float span = uHdrPeak - K;
+            return (K + span * (1.0 - exp(-(m - K) / span))) / (K + (1.0 - K) * (1.0 - exp(-(m - K) / (1.0 - K))));
+        }
         vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
         // Ours, not the game's (docs/render-post.md "Night grading"; the C# mirror is Meitou.Data.World.NightGrade, a test pins the constants): the scene
@@ -1258,7 +1266,10 @@ static class PostProcessShaders
             if (uUseAo != 0) c *= ao;
             if (uNight > 0.0 && uAuto != 0) c = nightGrade(c, dot(raw, LUM601), adapted.g);
             float top = uHdrPeak > 1.0 ? uHdrPeak : 1.0;
-            if (uHdrPeak > 1.0) c = hdrShoulder(c);
+            // HDR output: the look's own curve, its highlights lifted by what the HDR shoulder gives over the SDR one (1 under the knee, so the picture there is the SDR one).
+            if (uHdrPeak > 1.0 && uTone == 2) c = aces(c) * hdrGain(max(c.r, max(c.g, c.b)));
+            else if (uHdrPeak > 1.0 && uTone == 3) c = mix(clamp(c, 0.0, 1.0), aces(c * 0.7), uToneMix) * hdrGain(max(c.r, max(c.g, c.b)));
+            else if (uHdrPeak > 1.0) c = hdrShoulder(c);
             else if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
             // hybrid: between the game's clip and ACES, fed 0.7 of the exposure so its mid-tones stay the clip's (0.18 -> 0.17, 0.5 -> 0.49) and only the highlights roll off
