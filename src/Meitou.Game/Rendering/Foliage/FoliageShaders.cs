@@ -208,6 +208,7 @@ static class FoliageShaders
         uniform float uFogDistance;
         uniform bool uWireframe;
         uniform float uGrassRayReach;   // how far the traced sun's rays see grass (0: they see none)
+        uniform bool uGrassDepthOnly;   // the depth-first draw (FoliageRenderer.GrassDepthFirst): nothing after the cut
         out vec4 fragColour;
         void main()
         {
@@ -221,6 +222,7 @@ static class FoliageShaders
                 if (coverage <= 0.0) discard;
             }
             else if (d.a < threshold) discard;
+            if (uGrassDepthOnly) { fragColour = vec4(0.0); return; }
             vec3 albedo = d.rgb;
             if (uHasColourMap)
             {
@@ -390,6 +392,7 @@ static class FoliageShaders
         ["uHasColourMap"] = "pc.hasColourMap",
         ["uCoverage"] = "pc.coverage",
         ["uWireframe"] = "pc.wireframe",
+        ["uGrassDepthOnly"] = "(view.previousTime < -0.5)",
         ["uSprite"] = "textures2D[pc.sprite]",
         ["uColourMap"] = "textures2D[pc.colourMap]",
         ["uNearDepth"] = "textures2D[pc.nearDepth]",

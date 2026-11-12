@@ -56,6 +56,8 @@ The traced sun builds pages near the eye into structures from the arena: [Traced
 
 **Grass under the upscalers** (`GrassTexture`): grass sprites are sampled without the temporal upscalers' LOD bias (-1 at render scale 1, `PostProcess`). A level sharper, the wiry strands are under a pixel wide and TAA and DLSS smeared the moving grass into a grey veil (**Verified** at Gut, paused, mid-rotation frames at 20 to 45 ms a frame: a veil with the bias, strands and clumps kept without; FXAA showed no veil either way; one more level, +1, read blocky in stills).
 
+**Grass depth first** (`FoliageRenderer.GrassDepthFirst`, the GPU grass of a colour view without alpha to coverage): the indirect draw runs twice with the same program, first with the colour masked and the fragment stopping after its cut (`uGrassDepthOnly`, the view's `previousTime` at -1), then with the depth test EQUAL and no depth write, so a pixel is lit once. Blades cover each other many times and every layer the depth test had not yet hidden ran the lighting (**Verified** at Gut, paused A/B in one session at 2560x1440: grass 8.5 to 4.1 ms, frame GPU 18.1 to 13.7 ms, the picture equal within the upscaler's frame-to-frame noise; without any lighting the grass stage is 2.4 ms). The CPU-culled fallback keeps one draw.
+
 ## Visibility, depth and memory
 
 Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are distinct filters.

@@ -228,6 +228,7 @@ public static partial class FoliageGrassShaders
         ["uHasColourMap"] = Flag(FlagColourMap),
         ["uCoverage"] = Flag(FlagCoverage),
         ["uWireframe"] = Flag(FlagWireframe),
+        ["uGrassDepthOnly"] = "(view.previousTime < -0.5)",
         ["uSprite"] = Tex("sprite"),
         ["uColourMap"] = Tex("colourMap"),
         ["uNearDepth"] = Tex("nearDepth"),

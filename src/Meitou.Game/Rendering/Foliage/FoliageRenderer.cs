@@ -2704,7 +2704,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // (BeginNativeInPass). Each draw method is split into Prepare (reads the textures and the zones' state, makes a draw list) and Record (the
     // list into one native segment: the sets and dynamic state once, per draw a push constant block and the mesh's own buffers).
 
-    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4, PrepassKind = 5, PrepassSolidKind = 6, EqualKind = 7;
+    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4, PrepassKind = 5, PrepassSolidKind = 6, EqualKind = 7, GrassDepthKind = 8,
+        GrassEqualKind = 9;
     /// <summary>
     /// The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.
     /// </summary>
@@ -2735,8 +2736,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
-    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[8];
-    readonly int[] _segmentIds = new int[8];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[10];
+    readonly int[] _segmentIds = new int[10];
     int _segmentCount;
 
     /// <summary>
