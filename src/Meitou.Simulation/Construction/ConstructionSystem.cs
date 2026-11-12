@@ -837,20 +837,20 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Merges overlapping same-owner outposts into the smaller-radius town and reassesses the survivor once.
+    /// Merges the first overlapping player-faction outpost into the larger town, retaining this town on ties and reassessing the survivor.
     /// </summary>
     static void MergeOverlappingTown(World world, PlayerTown town)
     {
         var other = world.Buildings.Towns
-            .Where(t => t != town && t.Owner == town.Owner)
-            .MinBy(t => DistanceXzSquared(t.Position, town.Position));
-        if (other is null || DistanceXzSquared(other.Position, town.Position) >= (other.Radius + town.Radius) * (other.Radius + town.Radius)) return;
+            .FirstOrDefault(t => t != town && t.Owner == world.Player.Faction &&
+                DistanceXzSquared(t.Position, town.Position) < (t.Radius + town.Radius) * (t.Radius + town.Radius));
+        if (other is null) return;
 
-        var survivor = town.Radius <= other.Radius ? town : other;
+        var survivor = town.Radius >= other.Radius ? town : other;
         var removed = survivor == town ? other : town;
         world.Buildings.MoveTownBuildings(removed, survivor);
         world.Buildings.RemoveTown(removed);
-        ReassessTown(world, survivor, mergeOverlaps: false);
+        ReassessTown(world, survivor);
     }
 
     /// <summary>

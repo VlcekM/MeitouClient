@@ -288,24 +288,53 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
-    /// Placement reassessment moves buildings to the smaller overlapping outpost and expands its radius.
+    /// Placement reassessment preserves the larger outpost identity and properties.
     /// </summary>
     [Fact]
-    public void Placement_overlap_merges_buildings_into_the_smaller_radius_town()
+    public void Placement_overlap_merges_buildings_into_the_larger_radius_town()
     {
         using var world = World();
         var first = world.Buildings.AddTown(new Vector3(0, 300, 0), 7);
         var second = world.Buildings.AddTown(new Vector3(1000, 300, 0), 7);
+        world.Player.Faction = 7;
         first.Override = 1000;
         second.Override = 3000;
+        second.Name = "Larger";
+        second.Public = true;
+        second.SaveHandle = new Hand(13, 4, 55, 2, 9);
         world.Buildings.Add(Site("first", new Vector3(0, 300, 0), first.Number));
         world.Buildings.Add(Site("second", new Vector3(1000, 300, 0), second.Number));
 
         ConstructionSystem.ReassessTown(world, first);
 
-        Assert.Same(first, Assert.Single(world.Buildings.Towns));
-        Assert.All(world.Buildings.All, site => Assert.Equal(first.Number, site.Town));
-        Assert.True(first.Override > 1000);
+        Assert.Same(second, Assert.Single(world.Buildings.Towns));
+        Assert.All(world.Buildings.All, site => Assert.Equal(second.Number, site.Town));
+        Assert.Equal("Larger", second.Name);
+        Assert.True(second.Public);
+        Assert.Equal(new Hand(13, 4, 55, 2, 9), second.SaveHandle);
+    }
+
+    /// <summary>
+    /// The first eligible overlap wins over a nearer candidate, then the survivor merges again.
+    /// </summary>
+    [Fact]
+    public void Placement_overlap_uses_list_order_and_reassesses_the_survivor()
+    {
+        using var world = World();
+        world.Player.Faction = 7;
+        var current = world.Buildings.AddTown(new Vector3(0, 300, 0), 7);
+        var first = world.Buildings.AddTown(new Vector3(2000, 300, 0), 7);
+        var nearer = world.Buildings.AddTown(new Vector3(100, 300, 0), 7);
+        first.Override = 3000;
+        nearer.Override = 2000;
+        world.Buildings.Add(Site("current", current.Position, current.Number));
+        world.Buildings.Add(Site("first", first.Position, first.Number));
+        world.Buildings.Add(Site("nearer", nearer.Position, nearer.Number));
+
+        ConstructionSystem.ReassessTown(world, current);
+
+        Assert.Same(nearer, Assert.Single(world.Buildings.Towns));
+        Assert.All(world.Buildings.All, site => Assert.Equal(nearer.Number, site.Town));
     }
 
     /// <summary>
