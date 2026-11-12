@@ -348,10 +348,10 @@ public sealed class PostOptions
     public const float SsaoFadeEnd = 6600;
 
     /// <summary>
-    /// How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. All of it: at a quarter a face
-    /// under a hood, an armpit or the skin under a collar kept nearly the open skin's ambient light and seemed lit from inside.
+    /// How much of the occlusion stays on the characters' own pixels (Meitou): 0 none, 1 the same as everywhere else. They still darken the ground
+    /// round them.
     /// </summary>
-    public const float SsaoCharacterStrength = 1f;
+    public const float SsaoCharacterStrength = 0.25f;
 
     /// <summary>
     /// How much a character counts as an occluder of the ground and things round it (Meitou): 1 as anything else. At 1 a character lying down left a
@@ -375,18 +375,12 @@ public sealed class PostOptions
     public int GtaoSlices => GtaoQuality switch { 0 => 2, _ => 3 };
     public int GtaoSteps => GtaoQuality switch { 0 => 4, _ => 6 };
     public bool GtaoFullSize => GtaoQuality >= 2;
-    /// <summary>GTAO's search radius in world units, and the bounds on what it spans as shares of the render height (the world radius gives way to them). The most is wide
-    /// enough for a close-up: at 96 pixels a hood's brim was out of reach of the face under it.</summary>
-    public const float GtaoRadius = 20, GtaoMaxPixels = 400f / 1440, GtaoMinPixels = 12f / 1440;
+    /// <summary>GTAO's search radius in world units, and the bounds on what it spans as shares of the render height (the world radius gives way to them).</summary>
+    public const float GtaoRadius = 20, GtaoMaxPixels = 96f / 1440, GtaoMinPixels = 12f / 1440;
     /// <summary>The share of the radius at full weight, and how much of a passed horizon each further tap keeps (1: every occluder is solid behind).</summary>
     public const float GtaoFalloff = 0.17f, GtaoThickness = 0.9f;
     /// <summary>GTAO's curve after the blur (KenshiNative's defaults): the visibility to this power, then this much of it reaches the picture.</summary>
     public const float GtaoPower = 1.6f, GtaoStrength = 0.55f;
-    /// <summary>
-    /// How many times as deep GTAO's occlusion is on the characters' own pixels. The scene's strength suits surfaces the probes already shade at large; no probe
-    /// ray sees a character, so this is all the occlusion a face under a hood or an armpit gets.
-    /// </summary>
-    public const float GtaoCharacterStrength = 2.5f;
     /// <summary>The characters' traced occlusion (<c>Gi.CharacterOcclusionPass</c>): how far its rays look, world units, and how much of it reaches the picture.</summary>
     public const float CharacterOcclusionRadius = 8f, CharacterOcclusionStrength = 1f;
     /// <summary>The albedo of GTAO's multi-bounce term where no lit fragment wrote one to the surface target.</summary>

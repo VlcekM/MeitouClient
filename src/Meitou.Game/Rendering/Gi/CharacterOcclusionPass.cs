@@ -17,7 +17,7 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
 {
     /// <summary>The rays a pixel traces; each pixel of a 4 x 4 block turns them by a sixteenth of their spacing, so a block holds 16 times as many directions.</summary>
     public const int Rays = 8;
-    /// <summary>World units: a blocker nearer than the first counts for nothing, from the second in full.</summary>
+    /// <summary>World units: what is not worn counts for nothing as a blocker nearer than the first, in full from the second.</summary>
     const float NearStart = 0.4f, NearFull = 1.5f;
 
     static string F(float v) => v.ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture);
@@ -99,7 +99,7 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
     /// <summary>
     /// The rays: a cosine-weighted set round the shading normal, the same every frame (nothing for the upscaler to average), leaving the body as the traced
     /// sun's rays do (<see cref="TracedSunShaders"/>: close to the skin, past the creases between facets); a direction the drawn facet is turned from is not
-    /// asked (the smooth shading goes round the facets). A blocker counts in full from <see cref="NearFull"/> to half the radius, then less, to nothing at the radius.
+    /// asked (the smooth shading goes round the facets). A blocker counts in full up to half the radius, then less, to nothing at the radius; what is worn from the skin on (a hood lies against the temples), the body's own parts from <see cref="NearStart"/>.
     /// </summary>
     static readonly string Trace = $$"""
         #version 460
@@ -186,9 +186,13 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
                 }
                 if (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT)
                 {
-                    // What is nearer than a hand's breadth is the screen's occlusion's to shade (a brow over an eye, a nostril): counted here too, the eye sockets went black.
+                    // What is worn counts from the skin on (a hood lies against the temples). The body's own parts nearer than a hand's breadth (a brow over an eye, its
+                    // lashes, the eye, a nostril) are the screen's occlusion's to shade: counted here the eye sockets went black. A worn part's record has the tint 204
+                    // in its red (CharacterRenderer.AddRayPart's 0.8).
                     float hit = rayQueryGetIntersectionTEXT(q, true);
-                    blocked += smoothstep({{F(NearStart)}}, {{F(NearFull)}}, hit) * (1.0 - smoothstep(0.5 * reach, reach, hit));
+                    int record = rayQueryGetIntersectionInstanceCustomIndexEXT(q, true) + rayQueryGetIntersectionGeometryIndexEXT(q, true);
+                    float near = (geometries[record].charTint & 255u) == 204u ? 1.0 : smoothstep({{F(NearStart)}}, {{F(NearFull)}}, hit);
+                    blocked += near * (1.0 - smoothstep(0.5 * reach, reach, hit));
                 }
             }
             imageStore(uOut, px, vec4(1.0 - blocked / {{Rays}}.0, 0.0, 0.0, 1.0));
