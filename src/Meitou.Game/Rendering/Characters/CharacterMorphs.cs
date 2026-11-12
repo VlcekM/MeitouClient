@@ -22,9 +22,6 @@ internal sealed class MeshMorphs
     public required int SubMeshIndex;
     public required Dictionary<string, (int[] Slots, Vector3[] Offsets)> Poses;
     public bool HasCuttableHorns => Poses.ContainsKey("bone_horns_top_short");
-    HashSet<string>? _names;
-    /// <summary>The pose (shape key) names of the mesh.</summary>
-    public IReadOnlySet<string> PoseNames => _names ??= [.. Poses.Keys];
 
     /// <summary>
     /// The poses of <paramref name="mesh"/> on <paramref name="model"/>'s parts; null when it has none, or they do not line up with the part's
@@ -81,34 +78,6 @@ internal sealed class MeshMorphs
         }
         return result;
     }
-
-    /// <summary>
-    /// <paramref name="output"/> (SlotCount entries) set to the appearance's pose weights with the keys of <paramref name="face"/> replacing theirs
-    /// (docs/face-shape-keys.md): the poses summed at their weights, as <see cref="Deltas"/> does for the appearance alone.
-    /// </summary>
-    public void Compose(Vector4[] output, IReadOnlyDictionary<string, float> weights, bool cutHorns, FaceWeights face)
-    {
-        Array.Clear(output, 0, SlotCount);
-        foreach (var (name, stored) in weights)
-        {
-            if (face.TryGet(name, out _) || !Poses.TryGetValue(name, out var pose) || CharacterShape.BakeWeight(name, stored, cutHorns) is not { } w) continue;
-            Add(output, pose, w);
-        }
-        for (int i = 0; i < face.Count; i++)
-            if (face.WeightAt(i) != 0 && Poses.TryGetValue(face.KeyAt(i), out var pose)) Add(output, pose, face.WeightAt(i));
-    }
-
-    static void Add(Vector4[] output, (int[] Slots, Vector3[] Offsets) pose, float w)
-    {
-        for (int i = 0; i < pose.Slots.Length; i++) output[pose.Slots[i] - 1] += new Vector4(pose.Offsets[i] * w, 0);
-    }
-}
-
-/// <summary>The three rotating regions of the arena one character's runtime morph (<see cref="FaceWeights"/>) is written to, so a frame in flight never reads what this frame writes.</summary>
-internal sealed class FaceLease(int first, int slots)
-{
-    public readonly int First = first, Slots = slots;
-    public int Turn;
 }
 
 /// <summary>
@@ -169,34 +138,6 @@ internal sealed class MorphArena : IDisposable
         return (uint)(first - 1);
     }
 
-    readonly Dictionary<int, Stack<FaceLease>> _freeLeases = [];
-
-    /// <summary>
-    /// Three regions of <paramref name="slots"/> entries for one character's runtime morph; a released lease of the same size is reused.
-    /// </summary>
-    public FaceLease Lease(int slots) =>
-        _freeLeases.TryGetValue(slots, out var free) && free.Count > 0 ? free.Pop() : new FaceLease(Reserve(3 * slots), slots);
-
-    public void Release(FaceLease lease)
-    {
-        if (!_freeLeases.TryGetValue(lease.Slots, out var free))
-        {
-            _freeLeases[lease.Slots] = free = new();
-        }
-
-        free.Push(lease);
-    }
-
-    /// <summary>
-    /// Writes <paramref name="deltas"/> into the lease's next region and returns the base to draw with (see <see cref="Scratch"/>).
-    /// </summary>
-    public uint Write(FaceLease lease, Vector4[] deltas)
-    {
-        int first = lease.First + lease.Turn++ % 3 * lease.Slots;
-        Write(first, deltas.AsSpan(0, lease.Slots));
-        return (uint)(first - 1);
-    }
-
     /// <summary>
     /// Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set
     /// from the host copy.
@@ -215,12 +156,10 @@ internal sealed class MorphArena : IDisposable
         return first;
     }
 
-    void Write(int first, Vector4[] deltas) => Write(first, deltas.AsSpan());
-
-    void Write(int first, ReadOnlySpan<Vector4> deltas)
+    void Write(int first, Vector4[] deltas)
     {
-        deltas.CopyTo(_host.AsSpan(first));
-        Upload((ulong)first * 16, MemoryMarshal.AsBytes(deltas));
+        deltas.CopyTo(_host, first);
+        Upload((ulong)first * 16, MemoryMarshal.AsBytes(deltas.AsSpan()));
     }
 
     void Upload(ulong offset, ReadOnlySpan<byte> data)

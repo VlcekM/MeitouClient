@@ -277,28 +277,7 @@ sealed partial class GameHost
             Build = c.Build,
             Rotation = rotation,
             Blood = c.BloodAmounts,
-            Face = FaceFor(c, look, hidden),
         };
-
-    Data.Characters.FaceWeights?[] _facesBySlot = [];
-
-    /// <summary>
-    /// The shape-key weights the mods' face controllers give the character this frame (docs/face-shape-keys.md); null without controllers, for a
-    /// hidden character or a look without shape keys (not built yet, or a body mesh with no poses).
-    /// </summary>
-    Data.Characters.FaceWeights? FaceFor(CharacterSnapshot c, Data.Characters.CharacterAppearance look, bool hidden)
-    {
-        if (Modding.Mods is not { WantsFaces: true } mods || hidden || Gpu.Characters?.FaceKeys(look) is not { Count: > 0 } keys) return null;
-
-        ref var slot = ref Slot(ref _facesBySlot, c.Id.Slot);
-        var face = slot ??= new Data.Characters.FaceWeights();
-        face.Clear();
-        face.Available = keys;
-        mods.UpdateFace(
-            new FaceFrame(c, (Session.ShownTick + Session.SimulationAlpha) * Session.Simulation.TickSeconds, Vector3.Distance(Camera.Eye, c.Position)),
-            face);
-        return face;
-    }
 
     /// <summary>
     /// A character's key in the draw list: stable while it exists, new for every world (the renderer keeps its poses by it).

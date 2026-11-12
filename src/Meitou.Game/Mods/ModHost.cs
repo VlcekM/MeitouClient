@@ -106,32 +106,6 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// A mod registered a face controller: the host then asks for face weights while drawing characters.
-    /// </summary>
-    public bool WantsFaces => _registry.FaceControllers.Count > 0;
-
-    /// <summary>
-    /// Runs the face controllers for one character, in load order; one that throws is logged and gets no more.
-    /// </summary>
-    public void UpdateFace(in FaceFrame frame, Data.Characters.FaceWeights face)
-    {
-        foreach (var entry in _registry.FaceControllers)
-        {
-            if (entry.Faulted) continue;
-
-            try
-            {
-                entry.Controller.Update(in frame, face);
-            }
-            catch (Exception e)
-            {
-                entry.Faulted = true;
-                Console.Error.WriteLine($"mod       {entry.Owner}: face controller disabled: {e}");
-            }
-        }
-    }
-
-    /// <summary>
     /// The settings the mods registered, in load order (docs/modding.md "Settings").
     /// </summary>
     public IReadOnlyList<ModSettingsGroup> Settings => _registry.Settings;
@@ -156,12 +130,10 @@ public sealed class ModHost
         {
             var discovered = ModList.Discover(install);
             var onDisk = discovered.Where(m => m.HasCode).ToDictionary(m => m.Name, StringComparer.Ordinal);
-            var ports = BundledPorts(discovered);
             List<ModInfo> enabled = [];
             foreach (string name in ModList.ReadEnabled(install))
             {
                 if (onDisk.GetValueOrDefault(name) is { } code) enabled.Add(code);
-                if (ports.TryGetValue(name, out var bundled)) enabled.AddRange(bundled);
             }
             return (enabled, [.. onDisk.Values.Except(enabled)]);
         }
@@ -170,40 +142,6 @@ public sealed class ModHost
             Console.Error.WriteLine($"mods      the mod folders could not be read, no code mods: {e.Message}");
             return ([], []);
         }
-    }
-
-    /// <summary>
-    /// The code mods shipped in the game's <c>compat</c> folder (one folder each, with a <c>meitou.json</c> whose <c>portOf</c> names a data mod), by
-    /// the data mod they port; the port is listed only when that mod is installed. Whether it is enabled is the caller's.
-    /// </summary>
-    static Dictionary<string, List<ModInfo>> BundledPorts(IReadOnlyList<ModInfo> installed)
-    {
-        var ports = new Dictionary<string, List<ModInfo>>(StringComparer.Ordinal);
-        string root = Path.Combine(AppContext.BaseDirectory, "compat");
-        if (!Directory.Exists(root)) return ports;
-
-        foreach (string folder in Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal))
-        {
-            string manifest = Path.Combine(folder, ModList.CodeManifestFile);
-            if (!File.Exists(manifest)) continue;
-
-            try
-            {
-                var read = CodeModManifest.Read(manifest);
-                if (read.PortOf is not { } ported || installed.FirstOrDefault(m => m.Name == ported) is not { } target) continue;
-
-                var info = new ModInfo($"{ported}.Meitou", Path.Combine(folder, read.Id + ".mod"), ModSource.Bundled) { PortOf = target };
-                if (!ports.TryGetValue(ported, out var list)) ports[ported] = list = [];
-
-                list.Add(info);
-            }
-            catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
-            {
-                Console.Error.WriteLine($"mods      bundled port {Path.GetFileName(folder)} skipped: {e.Message}");
-            }
-        }
-
-        return ports;
     }
 
     /// <summary>

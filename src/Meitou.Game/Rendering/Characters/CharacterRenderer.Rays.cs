@@ -95,7 +95,7 @@ internal sealed partial class CharacterRenderer
         model.Translation += shift;
         // The drawn level (the colour pass's rule): a surface's ray leaves the same triangles it drew, so its own body shadows it only where it really does.
         int level = !GeneratedLod ? FileLevel(part, f.FileLod) : GeneratedLevel(part, f.Lod * LodBias, depth: false);
-        uint flags = HiddenFlags(part, l.Asset), morphs = part.Morphed ? l.MorphBase : 0;
+        uint flags = HiddenFlags(part, l.Asset), morphs = part.Morphed ? l.Asset.MorphBase : 0;
         var groups = part.Mesh.Parts;
         for (int g = 0; g < groups.Count; g++)
             if (GroupLevel(groups[g], level) is int lv && groups[g].Count[lv] >= 3)

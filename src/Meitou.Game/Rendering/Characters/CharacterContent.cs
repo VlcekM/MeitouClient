@@ -1114,7 +1114,7 @@ internal sealed class CharacterContent : IDisposable
             BoundsCentre = body.Centre,
             BoundsRadius = body.Radius,
             PickBoxes = body.PickBoxes ?? [],
-            Morphed = asset.Morph is not null,
+            Morphed = asset.MorphBase != 0,
             ShadowDistances = body.ShadowDistances,
             ShadowFirst = body.ShadowFirst,
             IsBody = true,
@@ -1133,7 +1133,7 @@ internal sealed class CharacterContent : IDisposable
                 Material = WoundMaterial(c),
                 BoundsCentre = cap.Centre,
                 BoundsRadius = cap.Radius,
-                Morphed = asset.Morph is not null,
+                Morphed = asset.MorphBase != 0,
             });
         var partLimbs = LimbHideOf(c, rig);
         foreach (var part in c.Parts)

@@ -47,8 +47,6 @@ public sealed class ModContext
 
     public string Folder => Mod.Info.Folder;
 
-    /// <summary>For a bundled port of a data mod (<c>portOf</c> in the manifest): the folder of that data mod, where its own files (INI files, ...) are; else null.</summary>
-    public string? PortedFolder => Mod.Info.PortOf?.Folder;
     public CodeModManifest Manifest => Mod.Manifest;
 
     /// <summary>
@@ -199,17 +197,6 @@ public sealed class ModContext
         CheckOpen();
         ArgumentNullException.ThrowIfNull(view);
         Pending.HitFeeds.Add(new ModHitFeed(Id, view));
-    }
-
-    /// <summary>
-    /// A face controller (docs/face-shape-keys.md): asked every frame for each drawn character whose body mesh has shape keys, it sets their weights
-    /// for that frame. Presentation only; in registration order, a later controller's weights replace an earlier one's for the same key.
-    /// </summary>
-    public void AddFaceController(IFaceController controller)
-    {
-        CheckOpen();
-        ArgumentNullException.ThrowIfNull(controller);
-        Pending.FaceControllers.Add(new ModFaceController(Id, controller));
     }
 
     /// <summary>

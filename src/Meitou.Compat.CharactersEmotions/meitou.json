@@ -1,7 +1,0 @@
-{
-  "id": "CharactersEmotions.Meitou",
-  "apiVersion": 2,
-  "portOf": "CharactersEmotions",
-  "assemblies": ["Meitou.Compat.CharactersEmotions.dll"],
-  "entry": "Meitou.Compat.CharactersEmotions.CharactersEmotionsMod"
-}

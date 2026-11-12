@@ -4,9 +4,6 @@
 plugins (`RE_Kenshi.json`, `startPlugin`), offers no KenshiLib facade and plans no plugin source ports. A
 mod's ordinary data and assets still load through the normal readers; its DLLs are ignored.
 
-Exception by re-implementation: a plugin's documented behaviour may be ported to a native bundled code mod ([modding](../modding.md#ports-of-re_kenshi-plugin-mods);
-the first is [Characters Emotions](../compat-characters-emotions.md)). The plugin's DLL is still never loaded.
-
 The research behind it (2026-10-11) follows. External findings are **Observed** in upstream source or
 documentation, not Verified by running plugins. Links track upstream branches and may change.
 

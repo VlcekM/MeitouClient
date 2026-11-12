@@ -108,19 +108,4 @@
     </ItemGroup>
   </Target>
 
-  <!-- The bundled port of an RE_Kenshi plugin mod (docs/modding.md "Ports"), beside the game under compat/CharactersEmotions (ModHost.BundledPorts): built after the game, against its assemblies, since the mod API is in MeitouClient.dll. -->
-  <Target Name="BundledPort" AfterTargets="Build"
-          Inputs="@(BundledPortSource)" Outputs="$(TargetDir)compat/CharactersEmotions/Meitou.Compat.CharactersEmotions.dll">
-    <Exec Command="dotnet build &quot;../Meitou.Compat.CharactersEmotions/Meitou.Compat.CharactersEmotions.csproj&quot; -c $(Configuration) -p:GameBin=&quot;$(TargetDir.TrimEnd('\'))&quot; -p:NuGetAudit=false -o &quot;$(TargetDir)compat/CharactersEmotions&quot; -v q" />
-  </Target>
-  <Target Name="BundledPortPublish" AfterTargets="Publish">
-    <ItemGroup>
-      <BundledPortFile Include="$(TargetDir)compat/CharactersEmotions/*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(BundledPortFile)" DestinationFolder="$(PublishDir)compat/CharactersEmotions" />
-  </Target>
-  <ItemGroup>
-    <BundledPortSource Include="../Meitou.Compat.CharactersEmotions/*.cs;../Meitou.Compat.CharactersEmotions/*.csproj;../Meitou.Compat.CharactersEmotions/meitou.json;Mods/*.cs" />
-  </ItemGroup>
-
 </Project>

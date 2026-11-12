@@ -51,14 +51,6 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
 
-## Ports of RE_Kenshi plugin mods
-
-Meitou does not load a plugin's DLL ([rekenshi](formats/rekenshi.md)); for a plugin worth it, the game ships a native C# re-implementation as a bundled code mod.
-A folder `compat/<name>/` beside the executable (`ModHost.BundledPorts`) holds its `meitou.json` with `"portOf": "<data mod name>"` and its DLL, built by
-the repo's `src/Meitou.Compat.*` projects and copied by `Meitou.Game.csproj` (build and publish). The port loads, with no trust prompt (it ships with the game),
-only when the data mod it names is installed and enabled in `mods.cfg`, directly after that mod in the load order; its mod name is `<data mod>.Meitou`.
-`ModContext.PortedFolder` is the data mod's folder (INI files and the like). Ported: [Characters Emotions](compat-characters-emotions.md).
-
 ## Trust
 
 A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. Installing and enabling a code mod
@@ -139,9 +131,6 @@ holds refuses the second mod.
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.
-- **Faces:** `AddFaceController(IFaceController)`: once a frame, on the host's thread, for each drawn character whose body mesh has shape keys, the controller
-  sets shape-key weights that the renderer applies on top of the look's own (presentation only, no world access, no hash). API, renderer cost and limits:
-  [face-shape-keys](face-shape-keys.md). **Verified** by a scratch run (2026-11-07); not covered by `ModdingTests`.
 - **Interface:** `AddUi(IUiExtension)`: namespaced styles, controls, actions, overrides and slot contributions (`UiSlots`), registered
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal).
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets

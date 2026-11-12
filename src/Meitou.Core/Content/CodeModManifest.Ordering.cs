@@ -23,13 +23,6 @@ public sealed partial record CodeModManifest
     public CodeModVersionRange? GameVersion { get; init; }
 
     /// <summary>
-    /// <c>portOf</c>: the data mod (its <c>.mod</c> name, as <c>mods.cfg</c> lists it) this bundled code mod is the native port of: it loads, without a
-    /// trust prompt, only when that mod is enabled (docs/modding.md "Ports of RE_Kenshi plugin mods"). Read only from the game's own <c>compat</c>
-    /// folder.
-    /// </summary>
-    public string? PortOf { get; init; }
-
-    /// <summary>
     /// The keys used that an API 1 game would ignore, so they need <c>apiVersion</c> 2.
     /// </summary>
     public IEnumerable<string> Api2Keys()

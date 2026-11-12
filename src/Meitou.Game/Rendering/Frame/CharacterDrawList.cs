@@ -107,11 +107,6 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     /// head keeps the pose of the moment it was cut); <see cref="Poses"/> are then ignored.
     /// </summary>
     public long? FreezeFrom { get; init; }
-    /// <summary>
-    /// Shape-key weights to draw the face with on top of the appearance's own (docs/face-shape-keys.md); null or empty: the appearance's. The host keeps one object per
-    /// character and refills it every frame; the renderer rebuilds the character's morph only when the weights changed.
-    /// </summary>
-    public Meitou.Data.Characters.FaceWeights? Face { get; init; }
 }
 
 /// <summary>

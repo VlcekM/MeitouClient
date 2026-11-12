@@ -19,20 +19,7 @@ sealed class ModRegistrations
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
     public List<ModHitFeed> HitFeeds { get; } = [];
-    public List<ModFaceController> FaceControllers { get; } = [];
     public ModSettingsGroup? Settings { get; set; }
-}
-
-/// <summary>
-/// A mod's face controller (<see cref="ModContext.AddFaceController"/>); faulted once it threw.
-/// </summary>
-sealed class ModFaceController(string owner, IFaceController controller)
-{
-    public string Owner => owner;
-
-    public IFaceController Controller => controller;
-
-    public bool Faulted { get; set; }
 }
 
 /// <summary>
@@ -62,7 +49,6 @@ sealed class ModRegistry
     public List<IUiExtension> Ui { get; } = [];
     public List<ModDebugCommand> DebugCommands { get; } = [];
     public List<ModHitFeed> HitFeeds { get; } = [];
-    public List<ModFaceController> FaceControllers { get; } = [];
     public Dictionary<int, string> RecordTypes { get; } = [];
     public List<ModSettingsGroup> Settings { get; } = [];
 
@@ -97,7 +83,6 @@ sealed class ModRegistry
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
-        FaceControllers.AddRange(r.FaceControllers);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 
