@@ -273,14 +273,6 @@ public sealed class PostOptions
     public float HdrPeak;
     /// <summary>The <see cref="HdrPeak"/> for a display's peak and the picture's paper white, both in nits.</summary>
     public static float HdrPeakFor(float peakNits, float paperNits) => MathF.Pow(MathF.Max(peakNits / paperNits, 1), 1 / 2.2f);
-    /// <summary>The Meitou <c>motionblur</c> switch (docs/render-post.md "Motion blur"), off by default even in the Meitou look; needs a temporal upscaler's motion target.</summary>
-    public bool MotionBlur;
-    /// <summary>The shutter angle at <see cref="ShutterBaseRate"/> in degrees, 180 by default: the exposure is <see cref="ShutterSeconds"/>, whatever the frame rate.</summary>
-    public float MotionBlurShutter = 180;
-    public const float ShutterBaseRate = 24;
-    public float ShutterSeconds => MotionBlurShutter / 360 / ShutterBaseRate;
-    /// <summary>The longest blur either way of a pixel, as a share of the picture's height; also the tiles' size.</summary>
-    public const float MotionBlurMaxRadius = 0.04f;
     /// <summary>The Meitou <c>dof</c> switch (docs/render-post.md "Depth of field"), off by default even in the Meitou look.</summary>
     public bool DepthOfField;
     /// <summary>The lens's f-number where the shot does not set one (the Tab slider; <see cref="DefaultAperture"/> by default).</summary>
@@ -296,10 +288,6 @@ public sealed class PostOptions
     public bool CinematicView = true;
     /// <summary>Set for a frame that is no world (the loading sky): the camera effects leave it alone.</summary>
     public bool CameraEffectsHeld;
-    /// <summary>The time this frame's motion stands for when it is not the real one (a recording's fixed step); 0: the measured frame.</summary>
-    public float FrameSeconds;
-    /// <summary>The camera jumped this frame (a cut to a key): no blur across it. The chain clears it.</summary>
-    public bool CameraCut;
     /// <summary>Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the game's: lamps cast no shadows.</summary>
     public bool LampShadows;
     /// <summary>The most lamps a pixel traces (2, <c>--lamp-shadow-lamps</c>); read once, when the pass is made.</summary>
@@ -409,7 +397,7 @@ public sealed class PostOptions
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom; Ssr = other.Ssr;
         GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiCache = other.GiCache;
-        MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
+        CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
         LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
@@ -491,12 +479,11 @@ public sealed class PostOptions
         string grade = GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off";
         string nightGrade = NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off";
         string bloom = BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off";
-        string blur = MotionBlur ? MotionBlurShutter.ToString("0", CultureInfo.InvariantCulture) + " deg" : "off";
         string focus = DepthOfField ? "f/" + DofAperture.ToString("0.##", CultureInfo.InvariantCulture) : "off";
         string lamps = LampShadows ? $"{LampShadowLamps} lamps" : "off";
         return $"{Preset}: aa {aa}, heat haze {heatHaze}, ssao {ssao}, contact {(ContactShadows ? "on" : "off")}, reflections {(Ssr ? "on" : "off")}, " +
             $"traced sun {(TracedSun ? "on" : "off")}, shafts {shafts}, exposure x{Exposure:0.##}, tonemap {tonemap}{mix}, grade {grade}, night grade {nightGrade}, " +
-            $"bloom {bloom}, motion blur {blur}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
+            $"bloom {bloom}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
     }
 
     string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiCache ? "cache" : "" }.Where(p => p.Length > 0));

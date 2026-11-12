@@ -257,7 +257,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 "Shadows" or "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows"
                     or "Contact shadows" or WorldFrame.FifthCascadeSwitch => "Lighting",
                 "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky & weather",
-                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch or WorldFrame.MotionBlurSwitch
+                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
                     or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
                 "Skin" or "Character levels" or "Item icons" => "Characters",
                 _ => "World",
@@ -269,7 +269,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow"))
             return "Lighting";
         if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Motion blur") || S("Depth of field")) return "Colour";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Depth of field")) return "Colour";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
         return "World";

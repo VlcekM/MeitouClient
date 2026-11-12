@@ -116,9 +116,6 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// </summary>
     public Action? Moved { get; set; }
 
-    /// <summary>Called when the cinema jumps the camera to a key: a host's motion blur leaves that frame out.</summary>
-    public Action? Cut { get; set; }
-
     public bool Playing { get; private set; }
 
     /// <summary>
@@ -230,7 +227,6 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         k.Shot.Apply(camera());
         if (_followTime) setHour?.Invoke(k.Shot.Hour);
         Moved?.Invoke();
-        Cut?.Invoke();
         (_time, _selected) = (k.Time, k);
     }
 

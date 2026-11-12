@@ -480,7 +480,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
         _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = _giAlbedo = _giLow = _lampLost = _ssrHit = _ssrLow = _shaftInjected = _shaftLight = _shaftScatter = _shaftRaw = _shaftHistory = _softDepth = null;
         FreeBloom();
-        FreeMotionBlur();
         FreeDepthOfField();
         _adaptedValid = _historyValid = _shaftHistoryValid = _softDepthReady = false;
         _adaptedFrames = 0;
@@ -958,7 +957,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _postColour = _sceneColour!;
         if (Temporal) { _postColour = RunUpscale(); Stamp("upscale"); }
         else ActiveUpscaler = "off";
-        _postColour = RunDepthOfField(RunMotionBlur(_postColour));
+        _postColour = RunDepthOfField(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1585,7 +1584,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         bool reset = !_historyValid || !_previousValid || Vector3.Distance(_eyeNow, _previousEye) > 5000;
         float dt = (float)_frameClock.Elapsed.TotalSeconds;
         _frameClock.Restart();
-        (_motionFresh, _motionSeconds) = (!reset, dt);
         // post-merge: the motion, the upscalers' depth and the water's reactivity in one dispatch (the vendor upscalers take the last two; TAA only the motion target).
         // The depth image is made with TAA too (one more R32F store per pixel; the kernel has the value already): frame generation takes motion and depth whatever upscales.
         var external = ExternalFor(Options.Upscale.Kind);
@@ -2112,7 +2110,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeMerged();
         DisposeUpscaleExposure();
         DisposeBloom();
-        DisposeMotionBlur();
         DisposeDepthOfField();
         DisposeGtao();
         DisposeLampShadows();

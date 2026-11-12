@@ -42,9 +42,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new("Tone map and grade", "Tone map and grade", ["Tone map (0 = game)", "Hybrid tone map: ACES share", "Grading (0 = game)"]),
         new("Night grading", "Night grading", ["Night grading strength (0 = game)"]),
         new(WorldFrame.BloomSwitch, WorldFrame.BloomSwitch, [WorldFrame.BloomStrengthSlider]),
-        new("Camera effects", null, [WorldFrame.MotionBlurSwitch, WorldFrame.MotionBlurShutterSlider, WorldFrame.DepthOfFieldSwitch,
-            WorldFrame.DofApertureSlider, WorldFrame.CameraEffectsSwitch], "Camera effects",
-            "A film camera's motion blur and focus for the free and cinematic cameras."),
+        new("Camera effects", null, [WorldFrame.DepthOfFieldSwitch, WorldFrame.DofApertureSlider, WorldFrame.CameraEffectsSwitch], "Camera effects",
+            "A film camera's focus for the free and cinematic cameras."),
 
         // World
         new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",

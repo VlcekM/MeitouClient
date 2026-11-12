@@ -1,3 +1,4 @@
+using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Post;
@@ -5,13 +6,18 @@ namespace Meitou.Game.Rendering.Post;
 /// <summary>
 /// Meitou depth of field (the <c>dof</c> switch; docs/render-post.md "Depth of field"): a thin lens's circle of confusion from the camera's
 /// field of view, f-number and focus, then a
-/// half-size scatter-as-gather with a near and a far field, in linear light (<see cref="CameraEffectShaders"/>). After the upscaler and the
-/// motion blur, into its own target. No history.
+/// half-size scatter-as-gather with a near and a far field, in linear light (<see cref="CameraEffectShaders"/>). After the upscaler,
+/// into its own target. No history.
 /// Port of KenshiNative's <c>docs/features/dof-rewrite.md</c> without its sparkle; KenshiNative's lens is a slider's radius, this one's is the
 /// optics.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
+    /// <summary>Whether the camera effects may run on this frame: a whole view of a scene, in the cinematic cameras or everywhere by the
+    /// player's choice.</summary>
+    bool CameraEffectsLive => _haveScene && ViewWindow.Current.IsWhole && !Options.CameraEffectsHeld
+        && (Options.CinematicView || Options.CameraEffectsEverywhere);
+
     /// <summary>The thin lens in the camera's own terms.</summary>
     internal static class ThinLens
     {

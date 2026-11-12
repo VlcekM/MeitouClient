@@ -446,7 +446,6 @@ sealed class GameLoop(GameHost host)
         _cinema = new Cinema(() => host.Camera, () => (float)host.Session.Clock.HourOfDay, null, FullScreenOn, ToggleFullScreen,
             Cinema.GameFile, lensKeysAlways: host.Duel.IsDuel);   // the duel has no floors: PageUp/PageDown zoom the lens there
         _cinema.Moved = () => _cinemaHolds = true;
-        _cinema.Cut = () => host.WorldOptions.Post.CameraCut = true;
         // PageUp/PageDown zoom the lens and Home puts it back in these cameras; in the strategy camera PageUp/PageDown are the game's floor keys.
         _cinema.LensKeys = () => host.Session.Camera.IsFree || _cinemaHolds;
         _cinema.Load();
@@ -1144,9 +1143,8 @@ sealed class GameLoop(GameHost host)
         host.AgentWorld.ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
         if (!_cinemaHolds) host.ApplyCamera(host.Session.CameraAt());
         _cinema.Advance(_cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
-        // The camera effects (docs/render-post.md "Motion blur"): for these cameras, never over the title; a recording's motion is its fixed step.
+        // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
         host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
-        host.WorldOptions.Post.FrameSeconds = _cinema.Recording ? (float)_cinema.FrameTime(dt) : 0;
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
         host.Session.ViewEye = _cinemaHolds ? host.Camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
