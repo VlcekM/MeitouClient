@@ -427,7 +427,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
         else if (entry is { Segmented: true, Choice: { } sides })
         {
-            Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, "All Faithful", "All Meitou");
+            Segmented(R(860, y + (row - 22) / 2, 240, 22), sides.Current(), sides.Choose, [.. sides.Options()]);
         }
         else if (entry.Choice is { } choice)
         {
@@ -567,17 +567,23 @@ sealed class SettingsCanvas(SettingsMenu menu)
     /// A compact Faithful | Meitou switch: one frame with two halves, the chosen half (<paramref name="selected"/>: 0 Faithful, 1 Meitou, -1 neither)
     /// filled in its colour (the colours of the slider notches); a click on a half calls <paramref name="choose"/>.
     /// </summary>
-    internal void Segmented(UiRect at, int selected, Action<int> choose, string faithful = "Faithful", string meitou = "Meitou")
+    internal void Segmented(UiRect at, int selected, Action<int> choose, string faithful = "Faithful", string meitou = "Meitou") =>
+        Segmented(at, selected, choose, [faithful, meitou]);
+
+    /// <summary>
+    /// The same switch with any number of parts (Off | Faithful | Meitou, a technique's choices): the game's sides (Off, Faithful) in the Faithful
+    /// colour, the others in Meitou's.
+    /// </summary>
+    internal void Segmented(UiRect at, int selected, Action<int> choose, string[] names)
     {
         float line = MathF.Max(1, MathF.Round(menu.Scale));
         Rect(at, new(0.07f, 0.06f, 0.05f, 0.9f), menu.Viewport);
-        string[] names = [faithful, meitou];
-        Vector4[] inks = [FaithfulInk, Brass];
-        float half = MathF.Round(at.Width / 2);
-        for (int i = 0; i < 2; i++)
+        var inks = names.Select(n => n == "Off" || n.Contains("Faithful", StringComparison.Ordinal) ? FaithfulInk : Brass).ToArray();
+        float half = MathF.Round(at.Width / names.Length);
+        for (int i = 0; i < names.Length; i++)
         {
             int index = i;
-            var part = new UiRect(at.X + i * half, at.Y, i == 0 ? half : at.Width - half, at.Height);
+            var part = new UiRect(at.X + i * half, at.Y, i < names.Length - 1 ? half : at.Width - half * i, at.Height);
             bool hovered = part.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
             float hover = menu.Motion.Hover(names[i], hovered);
             if (selected == i) Rect(part, inks[i] with { W = 0.28f }, menu.Viewport);
@@ -593,7 +599,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
         Rect(at with { Y = at.Y + at.Height - line, Height = line }, edge, menu.Viewport);
         Rect(at with { Width = line }, edge, menu.Viewport);
         Rect(at with { X = at.X + at.Width - line, Width = line }, edge, menu.Viewport);
-        Rect(new(at.X + half, at.Y + 3 * menu.Scale, line, at.Height - 6 * menu.Scale), edge, menu.Viewport);
+        for (int i = 1; i < names.Length; i++) Rect(new(at.X + i * half, at.Y + 3 * menu.Scale, line, at.Height - 6 * menu.Scale), edge, menu.Viewport);
     }
 
     /// <summary>

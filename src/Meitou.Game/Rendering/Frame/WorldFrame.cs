@@ -938,8 +938,8 @@ static partial class WorldFrame
             toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
             toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
         }
-        if (g.Foliage is { } farGrass) toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v));
-        if (g.Surfaces is { } wetWorld) toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v));
+        if (g.Foliage is { } farGrass) toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v, Remaster: true, OnOff: true));
+        if (g.Surfaces is { } wetWorld) toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v, Remaster: true, OnOff: true, Optional: true));
         if (g.Characters is not null && g.Options is { } materials)
         {
             // The Advanced materials' parts; they act while it is on.
