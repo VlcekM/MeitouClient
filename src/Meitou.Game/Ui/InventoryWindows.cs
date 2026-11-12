@@ -531,14 +531,15 @@ sealed class InventoryWindows(PlayerInterface player)
     readonly record struct DropSpot(DropKind Kind, ItemOwner Window, string Section, int X, int Y, UiRect Area, UiRect? Clip, bool Shows);
 
     /// <summary>
-    /// The section widgets of an item screen and the sections they are (the trader, storage and bench grids are their window's <c>main</c>).
+    /// The section widgets of an item screen and the sections they are (the trader, storage and bench grids are their window's <c>main</c>); a
+    /// character window's include the mods' slots (<see cref="ModSlots"/>).
     /// </summary>
     static (string Widget, string Section)[] SectionsOf(string screen) => ScreenKind(screen) switch
     {
         "inventory" or "loot" =>
         [
             ("backpack_attach", "backpack_attach"), ("back", "back"), ("hip", "hip"), ("shirt", "shirt"), ("head", "head"), ("legs", "legs"),
-            ("boots", "boots"), ("armour", "armour"), ("belt", "belt"), ("main", "main"),
+            ("boots", "boots"), ("armour", "armour"), ("belt", "belt"), .. ModSlots.All.Select(m => (m.Section, m.Section)), ("main", "main"),
         ],
         "bag" or "loot-bag" => [("backpack_content", "backpack_content")],
         "limbs" =>

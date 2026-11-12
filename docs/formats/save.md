@@ -106,6 +106,10 @@ include mission/owned/campaign/tags/inventory-refresh-time/slave. Optional town/
 limbs keys vary. Test record keys against surveyed saves, retain extension fields, and preserve
 editor-authored files. Original acceptance of a save synthesized from scratch is unverified.
 
+An item worn in a code mod's [equipment slot](../modding.md#registration-surface) is saved with the slot's name as its `section`. Loaded
+without that mod, a character's item in a section it has no slot for is auto-added to its grids (`SavedKit.Fits`); how the original game
+loads such an item is **Unknown**.
+
 ### Where saves live
 
 | Setting / path | Meaning |

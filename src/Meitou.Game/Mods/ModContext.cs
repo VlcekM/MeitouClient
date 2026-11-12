@@ -3,6 +3,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Modding;
@@ -200,6 +201,21 @@ public sealed class ModContext
         if (Enum.IsDefined((Data.Fcs.FcsRecordType)type)) throw new ArgumentException($"Record type {type} is a vanilla type.", nameof(type));
         _registry.CheckFree(ModCodeKind.RecordType, type, Pending, Id);
         Pending.RecordTypes[type] = name;
+    }
+
+    /// <summary>
+    /// An equipment slot (docs/modding.md "Equipment slots"): the inventory section <see cref="ModSlot.Section"/> takes the ARMOUR
+    /// and ITEM records whose FCS <c>slot</c> is <see cref="ModSlot.FcsSlot"/>, and the inventory window shows it at its place.
+    /// A section or <c>slot</c> of the game or of another slot refuses it.
+    /// </summary>
+    public void AddEquipmentSlot(ModSlot slot)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(slot);
+        if (ModSlots.Refusal(slot) is { } refusal) throw new ArgumentException(refusal, nameof(slot));
+        if (Pending.Slots.Any(s => s.Section == slot.Section || s.FcsSlot == slot.FcsSlot))
+            throw new ArgumentException($"The mod already has a slot with section '{slot.Section}' or FCS slot {slot.FcsSlot}.", nameof(slot));
+        Pending.Slots.Add(slot);
     }
 
     /// <summary>

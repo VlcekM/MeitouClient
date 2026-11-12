@@ -14,8 +14,8 @@ namespace Meitou.Simulation.Saving;
 public static class SavedKit
 {
     /// <summary>
-    /// The sections a worn ARMOUR sits in (the save's names; docs/formats/save.md). <c>belt</c> takes the ARMOUR with <c>slot</c> 14 (mods put masks,
-    /// goggles and robes there).
+    /// The sections a worn ARMOUR sits in (the save's names; docs/formats/save.md), with the mods' slots (<see cref="ModSlots"/>). <c>belt</c> takes
+    /// the ARMOUR with <c>slot</c> 14 (mods put masks, goggles and robes there).
     /// </summary>
     static readonly HashSet<string> Worn = new(StringComparer.Ordinal) { "head", "shirt", "armour", "legs", "boots", "belt" };
 
@@ -35,7 +35,7 @@ public static class SavedKit
         }
 
         var inventory = new Inventory(width, height);
-        Fill(inventory, items, factory, notes, "main");
+        Fill(inventory, items, factory, notes, "main", owner is not null);
         return inventory;
     }
 
@@ -46,7 +46,7 @@ public static class SavedKit
     /// <see cref="Inventory.AddTo"/>), and one that finds no room is lost. The rejected items are auto-added after the rest are placed (the bag is
     /// then known), an engine choice.
     /// </summary>
-    static void Fill(Inventory inventory, IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes, string gridSection)
+    static void Fill(Inventory inventory, IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes, string gridSection, bool character)
     {
         List<ItemInstance>? rejected = null;
 
@@ -59,9 +59,9 @@ public static class SavedKit
             }
 
             if (s.Contents is { } contents && item.Contents is { } bag)
-                Fill(bag, contents, factory, notes, "backpack_content");
+                Fill(bag, contents, factory, notes, "backpack_content", character);
 
-            if (Fits(inventory, item)) inventory.Items.Add(item);
+            if (Fits(inventory, item, character)) inventory.Items.Add(item);
             else (rejected ??= []).Add(item);
         }
 
@@ -78,9 +78,11 @@ public static class SavedKit
     }
 
     /// <summary>
-    /// Whether a loaded item may take its saved place: inside its grid or slot and over no item placed there.
+    /// Whether a loaded item may take its saved place: inside its grid or slot and over no item placed there. In a
+    /// <paramref name="character"/>'s inventory a section it has no slot for (a mod's slot whose mod is gone, docs/formats/save.md) takes nothing,
+    /// so its item is auto-added; a machine's storage keeps its saved sections.
     /// </summary>
-    static bool Fits(Inventory inventory, ItemInstance item)
+    static bool Fits(Inventory inventory, ItemInstance item, bool character)
     {
         var (w, h) = item.Section is "main" or "backpack_content" ? (inventory.Width, inventory.Height) : InventoryCommands.SectionSize(item.Section);
 
@@ -93,7 +95,7 @@ public static class SavedKit
         if (InventoryCommands.IsEquipmentSection(item.Section) || InventoryCommands.IsLimbSection(item.Section))
             return !inventory.Items.Any(i => i.Section == item.Section);
 
-        return true;
+        return !character;
     }
 
     /// <summary>
@@ -352,11 +354,11 @@ public static class SavedKit
 
             GameRecord? Find(string id) => id.Length > 0 ? db.Find(id) : null;
 
-            if (record.Type == FcsRecordType.Armour && Worn.Contains(s.Section))
+            if (record.Type == FcsRecordType.Armour && (Worn.Contains(s.Section) || ModSlots.Of(s.Section) is not null))
                 loadout.Clothing.Add(new LoadoutItem(record) { Quality = (int)s.Quality, Material = Find(s.MaterialId), Colour = Find(s.ColourId) });
             else if (s.Section == "backpack_attach")
                 loadout.Backpack = new LoadoutItem(record) { Quality = (int)s.Quality, Colour = Find(s.ColourId) };
-            else if (s.Section == "belt" && record.Type == FcsRecordType.Item)
+            else if ((s.Section == "belt" || ModSlots.Of(s.Section) is not null) && record.Type == FcsRecordType.Item)
                 loadout.Carried.Add(new LoadoutItem(record) { Colour = Find(s.ColourId) });
             else if (s.Section is "hip" or "back" && record.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
             {

@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Items;
 
 namespace Meitou.Modding;
 
@@ -45,6 +46,10 @@ sealed class ModRegistrations
     /// The record types' names by type number.
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
+    /// <summary>
+    /// The equipment slots, in registration order.
+    /// </summary>
+    public List<ModSlot> Slots { get; } = [];
     /// <summary>
     /// The player interface extensions.
     /// </summary>
@@ -157,6 +162,7 @@ sealed class ModRegistry
         foreach (var (code, handler) in r.Effects)
             Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
+        foreach (var slot in r.Slots) ModSlots.Add(slot);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
