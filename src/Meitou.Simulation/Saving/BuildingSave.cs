@@ -246,6 +246,7 @@ public static class BuildingSave
         var town = byInstance.GetValueOrDefault(instance.Id) ?? world.Buildings.AddTown(instance.Position, playerIndex);
         byInstance[instance.Id] = town;
         world.Buildings.ImportedTownInstances.Add(instance.Id);
+        if (instance.Target != PlayerTown.Template) town.SaveTemplate = instance.Target;
         ApplyTownStates(town, instance.Id, instance.Position, states);
     }
 
@@ -335,7 +336,7 @@ public static class BuildingSave
             var town = byInstance.GetValueOrDefault(instanceId) ?? world.Buildings.AddTown(site.Position, playerIndex);
             byInstance[instanceId] = town;
             world.Buildings.ImportedTownInstances.Add(instanceId);
-            town.IsLevelTown = true;
+            town.SaveTemplate = site.Record.Id;
             ApplyTownStates(town, instanceId, site.Position, states);
         }
     }
@@ -621,25 +622,16 @@ public static class BuildingSave
         int container = Math.Max(world.Buildings.TownContainerFloor, game.Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C).DefaultIfEmpty(0).Max());
         foreach (var town in towns)
         {
-            FcsInstance? instance = null;
-            string id;
-            if (town.IsLevelTown && town.SaveInstance is { } levelId) id = levelId;
-            else
+            list ??= game.TownInstanceList ?? AddTownInstanceList(game, quick);
+            var instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
+            if (instance is null)
             {
-                list ??= game.TownInstanceList ?? AddTownInstanceList(game, quick);
-                instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
-                if (instance is null)
-                {
-                    instance = new FcsInstance { Id = town.SaveInstance ?? QuickId(NextQuick(quick)) };
-                    list.Instances.Add(instance);
-                }
-
-                id = instance.Id;
+                instance = new FcsInstance { Id = town.SaveInstance ?? QuickId(NextQuick(quick)) };
+                list.Instances.Add(instance);
             }
 
-            var states = instance is null
-                ? game.Towns.Where(saved => saved.Instance == id && !saved.IsNest).Select(saved => saved.Record).ToList()
-                : TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList();
+            string id = instance.Id;
+            var states = TownStates(instance, byId, game).Where(state => !state.Bools.GetValueOrDefault("is nest")).ToList();
             var state = states.FirstOrDefault();
             bool fresh = state is null;
             if (state is null)
@@ -648,22 +640,19 @@ public static class BuildingSave
                 state = new FcsRecord { Type = (int)FcsRecordType.GamestateTown, Id = n, StringId = id + TownStateSuffix };
 
                 // With the other town states, before the list (the original's order).
-                int at = list is null ? -1 : quick.Records.IndexOf(list);
+                int at = quick.Records.IndexOf(list);
                 quick.Records.Insert(at < 0 ? quick.Records.Count : at, state);
                 byId[state.StringId] = state;
                 game.Towns.Add(new SaveTown(state));
                 states.Add(state);
             }
 
-            // A level town is saved only by its full runtime state; the level placement itself is not a dynamic instance (docs/formats/save.md).
-            if (instance is not null)
-            {
-                instance.Target = PlayerTown.Template;
-                instance.Position = town.Position;
-                instance.Rotation = new Quaternion(0, 0, 0, 0);
-                instance.States.Clear();
-                instance.States.AddRange(states.Select(linked => linked.StringId));
-            }
+            // Every player town gets an entry, a level town too (the writer walks the player list, FUN_14092a6c0), with the TOWN it is made from.
+            instance.Target = town.SaveTemplate ?? PlayerTown.Template;
+            instance.Position = town.Position;
+            instance.Rotation = new Quaternion(0, 0, 0, 0);
+            instance.States.Clear();
+            instance.States.AddRange(states.Select(linked => linked.StringId));
 
             var hand = town.SaveHandle ?? (Hand.Read(state, "hand") is { IsNull: false } h
                 ? h

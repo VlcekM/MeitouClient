@@ -364,12 +364,13 @@ public class PlayerTownImportTests
     }
 
     /// <summary>
-    /// A player outpost imported from a level town is written back through its runtime state only, not as a dynamic placement with the same id.
+    /// A player outpost imported from a level town is written as its full runtime state and as a town-list entry naming its own TOWN, as the
+    /// original's writer does for every player town, and the pair reloads as one outpost.
     /// </summary>
     [Fact]
-    public void A_level_town_outpost_is_written_without_a_dynamic_instance()
+    public void A_level_town_outpost_is_written_with_its_state_and_a_town_list_entry()
     {
-        // Catches a level placement and a dynamic instance with one id both instantiating after reload.
+        // Catches a player-owned level town missing from the instance list the original writes for every player town.
         var db = SyntheticTown.Database();
         var data = PopulationData.Create(db, [new TownPlacement("level-outpost", "30-t", SyntheticTown.Centre, null)]);
         var builder = new SaveBuilder(7);
@@ -380,12 +381,19 @@ public class PlayerTownImportTests
 
         BuildingSave.Write(builder.Game, world, Player);
 
-        Assert.True(builder.Game.TownInstanceList is null || builder.Game.TownInstanceList.Instances.All(i => i.Id != "level-outpost"));
+        var entry = Assert.Single(builder.Game.TownInstanceList!.Instances, i => i.Id == "level-outpost");
+        Assert.Equal("30-t", entry.Target);
+        Assert.Equal(SyntheticTown.Centre, entry.Position);
+        Assert.Equal([state.Record.StringId], entry.States);
         Assert.Equal("Renamed", state.Record.Strings["name"]);
         using var reloaded = World();
         BuildingSave.Read(builder.Game, reloaded, db, Player, 7, data);
         var town = Assert.Single(reloaded.Buildings.Towns);
         Assert.Equal(("Renamed", 1900f), (town.Name, town.Override));
+
+        BuildingSave.Write(builder.Game, reloaded, Player);
+
+        Assert.Equal("30-t", Assert.Single(builder.Game.TownInstanceList.Instances, i => i.Id == "level-outpost").Target);
     }
 
     /// <summary>

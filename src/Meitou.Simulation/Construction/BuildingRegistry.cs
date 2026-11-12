@@ -249,9 +249,10 @@ public sealed class PlayerTown
     /// </summary>
     public string? SaveInstance { get; set; }
     /// <summary>
-    /// Whether it was imported from a level town placement: saved by its runtime state alone, with no dynamic town-list entry; not hashed.
+    /// The TOWN record its town-list entry names when that is not <see cref="Template"/> (a player-owned level town keeps its placement's record);
+    /// null: <see cref="Template"/>. Bookkeeping for <c>Saving.BuildingSave</c>, not hashed.
     /// </summary>
-    public bool IsLevelTown { get; set; }
+    public string? SaveTemplate { get; set; }
     /// <summary>
     /// The save's town handle <c>hand*</c> (null until a save has named it); not hashed.
     /// </summary>
