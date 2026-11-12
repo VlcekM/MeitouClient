@@ -346,8 +346,10 @@ height and 24. 10 world units are a metre (see "Fog" above). Radius at infinity 
 So at the default lens a far focus is nearly sharp, as a real lens would be: the blur asks for a long lens, a near focus or a wide aperture (`Depth of field aperture`, f/0.25 to
 f/22, 1 by default; below about f/1 no real lens goes).
 
-Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [viewer](viewer.md#cinematic-camera)), else the camera target's distance (the free camera's is the
-strategy boom it left) and the slider. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
+Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [viewer](viewer.md#cinematic-camera)), else the autofocus and the slider. Autofocus
+(`CameraEffectShaders.DofFocus`, `PostOptions.LensAutoFocus`): a one-texel target holds the focus distance, the nearest surface among 25 taps in a spot at the picture's centre
+(3 % of its height each way), eased from the last frame's in log distance over 0.15 s (snapped after half a second without a frame); the prepare and composite passes
+compute the lens from it. On sky alone it falls back to the camera target's distance. The target's distance alone focused behind a close face (the head's bone), **Observed**. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
 The depth is jittered: the composite shifts its tap by the jitter, and an edge may still shimmer a render pixel. Look and cost **Unknown** (not run on a GPU).
 
 ## SMAA

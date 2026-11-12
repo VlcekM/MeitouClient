@@ -803,6 +803,7 @@ static partial class WorldFrame
         post.SetCamera(f.Eye, f.View, camera.FieldOfView, f.Aspect);
         post.BeginScene(near, far, camera.FieldOfView, f.Aspect);
         post.Options.LensFocus = camera.FocusDistance ?? camera.Distance;
+        post.Options.LensAutoFocus = camera.FocusDistance is null;
         post.Options.LensAperture = camera.Aperture ?? post.Options.DofAperture;
         f.Gpu.Terrain.BeginFrame();
 

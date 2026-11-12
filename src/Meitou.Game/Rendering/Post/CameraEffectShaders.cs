@@ -17,15 +17,57 @@ static class CameraEffectShaders
         uniform sampler2D uDepth;
         uniform vec2 uPlanes, uJitterUv;
         uniform vec3 uLens;    // the CoC at infinity, the focus distance, the largest CoC
+        uniform sampler2D uFocus;   // the autofocus (DofFocus): one texel, the focus distance
+        uniform vec3 uAuto;         // autofocus: x the CoC at infinity times (the focus in mm less the focal length), y the focal length in mm, z 1 on
         """ + DepthConvention.Glsl + """
+
+        // The lens now: x the CoC at infinity, y the focus distance (the autofocus's when it is on, ThinLens.InfinityCoc's rule).
+        vec2 dofLens()
+        {
+            if (uAuto.z < 0.5) return uLens.xy;
+            float s = texelFetch(uFocus, ivec2(0), 0).r;
+            return vec2(uAuto.x / (max(s * 100.0, uAuto.y + 1.0) - uAuto.y), s);
+        }
 
         float dofCoc(float d)
         {
-            if (depthIsSky(d)) return min(uLens.x, uLens.z);
+            vec2 lens = dofLens();
+            if (depthIsSky(d)) return min(lens.x, uLens.z);
             float z = depthViewZ(d, uPlanes);
-            return clamp(uLens.x * (z - uLens.y) / z, -uLens.z, uLens.z);
+            return clamp(lens.x * (z - lens.y) / z, -uLens.z, uLens.z);
         }
 
+        """;
+
+    /// <summary>
+    /// The autofocus (docs/render-post.md "Depth of field"), one texel: the nearest surface in a small spot at the picture's centre, eased from
+    /// the last frame's focus in log distance (a subject crossing the centre pulls the focus over, it does not snap); the fallback where the
+    /// spot shows only sky.
+    /// </summary>
+    public const string DofFocus = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uDepth;
+        uniform sampler2D uPrevious;
+        uniform vec2 uPlanes, uJitterUv;
+        uniform vec4 uSpot;   // x the ease this frame (1 snaps), y the fallback distance, z the spot's half height as a share of the picture's, w the picture's aspect
+        """ + DepthConvention.Glsl + """
+        void main()
+        {
+            float nearest = 1.0e9;
+            for (int y = -2; y <= 2; y++)
+                for (int x = -2; x <= 2; x++)
+                {
+                    vec2 uv = vec2(0.5) + vec2(float(x) / uSpot.w, float(y)) * 0.5 * uSpot.z;
+                    float d = textureLod(uDepth, uv + uJitterUv, 0.0).r;
+                    if (!depthIsSky(d)) nearest = min(nearest, depthViewZ(d, uPlanes));
+                }
+            float target = nearest < 1.0e8 ? nearest : uSpot.y;
+            float previous = texelFetch(uPrevious, ivec2(0), 0).r;
+            float focus = uSpot.x >= 1.0 || !(previous > 0.0) ? target : exp(mix(log(previous), log(target), uSpot.x));
+            fragColour = vec4(focus, 0.0, 0.0, 1.0);
+        }
         """;
 
     /// <summary>The gathers' rings: ring k at R k / rings holds 8 k taps, three half-size pixels apart up to R = 12, turned per pixel by static

@@ -45,13 +45,57 @@ public sealed unsafe partial class PostProcess
     /// <summary>What the two passes that compute a CoC share: the depth, its planes and jitter, the lens.</summary>
     abstract class DofLensPass : FullscreenProgram
     {
-        public readonly SamplerSlot Scene, Depth;
-        public readonly UniformHandle Planes, JitterUv, Lens;
+        public readonly SamplerSlot Scene, Depth, Focus;
+        public readonly UniformHandle Planes, JitterUv, Lens, Auto;
         protected DofLensPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
-            (Scene, Depth) = (P.Sampler("uScene"), P.Sampler("uDepth"));
-            (Planes, JitterUv, Lens) = (P.Uniform("uPlanes"), P.Uniform("uJitterUv"), P.Uniform("uLens"));
+            (Scene, Depth, Focus) = (P.Sampler("uScene"), P.Sampler("uDepth"), P.Sampler("uFocus"));
+            (Planes, JitterUv, Lens, Auto) = (P.Uniform("uPlanes"), P.Uniform("uJitterUv"), P.Uniform("uLens"), P.Uniform("uAuto"));
         }
+    }
+
+    /// <summary>The autofocus's one-texel pass (<see cref="CameraEffectShaders.DofFocus"/>).</summary>
+    sealed class DofFocusPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Depth, Previous;
+        public readonly UniformHandle Planes, JitterUv, Spot;
+        public DofFocusPass(GpuContext gpu) : base(gpu, CameraEffectShaders.DofFocus, "post dof focus")
+        {
+            (Depth, Previous) = (P.Sampler("uDepth"), P.Sampler("uPrevious"));
+            (Planes, JitterUv, Spot) = (P.Uniform("uPlanes"), P.Uniform("uJitterUv"), P.Uniform("uSpot"));
+        }
+    }
+
+    DofFocusPass? _dofFocusPass;
+    /// <summary>The autofocus's two texels (this frame's and the last's, by turns), whether the last holds a focus, and the clock it eases by.</summary>
+    readonly Target2D?[] _dofFocus = new Target2D?[2];
+    int _dofFocusTurn;
+    bool _dofFocusHeld;
+    readonly System.Diagnostics.Stopwatch _dofFocusClock = new();
+    /// <summary>The autofocus's spot (its half height as a share of the picture's) and the time its focus takes to cover most of a change.</summary>
+    const float DofFocusSpot = 0.03f, DofFocusSeconds = 0.15f;
+
+    /// <summary>
+    /// This frame's autofocus texel: the nearest surface at the picture's centre, eased from the last frame's (snapped when the last is older
+    /// than half a second: the effect was off, or the view was another).
+    /// </summary>
+    Target2D FocusNow(Target2D scene)
+    {
+        float dt = _dofFocusClock.IsRunning ? (float)_dofFocusClock.Elapsed.TotalSeconds : float.MaxValue;
+        _dofFocusClock.Restart();
+        bool snap = !_dofFocusHeld || dt > 0.5f;
+        var previous = _dofFocus[_dofFocusTurn]!;
+        _dofFocusTurn ^= 1;
+        var now = _dofFocus[_dofFocusTurn]!;
+        var pass = _dofFocusPass ??= new DofFocusPass(Gpu);
+        Bind(pass.P, pass.Depth, _sceneDepth);
+        Bind(pass.P, pass.Previous, previous);
+        pass.P.Set(pass.Planes, _planes.X, _planes.Y);
+        pass.P.Set(pass.JitterUv, JitterPixels.X / _width, JitterPixels.Y / _height);
+        pass.P.Set(pass.Spot, snap ? 1f : 1 - MathF.Exp(-dt / DofFocusSeconds), Options.LensFocus, DofFocusSpot, scene.Width / (float)Math.Max(scene.Height, 1));
+        Draw(pass.P, now);
+        _dofFocusHeld = true;
+        return now;
     }
 
     sealed class DofPreparePass(GpuContext gpu) : DofLensPass(gpu, CameraEffectShaders.DofPrepare, "post dof prepare");
@@ -108,6 +152,8 @@ public sealed unsafe partial class PostProcess
         // Released after the frames in flight.
         foreach (var t in (ReadOnlySpan<Target2D?>)[_dofPrepared, _dofTiles, _dofDilated, _dofFarField, _dofNearField, _dofOutput]) t?.Texture.Dispose();
         _dofPrepared = _dofTiles = _dofDilated = _dofFarField = _dofNearField = _dofOutput = null;
+        foreach (var t in _dofFocus) t?.Texture.Dispose();
+        (_dofFocus[0], _dofFocus[1], _dofFocusHeld) = (null, null, false);
     }
 
     /// <summary>The targets for a picture of this size: half size RGBA16F for linear light above 1, the near CoC's tiles, the output as the
@@ -125,10 +171,15 @@ public sealed unsafe partial class PostProcess
         _dofFarField = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof far");
         _dofNearField = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof near");
         _dofOutput = Make(batch, scene.Width, scene.Height, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post dof");
+        for (int i = 0; i < 2; i++) _dofFocus[i] = Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post dof focus");
     }
 
-    void SetLens(DofLensPass p, Target2D scene, float maxCoc)
+    void SetLens(DofLensPass p, Target2D scene, float maxCoc, Target2D focus)
     {
+        Bind(p.P, p.Focus, focus);
+        // The autofocus's lens in the shader: ThinLens.InfinityCoc with the focus left to the texel.
+        float focal = ThinLens.FocalLength(_fovNow);
+        p.P.Set(p.Auto, focal * focal / MathF.Max(Options.LensAperture, 0.01f) / ThinLens.SensorHeight * scene.Height * 0.25f, focal, Options.LensAutoFocus ? 1f : 0f);
         Bind(p.P, p.Scene, scene);
         Bind(p.P, p.Depth, _sceneDepth);
         p.P.Set(p.Planes, _planes.X, _planes.Y);
@@ -170,14 +221,15 @@ public sealed unsafe partial class PostProcess
         EnsureDepthOfField(scene);
         float maxCoc = MathF.Min(MathF.Max(scene.Height * PostOptions.DofMaxCocShare, 2), PostOptions.DofMaxCocPixels);
 
+        var focus = FocusNow(scene);
         var prepare = _dofPrepare ??= new DofPreparePass(Gpu);
-        SetLens(prepare, scene, maxCoc);
+        SetLens(prepare, scene, maxCoc, focus);
         Draw(prepare.P, _dofPrepared!);
         DofNearTiles(maxCoc);
         DofFields();
 
         var composite = _dofComposite ??= new DofCompositePass(Gpu);
-        SetLens(composite, scene, maxCoc);
+        SetLens(composite, scene, maxCoc, focus);
         Bind(composite.P, composite.FarField, _dofFarField);
         Bind(composite.P, composite.NearField, _dofNearField);
         Draw(composite.P, _dofOutput!);
@@ -187,6 +239,6 @@ public sealed unsafe partial class PostProcess
 
     void DisposeDepthOfField()
     {
-        foreach (var p in new FullscreenProgram?[] { _dofPrepare, _dofTile, _dofDilate, _dofFar, _dofNear, _dofComposite }) p?.P.Dispose();
+        foreach (var p in new FullscreenProgram?[] { _dofPrepare, _dofTile, _dofDilate, _dofFar, _dofNear, _dofComposite, _dofFocusPass }) p?.P.Dispose();
     }
 }

@@ -282,6 +282,11 @@ public sealed class PostOptions
     public const float DofMaxCocShare = 0.015f, DofMaxCocPixels = 24;
     /// <summary>The focus distance (world units) and f-number of the frame's camera, set by the world frame.</summary>
     public float LensFocus = 1000, LensAperture = DefaultAperture;
+    /// <summary>
+    /// The lens focuses by itself on what the picture's centre shows (docs/render-post.md "Depth of field"): set per frame, while no cinema key
+    /// names a focus. <see cref="LensFocus"/> is then what it falls back to on the sky.
+    /// </summary>
+    public bool LensAutoFocus;
     /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
     public bool CameraEffectsEverywhere;
     /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>
