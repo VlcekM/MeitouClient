@@ -31,6 +31,11 @@ public sealed partial class ProductionSystem
     /// Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.
     /// </summary>
     readonly Dictionary<int, TownPower> _townPower = [];
+    /// <summary>
+    /// The towns of the level data (negative grid keys) whose machines this tick have no generator among them: their supply is not modelled, so
+    /// they count as powered (<see cref="PowerTick"/>). Not saved.
+    /// </summary>
+    readonly HashSet<int> _assumedSupply = [];
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -174,6 +179,7 @@ public sealed partial class ProductionSystem
             grid.Add(m);
         }
 
+        AssumeNpcSupply();
         ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
         {
@@ -201,6 +207,30 @@ public sealed partial class ProductionSystem
                 m.GridCharging = grid.Charging > 0;
                 m.GridDraining = grid.Draining > 0;
             }
+        }
+    }
+
+    /// <summary>
+    /// A machine that resolves to a town of the level data (<see cref="PowerTown"/>, a negative key) whose grid holds no generator is fully powered
+    /// and takes no part in the sharing (engine choice, original <b>Unknown</b>: whether an NPC town's frame has generation of its own is not
+    /// established, and the earlier shared town-0 grid never left such a machine without power on a map with any generator; the NPC towns' own
+    /// generators are not modelled). A generator among them (one the player built there) makes the grid an ordinary one.
+    /// </summary>
+    void AssumeNpcSupply()
+    {
+        _assumedSupply.Clear();
+        foreach (var (town, grid) in _grids)
+        {
+            if (town >= 0 || grid.Any(m => m.Data.IsGenerator)) continue;
+            _assumedSupply.Add(town);
+            foreach (var m in grid) m.Power = 1;
+        }
+
+        foreach (var town in _assumedSupply)
+        {
+            _grids.Remove(town);
+            _townPower.Remove(town);
+            _townSupply.Remove(town);
         }
     }
 
@@ -290,7 +320,7 @@ public sealed partial class ProductionSystem
     {
         if (m.Data.IsGenerator || Rated(world, m) == 0) return true;
         if (!m.PowerOn) return false;
-        if (!_townSupply.TryGetValue(town, out var supply)) return true;
+        if (_assumedSupply.Contains(town) || !_townSupply.TryGetValue(town, out var supply)) return true;
         return supply.Generators || (m.GetsBattery && _batteryMode.GetValueOrDefault(town) && supply.Batteries);
     }
 

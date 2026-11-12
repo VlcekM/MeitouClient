@@ -662,7 +662,8 @@ public class ProductionTests
 
     /// <summary>
     /// A machine without a town joins the frame of the nearest town of the level data when that is nearer than any player town (a bought house in
-    /// an NPC town): a generator beside that town powers it, one beside a far player town does not.
+    /// an NPC town): a generator beside that town powers it, one beside a far player town does not feed it; with no generator in that town's grid
+    /// the machine counts as powered (engine choice, the NPC town's own supply is not modelled), so it never loses power to the town grid.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -684,7 +685,8 @@ public class ProductionTests
         rig.World.RunTicks(6);   // the frames run one town per tick
 
         Assert.Equal(generatorBesideNpcTown, rig.Machine(1).Granted > 0);
-        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).HasPower);
+        Assert.True(rig.Machine(1).HasPower);
+        Assert.Equal(1, rig.Machine(1).Power);
     }
 
     /// <summary>
