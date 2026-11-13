@@ -445,6 +445,11 @@ public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> D
     /// </summary>
     public long? SalePrice { get; init; }
     /// <summary>
+    /// The <c>public day</c> the house setup of its residents' template wrote over the building's flag (<see cref="FixtureRegistry.PublicDayOf"/>;
+    /// null: no setup ran, the level state's flag stands).
+    /// </summary>
+    public bool? ResidentsPublic { get; init; }
+    /// <summary>
     /// The selected bed's own panel data (null: no bed selected).
     /// </summary>
     public BedDetail? Bed { get; init; }

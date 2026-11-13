@@ -361,8 +361,11 @@ public sealed partial class FixtureRegistry
             .Select(f
                     => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0,
                             f.DoorBroken, f.RecordId, f.WantsLock)).ToArray();
-        return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction),
-                PublicOf(instance)) { SalePrice = SalePrice(instance, faction) };
+        return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction), PublicOf(instance))
+        {
+            SalePrice = SalePrice(instance, faction),
+            ResidentsPublic = PublicDayOf(instance),
+        };
     }
 
     #endregion

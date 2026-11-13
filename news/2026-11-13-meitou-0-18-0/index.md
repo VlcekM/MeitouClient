@@ -33,6 +33,7 @@ Thanks to everyone sending in saves 🙏
 - Eaten limbs no longer leave a severed limb item
 - Saves with characters from a removed mod load them as Exiles, as the original does
 - The Slaves start keeps its escaped slaves, and new player slaves get their Obedient Slave job
+- Private homes no longer read "Open to public: Public", so you know when the residents will tell you to leave
 - Trading with your own squad member no longer closes the window
 - Fitted prosthetic limbs can be taken from loot windows
 - The sand at the Watchtower's foot no longer counts as indoors, and windmills no longer sink when placed

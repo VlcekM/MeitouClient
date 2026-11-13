@@ -20,6 +20,7 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Eaten limbs leave no severed limb item (#564)
 - Saves: a character from a removed mod loads as an Exile, as the original's (#577)
 - The Slaves start keeps its escaped slaves, and new player slaves get the Obedient Slave job; Rebirth's hunger and escapes match the original (#515)
+- A town building's Open to public line reads the flag its residents set, so private homes no longer show Public
 - Trading with your own squad member no longer closes the window (#511); a race word in a trader's line no longer switches the speaker (#567)
 - Town furniture and camp buildings are selected with a left click, and selected furniture shows its town (#512)
 - Fitted prosthetic limbs can be taken from loot windows (#554); dismissing a character onto the squad panel works again (#556)

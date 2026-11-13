@@ -531,9 +531,9 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour, Action: "meitou:building-public", ButtonWidth: 0.3f));
         }
-        else if (!mine && (focus.PublicDay || focus.PublicNight))
+        else if (!mine && (PublicDayOf(focus, detail) || focus.PublicNight))
         {
-            bool open = player.Session.Clock.IsDaytime ? focus.PublicDay : focus.PublicNight;
+            bool open = player.Session.Clock.IsDaytime ? PublicDayOf(focus, detail) : focus.PublicNight;
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
         }
@@ -798,6 +798,12 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     static bool PublicOf(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail) =>
         site?.Public ?? detail?.Public ?? focus.PublicDay;
+
+    /// <summary>
+    /// Whether someone else's building is open to the public by day: as its residents' template set it (the original writes the template's
+    /// <c>public day</c> over the building's flag when the squad is housed, which is what the residents' AI reads), else as its level state reads.
+    /// </summary>
+    static bool PublicDayOf(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail) => detail?.ResidentsPublic ?? focus.PublicDay;
 
     /// <summary>
     /// The panel's own buttons on a selected building of the player's: Dismantle (after the original's "Are you sure?"), pause, upgrade, downgrade,
