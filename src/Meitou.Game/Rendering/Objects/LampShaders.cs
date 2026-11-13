@@ -42,10 +42,12 @@ static class LampShaders
         """;
 
     /// <summary>
-    /// <c>lampTileVisibility</c>: how much of a lamp reaches a point, from its tile (<c>uLampTiles</c>; column 4 of the lamp's row: z the place, w the side, negative for a sphere, 0 none; column 5: x the
-    /// lamp's radius). The penumbra is the lamp's own: its radius seen past the blockers a fixed spiral of lookups finds. A lookup r texels off counts only what stands nearer the lamp than the point by what
-    /// the surface can gain over r texels on its slope: its own near edge is not a blocker, and a real blocker of that penumbra stands far nearer still. The depth of the surface's plane at each lookup was tried and
-    /// dropped: at a graze it swings with the normal, and drew the ripples, then the terrain's facets, into the penumbra (**Observed**, spotlight-cross). Nothing here changes from frame to frame.
+    /// <c>lampTileVisibility</c>: how much of a lamp reaches a point, from its tile (<c>uLampTiles</c>; column 4 of the lamp's row: z the place, w
+    /// the side, negative for a sphere, 0 none; column 5: x the lamp's radius). The penumbra is the lamp's own: its radius seen past the blockers a
+    /// fixed spiral of lookups finds. A lookup r texels off counts only what stands nearer the lamp than the point by what the surface can gain over
+    /// r texels on its slope: its own near edge is not a blocker, and a real blocker of that penumbra stands far nearer still. The depth of the
+    /// surface's plane at each lookup was tried and dropped: at a graze it swings with the normal, and drew the ripples, then the terrain's facets,
+    /// into the penumbra (**Observed**, spotlight-cross). Nothing here changes from frame to frame.
     /// </summary>
     public const string TileVisibility = """
         float lampTileAt(ivec2 corner, int side, ivec2 q)

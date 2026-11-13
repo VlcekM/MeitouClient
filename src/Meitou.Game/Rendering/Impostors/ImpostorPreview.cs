@@ -118,7 +118,13 @@ internal sealed class ImpostorPreview : IDisposable
         ReadOnlySpan<Matrix4x4> instances, bool coverage)
     {
         var rows = Rows(instances);
-        var view = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = eye, LightDir = light, FogDistance = 0 };
+        var view = new ViewConstants
+        {
+            ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection,
+            Eye = eye,
+            LightDir = light,
+            FogDistance = 0,
+        };
         cmd.SetViewport(viewport);
         cmd.SetDepth(true, true, DepthFunction.Less);
         cmd.SetDepthBias(false, 0, 0);
@@ -137,7 +143,13 @@ internal sealed class ImpostorPreview : IDisposable
         if (_atlas is null) return;
 
         var rows = Rows(instances);
-        var view = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = eye, LightDir = light, FogDistance = 0 };
+        var view = new ViewConstants
+        {
+            ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection,
+            Eye = eye,
+            LightDir = light,
+            FogDistance = 0,
+        };
         var state = MeshState with { Cull = CullMode.None, AlphaToCoverage = coverage };
         cmd.SetViewport(viewport);
         cmd.SetRaster(state.Cull, state.Front);

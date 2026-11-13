@@ -53,6 +53,12 @@ public sealed class FreeCamera
     float _speedShownLeft;
 
     /// <summary>
+    /// The eye, kept in double precision: far from the origin a float steps by 0.004 units at 50000, a pixel or two for something a few units from the
+    /// eye, so a slow flight close to a thing moved in small jumps. <see cref="PositionResidual"/> is what the float leaves out.
+    /// </summary>
+    double _x, _y, _z;
+
+    /// <summary>
     /// A free camera over <paramref name="ground"/>; <paramref name="settings"/> default to a new set.
     /// </summary>
     public FreeCamera(Func<float, float, float> ground, CameraSettings? settings = null)
@@ -60,12 +66,6 @@ public sealed class FreeCamera
         this._ground = ground;
         this._settings = settings ?? new CameraSettings();
     }
-
-    /// <summary>
-    /// The eye, kept in double precision: far from the origin a float steps by 0.004 units at 50000, a pixel or two for something a few units from the
-    /// eye, so a slow flight close to a thing moved in small jumps. <see cref="PositionResidual"/> is what the float leaves out.
-    /// </summary>
-    double _x, _y, _z;
 
     /// <summary>
     /// The eye, from the double-precision position.
@@ -141,7 +141,8 @@ public sealed class FreeCamera
     /// </summary>
     public void Enter(CameraState from)
     {
-        (_x, _y, _z) = (from.Eye.X + (double)from.EyeResidual.X, from.Eye.Y + (double)from.EyeResidual.Y, from.Eye.Z + (double)from.EyeResidual.Z);
+        (_x, _y, _z) = (
+            from.Eye.X + (double)from.EyeResidual.X, from.Eye.Y + (double)from.EyeResidual.Y, from.Eye.Z + (double)from.EyeResidual.Z);
         Velocity = Vector3.Zero;
         Yaw = from.Yaw;
         Pitch = Math.Clamp(MathF.Asin(Math.Clamp(-from.Forward.Y, -1f, 1f)), -PitchLimit, PitchLimit);
@@ -158,7 +159,10 @@ public sealed class FreeCamera
         get
         {
             var f = Forward;
-            return new CameraState(Position, f, Vector3.UnitY, Position + f * ReportedDistance, Yaw, Pitch, ReportedDistance, true) { EyeResidual = PositionResidual };
+            return new CameraState(Position, f, Vector3.UnitY, Position + f * ReportedDistance, Yaw, Pitch, ReportedDistance, true)
+            {
+                EyeResidual = PositionResidual,
+            };
         }
     }
 
@@ -168,10 +172,22 @@ public sealed class FreeCamera
     /// </summary>
     public void Update(float dt, ActionState a)
     {
-        float look = Photo?.LookScale ?? 1;
-        // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): the mouse alone turns the view there.
+        // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): the mouse alone turns the view
+        // there.
         bool photoMode = Photo is not null;
         if (!photoMode) AdjustSpeed(dt, a.Wheel);
+        TurnView(dt, a, photoMode);
+        if (Photo is { } photo) UpdatePhoto(photo, dt, a);
+        Fly(dt, a, photoMode);
+    }
+
+    /// <summary>
+    /// Turns the view by the rotate and pitch keys (not in photo mode) and the mouse drag, scaled by photo mode's <see cref="PhotoControls.LookScale"/>;
+    /// clamps the pitch.
+    /// </summary>
+    void TurnView(float dt, ActionState a, bool photoMode)
+    {
+        float look = Photo?.LookScale ?? 1;
         float turn = photoMode ? 0 : (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
         float tilt = photoMode ? 0 : (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
         Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * look * dt);
@@ -181,9 +197,16 @@ public sealed class FreeCamera
             Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity * look);
             Pitch += a.MouseDelta.Y * _settings.MouseSensitivity * look;
         }
-        Pitch = Math.Clamp(Pitch, -PitchLimit, PitchLimit);
-        if (Photo is { } photo) UpdatePhoto(photo, dt, a);
 
+        Pitch = Math.Clamp(Pitch, -PitchLimit, PitchLimit);
+    }
+
+    /// <summary>
+    /// The move keys set the wished velocity (along the view, sideways, straight up and down), the velocity follows it, the eye moves and is kept
+    /// above the ground.
+    /// </summary>
+    void Fly(float dt, ActionState a, bool photoMode)
+    {
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
         float up = (a.Held(InputAction.MoveUp) ? 1 : 0) - (a.Held(InputAction.MoveDown) ? 1 : 0);
@@ -205,16 +228,20 @@ public sealed class FreeCamera
                 * (a.Input.IsDown(Key.LeftControl) || a.Input.IsDown(Key.RightControl) ? p.SlowFactor : 1)
             : SpeedScale;
         var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * factor : Vector3.Zero;
+
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
         (_x, _y, _z) = (_x + (double)Velocity.X * dt, _y + (double)Velocity.Y * dt, _z + (double)Velocity.Z * dt);
         KeepAboveGround();
     }
 
     /// <summary>
-    /// Photo mode's extra: the roll keys (Z banks left, X right).
+    /// 1 when either key is down, else 0.
     /// </summary>
     static float Down(ActionState a, Key first, Key second) => a.Input.IsDown(first) || a.Input.IsDown(second) ? 1 : 0;
 
+    /// <summary>
+    /// Photo mode's extra: the roll keys (Z banks left, X right).
+    /// </summary>
     void UpdatePhoto(PhotoControls photo, float dt, ActionState a)
     {
         float bank = (a.Input.IsDown(Key.X) ? 1 : 0) - (a.Input.IsDown(Key.Z) ? 1 : 0);
@@ -308,7 +335,7 @@ public sealed class PhotoControls
     public float FlySpeed = 300;
 
     /// <summary>
-    /// What Shift and Alt multiply the speed by.
+    /// What Shift and Ctrl multiply the speed by.
     /// </summary>
     public float FastFactor = 4, SlowFactor = 0.2f;
 

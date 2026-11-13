@@ -46,11 +46,13 @@ internal sealed class WeatherSurfaces : IDisposable
     /// The water shader's <c>gameTime</c> (game hours); the frame sets it.
     /// </summary>
     public float GameTime;
+
     /// <summary>
     /// Game seconds wrapping at 4096, exact to under a millisecond (<see cref="GameTime"/>'s float steps by more than a second late in a game): the
     /// characters' water beads move by it (<c>uWetClock</c>); the host sets it.
     /// </summary>
     public float Seconds;
+
     /// <summary>
     /// The world's surfaces show their wetness (Meitou, the "Rain drops and puddles" row; docs/formats/weather.md "Wet world"): drops and runs on
     /// objects, puddles on the ground. Off: the game's wet look only.
@@ -62,14 +64,16 @@ internal sealed class WeatherSurfaces : IDisposable
     /// their rings for <see cref="SplashSeconds"/>; an older one is cleared, so the wrapping clock cannot play it again.
     /// </summary>
     readonly Vector4[] _splashes = new Vector4[8];
-    int _nextSplash;
-    public const float SplashSeconds = 3;
 
-    public void AddSplash(Vector2 at, float strength)
-    {
-        _splashes[_nextSplash] = new Vector4(at.X, at.Y, Seconds, strength);
-        _nextSplash = (_nextSplash + 1) % _splashes.Length;
-    }
+    /// <summary>
+    /// The slot of <see cref="_splashes"/> the next step takes (the oldest).
+    /// </summary>
+    int _nextSplash;
+
+    /// <summary>
+    /// How long a splash's rings are drawn, game seconds.
+    /// </summary>
+    public const float SplashSeconds = 3;
 
     /// <summary>
     /// The shader's <c>rainAmount</c>.
@@ -104,6 +108,15 @@ internal sealed class WeatherSurfaces : IDisposable
     /// The dust test override (see <see cref="WetnessOverride"/>).
     /// </summary>
     public Vector3? DustOverride;
+
+    /// <summary>
+    /// A foot stepped in a puddle at <paramref name="at"/> (world x, z) now: its rings, of <paramref name="strength"/>, replace the oldest splash.
+    /// </summary>
+    public void AddSplash(Vector2 at, float strength)
+    {
+        _splashes[_nextSplash] = new Vector4(at.X, at.Y, Seconds, strength);
+        _nextSplash = (_nextSplash + 1) % _splashes.Length;
+    }
 
     /// <summary>
     /// Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.
@@ -145,6 +158,7 @@ static class MeshSurface
     /// The diffuse is one of the named metal textures (<see cref="MetalTextures"/>): what has no colour of its own is bare metal.
     /// </summary>
     public const uint MetalByTexture = 32;
+
     /// <summary>
     /// An impostor bake: neither dust nor wetness is baked in.
     /// </summary>

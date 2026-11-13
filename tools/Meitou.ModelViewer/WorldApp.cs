@@ -234,11 +234,16 @@ static partial class WorldApp
         for (int i = 1; i <= o.Sequence; i++)
         {
             sequenceFrame = i;
-            Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context);
-            string file = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(o.Screenshot!))!, $"{Path.GetFileNameWithoutExtension(o.Screenshot!)}-{i:00}.png");
+            Step();
+            Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance);
+            EndFrame(context);
+
+            string folder = Path.GetDirectoryName(Path.GetFullPath(o.Screenshot!))!;
+            string file = Path.Combine(folder, $"{Path.GetFileNameWithoutExtension(o.Screenshot!)}-{i:00}.png");
             FramebufferCapture.SavePng(context, target, file, w, h);
             if (o.PanStep != Vector2.Zero) Console.WriteLine($"sequence  {i:00}: target {camera.Target.X:R},{camera.Target.Y:R},{camera.Target.Z:R}");
         }
+
         if (o.Sequence > 0) Console.WriteLine($"saved     {o.Sequence} more frames");
         return 0;
     }

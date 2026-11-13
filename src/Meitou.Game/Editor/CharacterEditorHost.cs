@@ -139,7 +139,9 @@ sealed class CharacterEditorHost(GameHost host)
         if (!posed) characters.Update(host.DrawnPosition(c));
 
         // The platform casts into the studio's maps (Meitou, previewsun), as the character does.
-        characters.StageCasters = host.ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
+        characters.StageCasters = host.ActiveObjects is { } caster
+            ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye)
+            : null;
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
         characters.ResolveStage();

@@ -204,7 +204,8 @@ internal sealed class PartMaterial
     public bool Strands;
 
     /// <summary>
-    /// The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. Sent in the record's <c>DiffuseChannel</c>, which only hair reads.
+    /// The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. Sent in the record's
+    /// <c>DiffuseChannel</c>, which only hair reads.
     /// </summary>
     public Vector4 Sheen;
 
@@ -261,14 +262,35 @@ internal sealed class PartMaterial
     /// </summary>
     public bool Bloody, BloodFull;
     /// <summary>
-    /// Takes the gear blood (<see cref="CharacterShaders.GearBloody"/>, docs/game/blood-decals.md "On weapons and gear"): a worn item shows the wearer's body blood, in <see cref="GearColour"/> (the race's blood colour) and
-    /// <see cref="GearScale"/> (its <c>blood horizontal</c> and <c>blood vertical</c>); a weapon's blade is described by <see cref="BladeAxis"/> (towards the tip), <see cref="BladeLow"/> (the axis value at the hilt end),
-    /// <see cref="BladeScale"/> (one over the length) and <see cref="SplatScale"/>. Sent in the record's hair fields, which an item does not use.
+    /// Takes the gear blood (<see cref="CharacterShaders.GearBloody"/>, docs/game/blood-decals.md "On weapons and gear"): a worn item shows the
+    /// wearer's body blood, in <see cref="GearColour"/> and <see cref="GearScale"/>; a weapon's blade is described by <see cref="BladeAxis"/>,
+    /// <see cref="BladeLow"/>, <see cref="BladeScale"/> and <see cref="SplatScale"/>. Sent in the record's hair fields, which an item does not use.
     /// </summary>
     public bool GearBlood;
-    public Vector3 GearColour, BladeAxis;
+    /// <summary>
+    /// The gear blood's colour: the race's blood colour.
+    /// </summary>
+    public Vector3 GearColour;
+    /// <summary>
+    /// A weapon blade's axis, towards the tip.
+    /// </summary>
+    public Vector3 BladeAxis;
+    /// <summary>
+    /// The gear blood's scale: the race's <c>blood horizontal</c> and <c>blood vertical</c>.
+    /// </summary>
     public Vector2 GearScale;
-    public float BladeLow, BladeScale, SplatScale;
+    /// <summary>
+    /// The value along <see cref="BladeAxis"/> at the blade's hilt end.
+    /// </summary>
+    public float BladeLow;
+    /// <summary>
+    /// One over the blade's length.
+    /// </summary>
+    public float BladeScale;
+    /// <summary>
+    /// The blood splatter's scale along the blade (five over its length).
+    /// </summary>
+    public float SplatScale;
     /// <summary>
     /// A headless body's neck cap (<see cref="CharacterShaders.Wound"/>): <see cref="Colour1"/> the race's blood colour, the diffuse slot the
     /// splatter map; <see cref="Mechanical"/> a robot race's.
@@ -633,7 +655,8 @@ internal sealed class CharacterContent : IDisposable
     Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null,
         bool close = false, bool icon = false, string? partMap = null, bool worn = false) =>
         _prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()),
-                _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap, worn)));
+                _ => new Lazy<Prepared>(
+                    () => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap, worn)));
 
     /// <summary>
     /// Reads a mesh file and makes its levels and index buffers (no GPU work, any thread): with its skinning weights for a skeleton of
@@ -725,10 +748,11 @@ internal sealed class CharacterContent : IDisposable
             var packed = GpuVertex.PackCharacter(part.Vertices);
             int vertexBytes = packed.Length, indexBytes = made.All.Length * 4;
 
-            // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a
-            // spike from its bind pose (VlcekM/MeitouClient#168).
             // Read by address where the device traces rays: the traced scene skins them (Gi.TracedCharacters).
             var rays = _gpu.HasRayQuery ? BufferUse.RayInput : 0;
+
+            // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a
+            // spike from its bind pose (VlcekM/MeitouClient#168).
             var vertices = DeviceBuffer.Create(_gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex | rays, AllocationName);
             var indices = DeviceBuffer.Create(_gpu, (ulong)indexBytes, BufferUse.Index | rays, AllocationName);
             uploads.Write(vertices, 0, packed);
@@ -938,8 +962,10 @@ internal sealed class CharacterContent : IDisposable
                 if (BodySkeletonName(bodyPath) is not { } name || Rig(name) is not { } rig) return true;
                 var limbs = LimbHideOf(c, rig);
                 _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, limbs, close, partMap: partMap).Value;
-                foreach (var (path, shared, scale) in parts) _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels,
-                        shared ? limbs : null, close, worn: shared).Value;
+                foreach (var (path, shared, scale) in parts)
+                {
+                    _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, shared ? limbs : null, close, worn: shared).Value;
+                }
             }
             catch (Exception)
             {
@@ -964,6 +990,16 @@ internal sealed class CharacterContent : IDisposable
     /// 13 and the part index from 16).
     /// </summary>
     internal const int HeadLimb = 4, HeadBit = 1 << 14;
+
+    /// <summary>
+    /// The thickness a <see cref="MarkThickness"/> ray looks for: anything thicker lets no light through.
+    /// </summary>
+    const float MaxThickness = 2;
+
+    /// <summary>
+    /// The side of a <see cref="MarkThickness"/> grid cell, in world units.
+    /// </summary>
+    const float ThicknessCell = 1f;
 
     /// <summary>
     /// Which bone handle belongs to which limb slot (-1: none; <see cref="HeadLimb"/> the head) and the bind-pose heights below which a limb's
@@ -1110,9 +1146,10 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>
-    /// A worn item skinned to the body's skeleton (clothing, armour, goggles in any slot): bit 14 (<see cref="HeadBit"/>) on the vertices of the head's bones, nothing else, so a
-    /// decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped before, and a belt-slot item over the eyes stayed on the neck); and bits 16 to 19, the part (as MarkBody) whose blood the item shows;
-    /// the mesh's own vertex colour no longer stands in the hide bits (a white vertex read as the left arm's).
+    /// A worn item skinned to the body's skeleton (clothing, armour, goggles in any slot): bit 14 (<see cref="HeadBit"/>) on the vertices of the
+    /// head's bones, nothing else, so a decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped
+    /// before, and a belt-slot item over the eyes stayed on the neck); and bits 16 to 19, the part (as MarkBody) whose blood the item shows; the
+    /// mesh's own vertex colour no longer stands in the hide bits (a white vertex read as the left arm's).
     /// </summary>
     static void MarkWorn(Model model, LimbHide hide)
     {
@@ -1204,29 +1241,47 @@ internal sealed class CharacterContent : IDisposable
                 var s = byPosition[Key(v[i].Position)];
                 v[i].Colour.Z = s.Count > 0 ? s.Sum / s.Count : 0;
             }
+
             MarkThickness(part);
         }
     }
 
-    /// <summary>The thickness a <see cref="MarkThickness"/> ray looks for: anything thicker lets no light through.</summary>
-    const float MaxThickness = 2;
-
     /// <summary>
-    /// Writes each tightly curved vertex's thickness (world units) into its colour's W: how far a ray straight in from it goes before leaving the mesh by the back of a surface. An ear or a
-    /// finger is thin; a nose or an eyelid over the head behind it is not, whatever its curvature. <see cref="MaxThickness"/> for the rest.
+    /// Writes each tightly curved vertex's thickness (world units) into its colour's W: how far a ray straight in from it goes before leaving the
+    /// mesh by the back of a surface. An ear or a finger is thin; a nose or an eyelid over the head behind it is not, whatever its curvature.
+    /// <see cref="MaxThickness"/> for the rest.
     /// </summary>
     static void MarkThickness(ModelPart part)
     {
         var v = part.Vertices;
         var idx = part.Indices;
-        const float cell = 1f;
-        static (int, int, int) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
+        var grid = ThicknessGrid(v, idx);
+        var tested = new HashSet<int>();
+        for (int i = 0; i < v.Length; i++)
+        {
+            v[i].Colour.W = MaxThickness;
+            if (v[i].Colour.Z < 2 || v[i].Normal.LengthSquared() < 1e-8f) continue;
+            v[i].Colour.W = ThicknessAt(v, idx, grid, tested, i);
+        }
+    }
+
+    /// <summary>
+    /// The cell of the <see cref="ThicknessGrid"/> a point lies in.
+    /// </summary>
+    static (int, int, int) ThicknessCellOf(Vector3 p) =>
+        ((int)MathF.Floor(p.X / ThicknessCell), (int)MathF.Floor(p.Y / ThicknessCell), (int)MathF.Floor(p.Z / ThicknessCell));
+
+    /// <summary>
+    /// The triangles (by their first index's place) in each grid cell their bounding box touches.
+    /// </summary>
+    static Dictionary<(int, int, int), List<int>> ThicknessGrid(Vertex[] v, uint[] idx)
+    {
         var grid = new Dictionary<(int, int, int), List<int>>();
         for (int t = 0; t + 2 < idx.Length; t += 3)
         {
             var (a, b, c) = (v[idx[t]].Position, v[idx[t + 1]].Position, v[idx[t + 2]].Position);
-            var lo = CellOf(Vector3.Min(a, Vector3.Min(b, c)));
-            var hi = CellOf(Vector3.Max(a, Vector3.Max(b, c)));
+            var lo = ThicknessCellOf(Vector3.Min(a, Vector3.Min(b, c)));
+            var hi = ThicknessCellOf(Vector3.Max(a, Vector3.Max(b, c)));
             for (int x = lo.Item1; x <= hi.Item1; x++)
                 for (int y = lo.Item2; y <= hi.Item2; y++)
                     for (int z = lo.Item3; z <= hi.Item3; z++)
@@ -1235,39 +1290,59 @@ internal sealed class CharacterContent : IDisposable
                         list.Add(t);
                     }
         }
-        var tested = new HashSet<int>();
-        for (int i = 0; i < v.Length; i++)
+
+        return grid;
+    }
+
+    /// <summary>
+    /// Vertex <paramref name="i"/>'s thickness: the nearest back face a ray straight in from it meets, walking the grid cells along it,
+    /// <see cref="MaxThickness"/> when none is nearer.
+    /// </summary>
+    static float ThicknessAt(Vertex[] v, uint[] idx, Dictionary<(int, int, int), List<int>> grid, HashSet<int> tested, int i)
+    {
+        var dir = -Vector3.Normalize(v[i].Normal);
+        var from = v[i].Position + dir * 0.01f;
+        float best = MaxThickness;
+        tested.Clear();
+        for (float along = 0; along < best + ThicknessCell; along += ThicknessCell * 0.5f)
         {
-            v[i].Colour.W = MaxThickness;
-            if (v[i].Colour.Z < 2 || v[i].Normal.LengthSquared() < 1e-8f) continue;
-            var dir = -Vector3.Normalize(v[i].Normal);
-            var from = v[i].Position + dir * 0.01f;
-            float best = MaxThickness;
-            tested.Clear();
-            for (float along = 0; along < best + cell; along += cell * 0.5f)
+            if (!grid.TryGetValue(ThicknessCellOf(from + dir * MathF.Min(along, best)), out var list)) continue;
+            foreach (int t in list)
             {
-                if (!grid.TryGetValue(CellOf(from + dir * MathF.Min(along, best)), out var list)) continue;
-                foreach (int t in list)
-                {
-                    if (!tested.Add(t)) continue;
-                    var (p0, p1, p2) = (v[idx[t]], v[idx[t + 1]], v[idx[t + 2]]);
-                    if (Vector3.Dot(p0.Normal + p1.Normal + p2.Normal, dir) <= 0) continue;   // the front of something inside (an eyeball, a mouth): the ray has not left
-                    var (e1, e2) = (p1.Position - p0.Position, p2.Position - p0.Position);
-                    var h = Vector3.Cross(dir, e2);
-                    float det = Vector3.Dot(e1, h);
-                    if (MathF.Abs(det) < 1e-9f) continue;
-                    var s = from - p0.Position;
-                    float u = Vector3.Dot(s, h) / det;
-                    if (u < 0 || u > 1) continue;
-                    var q = Vector3.Cross(s, e1);
-                    float w = Vector3.Dot(dir, q) / det;
-                    if (w < 0 || u + w > 1) continue;
-                    float hit = Vector3.Dot(e2, q) / det;
-                    if (hit > 0 && hit < best) best = hit;
-                }
+                if (!tested.Add(t)) continue;
+                float hit = ThicknessRayHit(v, idx, t, from, dir);
+                if (hit > 0 && hit < best) best = hit;
             }
-            v[i].Colour.W = best;
         }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Where along <paramref name="dir"/> from <paramref name="from"/> the ray leaves by the back of triangle <paramref name="t"/>; NaN when it
+    /// misses it or meets its front.
+    /// </summary>
+    static float ThicknessRayHit(Vertex[] v, uint[] idx, int t, Vector3 from, Vector3 dir)
+    {
+        var (p0, p1, p2) = (v[idx[t]], v[idx[t + 1]], v[idx[t + 2]]);
+
+        // The front of something inside (an eyeball, a mouth): the ray has not left.
+        if (Vector3.Dot(p0.Normal + p1.Normal + p2.Normal, dir) <= 0) return float.NaN;
+
+        var (e1, e2) = (p1.Position - p0.Position, p2.Position - p0.Position);
+        var h = Vector3.Cross(dir, e2);
+        float det = Vector3.Dot(e1, h);
+        if (MathF.Abs(det) < 1e-9f) return float.NaN;
+
+        var s = from - p0.Position;
+        float u = Vector3.Dot(s, h) / det;
+        if (u < 0 || u > 1) return float.NaN;
+
+        var q = Vector3.Cross(s, e1);
+        float w = Vector3.Dot(dir, q) / det;
+        if (w < 0 || u + w > 1) return float.NaN;
+
+        return Vector3.Dot(e2, q) / det;
     }
 
     #endregion
@@ -1505,10 +1580,10 @@ internal sealed class CharacterContent : IDisposable
             var path = FindMesh(part.Mesh);
             if (path is null) continue;
             bool shared = part.Mode == AttachMode.SharedSkeleton;
+            var limbs = shared ? partLimbs : null;
 
             // An animal's fur is a shell over the whole body (5.5k triangles on the bonedog, more than its body), not a few hair cards: it takes the
             // rule's own distances.
-            var limbs = shared ? partLimbs : null;
             var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs: limbs, close: close, worn: shared);
             if (loaded is null || loaded.Gpu.Parts.Count == 0) continue;
             var ap = new AssetPart
@@ -1719,10 +1794,13 @@ internal sealed class CharacterContent : IDisposable
     PartMaterial MarkGear(PartMaterial m, CharacterAppearance c, CharacterPart part, LoadedMesh loaded)
     {
         if (m.Shading != CharacterShaders.ShadeItem || m.Bloody || m.Wound) return m;
+
         var item = part.Record;
         if (part.Mode == AttachMode.SharedSkeleton)
         {
-            if (c.Animal is not null || item.Type is FcsRecordType.LimbReplacement || c.Race.GetFloat("bleed rate", 1) <= 0) return m;
+            if (c.Animal is not null || item.Type is FcsRecordType.LimbReplacement || c.Race.GetFloat("bleed rate", 1) <= 0)
+                return m;
+
             m.GearColour = CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF);
             m.GearScale = new Vector2(c.Race.GetFloat("blood horizontal", 1), c.Race.GetFloat("blood vertical", 0.15f));
         }
@@ -1750,13 +1828,18 @@ internal sealed class CharacterContent : IDisposable
         var min = boxes.Aggregate(new Vector3(float.MaxValue), (a, b) => Vector3.Min(a, b.Min));
         var max = boxes.Aggregate(new Vector3(float.MinValue), (a, b) => Vector3.Max(a, b.Max));
         var size = max - min;
-        int axis = size.X >= size.Y && size.X >= size.Z ? 0 : size.Y >= size.Z ? 1 : 2;
-        float lo = min[axis], hi = max[axis];
+        int axis = size.X >= size.Y && size.X >= size.Z ? 0
+            : size.Y >= size.Z ? 1
+            : 2;
+        float lo = min[axis];
+        float hi = max[axis];
         float sign = hi >= -lo ? 1 : -1;
         if (sign < 0) (lo, hi) = (-hi, -lo);
         if (hi - lo < 1e-4f) return false;
 
-        m.BladeAxis = axis == 0 ? new Vector3(sign, 0, 0) : axis == 1 ? new Vector3(0, sign, 0) : new Vector3(0, 0, sign);
+        m.BladeAxis = axis == 0 ? new Vector3(sign, 0, 0)
+            : axis == 1 ? new Vector3(0, sign, 0)
+            : new Vector3(0, 0, sign);
         (m.BladeLow, m.BladeScale, m.SplatScale) = (lo, 1 / (hi - lo), 5 / (hi - lo));
         return true;
     }
@@ -1889,6 +1972,7 @@ internal sealed class CharacterContent : IDisposable
     void SetMetalMap(PartMaterial m, string? map)
     {
         if (map is null) return;
+
         m.Tex[CharacterShaders.SlotColourMap] = Texture(map, false);
         m.MetalMap = true;
     }

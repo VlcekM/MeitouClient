@@ -1361,8 +1361,10 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var cmd = Gpu.BeginGuest(program == _sky ? "sky" : "sky simple");
         var targets = Gpu.CurrentTargets();
-        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state; behind the scene: only where the depth is still the cleared one.
-        var drawState = behind ? Gpu.CurrentState() with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Equal }
+        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state; behind the scene: only where the depth is still the
+        // cleared one.
+        var drawState = behind
+            ? Gpu.CurrentState() with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Equal }
             : Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);

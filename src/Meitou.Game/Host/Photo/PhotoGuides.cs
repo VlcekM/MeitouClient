@@ -8,7 +8,30 @@ namespace Meitou.Game.Host.Photo;
 /// </summary>
 public enum PhotoGrid
 {
-    Off, Thirds, Golden, Cross, Diagonals,
+    /// <summary>
+    /// No grid.
+    /// </summary>
+    Off,
+
+    /// <summary>
+    /// Lines at the thirds.
+    /// </summary>
+    Thirds,
+
+    /// <summary>
+    /// Lines at the golden section (0.382 and 0.618).
+    /// </summary>
+    Golden,
+
+    /// <summary>
+    /// A cross through the centre.
+    /// </summary>
+    Cross,
+
+    /// <summary>
+    /// The two diagonals.
+    /// </summary>
+    Diagonals,
 }
 
 /// <summary>
@@ -16,7 +39,35 @@ public enum PhotoGrid
 /// </summary>
 public enum PhotoFrame
 {
-    Off, Cinema, Wide, Standard, Square, Portrait,
+    /// <summary>
+    /// No bars: the whole picture.
+    /// </summary>
+    Off,
+
+    /// <summary>
+    /// 2.39:1.
+    /// </summary>
+    Cinema,
+
+    /// <summary>
+    /// 16:9.
+    /// </summary>
+    Wide,
+
+    /// <summary>
+    /// 4:3.
+    /// </summary>
+    Standard,
+
+    /// <summary>
+    /// 1:1.
+    /// </summary>
+    Square,
+
+    /// <summary>
+    /// 4:5.
+    /// </summary>
+    Portrait,
 }
 
 /// <summary>
@@ -43,14 +94,19 @@ static class PhotoGuides
     /// </summary>
     public static Vector4 Window(PhotoFrame frame, int width, int height)
     {
-        float aspect = Aspect(frame), own = width / (float)Math.Max(height, 1);
+        float aspect = Aspect(frame);
+        float own = width / (float)Math.Max(height, 1);
         if (aspect <= 0) return new Vector4(0, 0, width, height);
+
         if (aspect > own)
         {
-            float shown = width / aspect, bar = MathF.Round((height - shown) / 2);
+            float shown = width / aspect;
+            float bar = MathF.Round((height - shown) / 2);
             return new Vector4(0, bar, width, height - bar);
         }
-        float across = height * aspect, side = MathF.Round((width - across) / 2);
+
+        float across = height * aspect;
+        float side = MathF.Round((width - across) / 2);
         return new Vector4(side, 0, width - side, height);
     }
 
@@ -60,6 +116,7 @@ static class PhotoGuides
     public static void DrawFrame(DebugOverlay o, PhotoFrame frame, int width, int height)
     {
         if (frame == PhotoFrame.Off) return;
+
         var w = Window(frame, width, height);
         var black = new Vector4(0, 0, 0, 1);
         if (w.Y > 0)
@@ -67,6 +124,7 @@ static class PhotoGuides
             o.Rect(0, 0, width, w.Y, black);
             o.Rect(0, w.W, width, height, black);
         }
+
         if (w.X > 0)
         {
             o.Rect(0, 0, w.X, height, black);
@@ -80,11 +138,15 @@ static class PhotoGuides
     public static void DrawReticle(DebugOverlay o, Vector2 at, float half, float thickness)
     {
         var ink = new Vector4(1, 1, 1, 0.85f);
-        float arm = half * 0.45f, t = thickness / 2;
+        float arm = half * 0.45f;
+        float t = thickness / 2;
         for (int corner = 0; corner < 4; corner++)
         {
-            int sx = (corner & 1) == 0 ? -1 : 1, sy = (corner & 2) == 0 ? -1 : 1;
-            float cx = at.X + sx * half, cy = at.Y + sy * half;
+            int sx = (corner & 1) == 0 ? -1 : 1;
+            int sy = (corner & 2) == 0 ? -1 : 1;
+            float cx = at.X + sx * half;
+            float cy = at.Y + sy * half;
+
             // A dark edge under each stroke, so the mark shows on sand and sky alike.
             for (int pass = 0; pass < 2; pass++)
             {
@@ -102,7 +164,11 @@ static class PhotoGuides
     public static void DrawGrid(DebugOverlay o, PhotoGrid grid, Vector4 w, float thickness)
     {
         if (grid == PhotoGrid.Off) return;
-        float x0 = w.X, y0 = w.Y, x1 = w.Z, y1 = w.W;
+
+        float x0 = w.X;
+        float y0 = w.Y;
+        float x1 = w.Z;
+        float y1 = w.W;
         switch (grid)
         {
             case PhotoGrid.Thirds:
@@ -121,16 +187,23 @@ static class PhotoGuides
         }
     }
 
+    /// <summary>
+    /// A vertical and a horizontal line at each fraction <paramref name="at"/> of the window.
+    /// </summary>
     static void Cuts(DebugOverlay o, float x0, float y0, float x1, float y1, float[] at, float thickness)
     {
         foreach (float t in at)
         {
-            float x = MathF.Round(x0 + (x1 - x0) * t), y = MathF.Round(y0 + (y1 - y0) * t);
+            float x = MathF.Round(x0 + (x1 - x0) * t);
+            float y = MathF.Round(y0 + (y1 - y0) * t);
             Stroke(o, x, y0, x, y1, thickness);
             Stroke(o, x0, y, x1, y, thickness);
         }
     }
 
+    /// <summary>
+    /// A white line over a dark one a pixel down and right.
+    /// </summary>
     static void Stroke(DebugOverlay o, float ax, float ay, float bx, float by, float thickness)
     {
         o.Line(ax + 1, ay + 1, bx + 1, by + 1, thickness, new Vector4(0, 0, 0, 0.35f));

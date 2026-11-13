@@ -68,13 +68,29 @@ sealed class Decapitation(GameHost host)
         /// </summary>
         public double Tick = double.NaN;
         /// <summary>
-        /// Its motion (<see cref="Step"/>): the seconds of its fall stepped so far, where the head bone is, its speed, how it is turned about the head
-        /// bone, its tumble's speed in the air, and whether it has come to rest.
+        /// The seconds of its fall stepped so far (<see cref="Step"/>).
         /// </summary>
         public float Time;
-        public Vector3 At, Speed;
+        /// <summary>
+        /// Where the head bone is now.
+        /// </summary>
+        public Vector3 At;
+        /// <summary>
+        /// Its speed now (units/s).
+        /// </summary>
+        public Vector3 Speed;
+        /// <summary>
+        /// How it is turned about the head bone.
+        /// </summary>
         public Quaternion Turn = Quaternion.Identity;
-        public bool Started, Resting;
+        /// <summary>
+        /// Whether its motion was set going (<see cref="At"/> and <see cref="Speed"/> from where and how it was cut).
+        /// </summary>
+        public bool Started;
+        /// <summary>
+        /// Whether it has come to rest.
+        /// </summary>
+        public bool Resting;
     }
 
     /// <summary>
@@ -168,8 +184,10 @@ sealed class Decapitation(GameHost host)
             _spurts.Clear();
             _headsEpoch = host.Saves.WorldEpoch;
         }
+
         UpdateSpurts();
         if (_heads.Count == 0 || host.Gpu.Characters is not { } characters) return;
+
         double clock = host.Session.ShownTick + host.Session.SimulationAlpha;
         float tick = host.Session.World.TickSeconds;
         foreach (var h in _heads)
@@ -177,27 +195,36 @@ sealed class Decapitation(GameHost host)
             // Its clock starts with the first frame its look is drawn; until then it is listed (so it gets ready) where it was cut.
             if (double.IsNaN(h.Tick) && characters.IsPrepared(h.Look)) h.Tick = clock;
             float t = double.IsNaN(h.Tick) ? 0 : MathF.Max(0, (float)((clock - h.Tick) * tick));
-            if (!h.Started)
-            {
-                // Thrown with the blow's speed, and aside over the time of its drop.
-                var aside = (h.Aside - new Vector2(h.Start.X, h.Start.Z)) / MathF.Max(h.Flight, 0.2f);
-                (h.At, h.Speed, h.Started) = (h.Start, h.Velocity + new Vector3(aside.X, 0, aside.Y), true);
-            }
+            MoveHead(h, characters, t);
 
-            if (!h.Resting && t > h.Time)
-            {
-                h.Time = MathF.Max(h.Time, t - CatchUp);
-                float floor = SurfaceUnder(characters, new Vector2(h.At.X, h.At.Z), h) + HeadRestHeight;
-                while (h.Time < t && !h.Resting)
-                {
-                    float dt = MathF.Min(StepSeconds, t - h.Time);
-                    Step(h, dt, floor);
-                    h.Time += dt;
-                }
-            }
-
-            var world = h.World * Matrix4x4.CreateTranslation(-h.Start) * Matrix4x4.CreateFromQuaternion(h.Turn) * Matrix4x4.CreateTranslation(h.At);
+            var world = h.World * Matrix4x4.CreateTranslation(-h.Start) * Matrix4x4.CreateFromQuaternion(h.Turn)
+                * Matrix4x4.CreateTranslation(h.At);
             list.Add(new CharacterInstance(h.Key, h.Look, h.At, 0, []) { World = world, FreezeFrom = h.From, Blood = h.Blood });
+        }
+    }
+
+    /// <summary>
+    /// Moves a head on to <paramref name="t"/> seconds into its fall, in steps of at most <see cref="StepSeconds"/> and catching up at most
+    /// <see cref="CatchUp"/>, over what lies under it at the frame's start; set going first from where and how it was cut.
+    /// </summary>
+    void MoveHead(FallingHead h, Rendering.Characters.CharacterRenderer characters, float t)
+    {
+        if (!h.Started)
+        {
+            // Thrown with the blow's speed, and aside over the time of its drop.
+            var aside = (h.Aside - new Vector2(h.Start.X, h.Start.Z)) / MathF.Max(h.Flight, 0.2f);
+            (h.At, h.Speed, h.Started) = (h.Start, h.Velocity + new Vector3(aside.X, 0, aside.Y), true);
+        }
+
+        if (h.Resting || t <= h.Time) return;
+
+        h.Time = MathF.Max(h.Time, t - CatchUp);
+        float floor = SurfaceUnder(characters, new Vector2(h.At.X, h.At.Z), h) + HeadRestHeight;
+        while (h.Time < t && !h.Resting)
+        {
+            float dt = MathF.Min(StepSeconds, t - h.Time);
+            Step(h, dt, floor);
+            h.Time += dt;
         }
     }
 

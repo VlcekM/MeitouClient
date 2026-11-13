@@ -236,33 +236,8 @@ static partial class WorldFrame
         if (gpu.Surfaces is { } surfaces) surfaces.GameTime = f.Time;
 
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
-        // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
-        bool probesShade = gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
-        bool giResolve = gpu.GiResolve > 0 && probesShade;
-        // The reflections subtract the sky's reflection as the surfaces stored it: lit by the probes they need the resolve, whose fragments leave it unoccluded.
-        bool reflections = gpu.Post is { Options.Ssr: true } && (giResolve || !probesShade);
-        if (gpu.Post is { } giPost)
-        {
-            giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
-            giPost.SsrSurfaces = reflections;
-            giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
-        }
-        if (gpu.Probes is { } giProbes)
-        {
-            giProbes.Resolve = giResolve;
-            giProbes.Reflections = reflections;
-            giProbes.Relocate = giResolve && post.Options.GiRelocating;
-            giProbes.CloudShadows = post.Options.GiCloudShadowing;
-        }
-        // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
-        if (gpu.Objects is { } casters) casters.HiddenFloorsCast = casters.CastersBothSides = gpu.Shadow is { Meitou: true };   // Faithful shadows: the floor view's hidden parts cast nothing, as in the game
-        gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
-        if (gpu.Post is { } tracedPost)
-        {
-            (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, gpu.Shadow is { Enabled: true });
-            tracedPost.ContactSun = tracedPost.Options.ContactShadows && !gpu.Traced && gpu.Shadow is { Enabled: true } && gpu.Probes is not null;
-        }
-        if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
+        bool giResolve = PrepareGiResolve(gpu, post);
+        PrepareTracedSun(gpu, giResolve);
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
         {
@@ -281,6 +256,57 @@ static partial class WorldFrame
         f.EyeResidual = f.Camera.EyeResidual;
         gpu.Guard?.Tick();
         return true;
+    }
+
+    /// <summary>
+    /// The GI resolve and the reflections' switches on the post chain and the probes for this frame; returns whether the resolve runs.
+    /// </summary>
+    static bool PrepareGiResolve(WorldGpu gpu, IWorldPostChain post)
+    {
+        // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
+        bool probesShade = gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
+        bool giResolve = gpu.GiResolve > 0 && probesShade;
+
+        // The reflections subtract the sky's reflection as the surfaces stored it: lit by the probes they need the resolve, whose fragments leave
+        // it unoccluded.
+        bool reflections = gpu.Post is { Options.Ssr: true } && (giResolve || !probesShade);
+
+        if (gpu.Post is { } giPost)
+        {
+            giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
+            giPost.SsrSurfaces = reflections;
+            giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
+        }
+
+        if (gpu.Probes is { } giProbes)
+        {
+            giProbes.Resolve = giResolve;
+            giProbes.Reflections = reflections;
+            giProbes.Relocate = giResolve && post.Options.GiRelocating;
+            giProbes.CloudShadows = post.Options.GiCloudShadowing;
+        }
+
+        return giResolve;
+    }
+
+    /// <summary>
+    /// Whether this frame traces the sun (<see cref="WorldGpu.Traced"/>), told to the post chain and the traced scene, and the casters' sides.
+    /// </summary>
+    static void PrepareTracedSun(WorldGpu gpu, bool giResolve)
+    {
+        // Faithful shadows: the floor view's hidden parts cast nothing, as in the game.
+        if (gpu.Objects is { } casters) casters.HiddenFloorsCast = casters.CastersBothSides = gpu.Shadow is { Meitou: true };
+
+        // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
+        gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
+        if (gpu.Post is { } tracedPost)
+        {
+            bool sunShadowed = gpu.Shadow is { Enabled: true };
+            (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, sunShadowed);
+            tracedPost.ContactSun = tracedPost.Options.ContactShadows && !gpu.Traced && gpu.Shadow is { Enabled: true } && gpu.Probes is not null;
+        }
+
+        if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
     }
 
     #endregion
@@ -555,55 +581,13 @@ static partial class WorldFrame
     static void UpdateLighting(ref FrameState f)
     {
         var gpu = f.Gpu;
-        if (gpu.Lamps is { } lamps)
-        {
-            lamps.Moving.Clear();
-            if (lamps.DebugCarried is { } debugCarried) lamps.Moving.Add(debugCarried);
-            gpu.Characters?.CollectLamps(lamps.Moving);   // the lanterns characters carry, where this update posed them
-        }
-        // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
-        if (gpu.Lamps is { } hull) hull.RoomMargin = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } ? WorldLamps.TracedRoomMargin : WorldLamps.RoomSurfaceMargin;
-        // The lamps' visibility cache: while their shadows are on and the traced scene exists.
-        if (gpu.Lamps is { } tiledLamps)
-        {
-            bool tiled = Gi.LampTiles.Enabled && gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.GiActive && gpu.Gi is not null;
-            if (tiled) gpu.LampTiles ??= new Gi.LampTiles(gpu.Post!.Gpu);
-            tiledLamps.Tiles = tiled ? gpu.LampTiles : null;
-            if (tiled) gpu.LampTiles!.BeginFrame(f.Eye, gpu.Gi);
-        }
-        gpu.Lamps?.Update(f.Eye, gpu.Objects, WorldLights.DaylightFactor(f.Hour, f.Scene.Clock.Sunrise, f.Scene.Clock.Sunset));
+        UpdateLamps(ref f);
 
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
         if (gpu.Probes is { } probesActive) probesActive.Active = gpu.GiActive;
         var objects = f.Render.Objects ? gpu.Objects : null;
-        if (gpu.Gi is { } gi && gpu.GiActive)
-        {
-            var heights = gpu.Terrain.Snapshot();
-            gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
-            gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
-            gi.SkinTable = gpu.Characters?.SkinTable ?? 0;
-            gi.GrassReach = TracedReach(ref f);
-            gi.GrassShadows = gpu.Post?.Options.TracedGrass ?? true;
-            // Traced, the objects cast as far as the cascades reached (the probes see them too).
-            // Through a lens longer than the game's what is far is drawn large, so the casters reach as much further (to 24000 at most: past it stand distant meshes).
-            float lens = Meitou.Data.Ogre.MeshLod.LensFactor(f.Camera.FieldOfView);
-            gi.Range = gpu.Traced && gpu.Shadow is { } reach
-                ? Math.Max(Gi.GiScene.ProbeRange, lens < 1 ? Math.Max(reach.Settings.Range, Math.Min(reach.Settings.Range / lens, 24000)) : reach.Settings.Range)
-                : Gi.GiScene.ProbeRange;
-            gi.PixelsPerRadian = f.Render.TerrainPixelScale;
-            gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
-            if (gpu.Lamps is { Tiles: { } lampTiles } tileLamps) { lampTiles.Fill(gi, tileLamps); StageClock.Sub("lamp tiles"); }
-            // The traced sun's volume for what draws no traced pixel, before anything reads it (the reflection first).
-            if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow && gpu.Post is { } volumePost)
-            {
-                gpu.TracedSunVolume ??= new Gi.TracedSunVolume(volumePost.Gpu);
-                gpu.TracedSunVolume.Run(gi, volumeShadow, f.Light.SunDirection);
-                StageClock.Sub("traced sun volume");
-            }
-            StageClock.Sub("gi scene");
-            gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
-            StageClock.Sub("gi blend");
-        }
+        if (gpu.Gi is { } gi && gpu.GiActive) UpdateGiScene(ref f, gi, objects);
+
         if (gpu.ProbeGi is { } probeGi)
         {
             probeGi.Active = gpu.GiActive;
@@ -615,28 +599,126 @@ static partial class WorldFrame
         }
     }
 
-    static int s_tracedLogs;
-
-    /// <summary><c>--debug-shadows 4</c>: whether this frame traces the sun, and what decides it (every 120th frame).</summary>
-    static void LogTraced(ref FrameState f, bool traced)
+    /// <summary>
+    /// The lamps for this frame: the moving ones (the lanterns characters carry among them), the room hull's margin, the visibility cache, then
+    /// their update.
+    /// </summary>
+    static void UpdateLamps(ref FrameState f)
     {
         var gpu = f.Gpu;
-        Console.WriteLine($"traced    {(traced ? "on" : "off")}: switch {gpu.Post?.Options.TracedSun}, gi resolve {gpu.Post?.GiResolve}, shadows {(gpu.Shadow is { Enabled: true } s ? s.Meitou ? "meitou" : "faithful" : "off")}, " +
-            $"scene {(gpu.Gi?.Top is null ? "none" : "ready")}, traced cascades {gpu.Shadow?.TracedCascades} to view depth {gpu.Shadow?.TracedDepth:0}, grass reach {gpu.Gi?.GrassReach:0}");
+        if (gpu.Lamps is { } lamps)
+        {
+            lamps.Moving.Clear();
+            if (lamps.DebugCarried is { } debugCarried) lamps.Moving.Add(debugCarried);
+            gpu.Characters?.CollectLamps(lamps.Moving);   // the lanterns characters carry, where this update posed them
+        }
+
+        // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
+        bool tracedLamps = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 };
+        if (gpu.Lamps is { } hull) hull.RoomMargin = tracedLamps ? WorldLamps.TracedRoomMargin : WorldLamps.RoomSurfaceMargin;
+
+        // The lamps' visibility cache: while their shadows are on and the traced scene exists.
+        if (gpu.Lamps is { } tiledLamps)
+        {
+            bool tiled = Gi.LampTiles.Enabled && tracedLamps && gpu.GiActive && gpu.Gi is not null;
+            if (tiled) gpu.LampTiles ??= new Gi.LampTiles(gpu.Post!.Gpu);
+            tiledLamps.Tiles = tiled ? gpu.LampTiles : null;
+            if (tiled) gpu.LampTiles!.BeginFrame(f.Eye, gpu.Gi);
+        }
+
+        gpu.Lamps?.Update(f.Eye, gpu.Objects, WorldLights.DaylightFactor(f.Hour, f.Scene.Clock.Sunrise, f.Scene.Clock.Sunset));
     }
 
     /// <summary>
-    /// How far from the eye the traced sun's share reaches (docs/render-shadows.md "Traced sun"): its end's view depth to the frame's corners. Without the traced sun, 0 (the grass
-    /// keeps its least reach for the lamps).
+    /// The global illumination's traced scene for this eye, the lamps' visibility cache and the traced sun's volume from it, then the probes.
+    /// </summary>
+    static void UpdateGiScene(ref FrameState f, Gi.GiScene gi, WorldObjectRenderer? objects)
+    {
+        var gpu = f.Gpu;
+        var heights = gpu.Terrain.Snapshot();
+        SetGiSceneInputs(ref f, gi);
+        gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
+        if (gpu.Lamps is { Tiles: { } lampTiles } tileLamps)
+        {
+            lampTiles.Fill(gi, tileLamps);
+            StageClock.Sub("lamp tiles");
+        }
+
+        // The traced sun's volume for what draws no traced pixel, before anything reads it (the reflection first).
+        if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow && gpu.Post is { } volumePost)
+        {
+            gpu.TracedSunVolume ??= new Gi.TracedSunVolume(volumePost.Gpu);
+            gpu.TracedSunVolume.Run(gi, volumeShadow, f.Light.SunDirection);
+            StageClock.Sub("traced sun volume");
+        }
+
+        StageClock.Sub("gi scene");
+        gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
+        StageClock.Sub("gi blend");
+    }
+
+    /// <summary>
+    /// What the traced scene's update reads this frame: the interior cuts, the lamps' shadows, the skin table, the grass's reach and shadows, the
+    /// casters' range and the pixel scale.
+    /// </summary>
+    static void SetGiSceneInputs(ref FrameState f, Gi.GiScene gi)
+    {
+        var gpu = f.Gpu;
+        gi.InteriorCuts = gpu.InteriorMask?.Cuts ?? [];
+        gi.LampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
+        gi.SkinTable = gpu.Characters?.SkinTable ?? 0;
+        gi.GrassReach = TracedReach(ref f);
+        gi.GrassShadows = gpu.Post?.Options.TracedGrass ?? true;
+        gi.Range = GiCasterRange(ref f);
+        gi.PixelsPerRadian = f.Render.TerrainPixelScale;
+    }
+
+    /// <summary>
+    /// How far the traced scene's objects cast: traced, as far as the cascades reached (the probes see them too); else the probes' range.
+    /// </summary>
+    static float GiCasterRange(ref FrameState f)
+    {
+        var gpu = f.Gpu;
+
+        // Through a lens longer than the game's what is far is drawn large, so the casters reach as much further (to 24000 at most: past it stand
+        // distant meshes).
+        float lens = Meitou.Data.Ogre.MeshLod.LensFactor(f.Camera.FieldOfView);
+        if (!gpu.Traced || gpu.Shadow is not { } reach) return Gi.GiScene.ProbeRange;
+
+        float range = reach.Settings.Range;
+        return Math.Max(Gi.GiScene.ProbeRange, lens < 1 ? Math.Max(range, Math.Min(range / lens, 24000)) : range);
+    }
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>: whether this frame traces the sun, and what decides it (every 120th frame).
+    /// </summary>
+    static void LogTraced(ref FrameState f, bool traced)
+    {
+        var gpu = f.Gpu;
+        string shadows = gpu.Shadow is { Enabled: true } s
+            ? s.Meitou ? "meitou" : "faithful"
+            : "off";
+        string scene = gpu.Gi?.Top is null ? "none" : "ready";
+        Console.WriteLine($"traced    {(traced ? "on" : "off")}: switch {gpu.Post?.Options.TracedSun}, gi resolve {gpu.Post?.GiResolve}, "
+            + $"shadows {shadows}, scene {scene}, traced cascades {gpu.Shadow?.TracedCascades} to view depth {gpu.Shadow?.TracedDepth:0}, "
+            + $"grass reach {gpu.Gi?.GrassReach:0}");
+    }
+
+    /// <summary>
+    /// How far from the eye the traced sun's share reaches (docs/render-shadows.md "Traced sun"): its end's view depth to the frame's corners.
+    /// Without the traced sun, 0 (the grass keeps its least reach for the lamps).
     /// </summary>
     static float TracedReach(ref FrameState f)
     {
         if (!f.Gpu.Traced || f.Gpu.Shadow is not { TracedDepth: > 0 } shadow) return 0;
+
         float tanY = MathF.Tan(f.Camera.FieldOfView * 0.5f), tanX = tanY * f.RenderWidth / Math.Max(f.RenderHeight, 1);
         return shadow.TracedDepth * MathF.Sqrt(1 + tanX * tanX + tanY * tanY);
     }
 
-    /// <summary>The "blood" stage's ground part: the blood on the ground near the eye (docs/game/blood-decals.md), before any terrain draw reads it.</summary>
+    /// <summary>
+    /// The "blood" stage's ground part: the blood on the ground near the eye (docs/game/blood-decals.md), before any terrain draw reads it.
+    /// </summary>
     static void RecordBlood(ref FrameState f)
     {
         var gpu = f.Gpu;
@@ -646,12 +728,16 @@ static partial class WorldFrame
         RecordTrails(gpu, f.Camera.Target);
     }
 
-    /// <summary>The ground trails round what the camera looks at (docs/render-terrain.md "Ground trails"; not the eye, which zooming moves), worn by the weather, before any terrain draw reads them.</summary>
+    /// <summary>
+    /// The ground trails round what the camera looks at (docs/render-terrain.md "Ground trails"; not the eye, which zooming moves), worn by the
+    /// weather, before any terrain draw reads them.
+    /// </summary>
     static void RecordTrails(WorldGpu gpu, Vector3 focus)
     {
         var trails = TerrainTrails.Enabled ? gpu.Trails : null;
         gpu.Terrain.Trails = trails;
         if (trails is null) return;
+
         trails.Imprints = gpu.Characters;
         var weather = gpu.Weather;
         trails.Record(focus, weather?.Times.Game ?? 0, WeatherSurfaces.RainAmount(gpu.Surfaces?.Rain ?? 0), weather?.State.WindSpeed ?? 0);
@@ -775,7 +861,9 @@ static partial class WorldFrame
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
         // precision far from the origin and the sky blurs.
         var rotation = f.Rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
-        // The eye-relative views (positions less f.Eye) from the precise eye: f.Eye is its float rounding, the rest a translation of under half a float step.
+
+        // The eye-relative views (positions less f.Eye) from the precise eye: f.Eye is its float rounding, the rest a translation of under half a
+        // float step.
         f.RelativeRotation = Matrix4x4.CreateTranslation(-f.EyeResidual) * rotation;
         var skyProjection = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), f.Jitter, f.RenderWidth, f.RenderHeight);
 
@@ -795,7 +883,10 @@ static partial class WorldFrame
         if (!skyHidden && !SkyBehindScene) gpu.Sky.Draw(skyProjection, f.Colours);
     }
 
-    /// <summary>The scene's sky is drawn after its opaque surfaces, where none was drawn (<c>MEITOU_SKY_FIRST=1</c>: before them, over the whole view, for comparing).</summary>
+    /// <summary>
+    /// The scene's sky is drawn after its opaque surfaces, where none was drawn (<c>MEITOU_SKY_FIRST=1</c>: before them, over the whole view, for
+    /// comparing).
+    /// </summary>
     public static bool SkyBehindScene { get; set; } = Environment.GetEnvironmentVariable("MEITOU_SKY_FIRST") != "1";
 
     /// <summary>
@@ -806,6 +897,7 @@ static partial class WorldFrame
     static void DrawSkyBehind(ref FrameState f)
     {
         if (!f.SkyShown || !SkyBehindScene) return;
+
         f.Host.Stage(5);
         f.Gpu.Sky.Draw(f.SkyProjection, f.Colours, behind: true);
         StageClock.Lap(5);
@@ -814,6 +906,11 @@ static partial class WorldFrame
     #endregion
 
     #region Scene
+
+    /// <summary>
+    /// The frames <see cref="MarkTracedSun"/> has seen under <c>--debug-shadows 4</c>: <see cref="LogTraced"/> writes every 120th.
+    /// </summary>
+    static int s_tracedLogs;
 
     /// <summary>
     /// The interior masks with the scene's camera, before the scene's passes (the terrain reads them).
@@ -852,18 +949,9 @@ static partial class WorldFrame
             && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
         bool projectedBlood = surfaceBlood || gpu.Decals?.FootprintsNear(f.Eye, s.Frustum) == true;
 
-        // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
-        bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
-        if (traced) gpu.Probes!.Traced = true;
-        if (gpu.DebugShadows == 4 && s_tracedLogs++ % 120 == 0) LogTraced(ref f, traced);
-        // The contact shadows' sun (PostProcess.ContactSun) leaves the colours the same way, with its cascades, until ContactSun puts it back.
-        bool apart = !traced && gpu.Post is { ContactSunReady: true } && gpu.Probes is not null;
-        if (apart) gpu.Probes!.SunApart = true;
-        // The traced lamps' shadows fall on the characters too, which mark themselves as receivers while the pass will run (PostProcess.RunLampShadows).
-        // The same mark makes them the receivers of their traced occlusion (PostProcess.RunCharacterOcclusion).
-        bool lampReceivers = gpu.Gi is { Top: not null } && gpu.Probes is not null
-            && (gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 } || gpu.Post is { CharacterOcclusionWanted: true });
-        if (lampReceivers) gpu.Probes!.LampReceivers = true;
+        bool traced = MarkTracedSun(ref f);
+        bool apart = MarkContactSun(gpu, traced);
+        bool lampReceivers = MarkLampReceivers(gpu);
 
         DrawSceneTerrain(ref f, s);
         if (projectedBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
@@ -876,22 +964,70 @@ static partial class WorldFrame
         if (lampReceivers) gpu.Probes!.LampReceivers = false;
         DrawSkyBehind(ref f);
         if (traced) TraceSun(ref f, s);
-        if (apart)
-        {
-            gpu.Probes!.SunApart = false;
-            f.Host.Close();
-            gpu.Post!.RunContactSun();
-            f.Host.Open(9, gpu.Post.WithShadingRate(gpu.Post.SceneTargets));
-            StageClock.Lap(14, "contact sun");
-        }
+        if (apart) RunContactSunApart(ref f);
         DrawWater(ref f, s.Near, s.Far, s.ViewProjection, f.RelativeRotation * s.Jittered);
         KeepParticleViews(ref f, s);
         CloseScene(f.Host);
     }
 
     /// <summary>
-    /// The traced sun (docs/render-shadows.md "Traced sun"): over the opaque scene, before the water copies it to refract: the pass closes for the rays and the
-    /// sun they let through, and opens again for the water.
+    /// Whether the rays take the sun over in this frame's main view; if so the probes leave it out of the colours (kenshiLight) until
+    /// <see cref="TraceSun"/>. Logs the decision under <c>--debug-shadows 4</c>.
+    /// </summary>
+    static bool MarkTracedSun(ref FrameState f)
+    {
+        var gpu = f.Gpu;
+
+        // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
+        bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
+        if (traced) gpu.Probes!.Traced = true;
+        if (gpu.DebugShadows == 4 && s_tracedLogs++ % 120 == 0) LogTraced(ref f, traced);
+        return traced;
+    }
+
+    /// <summary>
+    /// Whether the contact shadows' sun is drawn apart this frame (not while <paramref name="traced"/>); if so the probes leave it out of the
+    /// colours until <see cref="RunContactSunApart"/>.
+    /// </summary>
+    static bool MarkContactSun(WorldGpu gpu, bool traced)
+    {
+        // The contact shadows' sun (PostProcess.ContactSun) leaves the colours the same way, with its cascades, until ContactSun puts it back.
+        bool apart = !traced && gpu.Post is { ContactSunReady: true } && gpu.Probes is not null;
+        if (apart) gpu.Probes!.SunApart = true;
+        return apart;
+    }
+
+    /// <summary>
+    /// Whether the characters mark themselves as the traced lamps' and occlusion's receivers this frame; if so the probes are told until the
+    /// characters are drawn.
+    /// </summary>
+    static bool MarkLampReceivers(WorldGpu gpu)
+    {
+        // The traced lamps' shadows fall on the characters too, which mark themselves as receivers while the pass will run
+        // (PostProcess.RunLampShadows). The same mark makes them the receivers of their traced occlusion (PostProcess.RunCharacterOcclusion).
+        bool lampShadows = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
+        bool lampReceivers = gpu.Gi is { Top: not null } && gpu.Probes is not null
+            && (lampShadows || gpu.Post is { CharacterOcclusionWanted: true });
+        if (lampReceivers) gpu.Probes!.LampReceivers = true;
+        return lampReceivers;
+    }
+
+    /// <summary>
+    /// The contact shadows' sun put back over the opaque scene: the pass closes for it and opens again for the water.
+    /// </summary>
+    static void RunContactSunApart(ref FrameState f)
+    {
+        var gpu = f.Gpu;
+        gpu.Probes!.SunApart = false;
+        f.Host.Close();
+        gpu.Post!.RunContactSun();
+        f.Host.Open(9, gpu.Post.WithShadingRate(gpu.Post.SceneTargets));
+        StageClock.Lap(14, "contact sun");
+    }
+
+    /// <summary>
+    /// The traced sun (docs/render-shadows.md "Traced sun"): over the opaque scene, before the water copies it to refract: the pass closes for the
+    /// rays and the sun they let through, and opens again for the water.
     /// </summary>
     static void TraceSun(ref FrameState f, in SceneView s)
     {
@@ -925,7 +1061,9 @@ static partial class WorldFrame
         var jittered = Jitter.Apply(projection, f.Jitter, f.RenderWidth, f.RenderHeight);
         var viewProjection = f.View * jittered;
         var s = new SceneView(near, far, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
-        if (f.Gpu.Post is { } tracedPost && Matrix4x4.Invert(f.Rotation * jittered, out var toEye)) tracedPost.SceneToEye = toEye;   // the traced shadows' reconstruction
+
+        // the traced shadows' reconstruction
+        if (f.Gpu.Post is { } tracedPost && Matrix4x4.Invert(f.Rotation * jittered, out var toEye)) tracedPost.SceneToEye = toEye;
         AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.RelativeRotation * jittered, f.RelativeRotation * projection);
         return s;
     }
@@ -959,24 +1097,42 @@ static partial class WorldFrame
         f.Host.Stage(6);
         terrain.FogCull = f.Gpu.FogVolumes;
         terrain.InteriorCut = f.Gpu.InteriorMask;
-        // The resolved colour (PostProcess.TerrainResolveTargets): the patches' prepass in a pass of its own, into the scene's depth (cleared by the scene's pass, which closes for
-        // it) and the target that holds the resolve's inputs; DrawSceneLate then shades the patches over the picture.
+
+        // The resolved colour (PostProcess.TerrainResolveTargets): the patches' prepass in a pass of its own, into the scene's depth (cleared by
+        // the scene's pass, which closes for it) and the target that holds the resolve's inputs; DrawSceneLate then shades the patches over the
+        // picture.
         f.TerrainColour = null;
-        if (TerrainLateColour.Enabled && f.Gpu.Post is Post.PostProcess resolving && resolving.TerrainResolveTargets(out var prepass, out var colour, out var inputs))
+        if (TerrainLateColour.Enabled && f.Gpu.Post is Post.PostProcess resolving
+            && resolving.TerrainResolveTargets(out var prepass, out var colour, out var inputs))
         {
-            f.Host.Close();
-            var own = f.Gpu.TerrainPrepass ??= new SceneHost(f.Post.Context);
-            own.Open(6, prepass, new ClearColour(0, 0, 0, 0));
-            terrain.ResolveInputs = inputs;
-            terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: true, relative: f.RelativeRotation * s.Jittered);
-            own.Close();
-            f.Host.Open(6, f.Post.WithShadingRate(f.Post.SceneTargets));
+            DrawTerrainPrepass(ref f, s, prepass, inputs);
             f.TerrainColour = colour;
         }
-        else terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled, relative: f.RelativeRotation * s.Jittered);
+        else
+        {
+            var relative = f.RelativeRotation * s.Jittered;
+            terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled, relative: relative);
+        }
+
         terrain.InteriorCut = null;
         terrain.FogCull = null;
         StageClock.Lap(6);
+    }
+
+    /// <summary>
+    /// The terrain patches' prepass for the resolved colour, outside the scene's pass: into <paramref name="prepass"/> with the resolve's
+    /// <paramref name="inputs"/>; the scene's pass opens again after it.
+    /// </summary>
+    static void DrawTerrainPrepass(ref FrameState f, in SceneView s, PassTargets prepass, (uint G, uint Depth) inputs)
+    {
+        var terrain = f.Gpu.Terrain;
+        f.Host.Close();
+        var own = f.Gpu.TerrainPrepass ??= new SceneHost(f.Post.Context);
+        own.Open(6, prepass, new ClearColour(0, 0, 0, 0));
+        terrain.ResolveInputs = inputs;
+        terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: true, relative: f.RelativeRotation * s.Jittered);
+        own.Close();
+        f.Host.Open(6, f.Post.WithShadingRate(f.Post.SceneTargets));
     }
 
     /// <summary>
@@ -992,7 +1148,11 @@ static partial class WorldFrame
             objects.FogCull = gpu.FogVolumes;
             objects.InteriorCut = gpu.InteriorMask;
             objects.Selected = gpu.HoverOutline is null ? [] : gpu.OutlinedBuildings;   // their draws kept for the outline's masks
-            if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, f.RelativeRotation * s.Jittered);
+            if (f.Render.Objects)
+            {
+                objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain,
+                    f.RelativeRotation * s.Jittered);
+            }
             objects.FogCull = null;
             objects.InteriorCut = null;
             objects.Selected = [];
@@ -1014,7 +1174,8 @@ static partial class WorldFrame
             foliage.Occlusion = f.Post.OcclusionFor(f.Eye);
             foliage.InteriorCut = gpu.InteriorMask;
             foliage.PrepassView = true;
-            foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, relative: f.RelativeRotation * s.Jittered);
+            foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain,
+                relative: f.RelativeRotation * s.Jittered);
             foliage.PrepassView = false;
             foliage.FogCull = null;
             foliage.Occlusion = default;
@@ -1038,13 +1199,15 @@ static partial class WorldFrame
             f.Host.Open(6, f.Post.WithShadingRate(f.Post.SceneTargets));
         }
         else gpu.Terrain.DrawDeferred();
+
         gpu.Terrain.ResolveInputs = null;
         if (gpu.Debris is { } debris)
         {
             var relative = f.RelativeRotation * s.Jittered;
             debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
                 look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0, relative);
-            if (gpu.BirdPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BirdPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light, relative: relative);
+            if (gpu.BirdPieces.Count > 0)
+                debris.Draw(CollectionsMarshal.AsSpan(gpu.BirdPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light, relative: relative);
             if (gpu.BoltPieces.Count > 0)
             {
                 debris.Draw(CollectionsMarshal.AsSpan(gpu.BoltPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
@@ -1129,13 +1292,20 @@ static partial class WorldFrame
             swaying.SetMotionCamera(viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
         }
         gpu.Characters?.AttachMotion(post, gpu.Foliage, viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
+
         gpu.Debris?.BeginMotion(post.Temporal);   // the loose pieces' (birds, bolts, thrown bones and limbs) motion rides the characters' pass
         gpu.Objects?.BeginMotion(post.Temporal, f.Eye);
         if (gpu.Characters is { } chars)
         {
             var loose = post.Temporal ? gpu.Debris : null;
             var placed = post.Temporal ? gpu.Objects : null;
-            chars.ExtraMotion = loose is null && placed is null ? null : (t, c) => { loose?.DrawMotion(t, c); placed?.DrawMotion(t, c); };
+            chars.ExtraMotion = loose is null && placed is null
+                ? null
+                : (t, c) =>
+                {
+                    loose?.DrawMotion(t, c);
+                    placed?.DrawMotion(t, c);
+                };
         }
     }
 
@@ -1152,7 +1322,9 @@ static partial class WorldFrame
         if (water && gpu.Water is { } capturing && capturing.NeedsCapture(near))
         {
             host.Close();
-            // The GI resolve first: the water shows the scene it copies here, which must hold the light the ground beside the water will have (PostProcess.RunGiResolve).
+
+            // The GI resolve first: the water shows the scene it copies here, which must hold the light the ground beside the water will have
+            // (PostProcess.RunGiResolve).
             post.RunGiResolve(early: true);
             StageClock.Lap(14, "gi resolve");
             capturing.CaptureScene(post.SceneColour, post.SceneDepth, near, far);
@@ -1163,14 +1335,15 @@ static partial class WorldFrame
         if (water && gpu.Water is { } drawn)
         {
             drawn.Overcast = Overcast(gpu);
-            drawn.Draw(viewProjection, f.Eye, f.Light, f.Colours, f.Time, f.Camera.ViewDistance * 1.5f, f.Reflecting ? gpu.Reflection : null, relative);
+            var reflection = f.Reflecting ? gpu.Reflection : null;
+            drawn.Draw(viewProjection, f.Eye, f.Light, f.Colours, f.Time, f.Camera.ViewDistance * 1.5f, reflection, relative);
         }
         StageClock.Lap(9);
     }
 
     /// <summary>
-    /// After the scene's passes, over the finished scene: the GI resolve, the reflections, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the sun is
-    /// shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
+    /// After the scene's passes, over the finished scene: the GI resolve, the reflections, the Meitou light shafts (docs/render-shafts.md: the haze
+    /// darkened where the sun is shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
     /// </summary>
     static void FinishScene(ref FrameState f)
     {
@@ -1180,9 +1353,11 @@ static partial class WorldFrame
 
         post.RunGiResolve();
         StageClock.Lap(14, "gi resolve");
+
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         gpu.Post?.RunCharacterOcclusion(gpu.GiActive ? gpu.Gi : null);
         StageClock.Lap(StageClock.LampShadows);
+
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");
 
@@ -1193,7 +1368,8 @@ static partial class WorldFrame
             post.RunLightShafts(darkening, distance, f.Floor, ShaftAirByTime(post.Options, f.Scene.Clock, f.Hour));
             StageClock.Lap(StageClock.Shafts);
         }
-        if (gpu.DebugShadows is >= 2 and < 4 && gpu.Shadow is not null) gpu.Shadow.CaptureDepth(post.SceneDepth, f.RenderWidth, f.RenderHeight);
+        if (gpu.DebugShadows is >= 2 and < 4 && gpu.Shadow is not null)
+            gpu.Shadow.CaptureDepth(post.SceneDepth, f.RenderWidth, f.RenderHeight);
 
         // The placed fog volumes over the finished scene (opaque, water, sky; the haze is in the shaders), one pass reading the depth, as the game's
         // queue 82 does.
@@ -1287,9 +1463,8 @@ static partial class WorldFrame
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
         {
-            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, f.RelativeRotation * SceneProjection().Projection,
-                camera,
-                    f.Sun);
+            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight,
+                f.RelativeRotation * SceneProjection().Projection, camera, f.Sun);
         }
         else gpu.Markers?.Idle();
 
@@ -1304,7 +1479,7 @@ static partial class WorldFrame
         if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
         {
             debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight,
-                    f.RelativeRotation * SceneProjection().Projection, eye);
+                f.RelativeRotation * SceneProjection().Projection, eye);
         }
 
         // The hover outline (Meitou only): the characters' masks drawn after the portraits, the outlined buildings' from what the scene drew of them.

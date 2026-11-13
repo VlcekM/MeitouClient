@@ -172,8 +172,7 @@ public class AnimationTests
         Assert.Equal(1003, hot.Position.Z, 3);
 
         // The movement separation then pushes the overlapping bodies apart.
-        for (int i = 0; i < 30; i++)
-            world.RunTick();
+        for (int i = 0; i < 30; i++) world.RunTick();
 
         var pa = world.Characters.Previous[a.Slot].Position;
         var pb = world.Characters.Previous[b.Slot].Position;

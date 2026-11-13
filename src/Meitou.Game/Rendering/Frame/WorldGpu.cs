@@ -35,7 +35,8 @@ internal sealed class WorldGpu : IDisposable
     public WaterRenderer? Water;
 
     /// <summary>
-    /// The options the world was made from (the settings panel's rows for the start-up sizes and the haze distance read and write them; null in tests).
+    /// The options the world was made from (the settings panel's rows for the start-up sizes and the haze distance read and write them; null in
+    /// tests).
     /// </summary>
     public WorldOptions? Options;
 
@@ -230,16 +231,36 @@ internal sealed class WorldGpu : IDisposable
     /// "Resolve").
     /// </summary>
     public int GiResolve = 2;
-    /// <summary>Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").</summary>
-    public bool Traced;
-    internal Gi.TracedSunPass? TracedSun;
-    internal Gi.LampTiles? LampTiles;
-    /// <summary>The pass of the terrain patches' prepass when their colour is resolved over the picture (WorldFrame.DrawSceneTerrain).</summary>
-    internal SceneHost? TerrainPrepass;
-    internal Gi.TracedSunVolume? TracedSunVolume;
-    /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
-    public PostProcess? Post;
 
+    /// <summary>
+    /// Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").
+    /// </summary>
+    public bool Traced;
+
+    /// <summary>
+    /// The traced sun's pass (null until a frame first traces the sun).
+    /// </summary>
+    internal Gi.TracedSunPass? TracedSun;
+
+    /// <summary>
+    /// The lamps' visibility cache (null until the traced lamp shadows first want it).
+    /// </summary>
+    internal Gi.LampTiles? LampTiles;
+
+    /// <summary>
+    /// The pass of the terrain patches' prepass when their colour is resolved over the picture (WorldFrame.DrawSceneTerrain).
+    /// </summary>
+    internal SceneHost? TerrainPrepass;
+
+    /// <summary>
+    /// The traced sun's volume for what draws no traced pixel (null until a frame first traces the sun with it).
+    /// </summary>
+    internal Gi.TracedSunVolume? TracedSunVolume;
+
+    /// <summary>
+    /// The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.
+    /// </summary>
+    public PostProcess? Post;
 
     /// <summary>
     /// The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on

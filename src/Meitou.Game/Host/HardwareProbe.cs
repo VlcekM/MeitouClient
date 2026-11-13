@@ -43,15 +43,21 @@ static class HardwareProbe
     /// </summary>
     internal static int? GeForceTier(string gpu)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(gpu, @"(RTX|GTX)\s*(\d\d)(\d)0\s*(Ti)?\s*(SUPER)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var m = System.Text.RegularExpressions.Regex.Match(gpu, @"(RTX|GTX)\s*(\d\d)(\d)0\s*(Ti)?\s*(SUPER)?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (!m.Success) return null;
 
-        int series = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), model = m.Groups[3].Value[0] - '0';
-        bool ti = m.Groups[4].Success, super = m.Groups[5].Success;
-        const int low = QualityTiers.LowPreset, medium = QualityTiers.MediumPreset, high = QualityTiers.HighPreset, ultra = QualityTiers.UltraPreset,
-            extreme = QualityTiers.ExtremePreset;
+        int series = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        int model = m.Groups[3].Value[0] - '0';
+        bool ti = m.Groups[4].Success;
+        bool super = m.Groups[5].Success;
+        const int low = QualityTiers.LowPreset;
+        const int medium = QualityTiers.MediumPreset;
+        const int high = QualityTiers.HighPreset;
+        const int ultra = QualityTiers.UltraPreset;
+        const int extreme = QualityTiers.ExtremePreset;
         int? tier = m.Groups[1].Value.Equals("GTX", StringComparison.OrdinalIgnoreCase)
-            ? series == 10 && model == 8 && ti ? medium : low
+            ? (series == 10 && model == 8 && ti ? medium : low)
             : (series, model) switch
             {
                 (20, 6 or 7) => medium,
@@ -72,6 +78,7 @@ static class HardwareProbe
                 (50, 8 or 9) => extreme,
                 _ => null,
             };
+
         return tier is { } t && gpu.Contains("Laptop", StringComparison.OrdinalIgnoreCase) ? Math.Max(t - 1, low) : tier;
     }
 

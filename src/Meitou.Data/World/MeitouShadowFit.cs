@@ -178,8 +178,8 @@ public static class MeitouShadowFit
             Translation = translation,
             Extent = (size, size, depth),
             Texel = texel,
-            // No caster bias (FixedBias 0): the bias is the receiver's own, by its plane (MeitouShadowShaders, msCascade). A caster's pushes every shadow
-            // off its caster's foot by the caster's slope, whatever receives it.
+            // No caster bias (FixedBias 0): the bias is the receiver's own, by its plane (MeitouShadowShaders, msCascade). A caster's pushes every
+            // shadow off its caster's foot by the caster's slope, whatever receives it.
             FilterRadius = (float)(1.5 / tile),
             Tile = new Vector4(0, 0, 1, 1),   // the whole of its layer (i) of the cascade array
         };

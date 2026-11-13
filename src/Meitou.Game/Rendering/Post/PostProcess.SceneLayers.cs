@@ -112,8 +112,11 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) _fogShadow;
 
-    /// <summary>The uniforms both merged passes share; the grid and range those of this frame's shafts (unused while neither layer reads them).</summary>
-    /// <param name="shadowedFog">False: the fog volumes unshadowed (their shadow added after the upscaler, <see cref="CompositeLateFogShadow"/>).</param>
+    /// <summary>
+    /// The uniforms both merged passes share; the grid and range those of this frame's shafts (unused while neither layer reads them).
+    /// </summary>
+    /// <param name="shadowedFog">False: the fog volumes unshadowed (their shadow added after the upscaler,
+    /// <see cref="CompositeLateFogShadow"/>).</param>
     void SetLayerCommon(LayerPass p, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaft, bool shadowedFog = true)
     {
         Bind(p.P, p.NearDepth, _sceneDepth);

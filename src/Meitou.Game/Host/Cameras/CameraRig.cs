@@ -136,6 +136,7 @@ public sealed class CameraRig
             Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
             return;
         }
+
         Strategy.Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
         TakeOver(saved.Free, false);
     }

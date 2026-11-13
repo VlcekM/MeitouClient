@@ -273,6 +273,7 @@ public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
         if (maker is not null) item.CompanyId = maker.StringId;
         if (model is not null) item.MaterialId = model.StringId;
         if (Level is { } level) item.Level = level;
+
         return true;
     }
 
@@ -827,6 +828,7 @@ static class DebugCheats
         else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
             (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
         else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
+
         return true;
     }
 

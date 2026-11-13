@@ -805,9 +805,11 @@ public sealed class ParticleSimulation
             for (int i = lo; i < hi; i++)
             {
                 if (excluded?[t.Emitter[i]] == true) continue;
+
                 var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
                 float r2 = d.LengthSquared();
                 if (!(r2 > 0)) continue;
+
                 var dv = d * (pull * t.Mass[i] / r2);
                 t.Vx[i] += dv.X;
                 t.Vy[i] += dv.Y;
@@ -876,9 +878,14 @@ public sealed class ParticleSimulation
         {
             t.RandomiserClock[k] += dt;
             if (t.RandomiserClock[k] <= stepTime) return;
+
             t.RandomiserClock[k] -= stepTime;
         }
-        else rate = MathF.Sqrt(Math.Min(dt * 60, 4));
+        else
+        {
+            rate = MathF.Sqrt(Math.Min(dt * 60, 4));
+        }
+
         uint step = t.Step * 2654435761u + (uint)k * 40503u;
         bool kick = a.RandomDirection;
         var dev = a.MaxDeviation * (kick ? Definition.ScaleVelocity * rate : rate);
@@ -888,6 +895,7 @@ public sealed class ParticleSimulation
             for (int i = lo; i < hi; i++)
             {
                 if (excluded?[t.Emitter[i]] == true) continue;
+
                 uint s = t.Seed[i] ^ step;
                 float x = (Hash01(s * 3 + 1) * 2 - 1) * dev.X * place.X;
                 float y = (Hash01(s * 3 + 2) * 2 - 1) * dev.Y * place.Y;

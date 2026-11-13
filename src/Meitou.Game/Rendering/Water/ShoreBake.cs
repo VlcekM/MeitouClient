@@ -177,6 +177,16 @@ internal static class ShoreBake
     const int Block = 8;
 
     /// <summary>
+    /// The relaxed distance's box radius (texels) and how far from the grid's edge it starts easing in (texels).
+    /// </summary>
+    const int RelaxRadius = 10, RelaxEdge = 32;
+
+    /// <summary>
+    /// The shore distances (units) over which the distance is eased from exact to its blur.
+    /// </summary>
+    const float RelaxNear = 40, RelaxFar = 250;
+
+    /// <summary>
     /// The centre a bake for (<paramref name="x"/>, <paramref name="z"/>) would use: snapped to whole texels.
     /// </summary>
     public static (float X, float Z) SnapCentre(float x, float z, float texel) => (MathF.Round(x / texel) * texel, MathF.Round(z / texel) * texel);
@@ -214,20 +224,31 @@ internal static class ShoreBake
         Smooth(dist, tmp, n);
         var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel, scratch), Scratch.Get(ref scratch.Exposure, n * n));
         Relax(dist, Scratch.Get(ref scratch.Wide, n * n), tmp, n, texel);
+        var (travel, swell) = BakeTravel(s, dist, n, texel, x0, z0, walls, scratch);
+
+        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure, travel, swell);
+    }
+
+    /// <summary>
+    /// The shore waves' travel time and swell (<see cref="ShoreTravel"/>) into the scratch's arrays; both 0 where the field has no shore (every
+    /// distance the same).
+    /// </summary>
+    static (float[] Travel, float[] Swell) BakeTravel(float[] s, float[] dist, int n, float texel, float x0, float z0,
+        IReadOnlyList<(Vector2 A, Vector2 B)>? walls, Scratch scratch)
+    {
         var travel = Scratch.Get(ref scratch.Travel, n * n);
         var swell = Scratch.Get(ref scratch.Swell, n * n);
         bool shore = dist.AsSpan().ContainsAnyExcept(dist[0]);
-        if (shore)
-        {
-            ShoreTravel.Bake(s, dist, n, texel, x0, z0, walls, travel, swell);
-        }
-        else
+        if (!shore)
         {
             Array.Clear(travel);
             Array.Clear(swell);
+            return (travel, swell);
         }
 
-        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure, travel, swell);
+        ShoreTravel.Bake(s, dist, n, texel, x0, z0, walls, travel, swell);
+
+        return (travel, swell);
     }
 
     /// <summary>
@@ -536,10 +557,11 @@ internal static class ShoreBake
     }
 
     /// <summary>
-    /// Offshore the distance is eased towards its blur (three box passes of <see cref="RelaxRadius"/> texels, about a 105-unit Gaussian at 10 units a texel), from
-    /// <see cref="RelaxNear"/> to <see cref="RelaxFar"/> units out, and not within <see cref="RelaxEdge"/> texels of the grid's edge (the blur's edge would bend it). The exact
-    /// distance creases where the nearest shore switches (a bay's middle, off a point or a pier's corner): the breakers' crests, which follow its lines, kinked there and
-    /// their foam's frame (the gradient) flipped along a straight seam. Eased, the crests bend round such places as refracted swell does; the waterline is unchanged.
+    /// Offshore the distance is eased towards its blur (three box passes of <see cref="RelaxRadius"/> texels, about a 105-unit Gaussian at 10 units
+    /// a texel), from <see cref="RelaxNear"/> to <see cref="RelaxFar"/> units out, and not within <see cref="RelaxEdge"/> texels of the grid's edge
+    /// (the blur's edge would bend it). The exact distance creases where the nearest shore switches (a bay's middle, off a point or a pier's
+    /// corner): the breakers' crests, which follow its lines, kinked there and their foam's frame (the gradient) flipped along a straight seam.
+    /// Eased, the crests bend round such places as refracted swell does; the waterline is unchanged.
     /// </summary>
     static void Relax(float[] dist, float[] wide, float[] tmp, int n, float texel)
     {
@@ -549,6 +571,7 @@ internal static class ShoreBake
             BoxRows(wide, tmp, n);
             BoxColumns(tmp, wide, n);
         }
+
         float near = RelaxNear, far = RelaxFar;
         Parallel.For(0, n, j =>
         {
@@ -562,10 +585,9 @@ internal static class ShoreBake
         });
     }
 
-    const int RelaxRadius = 10, RelaxEdge = 32;
-    const float RelaxNear = 40, RelaxFar = 250;
-
-    /// <summary>One box pass of <see cref="RelaxRadius"/> along the rows (edge texels repeated), a running sum.</summary>
+    /// <summary>
+    /// One box pass of <see cref="RelaxRadius"/> along the rows (edge texels repeated), a running sum.
+    /// </summary>
     static void BoxRows(float[] a, float[] b, int n)
     {
         const int r = RelaxRadius;
@@ -574,6 +596,7 @@ internal static class ShoreBake
             int row = j * n;
             float sum = 0;
             for (int k = -r; k <= r; k++) sum += a[row + Math.Clamp(k, 0, n - 1)];
+
             for (int i = 0; i < n; i++)
             {
                 b[row + i] = sum / (2 * r + 1);
@@ -582,7 +605,9 @@ internal static class ShoreBake
         });
     }
 
-    /// <summary>The same along the columns.</summary>
+    /// <summary>
+    /// The same along the columns.
+    /// </summary>
     static void BoxColumns(float[] a, float[] b, int n)
     {
         const int r = RelaxRadius;
@@ -590,6 +615,7 @@ internal static class ShoreBake
         {
             float sum = 0;
             for (int k = -r; k <= r; k++) sum += a[Math.Clamp(k, 0, n - 1) * n + i];
+
             for (int j = 0; j < n; j++)
             {
                 b[j * n + i] = sum / (2 * r + 1);

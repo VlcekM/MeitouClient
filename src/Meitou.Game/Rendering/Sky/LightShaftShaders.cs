@@ -90,9 +90,9 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The sun's shadow at a world point, after <see cref="AtmosphereShaders.Functions"/>: one compare in the first cascade that holds it (no filter, no
-    /// surface to offset from), with the Meitou receiver's fade at the shadow range, its terrain term and its landmark map. The Faithful receiver's
-    /// cascades end at the last split.
+    /// The sun's shadow at a world point, after <see cref="AtmosphereShaders.Functions"/>: one compare in the first cascade that holds it (no filter,
+    /// no surface to offset from), with the Meitou receiver's fade at the shadow range, its terrain term and its landmark map. The Faithful
+    /// receiver's cascades end at the last split.
     /// </summary>
     internal static readonly string SunShadow = $$"""
 
@@ -158,11 +158,14 @@ static class LightShaftShaders
         }
         """;
 
-    const string InjectSample = "lit += shaftShadow(uShaftEye + shaftRay(uv) * dist, j);";
+    /// <summary>
+    /// The line of <see cref="Inject"/> that <see cref="InjectClouded"/> replaces: one sample's sun share.
+    /// </summary>
+    const string InjectSample ="lit += shaftShadow(uShaftEye + shaftRay(uv) * dist, j);";
 
     /// <summary>
-    /// <see cref="Inject"/> with the cloud transmission map on the sun at each sample (the <c>gihybrid</c> switch's <c>clouds</c> part): a cloud's shadow on the ground
-    /// goes up the air under it (docs/render-shafts.md "Cloud cover").
+    /// <see cref="Inject"/> with the cloud transmission map on the sun at each sample (the <c>gihybrid</c> switch's <c>clouds</c> part): a cloud's
+    /// shadow on the ground goes up the air under it (docs/render-shafts.md "Cloud cover").
     /// </summary>
     public static readonly string InjectClouded = Inject.Contains(InjectSample, StringComparison.Ordinal)
         ? Inject.Replace(InjectSample, """

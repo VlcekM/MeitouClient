@@ -227,7 +227,8 @@ public sealed class BirdFlocks
         _groups.Select(g =>
         {
             var range = CellsAround(g, eye);
-            return (g.Kind.Id, g.Birds.Count, g.Birds.Count(b => Vector3.Distance(b.Position, eye) <= near), range.Total, range.Matches, g.Kind.Distance, g.Kind.SpawnCount);
+            int nearby = g.Birds.Count(b => Vector3.Distance(b.Position, eye) <= near);
+            return (g.Kind.Id, g.Birds.Count, nearby, range.Total, range.Matches, g.Kind.Distance, g.Kind.SpawnCount);
         });
 
     /// <summary>

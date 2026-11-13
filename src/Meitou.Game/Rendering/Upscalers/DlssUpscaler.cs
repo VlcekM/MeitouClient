@@ -47,6 +47,26 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     bool _failed;
 
     /// <summary>
+    /// Streamline's <c>eWarnOutOfVRAM</c> (39): the call did its work, the driver warns that the card's memory budget is exceeded.
+    /// </summary>
+    const int WarnOutOfVram = 39;
+
+    /// <summary>
+    /// <c>MEITOU_DLSS_FAIL_AT=n</c>: the n-th evaluation fails after it was recorded (to test the fallback; 0: never).
+    /// </summary>
+    static readonly int FailAt = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_FAIL_AT"), out int failAt) ? failAt : 0;
+
+    /// <summary>
+    /// The evaluations recorded so far (for <see cref="FailAt"/>).
+    /// </summary>
+    int _evaluated;
+
+    /// <summary>
+    /// The out-of-memory warning was logged once.
+    /// </summary>
+    bool _warnedVram;
+
+    /// <summary>
     /// Allocates the upscale viewport.
     /// </summary>
     DlssUpscaler(Streamline sl, GpuContext ctx)
@@ -187,8 +207,10 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             r = _sl.EvaluateFeature(FeatureDlss, token, &input, 1, list.Handle.Handle);
             if (!Succeeded(r)) return Fail($"slEvaluateFeature failed ({r})");
 
-            // MEITOU_DLSS_FAIL_AT=n: report a failure after the n-th evaluation was recorded, as Streamline's out-of-memory warning once did (test hook for the fallback path).
-            if (FailAt > 0 && ++_evaluated == FailAt) return Fail("forced failure after the evaluation was recorded (MEITOU_DLSS_FAIL_AT)");
+            // MEITOU_DLSS_FAIL_AT=n: report a failure after the n-th evaluation was recorded, as Streamline's out-of-memory warning once did
+            // (test hook for the fallback path).
+            if (FailAt > 0 && ++_evaluated == FailAt)
+                return Fail("forced failure after the evaluation was recorded (MEITOU_DLSS_FAIL_AT)");
         }
         finally
         {
@@ -222,26 +244,6 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         if (i.Exposure is not null) tags[count++] = SlTypes.Tag(&exposure, BufferExposure, ValidUntilEvaluate);
         return _sl.SetTagForFrame(token, _viewport, tags, count, cb);
     }
-
-    /// <summary>
-    /// Streamline's <c>eWarnOutOfVRAM</c> (39): the call did its work, the driver warns that the card's memory budget is exceeded.
-    /// </summary>
-    const int WarnOutOfVram = 39;
-
-    /// <summary>
-    /// <c>MEITOU_DLSS_FAIL_AT=n</c>: the n-th evaluation fails after it was recorded (to test the fallback; 0: never).
-    /// </summary>
-    static readonly int FailAt = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_FAIL_AT"), out int failAt) ? failAt : 0;
-
-    /// <summary>
-    /// The evaluations recorded so far (for <see cref="FailAt"/>).
-    /// </summary>
-    int _evaluated;
-
-    /// <summary>
-    /// The out-of-memory warning was logged once.
-    /// </summary>
-    bool _warnedVram;
 
     /// <summary>
     /// A Streamline result that is not a failure: ok, or the out-of-memory warning (the evaluation was recorded and runs; counting it a failure

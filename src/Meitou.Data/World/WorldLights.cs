@@ -169,6 +169,7 @@ public static class WorldLights
 
         // A standalone placement (the character editor's bar) has no state record; its layouts are named by the placement.
         if (layouts is null) return result;
+
         AddLayout(db, layouts, building, b.LayoutName(state, exterior: true), exterior: true, result);
         if (includeInteriors && !b.WithoutInterior)
         {

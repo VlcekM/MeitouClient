@@ -275,8 +275,8 @@ public sealed partial class PopulationSystem
     sealed record WorldShare(Dictionary<string, int> Counts, int Zones);
 
     /// <summary>
-    /// The world's share now: the living squads and the unmade or saved platoons per template, the wild squads kept for unloaded sites, and the zones
-    /// loaded (the active ones, at least the sectors loaded or loading).
+    /// The world's share now: the living squads and the unmade or saved platoons per template, the wild squads kept for unloaded sites, and the
+    /// zones loaded (the active ones, at least the sectors loaded or loading).
     /// </summary>
     WorldShare WorldShareOf(World world)
     {
@@ -301,6 +301,7 @@ public sealed partial class PopulationSystem
 
         // The zone manager's loaded zones: the active ones, at least the sectors loaded (or loading) now.
         int sectors = _wildLoaded.Count(i => _wildSites![i].Kind == WildKind.Sector);
+
         return new WorldShare(counts, Math.Max(Math.Max(_active.Count, sectors), 1));
     }
 
@@ -877,7 +878,10 @@ public sealed partial class PopulationSystem
         state.Squads.Add(squad.Id);
         if (SpawnTrace is { Count: > 0 } trace && trace[^1].SquadId == squad.Id)
         {
-            trace[^1] = trace[^1] with { Source = site.Kind == WildKind.Nest ? "nest:" + site.Nest!.Name : "sector:" + _data.Biomes!.Groups[site.Group].Name };
+            string source = site.Kind == WildKind.Nest
+                ? "nest:" + site.Nest!.Name
+                : "sector:" + _data.Biomes!.Groups[site.Group].Name;
+            trace[^1] = trace[^1] with { Source = source };
         }
 
         if (_wildLog.Count < 256)

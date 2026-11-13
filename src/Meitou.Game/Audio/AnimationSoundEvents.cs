@@ -9,11 +9,18 @@ namespace Meitou.Game.Audio;
 /// <see cref="OverrideValue"/>) and the event to post when the animation ends (<see cref="Stop"/>). <see cref="Footstep"/> is an event called exactly
 /// <c>Footsteps</c>.
 /// </summary>
-public sealed record AnimationSoundEvent(string Event, string OverrideState, string OverrideValue, string Stop, bool Footstep, float Fraction) : IAnimationEvent;
+public sealed record AnimationSoundEvent(string Event, string OverrideState, string OverrideValue, string Stop, bool Footstep, float Fraction)
+    : IAnimationEvent;
 
-/// <summary>An event at a fraction of its clip, fired by an <see cref="AnimationEventCursor"/> (the exe keeps sound, ground and reload events in one list, each with its own fire).</summary>
+/// <summary>
+/// An event at a fraction of its clip, fired by an <see cref="AnimationEventCursor"/> (the exe keeps sound, ground and reload events in one list,
+/// each with its own fire).
+/// </summary>
 public interface IAnimationEvent
 {
+    /// <summary>
+    /// Where in its clip the event fires (0 to 1).
+    /// </summary>
     float Fraction { get; }
 }
 

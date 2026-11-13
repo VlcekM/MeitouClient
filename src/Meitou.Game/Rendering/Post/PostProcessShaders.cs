@@ -37,7 +37,8 @@ static class PostProcessShaders
     /// in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the frame globals' own <c>atmoApply</c>
     /// evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
     /// </summary>
-    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + LightShaftShaders.SunShadow + """
+    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions
+        + LightShaftShaders.SunShadow + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -192,10 +193,11 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Contact shadows (docs/render-post.md "Contact shadows") at the render size, on their own: the <see cref="Ssao"/> source's functions with a main of their
-    /// own, so they run with SSAO, GTAO or no occlusion, keep the detail a half-size pass blurs (armour layers, hair over a face) and take none of the occlusion's
-    /// reduction on characters. With the sun written apart (<c>uTermOn</c>, <see cref="PostProcess.ContactSun"/>): writes the sun term times what the contact
-    /// shadows leave of it, through the haze, added to the scene. Without: the light kept (1: none taken), multiplied into the scene colour.
+    /// Contact shadows (docs/render-post.md "Contact shadows") at the render size, on their own: the <see cref="Ssao"/> source's functions with a
+    /// main of their own, so they run with SSAO, GTAO or no occlusion, keep the detail a half-size pass blurs (armour layers, hair over a face) and
+    /// take none of the occlusion's reduction on characters. With the sun written apart (<c>uTermOn</c>, <see cref="PostProcess.ContactSun"/>):
+    /// writes the sun term times what the contact shadows leave of it, through the haze, added to the scene. Without: the light kept (1: none taken),
+    /// multiplied into the scene colour.
     /// </summary>
     public static readonly string Contact = Ssao[..(Ssao.IndexOf("\nvoid main()", StringComparison.Ordinal) + 1)] + """
         uniform usampler2D uSurface;   // the GI surface target: bit 16 of w is set where the sun was written apart (the traced sun's pixels, or these shadows')
@@ -353,11 +355,13 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The fog volumes' sun shadow kept apart (docs/render-shafts.md "Fog shadow after the upscaler"): at half the render size as <see cref="LayersHalf"/>
-    /// (each texel the full-size pixel at twice its coordinates), what the shadow changes in the volumes' colour, shadowed minus unshadowed (rgb, mostly
-    /// negative). The merged pass then blends the volumes unshadowed and <see cref="LateFogShadow"/> adds this over the upscaler's output.
+    /// The fog volumes' sun shadow kept apart (docs/render-shafts.md "Fog shadow after the upscaler"): at half the render size as
+    /// <see cref="LayersHalf"/> (each texel the full-size pixel at twice its coordinates), what the shadow changes in the volumes' colour, shadowed
+    /// minus unshadowed (rgb, mostly negative). The merged pass then blends the volumes unshadowed and <see cref="LateFogShadow"/> adds this over the
+    /// upscaler's output.
     /// </summary>
-    public static readonly string FogShadowHalf = "#version 330 core\n#define FOG_VOLUME_DELTA\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+    public static readonly string FogShadowHalf = "#version 330 core\n#define FOG_VOLUME_DELTA\n" + AtmosphereShaders.Functions
+        + LightShaftShaders.FogVolumeShadow
         + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + """
 
         out vec4 fragColour;
@@ -377,9 +381,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels, weighted
-    /// bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)). False where no
-    /// texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
+    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels,
+    /// weighted bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)).
+    /// False where no texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
     /// </summary>
     const string HalfUpsample = """
 
@@ -415,13 +419,14 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The fog volumes' shadow (<see cref="FogShadowHalf"/>) over the upscaler's output (<c>PostProcess.CompositeLateFogShadow</c>): the target pixel's place
-    /// in the render picture (the jitter undone), the four render pixels round it each upsampled by its own distance (<see cref="HalfUpsample"/>),
-    /// weighted bilinearly; then last frame's, reprojected by the closest of the four's motion, kept within the four's range and blended in (the four
-    /// follow the jitter at a depth edge). Written to a target of its own, which <see cref="LateFogShadowApply"/> adds.
+    /// The fog volumes' shadow (<see cref="FogShadowHalf"/>) over the upscaler's output (<c>PostProcess.CompositeLateFogShadow</c>): the target
+    /// pixel's place in the render picture (the jitter undone), the four render pixels round it each upsampled by its own distance
+    /// (<see cref="HalfUpsample"/>), weighted bilinearly; then last frame's, reprojected by the closest of the four's motion, kept within the four's
+    /// range and blended in (the four follow the jitter at a depth edge). Written to a target of its own, which <see cref="LateFogShadowApply"/>
+    /// adds.
     /// </summary>
-    public static readonly string LateFogShadow = "#version 330 core\n" + LightShaftShaders.CommonUniforms + AtmosphereShaders.WaterHorizonFunctions + SceneDistance
-        + HalfUpsample + """
+    public static readonly string LateFogShadow = "#version 330 core\n" + LightShaftShaders.CommonUniforms + AtmosphereShaders.WaterHorizonFunctions
+        + SceneDistance + HalfUpsample + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -459,7 +464,10 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>The upscaler's output plus the fog volumes' filtered shadow (<see cref="LateFogShadow"/>), into a target of its own (the TAA's output is its next history).</summary>
+    /// <summary>
+    /// The upscaler's output plus the fog volumes' filtered shadow (<see cref="LateFogShadow"/>), into a target of its own (the TAA's output is its
+    /// next history).
+    /// </summary>
     public const string LateFogShadowApply = """
         #version 330 core
         in vec2 vUv;
@@ -475,12 +483,13 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the SSAO's
-    /// factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as <c>scene * a + rgb</c>; in their
-    /// old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> = <c>scene * (a1 a2 ao) + (c1 a2 + c2) ao</c>, one
-    /// blend of the same state (the occlusion is grey). The shafts' and the fog are computed here, or upsampled from <see cref="LayersHalf"/> (uHalf: which
-    /// of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no texel, computed here at full size. With uHalf 0 (and the
-    /// <c>layers-lean</c> split, <see cref="SceneLayersLean"/>) it is the pass for the pixels the lean one left out.
+    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the
+    /// SSAO's factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as
+    /// <c>scene * a + rgb</c>; in their old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> =
+    /// <c>scene * (a1 a2 ao) + (c1 a2 + c2) ao</c>, one blend of the same state (the occlusion is grey). The shafts' and the fog are computed here,
+    /// or upsampled from <see cref="LayersHalf"/> (uHalf: which of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no
+    /// texel, computed here at full size. With uHalf 0 (and the <c>layers-lean</c> split, <see cref="SceneLayersLean"/>) it is the pass for the
+    /// pixels the lean one left out.
     /// </summary>
     public static readonly string SceneLayers = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
         + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance

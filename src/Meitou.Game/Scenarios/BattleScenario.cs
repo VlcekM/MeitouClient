@@ -335,8 +335,14 @@ sealed class BattleScenario(GameHost host)
         host.Player.Notice("Battle restarted (Backspace)");
     }
 
-    /// <summary>The race a record's <c>race</c> list names (an animal's: <see cref="Meitou.Data.Characters.CharacterAppearance.AnimalRaceId"/>).</summary>
-    static string? BattleRaceId(Meitou.Data.GameRecord record) => record.Type == Meitou.Data.Fcs.FcsRecordType.AnimalCharacter
-        ? Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(record)
-        : record.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => r.TargetStringId).FirstOrDefault();
+    /// <summary>
+    /// The race a record's <c>race</c> list names (an animal's: <see cref="Meitou.Data.Characters.CharacterAppearance.AnimalRaceId"/>).
+    /// </summary>
+    static string? BattleRaceId(Meitou.Data.GameRecord record) =>
+        record.Type == Meitou.Data.Fcs.FcsRecordType.AnimalCharacter
+            ? Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(record)
+            : record.GetReferences("race")
+                .Where(r => r.Values.Value0 > 0)
+                .Select(r => r.TargetStringId)
+                .FirstOrDefault();
 }

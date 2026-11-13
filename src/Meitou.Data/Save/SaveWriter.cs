@@ -72,9 +72,7 @@ public sealed class SaveWriter(SaveGame game)
         WriteModData(work);
         WriteLevelEdits(work);
         if (_game.WeaponBlood is not null)
-        {
             File.WriteAllBytes(Path.Combine(work, SaveFolder.WeaponBloodName), _game.WeaponBlood);
-        }
     }
 
     /// <summary>

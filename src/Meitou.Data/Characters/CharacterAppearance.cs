@@ -855,10 +855,7 @@ public sealed class CharacterAppearance
         var refs = animal.GetReferences("race");
         foreach (var r in refs)
         {
-            if (r.Values.Value0 > 0)
-            {
-                return r.TargetStringId;
-            }
+            if (r.Values.Value0 > 0) return r.TargetStringId;
         }
 
         return refs.Count > 0 ? refs[0].TargetStringId : null;
@@ -882,9 +879,11 @@ public sealed class CharacterAppearance
     public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal, GameRecord? backpack)
     {
         // No race: the original logs "Missing race" and uses the Greenlander RACE by id (docs/characters.md "Generating a character").
-        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.Race } found ? found
-            : db.Find(CharacterGenerator.DefaultRaceId) is { Type: FcsRecordType.Race } fallback ? fallback
-            : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
+        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.Race } found
+            ? found
+            : db.Find(CharacterGenerator.DefaultRaceId) is { Type: FcsRecordType.Race } fallback
+                ? fallback
+                : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
             Animal = animal,

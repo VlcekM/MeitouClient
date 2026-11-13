@@ -219,6 +219,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Backing field of <see cref="Chars2"/>.
+    /// </summary>
     bool _chars2;
 
     /// <summary>
@@ -236,7 +239,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// The <see cref="SurfaceParts"/> bits: hair highlights, cloth sheen, skin, eyes, metal, water beads, and all of them.
+    /// </summary>
     public const int SurfaceHair = 1, SurfaceCloth = 2, SurfaceSkin = 4, SurfaceEyes = 8, SurfaceMetal = 16, SurfaceBeads = 32, SurfaceAll = 63;
+
+    /// <summary>
+    /// Backing field of <see cref="SurfaceParts"/>.
+    /// </summary>
     int _surfaceParts = SurfaceAll;
 
     /// <summary>
@@ -491,9 +501,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public ulong Blood;
         /// <summary>
-        /// Its weapon's blood this frame (<see cref="GearBlood"/>): the colour as 24 bits, the amount and wetness as two bytes; which of its weapons took it.
+        /// Its weapon's blood this frame (<see cref="GearBlood"/>): the colour as 24 bits, the amount and wetness as two bytes.
         /// </summary>
         public float GearColour, GearAmounts;
+        /// <summary>
+        /// Which of its weapons took the blood of <see cref="GearColour"/>: true the back melee weapon (as <see cref="BackDrawn"/>), false the other.
+        /// </summary>
         public bool GearBack;
         /// <summary>
         /// Posed this frame whatever the thinning (the player's, a ragdoll, a new asset or a first pose).
@@ -609,14 +622,19 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public bool OffScreen;
         /// <summary>
-        /// The water's mark (<see cref="Soaked"/>): how high it reaches up the body's own mesh, its strength (1 down to 0), the seconds left before
-        /// it fades, and the clock it was last stepped at (NaN: never).
+        /// The water's mark (<see cref="Soaked"/>): how high it reaches up the body's own mesh, its strength (1 down to 0) and the seconds left
+        /// before it fades.
         /// </summary>
         public float SoakHeight = -1, SoakStrength, SoakTimer;
+        /// <summary>
+        /// The clock the water's mark was last stepped at (NaN: never).
+        /// </summary>
         public double SoakAt = double.NaN;
     }
 
-    /// <summary>The game's seconds (stopped while paused, faster at the fast speeds): what the water's mark dries by. The pose clock without one.</summary>
+    /// <summary>
+    /// The game's seconds (stopped while paused, faster at the fast speeds): what the water's mark dries by. The pose clock without one.
+    /// </summary>
     public Func<double>? SoakClock { get; set; }
 
     /// <summary>
@@ -629,6 +647,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         const float lasts = 300, fades = 40;
         double now = SoakClock?.Invoke() ?? _poseSeconds;
         float depth = 1.1f * (Meitou.Data.World.WorldWater.Height - l.World.Translation.Y);
+
         if (double.IsNaN(state.SoakAt))
         {
             (state.SoakHeight, state.SoakStrength, state.SoakTimer) = depth > 0 ? (depth, 1, lasts) : (-1, 0, 0);
@@ -840,8 +859,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public void SetView(int width, int height, float fieldOfView)
     {
         _content.Textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
-        // The generated levels are placed by their deviation in rendered pixels, at the game's lens at the narrowest: a longer lens (photo mode, the cinema's
-        // zoom) draws a far character large, and the levels, picked by distance, then come as much sooner as the lens is narrower (LensLod).
+
+        // The generated levels are placed by their deviation in rendered pixels, at the game's lens at the narrowest: a longer lens (photo mode,
+        // the cinema's zoom) draws a far character large, and the levels, picked by distance, then come as much sooner as the lens is narrower
+        // (LensLod).
         _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, MathF.Max(fieldOfView, MeshLod.GameLens));
         _viewPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, fieldOfView);
         LensLod = MeshLod.LensFactor(fieldOfView);
@@ -1263,8 +1284,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         (state.InWorld, state.Centre, state.Radius) = (!far, l.Centre, l.Radius);
         state.PreviousWorld = state.HasWorld ? state.World : l.World;
         (state.World, state.HasWorld) = (l.World, true);
-        if (far) l.Soak = 0; else Soaked(ref l, state);
-        if (far) (l.GearColour, l.GearAmounts) = (0, 0); else WeaponBloodOf(ref l);
+        if (far)
+        {
+            l.Soak = 0;
+            (l.GearColour, l.GearAmounts) = (0, 0);
+        }
+        else
+        {
+            Soaked(ref l, state);
+            WeaponBloodOf(ref l);
+        }
 
         // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the
         // same bones). A new asset (other gear, another rig) is posed at once: its parts' attach matrices and its arrays' sizes come from it. The
@@ -1679,6 +1708,45 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         Span<bool> has = stackalloc bool[CharacterShaders.Slots];
         for (int i = 0; i < CharacterShaders.Slots; i++) r.Tex[i] = Index(m.Tex[i], out has[i]);
         for (int i = CharacterShaders.Slots; i < CharacterShaders.TextureSlotCount; i++) r.Tex[i] = _textureStandIn;
+        uint flags = MaterialFlags(m, has);
+        uint vests = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            int s = CharacterShaders.SlotVest + 3 * i;
+            if (has[s] && has[s + 1]) vests |= 1u << i;
+            if (m.VestColoured[i] && has[s + 2]) flags |= CharacterShaders.Vest0Coloured << i;
+        }
+
+        r.Shading = m.Shading;
+        r.Flags = flags;
+        r.VestCount = vests;
+        r.AlphaThreshold = m.AlphaThreshold;
+        r.ShirtColour = new Vector4(m.ShirtColour, m.GlossMult);
+        r.SkinTone = new Vector4(m.SkinTone, has[CharacterShaders.SlotBlendNormal] ? m.MuscleBlend : 0);
+        r.HairColour = new Vector4(m.HairColour, m.MipmapBias);
+        r.HairAlpha = m.HairAlpha;
+        r.HairMult = m.HairMult;
+        r.BeardAlpha = m.BeardAlpha;
+        r.DiffuseChannel = m.Shading == CharacterShaders.ShadeHair ? m.DiffuseChannel : m.Sheen;
+        r.AlphaChannel = m.AlphaChannel;
+        r.Colour1 = m.Colour1;
+        r.Colour2 = m.Colour2;
+
+        if (m.GearBlood)
+        {
+            // An item has no hair: the gear blood's values ride in its hair fields (CharacterShaders, "Blood on gear").
+            r.HairColour = new Vector4(m.GearColour, 0);
+            r.HairAlpha = m.Worn ? new Vector4(m.GearScale, 0, 0) : new Vector4(m.BladeAxis, 0);
+            r.HairMult = new Vector4(m.BladeLow, m.BladeScale, m.SplatScale, 0);
+        }
+    }
+
+    /// <summary>
+    /// A material record's flags (<see cref="Write"/>) but the vest layers' colour maps: the textures present (<paramref name="has"/>), the
+    /// swizzle and cut-out, worn, dyed, skinned, bloody, wounded and the metal hints, and the textures still pending.
+    /// </summary>
+    uint MaterialFlags(PartMaterial m, ReadOnlySpan<bool> has)
+    {
         uint flags = 0;
         if (has[CharacterShaders.SlotDiffuse]) flags |= CharacterShaders.HasDiffuse;
         if (has[CharacterShaders.SlotNormal]) flags |= CharacterShaders.HasNormal;
@@ -1714,34 +1782,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             flags |= CharacterShaders.HeadPending;
         if (m.Tex[CharacterShaders.SlotHeadNormal] is not null && !has[CharacterShaders.SlotHeadNormal])
             flags |= CharacterShaders.HeadNormalPending;
-        uint vests = 0;
-        for (int i = 0; i < 3; i++)
-        {
-            int s = CharacterShaders.SlotVest + 3 * i;
-            if (has[s] && has[s + 1]) vests |= 1u << i;
-            if (m.VestColoured[i] && has[s + 2]) flags |= CharacterShaders.Vest0Coloured << i;
-        }
-        r.Shading = m.Shading;
-        r.Flags = flags;
-        r.VestCount = vests;
-        r.AlphaThreshold = m.AlphaThreshold;
-        r.ShirtColour = new Vector4(m.ShirtColour, m.GlossMult);
-        r.SkinTone = new Vector4(m.SkinTone, has[CharacterShaders.SlotBlendNormal] ? m.MuscleBlend : 0);
-        r.HairColour = new Vector4(m.HairColour, m.MipmapBias);
-        r.HairAlpha = m.HairAlpha;
-        r.HairMult = m.HairMult;
-        r.BeardAlpha = m.BeardAlpha;
-        r.DiffuseChannel = m.Shading == CharacterShaders.ShadeHair ? m.DiffuseChannel : m.Sheen;
-        r.AlphaChannel = m.AlphaChannel;
-        r.Colour1 = m.Colour1;
-        r.Colour2 = m.Colour2;
-        if (m.GearBlood)
-        {
-            // An item has no hair: the gear blood's values ride in its hair fields (CharacterShaders, "Blood on gear").
-            r.HairColour = new Vector4(m.GearColour, 0);
-            r.HairAlpha = m.Worn ? new Vector4(m.GearScale, 0, 0) : new Vector4(m.BladeAxis, 0);
-            r.HairMult = new Vector4(m.BladeLow, m.BladeScale, m.SplatScale, 0);
-        }
+        return flags;
     }
 
     /// <summary>

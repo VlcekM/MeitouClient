@@ -140,15 +140,19 @@ public sealed class UiLayer : IDisposable
     public GpuTexture? Composite(GpuTexture world)
     {
         if (_texture is null) return null;
+
         _final = Sized(_final, InternalFormat.Rgba8, world, "final");
         Draw(_program, _samplerUi, _samplerBack, _final, world);
         return _final;
     }
 
-    /// <summary>As <see cref="Composite"/>, into a 10-bit PQ picture for an HDR swapchain. Screenshots still read <see cref="Composite"/>'s.</summary>
+    /// <summary>
+    /// As <see cref="Composite"/>, into a 10-bit PQ picture for an HDR swapchain. Screenshots still read <see cref="Composite"/>'s.
+    /// </summary>
     public GpuTexture? CompositeHdr(GpuTexture world, float paperNits)
     {
         if (_texture is null) return null;
+
         var p = _hdrProgram ??= LegacyProgram.Create(_gpu, PostProcessShaders.Vertex, HdrFragment, "ui composite hdr");
         p.Set(p.Uniform("uPaperNits"), paperNits);
         _hdrFinal = Sized(_hdrFinal, InternalFormat.Rgb10A2, world, "final hdr");
@@ -156,16 +160,23 @@ public sealed class UiLayer : IDisposable
         return _hdrFinal;
     }
 
-    /// <summary>The texture, made again when its size is not the world's.</summary>
+    /// <summary>
+    /// The texture, made again when its size is not the world's.
+    /// </summary>
     GpuTexture Sized(GpuTexture? current, InternalFormat format, GpuTexture world, string name)
     {
         int width = world.Desc.Width, height = world.Desc.Height;
         if (current is not null && current.Desc.Width == width && current.Desc.Height == height) return current;
+
         current?.Dispose();   // released after the frames in flight
         return _gpu.CreateTexture(new TextureDesc(format, width, height,
             Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: name));
     }
 
+    /// <summary>
+    /// The composite with <paramref name="shader"/> (its samplers <paramref name="ui"/> and <paramref name="back"/>) over <paramref name="world"/>
+    /// into <paramref name="target"/>.
+    /// </summary>
     void Draw(LegacyProgram shader, SamplerSlot ui, SamplerSlot back, GpuTexture target, GpuTexture world)
     {
         int width = world.Desc.Width, height = world.Desc.Height;
@@ -174,7 +185,8 @@ public sealed class UiLayer : IDisposable
         cmd.BeginRendering(t.Rendering);
         var state = DrawState.For(t.Formats, _gpu.DepthClamp);
         state.Record(cmd, t);
-        cmd.BindPipeline(_gpu.Pipelines.Get(state.Pipeline(shader.Program, shader.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite")));
+        var pipeline = state.Pipeline(shader.Program, shader.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite");
+        cmd.BindPipeline(_gpu.Pipelines.Get(pipeline));
         shader.Bind(ui, _pointSampler with { View = _texture!.View() });
         shader.Bind(back, _pointSampler with { View = world.View() });
         shader.Flush(cmd);

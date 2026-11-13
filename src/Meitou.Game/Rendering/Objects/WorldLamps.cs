@@ -145,7 +145,9 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
-    /// <summary>Whether the lamps light the world (the bench's <c>lights</c> switch).</summary>
+    /// <summary>
+    /// Whether the lamps light the world (the bench's <c>lights</c> switch).
+    /// </summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -241,8 +243,12 @@ internal sealed class WorldLamps : IDisposable
         g.Publish("uLightCells", () => Sampled(_cells[_slot]));
         g.Publish("uLightIndex", () => Sampled(_index[_slot]));
         g.Publish("uLightData", () => Sampled(_data[_slot]));
+
         _noTiles = _ctx.CreateTexture(new TextureDesc(InternalFormat.R16, 1, 1, Use: use, Name: "lamp tiles none"));
-        using (var batch = _ctx.Uploads.Begin()) batch.Write(_noTiles, 0, 0, new PixelRect(0, 0, 1, 1), stackalloc byte[2]);
+        using (var batch = _ctx.Uploads.Begin())
+        {
+            batch.Write(_noTiles, 0, 0, new PixelRect(0, 0, 1, 1), stackalloc byte[2]);
+        }
         g.Publish("uLampTiles", () => Sampled(Tiles?.Atlas ?? _noTiles));
     }
 
@@ -251,18 +257,29 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     SampledTexture Sampled(GpuTexture t) => new(_nearest, t.View());
 
-    /// <summary>The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).</summary>
+    /// <summary>
+    /// The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).
+    /// </summary>
     internal (GpuTexture Cells, GpuTexture Index, GpuTexture Data) Current => (_cells[_slot], _index[_slot], _data[_slot]);
 
     /// <summary>
     /// The sampler for <see cref="Current"/>'s textures.
     /// </summary>
     internal GpuSampler NearestSampler => _nearest;
-    /// <summary>The lamp in row <paramref name="k"/> of this frame's data (<see cref="InGrid"/> rows).</summary>
+
+    /// <summary>
+    /// The lamp in row <paramref name="k"/> of this frame's data (<see cref="InGrid"/> rows).
+    /// </summary>
     internal WorldLight RowLamp(int k) => Lamp(_near[k].Lamp);
-    /// <summary>The lamps' tiles, for a compute pass that binds them itself.</summary>
+
+    /// <summary>
+    /// The lamps' tiles, for a compute pass that binds them itself.
+    /// </summary>
     internal GpuTexture TilesTexture => Tiles?.Atlas ?? _noTiles;
-    /// <summary>This frame's <c>uLightGrid</c> (w 0: no lamps).</summary>
+
+    /// <summary>
+    /// This frame's <c>uLightGrid</c> (w 0: no lamps).
+    /// </summary>
     internal Vector4 Grid => _grid;
 
     /// <summary>
@@ -493,9 +510,15 @@ internal sealed class WorldLamps : IDisposable
             _dataValues[row] = new Vector4(l.Position, l.Radius);
             _dataValues[row + 1] = new Vector4(l.Colour * power, l.Type == WorldLightType.Spot ? 1 : 0);
             _dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
-            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), l.Falloff > 0 ? l.Falloff : 1, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
+            float falloff = l.Falloff > 0 ? l.Falloff : 1;
+            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), falloff, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
+
             // The lamp's place in the cache: a carried lamp's is traced whole each frame.
-            var tile = Tiles is not { } shadows ? default : lamp < _lamps!.Length ? shadows.Place(l, TileReach) : shadows.PlaceMoving(l);
+            var tile = Tiles is not { } shadows
+                ? default
+                : lamp < _lamps!.Length
+                    ? shadows.Place(l, TileReach)
+                    : shadows.PlaceMoving(l);
             _dataValues[row + 4] = new Vector4(room is null ? 0 : room.YMin - RoomMargin, room is null ? 0 : room.YMax + RoomMargin, tile.X, tile.Y);
             _dataValues[row + 5] = new Vector4(Gi.LampTiles.SourceRadius(l), 0, 0, 0);
             if (room is not null) FillRoomEdges(row, room);

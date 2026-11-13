@@ -2,16 +2,16 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// GLSL of the camera effects (docs/render-post.md "Depth of field"), run with <see cref="PostProcessShaders.Vertex"/>. The
-/// picture after the upscaler is HDR at gamma 2.2
-/// with no sRGB step, so every blur decodes to linear light (power 2.2), sums there and encodes back; nothing is clamped at 1.
+/// GLSL of the camera effects (docs/render-post.md "Depth of field"), run with <see cref="PostProcessShaders.Vertex"/>. The picture after the
+/// upscaler is HDR at gamma 2.2 with no sRGB step, so every blur decodes to linear light (power 2.2), sums there and encodes back; nothing is clamped
+/// at 1.
 /// </summary>
 static class CameraEffectShaders
 {
     /// <summary>
-    /// The depth of field's thin lens: a point at view depth z blurs over a disc proportional to (z - s) / z, s the focus distance. The CoC is
-    /// the disc's radius in half-size
-    /// pixels, positive behind the focus, negative in front, the sky at infinity. <c>uJitterUv</c> moves a picture position onto the jittered depth.
+    /// The depth of field's thin lens: a point at view depth z blurs over a disc proportional to (z - s) / z, s the focus distance. The CoC is the
+    /// disc's radius in half-size pixels, positive behind the focus, negative in front, the sky at infinity. <c>uJitterUv</c> moves a picture
+    /// position onto the jittered depth.
     /// </summary>
     const string DofLens = """
         uniform sampler2D uDepth;
@@ -43,9 +43,9 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// The autofocus (docs/render-post.md "Depth of field"), one texel: the nearest surface in a small spot at the picture's centre, eased from
-    /// the last frame's focus in log distance (a subject crossing the centre pulls the focus over, it does not snap); the fallback where the
-    /// spot shows only sky.
+    /// The autofocus (docs/render-post.md "Depth of field"), one texel: the nearest surface in a small spot at the picture's centre, eased from the
+    /// last frame's focus in log distance (a subject crossing the centre pulls the focus over, it does not snap); the fallback where the spot shows
+    /// only sky.
     /// </summary>
     public const string DofFocus = """
         #version 330 core
@@ -74,8 +74,10 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>The gathers' rings: ring k at R k / rings holds 8 k taps, three half-size pixels apart up to R = 12, turned per pixel by static
-    /// noise. Nothing reads another frame.</summary>
+    /// <summary>
+    /// The gathers' rings: ring k at R k / rings holds 8 k taps, three half-size pixels apart up to R = 12, turned per pixel by static noise. Nothing
+    /// reads another frame.
+    /// </summary>
     const string DofRings = """
         const float TAU = 6.2831853;
         int dofRings(float radius) { return int(clamp(ceil(radius / 3.0), 1.0, 4.0)); }
@@ -84,9 +86,9 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 1, half size: the four picture pixels under each texel averaged as light (NaN and Inf to 0: a gather would spread
-    /// them over a disc), and the CoC of the
-    /// nearest surface of the four, so a silhouette's texel takes the subject's CoC and not a mix that names no surface.
+    /// Depth of field, pass 1, half size: the four picture pixels under each texel averaged as light (NaN and Inf to 0: a gather would spread them
+    /// over a disc), and the CoC of the nearest surface of the four, so a silhouette's texel takes the subject's CoC and not a mix that names no
+    /// surface.
     /// </summary>
     public const string DofPrepare = """
         #version 330 core
@@ -111,7 +113,9 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>Depth of field, pass 2: the largest near CoC of each tile of pass 1, the spans taken from both sizes.</summary>
+    /// <summary>
+    /// Depth of field, pass 2: the largest near CoC of each tile of pass 1, the spans taken from both sizes.
+    /// </summary>
     public const string DofTile = """
         #version 330 core
         in vec2 vUv;
@@ -131,8 +135,10 @@ static class CameraEffectShaders
         }
         """;
 
-    /// <summary>Depth of field, pass 3: the largest near CoC that can reach each tile: a tile t tiles away is at least (t - 1) spans from this
-    /// one, and a disc covers its CoC plus one.</summary>
+    /// <summary>
+    /// Depth of field, pass 3: the largest near CoC that can reach each tile: a tile t tiles away is at least (t - 1) spans from this one, and a disc
+    /// covers its CoC plus one.
+    /// </summary>
     public const string DofDilate = """
         #version 330 core
         in vec2 vUv;
@@ -155,9 +161,9 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 4, the far field, half size: scatter as gather over this texel's own CoC. A tap counts only where its own disc
-    /// reaches, so a sharp subject's taps reach
-    /// nothing and cannot ring the blur behind it, and near taps take no part. Light in RGB, this CoC in A for the composite's upsample.
+    /// Depth of field, pass 4, the far field, half size: scatter as gather over this texel's own CoC. A tap counts only where its own disc reaches,
+    /// so a sharp subject's taps reach nothing and cannot ring the blur behind it, and near taps take no part. Light in RGB, this CoC in A for the
+    /// composite's upsample.
     /// </summary>
     public const string DofFar = """
         #version 330 core
@@ -196,16 +202,9 @@ static class CameraEffectShaders
         """;
 
     /// <summary>
-    /// Depth of field, pass 5, the near field, half size: each near tap spreads its light over its own disc, so its share here is its coverage
-    /// times the area a tap stands for
-    /// over its disc's area. A uniform foreground covers exactly 1, half of one about half, so its edge is translucent over what is behind it.
-    /// Premultiplied, so the upsample fades
-    /// an edge instead of darkening it.
-    /// </summary>
-    /// <summary>
-    /// Depth of field, after the far gather: a 5 x 5 binomial over the gathered field, its step growing with the texel's CoC (a quarter texel in focus,
-    /// one texel from a CoC of 4), each tap weighed by how blurred it is. The gather weighs a sample by one over its disc's area, and its few taps then
-    /// leave a grain that this takes away; in-focus texels pass unchanged.
+    /// Depth of field, after the far gather: a 5 x 5 binomial over the gathered field, its step growing with the texel's CoC (a quarter texel in
+    /// focus, one texel from a CoC of 4), each tap weighed by how blurred it is. The gather weighs a sample by one over its disc's area, and its few
+    /// taps then leave a grain that this takes away; in-focus texels pass unchanged.
     /// </summary>
     public const string DofFarFilter = """
         #version 330 core
@@ -232,6 +231,11 @@ static class CameraEffectShaders
         }
         """;
 
+    /// <summary>
+    /// Depth of field, pass 5, the near field, half size: each near tap spreads its light over its own disc, so its share here is its coverage times
+    /// the area a tap stands for over its disc's area. A uniform foreground covers exactly 1, half of one about half, so its edge is translucent over
+    /// what is behind it. Premultiplied, so the upsample fades an edge instead of darkening it.
+    /// </summary>
     public const string DofNear = """
         #version 330 core
         in vec2 vUv;
@@ -276,8 +280,8 @@ static class CameraEffectShaders
 
     /// <summary>
     /// Depth of field, pass 6, at the picture's size: the far field over the sharp picture by the full-size CoC, so a sharp edge stays sharp,
-    /// upsampled by CoC so a subject's colour
-    /// does not ring the blur beside it; then the near field over both by its coverage. A pixel neither touches is returned as it came, bit for bit.
+    /// upsampled by CoC so a subject's colour does not ring the blur beside it; then the near field over both by its coverage. A pixel neither
+    /// touches is returned as it came, bit for bit.
     /// </summary>
     public const string DofComposite = """
         #version 330 core

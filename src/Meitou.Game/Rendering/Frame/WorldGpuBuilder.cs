@@ -65,13 +65,16 @@ static class WorldGpuBuilder
         if (!o.NoFoliage && scene.Database is not null) CreateFoliage(b, gpu, terrain, interactive);
         CreateShadows(b, gpu);
 
-        if (o.Crowd > 0 && scene.Database is not null) gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
+        if (o.Crowd > 0 && scene.Database is not null)
+            gpu.Characters = Characters.CrowdHarness.Create(context, install, scene, assets, o, interactive);
         if (gpu.Characters is { } crowd) (crowd.GeneratedLod, crowd.SkinShading, crowd.Chars2) = (o.CharacterLod, o.SkinShading, o.Chars2);
         gpu.DebugShadows = o.DebugShadows;
 
         b.Step("gi");
+
         // The grass fragment's far shading starts where the traced sun's rays stop seeing grass.
-        if (context is GpuContext reachContext) reachContext.Globals.PublishUniform("uGrassRayReach", () => gpu.GiActive ? gpu.Gi?.GrassRayParams.X ?? 0f : 0f);
+        if (context is GpuContext reachContext)
+            reachContext.Globals.PublishUniform("uGrassRayReach", () => gpu.GiActive ? gpu.Gi?.GrassRayParams.X ?? 0f : 0f);
         if ((o.GiDebug > 0 || o.Gi) && context is GpuContext giContext) CreateGi(gpu, giContext, o);
         else if (context is GpuContext plainContext) PublishReflectionSurfaces(gpu, plainContext);
         AttachGuard(gpu, context, vramSample);
@@ -179,8 +182,10 @@ static class WorldGpuBuilder
         b.Step("biomes");
         var textures = TerrainTextures.Create(b.Context, b.Install, scene.Database, b.Assets, layerSize, source: b.Ready(source));
         foreach (var m in textures.Messages.Take(20)) Console.WriteLine($"warning   {m}");
-        Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, {textures.Capacity} near slots of {layerSize}² and "
-            + $"{textures.FarSlots} far of {textures.FarSize}², near BC3+BC5, far BC3+BC1, {textures.ArrayBytes / 1048576} MB ({b.Watch.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"biomes    {textures.TotalBiomes} in the world, {textures.TotalPairs} texture pairs, "
+            + $"{textures.Capacity} near slots of {layerSize}² and "
+            + $"{textures.FarSlots} far of {textures.FarSize}², near BC3+BC5, far BC3+BC1, {textures.ArrayBytes / 1048576} MB "
+            + $"({b.Watch.ElapsedMilliseconds} ms)");
         terrain.SetTextures(textures);
         return (terrain, textures);
     }
@@ -427,7 +432,10 @@ static class WorldGpuBuilder
         else PublishReflectionSurfaces(gpu, context);
     }
 
-    /// <summary>Without probes, what they would publish for the lit fragments' surface target: only that the reflections want it (<see cref="Gi.GiProbes"/>' <c>Params</c>).</summary>
+    /// <summary>
+    /// Without probes, what they would publish for the lit fragments' surface target: only that the reflections want it
+    /// (<see cref="Gi.GiProbes"/>' <c>Params</c>).
+    /// </summary>
     static void PublishReflectionSurfaces(WorldGpu gpu, GpuContext context) =>
         context.Globals.PublishUniform("uGiParams", () => new System.Numerics.Vector4(0, 0, gpu.Post is { SsrSurfaces: true } ? 2 : 0, 0));
 

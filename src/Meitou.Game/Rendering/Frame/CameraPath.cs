@@ -3,8 +3,10 @@ using System.Numerics;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day; a key may also set the depth of field's
-/// focus and f-number (null: the target's distance, the player's aperture).</summary>
+/// <summary>
+/// A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day; a key may
+/// also set the depth of field's focus and f-number (null: the target's distance, the player's aperture).
+/// </summary>
 public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour,
     float? Focus = null, float? Aperture = null)
 {
@@ -46,16 +48,21 @@ public static class CameraPath
     /// <summary>
     /// A shot as its <see cref="Dims"/> interpolated values (the distance, focus and f-number as their logarithms, so they ease evenly in ratio).
     /// </summary>
-    static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour,
-        MathF.Log(MathF.Max(s.Focus ?? s.Distance, 1)), MathF.Log(s.Aperture ?? PostOptions.DefaultAperture)];
+    static float[] Values(in CameraShot s) =>
+    [
+        s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour,
+        MathF.Log(MathF.Max(s.Focus ?? s.Distance, 1)), MathF.Log(s.Aperture ?? PostOptions.DefaultAperture),
+    ];
 
     /// <summary>
-    /// The shot for interpolated values <paramref name="v"/>: the distance taken back out of its logarithm and the hour wrapped into 0..24.
+    /// The shot for interpolated values <paramref name="v"/>: the distance, focus and f-number taken back out of their logarithms and the hour
+    /// wrapped into 0..24.
     /// </summary>
     static CameraShot Shot(float[] v)
     {
         float hour = v[7] % 24;
-        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour, MathF.Exp(v[8]), MathF.Exp(v[9]));
+        float distance = MathF.Exp(v[5]);
+        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], distance, v[6], hour < 0 ? hour + 24 : hour, MathF.Exp(v[8]), MathF.Exp(v[9]));
     }
 
     /// <summary>
@@ -121,12 +128,17 @@ public static class CameraPath
             float m2 = ease2 ? 0 : (p3![d] - p1[d]) / MathF.Max(tNext - t0, 1e-4f);
             r[d] = h00 * p1[d] + h10 * h * m1 + h01 * p2[d] + h11 * h * m2;
         }
-        // Focus and aperture fly only where a key sets them: a key without one stands for the target's distance or the default, a flight with none has neither.
-        var shot = Shot(r);
-        return shot with
-        {
-            Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null,
-            Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null,
-        };
+
+        return WithKeyedLens(Shot(r), keys);
     }
+
+    /// <summary>
+    /// <paramref name="shot"/> with its focus and aperture only where a key sets them: a key without one stands for the target's distance or the
+    /// default, a flight with none has neither.
+    /// </summary>
+    static CameraShot WithKeyedLens(CameraShot shot, IReadOnlyList<CameraKey> keys) => shot with
+    {
+        Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null,
+        Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null,
+    };
 }

@@ -197,33 +197,51 @@ internal sealed unsafe partial class CharacterRenderer
             var pose = BeginPortraitPose(request, index);
             try
             {
-                int size = _portraitHdr.Desc.Width;
-                var constants = new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light };
-                // The studio (previewsun): its sun from the front on the camera's right, 35 degrees up, its shadow and occlusion drawn first.
-                if (StudioOn)
-                {
-                    // Level: the camera is at the head's height, above the body's centre, so the way to it already climbs.
-                    var toEye = Vector3.Normalize(new Vector3(pose.Eye.X - _live[index].Centre.X, 0, pose.Eye.Z - _live[index].Centre.Z));
-                    var right = Vector3.Normalize(Vector3.Cross(toEye, Vector3.UnitY));
-                    constants = StudioView(index, constants.ViewProjection, pose.Projection, pose.Eye, 0.6f * toEye - 0.35f * right + 0.49f * Vector3.UnitY,
-                        _portraitHdr, _portraitHdrDepth!, size, size);
-                }
-                var cmd = Gpu.BeginNative("portrait");
-                var target = PassTargets.Of(_portraitHdr, _portraitHdrDepth);
-                cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width,
-                    target.Height));
-                Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
-                var whole = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
-                DrawPortraitView(cmd, index, new PixelViewport(0, 0, target.Width, target.Height, 0, 1), whole, constants, pose.Eye);
-                Gpu.EndHostPass(cmd);
-                cmd.EndRendering();
-                Gpu.EndNative(cmd);
+                DrawPortraitHdr(index, in pose);
             }
-            finally { EndPortraitPose(index, pose); }
+            finally
+            {
+                EndPortraitPose(index, pose);
+            }
 
             int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
             _preview.Run(_portraitHdrSampled, atlas, supersampled, [new PixelRect(x, y, PortraitCell, PortraitCell)]);
         }
+    }
+
+    /// <summary>
+    /// <paramref name="index"/>'s posed character into the whole half-float square, through the studio when it is on.
+    /// </summary>
+    void DrawPortraitHdr(int index, in PortraitPose pose)
+    {
+        int size = _portraitHdr!.Desc.Width;
+        var constants = new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light };
+
+        // The studio (previewsun): its sun from the front on the camera's right, 35 degrees up, its shadow and occlusion drawn first.
+        if (StudioOn) constants = PortraitStudioView(index, in pose, constants.ViewProjection, size);
+
+        var cmd = Gpu.BeginNative("portrait");
+        var target = PassTargets.Of(_portraitHdr, _portraitHdrDepth);
+        cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width,
+            target.Height));
+        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+        var whole = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
+        DrawPortraitView(cmd, index, new PixelViewport(0, 0, target.Width, target.Height, 0, 1), whole, constants, pose.Eye);
+        Gpu.EndHostPass(cmd);
+        cmd.EndRendering();
+        Gpu.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The studio's shadow and occlusion for a portrait, its sun from the front on the camera's right; returns the colour draw's view constants.
+    /// </summary>
+    ViewConstants PortraitStudioView(int index, in PortraitPose pose, Matrix4x4 viewProjection, int size)
+    {
+        // Level: the camera is at the head's height, above the body's centre, so the way to it already climbs.
+        var toEye = Vector3.Normalize(new Vector3(pose.Eye.X - _live[index].Centre.X, 0, pose.Eye.Z - _live[index].Centre.Z));
+        var right = Vector3.Normalize(Vector3.Cross(toEye, Vector3.UnitY));
+        var toSun = 0.6f * toEye - 0.35f * right + 0.49f * Vector3.UnitY;
+        return StudioView(index, viewProjection, pose.Projection, pose.Eye, toSun, _portraitHdr!, _portraitHdrDepth!, size, size);
     }
 
     /// <summary>
@@ -253,8 +271,15 @@ internal sealed unsafe partial class CharacterRenderer
     void DrawPortraitCell(IGpuCommandList cmd, PortraitRequest request, int index, PixelViewport viewport, PixelRect rect)
     {
         var pose = BeginPortraitPose(request, index);
-        try { DrawPortraitView(cmd, index, viewport, rect, new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light }, pose.Eye); }
-        finally { EndPortraitPose(index, pose); }
+        try
+        {
+            var constants = new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light };
+            DrawPortraitView(cmd, index, viewport, rect, constants, pose.Eye);
+        }
+        finally
+        {
+            EndPortraitPose(index, pose);
+        }
     }
 
     /// <summary>
@@ -264,8 +289,8 @@ internal sealed unsafe partial class CharacterRenderer
         Transient Bones, Transient PreviousBones, int BoneBase, int AttachBase, bool Weapon, bool Ranged);
 
     /// <summary>
-    /// Poses <paramref name="index"/>'s character still for <paramref name="request"/>'s portrait (this view's own bone memory and attachments past the
-    /// frame's, weapon sheathed) and places its camera; <see cref="EndPortraitPose"/> restores the live pose.
+    /// Poses <paramref name="index"/>'s character still for <paramref name="request"/>'s portrait (this view's own bone memory and attachments past
+    /// the frame's, weapon sheathed) and places its camera; <see cref="EndPortraitPose"/> restores the live pose.
     /// </summary>
     PortraitPose BeginPortraitPose(PortraitRequest request, int index)
     {
@@ -281,6 +306,8 @@ internal sealed unsafe partial class CharacterRenderer
         var toEye = Vector3.Normalize(eye - target);
         var left = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, toEye));
         var light = Vector3.Normalize(toEye + 0.7f * Vector3.UnitY + 0.4f * left);
+
+        // The still pose's palette in place of the live one, the live one kept in the pose for EndPortraitPose.
         var pose = new PortraitPose(eye, view, projection, light, _bones, _previousBones, l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn);
         int bonesCount = l.Asset.Rig.BoneCount;
         _bones = _previousBones = AllocateConstants((ulong)Math.Max(bonesCount, 1) * 64, 256);
@@ -289,6 +316,7 @@ internal sealed unsafe partial class CharacterRenderer
             Array.Resize(ref _attach, _attachCount + l.Asset.AttachCount);
         _portraitAttach.AsSpan(0, l.Asset.AttachCount).CopyTo(_attach.AsSpan(_attachCount));
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (0, _attachCount, false, false);
+
         return pose;
     }
 

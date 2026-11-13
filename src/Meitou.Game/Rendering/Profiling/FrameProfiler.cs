@@ -213,10 +213,19 @@ public sealed class FrameProfiler : IDisposable
         {
             double sum = 0;
             for (int i = 1; i <= n; i++) sum += _gpu[k][(_gpuHead - i + History) % History];
-            means.Add((k == Other ? "other" : k == Total ? "total" : StageClock.Names[k], sum / n));
+            string name = k == Other
+                ? "other"
+                : k == Total
+                    ? "total"
+                    : StageClock.Names[k];
+            means.Add((name, sum / n));
         }
 
-        return string.Create(CultureInfo.InvariantCulture, $"{n} frames: ") + string.Join(" ", means.Where(m => m.Ms >= 0.005).OrderByDescending(m => m.Ms).Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Name}={m.Ms:0.00}")));
+        var listed = means
+            .Where(m => m.Ms >= 0.005)
+            .OrderByDescending(m => m.Ms)
+            .Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Name}={m.Ms:0.00}"));
+        return string.Create(CultureInfo.InvariantCulture, $"{n} frames: ") + string.Join(" ", listed);
     }
 
     /// <summary>

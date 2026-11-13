@@ -156,7 +156,8 @@ static class FoliageShaders
             }
             """, required: true);
         f = Replace(f, @"fragColour\s*=\s*vec4\s*\(\s*colour\s*,\s*1\.0\s*\)\s*;", "fragColour = vec4(colour, foliageCoverage);", required: false);
-        f = Replace(f, @"if\s*\(\s*uFogDistance\s*>\s*0\.0\s*&&\s*uAtmoParams\.x\s*>\s*0\.5\s*\)\s*colour\s*=\s*kenshiLight", "atmoReceiver = 2;\n            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight", required: true);
+        f = Replace(f, @"if\s*\(\s*uFogDistance\s*>\s*0\.0\s*&&\s*uAtmoParams\.x\s*>\s*0\.5\s*\)\s*colour\s*=\s*kenshiLight",
+            "atmoReceiver = 2;\n            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight", required: true);
         return f;
     }
 

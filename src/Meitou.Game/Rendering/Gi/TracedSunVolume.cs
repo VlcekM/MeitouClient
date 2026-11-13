@@ -8,12 +8,16 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The traced sun's depth map for what draws no traced pixel (docs/render-shadows.md "Traced sun"): rays from a plane towards the sun, down along the sun's direction, one per texel of
-/// <see cref="ShadowPass.SunMapLayers"/> nested squares locked to the world, into the shadow pass's map: the distance to the first caster. The light shafts, the lit dust, the water's foam,
-/// the skin's light entry, the reflection and impostors compare with it, so a beam is as continuous as the samples along it and stays put as the camera moves. Render thread only.
+/// The traced sun's depth map for what draws no traced pixel (docs/render-shadows.md "Traced sun"): rays from a plane towards the sun, down along the
+/// sun's direction, one per texel of <see cref="ShadowPass.SunMapLayers"/> nested squares locked to the world, into the shadow pass's map: the
+/// distance to the first caster. The light shafts, the lit dust, the water's foam, the skin's light entry, the reflection and impostors compare with
+/// it, so a beam is as continuous as the samples along it and stays put as the camera moves. Render thread only.
 /// </summary>
 sealed unsafe class TracedSunVolume : IDisposable
 {
+    /// <summary>
+    /// The compute shader: per texel of each traced layer, the nearest of the solids' and the fine and coarse terrain's first hits along the ray.
+    /// </summary>
     static readonly string Source = $$"""
         #version 460
         #extension GL_EXT_ray_query : require
@@ -70,28 +74,58 @@ sealed unsafe class TracedSunVolume : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The shader's <c>Params</c> block (std140).
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Params
     {
+        /// <summary>
+        /// The eye relative to the traced origin; towards the sun with the rays' length; the plane's axes (right's w: how far towards the sun the
+        /// rays start); the three squares; the texels across with the layers traced this frame.
+        /// </summary>
         public Vector4 Eye, Sun, Right, Up, Layer0, Layer1, Layer2, Size;
     }
 
+    /// <summary>
+    /// The device the program, the pipeline and the frame's constants come from.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The compiled <see cref="Source"/>.
+    /// </summary>
     readonly GpuProgram _program;
+
+    /// <summary>
+    /// The compute pipeline of <see cref="_program"/>.
+    /// </summary>
     readonly GpuComputePipeline _pipeline;
 
+    /// <summary>
+    /// Compiles the shader with its four push-descriptor bindings and the bindless table, and makes its pipeline.
+    /// </summary>
     public TracedSunVolume(GpuContext ctx)
     {
         this._ctx = ctx;
         _program = ctx.Shaders.Compute(Source, "traced sun volume",
-            [(0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer), (3, DescriptorType.StorageImage)], GpuSetLayout.Bindless);
+            [
+                (0, DescriptorType.AccelerationStructureKhr),
+                (1, DescriptorType.StorageBuffer),
+                (2, DescriptorType.UniformBuffer),
+                (3, DescriptorType.StorageImage),
+            ],
+            GpuSetLayout.Bindless);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced sun volume"));
     }
 
-    /// <summary>Fills <paramref name="shadow"/>'s map for this frame's squares from <paramref name="scene"/>'s top level.</summary>
+    /// <summary>
+    /// Fills <paramref name="shadow"/>'s map for this frame's squares from <paramref name="scene"/>'s top level.
+    /// </summary>
     public void Run(GiScene scene, ShadowPass shadow, Vector3 toSun)
     {
         if (scene.Top is null || shadow.TracedVolume is not { } volume) return;
+
         var m = shadow.SunMap;
         var parameters = new Params
         {
@@ -105,6 +139,7 @@ sealed unsafe class TracedSunVolume : IDisposable
             Size = new Vector4(ShadowPass.SunMapTexels, shadow.SunMapMask, 0, 0),   // y: the layers traced this frame, a bit each
         };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+
         var cmd = (CommandList)_ctx.BeginNative("traced sun volume");
         cmd.BeginLabel("traced sun volume");
         cmd.Barrier(BarrierBatch.Full);
@@ -117,20 +152,60 @@ sealed unsafe class TracedSunVolume : IDisposable
         _ctx.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Pushes the four descriptors: the top level, the geometry records, this frame's <see cref="Params"/> and the shadow pass's map.
+    /// </summary>
     void Bind(CommandList cmd, GiScene scene, GpuTexture volume, in Transient constants)
     {
         var top = scene.Top!.Handle;
-        var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
+        var asWrite = new WriteDescriptorSetAccelerationStructureKHR
+        {
+            SType = StructureType.WriteDescriptorSetAccelerationStructureKhr,
+            AccelerationStructureCount = 1,
+            PAccelerationStructures = &top,
+        };
         var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
         var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
         var storage = new DescriptorImageInfo(default, _ctx.Device.ViewAt(volume.View().Index), ImageLayout.General);
+
         var writes = stackalloc WriteDescriptorSet[4];
-        writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
-        writes[1] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &records };
-        writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
-        writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storage };
+        writes[0] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet,
+            PNext = &asWrite,
+            DstBinding = 0,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.AccelerationStructureKhr,
+        };
+        writes[1] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DstBinding = 1,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.StorageBuffer,
+            PBufferInfo = &records,
+        };
+        writes[2] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DstBinding = 2,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.UniformBuffer,
+            PBufferInfo = &uniform,
+        };
+        writes[3] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DstBinding = 3,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.StorageImage,
+            PImageInfo = &storage,
+        };
         cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), GpuBindPoint.Compute);
     }
 
+    /// <summary>
+    /// Releases the program.
+    /// </summary>
     public void Dispose() => _ctx.Shaders.Dispose(_program);
 }

@@ -330,7 +330,12 @@ static class WorldCommandLine
             case "--sequence": o.Sequence = Math.Max(r.Int(), 0); break;
             case "--zoom-step": o.ZoomStep = r.Float(); break;
             case "--pan-frames": o.PanFrames = Math.Max(r.Int(), 0); break;
-            case "--pan-step": { var (px, pz) = r.Pair(); o.PanStep = new Vector2((float)px, (float)pz); break; }
+            case "--pan-step":
+            {
+                var (px, pz) = r.Pair();
+                o.PanStep = new Vector2((float)px, (float)pz);
+                break;
+            }
             case "--ab": o.Ab = r.Next(); break;
             case "--ab-period": o.AbPeriod = Math.Max(r.Int(), 1); break;
             case "--bench-frames": o.BenchFrames = Math.Max(r.Int(), 1); break;

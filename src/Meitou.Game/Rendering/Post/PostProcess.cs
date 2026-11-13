@@ -316,7 +316,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (SceneSize, Sharpen) = (P.Uniform("uSceneSize"), P.Uniform("uSharpen"));
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
             HdrPeak = P.Uniform("uHdrPeak");
-            (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
+            (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"),
+                P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
             (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
         }
@@ -974,7 +975,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// Whether this frame's "scene" stamp is written (<see cref="MarkScene"/>).
     /// </summary>
-    bool _sceneMarked, _giResolved;
+    bool _sceneMarked;
+    /// <summary>
+    /// Whether this frame's GI resolve has run (<see cref="RunGiResolve"/> runs once a frame).
+    /// </summary>
+    bool _giResolved;
     /// <summary>
     /// The benchmark harness's frame number for the frame begun next; <see cref="OnCost"/> hands it back with each section's GPU ms once the frame's
     /// timestamps have been read.
@@ -1176,14 +1181,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The depth pyramid of this frame's scene (the next frame's foliage cull reads it; the lamps' shadows read it in this frame, so they build it once the opaque
-    /// scene is drawn: then the frame's end finds it built). False: no pyramid this frame (the occlusion cull off, a view window, no scene).
+    /// The depth pyramid of this frame's scene (the next frame's foliage cull reads it; the lamps' shadows read it in this frame, so they build it
+    /// once the opaque scene is drawn: then the frame's end finds it built). False: no pyramid this frame (the occlusion cull off, a view window, no
+    /// scene).
     /// </summary>
     bool BuildHiz()
     {
         if (!(OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)) return false;
+
         Hiz ??= new HizPyramid(Gpu);
         if (Hiz.BuiltThisFrame) return true;
+
         var hizCmd = Gpu.BeginNative("hiz");
         Hiz.Build(hizCmd, _sceneDepth.Texture, _planes, _width, _height, _eyeNow, _viewRotation, _fovNow, _aspectNow);
         Gpu.EndNative(hizCmd);
@@ -1212,6 +1220,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             else RunSsao();
         }
         if (ao && !_aoApplied) Stamp("ssao");
+
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         _postColour = _sceneColour!;
         if (Temporal)
@@ -1319,6 +1328,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void MakeLdrTargets(bool smaa, bool fxaa, bool haze)
     {
         bool wantLdr = smaa || fxaa || haze, wantSecond = haze && (smaa || fxaa);
+
         // The pictures between the composite and the target carry the highlights in HDR output.
         var format = Options.HdrPeak > 1 ? InternalFormat.Rgba16F : InternalFormat.Rgba8;
         if (_ldr is not null && _ldr.Format != format)
@@ -1327,7 +1337,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _ldrFxaa?.Texture.Dispose();
             _ldr = _ldrFxaa = null;
         }
-        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null) && (!smaa || _smaaWeights is not null)) return;
+
+        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null)
+            && (!smaa || _smaaWeights is not null))
+            return;
+
         try
         {
             using var batch = Gpu.Uploads.Begin();
@@ -1505,7 +1519,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var previous = DepthConvention.Perspective(_previousFov, _previousAspect, near, far);
         return Reprojection.ClipToPrevious(_viewRotation, EyeStep, now, _previousRotation, previous);
     }
-
 
     #endregion
 
@@ -1783,7 +1796,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
             _unavailable.Add(external.Kind);
-            _retired = external;   // not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one
+            // Not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one.
+            _retired = external;
             External = null;
             _warnedFallback = true;
         }
@@ -2210,6 +2224,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     static readonly DrawState AoMultiplyState = PassState with { Blend = new BlendState(true, BlendingFactor.Zero, BlendingFactor.SrcColor),
         ColourMask = DrawState.Rgb };
+    /// <summary>
+    /// Whether the contact shadows went into the sun written apart this frame (<see cref="RunContactSun"/>).
+    /// </summary>
+    bool _contactSunRan;
+
+    /// <summary>
+    /// The sun casts shadows this frame (set by the world frame): false with the sun shadows Off (<see cref="SunShadowMode"/>), when the contact
+    /// shadows have nothing to add to.
+    /// </summary>
+    public bool SunShadowed { get; set; } = true;
+
+    /// <summary>
+    /// This frame's sun is written apart for the contact shadows (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the lit fragments
+    /// leave it out of the colour (location 2, as for the traced sun) and <see cref="RunContactSun"/> adds it back times what the contact shadows
+    /// leave of it, so they take the sun alone, exactly, and nothing of the ambient, the lamps or the bounced light.
+    /// </summary>
+    public bool ContactSun { get; set; }
+
+    /// <summary>
+    /// The scene targets carry the sun's term for the contact shadows this frame.
+    /// </summary>
+    internal bool ContactSunReady => ContactSun && !TracedSun && TracedTermTarget is not null && _giAlbedo is not null;
 
     /// <summary>
     /// Runs the SSAO and multiplies it into the scene colour now, so what is drawn after (the weather's particles) is not darkened by the occlusion
@@ -2224,43 +2260,38 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The contact shadows over the scene now, whatever the occlusion (SSAO, GTAO or none; docs/render-post.md "Contact shadows"), at the render size, so the
-    /// characters keep theirs in full and their fine detail.
+    /// The contact shadows over the scene now, whatever the occlusion (SSAO, GTAO or none; docs/render-post.md "Contact shadows"), at the render
+    /// size, so the characters keep theirs in full and their fine detail.
     /// </summary>
-    /// <summary>The sun casts shadows this frame (set by the world frame): false with the sun shadows Off (<see cref="SunShadowMode"/>), when the contact shadows have nothing to add to.</summary>
-    public bool SunShadowed { get; set; } = true;
-
     void ApplyContactShadows()
     {
-        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess), nor when
-        // they went into the sun written apart (RunContactSun).
-        if (!Options.ContactShadows || !SunShadowed || TracedSun || _contactSunRan || !_haveScene || _sceneColour is null || _sceneDepth is null) return;
+        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess),
+        // nor when they went into the sun written apart (RunContactSun).
+        if (!Options.ContactShadows || !SunShadowed || TracedSun || _contactSunRan || !_haveScene || _sceneColour is null || _sceneDepth is null)
+            return;
+
         DrawContact(MathF.Tan(_fovY * 0.5f), _aspect, _nearPlane, _farPlane, null);
         Stamp("contact");
         CloseSegment();
     }
 
     /// <summary>
-    /// This frame's sun is written apart for the contact shadows (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the lit fragments leave it out
-    /// of the colour (location 2, as for the traced sun) and <see cref="RunContactSun"/> adds it back times what the contact shadows leave of it, so they take
-    /// the sun alone, exactly, and nothing of the ambient, the lamps or the bounced light.
+    /// Over the opaque scene, its pass closed (as <see cref="RunTracedSun"/>): the sun's term times what the contact shadows leave, added to the
+    /// scene.
     /// </summary>
-    public bool ContactSun { get; set; }
-    /// <summary>The scene targets carry the sun's term for the contact shadows this frame.</summary>
-    internal bool ContactSunReady => ContactSun && !TracedSun && TracedTermTarget is not null && _giAlbedo is not null;
-    bool _contactSunRan;
-
-    /// <summary>Over the opaque scene, its pass closed (as <see cref="RunTracedSun"/>): the sun's term times what the contact shadows leave, added to the scene.</summary>
     internal void RunContactSun()
     {
         if (_tracedTerm is null || _giAlbedo is null || _sceneColour is null || _sceneDepth is null) return;
+
         DrawContact(MathF.Tan(_fovNow * 0.5f), _aspectNow, _planes.X, _planes.Y, _tracedTerm);
         _contactSunRan = true;
         Stamp("contact sun");
         CloseSegment();
     }
 
-    /// <summary>The contact pass: over <paramref name="term"/> added to the scene, or without one multiplied into it.</summary>
+    /// <summary>
+    /// The contact pass: over <paramref name="term"/> added to the scene, or without one multiplied into it.
+    /// </summary>
     void DrawContact(float tanY, float aspect, float near, float far, Target2D? term)
     {
         var c = _contactPass ??= new ContactPass(Gpu);
@@ -2275,17 +2306,23 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
         c.P.Set(c.WaterY, WaterHeight ?? float.MinValue);
         c.P.Set(c.Contact, Options.ContactParams);
-        // Pixels the traced sun lights (the surface target's bit 16) keep its shadow alone: it already holds the contact, and both darkened thin gaps twice.
+
+        // Pixels the traced sun lights (the surface target's bit 16) keep its shadow alone: it already holds the contact, and both darkened thin
+        // gaps twice.
         bool surface = term is not null || SurfaceReady;
         Bind(c.P, c.Surface, surface ? _giAlbedo : null);
         c.P.Set(c.SurfaceOn, surface ? 1f : 0f);
         Bind(c.P, c.Term, term);
         c.P.Set(c.TermOn, term is not null ? 1f : 0f);
         c.P.ApplyGlobals();
-        Draw(c.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, term is not null ? GiAddState : AoMultiplyState);
+
+        var state = term is not null ? GiAddState : AoMultiplyState;
+        Draw(c.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, state);
     }
 
-    /// <summary>The occlusion (SSAO or GTAO) into the scene colour (<see cref="ApplySsao"/>).</summary>
+    /// <summary>
+    /// The occlusion (SSAO or GTAO) into the scene colour (<see cref="ApplySsao"/>).
+    /// </summary>
     void ApplyOcclusion()
     {
         if (GtaoOn)
@@ -2293,12 +2330,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             ApplyGtao();
             return;
         }
+
         if (MergeLayers)
         {
             ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _occlusion.A is not null);
             return;
         }
+
         if (!Options.Ssao || !_haveScene || _sceneColour is null || _occlusion.A is null) return;
+
         RunSsao();
         var p = _aoApplyPass ??= new AoApplyPass(Gpu);
         Bind(p.P, p.Ao, _occlusion.B);
@@ -2356,6 +2396,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max), ColourMask = DrawState.Rgb,
     };
+
     /// <summary>
     /// The GI resolve's divisor of the render size (0: off, the lit fragments read the probes themselves; 1 full size; 2 half). Set before
     /// <see cref="Begin"/>: while it is above 0 the scene targets carry the albedo target.
@@ -2378,13 +2419,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     GpuTexture? RunGiCache()
     {
         if (GiCache is not { } cache) return null;
+
         CloseSegment();
         float tanY = MathF.Tan(_fovNow * 0.5f);
         var rot = _viewRotation;
         var right = new Vector3(rot.M11, rot.M21, rot.M31);
         var up = new Vector3(rot.M12, rot.M22, rot.M32);
-        var view = new Gi.GiCache.View(_eyeNow, right, up, ViewWindow.BackFor(rot, _fovNow, _aspectNow), ViewWindow.Tan(tanY * _aspectNow, tanY),
-            _planes, _giLow!.Width, _giLow.Height, _giDivisor, _width, _height, tanY);
+        var back = ViewWindow.BackFor(rot, _fovNow, _aspectNow);
+        var tan = ViewWindow.Tan(tanY * _aspectNow, tanY);
+        var view = new Gi.GiCache.View(_eyeNow, right, up, back, tan, _planes, _giLow!.Width, _giLow.Height, _giDivisor, _width, _height, tanY);
         return cache.Run(_sceneDepth!.Texture, _giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
     }
 
@@ -2408,19 +2451,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their albedo: the resolve at 1/<see cref="GiResolve"/> of the render
-    /// size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too); once a frame.
-    /// <paramref name="early"/>: over the opaque scene before the water copies it (the scene's pass closed): the water writes no surface, so what lies
-    /// under it kept the sky's ambient while the ground beside it took the probes', and the shore was a band of another brightness with the resolve's
-    /// texels for an edge.
+    /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their albedo: the resolve at 1/<see cref="GiResolve"/> of the
+    /// render size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too);
+    /// once a frame. <paramref name="early"/>: over the opaque scene before the water copies it (the scene's pass closed): the water writes no
+    /// surface, so what lies under it kept the sky's ambient while the ground beside it took the probes', and the shore was a band of another
+    /// brightness with the resolve's texels for an edge.
     /// </summary>
     public void RunGiResolve(bool early = false)
     {
         if (_giResolved || GiResolve <= 0 || _giAlbedo is null || _giLow is null || _sceneColour is null || !_haveScene) return;
+
         _giResolved = true;
         if (!early) MarkScene();
+
         var cache = RunGiCache();
         if (cache is not null) Stamp("gi cache");
+
         bool relocate = Options.GiRelocating;
         var r = _giResolvePasses[(relocate ? 1 : 0) | (cache is null ? 0 : 2)] ??= new GiResolvePass(Gpu, relocate, cache is not null);
         var a = _giApplyPass ??= new GiApplyPass(Gpu);
@@ -2442,12 +2488,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
         if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
+
         _giAlbedo?.Texture.Dispose();
         _giLow?.Texture.Dispose();
         _giDivisor = divisor;
         using var batch = Gpu.Uploads.Begin();
-        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
-        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+
+        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
+        // probes' light can be below the sky's) with the view depth in alpha.
+        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height,
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
             TextureMinFilter.Nearest, "post gi resolve");

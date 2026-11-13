@@ -111,9 +111,24 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Cascades = null;
         TracedCascades = 0;
         TracedDepth = 0;
-        if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
-        if (Meitou && TracedWhole) { RenderTraced(view, Vector3.Normalize(toSun), landmarks); return; }
-        if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), draw, landmarks, prepare); return; }
+        if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f)
+        {
+            Disable();
+            return;
+        }
+
+        if (Meitou && TracedWhole)
+        {
+            RenderTraced(view, Vector3.Normalize(toSun), landmarks);
+            return;
+        }
+
+        if (Meitou)
+        {
+            RenderMeitou(view, Vector3.Normalize(toSun), draw, landmarks, prepare);
+            return;
+        }
+
         _meitouValid = false;
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);

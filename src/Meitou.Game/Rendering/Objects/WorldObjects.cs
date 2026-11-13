@@ -467,11 +467,7 @@ sealed class WorldObjects : IDisposable
 
         if (record.Type != Data.Fcs.FcsRecordType.Building)
         {
-            // A loose item (GroundItemSync): its one mesh, at its absolute height.
-            var at = new Vector3(b.Position.X, b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y, b.Position.Z);
-            var model = b.ItemMaterial is { Length: > 0 } modelId && Database.Find(modelId) is { Type: Data.Fcs.FcsRecordType.MaterialSpecsWeapon } spec ? spec : null;
-            if (WorldObjectLayout.Item(record, b.InstanceId, at, b.Rotation, b.ItemMesh, b.ItemScale, model) is { } item)
-                result.Items.Add(item);
+            LayLooseItem(result, b, record, map);
             return;
         }
 
@@ -512,8 +508,7 @@ sealed class WorldObjects : IDisposable
         LayLayouts(result, b, record, layAt, state, townMaterial, isDestroyed);
         if (b.Standalone)
         {
-            var moved = Matrix4x4.CreateTranslation(position - layAt);
-            for (int k = firstItem; k < result.Items.Count; k++) result.Items[k] = result.Items[k] with { Transform = result.Items[k].Transform * moved };
+            MoveLaidItems(result, firstItem, Matrix4x4.CreateTranslation(position - layAt));
             return;
         }
 
@@ -525,6 +520,28 @@ sealed class WorldObjects : IDisposable
             result.Stand.Add(distant);
             Interlocked.Increment(ref _stand);
         }
+    }
+
+    /// <summary>
+    /// A loose item (GroundItemSync): its one mesh, at its absolute height, in its weapon model's material where it names one.
+    /// </summary>
+    void LayLooseItem(ZoneObjects result, BuildingPlacement b, GameRecord record, TerrainHeightmap map)
+    {
+        var at = new Vector3(b.Position.X, b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y, b.Position.Z);
+        var model = b.ItemMaterial is { Length: > 0 } modelId && Database.Find(modelId) is { Type: Data.Fcs.FcsRecordType.MaterialSpecsWeapon } spec
+            ? spec
+            : null;
+        if (WorldObjectLayout.Item(record, b.InstanceId, at, b.Rotation, b.ItemMesh, b.ItemScale, model) is { } item)
+            result.Items.Add(item);
+    }
+
+    /// <summary>
+    /// Moves the items laid from <paramref name="firstItem"/> on by <paramref name="moved"/> (a standalone placement to its own place).
+    /// </summary>
+    static void MoveLaidItems(ZoneObjects result, int firstItem, Matrix4x4 moved)
+    {
+        for (int k = firstItem; k < result.Items.Count; k++)
+            result.Items[k] = result.Items[k] with { Transform = result.Items[k].Transform * moved };
     }
 
     /// <summary>

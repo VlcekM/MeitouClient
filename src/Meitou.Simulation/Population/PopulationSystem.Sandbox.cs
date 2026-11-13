@@ -22,7 +22,8 @@ public sealed partial class PopulationSystem
     public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction, string? race = null)
     {
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(recordId) ^ (player ? 1UL : 2UL) ^ ((ulong)variant << 8));
-        return _data.Appearances?.Create(recordId, _data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF), null, race);
+        return _data.Appearances?.Create(recordId, _data.Factions[faction].Id,
+            (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF), null, race);
     }
 
     /// <summary>
@@ -31,10 +32,12 @@ public sealed partial class PopulationSystem
     /// factions it knows, as <see cref="StartPlayer"/> does); otherwise it belongs to the first faction that is hostile to the player's. A
     /// <paramref name="variant"/> above 0 is a bystander with a look of its own: of the faction <paramref name="player"/> picks, in a squad of its
     /// own that is not the player's. <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes
-    /// two NPCs of one faction. <paramref name="race"/> (a RACE id) forces the look's race (the control channel's <c>spawn-at --race</c>). Before the
-    /// first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug menu call it.
+    /// two NPCs of one faction. <paramref name="race"/> (a RACE id) forces the look's race (the control channel's <c>spawn-at --race</c>).
+    /// Before the first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug
+    /// menu call it.
     /// </summary>
-    public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null, string? race = null)
+    public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null,
+        string? race = null)
     {
         int chosen = SandboxFaction(player, faction);
 
@@ -82,7 +85,10 @@ public sealed partial class PopulationSystem
             }
         }
 
-        int own = _data.Db.Find(spawn.Record)?.GetReferences("faction").Select(f => _data.FactionIndex(f.TargetStringId)).FirstOrDefault(i => i >= 0) ?? -1;
+        int own = _data.Db.Find(spawn.Record)
+            ?.GetReferences("faction")
+            .Select(f => _data.FactionIndex(f.TargetStringId))
+            .FirstOrDefault(i => i >= 0) ?? -1;
         SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null, race: spawn.Race);
     }
 
@@ -96,8 +102,11 @@ public sealed partial class PopulationSystem
 
         for (int i = 0; i < _data.Factions.Count; i++)
         {
-            if (_data.Factions[i].Name.Equals(name, StringComparison.OrdinalIgnoreCase) || _data.Factions[i].BaseName.Equals(name, StringComparison.OrdinalIgnoreCase))
+            if (_data.Factions[i].Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                || _data.Factions[i].BaseName.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
                 return i;
+            }
         }
 
         return -1;

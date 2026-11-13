@@ -116,7 +116,8 @@ public sealed partial class SaveGame
     public byte[]? ModEnvironment { get; set; }
 
     /// <summary>
-    /// The bytes of <c>meitou-weapon-blood.json</c> (the blood on the characters' weapons, <see cref="SaveWeaponBlood"/>); null when the save has none.
+    /// The bytes of <c>meitou-weapon-blood.json</c> (the blood on the characters' weapons, <see cref="SaveWeaponBlood"/>); null when the save has
+    /// none.
     /// </summary>
     public byte[]? WeaponBlood { get; set; }
 

@@ -418,7 +418,8 @@ sealed class MaterialCache : IDisposable
             any |= _cacheOrigin[k].W > 0;
         }
         if (!any) return;
-        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach, c.BakeBias) = (_cacheAlbedoIndex, _cacheNormalIndex, CacheLevels, _cacheReach, MathF.Min(_gpu.LodBias, 0));
+        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach, c.BakeBias) =
+            (_cacheAlbedoIndex, _cacheNormalIndex, CacheLevels, _cacheReach, MathF.Min(_gpu.LodBias, 0));
     }
 
     /// <summary>

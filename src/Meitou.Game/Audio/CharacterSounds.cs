@@ -520,7 +520,9 @@ public sealed class CharacterSounds
         {
             // A building's floor under the foot names its own material; anywhere else the terrain's overlay does.
             surface = BuildingFloor(e, position);
-            if (surface < 0 && Puddle?.Invoke(position) == true) surface = GroundSurfaces.Water;   // the wet world's puddles (Meitou): the water's step
+
+            // The wet world's puddles (Meitou): the water's step.
+            if (surface < 0 && Puddle?.Invoke(position) == true) surface = GroundSurfaces.Water;
             else if (surface < 0 && _ground is not null) surface = _ground.At(position.X, position.Z);
         }
         else return;

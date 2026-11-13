@@ -5,25 +5,38 @@ using Meitou.Data.World;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The indirect specular's reflections (docs/render-gi.md "Reflections"): <see cref="March"/> walks the reflected ray over the scene depth at the GI resolve's size,
-/// <see cref="GiShaders.Reflect"/> traces what it missed where the device can, <see cref="Shade"/> turns the two into what replaces the sky's reflection, and
-/// <see cref="Apply"/> upsamples that, Fresnel weighted, over the scene. Surfaces come from the GI surface target (bits 10-15: the gloss, <c>kenshiLight</c>).
+/// The indirect specular's reflections (docs/render-gi.md "Reflections"): <see cref="March"/> walks the reflected ray over the scene depth at the
+/// GI resolve's size, <see cref="GiShaders.Reflect"/> traces what it missed where the device can, <see cref="Shade"/> turns the two into what
+/// replaces the sky's reflection, and <see cref="Apply"/> upsamples that, Fresnel weighted, over the scene. Surfaces come from the GI surface target
+/// (bits 10-15: the gloss, <c>kenshiLight</c>).
 /// </summary>
 static class SsrShaders
 {
-    /// <summary>World units a marched ray goes.</summary>
+    /// <summary>
+    /// World units a marched ray goes.
+    /// </summary>
     public const float MarchRange = 3000;
-    /// <summary>Steps along the marched ray, and the halvings that refine a hit.</summary>
-    public const int MarchSteps = 40, MarchRefine = 5;
-    /// <summary>World units a marched ray may be behind the depth and still hit it, at least.</summary>
-    public const float MarchThickness = 6;
-
-    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// What the march and the traced rays share: the same pixel, gloss, normal and direction for one block of the render size. A const: <see cref="GiShaders.Reflect"/>
-    /// includes it while <see cref="AtmosphereShaders.Functions"/>, which <see cref="Shade"/> includes, may be initialising. The reflections start at a gloss of 0.25 and
-    /// replace the sky from 0.45, what a wet surface reaches (<c>makeWet</c> pulls it towards 0.5).
+    /// Steps along the marched ray.
+    /// </summary>
+    public const int MarchSteps = 40;
+
+    /// <summary>
+    /// The halvings that refine a marched hit.
+    /// </summary>
+    public const int MarchRefine = 5;
+
+    /// <summary>
+    /// World units a marched ray may be behind the depth and still hit it, at least.
+    /// </summary>
+    public const float MarchThickness = 6;
+
+    /// <summary>
+    /// What the march and the traced rays share: the same pixel, gloss, normal and direction for one block of the render size. A const:
+    /// <see cref="GiShaders.Reflect"/> includes it while <see cref="AtmosphereShaders.Functions"/>, which <see cref="Shade"/> includes, may be
+    /// initialising. The reflections start at a gloss of 0.25 and replace the sky from 0.45, what a wet surface reaches (<c>makeWet</c> pulls it
+    /// towards 0.5).
     /// </summary>
     public const string Common = """
 
@@ -69,10 +82,12 @@ static class SsrShaders
         """;
 
     /// <summary>
-    /// One texel per block: the scene colour where the reflected ray meets the scene depth (rgb) and how far to trust it (a: the fade towards the screen's
-    /// edges and the march's end; 0 no hit). The ray is walked in screen space with its inverse depth linear, then its crossing refined by halving.
+    /// One texel per block: the scene colour where the reflected ray meets the scene depth (rgb) and how far to trust it (a: the fade towards the
+    /// screen's edges and the march's end; 0 no hit). The ray is walked in screen space with its inverse depth linear, then its crossing refined by
+    /// halving.
     /// </summary>
-    public static readonly string March = "#version 330 core\n" + GiResolveShaders.Reconstruct + "uniform usampler2D uAlbedo;\n" + Common + $$"""
+    public static readonly string March = "#version 330 core\n" + GiResolveShaders.Reconstruct + "uniform usampler2D uAlbedo;\n" + Common
+        + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uScene;
@@ -152,13 +167,15 @@ static class SsrShaders
         """;
 
     /// <summary>
-    /// One texel per block of what the sky's reflection on this surface becomes, minus what the lit fragment already put there (the sky's, as <c>kenshiLight</c>
-    /// reads it), hazed as the fragment was; per unit of the environment BRDF, which <see cref="Apply"/> multiplies in at full size. Out: rgb that difference, a the signed
-    /// view depth as <see cref="GiResolveShaders.Resolve"/>'s. Every surface goes through here: below the gloss threshold the difference is the specular occlusion alone,
-    /// the same ratio the lit fragment takes without the resolve, recovered from the resolve's texel of this block.
-    /// <c>uHit</c>'s alpha is <c>ssrPackHit</c>'s. A rough surface mirrors a cone: the hits round this texel on the same surface are averaged over the disc the cone covers at their distance.
+    /// One texel per block of what the sky's reflection on this surface becomes, minus what the lit fragment already put there (the sky's, as
+    /// <c>kenshiLight</c> reads it), hazed as the fragment was; per unit of the environment BRDF, which <see cref="Apply"/> multiplies in at full size.
+    /// Out: rgb that difference, a the signed view depth as <see cref="GiResolveShaders.Resolve"/>'s. Every surface goes through here: below the gloss
+    /// threshold the difference is the specular occlusion alone, the same ratio the lit fragment takes without the resolve, recovered from the
+    /// resolve's texel of this block. <c>uHit</c>'s alpha is <c>ssrPackHit</c>'s. A rough surface mirrors a cone: the hits round this texel on the
+    /// same surface are averaged over the disc the cone covers at their distance.
     /// </summary>
-    public static readonly string Shade = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct + "uniform usampler2D uAlbedo;\n" + Common + $$"""
+    public static readonly string Shade = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
+        + "uniform usampler2D uAlbedo;\n" + Common + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uHit, uGiLow;
@@ -239,8 +256,12 @@ static class SsrShaders
         }
         """;
 
-    /// <summary>The low target over the scene (blend one, one; red, green and blue): upsampled by depth, times this pixel's environment BRDF (a specular colour of 0.04: resolved surfaces are dielectrics).</summary>
-    public static readonly string Apply = "#version 330 core\n" + GiResolveShaders.Reconstruct + AtmosphereShaders.EnvBrdfFunction + "\nuniform usampler2D uAlbedo;\n" + Common + $$"""
+    /// <summary>
+    /// The low target over the scene (blend one, one; red, green and blue): upsampled by depth, times this pixel's environment BRDF (a specular
+    /// colour of 0.04: resolved surfaces are dielectrics).
+    /// </summary>
+    public static readonly string Apply = "#version 330 core\n" + GiResolveShaders.Reconstruct + AtmosphereShaders.EnvBrdfFunction
+        + "\nuniform usampler2D uAlbedo;\n" + Common + $$"""
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -260,4 +281,9 @@ static class SsrShaders
             fragColour = vec4(kenshiEnvBrdf(ssrGloss(surface), nv, vec3({{F(KenshiLighting.DielectricSpecular)}})) * add, 0.0);
         }
         """;
+
+    /// <summary>
+    /// A float as a GLSL literal: invariant culture, at least one decimal, at most nine.
+    /// </summary>
+    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 }

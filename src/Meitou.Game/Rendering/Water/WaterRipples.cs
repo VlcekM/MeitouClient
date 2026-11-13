@@ -6,102 +6,172 @@ using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Water;
 
-/// <summary>One posed part of a body near the water: a capsule from <paramref name="A"/> to <paramref name="B"/> (world) of <paramref name="Radius"/>.</summary>
+/// <summary>
+/// One posed part of a body near the water: a capsule from <paramref name="A"/> to <paramref name="B"/> (world) of <paramref name="Radius"/>.
+/// </summary>
 public readonly record struct WaterBody(Vector3 A, Vector3 B, float Radius);
 
 /// <summary>
-/// The <c>contactfoam</c> switch's interactive water (docs/render-water.md "Wakes and ripples"): a damped wave equation on the GPU in a world-anchored window round the
-/// camera's target, addressed toroidally as the ground trails are (texel = world mod side; the strips the window gains are wiped, all of it after a jump). The waves run at
-/// the shallow-water speed of the depth under them, stop at the shore and die out in a sponge at the window's edge. The posed bodies in the water push it: the water a
-/// capsule takes from a column (its chord through the top <see cref="BodyDepth"/> units) rises round it, what it leaves falls back, so a walking leg makes a bow wave and a
-/// hollow behind, and the V of the wake comes out of the waves. Foam is renewed where the bodies churn the water and where the waves steepen, and fades. Fixed steps of
-/// game time (none while paused). Recorded into the frame's pre-frame commands; render thread only. Display only: nothing here is saved.
+/// The <c>contactfoam</c> switch's interactive water (docs/render-water.md "Wakes and ripples"): a damped wave equation on the GPU in a
+/// world-anchored window round the camera's target, addressed toroidally as the ground trails are (texel = world mod side; the strips the window
+/// gains are wiped, all of it after a jump). The waves run at the shallow-water speed of the depth under them, stop at the shore and die out in a
+/// sponge at the window's edge. The posed bodies in the water push it: the water a capsule takes from a column (its chord through the top
+/// <see cref="BodyDepth"/> units) rises round it, what it leaves falls back, so a walking leg makes a bow wave and a hollow behind, and the V of the
+/// wake comes out of the waves. Foam is renewed where the bodies churn the water and where the waves steepen, and fades. Fixed steps of game time
+/// (none while paused). Recorded into the frame's pre-frame commands; render thread only. Display only: nothing here is saved.
 /// </summary>
 public sealed unsafe class WaterRipples : IDisposable
 {
-    /// <summary>The window's side in texels and a texel in world units (5 cm), the snap it moves by, and the sponge round its edge (texels).</summary>
+    #region Window and steps
+
+    /// <summary>
+    /// The window's side in texels, the snap it moves by, and the sponge round its edge (texels).
+    /// </summary>
     public const int Side = 512, Snap = 32, Sponge = 24;
+
+    /// <summary>
+    /// A texel in world units (5 cm).
+    /// </summary>
     public const float Texel = 0.5f;
 
-    /// <summary>How far from the window's centre the waves show: the window's half side less its snap and the sponge.</summary>
+    /// <summary>
+    /// How far from the window's centre the waves show: the window's half side less its snap and the sponge.
+    /// </summary>
     public const float Reach = (Side / 2 - Snap - Sponge) * Texel;
 
-    /// <summary>How deep under the surface a body still moves the water (units): the top of the column, where the surface waves are made.</summary>
-    public const float BodyDepth = 3;
-
-    /// <summary>The depth map's side (texels of <see cref="DepthTexel"/> units over the same window).</summary>
-    const int DepthSide = Side / 4;
-    const float DepthTexel = Texel * 4;
-
-    /// <summary>One step of game time (s), at most this many a frame (the rest is dropped: slow frames slow the water down).</summary>
+    /// <summary>
+    /// One step of game time (s).
+    /// </summary>
     const float StepSeconds = 1f / 90;
+
+    /// <summary>
+    /// At most this many steps a frame (the rest is dropped: slow frames slow the water down).
+    /// </summary>
     const int MaxSteps = 6;
 
-    /// <summary>After this many game seconds with no body in the water the field has died out: no more steps until one comes.</summary>
+    /// <summary>
+    /// After this many game seconds with no body in the water the field has died out: no more steps until one comes.
+    /// </summary>
     const float QuietSeconds = 20;
 
-    /// <summary>The bodies one frame takes (capsules) and the characters they belong to.</summary>
-    public const int MaxCapsules = 192, MaxGroups = 32;
-
-    /// <summary>The foot splashes the field keeps until a step takes them (<see cref="AddSplash"/>).</summary>
-    public const int MaxSplashes = 32;
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct Push
-    {
-        public int OriginX, OriginZ;   // the window's first world texel
-        public int PreviousX, PreviousZ;
-        public int Groups, Mode, Sources, Splashes;
-        public float Dt, SourceDt, Water, Pad2;
-    }
-
+    /// <summary>
+    /// The GPU context everything here is made in and recorded into.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The compute program of <see cref="Kernel"/>.
+    /// </summary>
     readonly GpuProgram _program;
+
+    /// <summary>
+    /// The pipeline of <see cref="_program"/>.
+    /// </summary>
     readonly GpuComputePipeline _pipeline;
-    readonly DeviceBuffer _depth;
-    DeviceBuffer _now, _next;   // the state, swapped after each step
+
+    /// <summary>
+    /// The state, swapped after each step: the one a step reads.
+    /// </summary>
+    DeviceBuffer _now;
+
+    /// <summary>
+    /// The state a step writes.
+    /// </summary>
+    DeviceBuffer _next;
+
+    /// <summary>
+    /// The field written out for the water's shaders (<see cref="Surface"/>).
+    /// </summary>
     readonly GpuTexture _surface;
+
+    /// <summary>
+    /// The repeating linear sampler of <see cref="Surface"/>.
+    /// </summary>
     readonly GpuSampler _sampler;
-    readonly float[] _depths = new float[DepthSide * DepthSide];
-    readonly Vector4[] _bodies = new Vector4[MaxGroups * 2 + MaxCapsules * 2 + MaxSplashes];
-    readonly List<(QuerySlot Begin, QuerySlot Mid, QuerySlot End, int Steps)> _pendingTimes = [];
-    int _groups, _capsules, _groupStart, _splashes;
+
+    /// <summary>
+    /// The camera's target the window follows, set by <see cref="Begin"/>.
+    /// </summary>
     Vector3 _focus;
+
+    /// <summary>
+    /// Whether <see cref="Begin"/> ran since the last <see cref="Record"/>.
+    /// </summary>
     bool _focused;
-    (int X, int Z)? _origin, _depthOrigin;
-    bool _anyWater, _current;
+
+    /// <summary>
+    /// The window's first world texel (null before the first frame).
+    /// </summary>
+    (int X, int Z)? _origin;
+
+    /// <summary>
+    /// Whether the last bake found water in the window.
+    /// </summary>
+    bool _anyWater;
+
+    /// <summary>
+    /// Whether <see cref="Surface"/> was written for the current window.
+    /// </summary>
+    bool _current;
+
+    /// <summary>
+    /// The game hours of the last <see cref="Record"/>.
+    /// </summary>
     double? _lastHours;
-    int _sinceBake;
 
-    /// <summary>Frames after which the depth map is baked again where the window stands.</summary>
-    const int RebakeFrames = 120;
-    float _owed, _sourceOwed, _quiet = QuietSeconds;
+    /// <summary>
+    /// Game seconds not yet taken by a step.
+    /// </summary>
+    float _owed;
 
+    /// <summary>
+    /// Game seconds since the bodies last pushed the water.
+    /// </summary>
+    float _sourceOwed;
+
+    /// <summary>
+    /// Game seconds with no body or splash in the water.
+    /// </summary>
+    float _quiet = QuietSeconds;
+
+    /// <summary>
+    /// Makes the kernel, the two state buffers, the depth map and the field.
+    /// </summary>
     public WaterRipples(IGpuContext ctx)
     {
-        this._ctx = ctx;
+        _ctx = ctx;
         _program = ctx.Shaders.Compute(Kernel, "water ripples");
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "water ripples"));
+
         ulong texels = (ulong)Side * Side;
         _now = DeviceBuffer.Create(ctx, texels * 8, BufferUse.Storage | BufferUse.TransferDst, "water ripples a");
         _next = DeviceBuffer.Create(ctx, texels * 8, BufferUse.Storage | BufferUse.TransferDst, "water ripples b");
         _depth = DeviceBuffer.Create(ctx, DepthSide * DepthSide * 4, BufferUse.Storage | BufferUse.TransferDst, "water ripples depth");
+
         // One level: the water fades the waves out where a pixel covers several texels (they are smaller than it), so no mips are made.
+        var desc = new TextureDesc(InternalFormat.Rgba16F, Side, Side, Use: TextureUse.Sampled | TextureUse.Storage, Name: "water ripples");
         using (var batch = ctx.Uploads.Begin())
-            _surface = batch.Create(new TextureDesc(InternalFormat.Rgba16F, Side, Side, Use: TextureUse.Sampled | TextureUse.Storage, Name: "water ripples"));
+        {
+            _surface = batch.Create(desc);
+        }
+
         _sampler = ctx.Samplers.Get(new SamplerDesc(TextureMinFilter.Linear, TextureMagFilter.Linear, false, TextureWrapMode.Repeat,
             TextureWrapMode.Repeat, TextureWrapMode.Repeat, false, DepthFunction.Always, false, false, 1, 0));
     }
 
-    /// <summary>The field (rgba: height, its slopes along x and z, foam), once written: before that it must not be read.</summary>
+    /// <summary>
+    /// The field (rgba: height, its slopes along x and z, foam), once written: before that it must not be read.
+    /// </summary>
     public SampledTexture Surface => new(_sampler, _surface.View());
 
-    /// <summary>Whether <see cref="Surface"/> holds this window's field (false: none yet, or no water in the window).</summary>
+    /// <summary>
+    /// Whether <see cref="Surface"/> holds this window's field (false: none yet, or no water in the window).
+    /// </summary>
     public bool Ready => _current && _origin is not null;
 
     /// <summary>
-    /// The shader's window: xy its centre (world), zw that centre's place in the image (0 to 1, worked out in double so the far-out world does not round it);
-    /// and the half side the waves show over.
+    /// The shader's window: xy its centre (world), zw that centre's place in the image (0 to 1, worked out in double so the far-out world does not
+    /// round it); and the half side the waves show over.
     /// </summary>
     public (Vector4 Window, float Half) Window
     {
@@ -109,26 +179,142 @@ public sealed unsafe class WaterRipples : IDisposable
         {
             var (x, z) = _origin ?? (0, 0);
             double cx = (x + Side / 2.0) * Texel, cz = (z + Side / 2.0) * Texel, span = Side * (double)Texel;
-            return (new Vector4((float)cx, (float)cz, (float)(cx / span - Math.Floor(cx / span)), (float)(cz / span - Math.Floor(cz / span))), Reach);
+            float u = (float)(cx / span - Math.Floor(cx / span));
+            float v = (float)(cz / span - Math.Floor(cz / span));
+
+            return (new Vector4((float)cx, (float)cz, u, v), Reach);
         }
     }
 
-    /// <summary>GPU time of the timed frames (microseconds, summed: all of it and the steps alone), their count and their steps, read a few frames late.</summary>
-    public double GpuMicroseconds { get; private set; }
-    public double StepMicroseconds { get; private set; }
-    public long GpuTimed { get; private set; }
-    public long StepsTimed { get; private set; }
+    /// <summary>
+    /// The frame's work, before the scene: the window moved to the focus (the depth map baked again from <paramref name="heights"/> when it moved),
+    /// the steps of game time since the last frame (<paramref name="gameHours"/>, still while paused), then the field written out for the water's
+    /// shaders. Nothing with no water in the window.
+    /// </summary>
+    internal void Record(double gameHours, HeightSnapshot heights)
+    {
+        CollectTimes();
+        float seconds = _lastHours is { } last ? (float)Math.Clamp((gameHours - last) * WaveSet.SecondsPerGameHour, 0, 1) : 0;
+        _lastHours = gameHours;
+        if (!_focused) return;
 
-    /// <summary>Starts this frame's bodies: the window follows <paramref name="centre"/> (the camera's target).</summary>
+        _focused = false;
+        var (x, z) = (Snapped(_focus.X), Snapped(_focus.Z));
+        var previous = _origin;
+        bool jump = _origin is not { } was || Math.Abs(x - was.X) >= Side || Math.Abs(z - was.Z) >= Side;
+        _origin = (x, z);
+
+        // Again now and then where it stands: the terrain's finer heights stream in after the window has moved.
+        if (_depthOrigin != _origin || ++_sinceBake >= RebakeFrames) Bake(heights);
+
+        if (!_anyWater)
+        {
+            (_current, _splashes) = (false, 0);
+            return;
+        }
+
+        _quiet = _groups > 0 || _splashes > 0 ? 0 : _quiet + seconds;
+        if (_quiet >= QuietSeconds && _current && !jump && previous == _origin) return;
+
+        int steps = StepsOwed(seconds);
+        if (_current && steps == 0 && !jump && previous == _origin) return;
+
+        Dispatch(steps, jump, previous ?? _origin.Value);
+    }
+
+    /// <summary>
+    /// Adds <paramref name="seconds"/> to the time owed and takes the whole steps of it, at most <see cref="MaxSteps"/> (the rest dropped then).
+    /// </summary>
+    int StepsOwed(float seconds)
+    {
+        _owed += seconds;
+        _sourceOwed += seconds;
+        int steps = (int)(_owed / StepSeconds);
+        _owed -= steps * StepSeconds;
+        if (steps > MaxSteps) (steps, _owed) = (MaxSteps, 0);
+
+        return steps;
+    }
+
+    /// <summary>
+    /// The window's first texel on one axis for a focus at <paramref name="world"/>: centred on it, snapped to <see cref="Snap"/>.
+    /// </summary>
+    static int Snapped(float world) => (int)MathF.Floor((world / Texel - Side / 2f) / Snap) * Snap;
+
+    #endregion
+
+    #region Bodies
+
+    /// <summary>
+    /// How deep under the surface a body still moves the water (units): the top of the column, where the surface waves are made.
+    /// </summary>
+    public const float BodyDepth = 3;
+
+    /// <summary>
+    /// The bodies one frame takes (capsules) and the characters they belong to.
+    /// </summary>
+    public const int MaxCapsules = 192, MaxGroups = 32;
+
+    /// <summary>
+    /// The foot splashes the field keeps until a step takes them (<see cref="AddSplash"/>).
+    /// </summary>
+    public const int MaxSplashes = 32;
+
+    /// <summary>
+    /// A splash's crown radius (units) at strength 0.5.
+    /// </summary>
+    const float SplashRadius = 1.6f;
+
+    /// <summary>
+    /// The thickest capsule a body may have (units): a box larger than this is a broken pose or mesh, not a limb.
+    /// </summary>
+    const float MaxRadius = 30;
+
+    /// <summary>
+    /// What the kernel reads of the bodies: per group its box and capsule range, then the capsules (two each), then the splashes.
+    /// </summary>
+    readonly Vector4[] _bodies = new Vector4[MaxGroups * 2 + MaxCapsules * 2 + MaxSplashes];
+
+    /// <summary>
+    /// The groups (characters) taken this frame.
+    /// </summary>
+    int _groups;
+
+    /// <summary>
+    /// The capsules taken this frame.
+    /// </summary>
+    int _capsules;
+
+    /// <summary>
+    /// The first capsule of the group being added.
+    /// </summary>
+    int _groupStart;
+
+    /// <summary>
+    /// The splashes kept for the next step.
+    /// </summary>
+    int _splashes;
+
+    /// <summary>
+    /// Capsules dropped by <see cref="Sane"/> (reported at the end).
+    /// </summary>
+    long _dropped;
+
+    /// <summary>
+    /// Starts this frame's bodies: the window follows <paramref name="centre"/> (the camera's target).
+    /// </summary>
     public void Begin(Vector3 centre)
     {
         (_focus, _focused, _groups, _capsules) = (centre, true, 0, 0);
     }
 
-    /// <summary>One character's capsules (those near the water); the ones past <see cref="MaxCapsules"/> are dropped.</summary>
+    /// <summary>
+    /// One character's capsules (those near the water); the ones past <see cref="MaxCapsules"/> are dropped.
+    /// </summary>
     public void AddBody(ReadOnlySpan<WaterBody> parts)
     {
         if (_groups == MaxGroups || parts.IsEmpty) return;
+
         _groupStart = _capsules;
         var min = new Vector2(float.MaxValue);
         var max = new Vector2(float.MinValue);
@@ -137,10 +323,13 @@ public sealed unsafe class WaterRipples : IDisposable
             // A pose with a broken bone (not finite, or absurd) pushes nothing: one bad value would spread over the whole field.
             if (!Sane(c))
             {
-                if (_dropped++ == 0) Console.WriteLine($"water     ripples: dropped a body capsule ({c.A} to {c.B}, radius {c.Radius}): not finite or absurd");
+                if (_dropped++ == 0)
+                    Console.WriteLine($"water     ripples: dropped a body capsule ({c.A} to {c.B}, radius {c.Radius}): not finite or absurd");
                 continue;
             }
+
             if (_capsules == MaxCapsules) break;
+
             int at = MaxGroups * 2 + _capsules * 2;
             _bodies[at] = new Vector4(c.A, c.Radius);
             _bodies[at + 1] = new Vector4(c.B, 0);
@@ -148,74 +337,105 @@ public sealed unsafe class WaterRipples : IDisposable
             min = Vector2.Min(min, Vector2.Min(new Vector2(c.A.X, c.A.Z), new Vector2(c.B.X, c.B.Z)) - new Vector2(c.Radius));
             max = Vector2.Max(max, Vector2.Max(new Vector2(c.A.X, c.A.Z), new Vector2(c.B.X, c.B.Z)) + new Vector2(c.Radius));
         }
+
         if (_capsules == _groupStart) return;
+
         _bodies[_groups * 2] = new Vector4(min.X - 1, min.Y - 1, max.X + 1, max.Y + 1);
         _bodies[_groups * 2 + 1] = new Vector4(_groupStart, _capsules - _groupStart, 0, 0);
         _groups++;
     }
 
     /// <summary>
-    /// A foot landing in the water at <paramref name="at"/> (world x, z), <paramref name="strength"/> 0 to 1: a crown of water round a hollow that spreads as a ring, and foam that
-    /// lingers. Kept until the next step (a frame may take none).
+    /// A foot landing in the water at <paramref name="at"/> (world x, z), <paramref name="strength"/> 0 to 1: a crown of water round a hollow that
+    /// spreads as a ring, and foam that lingers. Kept until the next step (a frame may take none).
     /// </summary>
     public void AddSplash(Vector2 at, float strength)
     {
-        if (_splashes == MaxSplashes || !float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(strength)) return;
+        if (_splashes == MaxSplashes || !float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(strength))
+            return;
         if (Vector2.DistanceSquared(at, new Vector2(_focus.X, _focus.Z)) > Reach * Reach) return;
+
         strength = Math.Clamp(strength, 0, 1);
         _bodies[MaxGroups * 2 + MaxCapsules * 2 + _splashes++] = new Vector4(at, strength, SplashRadius * (0.8f + 0.4f * strength));
     }
 
-    /// <summary>A splash's crown radius (units) at strength 0.5.</summary>
-    const float SplashRadius = 1.6f;
-
-    /// <summary>A capsule the field can take: finite, a radius over 0 and under <see cref="MaxRadius"/>, and within the window's reach of its centre.</summary>
+    /// <summary>
+    /// A capsule the field can take: finite, a radius over 0 and under <see cref="MaxRadius"/>, and within the window's reach of its centre.
+    /// </summary>
     bool Sane(in WaterBody c) =>
-        float.IsFinite(c.A.X) && float.IsFinite(c.A.Y) && float.IsFinite(c.A.Z) && float.IsFinite(c.B.X) && float.IsFinite(c.B.Y) && float.IsFinite(c.B.Z)
-        && c.Radius > 0 && c.Radius < MaxRadius && Vector3.DistanceSquared(c.A, _focus) < 4 * Reach * Reach && Vector3.DistanceSquared(c.A, c.B) < MaxRadius * MaxRadius * 16;
+        float.IsFinite(c.A.X) && float.IsFinite(c.A.Y) && float.IsFinite(c.A.Z)
+        && float.IsFinite(c.B.X) && float.IsFinite(c.B.Y) && float.IsFinite(c.B.Z)
+        && c.Radius > 0 && c.Radius < MaxRadius
+        && Vector3.DistanceSquared(c.A, _focus) < 4 * Reach * Reach
+        && Vector3.DistanceSquared(c.A, c.B) < MaxRadius * MaxRadius * 16;
 
-    /// <summary>Capsules dropped by <see cref="Sane"/> (reported at the end).</summary>
-    long _dropped;
+    #endregion
 
-    /// <summary>The thickest capsule a body may have (units): a box larger than this is a broken pose or mesh, not a limb.</summary>
-    const float MaxRadius = 30;
+    #region Depth map
 
     /// <summary>
-    /// The frame's work, before the scene: the window moved to the focus (the depth map baked again from <paramref name="heights"/> when it moved), the steps of game time
-    /// since the last frame (<paramref name="gameHours"/>, still while paused), then the field written out for the water's shaders. Nothing with no water in the window.
+    /// The depth map's side (texels of <see cref="DepthTexel"/> units over the same window).
     /// </summary>
-    internal void Record(double gameHours, HeightSnapshot heights)
-    {
-        CollectTimes();
-        float seconds = _lastHours is { } last ? (float)Math.Clamp((gameHours - last) * WaveSet.SecondsPerGameHour, 0, 1) : 0;
-        _lastHours = gameHours;
-        if (!_focused) return;
-        _focused = false;
-        var (x, z) = (Snapped(_focus.X), Snapped(_focus.Z));
-        var previous = _origin;
-        bool jump = _origin is not { } was || Math.Abs(x - was.X) >= Side || Math.Abs(z - was.Z) >= Side;
-        _origin = (x, z);
-        // Again now and then where it stands: the terrain's finer heights stream in after the window has moved.
-        if (_depthOrigin != _origin || ++_sinceBake >= RebakeFrames) Bake(heights);
-        if (!_anyWater)
-        {
-            (_current, _splashes) = (false, 0);
-            return;
-        }
-        _quiet = _groups > 0 || _splashes > 0 ? 0 : _quiet + seconds;
-        if (_quiet >= QuietSeconds && _current && !jump && previous == _origin) return;
-        _owed += seconds;
-        _sourceOwed += seconds;
-        int steps = (int)(_owed / StepSeconds);
-        _owed -= steps * StepSeconds;
-        if (steps > MaxSteps) (steps, _owed) = (MaxSteps, 0);
-        if (_current && steps == 0 && !jump && previous == _origin) return;
-        Dispatch(steps, jump, previous ?? _origin.Value);
-    }
+    const int DepthSide = Side / 4;
 
-    static int Snapped(float world) => (int)MathF.Floor((world / Texel - Side / 2f) / Snap) * Snap;
+    /// <summary>
+    /// A depth map texel in world units.
+    /// </summary>
+    const float DepthTexel = Texel * 4;
 
-    /// <summary>The water's depth over the window (units, 0 on land) at <see cref="DepthTexel"/>, from this frame's terrain heights.</summary>
+    /// <summary>
+    /// Frames after which the depth map is baked again where the window stands.
+    /// </summary>
+    const int RebakeFrames = 120;
+
+    /// <summary>
+    /// How far round the window's centre the walls are read (on a worker), and how far it may move before they are read again.
+    /// </summary>
+    const float WallReach = 600, WallRefresh = 250;
+
+    /// <summary>
+    /// The depth map on the GPU.
+    /// </summary>
+    readonly DeviceBuffer _depth;
+
+    /// <summary>
+    /// The depth map as baked, addressed toroidally.
+    /// </summary>
+    readonly float[] _depths = new float[DepthSide * DepthSide];
+
+    /// <summary>
+    /// The window's origin at the last bake.
+    /// </summary>
+    (int X, int Z)? _depthOrigin;
+
+    /// <summary>
+    /// Frames since the last bake.
+    /// </summary>
+    int _sinceBake;
+
+    /// <summary>
+    /// The walls being read on a worker.
+    /// </summary>
+    Task<IReadOnlyList<(Vector2 A, Vector2 B)>>? _wallJob;
+
+    /// <summary>
+    /// The walls last read (null: none yet, or the read failed).
+    /// </summary>
+    IReadOnlyList<(Vector2 A, Vector2 B)>? _wallSegments;
+
+    /// <summary>
+    /// The centre <see cref="_wallSegments"/> were read round.
+    /// </summary>
+    Vector2 _wallCentre;
+
+    /// <summary>
+    /// The walls and posts standing in the water (<see cref="WaterRenderer.Walls"/>); the waves do not pass them.
+    /// </summary>
+    public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls { get; set; }
+
+    /// <summary>
+    /// The water's depth over the window (units, 0 on land) at <see cref="DepthTexel"/>, from this frame's terrain heights.
+    /// </summary>
     void Bake(HeightSnapshot heights)
     {
         var (x, z) = _origin!.Value;
@@ -230,25 +450,23 @@ public sealed unsafe class WaterRipples : IDisposable
                 _anyWater |= d > 0;
                 _depths[Wrap(dz + j, DepthSide) * DepthSide + Wrap(dx + i, DepthSide)] = d;
             }
+
         Wall(dx, dz);
         (_depthOrigin, _sinceBake) = (_origin, 0);
+
         using var batch = _ctx.Uploads.Begin();
         batch.Write(_depth, 0, MemoryMarshal.AsBytes(_depths.AsSpan()));
     }
 
+    /// <summary>
+    /// <paramref name="v"/> wrapped into 0 to <paramref name="n"/> - 1.
+    /// </summary>
     static int Wrap(int v, int n) => ((v % n) + n) % n;
 
-    /// <summary>The walls and posts standing in the water (<see cref="WaterRenderer.Walls"/>); the waves do not pass them.</summary>
-    public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls { get; set; }
-
-    Task<IReadOnlyList<(Vector2 A, Vector2 B)>>? _wallJob;
-    IReadOnlyList<(Vector2 A, Vector2 B)>? _wallSegments;
-    Vector2 _wallCentre;
-
-    /// <summary>How far round the window's centre the walls are read (on a worker), and how far it may move before they are read again.</summary>
-    const float WallReach = 600, WallRefresh = 250;
-
-    /// <summary>The depth map's texels the walls cross are land (depth 0): the waves stop at them as at a shore. The walls are read on a worker and kept while the window stays near.</summary>
+    /// <summary>
+    /// The depth map's texels the walls cross are land (depth 0): the waves stop at them as at a shore. The walls are read on a worker and kept while
+    /// the window stays near.
+    /// </summary>
     void Wall(int dx, int dz)
     {
         var centre = new Vector2((dx + DepthSide / 2) * DepthTexel, (dz + DepthSide / 2) * DepthTexel);
@@ -257,12 +475,15 @@ public sealed unsafe class WaterRipples : IDisposable
             _wallSegments = done.IsCompletedSuccessfully ? done.Result : null;
             _wallJob = null;
         }
+
         if (Walls is { } read && _wallJob is null && (_wallSegments is null || Vector2.Distance(centre, _wallCentre) > WallRefresh))
         {
             _wallCentre = centre;
             _wallJob = Task.Run(() => read(centre, WallReach));
         }
+
         if (_wallSegments is null) return;
+
         foreach (var (a, b) in _wallSegments)
         {
             var ta = a / DepthTexel;
@@ -273,54 +494,126 @@ public sealed unsafe class WaterRipples : IDisposable
                 var t = Vector2.Lerp(ta, tb, k / (float)steps);
                 int i = (int)MathF.Floor(t.X), j = (int)MathF.Floor(t.Y);
                 if (i < dx || j < dz || i >= dx + DepthSide || j >= dz + DepthSide) continue;
+
                 _depths[Wrap(j, DepthSide) * DepthSide + Wrap(i, DepthSide)] = 0;
             }
         }
     }
 
+    #endregion
+
+    #region Dispatch
+
+    /// <summary>
+    /// The kernel's push constants.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    struct Push
+    {
+        /// <summary>
+        /// The window's first world texel.
+        /// </summary>
+        public int OriginX, OriginZ;
+
+        /// <summary>
+        /// The window's first world texel the frame before.
+        /// </summary>
+        public int PreviousX, PreviousZ;
+
+        /// <summary>
+        /// The body groups, the kernel's mode, whether the bodies push in this step, and the splashes.
+        /// </summary>
+        public int Groups, Mode, Sources, Splashes;
+
+        /// <summary>
+        /// The step (s), the time the bodies' push covers (s), the water's height, and padding.
+        /// </summary>
+        public float Dt, SourceDt, Water, Pad2;
+    }
+
+    /// <summary>
+    /// Records the frame's kernels into the pre-frame commands, timed: the window wiped after a jump, the strips it gained wiped, the
+    /// <paramref name="steps"/>, then the field written out.
+    /// </summary>
     void Dispatch(int steps, bool jump, (int X, int Z) previous)
     {
         var cmd = _ctx.Frame.PreFrame;
         cmd.BeginLabel("water ripples");
         cmd.Order();
-        var stamps = (Begin: _ctx.Frame.Timestamps.Allocate(), Mid: _ctx.Frame.Timestamps.Allocate(), End: _ctx.Frame.Timestamps.Allocate());
+        var stamps = (
+            Begin: _ctx.Frame.Timestamps.Allocate(),
+            Mid: _ctx.Frame.Timestamps.Allocate(),
+            End: _ctx.Frame.Timestamps.Allocate());
         cmd.Timestamp(_ctx.Frame.Timestamps, stamps.Begin, GpuStage.Compute);
         if (jump)
         {
             cmd.FillBuffer(_now.Handle, 0, _now.Size, 0);
             cmd.Order();
         }
+
         var slice = _ctx.Frame.WriteConstants(MemoryMarshal.AsBytes(_bodies.AsSpan()), 256);
         var o = _origin!.Value;
-        var push = new Push
-        {
-            OriginX = o.X, OriginZ = o.Z, PreviousX = previous.X, PreviousZ = previous.Z, Groups = _groups, Splashes = _splashes, Dt = StepSeconds, SourceDt = Math.Max(_sourceOwed, 1e-3f),
-            Water = WorldWater.Height,
-        };
+        var push = StepPush(o, previous);
         uint g = Side / 16;
-        if (!jump && previous != o)
+        RunSteps(cmd, slice, push, g, steps, !jump && previous != o);
+
+        cmd.Timestamp(_ctx.Frame.Timestamps, stamps.Mid, GpuStage.Compute);
+        Run(cmd, slice, push with { Mode = 2 }, g);
+        cmd.Barrier([new GpuDependency(Access.StorageWrite, Access.Sampled)]);
+        cmd.Timestamp(_ctx.Frame.Timestamps, stamps.End, GpuStage.All);
+        if (stamps.Begin.IsValid && stamps.Mid.IsValid && stamps.End.IsValid)
+            _pendingTimes.Add((stamps.Begin, stamps.Mid, stamps.End, steps));
+
+        cmd.EndLabel();
+        _current = true;
+    }
+
+    /// <summary>
+    /// The push constants of a step in the window at <paramref name="origin"/> that stood at <paramref name="previous"/>.
+    /// </summary>
+    Push StepPush((int X, int Z) origin, (int X, int Z) previous) => new()
+    {
+        OriginX = origin.X,
+        OriginZ = origin.Z,
+        PreviousX = previous.X,
+        PreviousZ = previous.Z,
+        Groups = _groups,
+        Splashes = _splashes,
+        Dt = StepSeconds,
+        SourceDt = Math.Max(_sourceOwed, 1e-3f),
+        Water = WorldWater.Height,
+    };
+
+    /// <summary>
+    /// The strips the window gained wiped (when <paramref name="wipeStrips"/>), then the <paramref name="steps"/>, the bodies pushing in the first;
+    /// once a step ran, the splashes and the owed push time are spent.
+    /// </summary>
+    void RunSteps(IGpuCommandList cmd, in Transient slice, in Push push, uint g, int steps, bool wipeStrips)
+    {
+        if (wipeStrips)
         {
             Run(cmd, slice, push with { Mode = 1 }, g);   // the strips the window gained: wiped, in place
             Compute(cmd);
         }
+
         for (int i = 0; i < steps; i++)
         {
             Run(cmd, slice, push with { Mode = 0, Sources = i == 0 ? 1 : 0 }, g);
             Compute(cmd);
             (_now, _next) = (_next, _now);
         }
+
         if (steps > 0) (_sourceOwed, _splashes) = (0, 0);
-        cmd.Timestamp(_ctx.Frame.Timestamps, stamps.Mid, GpuStage.Compute);
-        Run(cmd, slice, push with { Mode = 2 }, g);
-        cmd.Barrier([new GpuDependency(Access.StorageWrite, Access.Sampled)]);
-        cmd.Timestamp(_ctx.Frame.Timestamps, stamps.End, GpuStage.All);
-        if (stamps.Begin.IsValid && stamps.Mid.IsValid && stamps.End.IsValid) _pendingTimes.Add((stamps.Begin, stamps.Mid, stamps.End, steps));
-        cmd.EndLabel();
-        _current = true;
     }
 
+    /// <summary>
+    /// A barrier between two kernels writing and reading the state.
+    /// </summary>
     static void Compute(IGpuCommandList cmd) => cmd.Barrier([new GpuDependency(Access.StorageWrite, Access.StorageRead | Access.StorageWrite)]);
 
+    /// <summary>
+    /// One dispatch of the kernel over the window with <paramref name="push"/>.
+    /// </summary>
     void Run(IGpuCommandList cmd, in Transient slice, in Push push, uint groupsPerSide)
     {
         cmd.BindPipeline(_pipeline);
@@ -337,14 +630,52 @@ public sealed unsafe class WaterRipples : IDisposable
         cmd.Dispatch(groupsPerSide, groupsPerSide, 1);
     }
 
+    #endregion
+
+    #region Timing
+
+    /// <summary>
+    /// The timed frames whose stamps are not read yet: their begin, mid (after the steps) and end stamps and their steps.
+    /// </summary>
+    readonly List<(QuerySlot Begin, QuerySlot Mid, QuerySlot End, int Steps)> _pendingTimes = [];
+
+    /// <summary>
+    /// GPU time of the timed frames (microseconds, summed), read a few frames late.
+    /// </summary>
+    public double GpuMicroseconds { get; private set; }
+
+    /// <summary>
+    /// GPU time of the timed frames' steps alone (microseconds, summed).
+    /// </summary>
+    public double StepMicroseconds { get; private set; }
+
+    /// <summary>
+    /// The frames timed.
+    /// </summary>
+    public long GpuTimed { get; private set; }
+
+    /// <summary>
+    /// The steps of the frames timed.
+    /// </summary>
+    public long StepsTimed { get; private set; }
+
+    /// <summary>
+    /// Adds the timed frames whose stamps are readable to the totals; drops those too old to read.
+    /// </summary>
     void CollectTimes()
     {
         var q = _ctx.Frame.Timestamps;
         for (int i = 0; i < _pendingTimes.Count; i++)
         {
             var (b, m, e, steps) = _pendingTimes[i];
-            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number) { _pendingTimes.RemoveAt(i--); continue; }
+            if (b.Frame + _ctx.FramesInFlight + 2 < _ctx.Frame.Number)
+            {
+                _pendingTimes.RemoveAt(i--);
+                continue;
+            }
+
             if (!q.TryRead(b, out ulong tb) || !q.TryRead(m, out ulong tm) || !q.TryRead(e, out ulong te)) continue;
+
             GpuMicroseconds += (te - tb) / 1000.0;
             StepMicroseconds += (tm - tb) / 1000.0;
             GpuTimed++;
@@ -352,6 +683,10 @@ public sealed unsafe class WaterRipples : IDisposable
             _pendingTimes.RemoveAt(i--);
         }
     }
+
+    #endregion
+
+    #region Kernel
 
     /// <summary>
     /// Modes: 0 one step (A to B; with Sources the bodies' push first), 1 the texels the window gained wiped in A, 2 the field written out (height,
@@ -519,12 +854,23 @@ public sealed unsafe class WaterRipples : IDisposable
         }
         """);
 
+    #endregion
+
+    /// <summary>
+    /// Reports the dropped capsules and the GPU time, then frees the buffers, the field and the program.
+    /// </summary>
     public void Dispose()
     {
         if (_dropped > 0) Console.WriteLine($"water     ripples: {_dropped} body capsules dropped (not finite or absurd)");
         if (GpuTimed > 0)
+        {
+            double perFrame = GpuMicroseconds / GpuTimed;
+            double stepUsPerFrame = StepMicroseconds / GpuTimed;
+            double stepCount = (double)StepsTimed / GpuTimed;
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"water     ripples: gpu us per frame {GpuMicroseconds / GpuTimed:F1}, of which steps {StepMicroseconds / GpuTimed:F1} ({(double)StepsTimed / GpuTimed:F2} a frame; {GpuTimed} timed)"));
+                $"water     ripples: gpu us per frame {perFrame:F1}, of which steps {stepUsPerFrame:F1} ({stepCount:F2} a frame; {GpuTimed} timed)"));
+        }
+
         _now.Dispose();
         _next.Dispose();
         _depth.Dispose();

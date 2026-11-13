@@ -444,6 +444,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// Decodes running or wanted, and meshes whose upload is queued.
     /// </summary>
     public int Pending => _running.Count + _wanted.Count + _reshaping.Count + _reshapeQueued;
+
     /// <summary>
     /// <see cref="Pending"/> as a loading screen waits for it: the remakes that coarsen a mesh (memory housekeeping, nothing to see) are left out; a
     /// camera at rest kept two of them running for tens of seconds.
@@ -471,6 +472,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// How many of <see cref="_reshapeQueued"/> make a mesh finer (the others coarsen one).
     /// </summary>
     int _upgradesQueued;
+
     /// <summary>
     /// Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.
     /// </summary>
@@ -1219,6 +1221,7 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     /// The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.
     /// </summary>
     public bool Dust { get; init; }
+
     /// <summary>
     /// The game's metalness map, where the material names one.
     /// </summary>

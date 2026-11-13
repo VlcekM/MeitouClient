@@ -31,7 +31,8 @@ public sealed class ReflectionPass : IDisposable
     public delegate void SceneDraw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum);
 
     /// <summary>
-    /// Size of the texture relative to the picture (the game's is a fixed 512Â²). Full size: at a grazing angle the mirror image is seen about as large as the scene itself.
+    /// Size of the texture relative to the picture (the game's is a fixed 512Â²). Full size: at a grazing angle the mirror image is seen about as
+    /// large as the scene itself.
     /// </summary>
     public const float Scale = 1f;
 

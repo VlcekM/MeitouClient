@@ -469,7 +469,8 @@ public sealed record BuildingPlacement(
         (exterior ? ExteriorLayout : InteriorLayout) ?? state?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
 
     /// <summary>
-    /// A loose weapon's model (its instance's <c>material sid</c>, a MATERIAL_SPECS_WEAPON): its look instead of the resolver's pick; null or empty for none.
+    /// A loose weapon's model (its instance's <c>material sid</c>, a MATERIAL_SPECS_WEAPON): its look instead of the resolver's pick; null or empty
+    /// for none.
     /// </summary>
     public string? ItemMaterial { get; init; }
 

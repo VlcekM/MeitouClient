@@ -122,10 +122,15 @@ internal sealed unsafe partial class CharacterRenderer
             (_previousRelativeUnjittered, _previousEye) = (_motionRelativeUnjittered, _motionEye);
         }
         (_previousUnjittered, _havePreviousCamera) = (_motionUnjittered, true);
+
         if (_liveCount > 0) DrawCharactersMotion(targets, previous, previousRelative);
         if (previousRelative is { } behind) ExtraMotion?.Invoke(targets, new MotionCamera(_motionRelative, behind, _motionEye));
     }
 
+    /// <summary>
+    /// The live characters' motion into <paramref name="targets"/>, from <paramref name="previous"/> (and <paramref name="previousRelative"/>
+    /// where the pass works relative to the eye).
+    /// </summary>
     void DrawCharactersMotion(MotionTargets targets, Matrix4x4 previous, Matrix4x4? previousRelative)
     {
         _motionCalls++;

@@ -739,7 +739,9 @@ public static class ImpostorShaders
         ["uImpostorBox"] = "pc.spare",
     };
 
-    /// <summary><see cref="Vertex"/> in the native model.</summary>
+    /// <summary>
+    /// <see cref="Vertex"/> in the native model.
+    /// </summary>
     public static string VertexNative() => NativeShaders.Port(RenderOrigin.Relative(Vertex), NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary>

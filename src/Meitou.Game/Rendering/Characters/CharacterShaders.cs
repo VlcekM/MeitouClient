@@ -879,7 +879,8 @@ struct CharacterPush
     /// </summary>
     public uint DepthIndex;
     /// <summary>
-    /// The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w the <c>chars2</c> switch's parts, <see cref="CharacterRenderer.SurfaceParts"/>, 0 while it is off).
+    /// The colour pass's fill light (<see cref="CharacterRenderer.Fill"/>; w the <c>chars2</c> switch's parts,
+    /// <see cref="CharacterRenderer.SurfaceParts"/>, 0 while it is off).
     /// </summary>
     public Vector4 Fill;
     /// <summary>

@@ -10,30 +10,21 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The characters in the traced scene (docs/render-lights.md "Traced lamp shadows"): each frame a kernel skins the shown parts of the characters nearest the eye with this frame's
-/// palettes (<see cref="Skin"/>, the vertex program's rule: morphs, bones, hidden limbs and parts), a triangle's three corners apiece, and each character's bottom level is refitted over
-/// them (built again when its parts or levels change, and every <see cref="RebuildEvery"/> refits). A character whose pose is held and whose pieces lie as they were skinned is left as
-/// it is: its structure is this frame's already. One instance per character under <see cref="TracedSunShaders.Characters"/>, which the
-/// probes' rays leave out. Render thread only.
+/// The characters in the traced scene (docs/render-lights.md "Traced lamp shadows"): each frame a kernel skins the shown parts of the characters
+/// nearest the eye with this frame's palettes (<see cref="Skin"/>, the vertex program's rule: morphs, bones, hidden limbs and parts), a triangle's
+/// three corners apiece, and each character's bottom level is refitted over them (built again when its parts or levels change, and every
+/// <see cref="RebuildEvery"/> refits). A character whose pose is held and whose pieces lie as they were skinned is left as it is: its structure is
+/// this frame's already. One instance per character under <see cref="TracedSunShaders.Characters"/>, which the probes' rays leave out. Render
+/// thread only.
 /// </summary>
 sealed unsafe class TracedCharacters : IDisposable
 {
-    /// <summary>The budget: characters this near the eye, the nearest this many, at most this many triangles a frame.</summary>
-    public const float Range = 4000;
-    public const int MaxCharacters = 128;
-    const int MaxTriangles = 3_000_000;
-    /// <summary>A refitted structure loses quality as the pose moves away from the one it was built over: built again after this many refits.</summary>
-    const int RebuildEvery = 60;
-    /// <summary>An unused character's structure is kept this many frames (it comes back without a build).</summary>
-    const int KeepFrames = 120;
-    /// <summary>Bytes of a skinned corner: its position at 0 and its texture coordinates at <see cref="GpuVertex.UvOffset"/>, as the hit records read them.</summary>
-    const int Stride = 32;
-    /// <summary>Most triangles of one mesh group (a larger one traces its first ones): the shared index buffer's size.</summary>
-    const int MaxGroupTriangles = 1 << 17;
+    #region Skinning kernel
 
     /// <summary>
-    /// One job a mesh group: its triangles' corners skinned into <c>target</c>, three a triangle in order. The vertex layout is <see cref="GpuVertex"/>'s character one: position at 0,
-    /// texture coordinates at 20, colour at 36 (x the morph slot's bits, y the hide marks), bones at 52 (8 bits each), weights at 56 (16-bit unorm).
+    /// One job a mesh group: its triangles' corners skinned into <c>target</c>, three a triangle in order. The vertex layout is
+    /// <see cref="GpuVertex"/>'s character one: position at 0, texture coordinates at 20, colour at 36 (x the morph slot's bits, y the hide marks),
+    /// bones at 52 (8 bits each), weights at 56 (16-bit unorm).
     /// </summary>
     public static readonly string Skin = $$"""
         #version 460
@@ -119,71 +110,300 @@ sealed unsafe class TracedCharacters : IDisposable
         }
         """;
 
+    /// <summary>
+    /// One mesh group's job as the kernel's <c>Job</c> reads it.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Job
     {
-        public Matrix4x4 Model;
-        public ulong Vertices, Indices, Target;
-        public uint Triangles, BoneBase, MorphBase, Flags, First, Pad1;
+        /// <summary>
+        /// Bytes of a job in the kernel's buffer.
+        /// </summary>
         public const int Size = 112;
+
+        /// <summary>
+        /// The piece's model matrix, relative to the character's anchor.
+        /// </summary>
+        public Matrix4x4 Model;
+
+        /// <summary>
+        /// Device address of the group's vertices.
+        /// </summary>
+        public ulong Vertices;
+
+        /// <summary>
+        /// Device address of the level's first index.
+        /// </summary>
+        public ulong Indices;
+
+        /// <summary>
+        /// Device address the skinned corners go to.
+        /// </summary>
+        public ulong Target;
+
+        /// <summary>
+        /// Triangles the job skins.
+        /// </summary>
+        public uint Triangles;
+
+        /// <summary>
+        /// The character's first bone in the palettes.
+        /// </summary>
+        public uint BoneBase;
+
+        /// <summary>
+        /// The piece's first morph delta (0: none).
+        /// </summary>
+        public uint MorphBase;
+
+        /// <summary>
+        /// The piece's flags: hidden parts and limbs, side, head only.
+        /// </summary>
+        public uint Flags;
+
+        /// <summary>
+        /// The job's first triangle over every job.
+        /// </summary>
+        public uint First;
+
+        /// <summary>
+        /// Padding to the kernel's layout.
+        /// </summary>
+        public uint Pad1;
     }
 
+    /// <summary>
+    /// The kernel's push constants.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Counts
     {
-        public uint Jobs, Triangles;
+        /// <summary>
+        /// Jobs in the buffer.
+        /// </summary>
+        public uint Jobs;
+
+        /// <summary>
+        /// Triangles over every job.
+        /// </summary>
+        public uint Triangles;
     }
 
-    /// <summary>What a character's structure was built over: per geometry its group, level, triangles and whether it is opaque.</summary>
+    #endregion
+
+    #region Structures
+
+    /// <summary>
+    /// The budget: characters this near the eye.
+    /// </summary>
+    public const float Range = 4000;
+
+    /// <summary>
+    /// The budget: the nearest this many characters.
+    /// </summary>
+    public const int MaxCharacters = 128;
+
+    /// <summary>
+    /// The budget: at most this many triangles a frame.
+    /// </summary>
+    const int MaxTriangles = 3_000_000;
+
+    /// <summary>
+    /// A refitted structure loses quality as the pose moves away from the one it was built over: built again after this many refits.
+    /// </summary>
+    const int RebuildEvery = 60;
+
+    /// <summary>
+    /// An unused character's structure is kept this many frames (it comes back without a build).
+    /// </summary>
+    const int KeepFrames = 120;
+
+    /// <summary>
+    /// Bytes of a skinned corner: its position at 0 and its texture coordinates at <see cref="GpuVertex.UvOffset"/>, as the hit records read them.
+    /// </summary>
+    const int Stride = 32;
+
+    /// <summary>
+    /// Most triangles of one mesh group (a larger one traces its first ones): the shared index buffer's size.
+    /// </summary>
+    const int MaxGroupTriangles = 1 << 17;
+
+    /// <summary>
+    /// What a piece's model may differ by from the skinned one and count as the same: its place in world units.
+    /// </summary>
+    const float PlacedShift = 0.05f;
+
+    /// <summary>
+    /// What a piece's model may differ by from the skinned one and count as the same: its axes' entries summed.
+    /// </summary>
+    const float PlacedTurn = 1e-3f;
+
+    /// <summary>
+    /// The device the structures and buffers live on.
+    /// </summary>
+    readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The skinning kernel's program.
+    /// </summary>
+    readonly GpuProgram _program;
+
+    /// <summary>
+    /// The skinning kernel's pipeline.
+    /// </summary>
+    readonly GpuComputePipeline _pipeline;
+
+    /// <summary>
+    /// Each character's structure, by its key.
+    /// </summary>
+    readonly Dictionary<long, Entry> _entries = [];
+
+    /// <summary>
+    /// This frame's characters near the eye, as the renderer lists them.
+    /// </summary>
+    readonly List<CharacterRenderer.RayCharacter> _characters = [];
+
+    /// <summary>
+    /// The characters in this frame's scene: their entry, whether it is built this frame and whether it is skinned this frame.
+    /// </summary>
+    readonly List<(CharacterRenderer.RayCharacter Character, Entry Entry, bool Fresh, bool Skin)> _shown = [];
+
+    /// <summary>
+    /// This frame's skinning jobs.
+    /// </summary>
+    readonly List<Job> _jobs = [];
+
+    /// <summary>
+    /// The pieces of the character being placed.
+    /// </summary>
+    readonly List<Piece> _pieces = [];
+
+    /// <summary>
+    /// The keys of the entries unused for too long.
+    /// </summary>
+    readonly List<long> _stale = [];
+
+    /// <summary>
+    /// The index buffer every geometry shares: 0, 1, 2, ... for its corners in order.
+    /// </summary>
+    readonly DeviceBuffer _sequence;
+
+    /// <summary>
+    /// Bytes the entries' vertices and structures hold.
+    /// </summary>
+    long _bytes;
+
+    /// <summary>
+    /// This frame's triangles over every job.
+    /// </summary>
+    int _jobTriangles;
+
+    /// <summary>
+    /// Structures built this frame.
+    /// </summary>
+    int _built;
+
+    /// <summary>
+    /// Structures refitted this frame.
+    /// </summary>
+    int _refitted;
+
+    /// <summary>
+    /// Triangles of this frame's characters.
+    /// </summary>
+    int _triangles;
+
+    /// <summary>
+    /// Characters held this frame (their structure left as it was).
+    /// </summary>
+    int _held;
+
+    /// <summary>
+    /// What a character's structure was built over: per geometry its group, level, triangles and whether it is opaque.
+    /// </summary>
     readonly record struct Piece(GpuObjectPart Group, int Level, int Triangles, bool Opaque);
 
+    /// <summary>
+    /// A character's structure and the skinned vertices it is built over.
+    /// </summary>
     sealed class Entry
     {
+        /// <summary>
+        /// The bottom level (null until first built).
+        /// </summary>
         public required AccelerationStructure Blas;
+
+        /// <summary>
+        /// The skinned corners, three a triangle.
+        /// </summary>
         public required DeviceBuffer Vertices;
+
+        /// <summary>
+        /// What the structure was built over.
+        /// </summary>
         public required Piece[] Pieces;
+
+        /// <summary>
+        /// The pieces' records for the hit shaders.
+        /// </summary>
         public required GeometryRecord[] Records;
+
+        /// <summary>
+        /// The pieces' geometries over <see cref="Vertices"/>.
+        /// </summary>
         public required TriangleGeometry[] Geometries;
-        public long Built, LastUsed;
-        /// <summary>What the vertices were last skinned with: each piece's model, flags and morphs, and the pose (<see cref="CharacterRenderer.RayCharacter.Pose"/>).</summary>
+
+        /// <summary>
+        /// What the vertices were last skinned with: each piece's model, flags and morphs, and the pose
+        /// (<see cref="CharacterRenderer.RayCharacter.Pose"/>).
+        /// </summary>
         public required (Matrix4x4 Model, uint Flags, uint Morphs)[] Skinned;
+
+        /// <summary>
+        /// The frame the structure was last built.
+        /// </summary>
+        public long Built;
+
+        /// <summary>
+        /// The frame the character was last shown.
+        /// </summary>
+        public long LastUsed;
+
+        /// <summary>
+        /// The pose the vertices were last skinned in.
+        /// </summary>
         public long SkinnedPose = long.MinValue;
-        /// <summary>Refits since the last build.</summary>
+
+        /// <summary>
+        /// Refits since the last build.
+        /// </summary>
         public int Refits;
     }
 
-    readonly GpuContext _ctx;
-    readonly GpuProgram _program;
-    readonly GpuComputePipeline _pipeline;
-    readonly Dictionary<long, Entry> _entries = [];
-    readonly List<CharacterRenderer.RayCharacter> _characters = [];
-    readonly List<(CharacterRenderer.RayCharacter Character, Entry Entry, bool Fresh, bool Skin)> _shown = [];
-    readonly List<Job> _jobs = [];
-    readonly List<Piece> _pieces = [];
-    readonly List<long> _stale = [];
-    /// <summary>The index buffer every geometry shares: 0, 1, 2, ... for its corners in order.</summary>
-    readonly DeviceBuffer _sequence;
-    long _bytes;
-    int _jobTriangles, _built, _refitted, _triangles, _held;
-
+    /// <summary>
+    /// The skinning kernel and the shared index buffer.
+    /// </summary>
     public TracedCharacters(GpuContext ctx)
     {
         this._ctx = ctx;
         _program = ctx.Shaders.Compute(Skin, "traced characters",
             [(0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer)]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced characters"));
+
         var list = new uint[MaxGroupTriangles * 3];
         for (uint i = 0; i < list.Length; i++) list[i] = i;
         _sequence = DeviceBuffer.Create(ctx, (ulong)list.Length * 4, BufferUse.Index | BufferUse.RayInput, "traced character indices");
         ctx.Uploads.Write(_sequence, 0, MemoryMarshal.AsBytes(list.AsSpan()));
     }
 
-    /// <summary>Characters in this frame's scene.</summary>
+    /// <summary>
+    /// Characters in this frame's scene.
+    /// </summary>
     public int Shown => _shown.Count;
 
     /// <summary>
-    /// This frame's characters near <paramref name="eye"/>, skinned and their structures refitted or built, into the scene's native list (<paramref name="open"/>). Their palettes are
-    /// this update's, so the structures hold the pose the frame draws.
+    /// This frame's characters near <paramref name="eye"/>, skinned and their structures refitted or built, into the scene's native list
+    /// (<paramref name="open"/>). Their palettes are this update's, so the structures hold the pose the frame draws.
     /// </summary>
     public void Update(Func<IGpuCommandList> open, CharacterRenderer people, Vector3 eye, long frame, float reach = Range, float minAngle = 0)
     {
@@ -191,13 +411,16 @@ sealed unsafe class TracedCharacters : IDisposable
         _jobs.Clear();
         (_jobTriangles, _built, _refitted, _triangles, _held) = (0, 0, 0, 0, 0);
         people.RayCharacters(eye, MathF.Max(Range, reach), MaxCharacters, _characters, minAngle);
+
         foreach (var c in _characters)
         {
             int count = Pieces(c);
             if (_triangles + count > MaxTriangles) break;
+
             _triangles += count;
             var (entry, fresh) = Current(c, frame);
             entry.LastUsed = frame;
+
             // A held pose (frozen, thinned by its size on screen) whose pieces lie as they were skinned: the structure is this frame's already.
             bool skin = entry.Blas is null || entry.SkinnedPose != c.Pose || Placed(c, entry);
             Describe(c, entry);
@@ -207,14 +430,73 @@ sealed unsafe class TracedCharacters : IDisposable
                 entry.SkinnedPose = c.Pose;
             }
             else _held++;
+
             _shown.Add((c, entry, fresh && skin, skin));
         }
+
         if (_jobs.Count > 0) Record((CommandList)open(), people, frame);
         else if (_shown.Count > 0) Stamp((CommandList)open(), 1);
+
         Evict(frame);
     }
 
-    /// <summary>The character's pieces into <see cref="_pieces"/>; returns their triangles.</summary>
+    /// <summary>
+    /// One instance per character at its anchor, after everything else, with its records.
+    /// </summary>
+    public void Emit(List<InstanceRecord> instances, List<GeometryRecord> records, Vector3 origin, int maxInstances, int maxRecords)
+    {
+        foreach (var (c, entry, _, _) in _shown)
+        {
+            if (instances.Count >= maxInstances || records.Count + entry.Records.Length > maxRecords) break;
+
+            var anchor = Matrix4x4.CreateTranslation(c.Anchor - origin);
+            instances.Add(InstanceRecord.Of(anchor, (uint)records.Count, TracedSunShaders.Characters, entry.Blas.Address));
+            records.AddRange(entry.Records);
+        }
+    }
+
+    /// <summary>
+    /// The characters in the scene now, as the spheres they fit in.
+    /// </summary>
+    public void CollectSpheres(List<(Vector3 Centre, float Radius)> into)
+    {
+        foreach (var (c, _, _, _) in _shown) into.Add((c.Centre, c.Radius));
+    }
+
+    /// <summary>
+    /// The lamps stopped tracing: the structures go (the kernel stays).
+    /// </summary>
+    public void Release()
+    {
+        _shown.Clear();
+        foreach (var key in _entries.Keys.ToArray()) Drop(key, _entries[key]);
+    }
+
+    /// <summary>
+    /// This frame's characters, structures and GPU time, for the console.
+    /// </summary>
+    public string Describe()
+    {
+        string structures = $"{_shown.Count} characters traced ({_triangles / 1000}k triangles, {_built} built, {_refitted} refitted, {_held} held";
+        string bytes = $"{_bytes / (1024 * 1024)} MB";
+        string gpu = $"GPU {GpuMs.Skin:0.000} ms a frame, {GpuMs.Total:0.000} with the top level, over the last {_gpuSamples.Count})";
+
+        return structures + ", " + bytes + "; " + gpu;
+    }
+
+    /// <summary>
+    /// The structures, the shared index buffer and the kernel go.
+    /// </summary>
+    public void Dispose()
+    {
+        Release();
+        _sequence.Dispose();
+        _ctx.Shaders.Dispose(_program);
+    }
+
+    /// <summary>
+    /// The character's pieces into <see cref="_pieces"/>; returns their triangles.
+    /// </summary>
     int Pieces(CharacterRenderer.RayCharacter c)
     {
         _pieces.Clear();
@@ -225,20 +507,40 @@ sealed unsafe class TracedCharacters : IDisposable
             _pieces.Add(new Piece(part.Group, part.Level, n, part.AlphaCut <= 0));
             count += n;
         }
+
         return count;
     }
 
-    /// <summary>The character's entry for <see cref="_pieces"/>: its own when they are those it was built over, else a new one (built in <see cref="Record"/>).</summary>
+    /// <summary>
+    /// The character's entry for <see cref="_pieces"/>: its own when they are those it was built over, else a new one (built in
+    /// <see cref="Record"/>).
+    /// </summary>
     (Entry Entry, bool Fresh) Current(CharacterRenderer.RayCharacter c, long frame)
     {
         if (_entries.TryGetValue(c.Key, out var entry) && entry.Pieces.AsSpan().SequenceEqual(CollectionsMarshal.AsSpan(_pieces)))
             return (entry, entry.Refits >= RebuildEvery + (int)(c.Key & 15));
+
         if (entry is not null) Drop(c.Key, entry);
+
+        entry = NewEntry(frame);
+        _entries[c.Key] = entry;
+        _bytes += (long)entry.Vertices.Size;
+
+        return (entry, true);
+    }
+
+    /// <summary>
+    /// A new entry over <see cref="_pieces"/>: its vertices, and per piece a geometry and a record over its run of them.
+    /// </summary>
+    Entry NewEntry(long frame)
+    {
         int count = _pieces.Sum(p => p.Triangles);
         var vertices = DeviceBuffer.Create(_ctx, (ulong)count * 3 * Stride, BufferUse.Storage | BufferUse.RayInput, "traced character vertices");
-        ulong address = _ctx.Device.Address(vertices.Handle), indices = _ctx.Device.Address(_sequence.Handle);
+        ulong address = _ctx.Device.Address(vertices.Handle);
+        ulong indices = _ctx.Device.Address(_sequence.Handle);
         var geometries = new TriangleGeometry[_pieces.Count];
         var records = new GeometryRecord[_pieces.Count];
+
         ulong first = 0;
         for (int i = 0; i < _pieces.Count; i++)
         {
@@ -248,16 +550,22 @@ sealed unsafe class TracedCharacters : IDisposable
             records[i] = new GeometryRecord { Vertices = at, Indices = indices, Stride = Stride, Kind = GeometryRecord.Character };
             first += (ulong)p.Triangles;
         }
-        entry = new Entry { Blas = null!, Vertices = vertices, Pieces = [.. _pieces], Records = records, Geometries = geometries, Built = frame,
-            Skinned = new (Matrix4x4, uint, uint)[_pieces.Count] };
-        _entries[c.Key] = entry;
-        _bytes += (long)vertices.Size;
-        return (entry, true);
+
+        return new Entry
+        {
+            Blas = null!,
+            Vertices = vertices,
+            Pieces = [.. _pieces],
+            Records = records,
+            Geometries = geometries,
+            Built = frame,
+            Skinned = new (Matrix4x4, uint, uint)[_pieces.Count],
+        };
     }
 
     /// <summary>
-    /// A piece is placed, hidden or morphed otherwise than when the vertices were last skinned (a held pose that turned about its anchor, a limb lost): beyond what the
-    /// placing's own rounding moves it from frame to frame.
+    /// A piece is placed, hidden or morphed otherwise than when the vertices were last skinned (a held pose that turned about its anchor, a limb
+    /// lost): beyond what the placing's own rounding moves it from frame to frame.
     /// </summary>
     static bool Placed(CharacterRenderer.RayCharacter c, Entry entry)
     {
@@ -266,31 +574,38 @@ sealed unsafe class TracedCharacters : IDisposable
             var part = c.Parts[i];
             ref readonly var last = ref entry.Skinned[i];
             if (part.Flags != last.Flags || part.MorphBase != last.Morphs) return true;
+
             Matrix4x4 a = part.Model, b = last.Model;
             if (Vector3.DistanceSquared(a.Translation, b.Translation) > PlacedShift * PlacedShift) return true;
-            float turn = MathF.Abs(a.M11 - b.M11) + MathF.Abs(a.M12 - b.M12) + MathF.Abs(a.M13 - b.M13) + MathF.Abs(a.M21 - b.M21) + MathF.Abs(a.M22 - b.M22) + MathF.Abs(a.M23 - b.M23)
+
+            float turn = MathF.Abs(a.M11 - b.M11) + MathF.Abs(a.M12 - b.M12) + MathF.Abs(a.M13 - b.M13)
+                + MathF.Abs(a.M21 - b.M21) + MathF.Abs(a.M22 - b.M22) + MathF.Abs(a.M23 - b.M23)
                 + MathF.Abs(a.M31 - b.M31) + MathF.Abs(a.M32 - b.M32) + MathF.Abs(a.M33 - b.M33);
             if (turn > PlacedTurn) return true;
         }
+
         return false;
     }
 
-    /// <summary>What a piece's model may differ by from the skinned one and count as the same: its place in world units, its axes' entries summed.</summary>
-    const float PlacedShift = 0.05f, PlacedTurn = 1e-3f;
-
-    /// <summary>The pieces' records as the frame draws them (they hold no geometry: a held structure takes them too).</summary>
+    /// <summary>
+    /// The pieces' records as the frame draws them (they hold no geometry: a held structure takes them too).
+    /// </summary>
     static void Describe(CharacterRenderer.RayCharacter c, Entry entry)
     {
         for (int i = 0; i < c.Parts.Count; i++)
         {
             var part = c.Parts[i];
+            ref var record = ref entry.Records[i];
+
             // The cut-out as the shadow draws make it; the channel rides in the record's diffuse index, which no probe ray reads for a character.
-            (entry.Records[i].AlphaTexture, entry.Records[i].AlphaThreshold, entry.Records[i].Texture) = (part.AlphaMap, part.AlphaCut, part.Channel);
-            (entry.Records[i].CharacterDiffuse, entry.Records[i].CharacterHead, entry.Records[i].CharacterTint) = (part.Diffuse, part.Head, part.Tint);
+            (record.AlphaTexture, record.AlphaThreshold, record.Texture) = (part.AlphaMap, part.AlphaCut, part.Channel);
+            (record.CharacterDiffuse, record.CharacterHead, record.CharacterTint) = (part.Diffuse, part.Head, part.Tint);
         }
     }
 
-    /// <summary>A job per piece, its corners into the entry's vertices in order.</summary>
+    /// <summary>
+    /// A job per piece, its corners into the entry's vertices in order.
+    /// </summary>
     void AddJobs(CharacterRenderer.RayCharacter c, Entry entry)
     {
         for (int i = 0; i < c.Parts.Count; i++)
@@ -301,36 +616,75 @@ sealed unsafe class TracedCharacters : IDisposable
             entry.Skinned[i] = (part.Model, part.Flags, part.MorphBase);
             _jobs.Add(new Job
             {
-                Model = part.Model, Vertices = _ctx.Device.Address(group.Vertices.Handle), Indices = _ctx.Device.Address(group.Indices.Handle) + (ulong)group.Offset[part.Level] * 4,
-                Target = g.VertexAddress, Triangles = g.TriangleCount, BoneBase = c.BoneBase, MorphBase = part.MorphBase, Flags = part.Flags, First = (uint)_jobTriangles,
+                Model = part.Model,
+                Vertices = _ctx.Device.Address(group.Vertices.Handle),
+                Indices = _ctx.Device.Address(group.Indices.Handle) + (ulong)group.Offset[part.Level] * 4,
+                Target = g.VertexAddress,
+                Triangles = g.TriangleCount,
+                BoneBase = c.BoneBase,
+                MorphBase = part.MorphBase,
+                Flags = part.Flags,
+                First = (uint)_jobTriangles,
             });
             _jobTriangles += (int)g.TriangleCount;
         }
     }
 
-    /// <summary>The kernel over every job, then each character's structure refitted, or built when new or due.</summary>
+    /// <summary>
+    /// The kernel over every job, then each character's structure refitted, or built when new or due.
+    /// </summary>
     void Record(CommandList cmd, CharacterRenderer people, long frame)
     {
         cmd.BeginLabel("traced characters");
+        DispatchSkinning(cmd, people);
+        cmd.Barrier(BarrierBatch.Full);
+        RefitOrBuild(cmd, frame);
+        Stamp(cmd, 1);
+        cmd.EndLabel();
+    }
+
+    /// <summary>
+    /// The kernel over every job: the jobs, the palettes and the morphs bound, one invocation a triangle.
+    /// </summary>
+    void DispatchSkinning(CommandList cmd, CharacterRenderer people)
+    {
         var list = _ctx.Frame.Constants.Write<Job>(CollectionsMarshal.AsSpan(_jobs), 256);
         var palettes = people.RayBones;
         var morphs = people.RayMorphs is { Size: > 0 } m ? m : palettes;
+
         var infos = stackalloc DescriptorBufferInfo[3];
         infos[0] = new DescriptorBufferInfo(_ctx.Device.BufferAt(palettes.Buffer.Index), palettes.Offset, palettes.Size);
         infos[1] = new DescriptorBufferInfo(_ctx.Device.BufferAt(morphs.Buffer.Index), morphs.Offset, morphs.Size);
         infos[2] = new DescriptorBufferInfo(_ctx.Device.BufferAt(list.Handle.Index), list.Offset, (ulong)(_jobs.Count * Job.Size));
         var writes = stackalloc WriteDescriptorSet[3];
         for (int i = 0; i < 3; i++)
-            writes[i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)i, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &infos[i] };
+        {
+            writes[i] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstBinding = (uint)i,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                PBufferInfo = &infos[i],
+            };
+        }
+
         cmd.BindPipeline(_pipeline);
         cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
         var count = new Counts { Jobs = (uint)_jobs.Count, Triangles = (uint)_jobTriangles };
         cmd.PushConstants(_program, GpuStage.Compute, in count);
         cmd.Dispatch((uint)((_jobTriangles + 63) / 64));
-        cmd.Barrier(BarrierBatch.Full);
+    }
+
+    /// <summary>
+    /// Each skinned character's structure refitted over its new corners, or built when new or due.
+    /// </summary>
+    void RefitOrBuild(CommandList cmd, long frame)
+    {
         foreach (var (_, entry, fresh, skin) in _shown)
         {
             if (!skin) continue;
+
             if (fresh || entry.Blas is null) Build(cmd, entry, frame);
             else
             {
@@ -339,10 +693,11 @@ sealed unsafe class TracedCharacters : IDisposable
                 _refitted++;
             }
         }
-        Stamp(cmd, 1);
-        cmd.EndLabel();
     }
 
+    /// <summary>
+    /// The entry's structure built again over its corners, the old one gone.
+    /// </summary>
     void Build(CommandList cmd, Entry entry, long frame)
     {
         if (entry.Blas is { } old)
@@ -350,31 +705,28 @@ sealed unsafe class TracedCharacters : IDisposable
             _bytes -= (long)old.Bytes;
             old.Dispose();
         }
+
         entry.Blas = AccelerationStructure.BuildBottom(_ctx.Device, cmd, entry.Geometries, "traced character", updatable: true, fastBuild: true);
         (entry.Built, entry.Refits) = (frame, 0);
         _bytes += (long)entry.Blas.Bytes;
         _built++;
     }
 
-    /// <summary>One instance per character at its anchor, after everything else, with its records.</summary>
-    public void Emit(List<InstanceRecord> instances, List<GeometryRecord> records, Vector3 origin, int maxInstances, int maxRecords)
-    {
-        foreach (var (c, entry, _, _) in _shown)
-        {
-            if (instances.Count >= maxInstances || records.Count + entry.Records.Length > maxRecords) break;
-            instances.Add(InstanceRecord.Of(Matrix4x4.CreateTranslation(c.Anchor - origin), (uint)records.Count, TracedSunShaders.Characters, entry.Blas.Address));
-            records.AddRange(entry.Records);
-        }
-    }
-
+    /// <summary>
+    /// The entries unused for more than <see cref="KeepFrames"/> go.
+    /// </summary>
     void Evict(long frame)
     {
         _stale.Clear();
         foreach (var (key, entry) in _entries)
             if (frame - entry.LastUsed > KeepFrames) _stale.Add(key);
+
         foreach (var key in _stale) Drop(key, _entries[key]);
     }
 
+    /// <summary>
+    /// An entry's vertices and structure go.
+    /// </summary>
     void Drop(long key, Entry entry)
     {
         _bytes -= (long)entry.Vertices.Size + (long)(entry.Blas?.Bytes ?? 0);
@@ -383,38 +735,52 @@ sealed unsafe class TracedCharacters : IDisposable
         _entries.Remove(key);
     }
 
-    /// <summary>The lamps stopped tracing: the structures go (the kernel stays).</summary>
-    /// <summary>The characters in the scene now, as the spheres they fit in.</summary>
-    public void CollectSpheres(List<(Vector3 Centre, float Radius)> into)
-    {
-        foreach (var (c, _, _, _) in _shown) into.Add((c.Centre, c.Radius));
-    }
+    #endregion
 
-    public void Release()
-    {
-        _shown.Clear();
-        foreach (var key in _entries.Keys.ToArray()) Drop(key, _entries[key]);
-    }
+    #region GPU timing
 
-    public string Describe() => $"{_shown.Count} characters traced ({_triangles / 1000}k triangles, {_built} built, {_refitted} refitted, {_held} held, {_bytes / (1024 * 1024)} MB; GPU {GpuMs.Skin:0.000} ms a frame, {GpuMs.Total:0.000} with the top level, over the last {_gpuSamples.Count})";
-
+    /// <summary>
+    /// The frames' timestamps not read yet: before the characters' work, after it and after the top level.
+    /// </summary>
     readonly Queue<(QuerySlot Start, QuerySlot Skinned, QuerySlot End)> _stamps = new();
+
+    /// <summary>
+    /// The last 60 read frames' GPU times in milliseconds: the characters' work, and that plus the top level.
+    /// </summary>
     readonly List<(double Skin, double Total)> _gpuSamples = [];
-    QuerySlot _startStamp, _skinnedStamp;
 
-    /// <summary>The mean GPU time over the last 60 frames that had characters: their skinning and structures, and that plus the top level built again over them.</summary>
-    public (double Skin, double Total) GpuMs => _gpuSamples.Count == 0 ? default : (_gpuSamples.Average(s => s.Skin), _gpuSamples.Average(s => s.Total));
+    /// <summary>
+    /// This frame's timestamp before the characters' work.
+    /// </summary>
+    QuerySlot _startStamp;
 
-    /// <summary>A timestamp: 0 before the characters' work, 1 after it, 2 after the top level; read a frame ring later.</summary>
+    /// <summary>
+    /// This frame's timestamp after the characters' work.
+    /// </summary>
+    QuerySlot _skinnedStamp;
+
+    /// <summary>
+    /// The mean GPU time over the last 60 frames that had characters: their skinning and structures, and that plus the top level built again over
+    /// them.
+    /// </summary>
+    public (double Skin, double Total) GpuMs => _gpuSamples.Count == 0
+        ? default
+        : (_gpuSamples.Average(s => s.Skin), _gpuSamples.Average(s => s.Total));
+
+    /// <summary>
+    /// A timestamp: 0 before the characters' work, 1 after it, 2 after the top level; read a frame ring later.
+    /// </summary>
     public void Stamp(CommandList cmd, int point)
     {
         var arena = _ctx.Frame.Timestamps;
         var slot = arena.Allocate();
         if (!slot.IsValid) return;
+
         cmd.Timestamp(arena, slot);
         if (point == 0) _startStamp = slot;
         else if (point == 1) _skinnedStamp = slot;
         else if (_startStamp.IsValid && _skinnedStamp.IsValid && _shown.Count > 0) _stamps.Enqueue((_startStamp, _skinnedStamp, slot));
+
         while (_stamps.TryPeek(out var s))
         {
             if (arena.TryRead(s.Start, out ulong a) && arena.TryRead(s.Skinned, out ulong m) && arena.TryRead(s.End, out ulong b))
@@ -423,14 +789,10 @@ sealed unsafe class TracedCharacters : IDisposable
                 if (_gpuSamples.Count > 60) _gpuSamples.RemoveAt(0);
             }
             else if (_ctx.Frame.Number - s.Start.Frame < 16) break;
+
             _stamps.Dequeue();
         }
     }
 
-    public void Dispose()
-    {
-        Release();
-        _sequence.Dispose();
-        _ctx.Shaders.Dispose(_program);
-    }
+    #endregion
 }

@@ -14,9 +14,14 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Game.Rendering.Water;
 
-/// <summary>The <c>contactfoam</c> switch (docs/render-water.md "Contact foam"): off, none of its code runs or is in the water's program.</summary>
+/// <summary>
+/// The <c>contactfoam</c> switch (docs/render-water.md "Contact foam"): off, none of its code runs or is in the water's program.
+/// </summary>
 public static class WaterContact
 {
+    /// <summary>
+    /// Whether the contact foam and the interactive waves are on.
+    /// </summary>
     public static bool Enabled { get; set; }
 }
 
@@ -1482,7 +1487,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     LegacyProgram.Attribute?[] _gridInputs = [];
 
     /// <summary>
-    /// The contact ripples (made while the contact foam is on), the game hours they last stepped at and the heights they read.
+    /// The contact ripples (made while the contact foam is on).
     /// </summary>
     WaterRipples? _ripples;
 
@@ -1547,13 +1552,22 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly ulong _uniformAlign;
 
     /// <summary>
-    /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.
+    /// The walls the game set (<see cref="Walls"/>).
     /// </summary>
-    public WaterRipples? Ripples => WaterContact.Enabled && Meitou && _meitou is not null && Gpu is GpuContext ? _ripples ??= new WaterRipples(Gpu) { Walls = _walls } : null;
+    Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
 
     /// <summary>
-    /// The walls and posts standing in the water round a point (centre, radius: X/Z segments where the buildings' collision cuts the water's height, read on a worker), which
-    /// neither the shore waves (<see cref="ShoreTravel"/>) nor the characters' wakes pass. Set by the game, which knows the buildings.
+    /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.
+    /// </summary>
+    public WaterRipples? Ripples =>
+        WaterContact.Enabled && Meitou && _meitou is not null && Gpu is GpuContext
+            ? _ripples ??= new WaterRipples(Gpu) { Walls = _walls }
+            : null;
+
+    /// <summary>
+    /// The walls and posts standing in the water round a point (centre, radius: X/Z segments where the buildings' collision cuts the water's
+    /// height, read on a worker), which neither the shore waves (<see cref="ShoreTravel"/>) nor the characters' wakes pass. Set by the game, which
+    /// knows the buildings.
     /// </summary>
     public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls
     {
@@ -1561,29 +1575,34 @@ public sealed unsafe class WaterRenderer : IDisposable
         set
         {
             _walls = value;
-            if (_shore is not null)
-            {
-                _shore.Walls = value;
-            }
-
-            if (_ripples is not null)
-            {
-                _ripples.Walls = value;
-            }
+            if (_shore is not null) _shore.Walls = value;
+            if (_ripples is not null) _ripples.Walls = value;
         }
     }
-
-    Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
 
     /// <summary>
     /// The Meitou program to draw with: with the contact foam (Vulkan only: it needs the scene depth), made the first time it is asked for.
     /// </summary>
-    WaterProgram MeitouProgram() => !WaterContact.Enabled || Gpu is not GpuContext ? _meitou!
-        : _meitouContact ??= new WaterProgram(Gpu, _frame, MeitouContactVertex(), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, _gridInputs, _constantsLayout);
+    WaterProgram MeitouProgram() =>
+        !WaterContact.Enabled || Gpu is not GpuContext
+            ? _meitou!
+            : _meitouContact ??= MeitouContactProgram();
 
     /// <summary>
-    /// The Meitou polar grid: segments round the eye (256 low, 1024 default), rings follow from it. A vertex's spacing is its distance from the eye times 2 pi over this,
-    /// and the waves it carries are those that spacing can hold: at 256 (30 pixels a cell at 1080p) the crests a few hundred units out changed shape as the camera moved.
+    /// Makes the Meitou program with the contact foam, on the grid's inputs.
+    /// </summary>
+    WaterProgram MeitouContactProgram()
+    {
+        var vertex = MeitouContactVertex();
+        var fragment = MeitouContactNative();
+
+        return new WaterProgram(Gpu, _frame, vertex, fragment, "water meitou contact", PrimitiveType.Triangles, _gridInputs, _constantsLayout);
+    }
+
+    /// <summary>
+    /// The Meitou polar grid: segments round the eye (256 low, 1024 default), rings follow from it. A vertex's spacing is its distance from the eye
+    /// times 2 pi over this, and the waves it carries are those that spacing can hold: at 256 (30 pixels a cell at 1080p) the crests a few hundred
+    /// units out changed shape as the camera moved.
     /// </summary>
     public const int DefaultGridSegments = 1024;
 
@@ -2120,7 +2139,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         _rippleHours = gameHours;
     }
 
-
     /// <summary>
     /// Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
     /// terrain's heights of this frame. Nothing while the water is Faithful.
@@ -2131,7 +2149,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         _rippleHeights = heights;
     }
 
-
     /// <summary>
     /// Records the Meitou ocean's FFT before the scene host opens (Metal records compute into the same command buffer and
     /// cannot nest it in a render encoder). The reflection pass has already set <see cref="NearestWater"/>.
@@ -2139,8 +2156,10 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal void PrepareFrame()
     {
         if (Meitou && OceanInView) _ocean?.Record();   // the FFT only while water near enough to show its detail is in view
+
         // The interactive waves only while their switch is on and water within their reach can be in view.
-        if (Meitou && WaterContact.Enabled && _ripples is { } r && _rippleHeights is { } heights && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
+        if (Meitou && WaterContact.Enabled && _ripples is { } r && _rippleHeights is { } heights
+            && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
         {
             r.Record(_rippleHours, heights);
         }
@@ -2269,7 +2288,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
         // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam
         // reads the depth.
-        return NeedsRefraction(near) || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
+        return NeedsRefraction(near)
+            || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
     }
 
     /// <summary>
@@ -2328,7 +2348,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// no later draw (docs/renderer-native.md 8.6). Faithful draws the game's quad; Meitou the polar grid with <see cref="Animate"/>'s motion.
     /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours). Meitou uses the game clock instead.</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null, Matrix4x4? relative = null)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent,
+        ReflectionPass? reflection = null, Matrix4x4? relative = null)
     {
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && _meitou is not null;
@@ -2482,6 +2503,14 @@ public sealed unsafe class WaterRenderer : IDisposable
         bool depth = _sceneDepthCopy is not null && _sceneDepthFrame == Gpu.Frame.Number;
         c.DepthPlanes = new Vector4(_sceneDepthPlanes, depth ? 1f : 0f, 0f);
         c.SceneDepthMap = depth ? _sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), _sceneDepthCopy!.View())) : Gpu.StandIn2D;
+        SetRippleMap(ref c);
+    }
+
+    /// <summary>
+    /// The contact ripples' field, window and shape (the stand-in and 0 in w while there is no field to draw).
+    /// </summary>
+    void SetRippleMap(ref WaterConstants c)
+    {
         bool ripple = WaterContact.Enabled && _ripples is { Ready: true };
         c.RippleMap = ripple ? _rippleMap.Index(_ripples!.Surface) : Gpu.StandIn2D;
         var (window, rippleHalf) = _ripples?.Window ?? default;

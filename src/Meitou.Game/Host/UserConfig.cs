@@ -152,25 +152,32 @@ sealed class UserConfig
     /// (<c>FrameGeneration</c>). Off by default; read at start-up, so a change takes effect after a restart.
     /// </summary>
     public bool FrameGeneration { get; set; }
+
     /// <summary>
     /// HDR10 output where the display offers it (read at start-up; not with frame generation; docs/render-post.md "HDR output"). Off by default.
     /// </summary>
     public bool Hdr { get; set; }
 
     /// <summary>
-    /// HDR output: the nits of the picture's white (the interface, sunlit ground) and of the display's peak.
+    /// HDR output: the nits of the picture's white (the interface, sunlit ground).
     /// </summary>
     public float HdrPaperNits { get; set; }
 
     /// <summary>
-    /// The picture's white in nits this frame: <see cref="HdrPaperNits"/>, or under <see cref="HdrPaperAuto"/> what Windows shows SDR white at (200 where it cannot say).
+    /// The picture's white in nits this frame: <see cref="HdrPaperNits"/>, or under <see cref="HdrPaperAuto"/> what Windows shows SDR white at (200
+    /// where it cannot say).
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public float HdrPaperNitsNow => HdrPaperNits >= HdrPaperAuto ? HdrPaperNits : Rendering.Display.WindowsHdr.SdrWhiteNits() ?? 200;
 
-    /// <summary>A <see cref="HdrPaperNits"/> below this is automatic.</summary>
+    /// <summary>
+    /// A <see cref="HdrPaperNits"/> below this is automatic.
+    /// </summary>
     public const float HdrPaperAuto = 80;
 
+    /// <summary>
+    /// HDR output: the nits of the display's peak.
+    /// </summary>
     public float HdrPeakNits { get; set; } = 1000;
 
     /// <summary>

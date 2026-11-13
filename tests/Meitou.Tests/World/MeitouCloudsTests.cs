@@ -49,7 +49,11 @@ public class MeitouCloudsTests
         }
         // On fresh options every switch is Meitou; a live switch left on the stand-in reads Faithful.
         foreach (var e in live)
-            if (e.Id is not ("gi" or "gihybrid" or "chars2" or "trails" or "contactfoam" or "dof" or "gtao" or "lampshadows" or "ssr" or "traced")) Assert.True(e.IsMeitou, e.Id);   // gi reads off without probes (no GPU here), by design; the others are off by default
+        {
+            // gi reads off without probes (no GPU here), by design; the others are off by default.
+            if (e.Id is not ("gi" or "gihybrid" or "chars2" or "trails" or "contactfoam" or "dof" or "gtao" or "lampshadows" or "ssr" or "traced"))
+                Assert.True(e.IsMeitou, e.Id);
+        }
         Assert.Contains(live, e => e.Id == "clouds");
         Assert.Contains(live, e => e.Id == "cloudshadows");
     }

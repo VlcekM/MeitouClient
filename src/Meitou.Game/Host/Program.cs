@@ -21,8 +21,8 @@ static class Program
     internal const string HardwareProbeFlag = "--recommend-preset";
 
     /// <summary>
-    /// The saved water grid and FFT size before the world loads: the water is made once with them. <c>--water-grid</c> and <c>--water-ocean</c> choose
-    /// them for this run instead.
+    /// The saved water grid and FFT size before the world loads: the water is made once with them. <c>--water-grid</c> and <c>--water-ocean</c>
+    /// choose them for this run instead.
     /// </summary>
     static void ReadSavedWaterSizes(WorldOptions world, UserConfig config, string[] args)
     {
@@ -174,6 +174,7 @@ static class Program
         if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline
             && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
             world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
+
         ReadSavedWaterSizes(world, config, args);
     }
 

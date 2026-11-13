@@ -420,6 +420,7 @@ internal static class MeshSimplifier
         {
             var own = _vertices[_cv![t * 3 + k]];
             var expected = ExpectedUv(t, to, own.Uv);
+
             int best = _groupVertices[to][0];
             float bestKey = float.MaxValue, bestError = float.MaxValue;
             foreach (int c in _groupVertices[to])
@@ -449,6 +450,7 @@ internal static class MeshSimplifier
 
             float d20 = Vector3.Dot(q, e1), d21 = Vector3.Dot(q, e2);
             float s = (d11 * d20 - d01 * d21) / den, u = (d00 * d21 - d01 * d20) / den;
+
             var uv0 = _vertices[_cv![t * 3]].Uv;
             return uv0 + s * (_vertices[_cv[t * 3 + 1]].Uv - uv0) + u * (_vertices[_cv[t * 3 + 2]].Uv - uv0);
         }
@@ -459,7 +461,10 @@ internal static class MeshSimplifier
         bool UvHolds(int t, int to)
         {
             for (int k = 0; k < 3; k++)
+            {
                 if (_tg[t * 3 + k] != to && _alive[t] && IsFrom(t, k) && MoveCorner(t, k, to).Error > UvTolerance) return false;
+            }
+
             return true;
         }
 

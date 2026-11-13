@@ -23,24 +23,23 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// in play, and every kept decal within range and in view is drawn (docs/game/blood-decals.md "Blood on surfaces"): a lower cap made live decals
     /// vanish in a big fight. <see cref="DrawChunk"/> is the rows of one draw.
     /// </summary>
-    const int MaxSurfaces = 32768, DrawChunk = 4096;
+    const int MaxSurfaces = 32768;
+
+    /// <summary>
+    /// The most instance rows one draw of the surface decals takes.
+    /// </summary>
+    const int DrawChunk = 4096;
 
     /// <summary>
     /// The camera's eye as the frame last gave it (<see cref="SurfacesNear"/>): the decals within <see cref="Range"/> of it are the drawn ones, which
     /// do not run out (<see cref="AgeSurfaces"/>).
     /// </summary>
     Vector3 _surfaceEye;
-    bool _surfaceEyeKnown;
 
     /// <summary>
-    /// The decal's circle round its square is within <see cref="Range"/> of the eye (the terrain's cells within the range are the ones on a texture).
+    /// Whether <see cref="_surfaceEye"/> holds a frame's eye (false until the first frame of a world).
     /// </summary>
-    bool InRange(SurfaceDecal d)
-    {
-        if (!_surfaceEyeKnown) return true;   // no frame yet (a world just loaded): nothing runs out before the camera is known
-        var (hw, hh) = Half(d);
-        return Vector3.Distance(d.Centre, _surfaceEye) - MathF.Sqrt(hw * hw + hh * hh) <= MathF.Max(Range, 0);
-    }
+    bool _surfaceEyeKnown;
 
     /// <summary>
     /// The range and default of <see cref="SurfaceDraws"/>.
@@ -51,8 +50,6 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// The most surface decals and footprints drawn in a frame, the nearest (the Tab panel's <c>Blood decals drawn</c> slider).
     /// </summary>
     public static int SurfaceDraws { get; set; } = DefaultSurfaceDraws;
-
-    /// <summary>
 
     /// <summary>
     /// How high above the feet a splash is centred (a blow lands at the body, not the soles).
@@ -525,6 +522,18 @@ public sealed unsafe partial class TerrainDecalRenderer
     public int SurfaceCount => _surfaces.Count;
 
     /// <summary>
+    /// The decal's circle round its square is within <see cref="Range"/> of the eye (the terrain's cells within the range are the ones on a
+    /// texture).
+    /// </summary>
+    bool InRange(SurfaceDecal d)
+    {
+        if (!_surfaceEyeKnown) return true;   // no frame yet (a world just loaded): nothing runs out before the camera is known
+
+        var (hw, hh) = Half(d);
+        return Vector3.Distance(d.Centre, _surfaceEye) - MathF.Sqrt(hw * hw + hh * hh) <= MathF.Max(Range, 0);
+    }
+
+    /// <summary>
     /// Whether any decal kept for the surfaces is within <see cref="TerrainDecalRenderer.Range"/> of <paramref name="eye"/>: the frame copies the
     /// depth and splits its passes for them only then (<see cref="RecordSurfaces"/> culls the rest per decal).
     /// </summary>
@@ -621,8 +630,13 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// The decals kept for the surfaces as a save holds them (<see cref="SaveSurfaceDecals"/>), oldest first, each with its life left.
     /// </summary>
     public IEnumerable<SurfaceBloodDecal> SavedSurfaces =>
-        _surfaces.Select(d => new SurfaceBloodDecal(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, MathF.Max(d.Expires - _surfaceClock, 0),
-            d.Colour, d.Floor));   // a life that ran out in view (see AgeSurfaces) is saved as 0: it stays while the camera is near
+        _surfaces.Select(SavedSurface);
+
+    /// <summary>
+    /// A kept decal as a save holds it; a life that ran out in view (see <see cref="AgeSurfaces"/>) is saved as 0: it stays while the camera is near.
+    /// </summary>
+    SurfaceBloodDecal SavedSurface(SurfaceDecal d) =>
+        new(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, MathF.Max(d.Expires - _surfaceClock, 0), d.Colour, d.Floor);
 
     /// <summary>
     /// Puts back the decals a save held (after <see cref="ClearSurfaces"/>, a new world): each with its life left, the newest kept when over <see
@@ -653,18 +667,24 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
-    /// Ages the decals by <paramref name="dt"/> seconds of game time. As the terrain's (<c>TerrainDecalStore.Age</c>, the game's rule: a decal at life 0 is removed
-    /// unless its cell is on a texture now), a decal whose life ran out goes only while it is out of the camera's range: within it, it stays as drawn, so
-    /// blood in view never vanishes by itself (it used to fade out in its last second while the terrain's blood beside it stayed).
+    /// Ages the decals by <paramref name="dt"/> seconds of game time. As the terrain's (<c>TerrainDecalStore.Age</c>, the game's rule: a decal at
+    /// life 0 is removed unless its cell is on a texture now), a decal whose life ran out goes only while it is out of the camera's range: within it,
+    /// it stays as drawn, so blood in view never vanishes by itself (it used to fade out in its last second while the terrain's blood beside it
+    /// stayed).
     /// </summary>
     public void AgeSurfaces(float dt)
     {
         if (dt <= 0 || (_surfaces.Count == 0 && _footprints.Count == 0)) return;
+
         _surfaceClock += dt;
         _footprints.RemoveAll(d => d.Expires <= _surfaceClock);
-        if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock && !InRange(d)) > 0)
-            foreach (var key in _surfacePools.Where(p => p.Value.Expires <= _surfaceClock && !InRange(p.Value)).Select(p => p.Key).ToList())
-                _surfacePools.Remove(key);
+        if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock && !InRange(d)) == 0) return;
+
+        var gone = _surfacePools
+            .Where(p => p.Value.Expires <= _surfaceClock && !InRange(p.Value))
+            .Select(p => p.Key)
+            .ToList();
+        foreach (var key in gone) _surfacePools.Remove(key);
     }
 
     /// <summary>
@@ -911,7 +931,8 @@ public sealed unsafe partial class TerrainDecalRenderer
             var (hw, hh) = Half(d);
             if (index == uint.MaxValue || hw <= 0) continue;
             uint abgr = d.Colour;
-            // A decal on a surface is as one drawn on a cell's texture: its alpha at the start, no fade (docs/game/blood-decals.md); a footprint fades with its life.
+            // A decal on a surface is as one drawn on a cell's texture: its alpha at the start, no fade (docs/game/blood-decals.md); a footprint
+            // fades with its life.
             bool footprint = d.Type == TerrainDecalType.Footprint;
             float alpha = (abgr >> 24) / 255f;
             if (footprint) alpha = MathF.Min(alpha, d.Expires - _surfaceClock);
@@ -975,7 +996,10 @@ public sealed unsafe partial class TerrainDecalRenderer
             MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(first, count)).CopyTo(new Span<byte>(rows.Pointer, count * SurfaceInstance.Size));
             Span<GpuBufferBinding> buffers =
             [
-                new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),
+                new(rows.Handle, rows.Offset),
+                new(rows.Handle, rows.Offset + 16),
+                new(rows.Handle, rows.Offset + 32),
+                new(rows.Handle, rows.Offset + 48),
             ];
 
             cmd.BindVertexBuffers(0, buffers);

@@ -9,7 +9,8 @@ namespace Meitou.Game.Rendering.Frame;
 /// default), chosen per feature: the remaster switches. Separate from the game's own graphics settings (draw distances,
 /// shadow quality...), which keep their meaning in both. Reads and writes the live options through its delegates.
 /// </summary>
-public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note, Func<string>? liveMeitou = null, bool optional = false)
+public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note,
+    Func<string>? liveMeitou = null, bool optional = false)
 {
     /// <summary>
     /// The command-line name (<c>--meitou ao,haze</c>).
@@ -41,10 +42,15 @@ public sealed class Enhancement(string id, string name, string faithful, string 
     /// </summary>
     public string Note { get; } = note;
 
-    /// <summary>An optional effect (<see cref="Toggle.Optional"/>): off in the Meitou look too, so <c>all</c> and the Meitou key leave it off; the player or its own id turns it on.</summary>
+    /// <summary>
+    /// An optional effect (<see cref="Toggle.Optional"/>): off in the Meitou look too, so <c>all</c> and the Meitou key leave it off; the player
+    /// or its own id turns it on.
+    /// </summary>
     public bool Optional { get; } = optional;
 
-    /// <summary>"Faithful (off)" or "Meitou (SSAO)".</summary>
+    /// <summary>
+    /// "Faithful (off)" or "Meitou (SSAO)".
+    /// </summary>
     public string State => IsMeitou ? $"Meitou ({Meitou})" : $"Faithful ({Faithful})";
 }
 
@@ -376,57 +382,96 @@ public static class Enhancements
                 + "drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"),
         new("fog", "Fog", "hard-edged, flat", "soft, lit",
             () => post.MeitouFog, v => post.MeitouFog = v,
-            "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
+            "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful "
+                + "draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to "
+                + "30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, "
+                + "near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun "
+                + "and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops "
+                + "being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
         new("contact", "Contact shadows", "off", "on",
             () => post.ContactShadows, v => post.ContactShadows = v,
-            "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs",
+            "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full "
+                + "resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does "
+                + "not show casts nothing; for the cascades, the Traced sun shadows hold theirs",
             optional: true),
         new("gihybrid", "Hybrid GI", "off", "on",
             () => post.GiHybrid, v => post.GiHybrid = v,
-            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
+            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds "
+                + "shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for "
+                + "the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md "
+                + "\"Hybrid GI\")"),
         new("chars2", "Advanced materials", "plain", "hair, cloth, skin, eyes, metal",
             chars2 ?? (() => false), setChars2 ?? (_ => { }),
-            "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"),
+            "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of "
+                + "cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a "
+                + "small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, "
+                + "in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"),
         // Off by default, added last so the Shift+F keys do not move: not yet seen on a GPU.
         new("trails", "Ground trails", "off", "footprints",
             () => TerrainTrails.Enabled, v => TerrainTrails.Enabled = v,
-            "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"),
+            "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt "
+                + "near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; "
+                + "docs/render-terrain.md \"Ground trails\")"),
         new("contactfoam", "Water contact foam, wakes and ripples", "off", "foam, waves",
             () => WaterContact.Enabled, v => WaterContact.Enabled = v,
-            "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"),
+            "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the "
+                + "scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a "
+                + "simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with "
+                + "foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"),
         new("objmetal", "Metal on buildings", "off", "metal textures",
             () => Objects.MetalTextures.Enabled, v => Objects.MetalTextures.Enabled = v,
-            "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte",
+            "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and "
+                + "machinery as metal where they have no colour of their own, so rust and paint stay matte",
             optional: true),
         new("gearblood", "Blood on weapons and gear", "none", "blades, armour, clothing",
             () => Characters.GearBlood.Enabled, v => Characters.GearBlood.Enabled = v,
-            "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"),
+            "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou "
+                + "lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away "
+                + "in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does "
+                + "(docs/game/blood-decals.md \"On weapons and gear\")"),
         new("grazesun", "Soft grazing sun", "off", "bumps fade",
             () => Sky.GrazingSun.Enabled, v => Sky.GrazingSun.Enabled = v,
-            "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"),
+            "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break "
+                + "into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light "
+                + "as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"),
         new("dof", "Depth of field", "off", "thin lens",
             () => post.DepthOfField, v => post.DepthOfField = v,
-            "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")",
+            "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number "
+                + "and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth "
+                + "of field\")",
             optional: true),
         new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
             () => post.Gtao, v => post.Gtao = v,
-            "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"),
+            "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's "
+                + "horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by "
+                + "default"),
         new("lampshadows", "Lamp shadows", "off", "traced",
             () => post.LampShadows, v => post.LampShadows = v,
-            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")",
+            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps "
+                + "that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast "
+                + "lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; "
+                + "docs/render-lights.md \"Traced lamp shadows\")",
             optional: true),
         new("ssr", "Reflections", "sky only", "traced",
             () => post.Ssr, v => post.Ssr = v,
-            "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
+            "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what "
+                + "they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and "
+                + "darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
         new("traced", "Traced sun shadows", "cascades", "ray-traced",
             () => post.TracedSun, v => post.TracedSun = v,
-            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"),
+            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel "
+                + "at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, "
+                + "characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by "
+                + "default)"),
         new("previewsun", "Portrait and editor sun", "key light", "fixed sun",
             () => Characters.PreviewStudio.Sun, v => Characters.PreviewStudio.Sun = v,
-            "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"),
+            "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on "
+                + "one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever "
+                + "the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"),
         new("editorbar", "Character editor bar", "platform", "bar",
             () => Characters.PreviewStudio.Bar, v => Characters.PreviewStudio.Bar = v,
-            "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"),
+            "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with "
+                + "your graphics settings"),
     ];
 
     #endregion

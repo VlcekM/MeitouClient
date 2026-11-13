@@ -647,9 +647,9 @@ sealed class AgentChannel(GameHost host)
         Add("screenshot", "screenshot <png path>", "save the next frame (interface included, no debug overlays or pointer) "
             + "to the file", ControlScreenshot);
 
-        Add("photo", "photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | key <name> [up] | shot [file] [--ui]",
-            "photo mode (docs/viewer.md): the free camera with lens, roll, exposure, drawn time of day, grids and frames; shot saves a picture without the panel "
-            + "and grid (--ui keeps them)", ControlPhoto);
+        Add("photo", "photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | key <name> [up] "
+            + "| shot [file] [--ui]", "photo mode (docs/viewer.md): the free camera with lens, roll, exposure, drawn time of day, grids and frames; shot "
+            + "saves a picture without the panel and grid (--ui keeps them)", ControlPhoto);
         Add("quit", "quit", "end the interactive loop and exit cleanly (as closing the window does)",
             (_, con) => { host.DevConsoleHost.ControlQuit = true; con.Print("quitting"); });
 

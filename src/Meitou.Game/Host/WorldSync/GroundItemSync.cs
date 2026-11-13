@@ -58,7 +58,9 @@ sealed class GroundItemSync(GameHost host)
         foreach (var g in snapshot.GroundItems)
         {
             if (!_shownGround.Add(g.Id)) continue;
-            var (rotation, y) = !g.Dropped ? (g.Rotation, g.Position.Y) : host.Debris.LimbLookOf(g.Record) is not null ? LaidFlat(g) : PlacedPose(g);
+            var (rotation, y) = !g.Dropped ? (g.Rotation, g.Position.Y)
+                : host.Debris.LimbLookOf(g.Record) is not null ? LaidFlat(g)
+                : PlacedPose(g);
             _groundPoses[g.Id] = (new Vector3(g.Position.X, y, g.Position.Z), rotation, GroundId(g.Id));
             if (host.Debris.LimbLookOf(g.Record) is not null)
             {
@@ -77,8 +79,7 @@ sealed class GroundItemSync(GameHost host)
     /// </summary>
     internal void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>
         host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(g.Position.X, g.Position.Z), GroundId(g.Id), g.Record, g.Position,
-            rotation, null, y)
-        { Key = GroundId(g.Id), ItemMaterial = g.Material });
+            rotation, null, y) { Key = GroundId(g.Id), ItemMaterial = g.Material });
 
     /// <summary>
     /// Drops every shown ground item, falling limb, limb at rest and pose (a new world) and diffs the next snapshot afresh.
@@ -125,12 +126,14 @@ sealed class GroundItemSync(GameHost host)
     }
 
     /// <summary>
-    /// A dropped item as the original places it (docs/game/carry-loot.md "Dropped item placement", <b>Verified</b>, <c>Item::createItemEntityCallback</c> <c>FUN_1407626e0</c>): the pose is
-    /// set when the item's entity is made, by its record's type, and the item is a static body there. A WEAPON is planted: turned about its own Z axis by 0.9 to 1.1 half turns (the
-    /// mesh's +Y, blade end, points down, up to 18 degrees off vertical) and then by a random yaw, its origin raised by 0.5 to 0.7 of the mesh's Y extent, so the blade end is stuck in the
-    /// ground; the slope does not enter. ARMOUR and CONTAINER lie on the mesh's Z axis (quarter turn about -X), turned to the ground normal, raised by half the Z extent; any other
-    /// type (meshes are modelled on their base) is only turned to the ground normal, at the ground. Engine choice: the random draws come from the item's id, the ground normal from
-    /// the heights round the drop point, and the yaw of a weapon is the one the simulation rolled for the drop.
+    /// A dropped item as the original places it (docs/game/carry-loot.md "Dropped item placement", <b>Verified</b>,
+    /// <c>Item::createItemEntityCallback</c> <c>FUN_1407626e0</c>): the pose is set when the item's entity is made, by its record's type, and the
+    /// item is a static body there. A WEAPON is planted: turned about its own Z axis by 0.9 to 1.1 half turns (the mesh's +Y, blade end, points
+    /// down, up to 18 degrees off vertical) and then by a random yaw, its origin raised by 0.5 to 0.7 of the mesh's Y extent, so the blade end is
+    /// stuck in the ground; the slope does not enter. ARMOUR and CONTAINER lie on the mesh's Z axis (quarter turn about -X), turned to the ground
+    /// normal, raised by half the Z extent; any other type (meshes are modelled on their base) is only turned to the ground normal, at the ground.
+    /// Engine choice: the random draws come from the item's id, the ground normal from the heights round the drop point, and the yaw of a weapon is
+    /// the one the simulation rolled for the drop.
     /// </summary>
     (Quaternion Rotation, float Y) PlacedPose(GroundItemSnapshot g)
     {
@@ -147,20 +150,34 @@ sealed class GroundItemSync(GameHost host)
             var yaw = new Quaternion(0, g.Rotation.Y, 0, g.Rotation.W);
             return (Quaternion.Normalize(Quaternion.Concatenate(tilt, yaw)), floor + (0.5f + 0.2f * b) * size.Y);
         }
+
         const float reach = 1;
-        var slope = Vector3.Normalize(new Vector3(Ground(at.X - reach, at.Z) - Ground(at.X + reach, at.Z), 2 * reach, Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
+        var slope = Vector3.Normalize(new Vector3(Ground(at.X - reach, at.Z) - Ground(at.X + reach, at.Z), 2 * reach,
+            Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
         float tiltAngle = MathF.Acos(Math.Clamp(slope.Y, -1, 1));
-        var toNormal = tiltAngle > 1e-3f ? Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tiltAngle) : Quaternion.Identity;
+        var toNormal = tiltAngle > 1e-3f
+            ? Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tiltAngle)
+            : Quaternion.Identity;
         if (type is Meitou.Data.Fcs.FcsRecordType.Armour or Meitou.Data.Fcs.FcsRecordType.Container)
-            return (Quaternion.Normalize(Quaternion.Concatenate(Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2), toNormal)), floor + size.Z * 0.5f);
+        {
+            var lying = Quaternion.Concatenate(Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2), toNormal);
+            return (Quaternion.Normalize(lying), floor + size.Z * 0.5f);
+        }
+
         return (toNormal, floor);
     }
 
-    /// <summary>A repeatable number in [0, 1) from an item's id and a stream number.</summary>
+    /// <summary>
+    /// A repeatable number in [0, 1) from an item's id and a stream number.
+    /// </summary>
     static float Unit(int id, int stream)
     {
         uint h = (uint)id * 0x9E3779B1u + (uint)stream * 0x85EBCA6Bu;
-        h ^= h >> 16; h *= 0x7FEB352Du; h ^= h >> 15; h *= 0x846CA68Bu; h ^= h >> 16;
+        h ^= h >> 16;
+        h *= 0x7FEB352Du;
+        h ^= h >> 15;
+        h *= 0x846CA68Bu;
+        h ^= h >> 16;
         return (h >> 8) / (float)(1 << 24);
     }
 

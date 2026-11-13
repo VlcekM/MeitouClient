@@ -261,13 +261,18 @@ public sealed unsafe class VulkanDisplay : IDisposable
         var vk = Vk.GetApi();
         uint n = 0;
         if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, null) != Result.Success) return false;
+
         var properties = new ExtensionProperties[n];
         fixed (ExtensionProperties* p = properties)
         {
             if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, p) != Result.Success) return false;
+
             for (uint i = 0; i < n; i++)
+            {
                 if (SilkMarshal.PtrToString((nint)p[i].ExtensionName) == name) return true;
+            }
         }
+
         return false;
     }
 

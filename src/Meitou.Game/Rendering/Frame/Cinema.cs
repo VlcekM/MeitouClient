@@ -168,9 +168,15 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// The most keys the timeline holds, and the frame rate a recorded flight's PNG frames are taken at.
     /// </summary>
     const int MaxKeys = 999, RecordFps = 60;
-    /// <summary>One press of the focus and aperture buttons: half a stop's ratio.</summary>
+
+    /// <summary>
+    /// One press of the focus and aperture buttons: half a stop's ratio.
+    /// </summary>
     const float LensStep = 1.1892f;
-    /// <summary>Seconds between the keys a recorded camera path drops.</summary>
+
+    /// <summary>
+    /// Seconds between the keys a recorded camera path drops.
+    /// </summary>
     const float PathStep = 1;
 
     /// <summary>
@@ -562,6 +568,20 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     }
 
     /// <summary>
+    /// Turns the selected key's easing on or off.
+    /// </summary>
+    void ToggleSelectedEase()
+    {
+        if (_selected is { } s)
+        {
+            s.Ease = !s.Ease;
+            Save();
+            _preview = true;
+        }
+        else Say("no key selected");
+    }
+
+    /// <summary>
     /// Scales the timing by <paramref name="factor"/> from the first key: the keys' times, the spacing (kept 0.5 .. 120 s) and the playhead.
     /// </summary>
     void Scale(float factor)
@@ -785,7 +805,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Add key at playhead", () => SaveKey(Enumerable.Range(1, MaxKeys).First(l => Find(l) is null), (float)_time));
         Button("Set key to camera", () => { if (_selected is { } s) SaveKey(s.Label); else Say("no key selected"); });
         Button("Go to key", () => { if (_selected is { } s) { Stop(); GoTo(s); } else Say("no key selected"); });
-        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off", () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
+        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off", ToggleSelectedEase);
         Button("Focus nearer", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) / LensStep }));
         Button("Focus farther", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) * LensStep }));
         Button(_selected is { Shot.Focus: not null } ? "Focus: key (to target)" : "Focus: target", () => SetLens(s => s with { Focus = null }));
@@ -1080,7 +1100,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             foreach (var s in saved.OrderBy(s => s.Time ?? s.Slot))
             {
                 if (s.Slot is < 1 or > MaxKeys || s.Eye is not { Length: 3 } || Find(s.Slot) is not null) continue;
-                var shot = new CameraShot(new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]), s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour, s.Focus, s.Aperture);
+                var eye = new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]);
+                var shot = new CameraShot(eye, s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour, s.Focus, s.Aperture);
                 _keys.Add(new Entry(s.Slot, shot, s.Time ?? order * _spacing, s.Ease));
                 order++;
             }

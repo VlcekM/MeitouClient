@@ -2025,8 +2025,8 @@ static partial class TerrainShaders
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
 
     /// <summary>
-    /// The patches' depth pass for the resolved colour (<see cref="ResolveFragmentNative"/>): besides the depth it writes, per pixel, the undisplaced point less the drawn one (what
-    /// the material's coordinates need back) and the fragment's depth (0 stays where no patch drew).
+    /// The patches' depth pass for the resolved colour (<see cref="ResolveFragmentNative"/>): besides the depth it writes, per pixel, the
+    /// undisplaced point less the drawn one (what the material's coordinates need back) and the fragment's depth (0 stays where no patch drew).
     /// </summary>
     public static string PrepassResolveFragmentNative(bool interiorCut = false)
     {
@@ -2034,12 +2034,18 @@ static partial class TerrainShaders
         return Native(interiorCut ? InteriorMaskRenderer.WithCut(text) : text);
     }
 
-    /// <summary>The resolved colour's vertex stage: a triangle over the picture.</summary>
+    /// <summary>
+    /// The resolved colour's vertex stage: a triangle over the picture.
+    /// </summary>
     public static string ResolveVertexNative() => Native("""
         #version 330 core
         void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
         """);
 
+    /// <summary>
+    /// The resolved colour's inputs and functions, added after <c>uWireframe</c>: the prepass's target, the scene's depth and the points and steps
+    /// rebuilt from them.
+    /// </summary>
     const string ResolveInputs = """
         uniform sampler2D uResolveG;       // the prepass's: xyz the undisplaced point less the drawn one, w the fragment's depth (0: no patch)
         uniform sampler2D uResolveDepth;   // the scene's depth now
@@ -2075,6 +2081,10 @@ static partial class TerrainShaders
 
         """;
 
+    /// <summary>
+    /// The resolved colour's start of <c>main</c>, in place of the texture point's choice: the pixel's point, discarded where no patch shows, and
+    /// its steps to the next pixels.
+    /// </summary>
     const string ResolvePrelude = """
         ivec2 resolvePixel = ivec2(gl_FragCoord.xy);
             float resolveDepth;
@@ -2089,46 +2099,83 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// The patches' colour resolved over the picture (docs/render-terrain.md "Resolved colour"): <see cref="Fragment"/> run once per pixel that still shows a patch, its point
-    /// rebuilt from the scene's depth and the prepass's target instead of interpolated over the patch's triangles. Nothing here takes a derivative from the rasteriser (a
-    /// neighbour may be discarded): the steps to the next pixels come from the neighbours' points, and every lookup names its level or its gradients.
+    /// The patches' colour resolved over the picture (docs/render-terrain.md "Resolved colour"): <see cref="Fragment"/> run once per pixel that
+    /// still shows a patch, its point rebuilt from the scene's depth and the prepass's target instead of interpolated over the patch's triangles.
+    /// Nothing here takes a derivative from the rasteriser (a neighbour may be discarded): the steps to the next pixels come from the neighbours'
+    /// points, and every lookup names its level or its gradients.
     /// </summary>
     public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false)
     {
-        static string Patch(string text, string from, string to)
-        {
-            int at = text.IndexOf(from, StringComparison.Ordinal);
-            if (at < 0) throw new InvalidOperationException($"TerrainShaders.ResolveFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
-            return text.Remove(at, from.Length).Insert(at, to);
-        }
-        string f = Fragment;
-        f = f.Insert(f.IndexOf('\n') + 1, "vec3 resolveWorldDx, resolveWorldDy, resolveShiftDx, resolveShiftDy;\n");
-        f = Patch(f, "in vec3 vWorld;", "vec3 vWorld;");
-        f = Patch(f, "in vec3 vNormal;", "vec3 vNormal;");
-        f = Patch(f, "in vec2 vCliffBlend;", "vec2 vCliffBlend = vec2(0.5);");
-        f = Patch(f, "uniform bool uWireframe;", "uniform bool uWireframe;\n" + ResolveInputs);
-        f = Patch(f, "texWorld = uHeightNormals ? vNormal : vWorld;", ResolvePrelude);
-        f = Patch(f, "texDx = dFdxCoarse(texWorld);", "texDx = resolveWorldDx + resolveShiftDx;");
-        f = Patch(f, "texDy = dFdyCoarse(texWorld);", "texDy = resolveWorldDy + resolveShiftDy;");
-        f = Patch(f, "cross(dFdx(world), dFdy(world))", "cross(resolveWorldDx, resolveWorldDy)");
-        f = Patch(f, "vec2 w = fwidth(vWorld.xz);", "vec2 w = abs(resolveWorldDx.xz) + abs(resolveWorldDy.xz);");
-        // The lookups that left their level to the rasteriser: the world's maps (magnified wherever they show: level 0), the dust's noise and the region's maps by the steps.
-        f = Patch(f, "return texture(s, (t * cells + 0.5) / (cells + 1.0)).r * 9800.0;", "return textureLod(s, (t * cells + 0.5) / (cells + 1.0), 0.0).r * 9800.0;");
-        f = Patch(f, "texture(uWeatherDustNoise, world.xz * 0.002)", "textureGrad(uWeatherDustNoise, world.xz * 0.002, resolveWorldDx.xz * 0.002, resolveWorldDy.xz * 0.002)");
-        f = Patch(f, "texture(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))", "textureLod(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
-        f = Patch(f, "texture(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))", "textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
-        f = Patch(f, "map = texture(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw));",
-            "map = textureGrad(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw);");
-        f = Patch(f, "colour = texture(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw)) * 1.2;",
-            "colour = textureGrad(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw) * 1.2;");
-        f = Patch(f, "vec4 weights = texture(uBlendMap, world01);", "vec4 weights = textureGrad(uBlendMap, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld));");
-        f = Patch(f, "texture(uGround, world01).rgb", "textureGrad(uGround, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
-        f = Patch(f, "texture(uWorldColour, world01).rgb", "textureGrad(uWorldColour, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
+        string f = ResolvedPointPatches(Fragment);
+        f = ResolvedLookupPatches(f);
         return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(Marched(f, march)), trails)), normalMaps, reliefQuality));
     }
 
+    /// <summary>
+    /// <paramref name="f"/> with its point, normal and steps rebuilt from the prepass and the scene's depth instead of the rasteriser's.
+    /// </summary>
+    static string ResolvedPointPatches(string f)
+    {
+        f = f.Insert(f.IndexOf('\n') + 1, "vec3 resolveWorldDx, resolveWorldDy, resolveShiftDx, resolveShiftDy;\n");
+        f = ResolvePatch(f, "in vec3 vWorld;", "vec3 vWorld;");
+        f = ResolvePatch(f, "in vec3 vNormal;", "vec3 vNormal;");
+        f = ResolvePatch(f, "in vec2 vCliffBlend;", "vec2 vCliffBlend = vec2(0.5);");
+        f = ResolvePatch(f, "uniform bool uWireframe;", "uniform bool uWireframe;\n" + ResolveInputs);
+        f = ResolvePatch(f, "texWorld = uHeightNormals ? vNormal : vWorld;", ResolvePrelude);
+        f = ResolvePatch(f, "texDx = dFdxCoarse(texWorld);", "texDx = resolveWorldDx + resolveShiftDx;");
+        f = ResolvePatch(f, "texDy = dFdyCoarse(texWorld);", "texDy = resolveWorldDy + resolveShiftDy;");
+        f = ResolvePatch(f, "cross(dFdx(world), dFdy(world))", "cross(resolveWorldDx, resolveWorldDy)");
+        f = ResolvePatch(f, "vec2 w = fwidth(vWorld.xz);", "vec2 w = abs(resolveWorldDx.xz) + abs(resolveWorldDy.xz);");
+        return f;
+    }
 
-    static string Trailed(string fragment, bool trails) => trails ? fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_TRAILS\n") : fragment;
+    /// <summary>
+    /// The lookups that left their level to the rasteriser: the world's maps (magnified wherever they show: level 0), the dust's noise and the
+    /// region's maps by the steps.
+    /// </summary>
+    static string ResolvedLookupPatches(string f)
+    {
+        f = ResolvePatch(f, "return texture(s, (t * cells + 0.5) / (cells + 1.0)).r * 9800.0;",
+            "return textureLod(s, (t * cells + 0.5) / (cells + 1.0), 0.0).r * 9800.0;");
+        f = ResolvePatch(f, "texture(uWeatherDustNoise, world.xz * 0.002)",
+            "textureGrad(uWeatherDustNoise, world.xz * 0.002, resolveWorldDx.xz * 0.002, resolveWorldDy.xz * 0.002)");
+        f = ResolvePatch(f, "texture(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))",
+            "textureLod(uWeatherGround, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
+        f = ResolvePatch(f, "texture(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w))",
+            "textureLod(uAtmoAmbientMap, (world.xz + uAtmoMaps.w) / (2.0 * uAtmoMaps.w), 0.0)");
+        f = ResolvePatch(f, "map = texture(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw));",
+            "map = textureGrad(uOverlay, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw);");
+        f = ResolvePatch(f, "colour = texture(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw)) * 1.2;",
+            "colour = textureGrad(uColour, fract((texWorld.xz + uHalfWorld) * uRegion.zw), texDx.xz * uRegion.zw, texDy.xz * uRegion.zw) * 1.2;");
+        f = ResolvePatch(f, "vec4 weights = texture(uBlendMap, world01);",
+            "vec4 weights = textureGrad(uBlendMap, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld));");
+        f = ResolvePatch(f, "texture(uGround, world01).rgb",
+            "textureGrad(uGround, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
+        f = ResolvePatch(f, "texture(uWorldColour, world01).rgb",
+            "textureGrad(uWorldColour, world01, texDx.xz / (2.0 * uHalfWorld), texDy.xz / (2.0 * uHalfWorld)).rgb");
+        return f;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its first <paramref name="from"/> replaced by <paramref name="to"/>; throws when it is not there.
+    /// </summary>
+    static string ResolvePatch(string text, string from, string to)
+    {
+        int at = text.IndexOf(from, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            throw new InvalidOperationException(
+                $"TerrainShaders.ResolveFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+        }
+
+        return text.Remove(at, from.Length).Insert(at, to);
+    }
+
+    /// <summary>
+    /// <paramref name="fragment"/> with <c>TERRAIN_TRAILS</c> defined when <paramref name="trails"/> (the ground trails' code).
+    /// </summary>
+    static string Trailed(string fragment, bool trails) =>
+        trails ? fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_TRAILS\n") : fragment;
 
     /// <summary>
     /// The material cache's bake (TerrainRenderer.MaterialCache): a triangle over the level's image.
@@ -2610,17 +2657,49 @@ struct TerrainConstants
     /// <c>uBakeReach</c>: the cache is read nearer than this (beyond it a biome's distance fade, which the bake has not, may begin).
     /// </summary>
     [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
+    /// <summary>
+    /// Bindless index of <c>uTrails</c>: the ground trails' coarse height (<see cref="TerrainTrailRenderer"/>).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(948)] public uint Trails;
+    /// <summary>
+    /// <c>uTrailDepth</c>: a full mark's depth in world units.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
+    /// <summary>
+    /// <c>uTrailMesh</c>: 1 where the mesh carries the trails (displaced with no parallax to march them).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
+    /// <summary>
+    /// <c>uTrailWindow</c>: the coarse window's centre x, z, half its side and 1 / its side.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
+    /// <summary>
+    /// Bindless index of <c>uTrailsFine</c>: the fine image (x the height, y 1 where a mark was recorded).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
+    /// <summary>
+    /// <c>uBakeBias</c>: the upscaler's texture bias (negative), so the cache level is chosen that much finer.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
+    /// <summary>
+    /// Bindless index of <c>uTrailCells</c>: the grid of cells a stamp wrote to.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(984)] public uint TrailCells;
-    /// <summary>The resolved colour's inputs (TerrainRenderer.Resolve): the prepass's target and the scene's depth (bindless), and clip space to the point less the eye.</summary>
+    /// <summary>
+    /// Bindless index of <c>uResolveG</c>, the resolved colour's input (TerrainRenderer.Resolve): the prepass's target.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(988)] public uint ResolveG;
+    /// <summary>
+    /// <c>uTrailFineWindow</c>: the fine window as <see cref="TrailWindow"/> (half 0: none).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
+    /// <summary>
+    /// Bindless index of <c>uResolveDepth</c>, the resolved colour's input: the scene's depth.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(1008)] public uint ResolveDepth;
+    /// <summary>
+    /// <c>uResolveInverse</c>, the resolved colour's input: clip space to the point less the eye.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Matrix4x4 ResolveInverse;
 }
 

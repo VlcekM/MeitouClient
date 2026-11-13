@@ -131,7 +131,8 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The quality preset choice's hint.
     /// </summary>
-    internal const string PresetHint = "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end.";
+    internal const string PresetHint =
+        "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end.";
 
     /// <summary>
     /// The tier being applied (<see cref="ApplyPreset"/>, <see cref="LookPresets.SetFaithful"/>), so the Low cut follows it before the sliders reach
@@ -182,7 +183,14 @@ sealed class QualityTiers(SettingsMenu menu)
             start = mark;
         }
 
-        float factor = preset switch { LowPreset => p.Low, MediumPreset => p.Medium, UltraPreset => p.Ultra, ExtremePreset => p.Extreme ?? p.Ultra, _ => float.NaN };
+        float factor = preset switch
+        {
+            LowPreset => p.Low,
+            MediumPreset => p.Medium,
+            UltraPreset => p.Ultra,
+            ExtremePreset => p.Extreme ?? p.Ultra,
+            _ => float.NaN,
+        };
         float value = preset == HighPreset ? p.High ?? start
             : float.IsNaN(factor) ? p.High ?? start
             : float.IsNegativeInfinity(factor) ? slider.Min
@@ -300,8 +308,8 @@ sealed class QualityTiers(SettingsMenu menu)
         ApplyPreset(MediumPreset);
         string[] off =
         [
-            "Indirect light", "Indoor GI", "Hybrid GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch,
-            WorldFrame.OutlineRefineSwitch,
+            "Indirect light", "Indoor GI", "Hybrid GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch,
+            WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch,
         ];
         foreach (var toggle in menu.Values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
 

@@ -58,9 +58,9 @@ public static class GroundRelief
     public static float ParallaxDistance { get; set; } = 600;
 
     /// <summary>
-    /// The parallax's depth as a share of <see cref="Depth"/> (the "Ground parallax depth" slider, 10 to 200 %; 1: the displacement's depth). The march
-    /// shows a height field's walls as stretched texels, which a shallower relief hides; the displaced mesh keeps <see cref="Depth"/>, so where both
-    /// run the fine detail the march adds is scaled by this against the mesh.
+    /// The parallax's depth as a share of <see cref="Depth"/> (the "Ground parallax depth" slider, 10 to 200 %; 1: the displacement's depth). The
+    /// march shows a height field's walls as stretched texels, which a shallower relief hides; the displaced mesh keeps <see cref="Depth"/>, so where
+    /// both run the fine detail the march adds is scaled by this against the mesh.
     /// </summary>
     public static float ParallaxScale { get; set; } = 1;
 

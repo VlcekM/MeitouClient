@@ -5,58 +5,147 @@ using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Characters;
 
-/// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion.</summary>
+/// <summary>
+/// The switches of the enhanced previews' studio (Meitou).
+/// </summary>
 public static class PreviewStudio
 {
+    /// <summary>
+    /// The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion.
+    /// </summary>
     public static bool Sun { get; set; } = true;
-    /// <summary>The <c>editorbar</c> switch (Meitou, optional): the character editor shows the bar, drawn by the world's pipeline, instead of the platform.</summary>
+
+    /// <summary>
+    /// The <c>editorbar</c> switch (Meitou, optional): the character editor shows the bar, drawn by the world's pipeline, instead of the platform.
+    /// </summary>
     public static bool Bar { get; set; }
 }
 
 /// <summary>
-/// The studio of the enhanced previews (docs/character-renderer.md "Meitou stage and portraits"): with <see cref="PreviewStudio.Sun"/>, the character is drawn
-/// three times. First its depth from a fixed sun into a shadow map, then its depth from the camera, from which a horizon-based occlusion is made. Last its
-/// colour in the shader's studio model (a fog distance of -4), which reads both through the view block's interior-cut fields: the characters never use those.
-/// A depth draw is the colour shader with a fog distance of -5, which returns as soon as its cut-outs have discarded, so hair cards cast their own shape.
+/// The studio of the enhanced previews (docs/character-renderer.md "Meitou stage and portraits"): with <see cref="PreviewStudio.Sun"/>, the character
+/// is drawn three times. First its depth from a fixed sun into a shadow map, then its depth from the camera, from which a horizon-based occlusion is
+/// made. Last its colour in the shader's studio model (a fog distance of -4), which reads both through the view block's interior-cut fields: the
+/// characters never use those. A depth draw is the colour shader with a fog distance of -5, which returns as soon as its cut-outs have discarded, so
+/// hair cards cast their own shape.
 /// </summary>
 internal sealed unsafe partial class CharacterRenderer
 {
+    /// <summary>
+    /// The studio shadow map's side in texels.
+    /// </summary>
     const int StudioShadowSize = 2048;
-    /// <summary>The sky's visibility: the character's depth from this many directions over the whole sphere (a Fibonacci spiral, CharacterShaders'
-    /// studioSky makes the same), each in a tile of this many pixels, this many tiles across.</summary>
-    const int StudioSkyDirections = 32, StudioSkyTile = 384, StudioSkyColumns = 8;
-    /// <summary>The fog distance of the studio's colour draw and of its depth draws (CharacterShaders).</summary>
-    const float StudioColour = -4, StudioDepth = -5;
 
-    GpuTexture? _studioShadowColour, _studioShadowDepth, _studioAo, _studioSkyColour, _studioSkyDepth;
-    uint _studioShadowIndex, _studioAoIndex, _studioSkyIndex;
+    /// <summary>
+    /// The sky's visibility: the character's depth from this many directions over the whole sphere (a Fibonacci spiral, CharacterShaders' studioSky
+    /// makes the same).
+    /// </summary>
+    const int StudioSkyDirections = 32;
+
+    /// <summary>
+    /// The side in pixels of one direction's tile of the sky atlas.
+    /// </summary>
+    const int StudioSkyTile = 384;
+
+    /// <summary>
+    /// The sky atlas's tiles across.
+    /// </summary>
+    const int StudioSkyColumns = 8;
+
+    /// <summary>
+    /// The fog distance of the studio's colour draw (CharacterShaders).
+    /// </summary>
+    const float StudioColour = -4;
+
+    /// <summary>
+    /// The fog distance of the studio's depth draws (CharacterShaders).
+    /// </summary>
+    const float StudioDepth = -5;
+
+    /// <summary>
+    /// The colour target the sun's depth draw carries (its colour is unused).
+    /// </summary>
+    GpuTexture? _studioShadowColour;
+
+    /// <summary>
+    /// The sun's shadow map.
+    /// </summary>
+    GpuTexture? _studioShadowDepth;
+
+    /// <summary>
+    /// The screen occlusion, the preview's size.
+    /// </summary>
+    GpuTexture? _studioAo;
+
+    /// <summary>
+    /// The colour target the sky's depth draws carry (its colour is unused).
+    /// </summary>
+    GpuTexture? _studioSkyColour;
+
+    /// <summary>
+    /// The sky atlas: the character's depth from each spiral direction, a tile each.
+    /// </summary>
+    GpuTexture? _studioSkyDepth;
+
+    /// <summary>
+    /// The bindless index of <see cref="_studioShadowDepth"/>.
+    /// </summary>
+    uint _studioShadowIndex;
+
+    /// <summary>
+    /// The bindless index of <see cref="_studioAo"/>.
+    /// </summary>
+    uint _studioAoIndex;
+
+    /// <summary>
+    /// The bindless index of <see cref="_studioSkyDepth"/>.
+    /// </summary>
+    uint _studioSkyIndex;
+
+    /// <summary>
+    /// The occlusion pass, made on first use.
+    /// </summary>
     StudioAoPass? _studioAoPass;
 
-    bool StudioOn => _look.Enhanced && _look.Studio;
-
-    /// <summary>What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
-    /// map's pass with its world view-projection and eye. The host sets it before <see cref="DrawStage"/>; the portraits have none.</summary>
-    internal Action<Matrix4x4, Vector3>? StageCasters { get; set; }
+    /// <summary>
+    /// The casters the current stage draw adds to the studio maps (<see cref="StageCasters"/> while the stage is drawn, null otherwise).
+    /// </summary>
     Action<Matrix4x4, Vector3>? _studioCasters;
 
     /// <summary>
-    /// The studio's shadow and occlusion for <paramref name="index"/>'s character (posed as the caller has it) seen through <paramref name="viewProjection"/> into
-    /// <paramref name="depth"/> (the preview's depth target, <paramref name="width"/> × <paramref name="height"/>), outside any pass; returns the view constants
-    /// of its colour draw.
+    /// The previews are drawn in the studio.
     /// </summary>
-    ViewConstants StudioView(int index, Matrix4x4 viewProjection, Matrix4x4 projection, Vector3 eye, Vector3 toSun, GpuTexture colour, GpuTexture depth, int width, int height)
+    bool StudioOn => _look.Enhanced && _look.Studio;
+
+    /// <summary>
+    /// What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
+    /// map's pass with its world view-projection and eye. The host sets it before <see cref="DrawStage"/>; the portraits have none.
+    /// </summary>
+    internal Action<Matrix4x4, Vector3>? StageCasters { get; set; }
+
+    /// <summary>
+    /// The studio's shadow and occlusion for <paramref name="index"/>'s character (posed as the caller has it) seen through
+    /// <paramref name="viewProjection"/> into <paramref name="depth"/> (the preview's depth target, <paramref name="width"/> ×
+    /// <paramref name="height"/>), outside any pass; returns the view constants of its colour draw.
+    /// </summary>
+    ViewConstants StudioView(int index, Matrix4x4 viewProjection, Matrix4x4 projection, Vector3 eye, Vector3 toSun, GpuTexture colour,
+        GpuTexture depth, int width, int height)
     {
         ref var l = ref _live[index];
         var centre = l.Centre;
         float radius = MathF.Max(l.Radius, 1f) * 1.3f;
         toSun = Vector3.Normalize(toSun);
 
-        // The sun's map: an orthographic box round the character's sphere, its matrix relative to the centre (the receiver subtracts it: no large numbers).
+        // The sun's map: an orthographic box round the character's sphere, its matrix relative to the centre (the receiver subtracts it: no large
+        // numbers).
         var up = MathF.Abs(toSun.Y) > 0.95f ? Vector3.UnitZ : Vector3.UnitY;
-        var lightRelative = Matrix4x4.CreateLookAt(toSun * (radius * 2), Vector3.Zero, up) * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
+        var lightRelative = Matrix4x4.CreateLookAt(toSun * (radius * 2), Vector3.Zero, up)
+            * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
         MakeStudioShadow();
-        // The camera's eye picks the levels of detail, so the map holds the meshes the picture shows (a coarser level from the sun's distance shaded its own finer one).
-        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, _studioShadowColour!, _studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
+
+        // The camera's eye picks the levels of detail, so the map holds the meshes the picture shows (a coarser level from the sun's distance shaded
+        // its own finer one).
+        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, _studioShadowColour!,
+            _studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
 
         // The sky's visibility: the depth from every direction of the spiral, at the camera's levels of detail.
         DrawStudioSky(index, centre, radius, eye);
@@ -65,6 +154,7 @@ internal sealed unsafe partial class CharacterRenderer
         DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
         RunStudioAo(depth, width, height, projection, radius);
 
+        // The colour draw's view: the maps through the interior-cut fields.
         var v = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = toSun, FogDistance = StudioColour };
         v.CutPad = _studioShadowIndex;
         v.CutVolumes = _studioAoIndex;
@@ -77,66 +167,108 @@ internal sealed unsafe partial class CharacterRenderer
         return v;
     }
 
+    /// <summary>
+    /// The sun's shadow map and its carrier colour target, made on first use.
+    /// </summary>
     void MakeStudioShadow()
     {
         if (_studioShadowDepth is not null) return;
-        _studioShadowColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, StudioShadowSize, StudioShadowSize, Use: TextureUse.ColourTarget, Name: "studio shadow colour"));
+
+        var colourDesc = new TextureDesc(InternalFormat.Rgba8, StudioShadowSize, StudioShadowSize, Use: TextureUse.ColourTarget,
+            Name: "studio shadow colour");
+        _studioShadowColour = Gpu.CreateTexture(colourDesc);
         _studioShadowDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent32F, StudioShadowSize, StudioShadowSize,
             Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio shadow"));
         _studioShadowIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioShadowDepth.View()));
     }
 
-    /// <summary>The spiral's direction <paramref name="i"/> of <see cref="StudioSkyDirections"/> (towards the sky), as the shader's studioSky makes it.</summary>
+    /// <summary>
+    /// The sky atlas and its carrier colour target, made on first use: <see cref="StudioSkyColumns"/> tiles across, as many rows as the directions
+    /// fill.
+    /// </summary>
+    void MakeStudioSky()
+    {
+        if (_studioSkyDepth is not null) return;
+
+        int w = StudioSkyTile * StudioSkyColumns;
+        int h = StudioSkyTile * ((StudioSkyDirections + StudioSkyColumns - 1) / StudioSkyColumns);
+        _studioSkyColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.ColourTarget, Name: "studio sky colour"));
+        var depthDesc = new TextureDesc(InternalFormat.DepthComponent32F, w, h, Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio sky");
+        _studioSkyDepth = Gpu.CreateTexture(depthDesc);
+        _studioSkyIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioSkyDepth.View()));
+    }
+
+    /// <summary>
+    /// The spiral's direction <paramref name="i"/> of <see cref="StudioSkyDirections"/> (towards the sky), as the shader's studioSky makes it.
+    /// </summary>
     static Vector3 StudioSkyDirection(int i)
     {
-        float y = 1 - (i + 0.5f) * 2 / StudioSkyDirections, r = MathF.Sqrt(MathF.Max(1 - y * y, 0)), phi = i * 2.39996323f;
+        float y = 1 - (i + 0.5f) * 2 / StudioSkyDirections;
+        float r = MathF.Sqrt(MathF.Max(1 - y * y, 0));
+        float phi = i * 2.39996323f;
         return new Vector3(MathF.Cos(phi) * r, y, MathF.Sin(phi) * r);
     }
 
-    /// <summary>The character's depth from each spiral direction into its tile of the sky atlas: orthographic boxes round its sphere, their matrices as
-    /// the shader's studioSky rebuilds them (look-at from the direction twice the radius out, up +Y or +Z near the poles, depth 0 to 4 radii).</summary>
+    /// <summary>
+    /// The character's depth from each spiral direction into its tile of the sky atlas: orthographic boxes round its sphere, their matrices as the
+    /// shader's studioSky rebuilds them (look-at from the direction twice the radius out, up +Y or +Z near the poles, depth 0 to 4 radii).
+    /// </summary>
     void DrawStudioSky(int index, Vector3 centre, float radius, Vector3 lodEye)
     {
-        if (_studioSkyDepth is null)
-        {
-            int w = StudioSkyTile * StudioSkyColumns, h = StudioSkyTile * ((StudioSkyDirections + StudioSkyColumns - 1) / StudioSkyColumns);
-            _studioSkyColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.ColourTarget, Name: "studio sky colour"));
-            _studioSkyDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent32F, w, h, Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio sky"));
-            _studioSkyIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioSkyDepth.View()));
-        }
+        MakeStudioSky();
+
         var cmd = Gpu.BeginNative("studio sky");
-        var target = PassTargets.Of(_studioSkyColour, _studioSkyDepth);
+        var target = PassTargets.Of(_studioSkyColour!, _studioSkyDepth!);
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         cmd.Clear(true, default, true, 1, new PixelRect(0, 0, (uint)target.Width, (uint)target.Height));
+
         int was = _portraitLive;
         _portraitLive = index;
         try
         {
-            for (int i = 0; i < StudioSkyDirections; i++)
-            {
-                var d = StudioSkyDirection(i);
-                var up = MathF.Abs(d.Y) > 0.95f ? Vector3.UnitZ : Vector3.UnitY;
-                var matrix = Matrix4x4.CreateTranslation(-centre) * Matrix4x4.CreateLookAt(d * (radius * 2), Vector3.Zero, up)
-                    * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
-                int x = i % StudioSkyColumns * StudioSkyTile, y = i / StudioSkyColumns * StudioSkyTile;
-                var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
-                Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
-                DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
-                _studioCasters?.Invoke(matrix, centre + d * (radius * 2));
-            }
+            for (int i = 0; i < StudioSkyDirections; i++) DrawStudioSkyTile(i, centre, radius, lodEye);
         }
-        finally { _portraitLive = was; }
+        finally
+        {
+            _portraitLive = was;
+        }
+
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// The character's depth from spiral direction <paramref name="i"/> into its tile, inside the sky pass.
+    /// </summary>
+    void DrawStudioSkyTile(int i, Vector3 centre, float radius, Vector3 lodEye)
+    {
+        var d = StudioSkyDirection(i);
+        var up = MathF.Abs(d.Y) > 0.95f ? Vector3.UnitZ : Vector3.UnitY;
+        var matrix = Matrix4x4.CreateTranslation(-centre) * Matrix4x4.CreateLookAt(d * (radius * 2), Vector3.Zero, up)
+            * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
+
+        int x = i % StudioSkyColumns * StudioSkyTile;
+        int y = i / StudioSkyColumns * StudioSkyTile;
+        var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
+        Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
+
+        DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
+        _studioCasters?.Invoke(matrix, centre + d * (radius * 2));
+    }
+
+    /// <summary>
+    /// The nearest-texel, clamped sampler the studio reads its maps with.
+    /// </summary>
     GpuSampler StudioNearest() => Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
-    /// <summary><paramref name="index"/>'s character's depth (cut-outs included) into <paramref name="depth"/>, cleared, its colour target only a carrier.</summary>
-    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, Vector3 lodEye, GpuTexture colour, GpuTexture depth, int width, int height, string label)
+    /// <summary>
+    /// <paramref name="index"/>'s character's depth (cut-outs included) into <paramref name="depth"/>, cleared, its colour target only a carrier.
+    /// </summary>
+    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, Vector3 lodEye, GpuTexture colour, GpuTexture depth, int width,
+        int height, string label)
     {
         var cmd = Gpu.BeginNative(label);
         var target = PassTargets.Of(colour, depth);
@@ -145,35 +277,58 @@ internal sealed unsafe partial class CharacterRenderer
         var rect = new PixelRect(0, 0, (uint)width, (uint)height);
         cmd.Clear(true, default, true, 1, rect);
         Gpu.SetPassViewport(new PixelViewport(0, 0, width, height, 0, 1), rect);
+
         int was = _portraitLive;
         _portraitLive = index;
-        try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []); }
-        finally { _portraitLive = was; }
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []);
+        }
+        finally
+        {
+            _portraitLive = was;
+        }
+
         _studioCasters?.Invoke(viewProjection, eye);
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// The screen occlusion from <paramref name="depth"/> into <see cref="_studioAo"/> (remade when the preview's size changes).
+    /// </summary>
     void RunStudioAo(GpuTexture depth, int width, int height, Matrix4x4 projection, float radius)
     {
         if (_studioAo is null || _studioAo.Desc.Width != width || _studioAo.Desc.Height != height)
         {
-            if (_studioAo is not null) { Gpu.Bindless.Free(BindlessKind.Texture2D, _studioAoIndex); _studioAo.Dispose(); }
-            _studioAo = Gpu.CreateTexture(new TextureDesc(InternalFormat.R16F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "studio occlusion"));
+            if (_studioAo is not null)
+            {
+                Gpu.Bindless.Free(BindlessKind.Texture2D, _studioAoIndex);
+                _studioAo.Dispose();
+            }
+
+            var desc = new TextureDesc(InternalFormat.R16F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "studio occlusion");
+            _studioAo = Gpu.CreateTexture(desc);
             _studioAoIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioAo.View()));
         }
+
         _studioAoPass ??= new StudioAoPass(Gpu);
+
         // The occlusion's reach: a tenth of the character's sphere (a head's span for a portrait's head, an arm's for the whole body).
         _studioAoPass.Run(new SampledTexture(StudioNearest(), depth.View()), _studioAo, width, height, projection, radius * 0.12f);
     }
 
+    /// <summary>
+    /// Frees the studio's maps, their bindless slots, the occlusion pass and the imprints.
+    /// </summary>
     void DisposeStudio()
     {
         DisposeImprints();
         if (_studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioShadowIndex);
         if (_studioAo is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioAoIndex);
         if (_studioSkyDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioSkyIndex);
+
         _studioSkyColour?.Dispose();
         _studioSkyDepth?.Dispose();
         (_studioSkyColour, _studioSkyDepth) = (null, null);
@@ -192,6 +347,9 @@ internal sealed unsafe partial class CharacterRenderer
 /// </summary>
 internal static class StudioShaders
 {
+    /// <summary>
+    /// The functions <c>studioShadow</c>, <c>studioSky</c>, <c>studioAmbient</c> and <c>studioOcclusion</c>, spliced into the shaders that read them.
+    /// </summary>
     public const string Functions = """
         // The studio (CharacterRenderer.Studio, Meitou previews): its sun's shadow map and occlusion through the view block's interior-cut fields, which the
         // characters never use: cutPad the map's bindless index, cutPlanes[0..3] its matrix relative to cutRanges[0].xyz (w: a texel in world units),
@@ -276,11 +434,14 @@ internal static class StudioShaders
 }
 
 /// <summary>
-/// The studio's occlusion (<see cref="CharacterRenderer"/>'s studio): horizon-based, from the camera's depth alone, eight fixed directions of six steps out to
-/// the reach; deterministic (the previews are supersampled, so a fixed pattern averages out). 1 open, 0 closed; the background stays 1.
+/// The studio's occlusion (<see cref="CharacterRenderer"/>'s studio): horizon-based, from the camera's depth alone, eight fixed directions of six steps
+/// out to the reach; deterministic (the previews are supersampled, so a fixed pattern averages out). 1 open, 0 closed; the background stays 1.
 /// </summary>
 internal sealed class StudioAoPass : IDisposable
 {
+    /// <summary>
+    /// The occlusion's fragment shader (GLSL).
+    /// </summary>
     const string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -339,12 +500,44 @@ internal sealed class StudioAoPass : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The GPU the pass draws on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The occlusion program (the post-process vertex shader and <see cref="Fragment"/>).
+    /// </summary>
     readonly LegacyProgram _program;
+
+    /// <summary>
+    /// The camera depth's sampler slot.
+    /// </summary>
     readonly SamplerSlot _depth;
-    readonly UniformHandle _projection, _size, _reach;
+
+    /// <summary>
+    /// The projection uniform: tan(half fov) × aspect, tan(half fov), near, far.
+    /// </summary>
+    readonly UniformHandle _projection;
+
+    /// <summary>
+    /// The target's size uniform in pixels.
+    /// </summary>
+    readonly UniformHandle _size;
+
+    /// <summary>
+    /// The occlusion's reach uniform in world units.
+    /// </summary>
+    readonly UniformHandle _reach;
+
+    /// <summary>
+    /// The pipeline, made on the first run.
+    /// </summary>
     GpuPipeline? _pipeline;
 
+    /// <summary>
+    /// The pass on <paramref name="gpu"/>, its program compiled.
+    /// </summary>
     public StudioAoPass(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -353,13 +546,21 @@ internal sealed class StudioAoPass : IDisposable
         (_projection, _size, _reach) = (_program.Uniform("uProjection"), _program.Uniform("uSize"), _program.Uniform("uReach"));
     }
 
+    /// <summary>
+    /// The occlusion of <paramref name="depthTexture"/> (seen through <paramref name="perspective"/>) into <paramref name="into"/>, out to
+    /// <paramref name="reachWorld"/> world units.
+    /// </summary>
     public void Run(SampledTexture depthTexture, GpuTexture into, int width, int height, Matrix4x4 perspective, float reachWorld)
     {
         var targets = PassTargets.Of(into, null);
         var state = DrawState.For(targets.Formats, false);
-        _pipeline ??= _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, targets.Formats, _program.Name));
+        _pipeline ??= _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, targets.Formats,
+            _program.Name));
+
         // System.Numerics' perspective: M11 = 1 / (tan × aspect), M22 = 1 / tan, depth 0 at the near plane and 1 at the far one.
-        float near = perspective.M43 / perspective.M33, far = perspective.M43 / (perspective.M33 + 1);
+        float near = perspective.M43 / perspective.M33;
+        float far = perspective.M43 / (perspective.M33 + 1);
+
         var cmd = _gpu.BeginNative("studio occlusion");
         cmd.Order();
         cmd.BeginRendering(new RenderingDesc(targets.Colour, default, targets.Width, targets.Height));
@@ -380,5 +581,8 @@ internal sealed class StudioAoPass : IDisposable
         _gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Frees the program.
+    /// </summary>
     public void Dispose() => _program.Dispose();
 }

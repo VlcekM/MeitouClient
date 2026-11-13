@@ -15,12 +15,17 @@ namespace Meitou.Game.Rendering.Objects;
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation);
 /// <paramref name="Stretch"/> lengthens it along its own z (a bolt in flight).
 /// </summary>
-public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null, long Id = 0)
+public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null,
+    long Id = 0)
 {
+    /// <summary>
+    /// The last identity <see cref="NewId"/> handed out.
+    /// </summary>
     static long s_ids;
 
     /// <summary>
-    /// A new identity for a piece that moves (<see cref="Id"/>): the renderer finds its last frame's place by it and writes its motion for the temporal upscalers. 0 is no identity (a piece that does not move on its own).
+    /// A new identity for a piece that moves (<see cref="Id"/>): the renderer finds its last frame's place by it and writes its motion for the
+    /// temporal upscalers. 0 is no identity (a piece that does not move on its own).
     /// </summary>
     public static long NewId() => Interlocked.Increment(ref s_ids);
 
@@ -672,9 +677,9 @@ public sealed unsafe class DebrisRenderer : IDisposable
     {
         var view = new ViewConstants
         {
-            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too: the scene's rotation-only one when the caller has it
-            // (translation(eye) × the world view-projection cancels the eye's coordinates in float, a rounding that changes as the jitter does: a bolt stuck in a
-            // character visibly shook against it close up; docs/character-renderer.md "Precision").
+            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too: the scene's rotation-only one
+            // when the caller has it (translation(eye) × the world view-projection cancels the eye's coordinates in float, a rounding that changes
+            // as the jitter does: a bolt stuck in a character visibly shook against it close up; docs/character-renderer.md "Precision").
             ViewProjection = relative ?? Matrix4x4.CreateTranslation(eye) * sliceViewProjection,
             Eye = eye,
             LightDir = light.SunDirection,
@@ -788,14 +793,13 @@ public sealed unsafe class DebrisRenderer : IDisposable
     readonly List<MotionDraw> _motionDraws = [];
 
     /// <summary>
-    /// Set each frame by the world frame when a temporal upscaler runs: <see cref="Draw"/> notes the moving pieces for <see cref="DrawMotion"/>
-    /// and keeps their places for the next frame.
+    /// Set each frame by the world frame when a temporal upscaler runs: <see cref="Draw"/> notes the moving pieces for <see cref="DrawMotion"/> and
+    /// keeps their places for the next frame.
     /// </summary>
     public bool Motion { get; private set; }
 
     /// <summary>
-    /// Starts a frame: <paramref name="on"/> when the upscaler needs motion vectors. The pieces drawn this frame become the "last frame" of the
-    /// next.
+    /// Starts a frame: <paramref name="on"/> when the upscaler needs motion vectors. The pieces drawn this frame become the "last frame" of the next.
     /// </summary>
     public void BeginMotion(bool on)
     {
@@ -814,6 +818,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     internal void DrawMotion(MotionTargets targets, MotionCamera camera)
     {
         if (!Motion || _motionDraws.Count == 0) return;
+
         var m = _motionMeshes ??= new MotionMeshes(_gpu, _frame, GpuVertex.ObjectSize);
         m.Begin(targets, camera);
         foreach (var d in _motionDraws)
@@ -841,6 +846,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         var placed = new Placed(piece.Position, piece.Rotation, piece.Stretch);
         _placedNow[piece.Id] = placed;
         if (!_placedBefore.TryGetValue(piece.Id, out var before) || before == placed) return;
+
         var scale = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * before.Stretch);
         var previous = scale * Matrix4x4.CreateFromQuaternion(before.Rotation) * Matrix4x4.CreateTranslation(before.Position - eye);
         _motionDraws.Add(new MotionDraw(mesh, model, previous));

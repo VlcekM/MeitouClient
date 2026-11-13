@@ -3,21 +3,26 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// Ground-truth ambient occlusion (the <c>gtao</c> switch; docs/render-post.md "GTAO"), the alternative to <see cref="PostProcessShaders.Ssao"/>: a horizon search
-/// per view-aligned slice with the closed-form visibility integral (Jimenez et al. 2016). Port of KenshiNative's <c>fx_gtao_ps</c>, adapted to a depth-only forward scene.
-/// <see cref="Gather"/> writes what the SSAO writes (R the visibility, G the view depth), so <see cref="PostProcessShaders.SsaoBlur"/> filters it unchanged;
-/// <see cref="Apply"/> then upsamples it by depth and multiplies the scene with the coloured multi-bounce term.
+/// Ground-truth ambient occlusion (the <c>gtao</c> switch; docs/render-post.md "GTAO"), the alternative to <see cref="PostProcessShaders.Ssao"/>: a
+/// horizon search per view-aligned slice with the closed-form visibility integral (Jimenez et al. 2016). Port of KenshiNative's <c>fx_gtao_ps</c>,
+/// adapted to a depth-only forward scene. <see cref="Gather"/> writes what the SSAO writes (R the visibility, G the view depth), so
+/// <see cref="PostProcessShaders.SsaoBlur"/> filters it unchanged; <see cref="Apply"/> then upsamples it by depth and multiplies the scene with the
+/// coloured multi-bounce term.
 /// </summary>
 static class GtaoShaders
 {
-    /// <summary>The surface target as the gather and the apply read it (<c>giAlbedoOut</c>): bit 8 of w says a lit fragment wrote it.</summary>
+    /// <summary>
+    /// The surface target as the gather and the apply read it (<c>giAlbedoOut</c>): bit 8 of w says a lit fragment wrote it.
+    /// </summary>
     const string SurfaceSampler = """
 
         uniform usampler2D uSurface;   // the GI resolve's surface target (AtmosphereShaders' giAlbedoOut)
 
         """;
 
-    /// <summary>The gather's world: every vector is an offset from the eye along the camera's world axes, as the SSAO's air visibility rebuilds it.</summary>
+    /// <summary>
+    /// The gather's world: every vector is an offset from the eye along the camera's world axes, as the SSAO's air visibility rebuilds it.
+    /// </summary>
     const string GatherDeclarations = """
 
         in vec2 vUv;
@@ -37,7 +42,9 @@ static class GtaoShaders
 
         """;
 
-    /// <summary>The same rules as <see cref="PostProcessShaders.Ssao"/>'s, kept apart so the two programs change independently.</summary>
+    /// <summary>
+    /// The same rules as <see cref="PostProcessShaders.Ssao"/>'s, kept apart so the two programs change independently.
+    /// </summary>
     const string Visibility = """
 
         // The share of a surface's occlusion the water in front of it leaves (docs/render-water.md "Edges").
@@ -60,6 +67,9 @@ static class GtaoShaders
 
         """;
 
+    /// <summary>
+    /// The gather's geometry: the noise, the depth and offset lookups, the depth normal, one tap's horizon update and a slice's visibility integral.
+    /// </summary>
     const string Geometry = """
 
         const float GTAO_PI = 3.14159265, GTAO_HALF_PI = 1.57079633;
@@ -142,8 +152,9 @@ static class GtaoShaders
         """;
 
     /// <summary>
-    /// The gather's depth: each pixel's view depth, 0 on the sky, negative where the scene's alpha marks a character. One lookup a tap gives the gather the depth and the mask (the mask
-    /// was a second, filtered lookup of a half-size copy: 36 a pixel at 3 x 6), and the depth needs no conversion there.
+    /// The gather's depth: each pixel's view depth, 0 on the sky, negative where the scene's alpha marks a character. One lookup a tap gives the
+    /// gather the depth and the mask (the mask was a second, filtered lookup of a half-size copy: 36 a pixel at 3 x 6), and the depth needs no
+    /// conversion there.
     /// </summary>
     public static readonly string Pack = "#version 330 core\n" + """
         in vec2 vUv;
@@ -163,9 +174,10 @@ static class GtaoShaders
         """;
 
     /// <summary>
-    /// A coarser level of <see cref="Pack"/>'s depth, from the level before it (XeGTAO's depth filter): the four texels' depths averaged by how near each is to the farthest
-    /// of them, full weight within the part of the gather's radius that counts in full and none a radius nearer, so a level holds the surface behind and a thin near thing
-    /// does not smear over it. The sky when one of the four is the sky; a character's when two or more are.
+    /// A coarser level of <see cref="Pack"/>'s depth, from the level before it (XeGTAO's depth filter): the four texels' depths averaged by how near
+    /// each is to the farthest of them, full weight within the part of the gather's radius that counts in full and none a radius nearer, so a level
+    /// holds the surface behind and a thin near thing does not smear over it. The sky when one of the four is the sky; a character's when two or more
+    /// are.
     /// </summary>
     public const string DepthLevel = """
         #version 330 core
@@ -193,6 +205,10 @@ static class GtaoShaders
         }
         """;
 
+    /// <summary>
+    /// The gather's entry point: the slices' visibilities over a pixel's radius, faded with distance and scaled by the air and water in front of it;
+    /// writes R the visibility, G the view depth.
+    /// </summary>
     const string GatherMain = """
 
         void main()
@@ -226,14 +242,18 @@ static class GtaoShaders
         }
         """;
 
-    /// <summary>The normal from the depth alone.</summary>
+    /// <summary>
+    /// The normal from the depth alone.
+    /// </summary>
     const string NormalFromDepth = """
 
         vec3 normalAt(ivec2 c, vec3 p, float z, vec3 view) { return depthNormal(c, p, z, view); }
 
         """;
 
-    /// <summary>The lit fragment's shading normal where it wrote one and it faces the eye (a normal map can tilt it past the silhouette); else the depth's.</summary>
+    /// <summary>
+    /// The lit fragment's shading normal where it wrote one and it faces the eye (a normal map can tilt it past the silhouette); else the depth's.
+    /// </summary>
     const string NormalFromSurface = SurfaceSampler + """
 
         vec3 normalAt(ivec2 c, vec3 p, float z, vec3 view)
@@ -249,10 +269,15 @@ static class GtaoShaders
 
         """;
 
-    /// <summary>The horizon search. <paramref name="surface"/>: the program reads the surface target for its normals.</summary>
-    public static string Gather(bool surface) => "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + GatherDeclarations
-        + DepthConvention.Glsl + Visibility + Geometry + (surface ? NormalFromSurface : NormalFromDepth) + GatherMain;
+    /// <summary>
+    /// The horizon search. <paramref name="surface"/>: the program reads the surface target for its normals.
+    /// </summary>
+    public static string Gather(bool surface) => "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions
+        + GatherDeclarations + DepthConvention.Glsl + Visibility + Geometry + (surface ? NormalFromSurface : NormalFromDepth) + GatherMain;
 
+    /// <summary>
+    /// The apply's inputs: the blurred occlusion, the scene depth, the two sizes and the contrast curve.
+    /// </summary>
     const string ApplyDeclarations = """
         #version 330 core
         in vec2 vUv;
@@ -266,6 +291,9 @@ static class GtaoShaders
 
         """;
 
+    /// <summary>
+    /// The apply's entry point: the depth-weighted upsample of the occlusion, its contrast curve and the multi-bounce colour.
+    /// </summary>
     const string ApplyMain = """
 
         // The occlusion's four nearest texels, weighted by how near each one's depth is to this pixel's; none near: open, never the wrong surface's occlusion.
@@ -307,13 +335,18 @@ static class GtaoShaders
         }
         """;
 
+    /// <summary>
+    /// The constant albedo (<c>uCurve.z</c>) everywhere, for a program without the surface target.
+    /// </summary>
     const string AlbedoConstant = """
 
         vec3 albedoAt(ivec2 px) { return vec3(uCurve.z); }
 
         """;
 
-    /// <summary>The albedo the lit fragment wrote (its square root in eight bits); the constant on what wrote none (foliage, characters, water).</summary>
+    /// <summary>
+    /// The albedo the lit fragment wrote (its square root in eight bits); the constant on what wrote none (foliage, characters, water).
+    /// </summary>
     const string AlbedoFromSurface = SurfaceSampler + """
 
         vec3 albedoAt(ivec2 px)
@@ -326,6 +359,9 @@ static class GtaoShaders
 
         """;
 
-    /// <summary>The finished occlusion as a colour the scene is multiplied by. <paramref name="surface"/>: the program reads the surface target for its albedo.</summary>
+    /// <summary>
+    /// The finished occlusion as a colour the scene is multiplied by. <paramref name="surface"/>: the program reads the surface target for its
+    /// albedo.
+    /// </summary>
     public static string Apply(bool surface) => ApplyDeclarations + DepthConvention.Glsl + (surface ? AlbedoFromSurface : AlbedoConstant) + ApplyMain;
 }

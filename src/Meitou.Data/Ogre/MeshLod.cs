@@ -76,7 +76,8 @@ public static class MeshLod
 
     /// <summary>
     /// A lens's factor on the LOD value: 1 at the game's lens and wider, under 1 through a longer one (the ratio of the half angles' tangents), so
-    /// what a long lens draws as large as the game's lens would from nearer takes that nearer level. Engine choice: the game's LOD knows distance alone.
+    /// what a long lens draws as large as the game's lens would from nearer takes that nearer level. Engine choice: the game's LOD knows distance
+    /// alone.
     /// </summary>
     public static float LensFactor(float fieldOfView) => MathF.Min(1, MathF.Tan(fieldOfView * 0.5f) / MathF.Tan(GameLens * 0.5f));
 

@@ -51,7 +51,10 @@ sealed partial class GameHost
             keys.Add(SettingsMenu.SwitchKeyPrefix + WorldFrame.BloomSwitch);
         }
         foreach (var (option, optionKeys) in OptionKeys)
+        {
             if (Environment.GetCommandLineArgs().Contains(option)) keys.UnionWith(optionKeys);
+        }
+
         return keys;
     }
 
@@ -69,7 +72,8 @@ sealed partial class GameHost
     /// A key or button bound to Orbit (middle button or Ctrl by default) is down.
     /// </summary>
     internal bool OrbitHeld() => PhotoLook
-        ? Session.Input.IsHeld(Binding.Of(MouseButton.Right)) || Session.Input.IsHeld(Binding.Of(MouseButton.Middle))   // photo mode's own: Orbit's key is its slow modifier
+        // Photo mode's own: Orbit's key is its slow modifier.
+        ? Session.Input.IsHeld(Binding.Of(MouseButton.Right)) || Session.Input.IsHeld(Binding.Of(MouseButton.Middle))
         : Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>

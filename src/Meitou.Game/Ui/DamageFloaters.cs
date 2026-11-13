@@ -38,7 +38,8 @@ sealed class DamageFloaters(PlayerInterface player)
         /// </summary>
         public Vector3 Last { get; set; }
         /// <summary>
-        /// The units risen so far: game time, so it stands still while the game is paused and runs faster at the fast speeds (<c>FUN_1406ea9f0</c> adds the game's frame time).
+        /// The units risen so far: game time, so it stands still while the game is paused and runs faster at the fast speeds (<c>FUN_1406ea9f0</c>
+        /// adds the game's frame time).
         /// </summary>
         public float Rise { get; set; }
     }
@@ -64,6 +65,7 @@ sealed class DamageFloaters(PlayerInterface player)
         _lastDraw = now;
         float risen = seconds * (float)player.Session.Simulation.Speed * FloaterRiseSpeed;
         foreach (var l in Floaters) l.Rise += risen;
+
         while (queue.TryDequeue(out var f))
         {
             if (player.Floaters == FloaterMode.Off && f.Kind is FloaterKind.Damage or FloaterKind.Building) continue;

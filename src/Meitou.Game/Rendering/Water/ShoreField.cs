@@ -46,8 +46,8 @@ internal sealed class ShoreField : IDisposable
     sealed record Baked(float X0, float Z0, float X1, float Z1, bool Uniform, Vector2 Value, float[]? Texels, double Ms);
 
     /// <summary>
-    /// The walls and posts standing in the water round a point (centre, radius; X/Z segments where the buildings' collision cuts the water's height), which the shore waves do
-    /// not pass (<see cref="ShoreTravel"/>). Called on the bake's worker. Setting it bakes the field again.
+    /// The walls and posts standing in the water round a point (centre, radius; X/Z segments where the buildings' collision cuts the water's
+    /// height), which the shore waves do not pass (<see cref="ShoreTravel"/>). Called on the bake's worker. Setting it bakes the field again.
     /// </summary>
     public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls
     {
@@ -59,6 +59,9 @@ internal sealed class ShoreField : IDisposable
         }
     }
 
+    /// <summary>
+    /// The walls the game set (<see cref="Walls"/>).
+    /// </summary>
     Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
 
     /// <summary>

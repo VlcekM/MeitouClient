@@ -2,10 +2,11 @@ namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The Meitou water's foam pattern (<see cref="WaterRenderer"/>), tileable, baked at load. R: a lace of rims from two octaves of cellular noise
-/// (F2 − F1 small), for the caustics on the floor only (a single-scale network: as foam it read as a honeycomb). G: a smooth value noise for patches.
-/// A: the froth itself, organic and not cellular: five octaves of domain-warped value noise less round holes of widely varying size (four scales, most
-/// small, few large, about half the cells empty), so a rising threshold leaves a sheet with holes, then irregular clusters, then dots. B: bubble walls
-/// up close, rings of varying size at three scales. The shader lets more of the froth through the more foam there is, in clumps where G is high.
+/// (F2 − F1 small), for the caustics on the floor only (a single-scale network: as foam it read as a honeycomb). G: a smooth value noise for
+/// patches. A: the froth itself, organic and not cellular: five octaves of domain-warped value noise less round holes of widely varying size (four
+/// scales, most small, few large, about half the cells empty), so a rising threshold leaves a sheet with holes, then irregular clusters, then dots.
+/// B: bubble walls up close, rings of varying size at three scales. The shader lets more of the froth through the more foam there is, in clumps
+/// where G is high.
 /// </summary>
 public static class WaterFoam
 {
@@ -32,7 +33,7 @@ public static class WaterFoam
     }
 
     /// <summary>
-    /// Writes pixel (<paramref name="x"/>, <paramref name="y"/>): the lace, the patches and the bubbles (A 255).
+    /// Writes pixel (<paramref name="x"/>, <paramref name="y"/>): the lace, the patches, the bubbles and the froth.
     /// </summary>
     static void BakePixel(byte[] pixels, int x, int y)
     {
@@ -88,7 +89,8 @@ public static class WaterFoam
     }
 
     /// <summary>
-    /// Value noise at <paramref name="octaves"/> octaves from <paramref name="cells"/>² cells, each twice as fine and 0.55 times as strong, normalised to 0..1.
+    /// Value noise at <paramref name="octaves"/> octaves from <paramref name="cells"/>² cells, each twice as fine and 0.55 times as strong,
+    /// normalised to 0..1.
     /// </summary>
     static float Fbm(float u, float v, int cells, int octaves, uint seed)
     {
@@ -99,12 +101,14 @@ public static class WaterFoam
             total += weight;
             weight *= 0.55f;
         }
+
         return sum / total;
     }
 
     /// <summary>
-    /// Round spots at (u, v) from <paramref name="cells"/>² cells, wrapping: in a share <paramref name="keep"/> of the cells one spot at a random place, its radius
-    /// between <paramref name="min"/> and <paramref name="max"/> cells (squared, so most are small). 1 inside a disc with a soft edge, or with <paramref name="ring"/> its wall.
+    /// Round spots at (u, v) from <paramref name="cells"/>² cells, wrapping: in a share <paramref name="keep"/> of the cells one spot at a random
+    /// place, its radius between <paramref name="min"/> and <paramref name="max"/> cells (squared, so most are small). 1 inside a disc with a soft
+    /// edge, or with <paramref name="ring"/> its wall.
     /// </summary>
     static float Discs(float u, float v, int cells, uint seed, float min, float max, float keep, bool ring = false)
     {
@@ -118,12 +122,16 @@ public static class WaterFoam
                 uint wx = (uint)(((gx % cells) + cells) % cells), wy = (uint)(((gy % cells) + cells) % cells);
                 uint h = Hash(wx, wy, seed), h2 = Hash(wx, wy, seed + 31);
                 if ((h2 >> 16) / 65535f >= keep) continue;
+
                 float size = (h2 & 0xFFFF) / 65535f;
                 float r = min + (max - min) * size * size;
                 float d = MathF.Sqrt(MathF.Pow(gx + (h & 0xFFFF) / 65535f - px, 2) + MathF.Pow(gy + (h >> 16) / 65535f - py, 2));
-                float value = ring ? MathF.Exp(-MathF.Pow((d - r) / (0.08f + 0.15f * r), 2)) : Math.Clamp((r - d) / (0.25f * r + 0.04f) + 0.5f, 0, 1);
+                float value = ring
+                    ? MathF.Exp(-MathF.Pow((d - r) / (0.08f + 0.15f * r), 2))
+                    : Math.Clamp((r - d) / (0.25f * r + 0.04f) + 0.5f, 0, 1);
                 result = MathF.Max(result, value);
             }
+
         return result;
     }
 

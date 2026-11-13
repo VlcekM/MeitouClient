@@ -349,6 +349,11 @@ sealed partial class GameHost(
     internal readonly Stopwatch RealTime = Stopwatch.StartNew();
 
     /// <summary>
+    /// The seconds <see cref="EffectSeconds"/> has held back (paused or slowed), and the clock it last read.
+    /// </summary>
+    double _effectHeld, _effectAt;
+
+    /// <summary>
     /// The clock of the ambient motion drawn outside the simulation (the foliage's sway, the birds): the frames' clock (real time without one) at the
     /// simulation's rate, still while that is paused and faster or slower with its speed, as the water and the particles are (the frame's game time).
     /// The title screen feeds the sway its own clock.
@@ -364,11 +369,6 @@ sealed partial class GameHost(
             return now - _effectHeld;
         }
     }
-
-    /// <summary>
-    /// The seconds <see cref="EffectSeconds"/> has held back (paused or slowed), and the clock it last read.
-    /// </summary>
-    double _effectHeld, _effectAt;
 
     /// <summary>
     /// The next frame is saved as a screenshot (the Screenshot action).
@@ -866,8 +866,10 @@ sealed partial class GameHost(
         Player.Frontend.ConfigureFrontend(Scene.Database,
             () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, Install.SaveDirectory, localSaves), credits);
 
-        // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges (docs/formats/fcs-mod.md): logged, not a problem.
-        Player.TitleMenu.DataProblems = (Scene.Database?.Issues.Count(i => i.Kind is not (Data.GameDataIssueKind.RecordAlreadyDefined or Data.GameDataIssueKind.ModifiedRecordNotFound)) ?? 0) + (Scene.Objects?.Levels.Problems().Count ?? 0);
+        // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges
+        // (docs/formats/fcs-mod.md): logged, not a problem.
+        int dataIssues = Scene.Database?.Issues.Count(IsDataProblem) ?? 0;
+        Player.TitleMenu.DataProblems = dataIssues + (Scene.Objects?.Levels.Problems().Count ?? 0);
         if (Scene.Database is { } db)
         {
             Player.TitleMenu.Mods = ModReport.Build(Install, db, Modding.Mods?.Refused);
@@ -876,6 +878,12 @@ sealed partial class GameHost(
 
         if (OpensOnTitle(interactive)) Player.Frontend.ShowTitle();
     }
+
+    /// <summary>
+    /// Whether a data issue counts as a problem on the title screen: any but a record defined again or one changed with nothing to change.
+    /// </summary>
+    static bool IsDataProblem(Data.GameDataIssue i) =>
+        i.Kind is not (Data.GameDataIssueKind.RecordAlreadyDefined or Data.GameDataIssueKind.ModifiedRecordNotFound);
 
     /// <summary>
     /// Logs the mod list the game data was loaded from: enabled (the names the list file gives), loaded (those whose .mod file was found), problems.
@@ -1249,7 +1257,8 @@ sealed partial class GameHost(
         Camera.Pitch = s.Pitch;
         Camera.Distance = s.Distance;
         // The free camera is placed by its eye, in double precision (after the pose, which clears it).
-        if (s.IsFree) Camera.PreciseEye = (s.Eye.X + (double)s.EyeResidual.X, s.Eye.Y + (double)s.EyeResidual.Y, s.Eye.Z + (double)s.EyeResidual.Z);
+        if (s.IsFree)
+            Camera.PreciseEye = (s.Eye.X + (double)s.EyeResidual.X, s.Eye.Y + (double)s.EyeResidual.Y, s.Eye.Z + (double)s.EyeResidual.Z);
 
         // A cinema key's lens goes with the camera it held; the roll is photo mode's, which sets it again after this.
         (Camera.FocusDistance, Camera.Aperture, Camera.Roll) = (null, null, 0);
@@ -1476,6 +1485,11 @@ sealed partial class GameHost(
     #region Frame
 
     /// <summary>
+    /// The frame's aspect ratio, kept by <see cref="UpdateFrameEffects"/> for the splashes' frustum.
+    /// </summary>
+    float _frameAspect = 16f / 9;
+
+    /// <summary>
     /// Draws one frame of the world: the title's, the character editor's scene, or the world with its clocks and per-frame effects.
     /// </summary>
     internal void DrawWorld(int width, int height)
@@ -1543,8 +1557,6 @@ sealed partial class GameHost(
     /// The per-frame effects before the draw, each lapped on the profiler: blood marks, the mods' hits, birds, then the weather source and the
     /// interior view.
     /// </summary>
-    float _frameAspect = 16f / 9;
-
     void UpdateFrameEffects(float aspect)
     {
         _frameAspect = aspect;
@@ -1581,7 +1593,8 @@ sealed partial class GameHost(
         if (TickAhead) Session.BeginTickAhead();
         try
         {
-            WorldFrame.Draw(Gpu, Scene, Camera, Render, width, height, PhotoHour ?? PresentationHour ?? hour, gameTime, WorldOptions.FogDistance, weatherHour: hour);
+            WorldFrame.Draw(
+                Gpu, Scene, Camera, Render, width, height, PhotoHour ?? PresentationHour ?? hour, gameTime, WorldOptions.FogDistance, weatherHour: hour);
         }
         finally
         {

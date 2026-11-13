@@ -51,6 +51,7 @@ public sealed partial class MedicalState
     public bool BeingEaten(float rate, float dt, in MedicalContext ctx, bool limbLoss, List<MedicalEvent>? events = null, bool vampiric = false)
     {
         EatenCountdown = 7;
+
         // Every bite sets the KO timer to -1 before anything else (FUN_140650370, Verified; robots included): the next medical update finds it
         // spent and the character wakes unless a vital part, the blood or a hunger knock-out holds it down.
         KoTimer = -1;

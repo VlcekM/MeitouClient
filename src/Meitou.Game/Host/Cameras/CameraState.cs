@@ -34,8 +34,9 @@ public readonly record struct CameraState(
         var forward = Vector3.Lerp(a.Forward, b.Forward, t);
         forward = forward.LengthSquared() < 1e-12f ? b.Forward : Vector3.Normalize(forward);
         // The eye between the two in double precision, with their residuals: in float the blend stepped with the float's grid.
-        double x = Between(a.Eye.X, a.EyeResidual.X, b.Eye.X, b.EyeResidual.X, t), y = Between(a.Eye.Y, a.EyeResidual.Y, b.Eye.Y, b.EyeResidual.Y, t),
-            z = Between(a.Eye.Z, a.EyeResidual.Z, b.Eye.Z, b.EyeResidual.Z, t);
+        double x = Between(a.Eye.X, a.EyeResidual.X, b.Eye.X, b.EyeResidual.X, t);
+        double y = Between(a.Eye.Y, a.EyeResidual.Y, b.Eye.Y, b.EyeResidual.Y, t);
+        double z = Between(a.Eye.Z, a.EyeResidual.Z, b.Eye.Z, b.EyeResidual.Z, t);
         var eye = new Vector3((float)x, (float)y, (float)z);
         return new CameraState(
             eye, forward, Vector3.UnitY, Interp.Lerp(a.Target, b.Target, t),
@@ -45,7 +46,11 @@ public readonly record struct CameraState(
         };
     }
 
-    static double Between(float a, float aRest, float b, float bRest, float t) => (a + (double)aRest) * (1 - (double)t) + (b + (double)bRest) * t;
+    /// <summary>
+    /// The double-precision blend at <paramref name="t"/> of two coordinates, each a float and the residual it leaves out.
+    /// </summary>
+    static double Between(float a, float aRest, float b, float bRest, float t) =>
+        (a + (double)aRest) * (1 - (double)t) + (b + (double)bRest) * t;
 
     /// <summary>
     /// The eye for yaw, pitch and distance round a target (the formula in the type's summary).

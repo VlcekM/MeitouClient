@@ -79,20 +79,22 @@ sealed class FoliageRayScene(IGpuContext gpu, WorldTextureCache textures, Dictio
 
     /// <summary>
     /// Adds every laid-out instance whose bounding radius is at least <paramref name="minRadius"/> and whose bounding sphere comes within
-    /// <paramref name="range"/> of <paramref name="eye"/>, with its mesh, transform and distance. Render thread (it may register bindless entries).
+    /// <paramref name="range"/> of <paramref name="eye"/>, with its mesh, transform and distance. Instances of <paramref name="belowRadius"/> and
+    /// up are left out (the traced sun's small foliage, past what the probes hold). With <paramref name="minAngle"/> above 0 only the instances
+    /// whose radius is at least that share of their distance (their size on screen), and the list's distance is then the distance over the radius
+    /// (the largest on screen sorts first). Render thread (it may register bindless entries).
     /// </summary>
-    /// <param name="belowRadius">Instances of this radius and up are left out (the traced sun's small foliage, past what the probes hold).</param>
-    /// <param name="minAngle">Above 0: only the instances whose radius is at least this share of their distance (their size on screen), and the
-    /// list's distance is then the distance over the radius (the largest on screen sorts first).</param>
     public void Instances(Vector3 eye, float range, float minRadius, List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into,
         float belowRadius = float.PositiveInfinity, float minAngle = 0)
     {
         foreach (var zone in zones.Values)
         {
             if (!zone.Ready) continue;
+
             foreach (var g in zone.Groups)
             {
                 if (!Bounded(g) || g.MaxRadius < minRadius) continue;
+
                 var nearest = Vector3.Clamp(eye, g.BoundMin, g.BoundMax);
                 float groupDistance = Vector3.Distance(nearest, eye);
                 if (groupDistance > range || (minAngle > 0 && g.MaxRadius < minAngle * groupDistance)) continue;
@@ -105,15 +107,18 @@ sealed class FoliageRayScene(IGpuContext gpu, WorldTextureCache textures, Dictio
     /// <summary>
     /// One group's instances for <see cref="Instances"/> (<paramref name="limits"/>: its range, radius limits and minimum angle).
     /// </summary>
-    static void AddInstances(FoliageGroup g, FoliageRayMesh mesh, Vector3 eye, (float Range, float MinRadius, float BelowRadius, float MinAngle) limits,
+    static void AddInstances(FoliageGroup g, FoliageRayMesh mesh, Vector3 eye,
+        (float Range, float MinRadius, float BelowRadius, float MinAngle) limits,
         List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into)
     {
         var (range, minRadius, belowRadius, minAngle) = limits;
+
         foreach (ref readonly var r in g.Instances.AsSpan())
         {
             if (r.Sphere.W < minRadius || r.Sphere.W >= belowRadius) continue;
             float d = Vector3.Distance(new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z), eye) - r.Sphere.W;
             if (d > range) continue;
+
             if (minAngle <= 0) into.Add((mesh, r.Transform, d));
             else if (r.Sphere.W >= minAngle * d) into.Add((mesh, r.Transform, MathF.Max(d, 0) / r.Sphere.W));
         }

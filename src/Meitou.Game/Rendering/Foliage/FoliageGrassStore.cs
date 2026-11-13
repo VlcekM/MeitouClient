@@ -408,6 +408,7 @@ sealed class FoliageGrassStore
         for (int i = 0; i < blades.Length; i++)
         {
             if (floats[i] == 0) continue;
+
             var data = blades[i];
             for (int at = 1; at < floats[i]; at += FoliageGrassField.Stride)
             {
@@ -415,8 +416,10 @@ sealed class FoliageGrassStore
                 if (h < minY) minY = h;
                 if (h > maxY) maxY = h;
             }
+
             if (i < state.Patches.Count) tallest = MathF.Max(tallest, state.Patches[i].Grass.QuadMaxHeight);
         }
+
         (page.MinY, page.MaxY) = (minY, maxY + tallest);
     }
 

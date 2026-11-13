@@ -163,8 +163,8 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/>, each fragment sorted against the scene's <paramref name="sceneDepthTexture"/>
-    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> eye-relative (RenderOrigin), in
-    /// <see cref="DepthConvention"/>).
+    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> eye-relative
+    /// (RenderOrigin), in <see cref="DepthConvention"/>).
     /// </summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
         Matrix4x4 sceneViewProjection, Vector3 eye)

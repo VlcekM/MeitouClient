@@ -14,7 +14,9 @@ static class GiShaders
     /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>The direction of an octahedral position (<c>giOct</c>); the surface target stores the normal so.</summary>
+    /// <summary>
+    /// The direction of an octahedral position (<c>giOct</c>); the surface target stores the normal so.
+    /// </summary>
     internal const string OctDirection = """
         vec3 giOctDir(vec2 p)
         {
@@ -24,12 +26,16 @@ static class GiShaders
         }
         """;
 
-    /// <summary>A hit record in GLSL (<see cref="GeometryRecord"/>).</summary>
+    /// <summary>
+    /// A hit record in GLSL (<see cref="GeometryRecord"/>).
+    /// </summary>
     internal const string GeometryStruct = """
         struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; uint charDiffuse; uint charHead; uint charTint; uint pad; };
         """;
 
-    /// <summary>The vertex and index data of a hit, by device address.</summary>
+    /// <summary>
+    /// The vertex and index data of a hit, by device address.
+    /// </summary>
     internal const string HitBuffers = """
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Position { vec3 v; };
         layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer TexCoord { vec2 v; };
@@ -37,7 +43,9 @@ static class GiShaders
         uvec2 offsetBy(uvec2 a, uint bytes) { uint lo = a.x + bytes; return uvec2(lo, a.y + (lo < a.x ? 1u : 0u)); }
         """;
 
-    /// <summary>The cut-out test of a candidate hit. Needs <see cref="HitBuffers"/>, <c>geometries</c> and the bindless table.</summary>
+    /// <summary>
+    /// The cut-out test of a candidate hit. Needs <see cref="HitBuffers"/>, <c>geometries</c> and the bindless table.
+    /// </summary>
     internal static readonly string HitCutout = $$"""
         vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
         {
@@ -199,10 +207,10 @@ static class GiShaders
 
         """;
 
-    /// <summary>What a shader that shades ray hits needs (the probe trace, <see cref="GiCacheShaders.Trace"/>): the vertex fetches, the ambient lookups, the cut-out test and the lamps' shadow rays. Needs its names in scope: <c>geometries</c>, <c>maps</c>, <c>origin</c>, <c>uScene</c>.</summary>
     /// <summary>
-    /// The lamps' visibility at the hits of the traced light: the lamp's tile when it has one (every lamp, the same still world the direct light sees, one filtered lookup), else <c>giLampVisibility</c>,
-    /// the old rule (a ray for an interior lamp, none for the others). Binding 18 is the tiles.
+    /// The lamps' visibility at the hits of the traced light: the lamp's tile when it has one (every lamp, the same still world the direct light
+    /// sees, one filtered lookup), else <c>giLampVisibility</c>, the old rule (a ray for an interior lamp, none for the others). Binding 18 is the
+    /// tiles.
     /// </summary>
     internal static readonly string LampTileTrace = $$"""
         layout(set = 0, binding = 18) uniform sampler2D uLampTiles;
@@ -217,6 +225,10 @@ static class GiShaders
         {{LampShaders.Lighting}}
         """;
 
+    /// <summary>
+    /// What a shader that shades ray hits needs (the probe trace, <see cref="GiCacheShaders.Trace"/>): the vertex fetches, the ambient lookups, the
+    /// cut-out test and the lamps' shadow rays. Needs its names in scope: <c>geometries</c>, <c>maps</c>, <c>origin</c>, <c>uScene</c>.
+    /// </summary>
     internal static readonly string HitFunctions = $$"""
         {{HitBuffers}}
 
@@ -256,12 +268,15 @@ static class GiShaders
         """;
 
     /// <summary>
-    /// The light at a committed hit on the front (or on foliage), inside a shader's <c>main</c>: from <c>rq</c>, <c>dir</c>, <c>t</c>, <c>world</c> and the record <c>g</c>, the
-    /// hit's <c>colour</c>, <c>sun</c>, <c>ambient</c> and <c>lamps</c>; its radiance towards the ray is <c>colour * (sun + ambient + lamps)</c>.
+    /// The light at a committed hit on the front (or on foliage), inside a shader's <c>main</c>: from <c>rq</c>, <c>dir</c>, <c>t</c>, <c>world</c>
+    /// and the record <c>g</c>, the hit's <c>colour</c>, <c>sun</c>, <c>ambient</c> and <c>lamps</c>; its radiance towards the ray is <c>colour *
+    /// (sun + ambient + lamps)</c>.
     /// </summary>
     internal static readonly string HitShade = HitShadeAt("4.0");
 
-    /// <summary>What a ray finds at its hit, its textures read at mip <paramref name="lod"/>: the probes want a coarse one, a reflection a fine one.</summary>
+    /// <summary>
+    /// What a ray finds at its hit, its textures read at mip <paramref name="lod"/>: the probes want a coarse one, a reflection a fine one.
+    /// </summary>
     static string HitShadeAt(string lod) => $$"""
             uvec3 tri = Triangle(offsetBy(g.indices, uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true)) * 12u)).v;
             vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
@@ -304,7 +319,9 @@ static class GiShaders
             if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);
         """;
 
-    /// <summary>The extensions of a shader that traces rays and reads hit records.</summary>
+    /// <summary>
+    /// The extensions of a shader that traces rays and reads hit records.
+    /// </summary>
     const string TraceExtensions = """
         #extension GL_EXT_ray_query : require
         #extension GL_EXT_buffer_reference : require
@@ -312,7 +329,9 @@ static class GiShaders
         #extension GL_EXT_scalar_block_layout : require
         """;
 
-    /// <summary>The traced scene and its hit records.</summary>
+    /// <summary>
+    /// The traced scene and its hit records.
+    /// </summary>
     static readonly string TraceScene = $$"""
         {{Meitou.Game.Rendering.Gpu.BindlessTable.Declarations(1)}}
 
@@ -321,7 +340,9 @@ static class GiShaders
         layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
         """;
 
-    /// <summary>The trace's constants (<see cref="GiProbes"/>' <c>Constants</c>).</summary>
+    /// <summary>
+    /// The trace's constants (<see cref="GiProbes"/>' <c>Constants</c>).
+    /// </summary>
     const string TraceParams = """
         layout(set = 0, binding = 3, std140) uniform Params
         {
@@ -339,7 +360,9 @@ static class GiShaders
         };
         """;
 
-    /// <summary>What a ray needs of the world at a hit: the probes, the lamps, the textures, the cut-out test (TRACE) and the lamps' visibility.</summary>
+    /// <summary>
+    /// What a ray needs of the world at a hit: the probes, the lamps, the textures, the cut-out test (TRACE) and the lamps' visibility.
+    /// </summary>
     static readonly string TraceShared = $$"""
         layout(set = 0, binding = 4) uniform sampler2D uGiIrradiance;
         layout(set = 0, binding = 5) uniform sampler2D uGiDistance;
@@ -657,8 +680,19 @@ static class GiShaders
         }
         """;
 
+    /// <summary>
+    /// The line of <see cref="ProbeSampling"/> that <see cref="OffsetLookup"/> goes in before.
+    /// </summary>
     const string CascadeAnchor = "vec4 giCascade(int c, vec3 p, vec3 n, vec3 v, float push)";
+
+    /// <summary>
+    /// The line of <see cref="ProbeSampling"/> after which a relocated probe's offset is added.
+    /// </summary>
     const string TileAnchor = "ivec2 tile = ivec2(colX, (c * GI_N + colZ) * GI_NY + layer);";
+
+    /// <summary>
+    /// The line of the probe trace after which its ray origin moves to the relocated place.
+    /// </summary>
     const string SleepAnchor = "if (giAsleep(positions[stateSlot], world, stateSlot)) return;   // the whole workgroup: the blend skips it too";
 
     /// <summary>
@@ -675,44 +709,68 @@ static class GiShaders
         """;
 
     /// <summary>
-    /// <paramref name="shader"/> (any text holding <see cref="ProbeSampling"/>) reading probes at their relocated places while <c>uGiGrid[2c + 1].w</c>
-    /// is set. The text of <see cref="ProbeSampling"/> stays as it is so that programs that never read relocated probes do not change.
+    /// <paramref name="shader"/> (any text holding <see cref="ProbeSampling"/>) reading probes at their relocated places while <c>uGiGrid[2c +
+    /// 1].w</c> is set. The text of <see cref="ProbeSampling"/> stays as it is so that programs that never read relocated probes do not change.
     /// </summary>
     public static string Relocating(string shader)
     {
         if (!shader.Contains(CascadeAnchor, StringComparison.Ordinal)) return shader;
-        if (!shader.Contains(TileAnchor, StringComparison.Ordinal)) throw new InvalidOperationException("Relocating: no probe tile line");
+        if (!shader.Contains(TileAnchor, StringComparison.Ordinal))
+            throw new InvalidOperationException("Relocating: no probe tile line");
+
         return shader.Replace(CascadeAnchor, OffsetLookup + CascadeAnchor, StringComparison.Ordinal)
             .Replace(TileAnchor, TileAnchor + "\n                    if (g1.w > 0.5) probe += giProbeOffset(tile, s, sy);", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The last line of the probe trace's Params block, after which the cloud constants go.
+    /// </summary>
     const string ParamsEnd = "vec4 extra;         // y: the far cascade's period";
+
+    /// <summary>
+    /// The probe trace's last sampler, after which the cloud maps and the cloud shadow function go.
+    /// </summary>
     const string SamplersEnd = "layout(set = 0, binding = 12) uniform sampler2D uLightData;";
+
+    /// <summary>
+    /// The end of the sun term at a hit, which the cloud transmission multiplies.
+    /// </summary>
     const string HitSun = "* nl * sunLight.rgb * amHit.a * 2.0;";
 
     /// <summary>
-    /// A hit shader (<see cref="ProbeTrace(int)"/>'s sun line and block) with the cloud transmission on the sun at its hits: the same function the lit
-    /// fragments use (docs/render-clouds.md), the map at bindings 15 and 16, the three values after <c>extra</c>.
+    /// A hit shader (<see cref="ProbeTrace(int)"/>'s sun line and block) with the cloud transmission on the sun at its hits: the same function the
+    /// lit fragments use (docs/render-clouds.md), the map at bindings 15 and 16, the three values after <c>extra</c>.
     /// </summary>
     internal static string Clouded(string trace)
     {
         foreach (string anchor in (ReadOnlySpan<string>)[ParamsEnd, SamplersEnd, HitSun])
-            if (!trace.Contains(anchor, StringComparison.Ordinal)) throw new InvalidOperationException("Clouded: no line " + anchor);
-        const string extraSamplers = "\nlayout(set = 0, binding = 15) uniform sampler2D uAtmoClouds;\nlayout(set = 0, binding = 16) uniform sampler2D uAtmoCloudsTile;\n";
+        {
+            if (!trace.Contains(anchor, StringComparison.Ordinal))
+                throw new InvalidOperationException("Clouded: no line " + anchor);
+        }
+
+        const string extraSamplers = "\nlayout(set = 0, binding = 15) uniform sampler2D uAtmoClouds;"
+            + "\nlayout(set = 0, binding = 16) uniform sampler2D uAtmoCloudsTile;\n";
         return trace.Replace(ParamsEnd, ParamsEnd + "\n    vec4 uAtmoCloud;\n    vec4 uAtmoCloudWind;\n    vec4 uAtmoSun;", StringComparison.Ordinal)
             .Replace(SamplersEnd, SamplersEnd + extraSamplers + AtmosphereShaders.CloudShadow, StringComparison.Ordinal)
             .Replace(HitSun, HitSun[..^1] + " * atmoCloudShadow(hit);", StringComparison.Ordinal);
     }
 
-    /// <summary>The probe trace for the frame's options: rays leaving from the relocated places (the bounces reading those places too), the cloud shadows on the hits.</summary>
+    /// <summary>
+    /// The probe trace for the frame's options: rays leaving from the relocated places (the bounces reading those places too), the cloud shadows on
+    /// the hits.
+    /// </summary>
     public static string ProbeTrace(int rays, bool relocate, bool clouds)
     {
         string trace = ProbeTrace(rays);
         if (clouds) trace = Clouded(trace);
+
         if (!relocate) return trace;
-        if (!trace.Contains(SleepAnchor, StringComparison.Ordinal)) throw new InvalidOperationException("ProbeTrace: no sleep line");
-        return Relocating(trace).Replace(SleepAnchor,
-            SleepAnchor + "\n            world += giProbeOffset(ivec2(colX, (c * GI_N + colZ) * GI_NY + layer), g0.z, g0.w);", StringComparison.Ordinal);
+        if (!trace.Contains(SleepAnchor, StringComparison.Ordinal))
+            throw new InvalidOperationException("ProbeTrace: no sleep line");
+
+        const string relocatedOrigin = "\n            world += giProbeOffset(ivec2(colX, (c * GI_N + colZ) * GI_NY + layer), g0.z, g0.w);";
+        return Relocating(trace).Replace(SleepAnchor, SleepAnchor + relocatedOrigin, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -748,10 +806,11 @@ static class GiShaders
         """;
 
     /// <summary>
-    /// The probe relocation (RTXGI's rule, docs/render-gi.md "Probe relocation"), before the blend while the probes' states are the ones the trace read. Inside
-    /// geometry (over a quarter of the rays hit back faces): through the closest back face. Too close to a front face: away from it, towards the
-    /// farthest open direction when that lies on the other side. Clear of everything: back towards the grid place, at most a quarter of the wanted clearance
-    /// an update, without crossing the closest surface. A move past 0.45 of a cell is not made: such a probe stays invalid (the blend's back-face count).
+    /// The probe relocation (RTXGI's rule, docs/render-gi.md "Probe relocation"), before the blend while the probes' states are the ones the trace
+    /// read. Inside geometry (over a quarter of the rays hit back faces): through the closest back face. Too close to a front face: away from it,
+    /// towards the farthest open direction when that lies on the other side. Clear of everything: back towards the grid place, at most a quarter of
+    /// the wanted clearance an update, without crossing the closest surface. A move past 0.45 of a cell is not made: such a probe stays invalid (the
+    /// blend's back-face count).
     /// </summary>
     public static string ProbeRelocate(int rays) => $$"""
         #version 460
@@ -837,13 +896,17 @@ static class GiShaders
         }
         """;
 
-    /// <summary>The longest reflection ray (the near cascade's reach; the traced objects end at 6000): it fades to the sky over its last quarter, the hit being unhazed.</summary>
+    /// <summary>
+    /// The longest reflection ray (the near cascade's reach; the traced objects end at 6000): it fades to the sky over its last quarter, the hit
+    /// being unhazed.
+    /// </summary>
     public const float ReflectionRange = 4000;
 
     /// <summary>
-    /// The reflections' rays (docs/render-gi.md "Reflections"): one per glossy texel of <c>uHit</c>, the march's ray (<see cref="SsrShaders.March"/>) from the block's first
-    /// glossy pixel, against the traced scene and its characters, its hit lit as a probe ray's: a hit replaces the march (world space first); a miss keeps what the march
-    /// found (grass, water and particles are not traced) and proves the sky open past it. Writes a below 0 (<see cref="SsrShaders.Shade"/>). No specular at the hits.
+    /// The reflections' rays (docs/render-gi.md "Reflections"): one per glossy texel of <c>uHit</c>, the march's ray (<see cref="SsrShaders.March"/>)
+    /// from the block's first glossy pixel, against the traced scene and its characters, its hit lit as a probe ray's: a hit replaces the march
+    /// (world space first); a miss keeps what the march found (grass, water and particles are not traced) and proves the sky open past it. Writes a
+    /// below 0 (<see cref="SsrShaders.Shade"/>). No specular at the hits.
     /// </summary>
     public static readonly string Reflect = $$"""
         #version 460
@@ -901,7 +964,6 @@ static class GiShaders
             imageStore(uHit, cell, vec4(colour * (sun + ambient + lamps), ssrPackHit(reach, t, true)));
         }
         """;
-
 
     /// <summary>
     /// The debug view (<c>--gi-debug</c>): per pixel of the scene depth, the surface's position (the depth back through the projection) and a

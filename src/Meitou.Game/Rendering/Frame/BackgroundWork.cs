@@ -18,6 +18,10 @@ public static class BackgroundWork
         /// The jobs waiting for a thread: the ordinary ones and the urgent ones (<see cref="RunUrgent"/>).
         /// </summary>
         readonly BlockingCollection<Task> _queue = [], _urgent = [];
+
+        /// <summary>
+        /// The jobs running on a thread now.
+        /// </summary>
         int _running;
 
         /// <summary>
@@ -40,8 +44,14 @@ public static class BackgroundWork
                     {
                         BlockingCollection<Task>.TakeFromAny(both, out var task);
                         Interlocked.Increment(ref _running);
-                        try { TryExecuteTask(task!); }
-                        finally { Interlocked.Decrement(ref _running); }
+                        try
+                        {
+                            TryExecuteTask(task!);
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref _running);
+                        }
                     }
                 })
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();

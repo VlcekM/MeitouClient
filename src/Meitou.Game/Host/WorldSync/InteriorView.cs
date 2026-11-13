@@ -79,9 +79,6 @@ sealed class InteriorView(GameHost host)
     }
 
     /// <summary>
-    /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to 0..3.
-    /// </summary>
-    /// <summary>
     /// Puts a building in the view at the current floor (the agent channel's <c>interior-view</c>).
     /// </summary>
     internal void AddViewed(InteriorVolume room)
@@ -89,6 +86,9 @@ sealed class InteriorView(GameHost host)
         if (InteriorFloors.TryAdd(room.PlacementId, ViewedFloorValue)) _viewed.Add(room);
     }
 
+    /// <summary>
+    /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to 0..3.
+    /// </summary>
     internal void StepFloor(int step) => ViewedFloor = ViewedFloorValue + step;
 
     /// <summary>

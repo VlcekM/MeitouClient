@@ -115,13 +115,19 @@ public sealed class SimulationClock
     public bool IsPaused => RequestedPause || _speed == 0;
 
     /// <summary>
-    /// The speed, the speed pause returns to and what the pause key remembers: all a host that runs the clock its own way for a while (photo mode's slow
-    /// motion) has to put back.
+    /// The speed, the speed pause returns to and what the pause key remembers: all a host that runs the clock its own way for a while (photo mode's
+    /// slow motion) has to put back.
     /// </summary>
     public readonly record struct SpeedState(double Speed, double Last, double Remembered);
 
+    /// <summary>
+    /// The clock's speeds now, for <see cref="RestoreSpeeds"/>.
+    /// </summary>
     public SpeedState SaveSpeeds() => new(_speed, _lastSpeed, _rememberedSpeed);
 
+    /// <summary>
+    /// Puts back the speeds <see cref="SaveSpeeds"/> took.
+    /// </summary>
     public void RestoreSpeeds(SpeedState state) => (_speed, _lastSpeed, _rememberedSpeed) = (state.Speed, state.Last, state.Remembered);
 
     /// <summary>

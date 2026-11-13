@@ -446,11 +446,16 @@ public sealed unsafe class VulkanPresenter : IDisposable
         var chosen = formats.FirstOrDefault(f => f.Format is Format.B8G8R8A8Unorm or Format.R8G8B8A8Unorm, formats[0]);
 
         // HDR10 where the display offers it (Windows: HDR turned on for that monitor); the SDR format otherwise.
-        var hdr = formats.FirstOrDefault(f => f.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext
-            && f.Format is Format.A2B10G10R10UnormPack32 or Format.A2R10G10B10UnormPack32);
+        var hdr = formats.FirstOrDefault(IsHdr10Format);
         HdrActive = WantHdr && FrameGeneration is null && hdr.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext;
         return HdrActive ? hdr : chosen;
     }
+
+    /// <summary>
+    /// Whether a surface format is HDR10: the ST 2084 colour space in a 10-bit UNORM format.
+    /// </summary>
+    static bool IsHdr10Format(SurfaceFormatKHR f) =>
+        f.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext && f.Format is Format.A2B10G10R10UnormPack32 or Format.A2R10G10B10UnormPack32;
 
     /// <summary>
     /// FIFO with vsync, else MAILBOX, else IMMEDIATE when the surface has them.

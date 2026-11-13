@@ -8,13 +8,23 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Objects;
 
-/// <summary>A drawn interior mask as a box: <see cref="ToBox"/> takes a world point to the mesh's own space, where its bounds are <see cref="Min"/>, <see cref="Max"/>;
-/// <see cref="Centre"/> and <see cref="Radius"/> are its sphere in the world.</summary>
+/// <summary>
+/// A drawn interior mask as a box: <see cref="ToBox"/> takes a world point to the mesh's own space, where its bounds are <see cref="Min"/>,
+/// <see cref="Max"/>; <see cref="Centre"/> and <see cref="Radius"/> are its sphere in the world.
+/// </summary>
 public readonly record struct InteriorMaskCut(Matrix4x4 ToBox, Vector3 Min, Vector3 Max, Vector3 Centre, float Radius)
 {
+    /// <summary>
+    /// The cut of a mask placed by <paramref name="node"/> (<paramref name="toBox"/> its inverse) with mesh bounds <paramref name="min"/>,
+    /// <paramref name="max"/>: the sphere's radius scaled by the node's largest axis.
+    /// </summary>
     internal static InteriorMaskCut Of(in Matrix4x4 node, in Matrix4x4 toBox, Vector3 min, Vector3 max)
     {
-        float scale = MathF.Max(new Vector3(node.M11, node.M12, node.M13).Length(), MathF.Max(new Vector3(node.M21, node.M22, node.M23).Length(), new Vector3(node.M31, node.M32, node.M33).Length()));
+        float xScale = new Vector3(node.M11, node.M12, node.M13).Length();
+        float yScale = new Vector3(node.M21, node.M22, node.M23).Length();
+        float zScale = new Vector3(node.M31, node.M32, node.M33).Length();
+        float scale = MathF.Max(xScale, MathF.Max(yScale, zScale));
+
         return new InteriorMaskCut(toBox, min, max, Vector3.Transform((min + max) * 0.5f, node), (max - min).Length() * 0.5f * scale);
     }
 }
@@ -164,7 +174,8 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     public IReadOnlyList<(Vector2 Min, Vector2 Max)> Boxes => _boxes;
 
     /// <summary>
-    /// The drawn masks as boxes in their building's space (the last <see cref="Record"/>'s): what the traced sun's grass leaves out (<see cref="Gi.TracedGrass"/>).
+    /// The drawn masks as boxes in their building's space (the last <see cref="Record"/>'s): what the traced sun's grass leaves out
+    /// (<see cref="Gi.TracedGrass"/>).
     /// </summary>
     public IReadOnlyList<InteriorMaskCut> Cuts => _cuts;
 

@@ -100,25 +100,35 @@ sealed partial class GameHost
         ulong used = 0;
         for (int i = 0; i < count; i++) used |= MatchedBefore(before, c.Animations[i].Name, used, out int k) ? 1UL << k : 0;
         for (int k = 0; k < Math.Min(before.Animations.Count, 64); k++)
+        {
             if ((used >> k & 1) == 0 && before.Animations[k].Weight > 0) count++;
+        }
+
         return count;
     }
 
+    /// <summary>
+    /// Finds the first of the last tick's layers (of its first 64) named <paramref name="name"/> and not yet in <paramref name="used"/>; its index
+    /// in <paramref name="index"/>, else the count searched.
+    /// </summary>
     static bool MatchedBefore(CharacterSnapshot before, string name, ulong used, out int index)
     {
         for (index = 0; index < before.Animations.Count && index < 64; index++)
+        {
             if ((used >> index & 1) == 0 && before.Animations[index].Name == name) return true;
+        }
 
         return false;
     }
 
     /// <summary>
     /// The layers to draw between the last tick (<paramref name="before"/>) and this one (<paramref name="c"/>) at <paramref name="alpha"/>, into
-    /// <paramref name="into"/> (<see cref="DrawnLayerCount"/> long). The simulation keeps each body half's weights at a total of 1, which the renderer relies on
-    /// (it adds the layers up with no normalising, the rest of the weight being the binding pose), so the whole weight vector is interpolated: a layer
-    /// that is new this tick fades in from 0 and one that is gone from this tick fades out to 0 (at its last tick's clip time), instead of the layer
-    /// appearing for the whole span or vanishing at its start, which dropped the total for a frame and pulled the pose towards the binding one (a
-    /// pop at each change of gait or action, plain in slow motion). A layer's clip time moves by the shorter way round its clip (<see cref="LayerTime"/>).
+    /// <paramref name="into"/> (<see cref="DrawnLayerCount"/> long). The simulation keeps each body half's weights at a total of 1, which the renderer
+    /// relies on (it adds the layers up with no normalising, the rest of the weight being the binding pose), so the whole weight vector is interpolated:
+    /// a layer that is new this tick fades in from 0 and one that is gone from this tick fades out to 0 (at its last tick's clip time), instead of the
+    /// layer appearing for the whole span or vanishing at its start, which dropped the total for a frame and pulled the pose towards the binding one (a
+    /// pop at each change of gait or action, plain in slow motion). A layer's clip time moves by the shorter way round its clip
+    /// (<see cref="LayerTime"/>).
     /// </summary>
     internal static void BlendLayers(CharacterSnapshot? before, CharacterSnapshot c, float alpha, CharacterPose[] into)
     {
@@ -129,25 +139,10 @@ sealed partial class GameHost
             return;
         }
 
-        // The gone layers keep their place in the order (the renderer adds rotations in order): after the current layer paired with the last tick's
-        // layer before them.
         int paired = Math.Min(before.Animations.Count, 64);
         Span<int> anchors = stackalloc int[paired];
         Span<int> current = stackalloc int[count];
-        ulong used = 0;
-        int last = -1;
-        anchors.Fill(-1);
-        for (int i = 0; i < count; i++)
-        {
-            current[i] = MatchedBefore(before, c.Animations[i].Name, used, out int k) ? k : -1;
-            if (current[i] >= 0) used |= 1UL << k;
-        }
-
-        for (int k = 0; k < paired; k++)
-        {
-            anchors[k] = last;
-            if ((used >> k & 1) != 0) last = current.IndexOf(k);
-        }
+        ulong used = PairLayers(before, c, current, anchors);
 
         int put = 0;
         PutGone(before, used, anchors, -1, alpha, into, ref put);
@@ -159,14 +154,45 @@ sealed partial class GameHost
                 var old = before.Animations[current[i]];
                 into[put++] = new CharacterPose(layer.Name, LayerTime(old, layer, alpha), old.Weight + (layer.Weight - old.Weight) * alpha);
             }
-            else into[put++] = new CharacterPose(layer.Name, layer.Time, layer.Weight * alpha);
+            else
+            {
+                into[put++] = new CharacterPose(layer.Name, layer.Time, layer.Weight * alpha);
+            }
 
             PutGone(before, used, anchors, i, alpha, into, ref put);
         }
     }
 
     /// <summary>
-    /// The last tick's layers that are gone from this tick and whose place is after the current layer <paramref name="anchor"/> (-1: before the first), fading out.
+    /// Pairs each current layer with the last tick's layer of its name (<paramref name="current"/>: its index there, or -1) and gives each of the last
+    /// tick's layers its anchor (<paramref name="anchors"/>: the current layer it follows, -1 before the first); returns the paired last-tick layers as
+    /// bits.
+    /// </summary>
+    static ulong PairLayers(CharacterSnapshot before, CharacterSnapshot c, Span<int> current, Span<int> anchors)
+    {
+        ulong used = 0;
+        int last = -1;
+        anchors.Fill(-1);
+        for (int i = 0; i < current.Length; i++)
+        {
+            current[i] = MatchedBefore(before, c.Animations[i].Name, used, out int k) ? k : -1;
+            if (current[i] >= 0) used |= 1UL << k;
+        }
+
+        // The gone layers keep their place in the order (the renderer adds rotations in order): after the current layer paired with the last tick's
+        // layer before them.
+        for (int k = 0; k < anchors.Length; k++)
+        {
+            anchors[k] = last;
+            if ((used >> k & 1) != 0) last = current.IndexOf(k);
+        }
+
+        return used;
+    }
+
+    /// <summary>
+    /// The last tick's layers that are gone from this tick and whose place is after the current layer <paramref name="anchor"/> (-1: before the
+    /// first), fading out.
     /// </summary>
     static void PutGone(CharacterSnapshot before, ulong used, ReadOnlySpan<int> anchors, int anchor, float alpha, CharacterPose[] into, ref int put)
     {
@@ -202,7 +228,9 @@ sealed partial class GameHost
     internal Vector3 DrawnPosition(CharacterSnapshot c)
     {
         IndexPrevious();
-        var at = PreviousById.TryGetValue(c.Id, out var before) ? Simulation.Session.Interp.Lerp(before.Position, c.Position, Session.SimulationAlpha) : c.Position;
+        var at = PreviousById.TryGetValue(c.Id, out var before)
+            ? Simulation.Session.Interp.Lerp(before.Position, c.Position, Session.SimulationAlpha)
+            : c.Position;
         return at + (c.Carry is { } carry
             ? MixCarry(before?.Carry, carry, Session.SimulationAlpha).World(Vector3.Zero, c.Yaw).Position
             : Vector3.Zero);
@@ -579,8 +607,11 @@ sealed partial class GameHost
     CharacterPose[] LayerPoses(CharacterSnapshot c, CharacterSnapshot? before, float alpha, bool posed)
     {
         int drawn = !posed ? 0 : DrawnLayerCount(before, c);
-        var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == drawn ? kept
-            : _posesBySlot[c.Id.Slot] = new CharacterPose[drawn];
+        var poses = !posed
+            ? []
+            : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == drawn
+                ? kept
+                : _posesBySlot[c.Id.Slot] = new CharacterPose[drawn];
 
         // Between ticks the layers' clip times and weights move on from the last snapshot (BlendLayers).
         if (posed) BlendLayers(before, c, alpha, poses);
@@ -646,7 +677,9 @@ sealed partial class GameHost
         var current = Session.CurrentSnapshot;
         foreach (var c in current.Characters)
         {
-            if (c.Appearance is not null && Gpu.Characters?.AssetState(c.Appearance) != "FAILED") continue;   // no look, or one the renderer could not build
+            // No look, or one the renderer could not build.
+            if (c.Appearance is not null && Gpu.Characters?.AssetState(c.Appearance) != "FAILED") continue;
+
             var clip = Vector4.Transform(new Vector4(c.Position + new Vector3(0, 10, 0), 1), view);
             if (clip.W <= 0.1f) continue;
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;

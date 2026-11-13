@@ -92,6 +92,7 @@ internal readonly struct HeightSnapshot
             for (int a = -1; a <= 2; a++) line += raw[row + Math.Clamp(i + a, 0, cols - 1)] * CatmullRom(a, tx);
             sum += line * CatmullRom(b, tz);
         }
+
         return sum * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 

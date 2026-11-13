@@ -584,9 +584,15 @@ sealed class GameLoop(GameHost host)
                 if (!LookPresets.HiddenSwitch(toggle.Label) && !_runOnly.Contains(SwitchKey(toggle.Label))
                         && host.Config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get())
                     toggle.Set(v >= 0.5f);
-            // The technique choices after the switches they stand for: the launcher writes the choice alone, and it wins (a file of switches only keeps them).
+
+            // The technique choices after the switches they stand for: the launcher writes the choice alone, and it wins (a file of switches only
+            // keeps them).
             foreach (var choice in _panel.Sliders.Where(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
-                if (host.Config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get())) choice.Set(Math.Clamp(c, choice.Min, choice.Max));
+            {
+                if (host.Config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get()))
+                    choice.Set(Math.Clamp(c, choice.Min, choice.Max));
+            }
+
             _panel.Tiers.ApplySavedPreset();
         }
         if (host.GameOptions.BenchmarkBaseline) _panel?.Tiers.ApplyBenchmarkBaseline();
@@ -638,6 +644,7 @@ sealed class GameLoop(GameHost host)
             EndTour();
         };
     }
+
     /// <summary>
     /// Photo mode starts only over a running game scene: not the title, a loading cover, a duel, a flight of the cinema or a squad tour.
     /// </summary>
@@ -1147,9 +1154,11 @@ sealed class GameLoop(GameHost host)
             if (_photo.Active)
             {
                 // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
-                if (!_photo.Panel.Wheel(Pixels(_orbitAnchor ?? m.Position), wheel.Y)) _photo.Wheel(wheel.Y, Held(SilkKey.ControlLeft, SilkKey.ControlRight));
+                if (!_photo.Panel.Wheel(Pixels(_orbitAnchor ?? m.Position), wheel.Y))
+                    _photo.Wheel(wheel.Y, Held(SilkKey.ControlLeft, SilkKey.ControlRight));
                 return;
             }
+
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
@@ -1167,6 +1176,7 @@ sealed class GameLoop(GameHost host)
             PhotoPointerDown(physical, at);
             return;
         }
+
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
         bool select = physical is { } pressed && host.PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
         if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true)
@@ -1236,6 +1246,7 @@ sealed class GameLoop(GameHost host)
             if (physical is { } photoButton) host.Session.Input.SetMouseButton(photoButton, false);
             return;
         }
+
         bool cinemaDrag = _cinema.MouseUp();
         if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
@@ -1449,7 +1460,8 @@ sealed class GameLoop(GameHost host)
         if (!_cinemaHolds) host.ApplyCamera(host.Session.CameraAt());
         _cinema.Advance(_cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
         // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
-        host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
+        host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible
+            && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
         _photo.Apply();
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
@@ -1538,7 +1550,8 @@ sealed class GameLoop(GameHost host)
             && !host.GameOptions.NoPopulation
             && !(PanelLive() && _panel?.Visible == true) && !_cinema.Contains(pointerAt);
         // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
-        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen && (!_photo.Active || !_photo.PanelShown || host.OrbitHeld());
+        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen
+            && (!_photo.Active || !_photo.PanelShown || host.OrbitHeld());
         Outline(takeFile, highlighting, pointerWorld);
         return new FramePointer(pointerMouse, pointerAt, pointerWorld, freeLook);
     }
@@ -1878,7 +1891,11 @@ sealed class GameLoop(GameHost host)
         bool worldAlone = generating && _frameGen!.PresentsWorldAlone, hdrShown = _display.HdrActive && !worldAlone;
 
         // Pictures saved from an HDR frame are the SDR composite, the shown one the PQ composite.
-        var finalPicture = worldAlone ? null : !hdrShown || capturing ? _uiLayer!.Composite(backbuffer) : null;
+        var finalPicture = worldAlone
+            ? null
+            : !hdrShown || capturing
+                ? _uiLayer!.Composite(backbuffer)
+                : null;
         var shownPicture = hdrShown ? _uiLayer!.CompositeHdr(backbuffer, host.Config.HdrPaperNitsNow) : finalPicture;
         StageClock.UiPart(StageClock.UiComposite);
         if (GpuContext.DiagSubmit) _display.Context.SubmitAndWait();
@@ -2205,9 +2222,16 @@ sealed class GameLoop(GameHost host)
         if (_panel is not null && !_lowEnd)
         {
             foreach (var slider in _panel.Sliders)
+            {
                 if (!_runOnly.Contains(slider.Label) && !host.GfxRunOnly.Contains(slider.Label)) host.Config.Graphics[slider.Label] = slider.Get();
+            }
+
             foreach (var toggle in _panel.Toggles)
-                if (!_runOnly.Contains(SwitchKey(toggle.Label)) && !host.GfxRunOnly.Contains(toggle.Label)) host.Config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
+            {
+                if (!_runOnly.Contains(SwitchKey(toggle.Label)) && !host.GfxRunOnly.Contains(toggle.Label))
+                    host.Config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
+            }
+
             _panel.Tiers.SavePreset();
         }
         host.Config.Bindings = host.Session.Bindings.ToDictionary();

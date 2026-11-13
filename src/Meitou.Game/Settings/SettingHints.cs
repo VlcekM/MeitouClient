@@ -58,9 +58,11 @@ static class SettingHints
         "Far water clarity" => "Adjust underwater visibility at a distance.",
         "Water see-through distance" => "Distance over which submerged scenery stays visible.",
         "Shadow distance" => "How far shadows are drawn; zero disables them.",
-        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, or ray-traced shadows (needs ray tracing, turns on global illumination).",
+        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, or ray-traced shadows "
+            + "(needs ray tracing, turns on global illumination).",
         "Ambient occlusion type" => "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate).",
-        WorldFrame.GiChoice => "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing.",
+        WorldFrame.GiChoice => "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. "
+            + "Needs ray tracing.",
         "Shadow map size" => "Higher resolution gives sharper shadow detail.",
         "Shadow filter" => "Higher values smooth shadow edges with more samples.",
         "Haze strength" => "Scale the amount of atmospheric haze.",
@@ -147,7 +149,8 @@ static class SettingHints
         WorldFrame.MaterialEyesSwitch => "A small catchlight on the eyes instead of a mirror of the landscape.",
         WorldFrame.MaterialMetalSwitch => "Weapons, armour plates, prosthetics and robots read as metal.",
         WorldFrame.MaterialBeadsSwitch => "Drops of water stand on wet skin, leather and metal, in the rain and after a swim.",
-        WorldFrame.WetWorldSwitch => "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original.",
+        WorldFrame.WetWorldSwitch => "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. "
+            + "Off: as the original.",
         WorldFrame.TracedGrassSwitch => "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
@@ -227,7 +230,8 @@ static class SettingHints
         InputAction.Prospect => "Prospect the ground with the selected character nearest the camera.",
         InputAction.Rest => "The selection sits down to rest.",
         InputAction.PutDown => "The selected carriers put their bodies down.",
-        InputAction.TogglePhotoMode => "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures.",
+        InputAction.TogglePhotoMode => "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, "
+            + "time of day and composition guides takes pictures.",
         _ => $"Choose the control for {SettingsMenu.ActionLabel(action).ToLowerInvariant()}.",
     };
 }

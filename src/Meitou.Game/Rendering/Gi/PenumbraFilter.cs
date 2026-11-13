@@ -7,24 +7,57 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gi;
 
-/// <summary>The penumbra filter's inputs, all at the render size: the scene depth and surface target, the rays' result, a scratch target and the output (RGBA16F).</summary>
-readonly record struct PenumbraTargets(GpuTexture Depth, GpuTexture Surface, GpuTexture Raw, GpuTexture Scratch, GpuTexture Filtered, int Width, int Height);
+/// <summary>
+/// The penumbra filter's inputs, all at the render size: the scene depth and surface target, the rays' result, a scratch target and the output
+/// (RGBA16F).
+/// </summary>
+readonly record struct PenumbraTargets(
+    GpuTexture Depth, GpuTexture Surface, GpuTexture Raw, GpuTexture Scratch, GpuTexture Filtered, int Width, int Height);
 
 /// <summary>
-/// The penumbra filter of the traced shadows (docs/render-shadows.md "Traced sun", docs/render-lights.md "Traced lamp shadows"), the same every frame (no history): the rays' hard
-/// result (rgb) softened by its light's size. The rays write, where they are blocked, the penumbra's radius at the receiver in world units (alpha: the light's angular radius times
-/// the blocker's distance; -1 where the pixel is no receiver: it is kept and no neighbour reads it). A horizontal pass finds the blockers' mean radius among taps on the pixel's own surface (its plane from the depth), takes it to pixels (at least <see cref="MinRadius"/>, which
-/// anti-aliases a contact edge), and averages along the row with a box whose ends are fractional; a vertical pass does the same along the column at that radius. The weights are
-/// continuous, so a wide penumbra is a smooth ramp, not a staircase of tap counts. Render thread only.
+/// The penumbra filter of the traced shadows (docs/render-shadows.md "Traced sun", docs/render-lights.md "Traced lamp shadows"), the same every
+/// frame (no history): the rays' hard result (rgb) softened by its light's size. The rays write, where they are blocked, the penumbra's radius at the
+/// receiver in world units (alpha: the light's angular radius times the blocker's distance; -1 where the pixel is no receiver: it is kept and no
+/// neighbour reads it). A horizontal pass finds the blockers' mean radius among taps on the pixel's own surface (its plane from the depth), takes it
+/// to pixels (at least <see cref="MinRadius"/>, which anti-aliases a contact edge), and averages along the row with a box whose ends are fractional;
+/// a vertical pass does the same along the column at that radius. The weights are continuous, so a wide penumbra is a smooth ramp, not a staircase
+/// of tap counts. Render thread only.
 /// </summary>
 sealed unsafe class PenumbraFilter : IDisposable
 {
-    /// <summary>Taps of the blocker search (a sunflower within <see cref="Search"/> pixels); pixels: the search's reach and the narrowest and widest radius.</summary>
+    /// <summary>
+    /// Taps of the blocker search (a sunflower within <see cref="Search"/> pixels).
+    /// </summary>
     const int SearchTaps = 16;
-    const float Search = 12, MinRadius = 1, MaxRadius = 16;
 
-    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// Pixels: the blocker search's reach.
+    /// </summary>
+    const float Search = 12;
 
+    /// <summary>
+    /// Pixels: the narrowest radius.
+    /// </summary>
+    const float MinRadius = 1;
+
+    /// <summary>
+    /// Pixels: the widest radius.
+    /// </summary>
+    const float MaxRadius = 16;
+
+    /// <summary>
+    /// How far past a filtered area the rows' pass reads (the search and the widest radius).
+    /// </summary>
+    public const int RowMargin = (int)(Search + MaxRadius) + 2;
+
+    /// <summary>
+    /// How far past a filtered area the columns' pass reads.
+    /// </summary>
+    public const int ColumnMargin = (int)MaxRadius;
+
+    /// <summary>
+    /// The filter's kernel, one pass along rows or columns (<c>size.w</c>) over an area or a list's cells.
+    /// </summary>
     static readonly string Source = $$"""
         #version 460
         layout(local_size_x = 8, local_size_y = 8) in;
@@ -172,37 +205,87 @@ sealed unsafe class PenumbraFilter : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The device the kernel runs on.
+    /// </summary>
+    readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The kernel's program.
+    /// </summary>
+    readonly GpuProgram _program;
+
+    /// <summary>
+    /// The kernel's pipeline.
+    /// </summary>
+    readonly GpuComputePipeline _pipeline;
+
+    /// <summary>
+    /// Nearest, clamped: the inputs are read texel by texel.
+    /// </summary>
+    readonly GpuSampler _sampler;
+
+    /// <summary>
+    /// What binding 6 holds when the pass works on an area, not a list.
+    /// </summary>
+    readonly DeviceBuffer _noLists;
+
+    /// <summary>
+    /// The kernel's constants, as <see cref="Source"/>'s <c>Params</c> reads them.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Params
     {
+        /// <summary>
+        /// NDC, jittered as the frame was, to the position relative to the eye.
+        /// </summary>
         public Matrix4x4 Inverse;
-        public Vector4 Size, Options, Area;
+
+        /// <summary>
+        /// Width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns).
+        /// </summary>
+        public Vector4 Size;
+
+        /// <summary>
+        /// x: the blue channel names what the channels hold, z: the pixels are a list's cells, w: the list's slot.
+        /// </summary>
+        public Vector4 Options;
+
+        /// <summary>
+        /// The pixels filtered: first x, y, one past the last x, y (a list's pass: x the lists' base).
+        /// </summary>
+        public Vector4 Area;
+
+        /// <summary>
+        /// The cells worked on, a bit each.
+        /// </summary>
         public fixed uint Cells[64];
     }
 
-    readonly GpuContext _ctx;
-    readonly GpuProgram _program;
-    readonly GpuComputePipeline _pipeline;
-    readonly GpuSampler _sampler;
-    readonly DeviceBuffer _noLists;
-
+    /// <summary>
+    /// The kernel and the empty list buffer.
+    /// </summary>
     public PenumbraFilter(GpuContext ctx)
     {
         this._ctx = ctx;
         _program = ctx.Shaders.Compute(Source, "penumbra filter",
         [
-            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.CombinedImageSampler),
-            (4, DescriptorType.StorageImage), (5, DescriptorType.UniformBuffer), (6, DescriptorType.StorageBuffer),
+            (0, DescriptorType.CombinedImageSampler),
+            (1, DescriptorType.CombinedImageSampler),
+            (2, DescriptorType.CombinedImageSampler),
+            (4, DescriptorType.StorageImage),
+            (5, DescriptorType.UniformBuffer),
+            (6, DescriptorType.StorageBuffer),
         ]);
         _noLists = DeviceBuffer.Create(ctx, 16, BufferUse.Storage, "penumbra filter no lists");
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "penumbra filter"));
-        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
     }
 
     /// <summary>
-    /// Both passes into <paramref name="cmd"/>, after the rays (a full barrier before each pass and after the last). <paramref name="inverse"/>: NDC, jittered as the frame was, to the
-    /// position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth.
+    /// Both passes into <paramref name="cmd"/>, after the rays (a full barrier before each pass and after the last). <paramref name="inverse"/>: NDC,
+    /// jittered as the frame was, to the position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth.
     /// </summary>
     /// <param name="named">The blue channel names what the others hold (the lamps' pair): only taps with the pixel's name are read.</param>
     public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, bool named = false)
@@ -214,14 +297,13 @@ sealed unsafe class PenumbraFilter : IDisposable
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    /// <summary>How far past a filtered area the rows' pass reads (the search and the widest radius), and the columns' pass.</summary>
-    public const int RowMargin = (int)(Search + MaxRadius) + 2, ColumnMargin = (int)MaxRadius;
-
     /// <summary>
-    /// Both passes over the cells of a list (<see cref="LampShadowPass"/>: <paramref name="lists"/>, the list's <paramref name="slot"/>, the lists' <paramref name="listBase"/>, the
-    /// indirect dispatch's arguments at <paramref name="argsOffset"/>): the raw result must hold those cells; the output holds them, right where the cells round a pixel are listed too.
+    /// Both passes over the cells of a list (<see cref="LampShadowPass"/>: <paramref name="lists"/>, the list's <paramref name="slot"/>, the lists'
+    /// <paramref name="listBase"/>, the indirect dispatch's arguments at <paramref name="argsOffset"/>): the raw result must hold those cells; the
+    /// output holds them, right where the cells round a pixel are listed too.
     /// </summary>
-    public void RunList(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, GpuBuffer lists, ulong listsSize, ulong argsOffset, int slot, int listBase)
+    public void RunList(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, GpuBuffer lists, ulong listsSize,
+        ulong argsOffset, int slot, int listBase)
     {
         Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, default, lists, listsSize, argsOffset, slot, listBase);
         cmd.Barrier(BarrierBatch.Full);
@@ -229,41 +311,92 @@ sealed unsafe class PenumbraFilter : IDisposable
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area,
-        GpuBuffer lists = default, ulong listsSize = 0, ulong argsOffset = 0, int slot = -1, int listBase = 0)
+    /// <summary>
+    /// The kernel and the empty list buffer go.
+    /// </summary>
+    public void Dispose()
+    {
+        _ctx.Shaders.Dispose(_program);
+        _noLists.Dispose();
+    }
+
+    /// <summary>
+    /// One pass from <paramref name="input"/> into <paramref name="output"/>: over <paramref name="area"/>, or over a list's cells when
+    /// <paramref name="slot"/> is set.
+    /// </summary>
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named,
+        Vector4 area, GpuBuffer lists = default, ulong listsSize = 0, ulong argsOffset = 0, int slot = -1, int listBase = 0)
     {
         bool listed = slot >= 0;
         var parameters = new Params
         {
-            Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, listed ? 1 : 0, Math.Max(slot, 0)),
+            Inverse = inverse,
+            Size = new Vector4(t.Width, t.Height, pixelSlope, pass),
+            Options = new Vector4(named ? 1 : 0, 0, listed ? 1 : 0, Math.Max(slot, 0)),
             Area = listed ? new Vector4(listBase, 0, 0, 0) : area,
         };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
-        DescriptorImageInfo Sampled(GpuTexture texture) => new(_ctx.Device.SamplerAt(_sampler.Index), _ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
+
+        BindPass(cmd, t, input, output, constants, listed, lists, listsSize);
+
+        if (listed) cmd.DispatchIndirect(lists, argsOffset);
+        else cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
+    }
+
+    /// <summary>
+    /// The pipeline bound and a pass's descriptors pushed: the depth, the surface, the input, the output, the constants and the cell lists.
+    /// </summary>
+    void BindPass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, Transient constants, bool listed, GpuBuffer lists,
+        ulong listsSize)
+    {
         var images = stackalloc DescriptorImageInfo[4];
         images[0] = Sampled(t.Depth);
         images[1] = Sampled(t.Surface);
         images[2] = Sampled(input);
         images[3] = new DescriptorImageInfo(default, _ctx.Device.ViewAt(output.View().Index), ImageLayout.General);
         var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
-        var cells = listed ? new DescriptorBufferInfo(_ctx.Device.BufferAt(lists.Index), 0, listsSize) : new DescriptorBufferInfo(_ctx.Device.BufferAt(_noLists.Handle.Index), 0, _noLists.Size);
+        var cells = listed
+            ? new DescriptorBufferInfo(_ctx.Device.BufferAt(lists.Index), 0, listsSize)
+            : new DescriptorBufferInfo(_ctx.Device.BufferAt(_noLists.Handle.Index), 0, _noLists.Size);
+
         var writes = stackalloc WriteDescriptorSet[6];
         for (int i = 0; i < 3; i++) writes[i] = Image((uint)i, DescriptorType.CombinedImageSampler, &images[i]);
         writes[3] = Image(4, DescriptorType.StorageImage, &images[3]);
-        writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
-        writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 6, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &cells };
+        writes[4] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer,
+            PBufferInfo = &uniform,
+        };
+        writes[5] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, DstBinding = 6, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer,
+            PBufferInfo = &cells,
+        };
+
         cmd.BindPipeline(_pipeline);
         cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
-        if (listed) cmd.DispatchIndirect(lists, argsOffset);
-        else cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
     }
 
-    static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>
-        new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PImageInfo = info };
+    /// <summary>
+    /// A texture read through the nearest sampler.
+    /// </summary>
+    DescriptorImageInfo Sampled(GpuTexture texture) =>
+        new(_ctx.Device.SamplerAt(_sampler.Index), _ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
 
-    public void Dispose()
+    /// <summary>
+    /// An image's descriptor write at <paramref name="binding"/>.
+    /// </summary>
+    static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) => new()
     {
-        _ctx.Shaders.Dispose(_program);
-        _noLists.Dispose();
-    }
+        SType = StructureType.WriteDescriptorSet,
+        DstBinding = binding,
+        DescriptorCount = 1,
+        DescriptorType = type,
+        PImageInfo = info,
+    };
+
+    /// <summary>
+    /// A float as a GLSL literal: invariant culture, at least one decimal, at most nine.
+    /// </summary>
+    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 }

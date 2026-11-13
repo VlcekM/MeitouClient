@@ -170,37 +170,106 @@ sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
     /// <inheritdoc/>
     public override Encoding Encoding => second.Encoding;
-    public override void Write(char value) { first.Write(value); second.Write(value); }
-    public override void Write(string? value) { first.Write(value); second.Write(value); }
-    public override void Write(char[] buffer, int index, int count) { first.Write(buffer, index, count); second.Write(buffer, index, count); }
-    public override void WriteLine(string? value) { first.WriteLine(value); second.WriteLine(value); }
-    public override void Flush() { first.Flush(); second.Flush(); }
+
+    /// <inheritdoc/>
+    public override void Write(char value)
+    {
+        first.Write(value);
+        second.Write(value);
+    }
+
+    /// <inheritdoc/>
+    public override void Write(string? value)
+    {
+        first.Write(value);
+        second.Write(value);
+    }
+
+    /// <inheritdoc/>
+    public override void Write(char[] buffer, int index, int count)
+    {
+        first.Write(buffer, index, count);
+        second.Write(buffer, index, count);
+    }
+
+    /// <inheritdoc/>
+    public override void WriteLine(string? value)
+    {
+        first.WriteLine(value);
+        second.WriteLine(value);
+    }
+
+    /// <inheritdoc/>
+    public override void Flush()
+    {
+        first.Flush();
+        second.Flush();
+    }
 }
+
 /// <summary>
 /// MEITOU_LOG_TIMES=1: each line starts with the seconds since the process started (to time the phases of a start or a load from the log).
 /// </summary>
 sealed class StampWriter(TextWriter inner) : TextWriter
 {
+    /// <summary>
+    /// When the process started, which the stamps count from.
+    /// </summary>
     static readonly DateTime ProcessStart = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+
+    /// <summary>
+    /// Whether the next character written starts a line (and so gets a stamp first).
+    /// </summary>
     bool _atLineStart = true;
 
+    /// <inheritdoc/>
     public override Encoding Encoding => inner.Encoding;
-    string Stamp() => $"[{(DateTime.Now - ProcessStart).TotalSeconds,7:0.00}] ";
-    void Begin()
+
+    /// <inheritdoc/>
+    public override void Write(char value)
     {
-        if (!_atLineStart) return;
-        inner.Write(Stamp());
-        _atLineStart = false;
+        Begin();
+        inner.Write(value);
+        _atLineStart = value == '\n';
     }
-    public override void Write(char value) { Begin(); inner.Write(value); _atLineStart = value == '\n'; }
+
+    /// <inheritdoc/>
     public override void Write(string? value)
     {
         if (string.IsNullOrEmpty(value)) return;
+
         Begin();
         inner.Write(value);
         _atLineStart = value[^1] == '\n';
     }
+
+    /// <inheritdoc/>
     public override void Write(char[] buffer, int index, int count) => Write(new string(buffer, index, count));
-    public override void WriteLine(string? value) { Begin(); inner.WriteLine(value); _atLineStart = true; }
+
+    /// <inheritdoc/>
+    public override void WriteLine(string? value)
+    {
+        Begin();
+        inner.WriteLine(value);
+        _atLineStart = true;
+    }
+
+    /// <inheritdoc/>
     public override void Flush() => inner.Flush();
+
+    /// <summary>
+    /// The stamp: the seconds since the process started, in brackets.
+    /// </summary>
+    string Stamp() => $"[{(DateTime.Now - ProcessStart).TotalSeconds,7:0.00}] ";
+
+    /// <summary>
+    /// Writes the stamp when a line starts.
+    /// </summary>
+    void Begin()
+    {
+        if (!_atLineStart) return;
+
+        inner.Write(Stamp());
+        _atLineStart = false;
+    }
 }

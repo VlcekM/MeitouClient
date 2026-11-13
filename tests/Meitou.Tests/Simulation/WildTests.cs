@@ -157,7 +157,8 @@ public class WildTests(ITestOutputHelper output)
         var sectors = pop.WildSites.Where(s => s.Kind == WildKind.Sector).ToList();
         var nests = pop.WildSites.Where(s => s.Kind == WildKind.Nest).ToList();
         Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
-        // The maker weighs a template by its share of the world's living platoons, town residents of the same template included (FUN_1406b9d10): later sectors may find it used up.
+        // The maker weighs a template by its share of the world's living platoons, town residents of the same template included (FUN_1406b9d10):
+        // later sectors may find it used up.
         Assert.All(sectors, s => Assert.InRange(pop.WildSquadsOf(s.Index).Count, 0, 2));
         Assert.All(sectors.Where(s => OwnTownIsNest(data, nests, s)), s => Assert.NotEmpty(pop.WildSquadsOf(s.Index)));
         Assert.All(nests, n => Assert.Empty(pop.WildSquadsOf(n.Index)));

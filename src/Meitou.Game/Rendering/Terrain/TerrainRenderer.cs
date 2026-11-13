@@ -816,6 +816,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void DrawDeferred()
     {
         if (!_latePending) return;
+
         _latePending = false;
         _lateResolve = false;
         _frame = _lateFrame;
@@ -841,9 +842,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Resolve(PassTargets targets)
     {
         if (!ResolvePending) return;
+
         (_latePending, _lateResolve) = (false, false);
         _frame = _lateFrame;
         PrepareConstants(material: true, patches: true);
+
         var p = _programs.ResolveProgram(NormalMapsOn);
         var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
         if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
@@ -857,6 +860,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         cmd.BeginRendering(targets.Rendering);
         state.Record(cmd, targets);
         cmd.BindPipeline(pipeline);
+
         var view = View();
         var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
@@ -864,6 +868,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
         cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
         cmd.SetScissor(new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
+
         cmd.Draw(3, 1);
         cmd.EndRendering();
         cmd.Order();
@@ -922,6 +927,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         bool resolve = ResolveInputs is not null;
         var p = _programs;
         var mode = resolve ? PatchMode.PrepassResolve : PatchMode.Prepass;
+
         RecordPatches(resolve ? p.PatchPrepassResolve : p.PatchPrepass, "terrain prepass", mode, _plainCount);
         if (_reliefCount > 0)
             RecordPatches((resolve ? p.PatchPrepassResolveTess : p.PatchPrepassTess)!, "terrain relief prepass", mode, _reliefCount, _reliefDraws);
@@ -932,6 +938,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             var cutRelief = (resolve ? p.PatchPrepassResolveCutTess : p.PatchPrepassCutTess)!;
             RecordPatches(cutRelief, "terrain relief prepass interior cut", mode, _cutReliefCount, _cutReliefDraws);
         }
+
         (_latePending, _lateFrame, _lateResolve) = (true, _frame, resolve);
     }
 
@@ -961,7 +968,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     /// <summary>
-    /// The ground trails the patches read (docs/render-terrain.md "Ground trails"; null: none, and the colour programs carry none of their code). Set before the scene.
+    /// The ground trails the patches read (docs/render-terrain.md "Ground trails"; null: none, and the colour programs carry none of their code).
+    /// Set before the scene.
     /// </summary>
     public TerrainTrailRenderer? Trails { get; set; }
 

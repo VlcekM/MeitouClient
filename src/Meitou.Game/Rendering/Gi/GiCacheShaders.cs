@@ -2,15 +2,20 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The hybrid GI's world-space radiance cache (docs/render-gi.md "Hybrid GI"): cells in a hash table keyed by a world position quantised at a size that grows with the
-/// eye distance and by the surface's axis, made by the low texels of the GI resolve that land in them, each traced from its own surface point and read back by
-/// interpolating the cells round each texel. Nothing is kept in screen space. <see cref="GiCache"/> runs the passes.
+/// The hybrid GI's world-space radiance cache (docs/render-gi.md "Hybrid GI"): cells in a hash table keyed by a world position quantised at a size
+/// that grows with the eye distance and by the surface's axis, made by the low texels of the GI resolve that land in them, each traced from its own
+/// surface point and read back by interpolating the cells round each texel. Nothing is kept in screen space. <see cref="GiCache"/> runs the passes.
 /// </summary>
 static class GiCacheShaders
 {
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>The per-frame view (<see cref="GiCache"/>'s <c>View</c>), alone or after the trace's probe constants.</summary>
+    /// <summary>
+    /// The per-frame view (<see cref="GiCache"/>'s <c>View</c>), alone or after the trace's probe constants.
+    /// </summary>
     const string ViewFields = """
             vec4 vEye;      // xyz the eye, w the low target's divisor
             vec4 vRight, vUp, vBack;
@@ -21,9 +26,14 @@ static class GiCacheShaders
 
         """;
 
+    /// <summary>
+    /// <see cref="ViewFields"/> as the View uniform block at binding 8.
+    /// </summary>
     const string ViewBlock = "\nlayout(set = 0, binding = 8, std140) uniform View\n{\n" + ViewFields + "};\n";
 
-    /// <summary>A cell as the table holds it, and the table's constants.</summary>
+    /// <summary>
+    /// A cell as the table holds it, and the table's constants.
+    /// </summary>
     static readonly string CellStruct = $$"""
         struct Cell
         {
@@ -36,7 +46,9 @@ static class GiCacheShaders
 
         """;
 
-    /// <summary>The key hashes and the cell size. Needs <c>vCells</c>.</summary>
+    /// <summary>
+    /// The key hashes and the cell size. Needs <c>vCells</c>.
+    /// </summary>
     const string Hashes = """
         uint cacheMix(uint h)
         {
@@ -58,9 +70,10 @@ static class GiCacheShaders
         """;
 
     /// <summary>
-    /// A low texel's surface (as the resolve picks it: the first pixel of its block that takes the probes), its position from the depth and its flat normal from the depth's
-    /// slope (KenshiNative: a mapped normal's bumps are noise to the light), and which cells it belongs to: the level by the eye distance (the next coarser one blending in over
-    /// the top of each level) and the axis nearest the normal (the second nearest blending in towards the diagonal), interiors apart.
+    /// A low texel's surface (as the resolve picks it: the first pixel of its block that takes the probes), its position from the depth and its flat
+    /// normal from the depth's slope (KenshiNative: a mapped normal's bumps are noise to the light), and which cells it belongs to: the level by the
+    /// eye distance (the next coarser one blending in over the top of each level) and the axis nearest the normal (the second nearest blending in
+    /// towards the diagonal), interiors apart.
     /// </summary>
     static readonly string Surface = DepthConvention.Glsl + $$"""
         {{GiShaders.OctDirection}}
@@ -154,7 +167,8 @@ static class GiCacheShaders
         """;
 
     /// <summary>
-    /// Once a frame, first: every cell no texel touched for <c>vFrame.y</c> frames (fewer as the table fills) gives its slot back; the list of this frame's cells empties.
+    /// Once a frame, first: every cell no texel touched for <c>vFrame.y</c> frames (fewer as the table fills) gives its slot back; the list of this
+    /// frame's cells empties.
     /// </summary>
     public static readonly string Evict = "#version 460\nlayout(local_size_x = 64) in;\n" + CellStruct + """
         layout(set = 0, binding = 0, std430) buffer Keys { uint keys[]; };
@@ -176,8 +190,8 @@ static class GiCacheShaders
         """;
 
     /// <summary>
-    /// Per low texel: the cells it belongs to (up to two levels times two axes), made where missing; its position and normal added into each one's sums for the frame
-    /// (12-bit fixed point within the cell); each cell listed once for the trace.
+    /// Per low texel: the cells it belongs to (up to two levels times two axes), made where missing; its position and normal added into each one's
+    /// sums for the frame (12-bit fixed point within the cell); each cell listed once for the trace.
     /// </summary>
     public static readonly string Touch = "#version 460\nlayout(local_size_x = 8, local_size_y = 8) in;\n" + CellStruct + """
         layout(set = 0, binding = 0) uniform usampler2D uSurfaceTarget;
@@ -249,7 +263,9 @@ static class GiCacheShaders
         }
         """;
 
-    /// <summary>The trace's dispatch: one workgroup per cell listed this frame.</summary>
+    /// <summary>
+    /// The trace's dispatch: one workgroup per cell listed this frame.
+    /// </summary>
     public const string Arguments = """
         #version 460
         layout(local_size_x = 1) in;
@@ -262,7 +278,9 @@ static class GiCacheShaders
         }
         """;
 
-    /// <summary>The trace's declarations; its Params block: <see cref="GiProbes"/>' constants, the rays' reach, then the view.</summary>
+    /// <summary>
+    /// The trace's declarations; its Params block: <see cref="GiProbes"/>' constants, the rays' reach, then the view.
+    /// </summary>
     static readonly string TraceSource = $$"""
         #version 460
         #extension GL_EXT_ray_query : require
@@ -314,9 +332,10 @@ static class GiCacheShaders
         """;
 
     /// <summary>
-    /// One workgroup per cell listed this frame, one ray per invocation from the cell's surface point (its texels' mean, averaged over frames) round its normal, cosine
-    /// weighted; the mean into the ring's slot for this frame's subset of directions, and the cell's light the mean of the subsets it holds. So a still scene's cells
-    /// hold a fixed set of <see cref="GiCache.Ring"/> × <see cref="GiCache.RaysPerCell"/> rays, each subset refreshed every <see cref="GiCache.Ring"/> frames.
+    /// One workgroup per cell listed this frame, one ray per invocation from the cell's surface point (its texels' mean, averaged over frames) round
+    /// its normal, cosine weighted; the mean into the ring's slot for this frame's subset of directions, and the cell's light the mean of the subsets
+    /// it holds. So a still scene's cells hold a fixed set of <see cref="GiCache.Ring"/> × <see cref="GiCache.RaysPerCell"/> rays, each subset
+    /// refreshed every <see cref="GiCache.Ring"/> frames.
     /// </summary>
     static readonly string TraceBody = $$"""
         vec3 axisDirection(int axis)
@@ -455,19 +474,24 @@ static class GiCacheShaders
         }
         """;
 
-    /// <summary>The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>).</summary>
+    /// <summary>
+    /// The trace for the frame's options (<see cref="GiShaders.Relocating"/>, <see cref="GiShaders.Clouded"/>).
+    /// </summary>
     public static string Trace(bool relocate, bool clouds)
     {
         string trace = TraceSource + TraceBody;
+
         if (clouds) trace = GiShaders.Clouded(trace.Replace("vec4 cloudSlots[3];", "", StringComparison.Ordinal));
+
         return relocate ? GiShaders.Relocating(trace) : trace;
     }
 
     /// <summary>
-    /// Per low texel: the light of the cells round it, as the resolve takes it (rgb the light, a how much). Per level and axis it belongs to, the eight cells whose centres
-    /// surround it, each weighted by its trilinear weight, its surface point's distance from the texel's tangent plane (half a cell: no light across a step or onto a parallel
-    /// surface), its normal's agreement and how many of its ring's subsets it has; a: the subsets held (full from <see cref="GiCache.FirstSubsets"/>) times how much of the
-    /// found cells' trilinear weight those weights keep (full from <see cref="GiCache.MatchFloor"/>), fading out over the last quarter of the cache's range.
+    /// Per low texel: the light of the cells round it, as the resolve takes it (rgb the light, a how much). Per level and axis it belongs to, the
+    /// eight cells whose centres surround it, each weighted by its trilinear weight, its surface point's distance from the texel's tangent plane
+    /// (half a cell: no light across a step or onto a parallel surface), its normal's agreement and how many of its ring's subsets it has; a: the
+    /// subsets held (full from <see cref="GiCache.FirstSubsets"/>) times how much of the found cells' trilinear weight those weights keep (full from
+    /// <see cref="GiCache.MatchFloor"/>), fading out over the last quarter of the cache's range.
     /// </summary>
     public static readonly string Gather = "#version 460\nlayout(local_size_x = 8, local_size_y = 8) in;\n" + CellStruct + """
         layout(set = 0, binding = 0) uniform usampler2D uSurfaceTarget;

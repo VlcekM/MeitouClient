@@ -33,8 +33,8 @@ public class FightRulesTests
     }
 
     /// <summary>
-    /// A, ordered onto B (its task target; <paramref name="picked"/>: by the player's pick, a focused attack), with C attacking it from the other side; each of
-    /// another faction, standing where it is put.
+    /// A, ordered onto B (its task target; <paramref name="picked"/>: by the player's pick, a focused attack), with C attacking it from the other
+    /// side; each of another faction, standing where it is put.
     /// </summary>
     static (CharacterId A, CharacterId B, CharacterId C) Three(SimWorld world, float far, bool picked = false)
     {
@@ -53,8 +53,9 @@ public class FightRulesTests
     }
 
     /// <summary>
-    /// A picked attack's target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0: only a focused fight, rows 5 and 61, ends with its
-    /// target): the fight ends once a swing in progress reaches its end marker ("Pacing"), though another still attacks the fighter.
+    /// A picked attack's target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0: only a focused fight, rows 5 and
+    /// 61, ends with its target): the fight ends once a swing in progress reaches its end marker ("Pacing"), though another still attacks the
+    /// fighter.
     /// </summary>
     [Fact]
     public void A_picked_attack_whose_target_drops_ends_its_fight_at_once()

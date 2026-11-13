@@ -1853,6 +1853,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
+
         // Each bite also sets playerWantsMeToGetUp (Character +0xec, FUN_140650370, Verified): a victim lying on, playing dead, gets up (staying low
         // when sneaking, docs/game/ragdolls.md "Staying low").
         if (medical.PlayingDead) medical.StandUp(Orders.Has(cc, CharacterOrders.Sneak));

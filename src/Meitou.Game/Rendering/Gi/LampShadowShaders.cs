@@ -1,17 +1,29 @@
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Sky;
+
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The lamps' traced shadows (docs/render-lights.md "Traced lamp shadows"): <see cref="Trace"/> finds per pixel which share of the traced lamps' diffuse light occluders take, and how
-/// much light that is of, <see cref="Apply"/> takes it off the finished scene and <see cref="Floor"/> keeps the scene above zero.
+/// The lamps' traced shadows (docs/render-lights.md "Traced lamp shadows"): <see cref="Trace"/> finds per pixel which share of the traced lamps'
+/// diffuse light occluders take, and how much light that is of, <see cref="Apply"/> takes it off the finished scene and <see cref="Floor"/> keeps
+/// the scene above zero.
 /// </summary>
 static class LampShadowShaders
 {
-    /// <summary>Most lamps a pixel traces.</summary>
-    public const int MinLamps = 2, MaxLamps = 2;
+    /// <summary>
+    /// Fewest lamps a pixel traces.
+    /// </summary>
+    public const int MinLamps = 2;
 
-    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), (the penumbra's radius is the lamp's own, LampTiles.SourceRadius).</summary>
+    /// <summary>
+    /// Most lamps a pixel traces.
+    /// </summary>
+    public const int MaxLamps = 2;
+
+    /// <summary>
+    /// World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), (the penumbra's radius is the lamp's own,
+    /// LampTiles.SourceRadius).
+    /// </summary>
     const string Constants = """
         const float LAMP_NEAR_SKIP = 15.0;
         const float LAMP_MIN_BIAS = 0.5;
@@ -19,10 +31,10 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// A character's skin takes a lamp as the colour pass gave it (<c>CharacterShaders.lampSkinDiffuse</c>, <c>LAMP_SKIN</c>): N.L and the band the scattering table adds
-    /// past the terminator, from the share and the table row the fragment wrote to the surface target (its bits 28-31 and 20-27) and the albedo's hue. The shading
-    /// normal stands for the smoothed ones of the red and green lookups. So a blocked lamp's whole term is taken back: with N.L alone the band stayed, and skin in a
-    /// lamp's shadow glowed red.
+    /// A character's skin takes a lamp as the colour pass gave it (<c>CharacterShaders.lampSkinDiffuse</c>, <c>LAMP_SKIN</c>): N.L and the band the
+    /// scattering table adds past the terminator, from the share and the table row the fragment wrote to the surface target (its bits 28-31 and 20-27)
+    /// and the albedo's hue. The shading normal stands for the smoothed ones of the red and green lookups. So a blocked lamp's whole term is taken back:
+    /// with N.L alone the band stayed, and skin in a lamp's shadow glowed red.
     /// </summary>
     static readonly string SkinTerm = $$"""
         #define LAMP_SKIN
@@ -32,8 +44,8 @@ static class LampShadowShaders
         {
             float lambert = clamp(dot(n, l), 0.0, 1.0);
             if (lampSkinShare <= 0.0 || uSkinLut < 0.5) return vec3(lambert);
-            float u = (dot(n, l) * 0.5 + 0.5) * {{((Characters.SkinScattering.Width - 1f) / Characters.SkinScattering.Width).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}} + {{(0.5f / Characters.SkinScattering.Width).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}};
-            float v = lampSkinRow * {{((Characters.SkinScattering.Height - 1f) / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}} + {{(0.5f / Characters.SkinScattering.Height).ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture)}};
+            float u = (dot(n, l) * 0.5 + 0.5) * {{GlslFloat((Characters.SkinScattering.Width - 1f) / Characters.SkinScattering.Width)}} + {{GlslFloat(0.5f / Characters.SkinScattering.Width)}};
+            float v = lampSkinRow * {{GlslFloat((Characters.SkinScattering.Height - 1f) / Characters.SkinScattering.Height)}} + {{GlslFloat(0.5f / Characters.SkinScattering.Height)}};
             vec3 s = textureLod(textures2D[nonuniformEXT(uint(uSkinLut + 0.5))], vec2(u, v), 0.0).rgb;
             float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
             return vec3(lambert) + extra * lampSkinHue * lampSkinHue * lampSkinShare;
@@ -51,8 +63,14 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// <c>lampLight</c> with <c>LAMP_VISIBILITY</c> turned into a note of each lamp's diffuse term (radiance and <c>diffuseNl</c> are its locals where the macro
-    /// expands), so the terms are the world's by construction: attenuation, spot cone, room clip. The strongest <c>LAMP_SLOTS</c> stay, in order.
+    /// A float as a GLSL literal: invariant culture, at least one decimal, at most six.
+    /// </summary>
+    static string GlslFloat(float value) => value.ToString("0.0#####", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// <c>lampLight</c> with <c>LAMP_VISIBILITY</c> turned into a note of each lamp's diffuse term (radiance and <c>diffuseNl</c> are its locals
+    /// where the macro expands), so the terms are the world's by construction: attenuation, spot cone, room clip. The strongest <c>LAMP_SLOTS</c>
+    /// stay, in order.
     /// </summary>
     const string Picks = """
         int pickLamp[LAMP_SLOTS];
@@ -119,8 +137,8 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// One ray per picked lamp, to its centre: the same every frame (no noise for the upscaler to average, nothing to trail). A lamp is a point of about a decimetre, so its
-    /// shadows are near hard.
+    /// One ray per picked lamp, to its centre: the same every frame (no noise for the upscaler to average, nothing to trail). A lamp is a point of
+    /// about a decimetre, so its shadows are near hard.
     /// </summary>
     static readonly string BlockerRays = $$"""
         // The surface target's bits of a receiver: a fragment the resolve lights (bit 8), or a character (bit 19, AtmosphereShaders' kenshiLight).
@@ -195,6 +213,10 @@ static class LampShadowShaders
         }
         """;
 
+    /// <summary>
+    /// <see cref="BlockerRays"/> and <c>lostLight</c>: per pixel, whether occluders block each picked lamp, its light per unit of albedo and the
+    /// penumbra's radius their blockers leave.
+    /// </summary>
     static readonly string Rays = BlockerRays + $$"""
         // Per traced lamp, in the lamps' index order so a slot means one lamp across the neighbouring pixels: whether occluders block it (r, g; the filter softens these) and its light per
         // unit of albedo (totals), and the penumbra their blockers leave (a: world units, 0 none; PenumbraFilter). Each lamp is filtered apart: a mean of the light, or of one share of two
@@ -256,15 +278,12 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// One lamp's rays over an area of the screen (<c>uRect</c>: first x, y, one past the last x, y): whether what moves blocks it (<c>uLost</c> r; a the penumbra's radius at the receiver in world units, -1 no receiver) and
-    /// the light it gives per unit of albedo after the still world (<c>uTotal</c>). One lamp a pass: nothing limits how many a pixel takes, and the filter reads one lamp's flags.
-    /// </summary>
-    /// <summary>
-    /// Which cells of 64 pixels a lamp's passes work on (<see cref="LampShadowPass"/>): a thread per cell of the area. A cell counts when the box of a mover's shadow covers it (the
-    /// CPU's cells) and, with this frame's depth pyramid, when what it shows between its nearest and farthest depth can lie within the lamp's reach and inside a mover's shadow (the cone
-    /// from the lamp round the mover's sphere, from the mover on): a sphere round that part of the cell's frustum against the lamp's sphere and the movers' cones, so never fewer cells
-    /// than hold a shadowed pixel. The cells that count and their neighbours (the filter reads round a pixel) are appended to the lamp's list; the count is the indirect dispatch's
-    /// second number (64 blocks of 8 x 8 pixels a cell along the first).
+    /// Which cells of 64 pixels a lamp's passes work on (<see cref="LampShadowPass"/>): a thread per cell of the area. A cell counts when the box of
+    /// a mover's shadow covers it (the CPU's cells) and, with this frame's depth pyramid, when what it shows between its nearest and farthest depth can
+    /// lie within the lamp's reach and inside a mover's shadow (the cone from the lamp round the mover's sphere, from the mover on): a sphere round that
+    /// part of the cell's frustum against the lamp's sphere and the movers' cones, so never fewer cells than hold a shadowed pixel. The cells that count
+    /// and their neighbours (the filter reads round a pixel) are appended to the lamp's list; the count is the indirect dispatch's second number (64
+    /// blocks of 8 x 8 pixels a cell along the first).
     /// </summary>
     public const string Classify = """
         #version 460
@@ -339,14 +358,23 @@ static class LampShadowShaders
         }
         """;
 
+    /// <summary>
+    /// One lamp's rays over an area of the screen (<c>uRect</c>: first x, y, one past the last x, y): whether what moves blocks it (<c>uLost</c> r;
+    /// a the penumbra's radius at the receiver in world units, -1 no receiver) and the light it gives per unit of albedo after the still world
+    /// (<c>uTotal</c>). One lamp a pass: nothing limits how many a pixel takes, and the filter reads one lamp's flags.
+    /// </summary>
     public static readonly string TraceOne = One(false);
 
     /// <summary>
-    /// The light a lamp gives the pixels of an area that its filtered flag (<c>uFlag</c>) marks, per unit of albedo after the still world (the lamp's tile), times the flag, added to the
-    /// sum of the lamps (<c>uSum</c>). Only those pixels pay for the lamp's visibility: the rays' kernel asks no more than whether the lamp reaches the pixel at all.
+    /// The light a lamp gives the pixels of an area that its filtered flag (<c>uFlag</c>) marks, per unit of albedo after the still world (the lamp's
+    /// tile), times the flag, added to the sum of the lamps (<c>uSum</c>). Only those pixels pay for the lamp's visibility: the rays' kernel asks no
+    /// more than whether the lamp reaches the pixel at all.
     /// </summary>
     public static readonly string TraceLight = One(true);
 
+    /// <summary>
+    /// The one-lamp kernel over a cell list: <see cref="TraceLight"/> when <paramref name="light"/>, else <see cref="TraceOne"/>.
+    /// </summary>
     static string One(bool light) => $$"""
         #version 460
         #extension GL_EXT_ray_query : require
@@ -448,7 +476,8 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// The lost light of every pixel of the render size into <c>uLost</c> (rgb per unit of albedo; 0 where no lamp is blocked or the surface target has nothing).
+    /// The lost light of every pixel of the render size into <c>uLost</c> (rgb per unit of albedo; 0 where no lamp is blocked or the surface target
+    /// has nothing).
     /// <paramref name="lamps"/>: the most lamps a pixel traces (<see cref="MinLamps"/> to <see cref="MaxLamps"/>).
     /// </summary>
     public static string Trace(int lamps) => $$"""
@@ -503,7 +532,8 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// Debug (console <c>lamps refview</c>): one lamp's visibility of the still world over the screen, grey, as the tile gives it (mode 0, <c>uOrigin</c>'s w) or as the truth of 256 rays to points of the lamp's disc (1), for comparing the two.
+    /// Debug (console <c>lamps refview</c>): one lamp's visibility of the still world over the screen, grey, as the tile gives it (mode 0,
+    /// <c>uOrigin</c>'s w) or as the truth of 256 rays to points of the lamp's disc (1), for comparing the two.
     /// </summary>
     public static readonly string TraceReference = $$"""
         #version 460
@@ -588,7 +618,9 @@ static class LampShadowShaders
         }
         """;
 
-    /// <summary>Debug: shows a target over the scene.</summary>
+    /// <summary>
+    /// Debug: shows a target over the scene.
+    /// </summary>
     public const string ShowTarget = """
         #version 330 core
         in vec2 vUv;
@@ -598,8 +630,8 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// The lamp tiles' fill (LampTiles): one workgroup per 8 texels square of the tiles of a frame, one closest-hit ray per texel from the lamp, the distance over the lamp's reach (1: nothing).
-    /// Two rays, one for what stands on the ground and one for the ground (<c>groundExit</c>).
+    /// The lamp tiles' fill (LampTiles): one workgroup per 8 texels square of the tiles of a frame, one closest-hit ray per texel from the lamp, the
+    /// distance over the lamp's reach (1: nothing). Two rays, one for what stands on the ground and one for the ground (<c>groundExit</c>).
     /// </summary>
     public static readonly string TileFill = $$"""
         #version 460
@@ -703,7 +735,9 @@ static class LampShadowShaders
         }
         """;
 
-    /// <summary>Drawn with a max blend after <see cref="Apply"/>: the stored albedo's rounding must not take a pixel below black.</summary>
+    /// <summary>
+    /// Drawn with a max blend after <see cref="Apply"/>: the stored albedo's rounding must not take a pixel below black.
+    /// </summary>
     public const string Floor = """
         #version 330 core
         in vec2 vUv;

@@ -5,28 +5,134 @@ using System.Globalization;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// The traced sun's shaders (docs/render-shadows.md "Traced sun"). Port of KenshiNative's traced sun shadows (<c>knSunShadowRay</c>, <c>kn_grass_card.hlsl</c>), which
-/// starts from a G-buffer and knows each pixel's triangle; here the scene is forward and the receiver is known by its depth and the surface target, so what KenshiNative
-/// skips by name is skipped by distance along the ray.
+/// The traced sun's shaders (docs/render-shadows.md "Traced sun"). Port of KenshiNative's traced sun shadows (<c>knSunShadowRay</c>,
+/// <c>kn_grass_card.hlsl</c>), which starts from a G-buffer and knows each pixel's triangle; here the scene is forward and the receiver is known by
+/// its depth and the surface target, so what KenshiNative skips by name is skipped by distance along the ray.
 /// </summary>
 static class TracedSunShaders
 {
     /// <summary>
-    /// Instance masks in the traced scene. <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/>, <see cref="Grass"/> and <see cref="Characters"/> are the
-    /// casters' alone: the lamps' shadow rays see everything (<see cref="LampMask"/>).
+    /// Instance mask: the fine terrain grid. The masks: <see cref="GiMask"/> is what the probes see, so <see cref="SmallFoliage"/>,
+    /// <see cref="Grass"/> and <see cref="Characters"/> are the casters' alone: the lamps' shadow rays see everything (<see cref="LampMask"/>).
     /// </summary>
-    public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40, Moving = 0x80;
-    public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse | Moving;
-    public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
-    /// <summary>What the per-pixel lamp rays see beside the tiles: what moves (characters, and an object that has moved in the last second, <see cref="Moving"/>).</summary>
-    public const byte LampMovers = Characters | Moving;
-    /// <summary>What a lamp's cached tile holds (LampTiles): what stands still and does not follow the eye, the ground apart as it takes its own ray.</summary>
-    public const byte LampTileObjects = Objects | Foliage | SmallFoliage, LampTileGround = TerrainFine | TerrainCoarse;
+    public const byte TerrainFine = 0x01;
 
     /// <summary>
-    /// A shadow ray's cut-out test at a candidate: kept where the map the draw cuts with reaches its threshold (an object part's own pair for the casters, else the probes'). A grass
-    /// card's coordinates are its corners' order; a character's map channel is in its record's <c>diffuse</c> (the probes never see characters). Needs <c>geometries</c>, the
-    /// bindless table, <c>TexCoord</c>, <c>Triangle</c> and <c>offsetBy</c>.
+    /// Instance mask: the objects.
+    /// </summary>
+    public const byte Objects = 0x02;
+
+    /// <summary>
+    /// Instance mask: the foliage the probes see.
+    /// </summary>
+    public const byte Foliage = 0x04;
+
+    /// <summary>
+    /// Instance mask: the coarse terrain grid.
+    /// </summary>
+    public const byte TerrainCoarse = 0x08;
+
+    /// <summary>
+    /// Instance mask: the small foliage, the casters' alone.
+    /// </summary>
+    public const byte SmallFoliage = 0x10;
+
+    /// <summary>
+    /// Instance mask: the grass (<see cref="TracedGrass"/>), the casters' alone.
+    /// </summary>
+    public const byte Grass = 0x20;
+
+    /// <summary>
+    /// Instance mask: the characters (<see cref="TracedCharacters"/>), the casters' alone.
+    /// </summary>
+    public const byte Characters = 0x40;
+
+    /// <summary>
+    /// Instance mask: an object that has moved in the last second.
+    /// </summary>
+    public const byte Moving = 0x80;
+
+    /// <summary>
+    /// What the probes see.
+    /// </summary>
+    public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse | Moving;
+
+    /// <summary>
+    /// What the lamps' shadow rays see: everything.
+    /// </summary>
+    public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
+
+    /// <summary>
+    /// What the per-pixel lamp rays see beside the tiles: what moves (characters, and an object that has moved in the last second,
+    /// <see cref="Moving"/>).
+    /// </summary>
+    public const byte LampMovers = Characters | Moving;
+
+    /// <summary>
+    /// What a lamp's cached tile holds (LampTiles): what stands still and does not follow the eye.
+    /// </summary>
+    public const byte LampTileObjects = Objects | Foliage | SmallFoliage;
+
+    /// <summary>
+    /// The ground of a lamp's cached tile, apart as it takes its own ray.
+    /// </summary>
+    public const byte LampTileGround = TerrainFine | TerrainCoarse;
+
+    /// <summary>
+    /// What the surfaces' sun rays see besides the terrain and the grass.
+    /// </summary>
+    const byte Solids = Objects | Foliage | SmallFoliage | Characters | Moving;
+
+    /// <summary>
+    /// What the visibility volume's rays see besides the terrain (<see cref="TracedSunVolume"/>): every solid the surfaces' rays see; no grass (a ray
+    /// from the air).
+    /// </summary>
+    public const byte VolumeSolids = Solids;
+
+    /// <summary>
+    /// The fine terrain grid (smooth, 8 apart: <see cref="GiScene"/>) is asked from a point this many units above the surface, plus a share of the
+    /// distance (<see cref="FineTerrainLiftPerUnit"/>), along the whole ray: the grid is not the drawn ground (its displacement, the curved outline),
+    /// so a ray from the ground itself would hit its own facets, while the 24-unit blind range it had let the ground at a cliff's foot see the sun
+    /// through the cliff.
+    /// </summary>
+    const float FineTerrainLift = 3;
+
+    /// <summary>
+    /// The fine terrain grid's lift per unit of distance from the eye.
+    /// </summary>
+    const float FineTerrainLiftPerUnit = 0.002f;
+
+    /// <summary>
+    /// The coarse terrain grid (160 apart) is asked from this far along the ray.
+    /// </summary>
+    const float CoarseTerrainBlind = 320;
+
+    /// <summary>
+    /// World units: the most the drawn ground's relief displaces it from the heightmap (GroundRelief's max depth at the deepest setting), what
+    /// <c>terrainOrigin</c> takes back.
+    /// </summary>
+    const float ReliefAmplitude = 12;
+
+    /// <summary>
+    /// On a character (docs/render-shadows.md "Traced sun"): how far a ray from under a turned facet may go before the back of a face blocks it (a
+    /// body's thickness).
+    /// </summary>
+    const float BodyChord = 0.8f;
+
+    /// <summary>
+    /// On a character: a shadow edge's least half width (world units; skin spreads light some millimetres).
+    /// </summary>
+    const float BodyPenumbra = 0.025f;
+
+    /// <summary>
+    /// On a character: what a ray from a facet facing the sun skips, past the creases between facets.
+    /// </summary>
+    const float BodyContact = 0.03f;
+
+    /// <summary>
+    /// A shadow ray's cut-out test at a candidate: kept where the map the draw cuts with reaches its threshold (an object part's own pair for the
+    /// casters, else the probes'). A grass card's coordinates are its corners' order; a character's map channel is in its record's <c>diffuse</c>
+    /// (the probes never see characters). Needs <c>geometries</c>, the bindless table, <c>TexCoord</c>, <c>Triangle</c> and <c>offsetBy</c>.
     /// </summary>
     internal static readonly string CasterCutout = $$"""
         vec2 casterUv(Geometry g, uvec3 tri, vec2 bary)
@@ -61,28 +167,10 @@ static class TracedSunShaders
             return (g.kind == {{GeometryRecord.Character}}u ? texel[g.diffuse & 3u] : texel.a) >= (worn ? 0.25 * cut : cut);
         }
         """;
-    const byte Solids = Objects | Foliage | SmallFoliage | Characters | Moving;
-    /// <summary>What the visibility volume's rays see besides the terrain (<see cref="TracedSunVolume"/>): every solid the surfaces' rays see; no grass (a ray from the air).</summary>
-    public const byte VolumeSolids = Solids;
 
     /// <summary>
-    /// The fine terrain grid (smooth, 8 apart: <see cref="GiScene"/>) is asked from a point this many units above the surface, plus a share of the distance, along the whole ray:
-    /// the grid is not the drawn ground (its displacement, the curved outline), so a ray from the ground itself would hit its own facets, while the 24-unit blind range it had let
-    /// the ground at a cliff's foot see the sun through the cliff. The coarse grid (160 apart) is asked from 320 along the ray.
+    /// One ray per pixel: the mask's red is what of the sun reaches the pixel (1 where nothing is asked).
     /// </summary>
-    const float FineTerrainLift = 3, FineTerrainLiftPerUnit = 0.002f, CoarseTerrainBlind = 320;
-    /// <summary>World units: the most the drawn ground's relief displaces it from the heightmap (GroundRelief's max depth at the deepest setting), what <c>terrainOrigin</c> takes back.</summary>
-    const float ReliefAmplitude = 12;
-    /// <summary>On a character (docs/render-shadows.md "Traced sun"): how far a ray from under a turned facet may go before the back of a face blocks it (a body's thickness), and a shadow edge's least half width (world units; skin spreads light some millimetres).</summary>
-    const float BodyChord = 0.8f, BodyPenumbra = 0.025f, BodyContact = 0.03f;
-
-    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
-
-    /// <summary><see cref="BodyChord"/> and <see cref="BodyContact"/> as GLSL constants, for the lamps' rays on a character (<see cref="LampShadowShaders"/>).</summary>
-    internal static string BodyChordText => F(BodyChord);
-    internal static string BodyContactText => F(BodyContact);
-
-    /// <summary>One ray per pixel: the mask's red is what of the sun reaches the pixel (1 where nothing is asked).</summary>
     public static readonly string Mask = $$"""
         #version 460
         #extension GL_EXT_ray_query : require
@@ -264,8 +352,8 @@ static class TracedSunShaders
         """;
 
     /// <summary>
-    /// <c>--debug-shadows 4</c>, over the scene in place of its colour: dark blue where the cascades light the sun (no traced share), else what the rays let through, green lit and
-    /// red shadowed, dimmed where the pixel takes no sun (its back, the night).
+    /// <c>--debug-shadows 4</c>, over the scene in place of its colour: dark blue where the cascades light the sun (no traced share), else what the
+    /// rays let through, green lit and red shadowed, dimmed where the pixel takes no sun (its back, the night).
     /// </summary>
     public static readonly string Debug = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct + """
         in vec2 vUv;
@@ -287,8 +375,8 @@ static class TracedSunShaders
         """;
 
     /// <summary>
-    /// The sun over the scene (blend one, one; red, green and blue): the fragment's term, what the rays let through, and the haze the fragment's own colour went through
-    /// (<c>atmoApply</c> is linear in the colour, so its multiplier is the same at this position).
+    /// The sun over the scene (blend one, one; red, green and blue): the fragment's term, what the rays let through, and the haze the fragment's own
+    /// colour went through (<c>atmoApply</c> is linear in the colour, so its multiplier is the same at this position).
     /// </summary>
     public static readonly string Add = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct + """
         in vec2 vUv;
@@ -308,4 +396,19 @@ static class TracedSunShaders
             fragColour = vec4(texelFetch(uTerm, px, 0).rgb * texelFetch(uMask, px, 0).r * hazeMul, 0.0);
         }
         """;
+
+    /// <summary>
+    /// <see cref="BodyChord"/> as a GLSL constant, for the lamps' rays on a character (<see cref="LampShadowShaders"/>).
+    /// </summary>
+    internal static string BodyChordText => F(BodyChord);
+
+    /// <summary>
+    /// <see cref="BodyContact"/> as a GLSL constant, for the lamps' rays on a character (<see cref="LampShadowShaders"/>).
+    /// </summary>
+    internal static string BodyContactText => F(BodyContact);
+
+    /// <summary>
+    /// A float as a GLSL literal: invariant culture, at least one decimal, at most nine.
+    /// </summary>
+    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 }

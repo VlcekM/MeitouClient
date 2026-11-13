@@ -636,13 +636,22 @@ sealed class ScreenshotScenes(GameHost host)
         // The tabs by name (SettingsMenu.GraphicsPages): a new tab moves no shot.
         int Tab(string name) => Array.IndexOf(SettingsMenu.GraphicsPages, name);
         foreach (var page in SettingsMenu.GraphicsPages) Shot(page.ToLowerInvariant().Replace(" & ", "-").Replace(' ', '-'), Tab(page));
-        menu.Grouping.ShowcaseOpen("Shadows", "Indirect light", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
+        menu.Grouping.ShowcaseOpen(
+            "Shadows", "Indirect light", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
         Shot("lighting-open", Tab("Lighting"));
         Shot("colour-open", Tab("Colour"));
         Shot("objects-open", Tab("Objects"));
-        Shot("post-changed", Tab("Post FX"), () => { menu.Grouping.ShowcaseOpen("Heat haze"); menu.ShowcaseSet("Heat haze strength (1 = game)", 0.8f); });
+        Shot("post-changed", Tab("Post FX"), () =>
+        {
+            menu.Grouping.ShowcaseOpen("Heat haze");
+            menu.ShowcaseSet("Heat haze strength (1 = game)", 0.8f);
+        });
         menu.ShowcaseSet("Heat haze strength (1 = game)", 0.5f);
-        Shot("preset-changed", Tab("Colour"), () => { menu.LookPresets.ShowcaseLook(1); menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f); });
+        Shot("preset-changed", Tab("Colour"), () =>
+        {
+            menu.LookPresets.ShowcaseLook(1);
+            menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f);
+        });
         Shot("preset-list", Tab("Colour"), menu.LookBar.ShowcaseOpenLooks);
         Shot("save-as", Tab("Colour"), menu.LookBar.ShowcaseNaming);
         Shot("low-quality", Tab("Lighting"), () => menu.Tiers.ShowcaseTier(0));

@@ -269,7 +269,8 @@ sealed class PostComposite : IDisposable
     /// The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
     /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.
     /// </summary>
-    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn, Vector4 contact = default)
+    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn,
+        Vector4 contact = default)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
         if (volumes) RunFogVolumes(cmd, scene, depth, inputs);

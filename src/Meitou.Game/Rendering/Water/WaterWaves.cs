@@ -17,7 +17,8 @@ public sealed class WaveSet
     public const double SecondsPerGameHour = 1200.0 / 11.0;
 
     /// <summary>
-    /// The shore waves: one every <see cref="BreakerPeriod"/> seconds on average (in sets of seven; the shader's waveCount, docs/render-water.md "Shore waves").
+    /// The shore waves: one every <see cref="BreakerPeriod"/> seconds on average (in sets of seven; the shader's waveCount, docs/render-water.md
+    /// "Shore waves").
     /// </summary>
     public const float BreakerPeriod = 8;
 
@@ -32,12 +33,14 @@ public sealed class WaveSet
     float _wind;
 
     /// <summary>
-    /// The shore waves' clock wraps here: 4096 sets of seven waves, so a wave's number (mod 4096, the shader's per-wave noise) and its set do not jump.
+    /// The shore waves' clock wraps here: 4096 sets of seven waves, so a wave's number (mod 4096, the shader's per-wave noise) and its set do not
+    /// jump.
     /// </summary>
     public const double ClockWrap = 4096.0 * 7 * BreakerPeriod;
 
     /// <summary>
-    /// x the shore waves' clock (game seconds, below <see cref="ClockWrap"/>), y the run-up height, z the mean wave period (s), w the waves' height (units).
+    /// x the shore waves' clock (game seconds, below <see cref="ClockWrap"/>), y the run-up height, z the mean wave period (s), w the waves' height
+    /// (units).
     /// </summary>
     public Vector4 Shore;
 
@@ -76,6 +79,7 @@ public sealed class WaveSet
 
         float target = WindFactor(windSpeed);
         _wind = first ? target : _wind + (target - _wind) * (float)(1 - Math.Exp(-dt / 10));
+
         float swell = 0.6f + 0.6f * MathF.Min(_wind, 1.5f);
         Shore = new Vector4((float)(seconds % ClockWrap), 2.2f * swell, BreakerPeriod, 3.5f * swell);
     }

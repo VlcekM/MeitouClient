@@ -116,22 +116,6 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly Dictionary<ZoneCoordinate, FoliageZoneState> _zones = [];
 
     /// <summary>
-    /// The alpha cut the grass fragment tests its sprite with (FoliageShaders, the game's 0.6).
-    /// </summary>
-    const float GrassCut = 0.6f;
-
-    /// <summary>
-    /// The field behind <see cref="GrassFarCover"/>.
-    /// </summary>
-    bool _grassFarCover = true;
-
-    /// <summary>
-    /// Bumped by each <see cref="GrassFarCover"/> change: a patch buffer whose <see cref="FoliageGrassBuffer.SpriteVersion"/> differs looks its sprite
-    /// up again.
-    /// </summary>
-    int _grassSpriteVersion;
-
-    /// <summary>
     /// The meshes by their record.
     /// </summary>
     readonly Dictionary<FoliageMesh, FoliageMeshAsset> _assetsByMesh = [];
@@ -1382,6 +1366,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         NearestMissingGrass = float.PositiveInfinity;
         _grassNearestWaiting.Clear();
         _grassFarthestHeld.Clear();
+
         var walk = new GrassWalkTally { VictimDistance = float.NegativeInfinity };
         foreach (var state in _zones.Values) walk.InFlight += state.GrassRunning;
         foreach (var state in _zones.Values) WalkZonePages(state, eye, kept, ref walk);
@@ -1389,6 +1374,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         _grassEyeWaited = walk.EyeWaiting;
         _grassSettled = !walk.Unsettled && !walk.EyeWaiting && _grassWanted.Count == 0 && walk.InFlight == 0;
         if (_grassSettled) RememberGrassWalk(eye, kept);
+
         if (walk.EyeWaiting && _grass.Full && walk.Victim is not null)
         {
             _grass.FreePage(walk.Victim);
@@ -1455,6 +1441,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             walk.WaitingPages++;
             KeepBest(_grassNearestWaiting, new(d, state, key, page), 1);
         }
+
         if (HeldCandidate(page, d)) KeepBest(_grassFarthestHeld, new(d, state, key, page), -1);
         if (page.Job is not null || page.PendingBlades is not null || page.Buffers is null)
             walk.Unsettled = true;
@@ -1505,6 +1492,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         int at = list.Count;
         while (at > 0 && (list[at - 1].Distance - c.Distance) * sign > 0) at--;
         if (at >= GrassMovesPerFrame) return;
+
         list.Insert(at, c);
         if (list.Count > GrassMovesPerFrame) list.RemoveAt(list.Count - 1);
     }
@@ -1554,6 +1542,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool noRoom = _grass.Full && waitingPages >= MaxGrassWaiting && _grassNearestWaiting.Count > 0;
         float makeWithin = noRoom ? _grassNearestWaiting[^1].Distance : float.PositiveInfinity;
         if (noRoom) _grassNear = 0;
+
         foreach (var wanted in _grassWanted)
         {
             // no room for it: nothing waits for it (the title's Pending)
@@ -1562,18 +1551,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 _grassWaiting--;
                 continue;
             }
+
             if (picked == free && (free == 0 || wanted.Distance >= _grassPicks[picked - 1].Distance)) continue;
 
             int at = picked < free ? picked++ : picked - 1;
             for (; at > 0 && _grassPicks[at - 1].Distance > wanted.Distance; at--) _grassPicks[at] = _grassPicks[at - 1];
             _grassPicks[at] = wanted;
         }
+
         for (int i = 0; i < picked; i++)
         {
             var (_, state, key) = _grassPicks[i];
             _grassPicks[i] = default;
             StartGrassPage(state, key);
         }
+
         return picked;
     }
 
@@ -3830,6 +3822,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly JobPool<GrassJob> _grassJobs = new();
 
     /// <summary>
+    /// The alpha cut the grass fragment tests its sprite with (FoliageShaders, the game's 0.6).
+    /// </summary>
+    const float GrassCut = 0.6f;
+
+    /// <summary>
+    /// The field behind <see cref="GrassFarCover"/>.
+    /// </summary>
+    bool _grassFarCover = true;
+
+    /// <summary>
+    /// Bumped by each <see cref="GrassFarCover"/> change: a patch buffer whose <see cref="FoliageGrassBuffer.SpriteVersion"/> differs looks its
+    /// sprite up again.
+    /// </summary>
+    int _grassSpriteVersion;
+
+    /// <summary>
     /// Grass keeps its cover at a distance (docs/render-foliage.md "Far grass"): its sprites are loaded with mips that keep the share of texels the
     /// top level keeps at the cut (WorldTextureCache's alpha cover); off, the files' own mips, with which thin grass fades out a short way from the
     /// eye, as in the game. A change takes every patch's sprite again.
@@ -3840,11 +3848,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         set
         {
             if (_grassFarCover == value) return;
+
             _grassFarCover = value;
             _grassSpriteVersion++;
             foreach (var state in _zones.Values)
+            {
                 for (int i = 0; i < state.PatchTextures.Length && i < state.Patches.Count; i++)
                     state.PatchTextures[i] = (GrassSprite(state.Patches[i].Grass.Sprite), state.PatchTextures[i].ColourMap);
+            }
         }
     }
 
@@ -4116,6 +4127,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly List<MotionDraw> _motionDraws = [];
 
     /// <summary>
+    /// The main view's relative view-projection for this <see cref="Draw"/> (null: a depth pass, which projects from its own camera).
+    /// </summary>
+    Matrix4x4? _drawRelative;
+
+    /// <summary>
+    /// This frame's relative view-projection (positions less the eye) as drawn and unjittered, and last frame's unjittered one.
+    /// </summary>
+    Matrix4x4 _motionRelative, _motionRelativeUnjittered, _previousRelativeUnjittered;
+
+    /// <summary>
+    /// Last frame's eye for the motion pass, which <see cref="PreviousRelative"/> moves last frame's relative view-projection by.
+    /// </summary>
+    Vector3 _previousMotionEye;
+
+    /// <summary>
     /// The scene camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.
     /// </summary>
     public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum, Matrix4x4 relative,
@@ -4127,18 +4153,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>
-    /// The scene's view-projection for positions less <paramref name="eye"/> (the vertex stages project relative to the eye, docs/renderer-native.md
-    /// "Render origin"): the frame's precise one for the main view, else translation(eye) × <paramref name="viewProjection"/> (shadow casters, previews).
+    /// The scene's view-projection for positions less <paramref name="eye"/> (the vertex stages project relative to the eye,
+    /// docs/renderer-native.md "Render origin"): the frame's precise one for the main view, else translation(eye) ×
+    /// <paramref name="viewProjection"/> (shadow casters, previews).
     /// </summary>
     Matrix4x4 Projected(Matrix4x4 viewProjection, Vector3 eye) => _drawRelative ?? Matrix4x4.CreateTranslation(eye) * viewProjection;
-
-    /// <summary>
-    /// The main view's relative view-projection for this <see cref="Draw"/> (null: a depth pass, which projects from its own camera).
-    /// </summary>
-    Matrix4x4? _drawRelative;
-
-    Matrix4x4 _motionRelative, _motionRelativeUnjittered, _previousRelativeUnjittered;
-    Vector3 _previousMotionEye;
 
     /// <summary>
     /// Last frame's unjittered relative view-projection seen from this frame's eye (the eye's move put back in, in double).
@@ -4150,6 +4169,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 (float)((double)_motionEye.Z - _previousMotionEye.Z))
             : Vector3.Zero;
         var previous = Matrix4x4.CreateTranslation(move) * (havePreviousCamera ? _previousRelativeUnjittered : _motionRelativeUnjittered);
+
         (_previousRelativeUnjittered, _previousMotionEye) = (_motionRelativeUnjittered, _motionEye);
         return previous;
     }
@@ -4425,7 +4445,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     internal const float RayGrassPageSize = PageSize;
 
     /// <summary>
-    /// The drawn grass patches of the pages within <paramref name="range"/> of <paramref name="eye"/> across the ground, nearest first. Render thread.
+    /// The drawn grass patches of the pages within <paramref name="range"/> of <paramref name="eye"/> across the ground, nearest first. Render
+    /// thread.
     /// </summary>
     internal void RayGrass(Vector3 eye, float range, List<RayGrassPatch> into)
     {
@@ -4433,6 +4454,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var state in _zones.Values)
         {
             if (state.Pages.Count == 0 || state.Patches.Count == 0) continue;
+
             foreach (var (key, page) in state.Pages)
             {
                 float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
@@ -4454,6 +4476,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var patch = state.Patches[i];
             var b = Patch(page.Buffers[i], patch);
             if (b.Shown == 0 || distance >= GrassRange(patch) || b.Sprite is not { Key: not 0 } sprite) continue;
+
             var g = patch.Grass;
             var size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
             float sway = patch.Layer.Wind ? g.SwayLength : 0f;

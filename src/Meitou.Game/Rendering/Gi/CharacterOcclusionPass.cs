@@ -16,46 +16,82 @@ namespace Meitou.Game.Rendering.Gi;
 /// </summary>
 sealed unsafe class CharacterOcclusionPass : IDisposable
 {
-    /// <summary>The rays a pixel traces; each pixel of a 4 x 4 block turns them by a sixteenth of their spacing, so a block holds 16 times as many directions.</summary>
+    /// <summary>
+    /// The rays a pixel traces; each pixel of a 4 x 4 block turns them by a sixteenth of their spacing, so a block holds 16 times as many directions.
+    /// </summary>
     public const int Rays = 8;
-    /// <summary>World units: what is not worn counts for nothing as a blocker nearer than the first, in full from the second.</summary>
+    /// <summary>
+    /// World units: what is not worn counts for nothing as a blocker nearer than the first, in full from the second.
+    /// </summary>
     const float NearStart = 0.4f, NearFull = 1.5f;
 
-    static string F(float v) => v.ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture);
-
+    /// <summary>
+    /// The GPU context the pass records into.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The trace (<see cref="Trace"/>).
+    /// </summary>
     readonly GpuProgram _program;
+
+    /// <summary>
+    /// The pipeline of <see cref="_program"/>.
+    /// </summary>
     readonly GpuComputePipeline _pipeline;
+
+    /// <summary>
+    /// The nearest, clamped sampler the depth and the surface target are read with.
+    /// </summary>
     readonly GpuSampler _sampler;
 
+    /// <summary>
+    /// The trace's constants (its Params block).
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    struct Params
+    {
+        /// <summary>
+        /// NDC, jittered as the frame was, to the position relative to the eye.
+        /// </summary>
+        public Matrix4x4 Inverse;
+
+        /// <summary>
+        /// The eye relative to the traced origin (w the rays' mask); the size, the rays' reach and a pixel's width per unit of depth.
+        /// </summary>
+        public Vector4 Eye, Size;
+    }
+
+    /// <summary>
+    /// <paramref name="v"/> as a GLSL float literal (invariant culture, up to four decimals).
+    /// </summary>
+    static string F(float v) => v.ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Compiles the trace and makes its pipeline and sampler.
+    /// </summary>
     public CharacterOcclusionPass(GpuContext ctx)
     {
-        this._ctx = ctx;
+        _ctx = ctx;
         _program = ctx.Shaders.Compute(Trace, "character occlusion",
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (3, DescriptorType.StorageImage),
             (4, DescriptorType.AccelerationStructureKhr), (5, DescriptorType.StorageBuffer), (6, DescriptorType.UniformBuffer),
         ], GpuSetLayout.Bindless);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "character occlusion"));
-        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct Params
-    {
-        public Matrix4x4 Inverse;
-        public Vector4 Eye, Size;
+        _sampler = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
     }
 
     /// <summary>
     /// Writes each pixel's visibility (1 where no character is a receiver) to <paramref name="output"/>'s red. <paramref name="inverse"/>: NDC to the
-    /// position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth; <paramref name="radius"/>: how far a ray looks.
+    /// position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth; <paramref name="radius"/>: how far a ray
+    /// looks.
     /// </summary>
-    public void Run(GiScene scene, GpuTexture depth, GpuTexture surface, GpuTexture output, int width, int height, in Matrix4x4 inverse, Vector3 eye, float pixelSlope,
-        float radius)
+    public void Run(GiScene scene, GpuTexture depth, GpuTexture surface, GpuTexture output, int width, int height, in Matrix4x4 inverse, Vector3 eye,
+        float pixelSlope, float radius)
     {
         if (scene.Top is null) return;
+
         var parameters = new Params
         {
             Inverse = inverse,
@@ -67,22 +103,7 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
         cmd.BeginLabel("character occlusion");
         cmd.Barrier(BarrierBatch.Full);
 
-        DescriptorImageInfo Sampled(GpuTexture texture) => new(_ctx.Device.SamplerAt(_sampler.Index), _ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
-        var depthInfo = Sampled(depth);
-        var surfaceInfo = Sampled(surface);
-        var storage = new DescriptorImageInfo(default, _ctx.Device.ViewAt(output.View().Index), ImageLayout.General);
-        var top = scene.Top!.Handle;
-        var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
-        var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
-        var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
-        var writes = stackalloc WriteDescriptorSet[6];
-        writes[0] = Image(0, DescriptorType.CombinedImageSampler, &depthInfo);
-        writes[1] = Image(1, DescriptorType.CombinedImageSampler, &surfaceInfo);
-        writes[2] = Image(3, DescriptorType.StorageImage, &storage);
-        writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 4, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
-        writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &records };
-        writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 6, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
-        cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
+        PushTraceDescriptors(cmd, scene, depth, surface, output, constants);
         cmd.BindBindlessTable(_program, 1, GpuBindPoint.Compute);   // the cut-out maps at the candidates (hair)
 
         cmd.BindPipeline(_pipeline);
@@ -92,18 +113,70 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
         _ctx.EndNative(cmd);
     }
 
-    static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>
-        new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PImageInfo = info };
-
+    /// <summary>
+    /// Disposes the trace.
+    /// </summary>
     public void Dispose() => _ctx.Shaders.Dispose(_program);
 
     /// <summary>
-    /// The occlusion over the scene (blend dst - src; red, green and blue): on a character's pixel, the ambient light its fragment took (its albedo times the
-    /// probes' irradiance, or the sky's where it reads none: <c>kenshiLight</c>'s in-shader branch) times what the rays found blocked and the haze's transmittance.
-    /// The ambient alone: the sun and the lamps have their own shadows, and the whole pixel darkened looked painted. The visibility is the mean of a 4 x 4 block
-    /// of the pixel's own surface (the block holds every turn of the rays' set: no pattern, the same every frame).
+    /// Pushes the trace's set 0: the depth, the surface target, <paramref name="output"/>, the traced scene, its records and the constants.
     /// </summary>
-    public static readonly string Apply = GiShaders.Relocating("#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct + $$"""
+    void PushTraceDescriptors(CommandList cmd, GiScene scene, GpuTexture depth, GpuTexture surface, GpuTexture output, Transient constants)
+    {
+        var depthInfo = SampledImage(depth);
+        var surfaceInfo = SampledImage(surface);
+        var storage = new DescriptorImageInfo(default, _ctx.Device.ViewAt(output.View().Index), ImageLayout.General);
+        var top = scene.Top!.Handle;
+        var asWrite = new WriteDescriptorSetAccelerationStructureKHR
+        {
+            SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top,
+        };
+        var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
+        var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
+
+        var writes = stackalloc WriteDescriptorSet[6];
+        writes[0] = Image(0, DescriptorType.CombinedImageSampler, &depthInfo);
+        writes[1] = Image(1, DescriptorType.CombinedImageSampler, &surfaceInfo);
+        writes[2] = Image(3, DescriptorType.StorageImage, &storage);
+        writes[3] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 4, DescriptorCount = 1,
+            DescriptorType = DescriptorType.AccelerationStructureKhr,
+        };
+        writes[4] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer,
+            PBufferInfo = &records,
+        };
+        writes[5] = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet, DstBinding = 6, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer,
+            PBufferInfo = &uniform,
+        };
+        cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 6), GpuBindPoint.Compute);
+    }
+
+    /// <summary>
+    /// <paramref name="texture"/> read through <see cref="_sampler"/>.
+    /// </summary>
+    DescriptorImageInfo SampledImage(GpuTexture texture) =>
+        new(_ctx.Device.SamplerAt(_sampler.Index), _ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
+
+    /// <summary>
+    /// A descriptor write of image <paramref name="info"/> as <paramref name="type"/> at <paramref name="binding"/>.
+    /// </summary>
+    static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>
+        new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PImageInfo = info };
+
+    /// <summary>
+    /// The occlusion over the scene (blend dst - src; red, green and blue): on a character's pixel, the ambient light its fragment took (its albedo
+    /// times the probes' irradiance, or the sky's where it reads none: <c>kenshiLight</c>'s in-shader branch) times what the rays found blocked and
+    /// the haze's transmittance. The ambient alone: the sun and the lamps have their own shadows, and the whole pixel darkened looked painted. The
+    /// visibility is the mean of a 4 x 4 block of the pixel's own surface (the block holds every turn of the rays' set: no pattern, the same every
+    /// frame).
+    /// </summary>
+    public static readonly string Apply = GiShaders.Relocating("#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
+        + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform usampler2D uAlbedo;
@@ -151,9 +224,10 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
         """);
 
     /// <summary>
-    /// The rays: a cosine-weighted set round the shading normal, the same every frame (nothing for the upscaler to average), leaving the body as the traced
-    /// sun's rays do (<see cref="TracedSunShaders"/>: close to the skin, past the creases between facets); a direction the drawn facet is turned from is not
-    /// asked (the smooth shading goes round the facets). A blocker counts in full up to half the radius, then less, to nothing at the radius; what is worn from the skin on (a hood lies against the temples), the body's own parts on the body from <see cref="NearStart"/>.
+    /// The rays: a cosine-weighted set round the shading normal, the same every frame (nothing for the upscaler to average), leaving the body as the
+    /// traced sun's rays do (<see cref="TracedSunShaders"/>: close to the skin, past the creases between facets); a direction the drawn facet is
+    /// turned from is not asked (the smooth shading goes round the facets). A blocker counts in full up to half the radius, then less, to nothing at
+    /// the radius; what is worn from the skin on (a hood lies against the temples), the body's own parts on the body from <see cref="NearStart"/>.
     /// </summary>
     static readonly string Trace = $$"""
         #version 460

@@ -91,6 +91,7 @@ public sealed class GroundSurfaces
                 (byte)r.GetInt("road type", Concrete),
             ];
             _biomes.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, types);
+
             string? Texture(string field) => r.Filenames.TryGetValue(field, out var file) && file.Length > 0 ? file : null;
             _textures.TryAdd(
                 (uint)r.GetInt("index") & 0xFFFFFF,
@@ -104,8 +105,8 @@ public sealed class GroundSurfaces
     public int At(float x, float z) => LayerAt(x, z).Type;
 
     /// <summary>
-    /// The GroundType at a world point with the diffuse texture of the biome layer that gives it (the record's <c>texture base</c>, <c>grass</c>, <c>dirt</c> or
-    /// <c>road</c>; null when the record names none or the map cannot be read); the type is -1 while the map loads.
+    /// The GroundType at a world point with the diffuse texture of the biome layer that gives it (the record's <c>texture base</c>, <c>grass</c>,
+    /// <c>dirt</c> or <c>road</c>; null when the record names none or the map cannot be read); the type is -1 while the map loads.
     /// </summary>
     public (int Type, string? Texture) LayerAt(float x, float z)
     {

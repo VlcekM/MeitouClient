@@ -580,6 +580,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             End(world, m);   // no kit of the right kind within reach
             return;
         }
+
         patientCold.StuckBolts = null;   // bolts go with the first update that finds no open wound (FUN_14064d800 -> FUN_14052bc10)
 
         float skill = SkillOf(stats, m == p, robot);

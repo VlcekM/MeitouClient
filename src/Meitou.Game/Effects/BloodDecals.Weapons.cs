@@ -6,17 +6,26 @@ using Meitou.Simulation;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// The blood on weapons across a save (docs/game/blood-decals.md "On weapons and gear"): written beside the save as <see cref="SaveWeaponBlood"/>, keyed by the
-/// characters' save handles (the renderer's draw keys are new for every world), and put back on the characters of the loaded world, those not met yet (their zone not
-/// loaded) as they appear.
+/// The blood on weapons across a save (docs/game/blood-decals.md "On weapons and gear"): written beside the save as <see cref="SaveWeaponBlood"/>,
+/// keyed by the characters' save handles (the renderer's draw keys are new for every world), and put back on the characters of the loaded world, those
+/// not met yet (their zone not loaded) as they appear.
 /// </summary>
 sealed partial class BloodDecals
 {
     /// <summary>
-    /// The entries of the loaded save that no character of the world has matched yet; carried into the next save so a character far away keeps its blood.
+    /// The entries of the loaded save that no character of the world has matched yet; carried into the next save so a character far away keeps its
+    /// blood.
     /// </summary>
     List<SaveWeaponBlood.Entry> _pendingWeapons = [];
+
+    /// <summary>
+    /// The save handle each character was written with by the last capture, by character.
+    /// </summary>
     IReadOnlyDictionary<CharacterId, Hand> _writtenHandles = new Dictionary<CharacterId, Hand>();
+
+    /// <summary>
+    /// Frames since the pending entries were last matched (<see cref="RetryPendingWeapons"/>).
+    /// </summary>
     int _pendingWait;
 
     /// <summary>
@@ -25,8 +34,8 @@ sealed partial class BloodDecals
     internal void NoteHandles(IReadOnlyDictionary<CharacterId, Hand> handles) => _writtenHandles = new Dictionary<CharacterId, Hand>(handles);
 
     /// <summary>
-    /// The weapon blood into <paramref name="game"/> (after its capture): every character's now, plus the entries not matched yet. With the feature off the
-    /// loaded save's file is carried on as it was.
+    /// The weapon blood into <paramref name="game"/> (after its capture): every character's now, plus the entries not matched yet. With the feature
+    /// off the loaded save's file is carried on as it was.
     /// </summary>
     internal void WriteWeaponBlood(SaveGame game)
     {
@@ -35,16 +44,20 @@ sealed partial class BloodDecals
             game.WeaponBlood = host.Saves.LoadedSave?.Source.WeaponBlood;
             return;
         }
+
         long epoch = (long)host.Saves.WorldEpoch << 56;
         var entries = new List<SaveWeaponBlood.Entry>();
         foreach (var (key, amount, wet, colour, back) in crowd.WeaponBloodNow())
         {
-            if ((key & ~((1L << 56) - 1)) != epoch) continue;   // an earlier world's
+            // An earlier world's.
+            if ((key & ~((1L << 56) - 1)) != epoch) continue;
+
             long v = (key & ((1L << 56) - 1)) - 1;
             var id = new CharacterId((int)(v >> 32), (int)(uint)v);
             if (_writtenHandles.TryGetValue(id, out var hand) && !hand.IsNull)
                 entries.Add(new SaveWeaponBlood.Entry(hand, amount, wet, colour.X, colour.Y, colour.Z, back));
         }
+
         entries.AddRange(_pendingWeapons);
         game.WeaponBlood = entries.Count > 0 ? SaveWeaponBlood.Write(entries) : null;
     }
@@ -64,21 +77,29 @@ sealed partial class BloodDecals
     void RetryPendingWeapons()
     {
         if (_pendingWeapons.Count == 0 || _pendingWait++ < 120) return;
+
         _pendingWait = 0;
         MatchPendingWeapons();
     }
 
+    /// <summary>
+    /// Puts the pending entries' blood on the living characters whose save handle they name; those matched are no longer pending.
+    /// </summary>
     void MatchPendingWeapons()
     {
         if (_pendingWeapons.Count == 0 || !GearBlood.Enabled || host.Gpu?.Characters is not { } crowd) return;
+
         var table = host.Session.World.Characters;
         var wanted = new Dictionary<Hand, SaveWeaponBlood.Entry>();
         foreach (var e in _pendingWeapons) wanted[e.Hand] = e;
         for (int slot = 0; slot < table.HighWater && wanted.Count > 0; slot++)
         {
-            if (!table.Next[slot].Alive || table.Cold(slot)?.Save?.Source.Handle is not { IsNull: false } hand || !wanted.Remove(hand, out var e)) continue;
+            if (!table.Next[slot].Alive || table.Cold(slot)?.Save?.Source.Handle is not { IsNull: false } hand || !wanted.Remove(hand, out var e))
+                continue;
+
             crowd.RestoreWeaponBlood(host.DrawKey(table.IdOf(slot)), e.Amount, e.Wet, new Vector3(e.R, e.G, e.B), e.Back);
         }
+
         _pendingWeapons = [.. wanted.Values];
     }
 }

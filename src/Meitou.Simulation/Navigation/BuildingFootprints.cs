@@ -515,8 +515,8 @@ public sealed class BuildingFootprints
 
     /// <summary>
     /// Where the collision of the level data's buildings placed within <paramref name="radius"/> of <paramref name="centre"/> cuts the horizontal
-    /// plane at <paramref name="y"/>: X/Z segments (walls, piers and posts standing in the water at the water's height). Reads the records' collision
-    /// as it goes (any thread); a building with no collision has none.
+    /// plane at <paramref name="y"/>: X/Z segments (walls, piers and posts standing in the water at the water's height). Reads the records'
+    /// collision as it goes (any thread); a building with no collision has none.
     /// </summary>
     public List<(Vector2 A, Vector2 B)> PlaneCut(Vector2 centre, float radius, float y)
     {
@@ -537,7 +537,8 @@ public sealed class BuildingFootprints
                         || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach))
                         continue;
 
-                    if (Wait(b.BuildingId) is not { } footprint || y < b.Position.Y + footprint.YMin - 1 || y > b.Position.Y + footprint.YMax + 1) continue;
+                    if (Wait(b.BuildingId) is not { } footprint || y < b.Position.Y + footprint.YMin - 1 || y > b.Position.Y + footprint.YMax + 1)
+                        continue;
 
                     Cut(Mesh(b.BuildingId), b.Position, b.Rotation, y, segments);
                 }
@@ -551,7 +552,8 @@ public sealed class BuildingFootprints
     /// The segments where the triangles, placed at <paramref name="position"/> turned by <paramref name="rotation"/>, cross the plane at
     /// <paramref name="y"/>.
     /// </summary>
-    static void Cut(IReadOnlyList<(Vector3[] Vertices, int[] Indices)> shapes, Vector3 position, Quaternion rotation, float y, List<(Vector2, Vector2)> into)
+    static void Cut(IReadOnlyList<(Vector3[] Vertices, int[] Indices)> shapes, Vector3 position, Quaternion rotation, float y,
+        List<(Vector2, Vector2)> into)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         Span<Vector2> hits = stackalloc Vector2[3];

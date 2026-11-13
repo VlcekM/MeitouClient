@@ -419,6 +419,23 @@ static partial class WorldFrame
         OutlineRefineSwitch = "Terrain outline refinement (tessellation)";
 
     /// <summary>
+    /// The mutually exclusive techniques as one choice each (docs/native-ui.md "Settings"), over the switches they stand for (which stay the saved
+    /// state).
+    /// </summary>
+    public const string SunShadowsChoice = "Sun shadows", OcclusionChoice = "Ambient occlusion type", GiChoice = "Global illumination";
+
+    /// <summary>
+    /// The <see cref="SunShadowsChoice"/>, <see cref="OcclusionChoice"/> and <see cref="GiChoice"/> keys.
+    /// </summary>
+    public static readonly string[] ChoiceSliders = [SunShadowsChoice, OcclusionChoice, GiChoice];
+
+    /// <summary>
+    /// The switches the <see cref="ChoiceSliders"/> replace on screen.
+    /// </summary>
+    public static readonly string[] ChoiceDrivenSwitches =
+        ["Shadows", "Traced sun shadows", "Ambient occlusion", "Ground-truth occlusion", "Indirect light", "Hybrid GI"];
+
+    /// <summary>
     /// The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.
     /// </summary>
     public static int WeatherParticlesSlider(bool weatherOn, PostOptions o) =>
@@ -438,6 +455,11 @@ static partial class WorldFrame
     #endregion
 
     #region Settings panel
+
+    /// <summary>
+    /// Whether the device traces rays (the traced sun and lamps, the GI, reflections); set when the settings panel is made.
+    /// </summary>
+    public static bool RayTracingAvailable { get; private set; }
 
     /// <summary>
     /// The Faithful / Meitou switches over the live renderer (the game's Shift+F keys, the viewer's F keys, the Tab checkboxes): they change the
@@ -535,58 +557,130 @@ static partial class WorldFrame
             choices);
     }
 
-    /// <summary>The mutually exclusive techniques as one choice each (docs/native-ui.md "Settings"), over the switches they stand for (which stay the saved state).</summary>
-    public const string SunShadowsChoice = "Sun shadows", OcclusionChoice = "Ambient occlusion type", GiChoice = "Global illumination";
-
-    /// <summary>The <see cref="SunShadowsChoice"/>, <see cref="OcclusionChoice"/> and <see cref="GiChoice"/> keys, and the switches they replace on screen.</summary>
-    public static readonly string[] ChoiceSliders = [SunShadowsChoice, OcclusionChoice, GiChoice];
-    public static readonly string[] ChoiceDrivenSwitches = ["Shadows", "Traced sun shadows", "Ambient occlusion", "Ground-truth occlusion", "Indirect light", "Hybrid GI"];
-
-    /// <summary>Whether the device traces rays (the traced sun and lamps, the GI, reflections); set when the settings panel is made.</summary>
-    public static bool RayTracingAvailable { get; private set; }
-
     /// <summary>
-    /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced), ambient occlusion (Off / SSAO / GTAO) and global illumination (Off / Probes /
-    /// Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance it stands for, so a settings file of the
-    /// switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns the GI on, and the GI off leaves the cascades.
+    /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced), ambient occlusion (Off / SSAO / GTAO) and global illumination (Off /
+    /// Probes / Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance it stands for, so a
+    /// settings file of the switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns the GI on, and the
+    /// GI off leaves the cascades.
     /// </summary>
     static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
     {
-        Toggle? T(string label) => toggles.FirstOrDefault(t => t.Label == label);
-        bool On(string label) => T(label)?.Get() == true;
-        void Set(string label, bool on) { if (T(label) is { } t && t.Get() != on) t.Set(on); }
-        static int Index(float v) => (int)MathF.Round(v);
-        if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow && T("Shadows") is not null)
-            sliders.Add(new Slider(SunShadowsChoice, 0, 3, () => !shadow.Enabled ? 0 : On("Traced sun shadows") ? 3 : On("Shadows") ? 2 : 1, v =>
-            {
-                int mode = Index(v);
-                Set("Traced sun shadows", mode == 3);
-                if (mode == 0) { distance.Set(distance.Min); return; }
-                // Back on at the range it had (Off keeps it), else the game's or Meitou's default.
-                if (!shadow.Enabled) distance.Set(shadow.Settings.Range >= KenshiShadows.MinRange ? shadow.Settings.Range : mode == 1 ? 5000 : Enhancements.MeitouShadowRange);
-                Set("Shadows", mode >= 2);
-                if (mode == 3) Set("Indirect light", true);
-            }, "0"));
-        if (T("Ambient occlusion") is not null)
-            sliders.Add(new Slider(OcclusionChoice, 0, 2, () => !On("Ambient occlusion") ? 0 : On("Ground-truth occlusion") ? 2 : 1, v =>
-            {
-                int mode = Index(v);
-                Set("Ambient occlusion", mode > 0);
-                if (mode > 0) Set("Ground-truth occlusion", mode == 2);
-            }, "0"));
-        if (T("Indirect light") is not null)
-            sliders.Add(new Slider(GiChoice, 0, 2, () => !On("Indirect light") ? 0 : On("Hybrid GI") ? 2 : 1, v =>
-            {
-                int mode = Index(v);
-                if (mode == 0) Set("Traced sun shadows", false);
-                Set("Indirect light", mode > 0);
-                Set("Hybrid GI", mode == 2);
-            }, "0"));
+        if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow
+            && ChoiceToggle(toggles, "Shadows") is not null)
+        {
+            sliders.Add(new Slider(SunShadowsChoice, 0, 3, () => SunShadowsMode(toggles, shadow),
+                v => SetSunShadowsMode(toggles, shadow, distance, ChoiceIndex(v)), "0"));
+        }
+
+        if (ChoiceToggle(toggles, "Ambient occlusion") is not null)
+            sliders.Add(new Slider(OcclusionChoice, 0, 2, () => OcclusionMode(toggles), v => SetOcclusionMode(toggles, ChoiceIndex(v)), "0"));
+        if (ChoiceToggle(toggles, "Indirect light") is not null)
+            sliders.Add(new Slider(GiChoice, 0, 2, () => GiMode(toggles), v => SetGiMode(toggles, ChoiceIndex(v)), "0"));
     }
 
-    /// <summary>The viewer's own rows; the game passes none of them (its clock, vsync and window mode are its own settings).</summary>
-    static void AddViewerSliders(List<Slider> sliders, Func<float>? getHour, Action<float>? setHour, Func<float>? getTimeSpeed, Action<float>? setTimeSpeed,
-        Func<bool>? getVSync, Action<bool>? setVSync, Func<bool>? getFullScreen, Action<bool>? setFullScreen)
+    /// <summary>
+    /// The switch row labelled <paramref name="label"/>, null when the panel has none.
+    /// </summary>
+    static Toggle? ChoiceToggle(List<Toggle> toggles, string label) => toggles.FirstOrDefault(t => t.Label == label);
+
+    /// <summary>
+    /// Whether the switch row labelled <paramref name="label"/> is on (false when the panel has none).
+    /// </summary>
+    static bool ChoiceOn(List<Toggle> toggles, string label) => ChoiceToggle(toggles, label)?.Get() == true;
+
+    /// <summary>
+    /// Turns the switch row labelled <paramref name="label"/> on or off, if the panel has it and it is not so already.
+    /// </summary>
+    static void ChoiceSet(List<Toggle> toggles, string label, bool on)
+    {
+        if (ChoiceToggle(toggles, label) is { } t && t.Get() != on) t.Set(on);
+    }
+
+    /// <summary>
+    /// A choice slider's value as the index of its choice.
+    /// </summary>
+    static int ChoiceIndex(float v) => (int)MathF.Round(v);
+
+    /// <summary>
+    /// The <see cref="SunShadowsChoice"/> the switches stand for: 0 off, 1 Faithful cascades, 2 Meitou cascades, 3 traced.
+    /// </summary>
+    static float SunShadowsMode(List<Toggle> toggles, ShadowPass shadow)
+    {
+        if (!shadow.Enabled) return 0;
+        if (ChoiceOn(toggles, "Traced sun shadows")) return 3;
+
+        return ChoiceOn(toggles, "Shadows") ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Sets the switches and the shadow distance for the <see cref="SunShadowsChoice"/> <paramref name="mode"/>.
+    /// </summary>
+    static void SetSunShadowsMode(List<Toggle> toggles, ShadowPass shadow, Slider distance, int mode)
+    {
+        ChoiceSet(toggles, "Traced sun shadows", mode == 3);
+        if (mode == 0)
+        {
+            distance.Set(distance.Min);
+            return;
+        }
+
+        // Back on at the range it had (Off keeps it), else the game's or Meitou's default.
+        if (!shadow.Enabled)
+        {
+            float range = shadow.Settings.Range >= KenshiShadows.MinRange ? shadow.Settings.Range
+                : mode == 1 ? 5000
+                : Enhancements.MeitouShadowRange;
+            distance.Set(range);
+        }
+
+        ChoiceSet(toggles, "Shadows", mode >= 2);
+        if (mode == 3) ChoiceSet(toggles, "Indirect light", true);
+    }
+
+    /// <summary>
+    /// The <see cref="OcclusionChoice"/> the switches stand for: 0 off, 1 SSAO, 2 GTAO.
+    /// </summary>
+    static float OcclusionMode(List<Toggle> toggles)
+    {
+        if (!ChoiceOn(toggles, "Ambient occlusion")) return 0;
+
+        return ChoiceOn(toggles, "Ground-truth occlusion") ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Sets the switches for the <see cref="OcclusionChoice"/> <paramref name="mode"/>.
+    /// </summary>
+    static void SetOcclusionMode(List<Toggle> toggles, int mode)
+    {
+        ChoiceSet(toggles, "Ambient occlusion", mode > 0);
+        if (mode > 0) ChoiceSet(toggles, "Ground-truth occlusion", mode == 2);
+    }
+
+    /// <summary>
+    /// The <see cref="GiChoice"/> the switches stand for: 0 off, 1 probes, 2 probes and hybrid.
+    /// </summary>
+    static float GiMode(List<Toggle> toggles)
+    {
+        if (!ChoiceOn(toggles, "Indirect light")) return 0;
+
+        return ChoiceOn(toggles, "Hybrid GI") ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Sets the switches for the <see cref="GiChoice"/> <paramref name="mode"/>: off also leaves the traced sun.
+    /// </summary>
+    static void SetGiMode(List<Toggle> toggles, int mode)
+    {
+        if (mode == 0) ChoiceSet(toggles, "Traced sun shadows", false);
+        ChoiceSet(toggles, "Indirect light", mode > 0);
+        ChoiceSet(toggles, "Hybrid GI", mode == 2);
+    }
+
+    /// <summary>
+    /// The viewer's own rows; the game passes none of them (its clock, vsync and window mode are its own settings).
+    /// </summary>
+    static void AddViewerSliders(List<Slider> sliders, Func<float>? getHour, Action<float>? setHour, Func<float>? getTimeSpeed,
+        Action<float>? setTimeSpeed, Func<bool>? getVSync, Action<bool>? setVSync, Func<bool>? getFullScreen, Action<bool>? setFullScreen)
     {
         // The time of day (the `--time` option and the , / . keys), to the minute.
         if (getHour is not null && setHour is not null)
@@ -711,8 +805,8 @@ static partial class WorldFrame
         v => options.FogDistance = MathF.Round(v / 1000) * 1000, "0", Logarithmic: true);
 
     /// <summary>
-    /// The material distance row (<c>--material-distance</c>): beyond it the terrain shows the biomes' ground colour. The draw's value and the texture
-    /// streamer's are read each frame. Also the Metal panel's.
+    /// The material distance row (<c>--material-distance</c>): beyond it the terrain shows the biomes' ground colour. The draw's value and the
+    /// texture streamer's are read each frame. Also the Metal panel's.
     /// </summary>
     internal static Slider MaterialDistance(WorldRenderOptions r, TerrainStreamer? streamer, WorldOptions? options) =>
         new(MaterialDistanceSlider, 2000, 100000, () => r.MaterialDistance, v =>
@@ -726,13 +820,14 @@ static partial class WorldFrame
     /// The impostor memory budget row (<c>--impostor-budget</c>), read at each scan: the lowest positions are the automatic rule (docs/impostors.md).
     /// Also the Metal panel's.
     /// </summary>
-    internal static Slider ImpostorBudget(FoliageRenderer foliage) => new(ImpostorBudgetSlider, 0, 2048, () => (float)(foliage.ImpostorBudgetMb ?? 0),
+    internal static Slider ImpostorBudget(FoliageRenderer foliage) => new(ImpostorBudgetSlider, 0, 2048,
+        () => (float)(foliage.ImpostorBudgetMb ?? 0),
         v => foliage.ImpostorBudgetMb = v < ImpostorBudgetFloor ? null : MathF.Round(v / 16) * 16, "0", Step: 16,
         Text: v => v < ImpostorBudgetFloor ? "Automatic" : string.Create(CultureInfo.InvariantCulture, $"{MathF.Round(v / 16) * 16:0} MB"));
 
     /// <summary>
-    /// The reflection's samples per texel as a power of two, 1 (off) to 8 (docs/render-water.md "Shading and reflection"): the targets are made again at the new
-    /// count on the next frame.
+    /// The reflection's samples per texel as a power of two, 1 (off) to 8 (docs/render-water.md "Shading and reflection"): the targets are made
+    /// again at the new count on the next frame.
     /// </summary>
     internal static Slider ReflectionSamples(ReflectionPass reflection, WorldOptions? options) => new(ReflectionSamplesSlider, 0, 3,
         () => Math.Clamp((int)MathF.Round(MathF.Log2(Math.Max(reflection.Samples, 1))), 0, 3), v =>
@@ -752,8 +847,8 @@ static partial class WorldFrame
 
         sliders.Add(new Slider(WaterGridSlider, 64, 1024, () => options.WaterGrid, v => options.WaterGrid = Segments(v), "0", Logarithmic: true,
             Step: 64));
-        sliders.Add(new Slider(WaterOceanSlider, 0, 2, () => MathF.Log2(Math.Max(options.WaterOcean, 64) / 64f), v => options.WaterOcean = 64 << FftIndex(v),
-            "0", Text: v => (64 << FftIndex(v)).ToString(CultureInfo.InvariantCulture)));
+        sliders.Add(new Slider(WaterOceanSlider, 0, 2, () => MathF.Log2(Math.Max(options.WaterOcean, 64) / 64f),
+            v => options.WaterOcean = 64 << FftIndex(v), "0", Text: v => (64 << FftIndex(v)).ToString(CultureInfo.InvariantCulture)));
     }
 
     /// <summary>
@@ -909,10 +1004,12 @@ static partial class WorldFrame
 
         sliders.Add(new Slider(HeatHazeStrengthSlider, 0, 3, () => options.HeatHazeStrength, v => options.HeatHazeStrength = Round20(v), "0.00",
             Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
-        sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200, "0.000", Faithful: 0));
+        sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200,
+            "0.000", Faithful: 0));
         sliders.Add(new Slider(DofApertureSlider, 0.25f, 22, () => options.DofAperture, v => options.DofAperture = MathF.Round(v * 20) / 20, "0.00",
             Logarithmic: true));
-        sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v), "0.00"));
+        sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v),
+            "0.00"));
 
         sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => options.ShaftStrength, v => options.ShaftStrength = Round20(v), "0.00"));
         sliders.Add(new Slider(ShaftAirSlider, 0, 4, () => options.ShaftAir, v => options.ShaftAir = Round20(v), "0.00"));
@@ -920,8 +1017,8 @@ static partial class WorldFrame
         sliders.Add(new Slider(ShaftQualitySlider, 0, 2, () => options.ShaftQuality, v => options.ShaftQuality = Math.Clamp((int)MathF.Round(v), 0,
             2), "0",
             Text: v => (int)MathF.Round(v) switch { 0 => "Low", 1 => "Medium", _ => "High" }));
-        sliders.Add(new Slider(GtaoQualitySlider, 0, 2, () => options.GtaoQuality, v => options.GtaoQuality = Math.Clamp((int)MathF.Round(v), 0, 2), "0",
-            Text: v => (int)MathF.Round(v) switch { 0 => "Low", 1 => "Medium", _ => "High" }));
+        sliders.Add(new Slider(GtaoQualitySlider, 0, 2, () => options.GtaoQuality, v => options.GtaoQuality = Math.Clamp((int)MathF.Round(v), 0, 2),
+            "0", Text: v => (int)MathF.Round(v) switch { 0 => "Low", 1 => "Medium", _ => "High" }));
     }
 
     /// <summary>
@@ -939,35 +1036,16 @@ static partial class WorldFrame
             .ToList() ?? [];
         if (fifthCascade is not null) toggles.Add(fifthCascade);
 
-        if (g.Post is { } post)
+        if (g.Post is { } post) AddPostToggles(toggles, post);
+        if (g.Foliage is { } farGrass)
+            toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v, Remaster: true, OnOff: true));
+        if (g.Surfaces is { } wetWorld)
         {
-            toggles.Add(new Toggle(BloomSwitch, () => post.Options.Bloom, v => post.Options.Bloom = v, Remaster: true, OnOff: true, Optional: true));
-            toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
-                Remaster: true, OnOff: true, Optional: true));
+            toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v, Remaster: true, OnOff: true,
+                Optional: true));
+        }
 
-            // The hybrid GI's parts (--gi-hybrid), plain on / off rows; they act while the Hybrid GI choice is on.
-            toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
-            toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
-            toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
-            // The traced sun shadows' grass, a plain on / off row; it acts while the sun's shadows are traced.
-            toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));
-        }
-        if (g.Foliage is { } farGrass) toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v, Remaster: true, OnOff: true));
-        if (g.Surfaces is { } wetWorld) toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v, Remaster: true, OnOff: true, Optional: true));
-        if (g.Characters is not null && g.Options is { } materials)
-        {
-            // The Advanced materials' parts; they act while it is on.
-            foreach (var (label, bit) in new[] { (MaterialHairSwitch, Characters.CharacterRenderer.SurfaceHair), (MaterialClothSwitch, Characters.CharacterRenderer.SurfaceCloth),
-                (MaterialSkinSwitch, Characters.CharacterRenderer.SurfaceSkin), (MaterialEyesSwitch, Characters.CharacterRenderer.SurfaceEyes),
-                (MaterialMetalSwitch, Characters.CharacterRenderer.SurfaceMetal), (MaterialBeadsSwitch, Characters.CharacterRenderer.SurfaceBeads) })
-            {
-                toggles.Add(new Toggle(label, () => (materials.Chars2Parts & bit) != 0, v =>
-                {
-                    materials.Chars2Parts = v ? materials.Chars2Parts | bit : materials.Chars2Parts & ~bit;
-                    if (g.Characters is { } c) c.SurfaceParts = materials.Chars2Parts;
-                }));
-            }
-        }
+        if (g.Characters is not null && g.Options is { } materials) AddMaterialToggles(toggles, g, materials);
         if (tessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true,
@@ -977,6 +1055,45 @@ static partial class WorldFrame
                 Remaster: true, OnOff: true));
         }
         return toggles;
+    }
+
+    /// <summary>
+    /// The post chain's switches: bloom, the camera effects, the hybrid GI's parts and the traced sun shadows' grass.
+    /// </summary>
+    static void AddPostToggles(List<Toggle> toggles, PostProcess post)
+    {
+        toggles.Add(new Toggle(BloomSwitch, () => post.Options.Bloom, v => post.Options.Bloom = v, Remaster: true, OnOff: true, Optional: true));
+        toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
+            Remaster: true, OnOff: true, Optional: true));
+
+        // The hybrid GI's parts (--gi-hybrid), plain on / off rows; they act while the Hybrid GI choice is on.
+        toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
+        toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
+        toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
+
+        // The traced sun shadows' grass, a plain on / off row; it acts while the sun's shadows are traced.
+        toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));
+    }
+
+    /// <summary>
+    /// The Advanced materials' parts (<see cref="WorldOptions.Chars2Parts"/>), plain on / off rows; they act while it is on.
+    /// </summary>
+    static void AddMaterialToggles(List<Toggle> toggles, WorldGpu g, WorldOptions materials)
+    {
+        var parts = new[]
+        {
+            (MaterialHairSwitch, Characters.CharacterRenderer.SurfaceHair), (MaterialClothSwitch, Characters.CharacterRenderer.SurfaceCloth),
+            (MaterialSkinSwitch, Characters.CharacterRenderer.SurfaceSkin), (MaterialEyesSwitch, Characters.CharacterRenderer.SurfaceEyes),
+            (MaterialMetalSwitch, Characters.CharacterRenderer.SurfaceMetal), (MaterialBeadsSwitch, Characters.CharacterRenderer.SurfaceBeads),
+        };
+        foreach (var (label, bit) in parts)
+        {
+            toggles.Add(new Toggle(label, () => (materials.Chars2Parts & bit) != 0, v =>
+            {
+                materials.Chars2Parts = v ? materials.Chars2Parts | bit : materials.Chars2Parts & ~bit;
+                if (g.Characters is { } c) c.SurfaceParts = materials.Chars2Parts;
+            }));
+        }
     }
 
     /// <summary>
@@ -1092,7 +1209,10 @@ static partial class WorldFrame
         post.Particles = null;
         post.SetCloudMotion(null);
         post.Options.CameraEffectsHeld = true;
-        try { post.End(); }
+        try
+        {
+            post.End();
+        }
         finally
         {
             post.Options.CameraEffectsHeld = false;

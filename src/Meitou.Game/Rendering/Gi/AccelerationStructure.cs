@@ -164,7 +164,10 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var ranges = stackalloc AccelerationStructureBuildRangeInfoKHR[Math.Max(n, 1)];
         var counts = stackalloc uint[Math.Max(n, 1)];
         FillBottom(geometries, geos, ranges, counts);
-        var flags = (fastBuild ? BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr : BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr) | (updatable ? BuildAccelerationStructureFlagsKHR.AllowUpdateBitKhr : 0);
+        var preference = fastBuild
+            ? BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr
+            : BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr;
+        var flags = preference | (updatable ? BuildAccelerationStructureFlagsKHR.AllowUpdateBitKhr : 0);
         var made = Build(device, cmd, AccelerationStructureTypeKHR.BottomLevelKhr, geos, (uint)n, ranges, counts, flags, name, updatable);
         made._updateFlags = flags;
         return made;
@@ -252,10 +255,14 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var sizes = TopSizes(device, maxInstances, BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr | update);
         var traceSizes = TopSizes(device, maxInstances, BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr | update);
         sizes.AccelerationStructureSize = Math.Max(sizes.AccelerationStructureSize, traceSizes.AccelerationStructureSize);
-        sizes.BuildScratchSize = Math.Max(Math.Max(sizes.BuildScratchSize, traceSizes.BuildScratchSize), Math.Max(sizes.UpdateScratchSize, traceSizes.UpdateScratchSize));
-        var top = new AccelerationStructure(device, AccelerationStructureTypeKHR.TopLevelKhr, Math.Max(sizes.AccelerationStructureSize, 256), name) { MaxInstances = maxInstances };
-        top._scratch = device.Allocator.CreateBuffer(sizes.BuildScratchSize + device.ScratchAlignment, BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
-            MemoryKind.DeviceLocal, name + " scratch");
+        var buildScratch = Math.Max(sizes.BuildScratchSize, traceSizes.BuildScratchSize);
+        sizes.BuildScratchSize = Math.Max(buildScratch, Math.Max(sizes.UpdateScratchSize, traceSizes.UpdateScratchSize));
+        var top = new AccelerationStructure(device, AccelerationStructureTypeKHR.TopLevelKhr, Math.Max(sizes.AccelerationStructureSize, 256),
+            name) { MaxInstances = maxInstances };
+
+        var scratchUse = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit;
+        top._scratch = device.Allocator.CreateBuffer(sizes.BuildScratchSize + device.ScratchAlignment, scratchUse, MemoryKind.DeviceLocal,
+            name + " scratch");
         return top;
     }
 
@@ -282,22 +289,31 @@ public sealed unsafe class AccelerationStructure : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds a structure of <see cref="CreateTop"/> over <paramref name="count"/> (at most <see cref="MaxInstances"/>) <see cref="InstanceRecord"/>s at <paramref name="instancesAddress"/>
-    /// into <paramref name="cmd"/>. <paramref name="updatable"/>: it can be refitted next (<paramref name="refit"/>: the same instances as that build, their bottom levels refitted; the flags
-    /// must be those of the build).
+    /// Rebuilds a structure of <see cref="CreateTop"/> over <paramref name="count"/> (at most <see cref="MaxInstances"/>)
+    /// <see cref="InstanceRecord"/>s at <paramref name="instancesAddress"/> into <paramref name="cmd"/>. <paramref name="updatable"/>: it can be
+    /// refitted next (<paramref name="refit"/>: the same instances as that build, their bottom levels refitted; the flags must be those of the
+    /// build).
     /// </summary>
-    public void RebuildTop(CommandList cmd, ulong instancesAddress, uint count, bool fastTrace = false, bool updatable = false, bool refit = false)
+    public void RebuildTop(CommandList cmd, ulong instancesAddress, uint count, bool fastTrace = false, bool updatable = false,
+        bool refit = false)
     {
         if (count > MaxInstances)
             throw new ArgumentOutOfRangeException(nameof(count), $"{count} instances, room for {MaxInstances}");
         var geo = TopGeometry(instancesAddress);
+
         var flags = (fastTrace ? BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr : BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr)
             | (updatable || refit ? BuildAccelerationStructureFlagsKHR.AllowUpdateBitKhr : 0);
         var build = new AccelerationStructureBuildGeometryInfoKHR
         {
-            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr, Type = AccelerationStructureTypeKHR.TopLevelKhr,
-            Flags = flags, Mode = refit ? BuildAccelerationStructureModeKHR.UpdateKhr : BuildAccelerationStructureModeKHR.BuildKhr, GeometryCount = 1, PGeometries = &geo,
-            SrcAccelerationStructure = refit ? Handle : default, DstAccelerationStructure = Handle, ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
+            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr,
+            Type = AccelerationStructureTypeKHR.TopLevelKhr,
+            Flags = flags,
+            Mode = refit ? BuildAccelerationStructureModeKHR.UpdateKhr : BuildAccelerationStructureModeKHR.BuildKhr,
+            GeometryCount = 1,
+            PGeometries = &geo,
+            SrcAccelerationStructure = refit ? Handle : default,
+            DstAccelerationStructure = Handle,
+            ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
         };
         var range = new AccelerationStructureBuildRangeInfoKHR { PrimitiveCount = count };
         var rangePointer = &range;

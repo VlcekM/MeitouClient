@@ -143,9 +143,9 @@ public sealed unsafe partial class FoliageRenderer
             FogDistance = fogDistance, Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
 
-        // Depth first: the same draw with the colour masked and the fragment stopping after its cut (uGrassDepthOnly), then the colour with the depth
-        // test EQUAL and no depth write. Blades cover each other many times over and the lighting ran for every layer the depth test had not yet
-        // hidden (Gut: 4.2 ms of 17.5, with the traced sun's rays for pixels that were then covered).
+        // Depth first: the same draw with the colour masked and the fragment stopping after its cut (uGrassDepthOnly), then the colour with the
+        // depth test EQUAL and no depth write. Blades cover each other many times over and the lighting ran for every layer the depth test had not
+        // yet hidden (Gut: 4.2 ms of 17.5, with the traced sun's rays for pixels that were then covered).
         bool depthFirst = GrassDepthFirst && !_depthPass && !coverage && !result.IsEmpty && state.DepthTest && state.DepthWrite;
         if (depthFirst)
         {

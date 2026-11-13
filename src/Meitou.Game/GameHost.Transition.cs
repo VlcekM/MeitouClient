@@ -70,6 +70,7 @@ sealed partial class GameHost
     /// The photo mode (null before the interactive loop makes it).
     /// </summary>
     internal Host.Photo.PhotoMode? Photo;
+
     /// <summary>
     /// The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.
     /// </summary>
@@ -174,7 +175,8 @@ sealed partial class GameHost
                 return;
             }
             SetLoadingStep(stage.Step);
-            Console.WriteLine($"loading   stage {stage.Step} starts at {load.Clock.Elapsed.TotalSeconds:0.0} s{(SkyArrival is { } flight ? $" (sky {(flight.AtStars ? "at the stars" : "ascending")})" : "")}");
+            string sky = SkyArrival is { } flight ? $" (sky {(flight.AtStars ? "at the stars" : "ascending")})" : "";
+            Console.WriteLine($"loading   stage {stage.Step} starts at {load.Clock.Elapsed.TotalSeconds:0.0} s{sky}");
             load.Waiting = stage.Run();
             load.Shown = false;
         }

@@ -2,12 +2,15 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
-/// The <c>chars2</c> switch's shading of the characters (docs/character-renderer.md "Hair, cloth, skin and eyes"): what a light adds to a fragment on top of
-/// <c>kenshiLight</c>, the sun's and the lamps' alike. <c>pc.fill.a</c> carries the switch, so one program serves both sides and off runs none of it.
+/// The <c>chars2</c> switch's shading of the characters (docs/character-renderer.md "Hair, cloth, skin and eyes"): what a light adds to a
+/// fragment on top of <c>kenshiLight</c>, the sun's and the lamps' alike. <c>pc.fill.a</c> carries the switch, so one program serves both sides
+/// and off runs none of it.
 /// </summary>
 static class CharacterSurface
 {
-    /// <summary>Ahead of the atmosphere text: what its two hooks (<see cref="Lighting"/>) call.</summary>
+    /// <summary>
+    /// Ahead of the atmosphere text: what its two hooks (<see cref="Lighting"/>) call.
+    /// </summary>
     public const string Prototypes = """
         bool surfaceOn = false;
         uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads
@@ -18,18 +21,48 @@ static class CharacterSurface
 
         """;
 
-    /// <summary>The atmosphere text with the two hooks only the character fragment has, so no other program's text changes.</summary>
-    public static string Lighting() => Hook(Hook(NativeShaders.AtmosphereFunctions,
-        "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;", "if (surfaceOn) { lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse, 1.0 - tracedShare) + surfaceAmbient(envDiffuse); if (tracedShare > 0.0) tracedSunOut += surfaceSunTraced(tracedSun, albedo * fresnelDiffuse); }"),
-        "specular += radiance * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / 3.14159265358979;", "if (surfaceOn) specular += radiance * surfaceSpecular(l);");
+    /// <summary>
+    /// The line of the atmosphere text that <see cref="SunHook"/> follows: the sun's and the sky's light summed.
+    /// </summary>
+    const string SunAnchor = "vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;";
 
+    /// <summary>
+    /// What the surface adds to the sun's and the sky's light, after <see cref="SunAnchor"/>.
+    /// </summary>
+    const string SunHook = "if (surfaceOn) { lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse, 1.0 - tracedShare) + surfaceAmbient(envDiffuse); if (tracedShare > 0.0) tracedSunOut += surfaceSunTraced(tracedSun, albedo * fresnelDiffuse); }";
+
+    /// <summary>
+    /// The line of the atmosphere text that <see cref="LampHook"/> follows: a lamp's specular.
+    /// </summary>
+    const string LampAnchor = "specular += radiance * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / 3.14159265358979;";
+
+    /// <summary>
+    /// What the surface adds to a lamp's specular, after <see cref="LampAnchor"/>.
+    /// </summary>
+    const string LampHook = "if (surfaceOn) specular += radiance * surfaceSpecular(l);";
+
+    /// <summary>
+    /// The atmosphere text with the two hooks only the character fragment has, so no other program's text changes.
+    /// </summary>
+    public static string Lighting()
+    {
+        string withSun = Hook(NativeShaders.AtmosphereFunctions, SunAnchor, SunHook);
+        return Hook(withSun, LampAnchor, LampHook);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with <paramref name="added"/> on a line of its own after <paramref name="anchor"/>; throws when the anchor is gone.
+    /// </summary>
     static string Hook(string text, string anchor, string added)
     {
         if (!text.Contains(anchor)) throw new InvalidOperationException($"CharacterSurface: the lighting text no longer holds '{anchor}'");
+
         return text.Replace(anchor, anchor + "\n" + added);
     }
 
-    /// <summary>The fragment's functions: after the skin's inputs, ahead of <c>main</c>.</summary>
+    /// <summary>
+    /// The fragment's functions: after the skin's inputs, ahead of <c>main</c>.
+    /// </summary>
     public const string Functions = """
         vec3 surfaceNormal = vec3(0.0, 1.0, 0.0), surfaceView = vec3(0.0, 0.0, 1.0);
         vec3 strand = vec3(0.0), strandHue = vec3(1.0), strandTint = vec3(0.0);   // hair: the strand's direction, the hair's own hue and its colour

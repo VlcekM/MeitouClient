@@ -753,14 +753,15 @@ sealed class HeldItems(PopulationData? data)
     }
 
     /// <summary>
-    /// How far ahead of a character an item it drops lands, and the most its ground may differ in height from the character's there (engine choices).
+    /// How far ahead of a character an item it drops lands, and the most its ground may differ in height from the character's there (engine
+    /// choices).
     /// </summary>
     const float DropReach = 3, DropStep = 4;
 
     /// <summary>
-    /// The ground ahead of a character where an item it drops lands: <see cref="DropReach"/> units ahead, nearer (to its feet) while the spot is not one
-    /// it could stand on at about its own height. Past the edge of a walkway or against a wall the height there is the ground far below or the wall's
-    /// top, and the item was out of sight and reach.
+    /// The ground ahead of a character where an item it drops lands: <see cref="DropReach"/> units ahead, nearer (to its feet) while the spot is
+    /// not one it could stand on at about its own height. Past the edge of a walkway or against a wall the height there is the ground far below or
+    /// the wall's top, and the item was out of sight and reach.
     /// </summary>
     static Vector3 AheadOf(World world, int slot)
     {
@@ -770,9 +771,11 @@ sealed class HeldItems(PopulationData? data)
         {
             var at = hot.Position + ahead * reach;
             if (!world.Walkability.TryStand(at.X, at.Z, hot.Position.Y, out float y) || MathF.Abs(y - hot.Position.Y) > DropStep) continue;
+
             at.Y = y;
             return at;
         }
+
         return hot.Position;
     }
 

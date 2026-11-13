@@ -80,7 +80,8 @@ static class LauncherSchema
         Graphics(WorldFrame.SmallFoliageRangeSlider, 200, 40000, 50, 4000) with { Logarithmic = true },
         Graphics(WorldFrame.ImpostorDistanceSlider, 500, 40000, 50, 5000) with { Logarithmic = true },
         Graphics(WorldFrame.LargeImpostorDistanceSlider, 500, 40000, 50, 10000) with { Logarithmic = true },
-        Graphics(WorldFrame.ImpostorBudgetSlider, 0, 2048, 16, 0) with { Suffix = " MB", OffBelow = WorldFrame.ImpostorBudgetFloor, OffText = "Automatic" },
+        Graphics(WorldFrame.ImpostorBudgetSlider, 0, 2048, 16, 0) with
+            { Suffix = " MB", OffBelow = WorldFrame.ImpostorBudgetFloor, OffText = "Automatic" },
         Multiplier(WorldFrame.GrassDistanceSlider, 0.25f, 80, 1),
         Graphics(WorldFrame.GrassDensitySlider, 0.1f, 2, 0.05f, 1) with { Format = "0.00", Suffix = "x" },
         Graphics(WorldFrame.MaterialDistanceSlider, 2000, 100000, 500, 30000) with { Logarithmic = true },
@@ -103,7 +104,8 @@ static class LauncherSchema
         // Lighting: the technique choices first (WorldFrame.AddChoiceSliders), their defaults as a fresh WorldOptions' switches have them
         Graphics(WorldFrame.SunShadowsChoice, 0, 3, 1, ChoiceDefault(WorldFrame.SunShadowsChoice)) with
             { Labels = ["Off", "Faithful cascades", "Meitou cascades", "Traced (ray tracing)"] },
-        Graphics(WorldFrame.OcclusionChoice, 0, 2, 1, ChoiceDefault(WorldFrame.OcclusionChoice)) with { Name = "Ambient occlusion", Labels = ["Off", "SSAO", "GTAO"] },
+        Graphics(WorldFrame.OcclusionChoice, 0, 2, 1, ChoiceDefault(WorldFrame.OcclusionChoice)) with
+            { Name = "Ambient occlusion", Labels = ["Off", "SSAO", "GTAO"] },
         Graphics(WorldFrame.GiChoice, 0, 2, 1, ChoiceDefault(WorldFrame.GiChoice)) with
             { Labels = ["Off (flat ambient)", "Probes (ray tracing)", "Probes + hybrid cache"] },
         Graphics(WorldFrame.ShadowDistanceSlider, KenshiShadows.MinRange * 0.9f, 200000, 100, Enhancements.MeitouShadowRange) with
@@ -170,11 +172,18 @@ static class LauncherSchema
     {
         var on = WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).ToDictionary(e => e.Name, e => e.IsMeitou);
         bool On(string name) => on.TryGetValue(name, out bool v) && v;
+
         return choice switch
         {
-            WorldFrame.SunShadowsChoice => On("Traced sun shadows") ? 3 : On("Shadows") ? 2 : 1,
-            WorldFrame.OcclusionChoice => !On("Ambient occlusion") ? 0 : On("Ground-truth occlusion") ? 2 : 1,
-            _ => !On("Indirect light") ? 0 : On("Hybrid GI") ? 2 : 1,
+            WorldFrame.SunShadowsChoice => On("Traced sun shadows") ? 3
+                : On("Shadows") ? 2
+                : 1,
+            WorldFrame.OcclusionChoice => !On("Ambient occlusion") ? 0
+                : On("Ground-truth occlusion") ? 2
+                : 1,
+            _ => !On("Indirect light") ? 0
+                : On("Hybrid GI") ? 2
+                : 1,
         };
     }
 
@@ -195,7 +204,8 @@ static class LauncherSchema
             Shown = shown ? 1 : 0,
             Impact = LookPresets.ImpactOf(label),
         };
-        // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it last).
+        // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it
+        // last).
         foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null)
                      .Where(e => !LookPresets.HiddenSwitch(e.Name) && !WorldFrame.ChoiceDrivenSwitches.Contains(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
@@ -211,7 +221,8 @@ static class LauncherSchema
         yield return Switch(WorldFrame.MaterialEyesSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialMetalSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
-        yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with { ShownWhen = new() { Key = WorldFrame.SunShadowsChoice, Value = 3 } };
+        yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with
+            { ShownWhen = new() { Key = WorldFrame.SunShadowsChoice, Value = 3 } };
         yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "Meitou: on", true);
         yield return Switch(WorldFrame.WetWorldSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
@@ -236,8 +247,10 @@ static class LauncherSchema
         new()
         {
             Key = Key(nameof(UserConfig.FrameGenerationVendor)), Kind = SettingKind.Slider, Name = "Frame generation by",
-            Description = "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs.",
-            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1, Labels = ["FSR 3", "DLSS"],
+            Description = "FSR 3: any GPU, needs the FidelityFX library. "
+                + "DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs.",
+            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1,
+            Labels = ["FSR 3", "DLSS"],
         },
     ];
 
@@ -253,19 +266,23 @@ static class LauncherSchema
         },
         new()
         {
-            Key = Key(nameof(UserConfig.HdrPaperNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPaperName, Description = SettingsMenu.HdrPaperHint,
-            Default = UserConfig.HdrPaperAuto - 10, Shown = UserConfig.HdrPaperAuto - 10, Min = UserConfig.HdrPaperAuto - 10, Max = 500, Step = 10, Suffix = " nits",
+            Key = Key(nameof(UserConfig.HdrPaperNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPaperName,
+            Description = SettingsMenu.HdrPaperHint,
+            Default = UserConfig.HdrPaperAuto - 10, Shown = UserConfig.HdrPaperAuto - 10, Min = UserConfig.HdrPaperAuto - 10, Max = 500, Step = 10,
+            Suffix = " nits",
             OffBelow = UserConfig.HdrPaperAuto, OffText = "Automatic",
         },
         new()
         {
-            Key = Key(nameof(UserConfig.HdrPeakNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPeakName, Description = SettingsMenu.HdrPeakHint,
+            Key = Key(nameof(UserConfig.HdrPeakNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPeakName,
+            Description = SettingsMenu.HdrPeakHint,
             Default = defaults.HdrPeakNits, Shown = defaults.HdrPeakNits, Min = 200, Max = 4000, Step = 50, Suffix = " nits",
         },
     ];
 
     /// <summary>
-    /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of the given sliders.
+    /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of
+    /// the given sliders.
     /// </summary>
     static SettingsSection DisplaySection(UserConfig defaults, List<SettingDescription> sliders) => new()
     {

@@ -15,7 +15,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// <see cref="LauncherHeader"/>: the launcher's heading where it differs (the technique choice, which the game's menu shows as the effect's
     /// switch and a technique row).
     /// </summary>
-    internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "", string? LauncherHeader = null);
+    internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "",
+        string? LauncherHeader = null);
 
     /// <summary>
     /// The group of the race switches (every <c>race:</c> setting is in it).
@@ -33,8 +34,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
         // Lighting: the shadows first (the sun's switch heads them; the lamps' and the contact shadows are inside)
         new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.TracedGrassSwitch,
-            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.FifthCascadeSwitch, "Contact shadows",
-            "Lamp shadows"]),
+            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.FifthCascadeSwitch,
+            "Contact shadows", "Lamp shadows"]),
         new("Soft grazing sun", "Soft grazing sun", []),
         new("Indirect light", "Indirect light", [SettingsMenu.TechniqueKey(WorldFrame.GiChoice), "Indoor GI", WorldFrame.GiRelocateSwitch,
             WorldFrame.GiCloudShadowsSwitch, WorldFrame.GiCacheSwitch], LauncherHeader: WorldFrame.GiChoice),
@@ -56,16 +57,17 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // Terrain
         new("Terrain detail", null, ["Terrain detail: error px (less = finer)", WorldFrame.MaterialDistanceSlider], "Terrain detail",
             "How finely the ground's shape and its textures are drawn with distance."),
-        new("Terrain relief", null, ["Ground parallax", WorldFrame.GroundParallaxDepthSlider, "Ground parallax distance (m)", "Ground displacement (tessellation)",
-            "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider,
-            "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)"],
+        new("Terrain relief", null, ["Ground parallax", WorldFrame.GroundParallaxDepthSlider, "Ground parallax distance (m)",
+            "Ground displacement (tessellation)", "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)",
+            WorldFrame.GroundReliefQualitySlider, "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)"],
             "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
         new("Ground trails", "Ground trails", []),
 
         // Vegetation
         new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
             "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),
-        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)", WorldFrame.ImpostorBudgetSlider]),
+        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)",
+            WorldFrame.ImpostorBudgetSlider]),
         new(WorldFrame.GrassCoverSwitch, WorldFrame.GrassCoverSwitch, []),
 
         // Objects

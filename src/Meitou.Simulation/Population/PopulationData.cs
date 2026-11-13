@@ -33,7 +33,8 @@ public interface IAppearanceSource
     /// <summary>
     /// As the 4-argument <c>Create</c>, the race forced to <paramref name="raceId"/> when given (debug: control channel <c>spawn-at --race</c>).
     /// </summary>
-    CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId, string? raceId) => Create(recordId, factionId, seed, templateId);
+    CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId, string? raceId) =>
+        Create(recordId, factionId, seed, templateId);
 
     /// <summary>
     /// The look of a CHARACTER record drawn from a given loadout (a saved character's appearance and worn items); nothing is rolled. Null: no look.

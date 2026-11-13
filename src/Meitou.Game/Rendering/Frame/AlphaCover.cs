@@ -11,6 +11,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 static class AlphaCover
 {
+    /// <summary>
+    /// Each file's level scales by its path and cut (<see cref="Table"/>), worked out once.
+    /// </summary>
     static readonly ConcurrentDictionary<(string Path, int Cut), float[]> Tables = new();
 
     /// <summary>
@@ -20,6 +23,7 @@ static class AlphaCover
     public static void Apply(string path, DdsFile kept, DdsFile whole, float cut)
     {
         if (cut <= 0 || kept.Format is not (DdsFormat.Bc2 or DdsFormat.Bc3)) return;
+
         float[] scale = Tables.GetOrAdd((path, CutByte(cut)), key => Table(key.Path, key.Cut));
         int dropped = whole.MipCount - kept.MipCount;
         foreach (var surface in kept.Surfaces)
@@ -30,6 +34,9 @@ static class AlphaCover
         }
     }
 
+    /// <summary>
+    /// The cut as an 8-bit alpha (1 to 255): the lowest stored value that passes it.
+    /// </summary>
     static int CutByte(float cut) => Math.Clamp((int)MathF.Ceiling(cut * 255 - 1e-4f), 1, 255);
 
     /// <summary>
@@ -44,26 +51,44 @@ static class AlphaCover
         Span<int> histogram = stackalloc int[256];
         double share = Share(dds, 0, histogram, cut);
         if (share <= 0) return scale;
+
         for (int level = 1; level < dds.MipCount && level < dds.Surfaces.Count; level++)
         {
             Histogram(dds, level, histogram);
-            long texels = 0, above = 0;
-            for (int a = 0; a < 256; a++) texels += histogram[a];
-            int threshold = 255;
-            for (; threshold >= 1; threshold--)
-            {
-                above += histogram[threshold];
-                if (above >= share * texels) break;
-            }
-
-            threshold = Math.Clamp(threshold, 1, cut);
+            int threshold = Math.Clamp(ShareThreshold(histogram, share), 1, cut);
             scale[level] = cut / (float)threshold;
         }
 
-        Console.WriteLine($"textures  cover kept in {Path.GetFileName(path)} ({dds.Format}, {share:P1} past the cut): scale {string.Join(" ", scale.Skip(1).Take(8).Select(k => k.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)))}");
+        var shown = scale
+            .Skip(1)
+            .Take(8)
+            .Select(k => k.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+        string file = Path.GetFileName(path);
+        Console.WriteLine($"textures  cover kept in {file} ({dds.Format}, {share:P1} past the cut): scale {string.Join(" ", shown)}");
         return scale;
     }
 
+    /// <summary>
+    /// The highest alpha (255 down to 0) at and above which a level's <paramref name="histogram"/> holds <paramref name="share"/> of its texels.
+    /// </summary>
+    static int ShareThreshold(Span<int> histogram, double share)
+    {
+        long texels = 0, above = 0;
+        for (int a = 0; a < 256; a++) texels += histogram[a];
+
+        int threshold = 255;
+        for (; threshold >= 1; threshold--)
+        {
+            above += histogram[threshold];
+            if (above >= share * texels) break;
+        }
+
+        return threshold;
+    }
+
+    /// <summary>
+    /// The share of a level's texels whose alpha passes the cut (<see cref="CutByte"/>); 0 for an empty level.
+    /// </summary>
     static double Share(DdsFile dds, int level, Span<int> histogram, int cut)
     {
         Histogram(dds, level, histogram);
@@ -77,6 +102,9 @@ static class AlphaCover
         return texels == 0 ? 0 : above / (double)texels;
     }
 
+    /// <summary>
+    /// The count of a level's texels at each alpha, into <paramref name="histogram"/>.
+    /// </summary>
     static void Histogram(DdsFile dds, int level, Span<int> histogram)
     {
         histogram.Clear();
@@ -94,6 +122,7 @@ static class AlphaCover
         for (int at = 0; at + 16 <= blocks.Length; at += 16)
         {
             var alpha = blocks.Slice(at, 8);
+
             if (format == DdsFormat.Bc3)
             {
                 bool eight = alpha[0] > alpha[1];
@@ -105,7 +134,8 @@ static class AlphaCover
             {
                 for (int i = 0; i < 8; i++)
                 {
-                    int low = Math.Min(15, (int)MathF.Round((alpha[i] & 15) * k)), high = Math.Min(15, (int)MathF.Round((alpha[i] >> 4) * k));
+                    int low = Math.Min(15, (int)MathF.Round((alpha[i] & 15) * k));
+                    int high = Math.Min(15, (int)MathF.Round((alpha[i] >> 4) * k));
                     alpha[i] = (byte)(low | high << 4);
                 }
             }

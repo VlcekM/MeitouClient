@@ -67,8 +67,10 @@ sealed class TownBuildingContents
     public static IReadOnlyList<HomeSpot> LaySpots(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved)
     {
         var c = new TownBuildingContents();
-        if (!resolved.Destroyed && layouts.Find(resolved.Record, resolved.Placement.LayoutName(null, exterior: false), exterior: false) is { } interior)
+        string layout = resolved.Placement.LayoutName(null, exterior: false);
+        if (!resolved.Destroyed && layouts.Find(resolved.Record, layout, exterior: false) is { } interior)
             c.LayInterior(db, layouts, resolved, interior, new(), new());
+
         return c.Spots;
     }
 

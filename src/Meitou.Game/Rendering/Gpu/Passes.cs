@@ -38,15 +38,21 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
     public PassTargets WithShadingRate(GpuView view, int texel) =>
         this with { ShadingRate = view, ShadingRateTexel = texel, Formats = Formats with { ShadingRate = true } };
 
-    /// <summary>The targets of <paramref name="colour"/> and / or <paramref name="depth"/> (null: none), loaded, the whole area as viewport and scissor.</summary>
+    /// <summary>
+    /// The targets of <paramref name="colour"/> and / or <paramref name="depth"/> (null: none), loaded, the whole area as viewport and scissor.
+    /// </summary>
     public static PassTargets Of(GpuTexture? colour, GpuTexture? depth, GpuTexture? extra = null, GpuTexture? extra2 = null)
     {
         var any = colour ?? depth ?? throw new ArgumentException("a pass needs an attachment");
         int w = any.Desc.Width, h = any.Desc.Height;
         static RenderTarget Target(GpuTexture? t) => t is null ? default : new RenderTarget(t.Attachment(), LoadOp.Load, default);
-        var formats = new AttachmentFormats(colour?.Desc.Format ?? InternalFormat.None, depth?.Desc.Format ?? InternalFormat.None, any.Desc.Samples, Extra: extra?.Desc.Format ?? InternalFormat.None,
-            Extra2: extra2?.Desc.Format ?? InternalFormat.None);
-        return new PassTargets(Target(colour), Target(depth), formats, w, h, new PixelViewport(0, 0, w, h, 0, 1), Whole(w, h), Target(extra)) { Extra2 = Target(extra2) };
+        var formats = new AttachmentFormats(colour?.Desc.Format ?? InternalFormat.None, depth?.Desc.Format ?? InternalFormat.None, any.Desc.Samples,
+            Extra: extra?.Desc.Format ?? InternalFormat.None, Extra2: extra2?.Desc.Format ?? InternalFormat.None);
+
+        return new PassTargets(Target(colour), Target(depth), formats, w, h, new PixelViewport(0, 0, w, h, 0, 1), Whole(w, h), Target(extra))
+        {
+            Extra2 = Target(extra2),
+        };
     }
 
     /// <summary>

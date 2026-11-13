@@ -820,9 +820,13 @@ public sealed unsafe class TerrainTextures : IDisposable
             {
                 var local = new List<string>();
                 var d = LoadLayer(_assets, pair.Diffuse, size, true, [128, 128, 128, 60], local);
-                var n = near ? LoadNearNormal(_assets, pair.Normal, size, local) : LoadLayer(_assets, pair.Normal, size, false, [128, 128, 255, 255], local);
+                var n = near
+                    ? LoadNearNormal(_assets, pair.Normal, size, local)
+                    : LoadLayer(_assets, pair.Normal, size, false, [128, 128, 255, 255], local);
                 float steep = 0;
-                var h = !near && GroundRelief.Enabled ? LoadHeight(_assets, pair.Normal, HeightSize, _softness.Relief(pair.Diffuse), out steep) : null;
+                var h = !near && GroundRelief.Enabled
+                    ? LoadHeight(_assets, pair.Normal, HeightSize, _softness.Relief(pair.Diffuse), out steep)
+                    : null;
                 foreach (var m in local) _problems.Enqueue(m);
                 result = new Decoded(pair, near, d, n, h, steep);
             }
@@ -953,7 +957,10 @@ public sealed unsafe class TerrainTextures : IDisposable
     void GrowNear()
     {
         int want = Math.Min(Math.Min(_pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
-        if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null || _normalArray is null) return;
+        if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null
+            || _normalArray is null)
+            return;
+
         if (Guard is { } guard && !guard.Allows((ulong)Bytes(_layerSize, _levelCount, want, 32)))
         {
             _nearRefused = want;
@@ -981,7 +988,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         _nextFree = 0;
         Capacity = want;
         for (int b = 0; b < _state.Length; b++) WriteNear(b);
-        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(_layerSize, _levelCount, want, 32) >> 20} MB)");
+        long megabytes = Bytes(_layerSize, _levelCount, want, 32) >> 20;
+        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({megabytes} MB)");
     }
 
     /// <summary>
@@ -1168,6 +1176,16 @@ public sealed unsafe class TerrainTextures : IDisposable
     #region Layer decoding
 
     /// <summary>
+    /// Bumped when <see cref="Deblock"/> or the BC5 encoding changes; part of the cache's file name.
+    /// </summary>
+    const string NormalCacheVersion = "n2";
+
+    /// <summary>
+    /// <see cref="Deblock"/>'s kernel radius in texels.
+    /// </summary>
+    const int DeblockRadius = 4;
+
+    /// <summary>
     /// One layer texture as the blocks of its array slice: every mip level down to 1 × 1, BC3 (<paramref name="diffuse"/>) or BC1.
     /// A square power-of-two DDS in BC1 or BC3 that is at least <paramref name="size"/> wide and has the mips is taken as stored
     /// (levels from <paramref name="size"/> down; the other of BC1/BC3 by a block conversion); anything else is decoded, scaled to
@@ -1257,64 +1275,84 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>
-    /// A near normal layer as BC5 blocks (x and y; z is rebuilt in the shader), every mip level down to 1 x 1, with the game's BC1 blocks smoothed out: the file's
-    /// 4 x 4 blocks hold four colours each (5:6:5 endpoints), so magnified the normals lit as flat facets with hard edges (docs/render-terrain.md, "BC1 normal blocks").
-    /// The level 0 normals are decoded, smoothed by a separable Gaussian (<see cref="Deblock"/>) and the levels made from that, so nothing is block-aligned.
+    /// A near normal layer as BC5 blocks (x and y; z is rebuilt in the shader), every mip level down to 1 x 1, with the game's BC1 blocks smoothed
+    /// out: the file's 4 x 4 blocks hold four colours each (5:6:5 endpoints), so magnified the normals lit as flat facets with hard edges
+    /// (docs/render-terrain.md, "BC1 normal blocks"). The level 0 normals are decoded, smoothed by a separable Gaussian (<see cref="Deblock"/>) and
+    /// the levels made from that, so nothing is block-aligned.
     /// </summary>
     static byte[][] LoadNearNormal(AssetLocator assets, string? name, int size, List<string> problems)
     {
         int levelCount = (int)Math.Log2(size) + 1;
         string? cacheFile = NormalCachePath(assets, name, size);
         if (cacheFile is not null && ReadNormalCache(cacheFile, size, levelCount) is { } cached) return cached;
+
         var levels = DecodeNearNormal(assets, name, size, levelCount, problems);
         if (cacheFile is not null) WriteNormalCache(cacheFile, levels);
         return levels;
     }
 
-    /// <summary>Bumped when <see cref="Deblock"/> or the BC5 encoding changes; part of the cache's file name.</summary>
-    const string NormalCacheVersion = "n2";
-
     /// <summary>
-    /// The disk cache of a deblocked near normal layer (<c>%LOCALAPPDATA%\Meitou\terrain\normals\&lt;hash&gt;.bc5</c>): the hash covers the version tag, the layer size and the
-    /// source file's path, length and write time, so a mod's replacement gets its own file. Null for a layer without a file. Old files are never deleted.
+    /// The disk cache of a deblocked near normal layer (<c>%LOCALAPPDATA%\Meitou\terrain\normals\&lt;hash&gt;.bc5</c>): the hash covers the version
+    /// tag, the layer size and the source file's path, length and write time, so a mod's replacement gets its own file. Null for a layer without a
+    /// file. Old files are never deleted.
     /// </summary>
     static string? NormalCachePath(AssetLocator assets, string? name, int size)
     {
         if (name is null) return null;
+
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) return null;
+
         try
         {
             var info = new FileInfo(path);
             var key = $"{NormalCacheVersion}|{size}|{path.ToLowerInvariant()}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
-            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "terrain", "normals", hash + ".bc5");
+            var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key));
+            var hash = Convert.ToHexString(digest)[..24].ToLowerInvariant();
+            var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return Path.Combine(localData, "Meitou", "terrain", "normals", hash + ".bc5");
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
     }
 
-    /// <summary>The levels of a cache file (magic MNB5, level count, then each level's length and blocks), or null when it is missing or does not fit.</summary>
+    /// <summary>
+    /// The levels of a cache file (magic MNB5, level count, then each level's length and blocks), or null when it is missing or does not fit.
+    /// </summary>
     static byte[][]? ReadNormalCache(string file, int size, int levelCount)
     {
         try
         {
             if (!File.Exists(file)) return null;
+
             using var stream = new BufferedStream(File.OpenRead(file), 1 << 20);
             using var reader = new BinaryReader(stream);
             if (reader.ReadUInt32() != 0x3542424D || reader.ReadInt32() != levelCount) return null;
+
             var levels = new byte[levelCount][];
             for (int l = 0; l < levelCount; l++)
             {
                 int side = Math.Max(size >> l, 1), expected = (side + 3) / 4 * ((side + 3) / 4) * 16;
                 if (reader.ReadInt32() != expected) return null;
+
                 levels[l] = reader.ReadBytes(expected);
                 if (levels[l].Length != expected) return null;
             }
+
             return levels;
         }
-        catch (Exception e) when (e is IOException or EndOfStreamException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or EndOfStreamException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
+    /// <summary>
+    /// Writes a layer's levels to its cache file (<see cref="ReadNormalCache"/>'s layout) through a temporary file moved into place; a failure
+    /// leaves no cache.
+    /// </summary>
     static void WriteNormalCache(string file, byte[][] levels)
     {
         try
@@ -1326,25 +1364,29 @@ public sealed unsafe class TerrainTextures : IDisposable
             {
                 writer.Write(0x3542424D);
                 writer.Write(levels.Length);
-                foreach (var level in levels) { writer.Write(level.Length); writer.Write(level); }
+                foreach (var level in levels)
+                {
+                    writer.Write(level.Length);
+                    writer.Write(level);
+                }
             }
+
             File.Move(temporary, file, overwrite: true);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
+    /// <summary>
+    /// Decodes a near normal layer, unit-length and deblocked, and encodes its mip levels as BC5.
+    /// </summary>
     static byte[][] DecodeNearNormal(AssetLocator assets, string? name, int size, int levelCount, List<string> problems)
     {
-        byte[] level0;
-        if (ReadImage(assets, name, size) is { } image) level0 = Resize(image, size);
-        else
-        {
-            if (name is not null) problems.Add($"terrain texture not found or unreadable: {name}");
-            level0 = new byte[size * size * 4];
-            for (int i = 0; i < level0.Length; i += 4) (level0[i], level0[i + 1], level0[i + 2], level0[i + 3]) = (128, 128, 255, 255);
-        }
+        byte[] level0 = NearNormalLevel0(assets, name, size, problems);
         Normalise(level0);
         Deblock(level0, size);
+
         var mips = Mips(level0, size, size);
         var encoded = new byte[mips.Length][];
         for (int l = 0; l < mips.Length; l++) encoded[l] = EncodeBc5(mips[l], Math.Max(size >> l, 1));
@@ -1352,8 +1394,22 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>
-    /// Makes every texel of an RGBA8 normal map a unit vector. The game lights with <c>normalize(rgb * 2 - 1)</c> (terrainfp4.hlsl, deferred.hlsl), and most of its
-    /// terrain maps store a blue of 1 over any x and y (lengths up to 1.34): x and y kept as stored, with z rebuilt from them, tilt such a normal far more than the game does.
+    /// A near normal layer's level 0 as RGBA8 at <paramref name="size"/>²; flat (straight up) when the file is missing or unreadable.
+    /// </summary>
+    static byte[] NearNormalLevel0(AssetLocator assets, string? name, int size, List<string> problems)
+    {
+        if (ReadImage(assets, name, size) is { } image) return Resize(image, size);
+
+        if (name is not null) problems.Add($"terrain texture not found or unreadable: {name}");
+        var level0 = new byte[size * size * 4];
+        for (int i = 0; i < level0.Length; i += 4) (level0[i], level0[i + 1], level0[i + 2], level0[i + 3]) = (128, 128, 255, 255);
+        return level0;
+    }
+
+    /// <summary>
+    /// Makes every texel of an RGBA8 normal map a unit vector. The game lights with <c>normalize(rgb * 2 - 1)</c> (terrainfp4.hlsl, deferred.hlsl),
+    /// and most of its terrain maps store a blue of 1 over any x and y (lengths up to 1.34): x and y kept as stored, with z rebuilt from them, tilt
+    /// such a normal far more than the game does.
     /// </summary>
     internal static void Normalise(byte[] rgba)
     {
@@ -1363,6 +1419,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             float length = MathF.Sqrt(x * x + y * y + z * z);
             if (length < 1e-4f) (x, y, z) = (0, 0, 1);
             else (x, y, z) = (x / length, y / length, z / length);
+
             rgba[i] = (byte)Math.Clamp((int)((x * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
             rgba[i + 1] = (byte)Math.Clamp((int)((y * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
             rgba[i + 2] = (byte)Math.Clamp((int)((z * 0.5f + 0.5f) * 255 + 0.5f), 0, 255);
@@ -1370,19 +1427,30 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>
-    /// The red and green channels (a normal's x and y) of an RGBA8 image smoothed across the BC1 blocks: a separable Gaussian (sigma 1.5 texels, radius 4,
-    /// edges wrapping as the layers repeat). The blocks' palette steps are a few levels of 255 over four texels; a texel-scale filter flattens them and keeps the
-    /// shapes the file holds (the file cannot hold detail finer than a block anyway).
+    /// The red and green channels (a normal's x and y) of an RGBA8 image smoothed across the BC1 blocks: a separable Gaussian (sigma 1.5 texels,
+    /// radius 4, edges wrapping as the layers repeat). The blocks' palette steps are a few levels of 255 over four texels; a texel-scale filter
+    /// flattens them and keeps the shapes the file holds (the file cannot hold detail finer than a block anyway).
     /// </summary>
     internal static void Deblock(byte[] rgba, int size)
     {
-        const int radius = 4;
+        const int radius = DeblockRadius;
         Span<float> kernel = stackalloc float[radius * 2 + 1];
         float total = 0;
         for (int i = -radius; i <= radius; i++) total += kernel[i + radius] = MathF.Exp(-i * i / (2 * 1.5f * 1.5f));
         for (int i = 0; i < kernel.Length; i++) kernel[i] /= total;
+
         var kernelArray = kernel.ToArray();
         var temp = new float[size * size * 2];
+        DeblockRows(rgba, temp, size, kernelArray);
+        DeblockColumns(temp, rgba, size, kernelArray);
+    }
+
+    /// <summary>
+    /// <see cref="Deblock"/>'s horizontal pass: the red and green of <paramref name="rgba"/> blurred along the rows into <paramref name="temp"/>.
+    /// </summary>
+    static void DeblockRows(byte[] rgba, float[] temp, int size, float[] kernelArray)
+    {
+        const int radius = DeblockRadius;
         Parallel.For(0, size, y =>
         {
             for (int x = 0; x < size; x++)
@@ -1392,11 +1460,23 @@ public sealed unsafe class TerrainTextures : IDisposable
                 {
                     int o = (y * size + ((x + k) & (size - 1))) * 4;
                     float w = kernelArray[k + radius];
-                    r += rgba[o] * w; g += rgba[o + 1] * w;
+                    r += rgba[o] * w;
+                    g += rgba[o + 1] * w;
                 }
-                temp[(y * size + x) * 2] = r; temp[(y * size + x) * 2 + 1] = g;
+
+                temp[(y * size + x) * 2] = r;
+                temp[(y * size + x) * 2 + 1] = g;
             }
         });
+    }
+
+    /// <summary>
+    /// <see cref="Deblock"/>'s vertical pass: <paramref name="temp"/> blurred along the columns back into the red and green of
+    /// <paramref name="rgba"/>.
+    /// </summary>
+    static void DeblockColumns(float[] temp, byte[] rgba, int size, float[] kernelArray)
+    {
+        const int radius = DeblockRadius;
         Parallel.For(0, size, y =>
         {
             for (int x = 0; x < size; x++)
@@ -1406,8 +1486,10 @@ public sealed unsafe class TerrainTextures : IDisposable
                 {
                     int o = (((y + k) & (size - 1)) * size + x) * 2;
                     float w = kernelArray[k + radius];
-                    r += temp[o] * w; g += temp[o + 1] * w;
+                    r += temp[o] * w;
+                    g += temp[o + 1] * w;
                 }
+
                 int d = (y * size + x) * 4;
                 rgba[d] = (byte)Math.Clamp((int)(r + 0.5f), 0, 255);
                 rgba[d + 1] = (byte)Math.Clamp((int)(g + 0.5f), 0, 255);
@@ -1415,10 +1497,13 @@ public sealed unsafe class TerrainTextures : IDisposable
         });
     }
 
-    /// <summary>The red and green channels of a square RGBA8 level as BC5 blocks; a level under 4 x 4 is padded by repeating its edge texels.</summary>
+    /// <summary>
+    /// The red and green channels of a square RGBA8 level as BC5 blocks; a level under 4 x 4 is padded by repeating its edge texels.
+    /// </summary>
     static byte[] EncodeBc5(byte[] rgba, int side)
     {
         if (side >= 4) return Meitou.Game.Rendering.Impostors.ImpostorEncoder.EncodeBc5(rgba, side);
+
         var padded = new byte[4 * 4 * 4];
         for (int y = 0; y < 4; y++)
             for (int x = 0; x < 4; x++)

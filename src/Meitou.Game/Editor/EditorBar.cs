@@ -128,13 +128,18 @@ sealed class EditorBar
     {
         var db = world.Database;
         Origin = origin;
-        Placement = new BuildingPlacement(WorldLayout.ZoneOf(origin.X, origin.Z), Key, BuildingId, origin with { Y = 0 }, Quaternion.Identity, null, origin.Y)
+        var zone = WorldLayout.ZoneOf(origin.X, origin.Z);
+        Placement = new BuildingPlacement(zone, Key, BuildingId, origin with { Y = 0 }, Quaternion.Identity, null, origin.Y)
         {
-            Key = Key, InteriorLayout = LayoutName, ExteriorLayout = "", Standalone = true,
+            Key = Key,
+            InteriorLayout = LayoutName,
+            ExteriorLayout = "",
+            Standalone = true,
         };
         Stand = origin + StandLocal;
         StandYaw = MathF.Atan2(FacingLocal.X, FacingLocal.Z);
         FillAt = origin + new Vector3(0, FillHeight, 0);
+
         // The spots of the record's interior layout, the near ones left out, nearest the focus first.
         var focus = origin + SeatFocusLocal;
         var spots = TownBuildings.InteriorSpots(db, world.Layouts, new ResolvedBuilding(Placement, record, origin, false));
@@ -155,11 +160,16 @@ sealed class EditorBar
     /// </summary>
     public static EditorBar? Above(WorldObjects world, Vector3 anchor, Func<float, float, float> ground)
     {
-        if (world.Database.Find(BuildingId) is not { Type: FcsRecordType.Building } record || world.Layouts.Find(record, LayoutName, exterior: false) is null) return null;
+        if (world.Database.Find(BuildingId) is not { Type: FcsRecordType.Building } record
+            || world.Layouts.Find(record, LayoutName, exterior: false) is null)
+            return null;
+
         float top = float.MinValue;
         for (int x = -2; x <= 2; x++)
-            for (int z = -2; z <= 2; z++)
-                top = MathF.Max(top, ground(anchor.X + x * 100, anchor.Z + z * 100));
+        {
+            for (int z = -2; z <= 2; z++) top = MathF.Max(top, ground(anchor.X + x * 100, anchor.Z + z * 100));
+        }
+
         return new EditorBar(world, record, new Vector3(anchor.X, top + Lift, anchor.Z));
     }
 
@@ -168,30 +178,14 @@ sealed class EditorBar
     /// drawn from the town's bar squads, some on the seats left after the editor's characters' and some standing at the room's nodes. Rolled the same
     /// each time (fixed seeds).
     /// </summary>
-    static List<(string Record, string? Faction, Vector3 Position, float Yaw, string Clip, int Seed)> MakeCrowd(GameDatabase db, IEnumerable<HomeSpot> seats,
-        IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
+    static List<(string Record, string? Faction, Vector3 Position, float Yaw, string Clip, int Seed)> MakeCrowd(
+        GameDatabase db, IEnumerable<HomeSpot> seats, IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
     {
         var crowd = new List<(string, string?, Vector3, float, string, int)>();
-        // Only the base game's people, so a mod that adds to the town's or the residents' lists does not change who stands in the bar.
-        static bool IsBase(string id) => id.EndsWith("gamedata.base", StringComparison.Ordinal) || id.EndsWith("Newwworld.mod", StringComparison.Ordinal)
-            || id.EndsWith("rebirth.mod", StringComparison.Ordinal) || id.EndsWith("Dialogue.mod", StringComparison.Ordinal);
-        bool IsCharacter(string id) => IsBase(id) && db.Find(id)?.Type == FcsRecordType.Character;
-        if (db.Find(ResidentsId) is { } residentRecord && SquadTemplate.From(residentRecord) is var residents)
-        {
-            if (residents.Leader is { } barman && IsCharacter(barman.Id) && counter.FirstOrDefault() is { Position: var at } spot && at != default)
-                crowd.Add((barman.Id, residents.Faction, at, spot.Yaw, "idle_stand_confident", 11));
-            if (residents.Squad.FirstOrDefault(m => IsCharacter(m.Id)) is { Id: { } guard }
-                    && posts.FirstOrDefault() is { Position: var post } postSpot && post != default)
-                crowd.Add((guard, residents.Faction, post, postSpot.Yaw, "idle_stand_guard", 12));
-        }
-        var patrons = new List<(string Id, string? Faction)>();
-        if (db.Find(TownId) is { } town)
-            foreach (var link in town.GetReferences("bar squads"))
-                if (IsBase(link.TargetStringId) && db.Find(link.TargetStringId) is { } record && SquadTemplate.From(record) is var squad)
-                    foreach (var m in (squad.Leader is { } leader ? [leader] : Array.Empty<RecordLink>()).Concat(squad.Squad)
-                            .Concat(squad.Squad2).Concat(squad.ChooseFrom))
-                        if (IsCharacter(m.Id) && !patrons.Exists(p => p.Id == m.Id)) patrons.Add((m.Id, squad.Faction));
+        AddResidents(db, crowd, counter, posts);
+        var patrons = BarPatrons(db);
         if (patrons.Count == 0) return crowd;
+
         var random = new Random(173);
         int next = 0;
         (string Id, string? Faction) Patron() => patrons[(next++ * 7 + random.Next(patrons.Count)) % patrons.Count];
@@ -200,13 +194,70 @@ sealed class EditorBar
             var (id, faction) = Patron();
             crowd.Add((id, faction, seat.Position, seat.Yaw, seat.SitClip!, 20 + next));
         }
+
         foreach (var node in nodes.Take(StandingPatrons))
         {
             var (id, faction) = Patron();
             crowd.Add((id, faction, node.Position, node.Yaw, Stances[random.Next(Stances.Length)], 40 + next));
         }
+
         return crowd;
     }
+
+    /// <summary>
+    /// The residents' leader (the barman) at the first shopkeeper node and the first character of their squad (the guard) at the first guard node.
+    /// </summary>
+    static void AddResidents(
+        GameDatabase db, List<(string, string?, Vector3, float, string, int)> crowd, IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts)
+    {
+        if (db.Find(ResidentsId) is not { } residentRecord) return;
+
+        var residents = SquadTemplate.From(residentRecord);
+
+        if (residents.Leader is { } barman && IsBaseCharacter(db, barman.Id) && counter.FirstOrDefault() is { Position: var at } spot && at != default)
+            crowd.Add((barman.Id, residents.Faction, at, spot.Yaw, "idle_stand_confident", 11));
+        if (residents.Squad.FirstOrDefault(m => IsBaseCharacter(db, m.Id)) is { Id: { } guard }
+            && posts.FirstOrDefault() is { Position: var post } postSpot && post != default)
+            crowd.Add((guard, residents.Faction, post, postSpot.Yaw, "idle_stand_guard", 12));
+    }
+
+    /// <summary>
+    /// The town's bar squads' characters (leader, squads, then the pick list), each once, with their squad's faction.
+    /// </summary>
+    static List<(string Id, string? Faction)> BarPatrons(GameDatabase db)
+    {
+        var patrons = new List<(string Id, string? Faction)>();
+        if (db.Find(TownId) is not { } town) return patrons;
+
+        foreach (var link in town.GetReferences("bar squads"))
+        {
+            if (!IsBase(link.TargetStringId) || db.Find(link.TargetStringId) is not { } record) continue;
+
+            var squad = SquadTemplate.From(record);
+            var members = (squad.Leader is { } leader ? [leader] : Array.Empty<RecordLink>())
+                .Concat(squad.Squad)
+                .Concat(squad.Squad2)
+                .Concat(squad.ChooseFrom);
+            foreach (var m in members)
+            {
+                if (IsBaseCharacter(db, m.Id) && !patrons.Exists(p => p.Id == m.Id)) patrons.Add((m.Id, squad.Faction));
+            }
+        }
+
+        return patrons;
+    }
+
+    /// <summary>
+    /// Whether a record is the base game's: only its people stand in the bar, so a mod that adds to the town's or the residents' lists does not change
+    /// who does.
+    /// </summary>
+    static bool IsBase(string id) => id.EndsWith("gamedata.base", StringComparison.Ordinal) || id.EndsWith("Newwworld.mod", StringComparison.Ordinal)
+        || id.EndsWith("rebirth.mod", StringComparison.Ordinal) || id.EndsWith("Dialogue.mod", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether a record is a base game character (<see cref="IsBase"/>).
+    /// </summary>
+    static bool IsBaseCharacter(GameDatabase db, string id) => IsBase(id) && db.Find(id)?.Type == FcsRecordType.Character;
 
     /// <summary>
     /// The ground under the bar: <see cref="GroundMesh"/> drawn as its own map feature, scaled so its top spans <see cref="GroundHalfWidth"/> each

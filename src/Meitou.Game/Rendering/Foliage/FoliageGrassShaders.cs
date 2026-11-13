@@ -50,12 +50,13 @@ public static partial class FoliageGrassShaders
     /// <summary>
     /// Kernel 1, one thread per slot (a page's blades of one patch): the decisions of <c>FoliageRenderer.PrepareGrass</c> in its operation order,
     /// <c>precise</c> (no FMA): the page box against the planes (<c>WorldCamera.Intersects</c>), the page's distance (<c>BoxDistance</c> with the
-    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). A slot that draws takes the
-    /// next place of the view's list (the draws' count, in whatever order the threads come) and writes there <c>keys[place] = (distance bits, tie,
-    /// blades, patch row)</c> and its first blade; counts the draws and blades. The list holds the slots that draw and no others, so kernel 2 ranks
-    /// among those alone. With the last frame's depth pyramid (<c>view.hz</c>, <c>hzOff</c> and <c>hiz</c> as <see cref="FoliageShaders"/>' cull
-    /// reads them; level count 0: none) a page whose box (its square grown by half the patch's widest quad and its sway, the heights its blades span) lay wholly
-    /// behind that frame's surfaces is left out, by the rule of the meshes' occlusion cull (docs/formats/foliage.md "Occlusion culling").
+    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). A slot that draws
+    /// takes the next place of the view's list (the draws' count, in whatever order the threads come) and writes there <c>keys[place] = (distance
+    /// bits, tie, blades, patch row)</c> and its first blade; counts the draws and blades. The list holds the slots that draw and no others, so
+    /// kernel 2 ranks among those alone. With the last frame's depth pyramid (<c>view.hz</c>, <c>hzOff</c> and <c>hiz</c> as
+    /// <see cref="FoliageShaders"/>' cull reads them; level count 0: none) a page whose box (its square grown by half the patch's widest quad and
+    /// its sway, the heights its blades span) lay wholly behind that frame's surfaces is left out, by the rule of the meshes' occlusion cull
+    /// (docs/formats/foliage.md "Occlusion culling").
     /// </summary>
     public static readonly string CullCompute = Common + FoliageShaders.CrSqrt + "\n" + """
         layout(std430, set = 0, binding = 2) readonly buffer Prefixes { uint prefixes[]; };
@@ -312,8 +313,9 @@ public static partial class FoliageGrassShaders
 /// <summary>
 /// One slot of the slot table (std430, 36 bytes): a page's blades of one patch. <see cref="X0"/>, <see cref="Z0"/> are the page's corner,
 /// <see cref="YMin"/> and <see cref="YMax"/> the heights its blades span (the lowest root to the highest tip), as <c>PrepareGrass</c> reads them
-/// from the page; <see cref="FirstBlade"/> the index of its first blade in the arena (the draw's first instance); <see cref="Zone"/> and <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out
-/// again); <see cref="Tie"/> orders pages of equal distance (creation order, then patch index).
+/// from the page; <see cref="FirstBlade"/> the index of its first blade in the arena (the draw's first instance); <see cref="Zone"/> and
+/// <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out again); <see cref="Tie"/> orders pages of equal
+/// distance (creation order, then patch index).
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassSlot

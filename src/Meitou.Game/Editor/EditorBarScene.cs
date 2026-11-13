@@ -159,10 +159,12 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         EditorBar = bar;
         objects.AddRuntime(bar.Placement);
         var lamps = WorldLights.ForBuilding(db, world.Levels, new ResolvedBuilding(bar.Placement, record, bar.Origin, false), world.Layouts);
-        // The room's fill: a point light under the roof in the lamps' own colour at a share of their mean power, lit day and night. White and at half their
-        // power it read as a spotlight on the character: skin that shone and seemed to glow in a warm, dim room.
+        // The room's fill: a point light under the roof in the lamps' own colour at a share of their mean power, lit day and night. White and at
+        // half their power it read as a spotlight on the character: skin that shone and seemed to glow in a warm, dim room.
         float power = lamps.Count > 0 ? lamps.Average(l => l.Intensity) * EditorBar.FillShare : 1;
-        var fillColour = lamps.Count > 0 ? new Vector3(lamps.Average(l => l.Colour.X), lamps.Average(l => l.Colour.Y), lamps.Average(l => l.Colour.Z)) : Vector3.One;
+        var fillColour = lamps.Count > 0
+            ? new Vector3(lamps.Average(l => l.Colour.X), lamps.Average(l => l.Colour.Y), lamps.Average(l => l.Colour.Z))
+            : Vector3.One;
         lamps.Add(new WorldLight(bar.FillAt, fillColour, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
             WorldLightEffect.None, WorldLightRule.WhenBuildingOn, true, 0, "meitou:editor-fill", record.StringId, EditorBar.Key));
         host.ActiveLamps?.SetRuntime(EditorBar.Key, lamps);

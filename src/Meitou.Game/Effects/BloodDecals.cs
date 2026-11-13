@@ -113,7 +113,8 @@ sealed partial class BloodDecals(GameHost host)
         float tick = world.TickSeconds;
         while (_bloodQueue.TryDequeue(out var m))
         {
-            if (m.Kind == BloodMarkKind.Splash && m.Attacker is { } attacker && host.Gpu.Characters is { } crowd) crowd.WeaponHit(host.DrawKey(attacker), m.Colour, m.Amount);
+            if (m.Kind == BloodMarkKind.Splash && m.Attacker is { } attacker && host.Gpu.Characters is { } crowd)
+                crowd.WeaponHit(host.DrawKey(attacker), m.Colour, m.Amount);
             if (m.Kind == BloodMarkKind.Explosion)
             {
                 host.Debris.Burst(m, world);
@@ -142,6 +143,7 @@ sealed partial class BloodDecals(GameHost host)
                     break;
             }
         }
+
         RetryPendingWeapons();
         long ticks = world.Tick - _bloodTick;
         _bloodTick = world.Tick;

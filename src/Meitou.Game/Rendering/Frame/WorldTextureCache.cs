@@ -570,8 +570,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public WorldTexture? Get(string? name, bool border, bool deferred = false, float cut = 0)
     {
         if (name is null) return null;
+
         string key = border ? name + "|border" : name;
         if (cut > 0) key += "|cut";
+
         if (_cache.TryGetValue(key, out var t))
         {
             if (!deferred)
@@ -723,7 +725,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
         Func<TextureData?> load = () =>
         {
             TextureData data;
-            try { data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize, cut); }
+            try
+            {
+                data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize, cut);
+            }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
@@ -1005,7 +1010,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// are stored (BC4 through a swizzle that shows it as grey); the rest is decoded to RGBA8 on the CPU.
     /// </summary>
     /// <param name="leanSize">0, or the largest top side to keep (a lean load under the guard's pressure).</param>
-    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0, float cut = 0)
+    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0,
+        float cut = 0)
     {
         using var file = File.OpenHandle(Content.GameFiles.Resolve(path), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
         Span<byte> magic = stackalloc byte[4];

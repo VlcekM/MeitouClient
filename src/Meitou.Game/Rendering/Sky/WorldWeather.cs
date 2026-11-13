@@ -145,10 +145,15 @@ public sealed class WorldWeather
         Day = day;
         var now = new WeatherTime(day, hour);
         double from = _last?.Minutes ?? 0;
+
         // A region the save holds is set from its snapshot below, which replaces everything the replay would have made of it (docs/engine.md
         // "Loading"): only the others replay, minute by minute from day 0 (a second at day 330 for the 71 regions).
-        var saved = regions.Select(r => r.RegionId).ToHashSet(StringComparer.Ordinal);
-        var replayed = World.Regions.Where(r => !saved.Contains(r.Def.StringId)).ToList();
+        var saved = regions
+            .Select(r => r.RegionId)
+            .ToHashSet(StringComparer.Ordinal);
+        var replayed = World.Regions
+            .Where(r => !saved.Contains(r.Def.StringId))
+            .ToList();
         for (double m = Math.Floor(from) + 1; replayed.Count > 0 && m <= now.Minutes; m++)
         {
             var t = WeatherTime.FromHours(m / 60);

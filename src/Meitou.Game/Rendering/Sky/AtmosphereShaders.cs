@@ -44,7 +44,10 @@ static class AtmosphereShaders
         }
         """;
 
-    /// <summary>Lazarov's environment BRDF for any specular colour: <see cref="Functions"/> and the reflections' full-size pass (<see cref="Gi.SsrShaders.Apply"/>).</summary>
+    /// <summary>
+    /// Lazarov's environment BRDF for any specular colour: <see cref="Functions"/> and the reflections' full-size pass
+    /// (<see cref="Gi.SsrShaders.Apply"/>).
+    /// </summary>
     internal const string EnvBrdfFunction = """
         // The same for a specular colour of rf0 (LazarovEnvironmentBRDF).
         vec3 kenshiEnvBrdf(float gloss, float nv, vec3 rf0)
@@ -56,8 +59,8 @@ static class AtmosphereShaders
         """;
 
     /// <summary>
-    /// The clouds' shade on the sun at a world point; needs <c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, <c>uAtmoSun</c>, <c>uAtmoClouds</c> and <c>uAtmoCloudsTile</c>
-    /// (<see cref="Functions"/>, and the probe trace, which has them in its own block).
+    /// The clouds' shade on the sun at a world point; needs <c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, <c>uAtmoSun</c>, <c>uAtmoClouds</c> and
+    /// <c>uAtmoCloudsTile</c> (<see cref="Functions"/>, and the probe trace, which has them in its own block).
     /// </summary>
     internal static readonly string CloudShadow = $$"""
         // The sun light that gets past the cloud layer to a world point: the sun's ray from the point hits the world-anchored plane, where the sky pass's
@@ -90,7 +93,9 @@ static class AtmosphereShaders
         }
         """;
 
-    /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
+    /// <summary>
+    /// What every world shader includes (fragment stage, or the grass's vertex stage).
+    /// </summary>
     public static readonly string Functions = $$"""
 
         const float ATMO_PI = 3.14159265358979;

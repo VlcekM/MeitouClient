@@ -283,6 +283,11 @@ sealed class DebugMenu(GameHost host)
     DebugTool[]? _debugTools;
 
     /// <summary>
+    /// The whole hour the time row last stepped to (-1: none), so Left keeps going back while the clock runs on past it.
+    /// </summary>
+    int _debugLastHour = -1;
+
+    /// <summary>
     /// The settings window's "Time of day" slider (the same setter as its Advanced page), null where the loop has none.
     /// </summary>
     Slider? DebugTimeSlider => host.AgentChannel.SettingsPanel?.Sliders.FirstOrDefault(s => s.Label == "Time of day");
@@ -293,17 +298,13 @@ sealed class DebugMenu(GameHost host)
     string DebugTimeText() => DebugTimeSlider is { } s ? s.Display : "n/a";
 
     /// <summary>
-    /// The whole hour the time row last stepped to (-1: none), so Left keeps going back while the clock runs on past it.
-    /// </summary>
-    int _debugLastHour = -1;
-
-    /// <summary>
     /// Moves the time of day to the next whole hour (<paramref name="hours"/> 1) or back (-1): to the start of the current hour, or to the hour
     /// before when the time is within 5 game minutes past the hour or still in the hour this row last stepped to (a running clock moves on from it).
     /// </summary>
     void DebugStepTime(int hours)
     {
         if (DebugTimeSlider is not { } s) return;
+
         float h = s.Get();
         int whole;
         if (hours > 0)
@@ -937,7 +938,8 @@ sealed class DebugMenu(GameHost host)
             {
                 model = args[++i];
             }
-            else if (i + 1 < args.Count && args[i].Equals("--level", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out int n))
+            else if (i + 1 < args.Count && args[i].Equals("--level", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(args[i + 1], out int n))
             {
                 level = n;
                 i++;

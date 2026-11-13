@@ -767,6 +767,7 @@ sealed class DevConsoleHost(GameHost host)
         foreach (var c in host.Session.CurrentSnapshot.Characters)
         {
             if (c.Body is not { Dead: true }) continue;
+
             var w = host.Session.World.Weather?.At(c.Position.X, c.Position.Z);
             var died = host.Session.World.Characters.Cold(c.Id.Slot)?.DiedTick ?? -2;
             con.Print($"{c.Id} at {c.Position.X:0},{c.Position.Z:0} died={died} now={host.Session.World.Tick} flies={c.HasFlies} "
@@ -786,6 +787,7 @@ sealed class DevConsoleHost(GameHost host)
     void ConsoleEditor(IReadOnlyList<string> args, DevConsole con)
     {
         if (!Need(args, 0, 2, Self("editor"))) return;
+
         if (host.PlayerSquad is null)
         {
             con.Error("editor: no player squad");
@@ -794,22 +796,7 @@ sealed class DevConsoleHost(GameHost host)
 
         if (args.Count >= 1)
         {
-            if (!float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float yaw))
-            {
-                con.Error("editor: yaw in degrees");
-                return;
-            }
-
-            float? height = args.Count == 2 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float h)
-                ? h * MathF.PI / 180
-                : null;
-            if (!host.Player.CharacterEditor.TurnEditor(yaw * MathF.PI / 180, height))
-            {
-                con.Error("editor: not open");
-                return;
-            }
-
-            con.Print("editor turned to " + yaw);
+            ConsoleEditorTurn(args, con);
             return;
         }
 
@@ -820,6 +807,29 @@ sealed class DevConsoleHost(GameHost host)
         }
 
         con.Print("editor open on " + host.PlayerSquad.Leader);
+    }
+
+    /// <summary>
+    /// <c>editor yawDegrees [elevationDegrees]</c>: turns the open character editor's camera.
+    /// </summary>
+    void ConsoleEditorTurn(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float yaw))
+        {
+            con.Error("editor: yaw in degrees");
+            return;
+        }
+
+        float? height = args.Count == 2 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float h)
+            ? h * MathF.PI / 180
+            : null;
+        if (!host.Player.CharacterEditor.TurnEditor(yaw * MathF.PI / 180, height))
+        {
+            con.Error("editor: not open");
+            return;
+        }
+
+        con.Print("editor turned to " + yaw);
     }
 
     /// <summary>
@@ -837,7 +847,11 @@ sealed class DevConsoleHost(GameHost host)
                 continue;
             }
 
-            string kind = c.Body is { Dead: true } ? "dead" : c.Ragdoll is not null ? "ragdoll" : "alive";
+            string kind = c.Body is { Dead: true }
+                ? "dead"
+                : c.Ragdoll is not null
+                    ? "ragdoll"
+                    : "alive";
             var look = c.Appearance;
             string appearance = look is null ? "NULL" : (look.Headless ? "headless " : "") + (host.Gpu?.Characters?.AssetState(look) ?? "?");
             con.Print($"{c.Id} {c.Name} {kind} at {c.Position.X:0.0},{c.Position.Y:0.0},{c.Position.Z:0.0} carriedBy={c.CarriedBy} "

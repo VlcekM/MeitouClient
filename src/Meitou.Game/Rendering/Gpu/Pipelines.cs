@@ -50,14 +50,24 @@ public sealed class VertexLayout : IEquatable<VertexLayout>
     public override string ToString() => string.Join(" ", Inputs.Select(i => $"{i.Location}:{i.Format}/{i.Stride}{(i.PerInstance ? "i" : "")}"));
 }
 
-/// <summary>A pass's attachment formats: one colour attachment (Undefined = none), depth (Undefined = none), samples; <c>ShadingRate</c>: the rendering has a fragment
-/// shading rate attachment (the pipeline is made for it); <paramref name="Extra"/>: a second colour attachment (location 1; the GI resolve's surface target,
-/// docs/render-gi.md), written only by programs whose fragment shader declares that output.</summary>
-public readonly record struct AttachmentFormats(InternalFormat Colour, InternalFormat Depth, int Samples = 1, bool ShadingRate = false, InternalFormat Extra = InternalFormat.None,
-    InternalFormat Extra2 = InternalFormat.None)
+/// <summary>
+/// A pass's attachment formats: one colour attachment (Undefined = none), depth (Undefined = none), samples; <c>ShadingRate</c>: the rendering has a
+/// fragment shading rate attachment (the pipeline is made for it); <paramref name="Extra"/>: a second colour attachment (location 1; the GI resolve's
+/// surface target, docs/render-gi.md), written only by programs whose fragment shader declares that output.
+/// </summary>
+public readonly record struct AttachmentFormats(InternalFormat Colour, InternalFormat Depth, int Samples = 1, bool ShadingRate = false,
+    InternalFormat Extra = InternalFormat.None, InternalFormat Extra2 = InternalFormat.None)
 {
-    /// <summary>The rendering's colour attachments: the main one, <see cref="Extra"/> and <see cref="Extra2"/> (location 2, only after <see cref="Extra"/>).</summary>
-    public uint ColourCount => Colour == InternalFormat.None ? 0u : Extra == InternalFormat.None ? 1u : Extra2 == InternalFormat.None ? 2u : 3u;
+    /// <summary>
+    /// The rendering's colour attachments: the main one, <see cref="Extra"/> and <see cref="Extra2"/> (location 2, only after <see cref="Extra"/>).
+    /// </summary>
+    public uint ColourCount => Colour == InternalFormat.None
+        ? 0u
+        : Extra == InternalFormat.None
+            ? 1u
+            : Extra2 == InternalFormat.None
+                ? 2u
+                : 3u;
 }
 
 /// <summary>
@@ -126,7 +136,8 @@ public static unsafe class PipelineFactory
     /// </summary>
     public static Pipeline CreateGraphics(VulkanDevice device, ShaderModule vertex, ShaderModule fragment, PipelineLayout layout,
         ReadOnlySpan<VertexInput> inputs, PrimitiveType topology, AttachmentFormats targets, BlendState blendState,
-        ColorMask colourMask, PolygonKind polygon, bool alphaToCoverage, bool depthClamp, ColorMask extraMask = 0, ShaderModule tessControl = default, ShaderModule tessEvaluation = default, ColorMask extra2Mask = 0)
+        ColorMask colourMask, PolygonKind polygon, bool alphaToCoverage, bool depthClamp, ColorMask extraMask = 0,
+        ShaderModule tessControl = default, ShaderModule tessEvaluation = default, ColorMask extra2Mask = 0)
     {
         var entry = "main"u8;
         int n = inputs.Length;
@@ -156,7 +167,9 @@ public static unsafe class PipelineFactory
             var dynamic = DynamicStateInfo(dynamics);
             var colourFormats = stackalloc Format[3]
             {
-                GlConventions.VkFormatOrUndefined(targets.Colour), GlConventions.VkFormatOrUndefined(targets.Extra), GlConventions.VkFormatOrUndefined(targets.Extra2),
+                GlConventions.VkFormatOrUndefined(targets.Colour),
+                GlConventions.VkFormatOrUndefined(targets.Extra),
+                GlConventions.VkFormatOrUndefined(targets.Extra2),
             };
             var rendering = RenderingInfo(targets, colourCount, colourFormats);
             var rate = ShadingRateState();

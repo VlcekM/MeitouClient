@@ -1132,16 +1132,35 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         squad.SpawnSize = squad.Members.Count;
         if (squad.Leader.IsNone) squad.Leader = SquadRegistry.Successor(squad.Members, table);
         world.Squads.Add(squad);
-        if (SpawnTrace is { } trace && !player && !idle)
-            trace.Add(new SpawnTraceEntry(world.Tick, site is not null ? "town" : "wild", squad.Id, squad.TemplateId, squad.Name, squad.Faction, squad.Members.Count, built.Position.X, built.Position.Y, PlayerSpots(world).Select(a => Vector2.Distance(a, built.Position)).DefaultIfEmpty(-1).Min(),
-                leaderPlan?.RecordId ?? builtMembers.FirstOrDefault()?.Plan.RecordId ?? ""));
+        if (SpawnTrace is { } trace && !player && !idle) TraceSpawn(world, trace, squad, built, site, builtMembers, leaderPlan);
+
         return squad;
     }
 
-    /// <summary>A squad made by the population (debug aid, the control channel's <c>spawn-trace</c>): when, from where, which template and where.</summary>
-    public readonly record struct SpawnTraceEntry(long Tick, string Source, int SquadId, string TemplateId, string Name, int Faction, int Members, float X, float Z, float PlayerDistance, string LeaderRecord);
+    /// <summary>
+    /// Appends a made squad to <paramref name="trace"/> (<see cref="SpawnTrace"/>), with its distance to the nearest player character (-1: none).
+    /// </summary>
+    void TraceSpawn(World world, List<SpawnTraceEntry> trace, Squad squad, BuiltSquad built, TownSite? site, List<BuiltMember> builtMembers,
+        MemberPlan? leaderPlan)
+    {
+        float playerDistance = PlayerSpots(world)
+            .Select(a => Vector2.Distance(a, built.Position))
+            .DefaultIfEmpty(-1)
+            .Min();
+        string leader = leaderPlan?.RecordId ?? builtMembers.FirstOrDefault()?.Plan.RecordId ?? "";
+        trace.Add(new SpawnTraceEntry(world.Tick, site is not null ? "town" : "wild", squad.Id, squad.TemplateId, squad.Name, squad.Faction,
+            squad.Members.Count, built.Position.X, built.Position.Y, playerDistance, leader));
+    }
 
-    /// <summary>When set, every squad the population makes (not the player's, not the sandbox's) is appended here (debug aid, not part of the state).</summary>
+    /// <summary>
+    /// A squad made by the population (debug aid, the control channel's <c>spawn-trace</c>): when, from where, which template and where.
+    /// </summary>
+    public readonly record struct SpawnTraceEntry(long Tick, string Source, int SquadId, string TemplateId, string Name, int Faction, int Members,
+        float X, float Z, float PlayerDistance, string LeaderRecord);
+
+    /// <summary>
+    /// When set, every squad the population makes (not the player's, not the sandbox's) is appended here (debug aid, not part of the state).
+    /// </summary>
     public List<SpawnTraceEntry>? SpawnTrace { get; set; }
 
     /// <summary>

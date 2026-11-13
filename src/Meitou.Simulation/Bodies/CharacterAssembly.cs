@@ -25,6 +25,7 @@ sealed class CharacterAssembly(PopulationData data)
     public static string? RaceId(GameRecord record)
     {
         if (record.Type == FcsRecordType.AnimalCharacter) return CharacterAppearance.AnimalRaceId(record);
+
         foreach (var r in record.GetReferences("race"))
             if (r.Values.Value0 > 0) return r.TargetStringId;
         return null;

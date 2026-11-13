@@ -231,7 +231,8 @@ static partial class NativeShaders
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
-        ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock", ["uWetWorld"] = "frame.wetWorld", ["uWetSplash"] = "frame.wetSplash",
+        ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock", ["uWetWorld"] = "frame.wetWorld",
+        ["uWetSplash"] = "frame.wetSplash",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
@@ -599,8 +600,15 @@ unsafe struct FrameConstants
     /// The bindless index of <c>uLightData</c>, the lamps' data.
     /// </summary>
     [FieldOffset(8632)] public uint LightData;
+
+    /// <summary>
+    /// The bindless index of <c>uLampTiles</c>, the lamps' visibility cache (<c>Gi.LampTiles</c>).
+    /// </summary>
     [FieldOffset(8636)] public uint LampTiles;
-    /// <summary>Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.</summary>
+
+    /// <summary>
+    /// Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.
+    /// </summary>
     [FieldOffset(8640)] public Vector4 AtmoNight;
     /// <summary>
     /// Meitou cloud shadows (<c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, docs/formats/clouds.md "Meitou cloud shadows"): the layer's numbers, the wind
@@ -622,13 +630,26 @@ unsafe struct FrameConstants
     /// The bindless index of <c>uAtmoCloudsTile</c>, the cloud shadows' tiling texture.
     /// </summary>
     [FieldOffset(8692)] public uint AtmoCloudsTile;
-    /// <summary>How far from the eye the traced sun's rays see grass (<c>uGrassRayReach</c>, <c>GiScene.GrassRayParams</c>): 0 while they see none.</summary>
+
+    /// <summary>
+    /// How far from the eye the traced sun's rays see grass (<c>uGrassRayReach</c>, <c>GiScene.GrassRayParams</c>): 0 while they see none.
+    /// </summary>
     [FieldOffset(8696)] public float GrassRayReach;
-    /// <summary>Game seconds wrapping at 4096 (<c>uWetClock</c>, <c>WeatherSurfaces.Seconds</c>): what the characters' water beads swell and run off by.</summary>
+
+    /// <summary>
+    /// Game seconds wrapping at 4096 (<c>uWetClock</c>, <c>WeatherSurfaces.Seconds</c>): what the characters' water beads swell and run off by.
+    /// </summary>
     [FieldOffset(8700)] public float WetClock;
-    /// <summary>1 while the world shows its wetness: drops, runs and puddles (<c>uWetWorld</c>, <c>WeatherSurfaces.WetWorld</c>).</summary>
+
+    /// <summary>
+    /// 1 while the world shows its wetness: drops, runs and puddles (<c>uWetWorld</c>, <c>WeatherSurfaces.WetWorld</c>).
+    /// </summary>
     [FieldOffset(8704)] public float WetWorld;
-    /// <summary>The last feet in the puddles (<c>uWetSplash[8]</c>, <c>WeatherSurfaces.AddSplash</c>): x, z, the wet clock at the step, the strength (0: none).</summary>
+
+    /// <summary>
+    /// The last feet in the puddles (<c>uWetSplash[8]</c>, <c>WeatherSurfaces.AddSplash</c>): x, z, the wet clock at the step, the strength (0:
+    /// none).
+    /// </summary>
     [FieldOffset(8720)] public fixed float WetSplash[32];
 
     /// <summary>
@@ -641,7 +662,8 @@ unsafe struct FrameConstants
         ("uAtmoHazeCloud", 160, 16), ("uAtmoAltitude", 176, 16), ("uAtmoMaps", 192, 16), ("uWeatherWet", 240, 16), ("uWeatherDust", 256, 16),
         ("uFogVolumeEye", 288, 16), ("uFogVolumeInfo", 304, 16), ("uFogVolumeData", 320, FogVolumeShaders.MaxData * 16),
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
-        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16), ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4), ("uWetWorld", 8704, 4), ("uWetSplash", 8720, 128),
+        ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16),
+        ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4), ("uWetWorld", 8704, 4), ("uWetSplash", 8720, 128),
     ];
 
     /// <summary>
@@ -654,7 +676,8 @@ unsafe struct FrameConstants
         ("uShadowBlocker", BindlessKind.Texture2DArray, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
-        ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632), ("uLampTiles", BindlessKind.Texture2D, 8636),
+        ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
+        ("uLampTiles", BindlessKind.Texture2D, 8636),
         ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
     ];
 }
