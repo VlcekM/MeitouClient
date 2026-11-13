@@ -1021,7 +1021,7 @@ public sealed class CharacterCold
 
     /// <summary>
     /// Held in a cage by a kidnapper (<see cref="Kidnap.KidnapSystem"/>), not sentenced: no sentence is ever served, no bail is offered, getting out
-    /// is no crime. Saved as <c>meitou kidnapped</c>. Hashed only while set.
+    /// is no crime. Saved as <c>kidn</c>. Hashed only while set.
     /// </summary>
     public bool Kidnapped { get; set; }
 

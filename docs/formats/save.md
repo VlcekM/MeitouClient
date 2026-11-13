@@ -578,7 +578,7 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
 
 Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`; the original's keys for these facts are **Unknown**), each written only while set and removed otherwise:
 - GAMESTATE_CHARACTER float `age`: the character's age (1 for people, an animal's growth, [animals](../game/animals.md#ageing)); **Verified** in vanilla saves.
-- GAMESTATE_CHARACTER `meitou escaped` (bool, escaped-prisoner flag), `meitou kidnapped` (bool, held by a kidnapper: no sentence, no bail), `meitou recognition` (float 0..1, bounty recognition meter). Older Meitou saves wrote the recently-wanted seconds as `meitou recently wanted`; they are read when `disguiseblown` is missing and dropped on save.
+- GAMESTATE_CHARACTER `meitou recognition` (float 0..1, bounty recognition meter). The escaped and kidnapped flags are the original's `escap` and `kidn` (above; `CrimeSave` writes them always; Meitou's `Kidnapped` is "held by a kidnapper: no sentence, no bail", what sets the original's `+0xe9` is **Unknown**). Older Meitou saves wrote `meitou escaped`, `meitou kidnapped` and the recently-wanted seconds as `meitou recently wanted`; each is read when the original's key (`escap`, `kidn`, `disguiseblown`) is missing and dropped on save.
 - GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since).
 - GAMESTATE_BUILDING `meitou lock <layout index>` (int level x 4 + broken x 2 + locked) for each interior cage or container whose lock is locked or broken (their ids are not mapped, see above).
 

@@ -46,7 +46,7 @@ public class JailSaveTests
     /// <summary>
     /// The character keys only a jailed, escaped or recognised character writes.
     /// </summary>
-    static readonly string[] CharacterKeys = [CrimeSave.EscapedKey, CrimeSave.OldRecentlyWantedKey, CrimeSave.RecognitionKey, HeldSave.MeitouState,
+    static readonly string[] CharacterKeys = [CrimeSave.OldEscapedKey, CrimeSave.OldRecentlyWantedKey, CrimeSave.RecognitionKey, HeldSave.MeitouState,
             HeldSave.MeitouWhat];
 
     /// <summary>
