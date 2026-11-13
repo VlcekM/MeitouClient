@@ -57,7 +57,7 @@ public sealed partial class CaptiveSystem
         {
             var events = new List<MedicalEvent>();
             var stretch = cc.Medical!.StretchLimbs(dt, ContextOf(world, c, cc), data.BodyOptions.Dismemberment != Dismemberment.Never, events);
-            ApplyBodyEvents(world, rack.Occupant, c, cc.Medical, events);
+            ApplyBodyEvents(world, rack.Occupant, c, cc.Medical, events, limbDrops: true);
             busy = stretch.Busy;
             if (rack.RackBusy && !busy) Finish(machine);
             else

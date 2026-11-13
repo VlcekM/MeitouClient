@@ -847,10 +847,10 @@ static partial class WorldFrame
         var s = BeginScene(ref f);
         var gpu = f.Gpu;
 
-        // The blood on walls, buildings and objects (the bloodsurfaces switch) needs the depths the terrain and then the static scene wrote, to leave
-        // the terrain's pixels to its own blood.
+        // Prints need only the terrain depth. Blood on walls and objects also needs the static scene's depth.
         bool surfaceBlood = gpu.Decals is { Surfaces: true, SurfaceCount: > 0 } bloodDecals
             && gpu.DecalStore is not null && bloodDecals.SurfacesNear(f.Eye);
+        bool projectedBlood = surfaceBlood || gpu.Decals?.FootprintsNear(f.Eye, s.Frustum) == true;
 
         // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
         bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
@@ -866,12 +866,12 @@ static partial class WorldFrame
         if (lampReceivers) gpu.Probes!.LampReceivers = true;
 
         DrawSceneTerrain(ref f, s);
-        if (surfaceBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
+        if (projectedBlood) CaptureDepth(ref f, 7, gpu.Decals!.CaptureTerrainDepth);
         DrawSceneObjects(ref f, s);
         if (surfaceBlood) CaptureDepth(ref f, 8, gpu.Decals!.CaptureStaticDepth);
         DrawSceneFoliage(ref f, s);
         DrawSceneLate(ref f, s);
-        if (surfaceBlood) DrawSurfaceBlood(ref f, s);
+        if (projectedBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
         if (lampReceivers) gpu.Probes!.LampReceivers = false;
         DrawSkyBehind(ref f);
@@ -1055,7 +1055,7 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The blood on walls, buildings and objects (the bloodsurfaces switch): over the finished opaque scene, under the characters and the water.
+    /// Projected blood and footprints over the finished opaque scene, under the characters and the water.
     /// </summary>
     static void DrawSurfaceBlood(ref FrameState f, in SceneView s)
     {
@@ -1063,7 +1063,8 @@ static partial class WorldFrame
         f.Host.Close();
         float tanY = MathF.Tan(f.Camera.FieldOfView * 0.5f);
         var jitterClip = new Vector2(2 * f.Jitter.X / f.RenderWidth, 2 * f.Jitter.Y / f.RenderHeight);
-        f.Gpu.Decals!.RecordSurfaces(post.SceneColour, post.SceneDepth, s.Near, s.Far, f.Rotation, tanY * f.Aspect, tanY, f.Eye, jitterClip);
+        f.Gpu.Decals!.RecordSurfaces(post.SceneColour, post.SceneDepth, s.Near, s.Far, f.Rotation, tanY * f.Aspect, tanY, f.Eye, jitterClip,
+            s.Frustum);
         f.Host.Open(6, post.WithShadingRate(post.SceneTargets));
         StageClock.Lap(StageClock.Blood, "blood surfaces");
     }

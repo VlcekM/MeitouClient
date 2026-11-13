@@ -27,10 +27,11 @@ public class HousePurchaseTests
                     r => { r.Ints["build materials"] = 32; r.References["functionality"] = [new("shell", 0, 0,
                     0)]; r.References["doors"] = [new("door", 0, 0, 0)]; }),
             Rec("door", FcsRecordType.Building),
+            Rec("tenant", FcsRecordType.SquadTemplate, r => r.Bools["sell home"] = sale),
             Rec("state", FcsRecordType.GamestateBuilding,
-                    r => { r.Bools["sell home"] = sale; r.Bools["is inside building"] = inside; r.Bools["destroyed"] = destroyed; }));
+                    r => { r.Bools["is inside building"] = inside; r.Bools["destroyed"] = destroyed; }));
         var house = new TownBuilding("home", "house", "House", new(100, 0, 100), 0, false, false, [])
-        { LevelState = db.Find("state"), Destroyed = destroyed };
+        { LevelState = db.Find("state"), Destroyed = destroyed, ResidentsTemplate = "tenant" };
         var data = PopulationData.Create(db, [new TownPlacement("town-instance", "town", house.Position, null)],
             buildings: new Dictionary<string, List<TownBuilding>> { ["town-instance"] = [house] });
         return (data, house);

@@ -27,7 +27,7 @@ static class WorldCommandLine
           --yaw <deg> --pitch <deg> --distance <units>   camera around the point (defaults 30, 35, radius)
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
           --monitor <n>                                  open the window on monitor n (1-based)
-          --headless                                     no window, swapchain or presentation: the interactive loop draws into an offscreen picture of --size (default 1920x1080), 30 fps unless --fps-limit; for the control channel (--control-dir) and its screenshot command; env MEITOU_HEADLESS=1
+          --headless                                     no window, swapchain or presentation: the interactive loop draws into an offscreen picture of --size (default 1920x1080), 30 fps unless --fps-limit; no sound; for the control channel (--control-dir) and its screenshot command; env MEITOU_HEADLESS=1
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
@@ -63,7 +63,7 @@ static class WorldCommandLine
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,footprints,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time, or render-thread time over 20 ms, is over 1.5 x its median: stage times (GPU, render thread) and what it uploaded or rebuilt

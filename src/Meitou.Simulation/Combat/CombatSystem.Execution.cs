@@ -79,12 +79,12 @@ public sealed partial class CombatSystem
                     break;
                 case MedicalEventKind.Decapitated:
                     // the look loses its head (nothing drops)
-                    table.LimbsChanged.Enqueue((d, -1));
+                    table.LimbsChanged.Enqueue((d, -1, false));
                     break;
                 case MedicalEventKind.PartSevered:
                     var template = dc.Medical!.Parts[ev.Part].Template;
                     _xp.ToughnessFromLimbLoss(dc.Stats!, dc.Race!);
-                    table.LimbsChanged.Enqueue((d, template.LimbSlot));
+                    table.LimbsChanged.Enqueue((d, template.LimbSlot, true));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None,
                         template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;

@@ -348,18 +348,17 @@ internal static class SavedCharacters
     #region Characters
 
     /// <summary>
+    /// The CHARACTER (Exile) a saved character whose record the game data lacks is made from (the original's platoon file load).
+    /// </summary>
+    const string DeletedCharacterStandIn = "136-gamedata.quack";
+
+    /// <summary>
     /// Reads a character's race, stats, medical state, items and look. Null (with a note) when the game data lacks its record.
     /// </summary>
     public static SavedParts? Read(SaveCharacter sc, string platoonName, PopulationData data, IAppearanceSource? appearances,
         Dictionary<string, RaceData?> races, Dictionary<string, BodyPartTemplate?> parts, Action<string>? note)
     {
-        var record = data.Db.Find(sc.RecordId);
-
-        if (record is null)
-        {
-            note?.Invoke($"{platoonName}: character {sc.Name} is made from {sc.RecordId}, which the game data does not have; left out.");
-            return null;
-        }
+        if (RecordOf(sc, platoonName, data.Db, note) is not { } record) return null;
 
         RaceData? race = RaceOf(sc, record, data.Db, races);
         CharacterStats? stats = sc.Stats is null ? null : CharacterStats.ReadSave(sc.Stats.Floats);
@@ -556,6 +555,37 @@ internal static class SavedCharacters
             cold.Save.CarryPartner = Hand.Read(carry, "carrying");
             cold.Save.CarryIsCarrier = carry.Bools.GetValueOrDefault("carrying");
         }
+    }
+
+    /// <summary>
+    /// The record a saved character is made from; null (with a note) when the game data lacks it. A saved character (more than four of its six
+    /// state records) whose record is gone, its mod removed, is made from the Exile <see cref="DeletedCharacterStandIn"/> instead, which becomes
+    /// its record (and so what the next save writes), as the original's (docs/formats/save.md "Missing character records").
+    /// </summary>
+    static GameRecord? RecordOf(SaveCharacter sc, string platoonName, GameDatabase db, Action<string>? note)
+    {
+        if (db.Find(sc.RecordId) is { } record) return record;
+
+        bool saved = sc.RecordId.Length > 2 && StateCount(sc) > 4;
+
+        if (saved && db.Find(DeletedCharacterStandIn) is { } standIn)
+        {
+            note?.Invoke($"{platoonName}: character {sc.Name} is made from {sc.RecordId}, which the game data does not have; made as {standIn.Name}.");
+            sc.RecordId = DeletedCharacterStandIn;
+            return standIn;
+        }
+
+        note?.Invoke($"{platoonName}: character {sc.Name} is made from {sc.RecordId}, which the game data does not have; left out.");
+        return null;
+    }
+
+    /// <summary>
+    /// How many of its six state records the saved character has.
+    /// </summary>
+    static int StateCount(SaveCharacter sc)
+    {
+        FcsRecord?[] states = [sc.GameState, sc.Ai, sc.Inventory, sc.Medical, sc.Stats, sc.Appearance];
+        return states.Count(s => s is not null);
     }
 
     /// <summary>

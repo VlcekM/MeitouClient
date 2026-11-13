@@ -22,9 +22,9 @@ public sealed partial class DialogueSystem
     /// run with that speaker as "me" (the NPC for a player-side line); a passing root descends into its children; every passing line scoring at least
     /// the best so far is a candidate (earlier lower ones stay) and one candidate is picked at random. The checks and the race bonus use the target
     /// the walk started with (<paramref name="target"/>): a line check that retargets (<see cref="SetTarget"/>) changes who the T_TARGET speakers are
-    /// for the rest of the walk, not the target the walk tests.
+    /// for the rest of the walk, not the target the walk tests. A token's walk passes <paramref name="retarget"/> false (see <see cref="Check"/>).
     /// </summary>
-    Picked? Pick(World world, Conversation c, IReadOnlyList<DialogueNode> list, int depth = 0, CharacterId? target = null)
+    Picked? Pick(World world, Conversation c, IReadOnlyList<DialogueNode> list, int depth = 0, CharacterId? target = null, bool retarget = true)
     {
         if (depth > 8) return null;
         var whom = target ?? c.Player;
@@ -40,18 +40,18 @@ public sealed partial class DialogueSystem
                 c.Interjectors[slot] = CharacterId.None;
                 if (FindInterjector(world, c, node) is not { } interjector) continue;
                 c.Interjectors[slot] = interjector;
-                if (Pick(world, c, node.Children, depth + 1, whom) is not { } inner) continue;
+                if (Pick(world, c, node.Children, depth + 1, whom, retarget) is not { } inner) continue;
                 Consider(own + LeafScore(inner.Line), inner with { Root = inner.Root ?? c.Root });
                 continue;
             }
             if (!SpeakerOf(world, c, node, out var speaker)) continue;
             var me = IsNpcSide(node.Speaker) ? speaker : c.Npc;
-            if (!Check(world, c, node, me, whom)) continue;
+            if (!Check(world, c, node, me, whom, retarget)) continue;
             if (node.IsRoot)
             {
                 var root = c.Root;
                 c.Root = node;
-                var child = Pick(world, c, node.Children, depth + 1, whom);
+                var child = Pick(world, c, node.Children, depth + 1, whom, retarget);
                 c.Root = root;
                 if (child is not { } p) continue;
                 Consider(own + LeafScore(p.Line), p with { Root = node });
@@ -155,9 +155,10 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// The line check (<c>FUN_140678f30</c>, docs/game/dialogue.md "Line check") with <paramref name="me"/> as the speaker and
     /// <paramref name="other"/> the target: tag masks, the lock, <c>chance temporary</c>, the record lists, <c>repetition limit</c>, <c>target is
-    /// type</c>, <c>chance permanent</c>, then the conditions.
+    /// type</c>, <c>chance permanent</c>, then the conditions. <paramref name="retarget"/> false is the flag the token expander passes
+    /// (<c>FUN_14067a530</c>): a <c>target race</c> hit in the target's squad passes the line but does not become the target.
     /// </summary>
-    bool Check(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other)
+    bool Check(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other, bool retarget = true)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(me, out int ms) || table.Cold(ms) is not { } mc) return false;
@@ -171,7 +172,7 @@ public sealed partial class DialogueSystem
         }
         if ((node.TargetHasItemFunction != 0 || node.TargetHasItem.Count > 0) && !ItemsFound(world, c, node, me, other)) return false;
         if (node.TargetRace.Count > 0 && !(tc?.Race is { } targetRace && _dialogue.RaceMatches(targetRace.StringId, node.TargetRace))
-            && !RaceFound(world, c, node, me, other))
+            && !RaceFound(world, c, node, me, other, retarget))
         {
             return false;
         }
@@ -264,9 +265,9 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// <c>target race</c> when the target itself is of none (it passes with no side effect): per listed race in turn the first member of its squad
-    /// of that race becomes the target (the last race to hit decides).
+    /// of that race becomes the target (the last race to hit decides), unless <paramref name="retarget"/> is false (a token's walk).
     /// </summary>
-    bool RaceFound(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other)
+    bool RaceFound(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other, bool retarget)
     {
         bool hit = false;
         foreach (string listed in node.TargetRace)
@@ -275,7 +276,7 @@ public sealed partial class DialogueSystem
             {
                 if (Cold(world, m)?.Race is { } r && _dialogue.RaceMatches(r.StringId, listed))
                 {
-                    SetTarget(c, me, m);
+                    if (retarget) SetTarget(c, me, m);
                     hit = true;
                     break;
                 }

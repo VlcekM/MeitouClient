@@ -166,6 +166,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _showFrameStats;
 
     /// <summary>
+    /// The world's files read on a worker since <see cref="OpenDisplay"/>, when the host owns the scene (an interactive run; a still's is given).
+    /// </summary>
+    Task<WorldScene?>? _sceneRead;
+
+    /// <summary>
     /// Opens the window and the device, boots the world, the simulation and the interface, then draws frames until the window closes or the game
     /// quits.
     /// </summary>
@@ -177,36 +182,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         ReadSwitches();
         CreatePostChain();
         ShowWindow();
-
-        CreateWorldGpu();
-        CreateGi();
-        UnpackRenderers();
-        ConfigureFoliage();
-        KeepRenderers();
-
-        BootWorldSession();
-        StartPlayerSquad();
-        LoadZonesAroundStart();
-        host.ApplyCamera(host.Session.Camera.Current);
-        host.SendFocus();
-        CreateCharacters();
-
-        // The squad tour and character flights (docs/viewer.md "Squad tour"). Metal has no cinema, so a held camera is
-        // only the tour's; EndTour hands the view back to the rig as the Vulkan host does.
-        _tour = new SquadTour();
-
-        // The game's HUD and panels. PlayerInterface is the interface's data/layout owner; ArrangeUi/BindUi and the UiPainter
-        // work with the session the loop has. Only the panels' pointer/keyboard controls are wired here so far.
-        if (_overlay is not null) CreateInterface(_overlay);
-        PlaceStartCamera();
-        ApplyUserConfig();
-
-        // The shared settings layout: Metal supplies the settings it can change live (window, upscaler, distances,
-        // shadows, sky and the composite); the Interface/Controls/Advanced/Audio pages are the game's own.
-        if (_overlay is not null && _hud is not null) CreateSettingsMenu(_hud);
-        CreateLoadingScreen();
-        ConnectScreenActions();
-        OpenStartSave();
+        if (LoadWorld() is { } exit) return exit;
 
         // The audio device is up before the first frame; the title theme starts here when the menu is open.
         host.Sound.AttachAudio();
@@ -218,7 +194,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _frameStatsVisible = _showFrameStats;
         HookInput();
 
-        SettleStart();
         PrepareStills();
         RunLoop();
 
@@ -227,17 +202,20 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The window and its display, with the run's vsync and frame cap.
+    /// The window and its display, with the run's vsync and frame cap; the world's files start on a worker meanwhile.
     /// </summary>
     MetalDisplay OpenDisplay()
     {
         // Same setting as VulkanDisplay: Metal used to always present with display sync, even under --no-vsync.
         bool vsync = host.GameOptions.VSync ?? host.Config.VSync;
         _fpsLimit = host.GameOptions.FpsLimit ?? host.Config.FpsLimit;
+        _sceneRead = host.LoadScene is { } readScene ? Task.Run(readScene) : null;
         return _display = new MetalDisplay(WindowOptions.Default with
         {
             Size = new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height),
             Title = "Meitou (metal)",
+            // Hidden until the first loading frame is in it: shown at once, macOS showed an empty window and took that into the full-screen Space.
+            IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
         }, vsync);
@@ -253,7 +231,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The memory guard's budget, the window (full screen as the shared setting says) and the texture filtering.
+    /// The memory guard's budget, the window and the texture filtering.
     /// </summary>
     void SetUpMemoryAndWindow()
     {
@@ -273,8 +251,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 + "the 16 GB M1 Pro. Use 5120 unless profiling.");
         }
         _window = _display.Window;
-        // The shared window setting: native macOS full screen (a Space of its own); --windowed keeps the window for one run.
-        if (host.Config.FullScreen && !host.WorldOptions.Windowed) ToggleFullScreen();
         _ctx.Samplers.MaxAnisotropy = host.WorldOptions.Anisotropy;
     }
 
@@ -386,7 +362,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The overlay painter, then the window brought forward in place of the splash.
+    /// The overlay painter and the loading screen, then the window brought forward with the first loading frame in it, in place of the splash, and
+    /// taken into full screen.
     /// </summary>
     void ShowWindow()
     {
@@ -396,8 +373,132 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // the game's HUD is part of the picture. MEITOU_METAL_OVERLAY=1 adds the stats lines to a still.
         _overlay = DebugOverlay.TryCreate(_ctx);
         _showFrameStats = host.WorldOptions.Screenshot is null || Environment.GetEnvironmentVariable("MEITOU_METAL_OVERLAY") == "1";
+        CreateLoadingScreen();
+
+        // Shown before the first loading frame (a still draws none): the layer of a window not shown yet gives no drawable, nor does it for the
+        // first frame right after showing; the next one does (Observed 2026-11-12, Apple M6, macOS 27.2). The window's black background fills
+        // that moment. It is on screen before it goes full screen: AppKit ignores the request for a hidden window, and animates the Space from
+        // what it shows.
+        _window.IsVisible = true;
         _display.Activate();
+        host.LoadingFrame();
+        EnterFullScreen();
         host.Splash?.Dispose();
+    }
+
+    /// <summary>
+    /// The shared window setting: native macOS full screen (a Space of its own); --windowed keeps the window for one run.
+    /// </summary>
+    void EnterFullScreen()
+    {
+        if (!host.Config.FullScreen || host.WorldOptions.Windowed) return;
+        ToggleFullScreen();
+        AwaitFullScreen();
+    }
+
+    /// <summary>
+    /// Loading frames until the window is in its Space: AppKit runs the animation only while the window's events are handled, and a load step
+    /// holding the thread meanwhile left the Space showing the window's last picture. Not for a still, which draws no loading frames.
+    /// </summary>
+    void AwaitFullScreen()
+    {
+        if (host.WorldOptions.Screenshot is not null || host.Loading is null) return;
+        var watch = Stopwatch.StartNew();
+        while (_display.FullScreenTransitioning && host.LoadingFrame()) Thread.Sleep(5);
+        Console.WriteLine($"window    full-screen transition over after {watch.ElapsedMilliseconds} ms");
+    }
+
+    /// <summary>
+    /// The scene and the boot under the loading screen; the exit code when the run ends here (the window closed, the scene failed), else null.
+    /// </summary>
+    int? LoadWorld()
+    {
+        try
+        {
+            if (!ReadScene()) return 1;
+            BootWorld();
+            BootInterface();
+            EndStartLoading();
+            return null;
+        }
+        catch (GameHost.LoadingCancelledException)
+        {
+            Console.WriteLine("loading   cancelled: the window was closed");
+            host.EndLoadingScreen();
+            _ctx.Finish();
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// The world's files from <see cref="_sceneRead"/> as the host's scene; false when they could not be read.
+    /// </summary>
+    bool ReadScene()
+    {
+        if (_sceneRead is null) return true;
+        host.LoadingStep("scene");
+        if (host.AwaitLoading(_sceneRead) is not { } loaded)
+        {
+            Console.Error.WriteLine("metal     the world could not be read");
+            return false;
+        }
+        host.Scene = host.OwnedScene = loaded;
+        return true;
+    }
+
+    /// <summary>
+    /// The world's renderers, the simulation and its session, the start's squad and navmesh, and the characters.
+    /// </summary>
+    void BootWorld()
+    {
+        CreateWorldGpu();
+        CreateGi();
+        UnpackRenderers();
+        ConfigureFoliage();
+        KeepRenderers();
+
+        BootWorldSession();
+        StartPlayerSquad();
+        LoadZonesAroundStart();
+        host.ApplyCamera(host.Session.Camera.Current);
+        host.SendFocus();
+        host.LoadingStep("characters");
+        CreateCharacters();
+
+        // The squad tour and character flights (docs/viewer.md "Squad tour"). Metal has no cinema, so a held camera is
+        // only the tour's; EndTour hands the view back to the rig as the Vulkan host does.
+        _tour = new SquadTour();
+    }
+
+    /// <summary>
+    /// The interface, the settings, the menus' actions and a --load save, then the view settled round the start's camera.
+    /// </summary>
+    void BootInterface()
+    {
+        // The game's HUD and panels. PlayerInterface is the interface's data/layout owner; ArrangeUi/BindUi and the UiPainter
+        // work with the session the loop has. Only the panels' pointer/keyboard controls are wired here so far.
+        host.LoadingStep("finishing");
+        if (_overlay is not null) CreateInterface(_overlay);
+        PlaceStartCamera();
+        ApplyUserConfig();
+
+        // The shared settings layout: Metal supplies the settings it can change live (window, upscaler, distances,
+        // shadows, sky and the composite); the Interface/Controls/Advanced/Audio pages are the game's own.
+        if (_overlay is not null && _hud is not null) CreateSettingsMenu(_hud);
+        ConnectScreenActions();
+        OpenStartSave();
+
+        host.LoadingStep("view");
+        SettleStart();
+    }
+
+    /// <summary>
+    /// The start has loaded: no more loading frames, and the screen slides away over the world's first frames (Metal measures no warm-up).
+    /// </summary>
+    void EndStartLoading()
+    {
+        host.EndLoadingFrames();
+        host.BeginWarm();
     }
 
     /// <summary>
@@ -502,8 +603,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void CreateWorldGpu()
     {
         // The world's renderers through the shared construction path: terrain, textures, streamer, sky and weather,
-        // particles, lamps, objects, foliage, faithful water, shadows and the memory guard. The step callback is
-        // unused here because Metal has no separate Vulkan loading-frame loop.
+        // particles, lamps, objects, foliage, faithful water, shadows and the memory guard, with a loading frame between the steps and while
+        // the workers' files and bakes are awaited.
         // --crowd means simulated characters (SpawnCrowd) here too; the posed harness is only for a renderer test.
         host.Sandbox.Crowd = host.WorldOptions.Crowd;
         host.WorldOptions.Crowd = 0;
@@ -520,6 +621,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             ? "metal     ground relief on (MEITOU_METAL_GROUND_RELIEF=0 disables it)"
             : "metal     ground relief off (MEITOU_METAL_GROUND_RELIEF=0)");
         _worldGpu = WorldFrame.CreateGpu(_ctx, host.Install, host.Scene, host.Assets, host.WorldOptions, interactive: true,
+            step: host.LoadingStep, wait: host.AwaitLoading,
             terrainTextures: !terrainTexturesOff, particlesEnabled: metalParticles, objectLoadBudget: 0,
             vramSample: _guardEnabled ? () => ((ulong)_ctx.Device.CurrentAllocatedSize, _memoryBudget) : null);
         _worldGpu.PostChain = _postChain;
@@ -621,7 +723,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The simulation's side, using the same CPU height grid as the shared renderer.
         _heights = new Meitou.Data.World.GroundHeights(host.Scene.Window, host.Scene.Coarse, host.Scene.CoarseSize, WorldFrame.CoarseStep);
         host.KeepMetalGround(_heights.HeightAt);
-        var (walkability, systems, constants) = host.BootSimulation(_heights, interactive: true);
+
+        // On a worker (it makes no GPU resource), the loading screen drawn meanwhile.
+        var heights = _heights;
+        host.LoadingStep("people");
+        var (walkability, systems, constants) = host.AwaitLoading(Task.Run(() => host.BootSimulation(heights, interactive: true)));
+
+        host.LoadingStep("world");
         (host.Camera, host.Render) = WorldFrame.Setup(host.Scene, host.WorldOptions);
         // Terrain shader A/B: the no-normal program is a compile-time variant, so the option must be fixed before the first draw.
         if (Environment.GetEnvironmentVariable("MEITOU_TERRAIN_NO_NORMAL") is "1" or "true")
@@ -695,7 +803,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 : host.Session.Focus;
             var zones = Meitou.Simulation.Population.ZoneActivation.ZonesAround(around, 0);
             var watch = Stopwatch.StartNew();
-            Task.WaitAll([.. zones.Select(z => (Task)host.Nav.LoadZone(z))]);
+            host.LoadingStep("navmesh");
+            host.AwaitLoading(Task.WhenAll(zones.Select(z => (Task)host.Nav.LoadZone(z))));
             foreach (var z in zones) host.NavZones[z] = Stopwatch.GetTimestamp();
             Console.WriteLine($"metal     navmesh {zones.Count} zone(s) round the start ready in {watch.ElapsedMilliseconds} ms");
         }
@@ -956,6 +1065,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         hud.StealthView.DrawnHead = id => _characters?.BonePosition(host.DrawKey(id), "Bip01 Head");
         hud.Picking.ShownInteriorHit = (origin, direction, distance) => _objects?.ShownInteriorHit(origin, direction, distance);
         hud.Furniture.AboveViewedFloor = host.Interiors.AboveViewedFloor;
+        hud.Furniture.FloorHidden = host.Interiors.FloorHidden;
         hud.GroundItemPicks.GroundItemShape = host.GroundItemSync.GroundShape;
         hud.GroundItemPicks.GroundItemHidden = host.GroundItemSync.HiddenGround.Contains;
         hud.Furniture.DoorShape = (record, door) => host.Nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
@@ -979,23 +1089,23 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The Kenshi loading screen.
+    /// The Kenshi loading screen, drawn while the start loads (not for a still) and between scenes.
     /// </summary>
     void CreateLoadingScreen()
     {
         // The loading screen is backend-neutral: the same Kenshi layout, picture and tips the Vulkan host draws.
-        if (_overlay is not null)
+        if (_overlay is null) return;
+        try
         {
-            try
-            {
-                host.Loading = LoadingScreen.Create(_overlay, host.Assets.Find, host.Install.DataDirectory,
-                    (host.GameOptions.UiMode ?? host.Config.UiMode) == Meitou.Data.Ui.UiMode.Faithful);
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"loading   the loading screen did not load: {e.Message}");
-            }
+            host.Loading = LoadingScreen.Create(_overlay, host.Assets.Find, host.Install.DataDirectory,
+                (host.GameOptions.UiMode ?? host.Config.UiMode) == Meitou.Data.Ui.UiMode.Faithful);
         }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"loading   the loading screen did not load: {e.Message}");
+            return;
+        }
+        if (host.WorldOptions.Screenshot is null) host.BeginLoadingFrames(new MetalLoadingCanvas(_ctx, _window, _overlay));
     }
 
     /// <summary>
@@ -1034,7 +1144,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             try
             {
                 var navmesh = host.Saves.SwapInSave(Task.FromResult(startSave), interactive: true, out string summary);
-                navmesh.Wait();
+                host.AwaitLoading(navmesh);
                 host.SettleNewWorld();
                 _hud.FollowSelected();
                 host.Saves.FinishLoadNotice(summary);

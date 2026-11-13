@@ -8,8 +8,8 @@ namespace Meitou.Game.Host.Cameras;
 /// The free camera (the game's <c>toggle_fps_camera</c>, docs/formats/camera.md: flies with a velocity, only kept a little above the ground, no
 /// ceiling found; Observed). Everything about its feel is an engine choice: the velocity follows the wished direction (along the view for forward and
 /// back, sideways, straight up and down) with an exponential response; the speed grows with the height above the ground like the viewer's free flight
-/// (<see cref="CameraSettings.FreeSpeedPerHeight"/> per unit of height, between the minimum and maximum speed), doubled while Shift is held; the eye
-/// is kept <see cref="CameraSettings.FreeClearance"/> above the ground under it. The mouse drag and the rotate and pitch keys turn the view; pitch is
+/// (<see cref="CameraSettings.FreeSpeedPerHeight"/> per unit of height, between the minimum and maximum speed), times <see cref="SpeedScale"/> that the
+/// wheel sets as the game's does (in steps of a quarter doubling, so scrolling back always lands on 100%); the eye is kept <see cref="CameraSettings.FreeClearance"/> above the ground under it. The mouse drag and the rotate and pitch keys turn the view; pitch is
 /// limited to +-1.5 radians as in the viewer.
 /// </summary>
 public sealed class FreeCamera
@@ -18,6 +18,18 @@ public sealed class FreeCamera
     /// The pitch limit, +-1.5 radians as in the viewer.
     /// </summary>
     const float PitchLimit = 1.5f;
+    /// <summary>
+    /// Wheel notches per doubling of <see cref="SpeedScale"/>.
+    /// </summary>
+    const int StepsPerDoubling = 4;
+    /// <summary>
+    /// The most notches either way from 100%: 16 is 1/16 to 16 times.
+    /// </summary>
+    const int MaxSpeedStep = 16;
+    /// <summary>
+    /// How long <see cref="SpeedShown"/> stays true after the last change, seconds.
+    /// </summary>
+    const float SpeedShownSeconds = 3;
 
     /// <summary>
     /// The ground (or sea) height under a point, which the eye keeps above.
@@ -27,6 +39,18 @@ public sealed class FreeCamera
     /// The settings the camera reads (speeds, response, clearance).
     /// </summary>
     readonly CameraSettings _settings;
+    /// <summary>
+    /// Whole wheel notches from 100%, between -<see cref="MaxSpeedStep"/> and <see cref="MaxSpeedStep"/>.
+    /// </summary>
+    int _speedStep;
+    /// <summary>
+    /// The wheel's fraction of a notch not yet taken (a touchpad scrolls in fractions).
+    /// </summary>
+    float _wheelRest;
+    /// <summary>
+    /// Seconds left of <see cref="SpeedShown"/>.
+    /// </summary>
+    float _speedShownLeft;
 
     /// <summary>
     /// A free camera over <paramref name="ground"/>; <paramref name="settings"/> default to a new set.
@@ -98,7 +122,16 @@ public sealed class FreeCamera
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>
-    /// The speed at the current height above the ground, units per second.
+    /// The wheel's multiplier of <see cref="Speed"/>: 2^(notches / 4), exactly 1 at no notches.
+    /// </summary>
+    public float SpeedScale => MathF.Pow(2, _speedStep / (float)StepsPerDoubling);
+    /// <summary>
+    /// Whether the wheel changed <see cref="SpeedScale"/> within the last 3 seconds (the host shows it then).
+    /// </summary>
+    public bool SpeedShown => _speedShownLeft > 0;
+
+    /// <summary>
+    /// The speed at the current height above the ground before <see cref="SpeedScale"/>, units per second.
     /// </summary>
     public float Speed => Photo?.FlySpeed ?? Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight,
         _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
@@ -130,14 +163,15 @@ public sealed class FreeCamera
     }
 
     /// <summary>
-    /// One step of <paramref name="dt"/> seconds: the keys and the mouse drag turn the view, the move keys set the wished velocity (doubled with
-    /// Shift), the eye moves and is kept above the ground.
+    /// One step of <paramref name="dt"/> seconds: the keys and the mouse drag turn the view, the wheel sets the speed, the move keys set the wished
+    /// velocity, the eye moves and is kept above the ground.
     /// </summary>
     public void Update(float dt, ActionState a)
     {
         float look = Photo?.LookScale ?? 1;
         // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): the mouse alone turns the view there.
         bool photoMode = Photo is not null;
+        if (!photoMode) AdjustSpeed(dt, a.Wheel);
         float turn = photoMode ? 0 : (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
         float tilt = photoMode ? 0 : (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
         Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * look * dt);
@@ -166,9 +200,10 @@ public sealed class FreeCamera
         flat = flat.LengthSquared() < 1e-6f ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) : Vector3.Normalize(flat);
         var side = Vector3.Cross(flat, Vector3.UnitY);
         var wish = f * fwd + side * right + Vector3.UnitY * up;
-        bool shift = a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift);
-        float factor = Photo is { } p ? (shift ? p.FastFactor : 1) * (a.Input.IsDown(Key.LeftControl) || a.Input.IsDown(Key.RightControl) ? p.SlowFactor : 1)
-            : shift ? 2 : 1;
+        float factor = Photo is { } p
+            ? (a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift) ? p.FastFactor : 1)
+                * (a.Input.IsDown(Key.LeftControl) || a.Input.IsDown(Key.RightControl) ? p.SlowFactor : 1)
+            : SpeedScale;
         var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * factor : Vector3.Zero;
         Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
         (_x, _y, _z) = (_x + (double)Velocity.X * dt, _y + (double)Velocity.Y * dt, _z + (double)Velocity.Z * dt);
@@ -198,6 +233,21 @@ public sealed class FreeCamera
         Pitch = Math.Clamp(pitch, -PitchLimit, PitchLimit);
         Roll = 0;
         KeepAboveGround();
+    }
+
+    /// <summary>
+    /// Takes the whole wheel notches into <see cref="SpeedScale"/> (away from the user is faster) and counts down <see cref="SpeedShown"/>.
+    /// </summary>
+    void AdjustSpeed(float dt, float wheel)
+    {
+        _speedShownLeft = MathF.Max(0, _speedShownLeft - dt);
+        _wheelRest += wheel;
+        int notches = (int)MathF.Truncate(_wheelRest);
+        if (notches == 0) return;
+
+        _wheelRest -= notches;
+        _speedStep = Math.Clamp(_speedStep + notches, -MaxSpeedStep, MaxSpeedStep);
+        _speedShownLeft = SpeedShownSeconds;
     }
 
     /// <summary>

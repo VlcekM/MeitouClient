@@ -23,6 +23,18 @@ files; 957 in `rebirth/interiors.level`) and nothing else; that is how layers re
 outside the building's convex interior-mask hull (OgreMeshReader positions transformed into
 world space and compared with InteriorVolume footprint planes). A mask is not an exact visible-surface boundary.
 
+**Verified** (probe of the `interior mask` parts' `xml collision` files): 17 of the trigger files hold more than one shape (boxes, capsules,
+convex meshes), among them the L-House, Y-House, Longhouse, Saloon, Snailhouse and Watchtower ones. The Watchtower's
+(`Storm_House_09_Interior_TRIGGER.xml`) is the tower body (a convex mesh) and a capsule at the roof, about 284 up. Along the building's X axis
+on one side the body reaches about 96 from the center and the outer wall (`Storm09-WallCOL.xml`) about 101, while the capsule reaches about 144.
+
+**Observed** (original 1.0.68, plain game): a player character on the sand at the Sho-Battai Watchtower's outer foot, below the capsule and
+outside the body, leaves the tower closed.
+
+Meitou: `InteriorVolume.Contains` tests each shape's own footprint and height range, so ground between shapes, or below a roof shape, is not
+indoors; the volume's `Footprint` stays the convex hull of all of them. `ContainsGround` ignores height and holds a point under any shape's
+footprint, as a ray cast down from above hits the shape.
+
 **Verified** (probe: placed part bounds, zone 20.33 in the `Newwworld` and `rebirth` layers, which agree): the Hub's two
 `Defensive Wall IV` (`14`, `66`) end in the Shinobi Thieves `Watchtower` (`2`, Storm House 09), the wall's corner: `66` runs
 about 150 inside its east side, `14` overlaps its north edge (bounds boxes). No part rule hides them and building parts take no interior cut
@@ -76,7 +88,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | Key | Type | Value |
 |---|---|---|
 | `name` | string | display name; housing replaces it ([town residents](../game/factions-squads-towns.md#town-residents)) |
-| `residents` handle, `residents template` | handle, string | null / empty for a new building |
+| `residents` handle, `residents template` | handle, string | the platoon whose home it is and that platoon's SQUAD_TEMPLATE ([which](../game/factions-squads-towns.md#whose-template-a-home-carries)); null / empty with no residents. The reader `FUN_140552b70` drops a non-empty `residents template` (level data's is never used) |
 | `floornum` | int | floor |
 | `destroyed` | bool | +0x1a1 |
 | `town` | handle | its town (outpost), only when the building is not inside another one (**Observed** condition) |
@@ -94,7 +106,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `version` | int | |
 | `world Y pos` | float | absolute height the building stood at; written, never read ([placement height](#placement-height)) |
 | `foliage` | bool | |
-| `squad template` | string | |
+| `squad template` | string | the same id as `residents template` (**Observed**, every saved state) |
 | `isInsideBuilding` | handle | parent building |
 | `internalbuildings-<i>` | handle | buildings inside it |
 | `is inside building` | bool | |
@@ -230,7 +242,7 @@ zone the save has no file of, round its centre, as its own camp's (`PopulationSy
   building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
   a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
 - What the INVENTORY_STATE entries in the building list are for; INVENTORY_*
-  contents; the game's building layout lookup (the 13 unresolved exterior names); the caller and the flag of the nest scatter.
+  contents; the caller and the flag of the nest scatter.
 - ROAD `start`/`end`, the road point x parameter, road foliage w.
 - `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
 - Building assembly leftovers: rolls drawn by part-material collections inside the seeded sequence (EFFECT

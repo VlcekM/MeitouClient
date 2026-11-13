@@ -425,7 +425,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<float>? CameraRotateSpeedChanged { get; init; }
 
     /// <summary>
-    /// A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
+    /// A camera option other than the rotation speed changed (invert X / Y, smoothing, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
     /// </summary>
     public Action? CameraChanged { get; init; }
 
@@ -1350,7 +1350,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
-        Config.PauseOnLoad = false;
+        Config.PauseOnLoad = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;
@@ -1369,6 +1369,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.EnhancedHardwareMouse = true;
         GamePages.CameraRotateSpeed.Set(Data.World.KenshiCamera.DefaultRotateSpeed);
         Config.EdgeScroll = true;
+        Config.CameraSmoothing = true;
+        Config.ShiftPanBoost = true;
+        Config.ShiftPanMultiplier = UserConfig.DefaultShiftPanMultiplier;
         Config.InvertX = false;
         Config.InvertY = true;
         Config.CameraMoveSpeed = Data.World.KenshiCamera.DefaultMoveSpeed;
@@ -1432,11 +1435,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The window's scale and bounds for a <paramref name="width"/> x <paramref name="height"/> screen, slid by the opening motion.
+    /// The window's scale and bounds for a <paramref name="width"/> x <paramref name="height"/> screen (physical pixels, so a high-DPI display's is
+    /// larger than its points: Retina's twice), slid by the opening motion. The scale has no upper limit: the window keeps its share of the screen
+    /// at any resolution.
     /// </summary>
     void PlaceWindow(int width, int height)
     {
-        Scale = Math.Max(0.35f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
+        Scale = Math.Max(0.35f, Math.Min(height / 900f, width / 1280f));
         Canvas.TextViewportHeight = height;
         Bounds = new(MathF.Round((width - 1120 * Scale) / 2), MathF.Round((height - 720 * Scale) / 2), MathF.Round(1120 * Scale),
             MathF.Round(720 * Scale));

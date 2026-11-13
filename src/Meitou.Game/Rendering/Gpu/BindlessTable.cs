@@ -262,6 +262,11 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     int _currentSlot;
 
     /// <summary>
+    /// The indices freed and not registered again (<c>MEITOU_DIAG_FAULT=1</c>, <see cref="DeviceFault.Tracking"/>, issue #319); null otherwise.
+    /// </summary>
+    public FreedIndices? Freed { get; } = DeviceFault.Tracking ? new() : null;
+
+    /// <summary>
     /// Entries per array (<see cref="BindlessKind"/> order).
     /// </summary>
     public uint[] Capacity { get; }
@@ -342,6 +347,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             : _next[k] < Capacity[k] ? _next[k]++
             : throw new InvalidOperationException($"bindless {kind} array is full ({Capacity[k]})");
         _journal.Add((kind, index, texture));
+        Freed?.Taken(kind, index);
         return index;
     }
 
@@ -378,6 +384,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     {
         RenderJobs.AssertNotInJob();
         _journal.Add((kind, index, default));   // a tombstone (null view)
+        Freed?.Freed(kind, index, _device.Frames.FrameNumber);
         _device.Frames.DeferDelete(() => _free[(int)kind].Push(index));
     }
 

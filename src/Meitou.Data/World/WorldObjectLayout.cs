@@ -506,9 +506,11 @@ public static class WorldObjectLayout
         {
             if (a.Db.Find(r.TargetStringId) is not { Type: FcsRecordType.BuildingPart } part) continue;
 
-            // Children hang under the part's node, or under the building's when the part has no entity (they then keep the joints above the part).
+            // Children hang under the part's node, or under the building's when the part has no entity (they then keep the joints above the part)
+            // or is an interior part (FUN_1405609e0 recurses into those with no parent, so a scaled building's interior floor is scaled once).
             var node = AddPart(a, holder, part, parentNode, joints, out var below);
-            AddParts(a, part, node ?? a.Node, depth + 1, "parts", below);
+            var childNode = list == "interior" ? a.Node : node ?? a.Node;
+            AddParts(a, part, childNode, depth + 1, "parts", below);
         }
 
         // The building's own instances once, with its parts.

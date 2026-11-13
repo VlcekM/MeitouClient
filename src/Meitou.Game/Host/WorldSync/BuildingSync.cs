@@ -427,10 +427,11 @@ sealed class BuildingSync(GameHost host)
             var own = building?.Key == placement.Key ? building : null;
             var (name, type) = WorldBuildingName(db, placement, state, saved, own);
             var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
+            bool destroyed = host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
+                : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
+            var pieces = destroyed || host.TownChanges.IsEmptied(placement.Key) ? null : own?.Pieces;
             return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
-                    : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false,
-                own?.Turret is not null);
+                destroyed, own?.Turret is not null, pieces);
         };
     }
 

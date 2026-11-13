@@ -77,32 +77,75 @@ public sealed class BuildingLayouts
     public int Count => _byBuilding.Values.Sum(l => l.Count);
 
     /// <summary>
-    /// The layout named <paramref name="name"/> for <paramref name="building"/>: one associated with the building itself, else with a
-    /// building it lists in <c>shares interiors with</c>; within each, an exact name match before a case-insensitive one. Null when
-    /// there is none (no fallback to another building's layout of the same name: its positions belong to that building's shape).
+    /// The layout named <paramref name="name"/> for <paramref name="building"/>, of the building itself, else of a building it lists in
+    /// <c>shares interiors with</c>; null when there is none (no fallback to another building's layout of the same name: its positions belong to
+    /// that building's shape). An exterior is the record with the string id <c>EXT-&lt;building&gt;-&lt;name&gt;</c>, exactly, as the original's
+    /// loader finds it (<c>LayoutExterior</c> vfunc 14 <c>FUN_14054c080</c>, its fallback <c>FUN_14055a730</c>, Verified): neither the record's name
+    /// nor its <c>associated building</c> is read, so <c>Mechanical Sign</c> finds no <c>EXT-...-Mechanical SIgn</c>. An interior is one associated
+    /// with the building, an exact name match before a case-insensitive one (the original's is by the id <c>&lt;building&gt;-&lt;name&gt;</c>, which
+    /// finds the same record for every level-data home).
     /// </summary>
     public GameRecord? Find(GameRecord building, string name, bool exterior = true)
     {
         if (name.Length == 0) return null;
-        foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
+
+        foreach (var id in Sharing(building))
         {
-            if (!_byBuilding.TryGetValue((exterior, id), out var list)) continue;
-            var match = list.FirstOrDefault(r => r.Name == name)
-                ?? list.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+            var match = exterior ? _interiors?.Find($"{ExteriorPrefix}{id}-{name}") : Interior(id, name);
             if (match is not null) return match;
         }
+
         return null;
     }
 
     /// <summary>
+    /// The start of an exterior layout's string id, before the building's.
+    /// </summary>
+    const string ExteriorPrefix = "EXT-";
+
+    /// <summary>
+    /// The building's string id, then those it lists in <c>shares interiors with</c>.
+    /// </summary>
+    static IEnumerable<string> Sharing(GameRecord building) =>
+        building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId);
+
+    /// <summary>
+    /// The interior layout named <paramref name="name"/> associated with building <paramref name="id"/>: an exact match, else a case-insensitive one.
+    /// </summary>
+    GameRecord? Interior(string id, string name)
+    {
+        if (!_byBuilding.TryGetValue((false, id), out var list)) return null;
+
+        return list.FirstOrDefault(r => r.Name == name) ?? list.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// The names of the layouts <see cref="Find"/> can return for <paramref name="building"/> (its own and those of the buildings it shares interiors
-    /// with).
+    /// with), case kept; housing takes the building to offer exactly these (the original compares names exactly, Verified). Interior: the names of
+    /// the interior layouts associated with those buildings (<c>FUN_14055ad40</c>). Exterior: the rest of each <c>interiors.level</c> string id
+    /// <c>EXT-&lt;building&gt;-&lt;name&gt;</c> of those buildings (<c>FUN_14055b330</c>).
     /// </summary>
     public IEnumerable<string> Names(GameRecord building, bool exterior)
     {
-        foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
-            if (_byBuilding.TryGetValue((exterior, id), out var list))
-                foreach (var r in list) yield return r.Name;
+        foreach (var id in Sharing(building))
+        {
+            foreach (string name in exterior ? ExteriorNames(id) : InteriorNames(id)) yield return name;
+        }
+    }
+
+    /// <summary>
+    /// The names of the interior layouts associated with building <paramref name="id"/>.
+    /// </summary>
+    IEnumerable<string> InteriorNames(string id) => _byBuilding.TryGetValue((false, id), out var list) ? list.Select(r => r.Name) : [];
+
+    /// <summary>
+    /// The layout names of the <c>EXT-&lt;id&gt;-&lt;name&gt;</c> string ids of building <paramref name="id"/>.
+    /// </summary>
+    IEnumerable<string> ExteriorNames(string id)
+    {
+        string prefix = $"{ExteriorPrefix}{id}-";
+
+        return _interiors?.Records.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Select(k => k[prefix.Length..]) ?? [];
     }
 
     /// <summary>

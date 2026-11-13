@@ -106,6 +106,10 @@ include mission/owned/campaign/tags/inventory-refresh-time/slave. Optional town/
 limbs keys vary. Test record keys against surveyed saves, retain extension fields, and preserve
 editor-authored files. Original acceptance of a save synthesized from scratch is unverified.
 
+An item worn in a code mod's [equipment slot](../modding.md#registration-surface) is saved with the slot's name as its `section`. Loaded
+without that mod, a character's item in a section it has no slot for is auto-added to its grids (`SavedKit.Fits`); how the original game
+loads such an item is **Unknown**.
+
 ### Where saves live
 
 | Setting / path | Meaning |
@@ -336,6 +340,16 @@ One PLATOON per player squad, `squad index` its place in the squad order (**Obse
 copies its text into the platoon's record name, `FUN_14048df00`, **Observed**; 962 PLATOON records of two saves all have name = `platoon stringID`, none
 renamed). Meitou keeps each loaded squad on its own file (`Squad.SaveName`) and writes a squad made since as a new platoon, empty squads included; a
 character that changed squads is written anew in its new platoon and leaves the old file; a removed squad's platoon is deleted.
+
+### Missing character records
+
+A platoon file's character instance whose CHARACTER record the game data lacks (its mod removed; the file holds only the id, not the record) is made
+from the Exile `136-gamedata.quack` with its saved states on top, when its id is longer than 2 characters and more than 4 of its state records
+were found; the log says "missing character base data assumed to be deleted <id>". Otherwise it is skipped ("Possible problem- leveldata has
+missing item from gamedata..."). **Verified** by decompile: ActivePlatoon vtable slot 7 `FUN_14036f6b0`, called by `FUN_14036d7e0` with the
+found-states count. The character's record is then the Exile, so the next save writes that id. Meitou does the same (`SavedCharacters.RecordOf`,
+player and NPC platoons; a load note instead of the log). **Observed** on #511's save (UWE removed): Rusty loads with the squad, his 6 items and
+saved look.
 
 ### NPC platoons (Meitou mapping)
 

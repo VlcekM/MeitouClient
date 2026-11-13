@@ -159,15 +159,15 @@ public class PopulationTests
         var captives = SyntheticTown.Rec("14-t", Data.Fcs.FcsRecordType.SquadTemplate, "Captives");
         captives.References["squad"] = [SyntheticTown.Ref("2-t", 3)];
 
-        // One patrol, housed by its level-data template in a house with two cages; its template makes a captive squad of three.
-        var db = SyntheticTown.Database(residentSquads: 1, extra: [function, cage, house, captives],
+        // One patrol, the town's first resident, housed in the only house, which has two cages; its template makes a captive squad of three.
+        var db = SyntheticTown.Database(residentSquads: 1, overrideFlag: true, extra: [function, cage, house, captives],
                 changePatrol: p => p.References["prisoners"] = [SyntheticTown.Ref("14-t")]);
         var at = SyntheticTown.Centre + new Vector3(0, 0, 100);
         var zone = WorldLayout.ZoneOf(at.X, at.Z);
         string key = BuildingKey.Of(zone, "house");
         var home = new TownBuilding("house", "52-t", "house", at, 0, false, false, [])
         {
-            Zone = zone, CanHouse = true, ResidentsTemplate = "10-t",
+            Zone = zone, CanHouse = true,
             Fixtures = [new TownFixture($"{key}/0", "54-t", true, at + new Vector3(10, 0, 0), 0),
                     new TownFixture($"{key}/1", "54-t", true, at + new Vector3(-10, 0, 0), 0)],
         };

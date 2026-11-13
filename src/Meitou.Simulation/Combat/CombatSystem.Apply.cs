@@ -253,11 +253,11 @@ public sealed partial class CombatSystem
                     break;
                 case MedicalEventKind.Decapitated:
                     // the look loses its head (nothing drops)
-                    table.LimbsChanged.Enqueue((v, -1));
+                    table.LimbsChanged.Enqueue((v, -1, false));
                     break;
                 case MedicalEventKind.PartSevered:
                     if (dc.Stats is { } st) _xp.ToughnessFromLimbLoss(st, race);
-                    table.LimbsChanged.Enqueue((v, medical.Parts[ev.Part].Template.LimbSlot));
+                    table.LimbsChanged.Enqueue((v, medical.Parts[ev.Part].Template.LimbSlot, true));
 
                     // LOST_LEG / LOST_ARM
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None,

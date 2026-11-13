@@ -30,11 +30,6 @@ public sealed class ProductionSettings
     /// </summary>
     public float ResearchOption { get; init; } = 1;
     /// <summary>
-    /// A turret's gunner whose path has ended counts as at its spot within this much more (engine choice). Operators work within the machine's <c>use
-    /// range</c> (<see cref="SiteReach"/>).
-    /// </summary>
-    public float SettleReach { get; init; } = 150;
-    /// <summary>
     /// The footprint radius of a BUILDING record (the host knows it); null: 0.
     /// </summary>
     public Func<string, float>? Footprint { get; init; }
@@ -361,9 +356,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     #region Orders and the operators' walk
 
     /// <summary>
-    /// The gunner spots of the player's turrets, as their walks found them (derived from the site and the ground; not saved, not hashed).
+    /// The gunner spots of the player's turrets, as their walks found them, with each turret's <c>use range</c> (derived from the site and the
+    /// ground; not saved, not hashed).
     /// </summary>
-    readonly Dictionary<string, Vector2> _turretSpots = [];
+    readonly Dictionary<string, (Vector3 Spot, float Range)> _turretSpots = [];
 
     /// <summary>
     /// The clip a turret's gunner holds.
@@ -553,7 +549,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && TurretPostOf(site) is { } post)
         {
             var spot = AiSystem.TurretSpot(world, post);
-            return _turretSpots[site.Id] = new Vector2(spot.X, spot.Z);
+            _turretSpots[site.Id] = (spot, post.UseRange);
+            return new Vector2(spot.X, spot.Z);
         }
 
         var at = world.Walkability.FloorNear(site.Position.X, site.Position.Z, site.Position.Y, MovementSystem.FloorSlack) ?? site.Position;
@@ -616,16 +613,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site?.Parent is not null;
 
     /// <summary>
-    /// Whether the operator is at the machine: a turret's gunner at its spot, a rock's within its footprint or use range, else within reach of
-    /// the site.
+    /// Whether the operator is at the machine: a turret's gunner at its spot or within the turret's use range, a rock's within its footprint or use
+    /// range, else within reach of the site; a gunner also at its spot's height, a machine's operator at the site's.
     /// </summary>
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {
-        // A turret's gunner stands at its spot (once its walk has found it).
-        if (_turretSpots.TryGetValue(site.Id, out var spot))
+        // A turret's gunner walks to its spot (once its walk has found it) and mans the turret from within its use range of the turret, doubled when
+        // stopped, as any machine (AI::isWithinChoppingRange has no settle slack; a 150 slack let gunners man turrets from 15 m off, #580). The height
+        // is the spot's, which may stand above the turret's origin.
+        if (_turretSpots.TryGetValue(site.Id, out var turret))
         {
-            float off = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), spot);
-            return off <= AiSystem.TurretSlack || ((n.Flags & (ushort)MoveFlags.AnyPath) == 0 && off <= AiSystem.TurretSlack + Settings.SettleReach);
+            bool near = Gap(n.Position, turret.Spot) <= AiSystem.TurretSlack || SiteReach.Within(n, Gap(n.Position, site.Position), turret.Range);
+            return near && MathF.Abs(n.Position.Y - turret.Spot.Y) < SiteReach.HeightLimit(door: false, site.Parent is not null);
         }
 
         // A rock: inside its footprint scaled 1.2, or within its use range of the box's centre (the original measures to its position marker; a

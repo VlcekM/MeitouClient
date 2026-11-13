@@ -33,6 +33,10 @@ sealed class TownBuildingContents
     /// The thrones, dummies and workstations of its interior layout, and the building itself when it stands alone as one.
     /// </summary>
     public List<HomeSpot> Furniture = [];
+    /// <summary>
+    /// Its interior layout's other furniture (<see cref="TownBuilding.Pieces"/>).
+    /// </summary>
+    public List<TownPiece> Pieces = [];
 
     /// <summary>
     /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the
@@ -90,53 +94,70 @@ sealed class TownBuildingContents
     }
 
     /// <summary>
-    /// The interior layout's objects in layout order: beds and nodes, chairs, other furniture, tables and fixtures; returns the chairs' spot indices
-    /// and functionality flags (null: none).
+    /// The interior layout's objects in layout order: beds and nodes, chairs, other furniture, tables and fixtures, and as <see cref="Pieces"/>
+    /// whatever no bed, node, seat, cage or container pick takes; returns the chairs' spot indices and functionality flags (null: none).
     /// </summary>
     List<(int Spot, int Flags)>? LayItems(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior,
         Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
     {
         var b = resolved.Placement;
-        var spots = Spots;
         int index = 0;
         List<(int Spot, int Flags)>? seats = null;
         foreach (var item in layouts.Items(interior, b))
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
-            bool node = item.Building.GetBool("is node");
-            HomeSpotKind? kind = node ? NodeKind(item.Building) : IsBed(db, item.Building, beds) ? HomeSpotKind.Bed : null;
-            var function = kind is null ? FunctionOf(db, item.Building, functions) : null;
-            // A node marker looks along its local -X (docs/game/ai-tasks.md "Town goals"), a bed along +Z.
-            if (kind is { } k)
-            {
-                spots.Add(new HomeSpot(k, at, YawOf(rotation) - (node ? MathF.PI / 2 : 0))
-                {
-                    NodeType = node ? item.Building.GetInt("node type") : -1,
-                    Record = k == HomeSpotKind.Bed ? item.Building.StringId : null,
-                    Marker = k == HomeSpotKind.Bed ? WorldObjectLayout.PositionMarker(db, item.Building, at, rotation) : null,
-                });
-            }
-            else if (function?.GetInt("function") == ChairFunction)
-            {
-                (seats ??= []).Add((spots.Count, function.GetInt("flags")));
-                spots.Add(new HomeSpot(HomeSpotKind.Chair, at, YawOf(rotation))
-                {
-                    Record = item.Building.StringId,
-                    SitClip = function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
-                    HungerRate = function.GetFloat("hunger rate", 1),
-                });
-            }
-            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is { } piece)
-            {
-                Furniture.Add(piece);
-            }
+            var function = item.Building.GetBool("is node") || IsBed(db, item.Building, beds) ? null : FunctionOf(db, item.Building, functions);
+            bool picked = LaySpot(db, item, at, rotation, beds, function, ref seats);
 
+            string id = $"{b.Key}/{index}";
             if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) Tables.Add(at);
-            else AddFixture(db, functions, item, $"{b.Key}/{index}", at, rotation);
+            else picked |= AddFixture(db, functions, item, id, at, rotation);
+
+            if (!picked) Pieces.Add(new TownPiece(id, item.Building.StringId, at, rotation, item.Floor, item.Outside));
             index++;
         }
         Furnished = index > 0;
         return seats;
+    }
+
+    /// <summary>
+    /// One layout object as a bed or node spot, a chair, or other furniture (<see cref="Furniture"/>); returns whether it stays out of
+    /// <see cref="Pieces"/>: a bed or a seat, which have picks of their own, or a node, which has no shape to click; not a dummy or workstation.
+    /// </summary>
+    bool LaySpot(GameDatabase db, LayoutItem item, Vector3 at, Quaternion rotation, Dictionary<string, bool> beds, GameRecord? function,
+        ref List<(int Spot, int Flags)>? seats)
+    {
+        bool node = item.Building.GetBool("is node");
+        HomeSpotKind? kind = node ? NodeKind(item.Building) : IsBed(db, item.Building, beds) ? HomeSpotKind.Bed : null;
+
+        // A node marker looks along its local -X (docs/game/ai-tasks.md "Town goals"), a bed along +Z.
+        if (kind is { } k)
+        {
+            Spots.Add(new HomeSpot(k, at, YawOf(rotation) - (node ? MathF.PI / 2 : 0))
+            {
+                NodeType = node ? item.Building.GetInt("node type") : -1,
+                Record = k == HomeSpotKind.Bed ? item.Building.StringId : null,
+                Marker = k == HomeSpotKind.Bed ? WorldObjectLayout.PositionMarker(db, item.Building, at, rotation) : null,
+            });
+            return true;
+        }
+
+        if (function?.GetInt("function") == ChairFunction)
+        {
+            (seats ??= []).Add((Spots.Count, function.GetInt("flags")));
+            Spots.Add(new HomeSpot(HomeSpotKind.Chair, at, YawOf(rotation))
+            {
+                Record = item.Building.StringId,
+                SitClip = function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
+                HungerRate = function.GetFloat("hunger rate", 1),
+            });
+            return true;
+        }
+
+        if (function is null || FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is not { } piece) return false;
+
+        Furniture.Add(piece);
+        return piece.Kind == HomeSpotKind.ThroneSeat;
     }
 
     /// <summary>
@@ -170,11 +191,12 @@ sealed class TownBuildingContents
 
     /// <summary>
     /// A cage, a lockable object or a container with an inventory of the interior layout (<see cref="TownFixture"/>); nothing for anything else.
+    /// Returns whether a pick of its own selects it: a cage or a container, not a lock alone.
     /// </summary>
-    void AddFixture(GameDatabase db, Dictionary<string, GameRecord?> functions, LayoutItem item, string id, Vector3 at, Quaternion rotation)
+    bool AddFixture(GameDatabase db, Dictionary<string, GameRecord?> functions, LayoutItem item, string id, Vector3 at, Quaternion rotation)
     {
         var itemFn = FunctionOf(db, item.Building, functions)?.GetInt("function");
-        if (itemFn != CageFunction && !item.Building.GetBool("has lock") && !item.Building.GetBool("has inventory")) return;
+        if (itemFn != CageFunction && !item.Building.GetBool("has lock") && !item.Building.GetBool("has inventory")) return false;
         var (storageWidth, storageHeight) = item.Building.GetBool("has inventory") ? MachineData.StorageGrid(db, item.Building) : (0, 0);
         Fixtures.Add(new TownFixture(id, item.Building.StringId, itemFn == CageFunction, at, YawOf(rotation))
         {
@@ -182,6 +204,7 @@ sealed class TownBuildingContents
             StorageWidth = storageWidth,
             StorageHeight = storageHeight,
         });
+        return itemFn == CageFunction || item.Building.GetBool("has inventory");
     }
 
     /// <summary>

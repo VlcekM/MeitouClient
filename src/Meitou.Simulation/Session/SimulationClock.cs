@@ -56,13 +56,10 @@ public sealed class SimulationClock
     /// </summary>
     double _lastSpeed = 1;
     /// <summary>
-    /// The speed the pause key resumes at (see <see cref="Remember"/>).
+    /// The speed the pause key resumes at (see <see cref="Remember"/>): 1, as the original's first call leaves it (docs/game/game-loop.md "Speed
+    /// and pause"), until a pause (the key or <see cref="Pause"/>) first stops a running game.
     /// </summary>
-    double _rememberedSpeed;
-    /// <summary>
-    /// Whether <see cref="_rememberedSpeed"/> was ever set.
-    /// </summary>
-    bool _rememberedSet;
+    double _rememberedSpeed = 1;
     /// <summary>
     /// The most ticks a frame may run at speed 1 (see <see cref="MaxTicksPerFrame"/>).
     /// </summary>
@@ -121,11 +118,11 @@ public sealed class SimulationClock
     /// The speed, the speed pause returns to and what the pause key remembers: all a host that runs the clock its own way for a while (photo mode's slow
     /// motion) has to put back.
     /// </summary>
-    public readonly record struct SpeedState(double Speed, double Last, double Remembered, bool RememberedSet);
+    public readonly record struct SpeedState(double Speed, double Last, double Remembered);
 
-    public SpeedState SaveSpeeds() => new(_speed, _lastSpeed, _rememberedSpeed, _rememberedSet);
+    public SpeedState SaveSpeeds() => new(_speed, _lastSpeed, _rememberedSpeed);
 
-    public void RestoreSpeeds(SpeedState state) => (_speed, _lastSpeed, _rememberedSpeed, _rememberedSet) = (state.Speed, state.Last, state.Remembered, state.RememberedSet);
+    public void RestoreSpeeds(SpeedState state) => (_speed, _lastSpeed, _rememberedSpeed) = (state.Speed, state.Last, state.Remembered);
 
     /// <summary>
     /// Sets the speed: 0 pauses; any other finite one runs (the buttons and keys pick one of <see cref="Speeds"/>).
@@ -165,16 +162,10 @@ public sealed class SimulationClock
 
     /// <summary>
     /// The original's pause function (docs/game/game-loop.md "Speed and pause"): the speed it resumes at is kept apart from the speed buttons. A
-    /// call refreshes it from the current speed when that is above 0 (the first call also takes a speed of 0), so it is only ever written here.
+    /// call refreshes it from the current speed when that is above 0; besides here only <see cref="SetFastSpeeds"/> moves it with the speeds.
     /// </summary>
     void Remember()
     {
-        if (!_rememberedSet)
-        {
-            _rememberedSpeed = _speed;
-            _rememberedSet = true;
-        }
-
         if (_speed > 0) _rememberedSpeed = _speed;
     }
 
@@ -188,8 +179,7 @@ public sealed class SimulationClock
     }
 
     /// <summary>
-    /// The pause key: running, it pauses (<see cref="Pause"/>); paused, it sets the stored speed, which stays paused when that is 0 (after a speed
-    /// button paused before the key stored one).
+    /// The pause key: running, it pauses (<see cref="Pause"/>); paused, it resumes at the stored speed.
     /// </summary>
     public void PauseKey()
     {
@@ -199,7 +189,6 @@ public sealed class SimulationClock
             return;
         }
 
-        Remember();
         SetSpeed(_rememberedSpeed);
     }
 

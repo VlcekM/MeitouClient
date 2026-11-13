@@ -70,11 +70,11 @@ public class TownArtifactTests
         };
         var vaultHome = new TownBuilding("vault", "house-t", "Vault", VaultAt, 0, true, false, [])
         {
-            Zone = VaultZone, CanHouse = true, Furnished = true, InteriorLayout = "Vault", ResidentsTemplate = "vault-t", Fixtures = [Chest(0),
+            Zone = VaultZone, CanHouse = true, Furnished = true, InteriorLayout = "Vault", HandleSerial = 1, Fixtures = [Chest(0),
                     Chest(1)],
         };
         var hutHome = new TownBuilding("hut", "house-t", "Hut", HutAt, 0, false, false, []) { Zone = HutZone, CanHouse = true, Furnished = true,
-                ResidentsTemplate = "hut-t" };
+                HandleSerial = 2 };
         return PopulationData.Create(db, [new TownPlacement("inst", "30-t", SyntheticTown.Centre, null)],
             buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [vaultHome, hutHome] });
     }

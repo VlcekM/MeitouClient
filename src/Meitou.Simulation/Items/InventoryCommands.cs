@@ -22,10 +22,10 @@ public sealed record ArrangeInventory(CharacterId Character, bool Bag = false) :
 public static class InventoryCommands
 {
     /// <summary>
-    /// Whether <paramref name="section"/> is a worn item's (equipment) section.
+    /// Whether <paramref name="section"/> is a worn item's (equipment) section, a mod's (<see cref="ModSlots"/>) included.
     /// </summary>
     public static bool IsEquipmentSection(string section) => section is "back" or "hip" or "shirt" or "head" or "legs" or "boots" or "armour"
-            or "belt" or "backpack_attach";
+            or "belt" or "backpack_attach" || ModSlots.Of(section) is not null;
 
     /// <summary>
     /// An equipment section disabled for <paramref name="wearer"/> (<c>CharacterHuman::validateInventorySections</c> <c>FUN_1406218f0</c>,
@@ -118,7 +118,7 @@ public static class InventoryCommands
             => section switch { "left_arm_replace" => 0, "right_arm_replace" => 1, "left_leg_replace" => 2, "right_leg_replace" => 3, _ => -1 };
 
     /// <summary>
-    /// Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
+    /// Engine slot capacities, in inventory cells, a mod slot's its own (<see cref="ModSlots"/>). Clothing and backpack slots hold one item.
     /// </summary>
     public static (int Width, int Height) SectionSize(string section) => section switch
     {
@@ -130,7 +130,7 @@ public static class InventoryCommands
         "legs" => (4, 5),
         "armour" => (4, 6),
         "belt" => (2, 2),
-        _ => (0, 0),
+        _ => ModSlots.Of(section) is { } mod ? (mod.Width, mod.Height) : (0, 0),
     };
 
     /// <summary>

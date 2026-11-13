@@ -232,11 +232,18 @@ sealed class CharacterAssembly(PopulationData data)
     }
 
     /// <summary>
-    /// Builds the character's look again from its body, worn kit, limbs and shave; an animal's and one without an inventory stay as they are.
+    /// Builds the character's look again from its body, worn kit, limbs and shave (an animal's: from the bag it wears); one without an inventory
+    /// stays as it is.
     /// </summary>
     void RefreshLook(CharacterCold cold)
     {
-        if (cold.Inventory is not { } inventory || cold.Appearance is not { } look || look.Animal is not null) return;
+        if (cold.Inventory is not { } inventory || cold.Appearance is not { } look) return;
+        if (look.Animal is not null)
+        {
+            MatchAnimalBag(cold);
+            return;
+        }
+
         var body = look.Loadout?.Appearance.Record ?? look.Body?.Record;
         if (Saving.SavedKit.LoadoutOf(body, Saving.SavedKit.FromInventory(inventory), data.Db, look.Loadout?.Seed ?? 0, FactionRecord(cold))
             is not { } kit)
@@ -244,6 +251,18 @@ sealed class CharacterAssembly(PopulationData data)
 
         Saving.SavedKit.SetLimbs(kit, cold.Medical, data.Db);
         if (data.Appearances?.Create(cold.RecordId, kit, cold.Shaved) is { } updated) cold.Appearance = updated;
+    }
+
+    /// <summary>
+    /// Gives an animal the look of its species wearing the bag in its <c>backpack_attach</c> slot, when its look shows another (or none).
+    /// </summary>
+    void MatchAnimalBag(CharacterCold cold)
+    {
+        if (cold.Inventory is not { } inventory || cold.Appearance is not { Animal: { } animal } look) return;
+        var bag = inventory.Backpack?.Record;
+        if (bag == look.AnimalBackpack?.StringId) return;
+
+        if (data.Appearances?.CreateAnimal(animal.StringId, bag) is { } updated) cold.Appearance = updated;
     }
 
     /// <summary>
@@ -267,6 +286,7 @@ sealed class CharacterAssembly(PopulationData data)
         }
         cold.Inventory = inventory ?? data.Items.Build(record, cold.Appearance?.Loadout);
         Dye(cold, cold.Inventory);
+        MatchAnimalBag(cold);
 
         // Fitted prosthetics show in the limbs window: their items sit in the inventory's limb sections (saved apart, SavedLimbs).
         for (int k = 0; k < 4 && cold.Inventory is { } carried; k++)
@@ -335,6 +355,7 @@ sealed class CharacterAssembly(PopulationData data)
         if (record is { Type: FcsRecordType.Character }) cold.Shaved = record.GetBool("shaved");
         FitRolledLimbs(cold.Appearance?.Loadout, cold.Inventory, medical);
         Dye(cold, cold.Inventory);
+        MatchAnimalBag(cold);
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);

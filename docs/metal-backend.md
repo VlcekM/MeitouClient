@@ -491,7 +491,14 @@ the hover outline, move marker and navmesh debug overlay (Shift+F11).
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
 F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter toggles full screen. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
 has `FullScreenPrimary`): a Space of its own, so Cmd+Tab and Ctrl+Left/Right switch away, and AppKit hides the menu bar and Dock
-(**Unknown** on hardware yet: written for issue #390, built but not run).
+(**Observed** working, 2026-11-12, Apple M6, macOS 27.2).
+**Start (Observed 2026-11-12, Apple M6, macOS 27.2, from the run's log):** as on Vulkan, the world is read on a worker
+and the boot draws the Kenshi loading screen between its steps (`MetalLoadingCanvas`, docs/engine.md "Host and loading"); the
+window is made hidden and shown with the loading screen. A hidden window's `CAMetalLayer` gives no drawable, nor does the first `nextDrawable` right after it shows, so the window
+background is black for that moment. Full screen is asked for once the window is shown (AppKit ignores it for a hidden one), and loading
+frames are drawn until `NSWindowDidEnterFullScreenNotification` (`FullScreenTransitions`, ~0.6 s): AppKit animates into the Space only
+while events are handled, and a load step holding the thread earlier left the Space showing the empty window. Stills draw no
+loading frames.
 The shared settings menu is now wired on Metal too (F10; Display, Graphics, Interface, Controls, Advanced and Audio),
 including the MetalFX preset (which owns the render scale), VSync, frame limit and full screen, persisted in
 `meitou.user.json`. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the

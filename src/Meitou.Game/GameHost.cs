@@ -847,6 +847,7 @@ sealed partial class GameHost(
         Player.StealthView.HiddenInWorld = Interiors.HiddenIndoors.Contains;
         Player.StealthView.DrawnHead = id => Gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
         Player.Furniture.AboveViewedFloor = Interiors.AboveViewedFloor;
+        Player.Furniture.FloorHidden = Interiors.FloorHidden;
         Player.Furniture.DoorShape = (record, door) => Nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
 
         Player.GroundItemPicks.GroundItemShape = GroundItemSync.GroundShape;

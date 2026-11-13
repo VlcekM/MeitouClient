@@ -340,7 +340,8 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     /// <summary>
     /// The section a worn ARMOUR or ITEM goes to by its <c>slot</c> (the save's section names; <c>FUN_14075faf0</c> stores the slot of every item
     /// type and a section takes an item whose slot is its type, <c>FUN_14074bc30</c>, <b>Verified</b>). An ARMOUR with another slot goes to "main";
-    /// an ITEM with slot 7 (none) or another slot has no section (in the base data only the two lanterns, slot 14, have one).
+    /// an ITEM with slot 7 (none) or another slot has no section (in the base data only the two lanterns, slot 14, have one). A slot a mod claimed
+    /// (<see cref="ModSlots"/>) goes to the mod's section, for either type.
     /// </summary>
     static string SectionOf(GameRecord worn) => (Data.Characters.AttachSlot)worn.GetInt("slot") switch
     {
@@ -350,6 +351,7 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
         Data.Characters.AttachSlot.Body => "armour",
         Data.Characters.AttachSlot.Legs => "legs",
         Data.Characters.AttachSlot.Belt => "belt",
+        var other when ModSlots.SectionOf((int)other) is { } mod => mod,
         _ => worn.Type == FcsRecordType.Item ? "" : "main",
     };
 }

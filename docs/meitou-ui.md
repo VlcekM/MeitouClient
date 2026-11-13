@@ -33,6 +33,8 @@ The project site ([site/](../site/), Astro + nginx container) uses a texture-fre
   buttons (New game, Load game, Import game, Options, Credits) 38 tall 6 apart, Exit 4 further. Icon column 24, 12 to the label; menu sprites fit a
   24×20 area (not upscaled) and centre by their visible pixels (alpha ≥ 40, stray blobs from
   neighbouring sprites dropped), not by the transparent padding of the atlas crops.
+- Settings window: 1120×720 units at scale min(height / 900, width / 1280) of the framebuffer's physical-pixel size (on a high-DPI
+  display more than its points: Retina's twice), at least 0.35 and no upper limit, so it fills the same share of the screen at any resolution.
 - Title, both modes: game data or level file problems of the load (missing mod, changed record type...) show bottom right as
   `N game data problems, see log.txt` (13, `InkDanger`); log.txt lists a count by kind and the first 20.
 - Type: Exo 2 600. 24 window title, 22 primary label (upper, 0.08em), 20 headings, 16 body,

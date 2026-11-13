@@ -9,7 +9,9 @@ namespace Meitou.Data.World;
 /// <item>the ruins (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c> destroys a home whose
 /// template has <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>);</item>
 /// <item>the layouts (docs/game/factions-squads-towns.md "Town residents"): the original gives a home its template's <c>layout interior</c> and
-/// <c>layout exterior</c> (<c>FUN_140552140</c>), replacing or clearing what the level state names.</item>
+/// <c>layout exterior</c> (<c>FUN_140552140</c>), replacing or clearing what the level state names;</item>
+/// <item>the templates: a home carries its residents' template, any other building of a town none: the original's state reader drops the level
+/// state's <c>residents template</c> (<c>FUN_140552b70</c>), so only housing gives a building one.</item>
 /// </list>
 /// </summary>
 public static class ResidentRuins
@@ -22,6 +24,10 @@ public static class ResidentRuins
     /// The level state's keys of the building's name and its squad template.
     /// </summary>
     public const string NameKey = "name", SquadTemplateKey = "squad template";
+    /// <summary>
+    /// The level state's key of the template of the building's residents (the original saves it twice, also as <see cref="SquadTemplateKey"/>).
+    /// </summary>
+    public const string ResidentsTemplateKey = "residents template";
 
     /// <summary>
     /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names each home's layouts as its residents' template
@@ -43,10 +49,17 @@ public static class ResidentRuins
                     continue;
                 var town = TownData.From(record);
                 var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.Faction } f ? FactionData.From(f) : null;
+                var homes = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
                     LayOut(levels, b, t);
+                    homes.Add(b);
+                }
+
+                foreach (var b in list)
+                {
+                    if (!homes.Contains(b)) Vacate(b);
                 }
             }
             return ruined;
@@ -65,6 +78,17 @@ public static class ResidentRuins
     }
 
     /// <summary>
+    /// A town building nobody is housed in carries no template, whatever its level state names.
+    /// </summary>
+    static void Vacate(TownBuilding b)
+    {
+        if (b.LevelState is not { } state) return;
+
+        if (state.GetString(ResidentsTemplateKey).Length > 0) state.StringTable[ResidentsTemplateKey] = "";
+        if (state.GetString(SquadTemplateKey).Length > 0) state.StringTable[SquadTemplateKey] = "";
+    }
+
+    /// <summary>
     /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it,
     /// ruins too (the original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a
     /// ruin's layouts. The home is named as housing names it (<see cref="DisplayName"/>) and its state names the template, as the original's saved
@@ -77,11 +101,13 @@ public static class ResidentRuins
         if (level != (t.LayoutInterior, t.LayoutExterior)) levels.LevelLayoutNames.TryAdd(b.Key, level);
         foreach (var (key, layout) in Names(t)) state.StringTable[key] = layout;
 
-        var levelNaming = BuildingNaming.Of(state);
+        // The level's own naming has no template: the original never reads the level state's.
+        var levelNaming = BuildingNaming.Of(state) with { SquadTemplate = "" };
         var naming = Naming(t, levelNaming);
-        if (naming != levelNaming) levels.LevelNames.TryAdd(b.Key, levelNaming);
+        levels.LevelNames.TryAdd(b.Key, levelNaming);
         state.StringTable[NameKey] = naming.Name;
         state.StringTable[SquadTemplateKey] = naming.SquadTemplate;
+        state.StringTable[ResidentsTemplateKey] = t.Id;
     }
 
     /// <summary>

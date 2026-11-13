@@ -89,6 +89,8 @@ static class LauncherSchema
         Graphics(WorldFrame.GroundDisplaceDistanceSlider, 10, 200, 1, 50) with { Suffix = " m" },
         Graphics(WorldFrame.GroundParallaxDepthSlider, 10, 200, 5, 100) with { Suffix = " %" },
         Graphics(WorldFrame.GroundParallaxDistanceSlider, 10, 150, 1, 50) with { Suffix = " m" },
+        Graphics(WorldFrame.BloodDrawsSlider, Rendering.Terrain.TerrainDecalRenderer.MinSurfaceDraws,
+            Rendering.Terrain.TerrainDecalRenderer.MaxSurfaceDraws, 64, Rendering.Terrain.TerrainDecalRenderer.DefaultSurfaceDraws),
         // Water
         Graphics(WorldFrame.WaterReflectionSlider, 0, 4, 1, 2) with { Labels = ["Off", "Landscape", "Characters", "Buildings", "Everything"] },
         Multiplier(WorldFrame.ReflectionRangeSlider, 0.1f, 50, 0.6f),

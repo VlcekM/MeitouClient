@@ -44,6 +44,15 @@ public sealed class CameraSettings
     /// </summary>
     public bool EdgeScroll { get; set; } = true;
     /// <summary>
+    /// Engine choice (Controls settings, default on): the turn and tilt input is averaged over the last frames, as the game always does; off, the
+    /// view follows the keys and the mouse at once.
+    /// </summary>
+    public bool Smoothing { get; set; } = true;
+    /// <summary>
+    /// Engine choice (Controls settings' Shift pan boost): the pan speed factor while Shift is held with the pan keys; 1, the game's, is no boost.
+    /// </summary>
+    public float ShiftPanFactor { get; set; } = 1;
+    /// <summary>
     /// The game's camera step runs once per drawn frame with the frame's time, and some of its inputs are per frame (the mouse movement,
     /// the 20-frame averaging of the turn and tilt), so the feel depends on the frame rate. A control tick is split into steps of about
     /// this length so the camera behaves as the game at that frame rate whatever the tick rate (engine choice).

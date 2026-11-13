@@ -112,7 +112,7 @@ public static class Enhancements
         Func<bool>? skin = null, Action<bool>? setSkin = null, Func<bool>? interiorLamps = null, Action<bool>? setInteriorLamps = null,
         Func<bool>? icons = null, Action<bool>? setIcons = null, Func<bool>? blood = null, Action<bool>? setBlood = null,
         Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null, Func<bool>? tracers = null, Action<bool>? setTracers = null,
-        Func<bool>? chars2 = null, Action<bool>? setChars2 = null) =>
+        Func<bool>? chars2 = null, Action<bool>? setChars2 = null, Func<bool>? footprints = null, Action<bool>? setFootprints = null) =>
     [
         .. PostSwitches(post, meitouHaze, setMeitouHaze),
         .. ReachSwitches(meitouShadows, setMeitouShadows, meitouRange, setMeitouRange, impostors, setImpostors, meitouReach, setMeitouReach),
@@ -121,7 +121,7 @@ public static class Enhancements
         .. NightSwitches(post, nightHaze, setNightHaze, planetshine, setPlanetshine, stars, setStars),
         .. CloudSwitches(clouds, setClouds, cloudShadows, setCloudShadows, cloudFog, setCloudFog),
         .. InteriorSwitches(interiorGi, setInteriorGi, characterLod, setCharacterLod, skin, setSkin, interiorLamps, setInteriorLamps, icons, setIcons),
-        .. SurfaceSwitches(blood, setBlood, bloodSurfaces, setBloodSurfaces),
+        .. SurfaceSwitches(blood, setBlood, bloodSurfaces, setBloodSurfaces, footprints, setFootprints),
         .. EffectSwitches(post, tracers, setTracers, chars2, setChars2),
     ];
 
@@ -321,9 +321,10 @@ public static class Enhancements
     ];
 
     /// <summary>
-    /// Blood, the ground relief and mesh welding.
+    /// Blood, the footprints walked through it, the ground relief and mesh welding.
     /// </summary>
-    static Enhancement[] SurfaceSwitches(Func<bool>? blood, Action<bool>? setBlood, Func<bool>? bloodSurfaces, Action<bool>? setBloodSurfaces) =>
+    static Enhancement[] SurfaceSwitches(Func<bool>? blood, Action<bool>? setBlood, Func<bool>? bloodSurfaces, Action<bool>? setBloodSurfaces,
+        Func<bool>? footprints, Action<bool>? setFootprints) =>
     [
         new("blood", "Blood cells", "8 nearest", $"up to {TerrainDecalRenderer.MaxSlots}",
             blood ?? (() => false), setBlood ?? (_ => { }),
@@ -335,6 +336,10 @@ public static class Enhancements
             "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; "
                 + "Meitou also sprays splashes over walls, buildings, rocks and other static objects, "
                 + "and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"),
+        new("footprints", "Bloody footprints", "none", "prints",
+            footprints ?? (() => false), setFootprints ?? (_ => { }),
+            "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour "
+                + "and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"),
         // The ground relief's settings are static (GroundRelief), so these two need no delegates. The labels are the saved keys of the on/off toggles
         // they replace.
         new("parallax", "Ground parallax", "off", "relief march",

@@ -386,6 +386,7 @@ static partial class WorldFrame
         GroundDisplaceDistanceSlider = "Ground displacement distance (m)",
         GroundParallaxDistanceSlider = "Ground parallax distance (m)",
         GroundParallaxDepthSlider = "Ground parallax depth (% of relief depth)",
+        BloodDrawsSlider = "Blood decals drawn",
         ShadowFilterSlider = "Shadow filter 0-2 (Meitou; 0 low-end)",
         HazeStrengthSlider = "Haze strength (1 = game)",
         PlanetshineStrengthSlider = "Planetshine strength (x physical)",
@@ -489,7 +490,8 @@ static partial class WorldFrame
             () => gpu()?.Decals?.Meitou ?? o.MeitouBlood, v => { o.MeitouBlood = v; if (gpu()?.Decals is { } d) d.Meitou = v; },
             () => gpu()?.Decals?.Surfaces ?? o.MeitouBloodSurfaces, v => { o.MeitouBloodSurfaces = v; if (gpu()?.Decals is { } d) d.Surfaces = v; },
             () => o.MeitouTracers, v => o.MeitouTracers = v,
-            () => gpu()?.Characters?.Chars2 ?? o.Chars2, v => { o.Chars2 = v; if (gpu()?.Characters is { } c) c.Chars2 = v; });
+            () => gpu()?.Characters?.Chars2 ?? o.Chars2, v => { o.Chars2 = v; if (gpu()?.Characters is { } c) c.Chars2 = v; },
+            () => o.MeitouFootprints, v => o.MeitouFootprints = v);
 
     /// <summary>
     /// The Tab settings panel over <paramref name="g"/>'s renderers: the sliders (the viewer's clock, window and the render settings), the Faithful /
@@ -755,8 +757,8 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The terrain's pixel error and the ground relief (ours, docs/render-terrain.md "Ground relief": the march's quality, the depth and where each
-    /// ends).
+    /// The terrain's pixel error, the ground relief (ours, docs/render-terrain.md "Ground relief": the march's quality, the depth and where each
+    /// ends) and the blood decals drawn on it.
     /// </summary>
     static void AddTerrainSliders(List<Slider> sliders, WorldGpu g, WorldRenderOptions r)
     {
@@ -779,6 +781,11 @@ static partial class WorldFrame
             v => GroundRelief.ParallaxScale = MathF.Round(v / 5) / 20, "0"));
         sliders.Add(new Slider(GroundParallaxDistanceSlider, 10, 150, () => GroundRelief.ParallaxDistance / 10,
             v => GroundRelief.ParallaxDistance = MathF.Round(v) * 10, "0"));
+
+        // Blood on surfaces and footprints share one cap a frame, the nearest drawn (docs/game/blood-decals.md "Bloody footprints").
+        sliders.Add(new Slider(BloodDrawsSlider, TerrainDecalRenderer.MinSurfaceDraws, TerrainDecalRenderer.MaxSurfaceDraws,
+            () => TerrainDecalRenderer.SurfaceDraws, v => TerrainDecalRenderer.SurfaceDraws = (int)MathF.Round(v / 64) * 64, "0", Step: 64,
+            Meitou: TerrainDecalRenderer.DefaultSurfaceDraws));
     }
 
     /// <summary>

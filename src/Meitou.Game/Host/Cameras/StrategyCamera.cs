@@ -117,6 +117,12 @@ public sealed class StrategyCamera
     public Vector2? EdgePointer { get; set; }
 
     /// <summary>
+    /// The drawn frame's length in seconds, which the turn and tilt averaging counts its frames in (<see cref="FramesPerStep"/>); 0 is a step's.
+    /// Set by the host before each frame.
+    /// </summary>
+    public float DrawnFrameSeconds { get; set; }
+
+    /// <summary>
     /// Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once.
     /// </summary>
     public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
@@ -210,6 +216,7 @@ public sealed class StrategyCamera
         // Pan: the keys and the pointer at an edge add up; the direction is unit length whatever it is made of.
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
+        float speed = fwd != 0 || right != 0 ? KeyPanFactor(a) : 1;
         if (_settings.EdgeScroll && EdgePointer is { } p)
         {
             if (p.X < KenshiCamera.EdgeMargin) right -= 1;
@@ -217,9 +224,18 @@ public sealed class StrategyCamera
             if (p.Y < KenshiCamera.EdgeMargin) fwd += 1;
             if (p.Y > 1 - KenshiCamera.EdgeMargin) fwd -= 1;
         }
-        if (fwd != 0 || right != 0) Pan(fwd, right, h);
+        if (fwd != 0 || right != 0) Pan(fwd, right, h * speed);
 
-        // Turn and tilt: the held keys and, while the rotate button is down, the mouse movement, averaged over the last frames.
+        TurnAndTilt(h, a, share);
+        FollowHeight(h);
+    }
+
+    /// <summary>
+    /// Turn and tilt: the held keys and, while the rotate button is down, the mouse movement, averaged over the last frames (engine choice: not
+    /// averaged with <see cref="CameraSettings.Smoothing"/> off).
+    /// </summary>
+    void TurnAndTilt(float h, ActionState a, float share)
+    {
         float yaw = (a.Held(InputAction.RotateRight) ? KenshiCamera.YawKeyInput : 0)
             - (a.Held(InputAction.RotateLeft) ? KenshiCamera.YawKeyInput : 0);
         float tilt = (a.Held(InputAction.PitchUp) ? KenshiCamera.TiltKeyInput : 0) - (a.Held(InputAction.PitchDown) ? KenshiCamera.TiltKeyInput : 0);
@@ -228,17 +244,28 @@ public sealed class StrategyCamera
             yaw -= a.MouseDelta.X * share * _settings.MouseSpeedX;
             tilt -= a.MouseDelta.Y * share * _settings.MouseSpeedY;
         }
-        float turn = _yawInput.Push(yaw);
-        float lean = _pitchInput.Push(tilt);
-        if (turn != 0 || lean != 0)
-        {
-            Yaw = Interp.WrapAngle(Yaw + _settings.RotateSpeedX * turn * h * (_settings.InvertX ? -1 : 1) * DegreesToRadians);
-            State = Compute();
-            PitchStep(_settings.RotateSpeedY * lean * h * (_settings.InvertY ? -1 : 1) * DegreesToRadians);
-        }
 
-        FollowHeight(h);
+        float frames = FramesPerStep(h);
+        float turn = _yawInput.Push(yaw, frames);
+        float lean = _pitchInput.Push(tilt, frames);
+        if (!_settings.Smoothing)
+        {
+            turn = yaw;
+            lean = tilt;
+        }
+        if (turn == 0 && lean == 0) return;
+
+        Yaw = Interp.WrapAngle(Yaw + _settings.RotateSpeedX * turn * h * (_settings.InvertX ? -1 : 1) * DegreesToRadians);
+        State = Compute();
+        PitchStep(_settings.RotateSpeedY * lean * h * (_settings.InvertY ? -1 : 1) * DegreesToRadians);
     }
+
+    /// <summary>
+    /// How many of the game's frames a step of <paramref name="h"/> seconds spans, for the averaging. The game averages drawn frames, so its lag
+    /// shrinks as the frame rate rises; the step itself stays about <see cref="CameraSettings.ReferenceFrameSeconds"/>, which the mouse's turn per
+    /// pixel goes with. Engine choice: a drawn frame longer than the step counts as the step, so a low frame rate lags no more than 60 fps.
+    /// </summary>
+    float FramesPerStep(float h) => DrawnFrameSeconds > 0 && DrawnFrameSeconds < h ? h / DrawnFrameSeconds : 1;
 
     /// <summary>
     /// A zoom step of <paramref name="input"/>; the boom closes on its new length at <see cref="KenshiCamera.ZoomFollowRate"/> per second.
@@ -248,6 +275,11 @@ public sealed class StrategyCamera
         float target = KenshiCamera.ZoomedDistance(Distance, _settings.ZoomSpeed, input);
         Distance += (target - Distance) * MathF.Min(KenshiCamera.ZoomFollowRate * h, 1);
     }
+
+    /// <summary>
+    /// The pan speed factor of the pan keys: <see cref="CameraSettings.ShiftPanFactor"/> while Shift is held, else 1.
+    /// </summary>
+    float KeyPanFactor(ActionState a) => a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift) ? _settings.ShiftPanFactor : 1;
 
     /// <summary>
     /// Pans along the heading. The game turns the key direction by the pivot's orientation, drops its height and normalises: sideways is
@@ -334,7 +366,8 @@ public sealed class StrategyCamera
     }
 
     /// <summary>
-    /// The average of the last frames' input with weights 1, a, a², ... from the newest back (the game's turn and tilt smoothing).
+    /// The average of the last frames' input with weights 1, a, a², ... from the newest back (the game's turn and tilt smoothing). A sample may span
+    /// several frames: the weights then fall by a per frame spanned and the window is as many samples as hold its frames.
     /// </summary>
     sealed class SmoothedInput(float decay, int frames)
     {
@@ -348,19 +381,23 @@ public sealed class StrategyCamera
         int _newest;
 
         /// <summary>
-        /// Adds a frame's input and returns the weighted average.
+        /// Adds the input of a sample spanning <paramref name="span"/> frames (1 or more) and returns the weighted average.
         /// </summary>
-        public float Push(float value)
+        public float Push(float value, float span)
         {
             _newest = (_newest + 1) % _samples.Length;
             _samples[_newest] = value;
+
+            float step = span == 1 ? decay : MathF.Pow(decay, span);
+            int window = Math.Max(1, (int)MathF.Ceiling(_samples.Length / span));
             float sum = 0, weights = 0, weight = 1;
-            for (int i = 0; i < _samples.Length; i++)
+            for (int i = 0; i < window; i++)
             {
                 sum += weight * _samples[(_newest - i + _samples.Length) % _samples.Length];
                 weights += weight;
-                weight *= decay;
+                weight *= step;
             }
+
             return sum / weights;
         }
     }

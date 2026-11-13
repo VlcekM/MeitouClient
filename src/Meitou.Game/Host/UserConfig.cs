@@ -122,6 +122,10 @@ sealed class UserConfig
     /// The ranges of <see cref="CameraMoveSpeed"/> (150 … 1000) and <see cref="CameraZoomSpeed"/> (10 … 200), the original's.
     /// </summary>
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
+    /// <summary>
+    /// The range and default of <see cref="ShiftPanMultiplier"/>.
+    /// </summary>
+    public const float MinShiftPanMultiplier = 1.25f, MaxShiftPanMultiplier = 5, DefaultShiftPanMultiplier = 2;
 
     /// <summary>
     /// The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that release does not
@@ -352,12 +356,13 @@ sealed class UserConfig
     /// </summary>
     public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>
-    /// A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs
-    /// at once, as in the game). <c>--load</c> is not paused.
+    /// A loaded or imported save starts paused (Advanced settings, a Faithful / Meitou switch; on by default, Meitou: in the game it runs at once).
+    /// <c>--load</c> is not paused.
     /// </summary>
-    public bool PauseOnLoad { get; set; }
+    public bool PauseOnLoad { get; set; } = true;
     /// <summary>
-    /// The player's animals pick up loose items into their bags (Advanced settings, a plain on/off switch; off by default;
+    /// The player's animals pick up loose items into their bags (Advanced settings, a Faithful / Meitou switch whose
+    /// Faithful side is on, as the game lets animals pick up; off by default, Meitou;
     /// <c>PlayerSystem.AnimalsPickUp</c>).
     /// </summary>
     public bool AnimalsPickUp { get; set; }
@@ -406,6 +411,20 @@ sealed class UserConfig
     /// first used, then taken from the install's settings.cfg.
     /// </summary>
     public bool? EdgeScroll { get; set; }
+    /// <summary>
+    /// The strategy camera's turn and tilt ease in and out as the original's always do (Controls settings; the original has no such option).
+    /// </summary>
+    public bool CameraSmoothing { get; set; } = true;
+    /// <summary>
+    /// Shift held with the pan keys multiplies the strategy camera's pan speed by <see cref="ShiftPanMultiplier"/> (Controls settings, a Faithful /
+    /// Meitou switch; Faithful off: the game has no such boost).
+    /// </summary>
+    public bool ShiftPanBoost { get; set; } = true;
+    /// <summary>
+    /// The pan speed factor while Shift is held (Controls settings, <see cref="MinShiftPanMultiplier"/> … <see cref="MaxShiftPanMultiplier"/>,
+    /// default 2).
+    /// </summary>
+    public float ShiftPanMultiplier { get; set; } = DefaultShiftPanMultiplier;
     /// <summary>
     /// The in-game tutorials (the original's <c>tutorials</c>, default on; Gameplay settings); null until first used, then taken from the install's
     /// settings.cfg.
@@ -579,8 +598,10 @@ sealed class UserConfig
     {
         camera.InvertX = InvertX ?? camera.InvertX;
         camera.InvertY = InvertY ?? camera.InvertY;
+        camera.Smoothing = CameraSmoothing;
         camera.MoveSpeed = CameraMoveSpeed ?? camera.MoveSpeed;
         camera.ZoomSpeed = CameraZoomSpeed ?? camera.ZoomSpeed;
+        camera.ShiftPanFactor = ShiftPanBoost ? ShiftPanMultiplier : 1;
     }
 
     #endregion

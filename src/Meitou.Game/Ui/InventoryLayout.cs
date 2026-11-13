@@ -244,6 +244,32 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
+    /// Adds the mods' equipment slots (<see cref="ModSlots"/>, docs/modding.md "Equipment slots") to a character window that has the belt slot: each
+    /// a copy of the belt slot's widget, named by its section, sized in cells and placed at its offset from the window's top-left corner, clipped
+    /// to the window.
+    /// </summary>
+    internal void AddModSlots(List<UiControl> controls)
+    {
+        if (ModSlots.All.Count == 0) return;
+        int belt = controls.FindIndex(c => c.Name == "belt");
+        if (belt < 0 || controls.FirstOrDefault(c => c.Type == "Window") is not { } window) return;
+
+        var template = controls[belt];
+        float cell = player.InventoryCell;
+        string tile = FormattableString.Invariant($"{cell} {cell}");
+
+        // The belt's clip is its own panel's; a mod slot may lie anywhere in the window.
+        var clip = window.Clip is { } c ? window.Bounds.Intersect(c) : window.Bounds;
+        foreach (var slot in ModSlots.All)
+        {
+            var bounds = new UiRect(window.Bounds.X + slot.X * player.UiScale, window.Bounds.Y + slot.Y * player.UiScale, slot.Width * cell,
+                slot.Height * cell);
+            var properties = new Dictionary<string, string>(template.Properties) { ["TileSize"] = tile, ["State"] = "normal" };
+            controls.Insert(++belt, template with { Name = slot.Section, Bounds = bounds, Clip = clip, Properties = properties });
+        }
+    }
+
+    /// <summary>
     /// The player's own animal's inventory window ends where its "-INVENTORY-" label would start, with no main grid, so its death items stay out of
     /// sight (<b>Observed</b>, original: a bought Garru with meat and skins in its save, and a dog). The loot window keeps the grid.
     /// </summary>

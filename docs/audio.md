@@ -121,8 +121,8 @@ Traced 2026-10-17 from the last part of the camera update (`FUN_1406b0140`, with
 - **Data** (base game records, Verified). 603 BUILDINGs; 58 have an interior-mask hull, 38 of those an ambience (Metal 6, Stone 20, Wicker 4, Wood 8) and 20 none; 25 more have an ambience but no hull and never
   sound. Integrity is 100 for most (50 and 70 for some, 0 and 1 for ruins); `cavernous` is set on 17 Metal and 2 Stone buildings. 13 gateways have a hull, none an ambience.
 - **Meitou** (`InteriorSounds`; `WorldAudio`). `WorldObjectRenderer.InteriorUnder(x, z)` finds the loaded building whose hull footprint (`InteriorVolume.ContainsGround`) holds the pivot, highest first; the
-  volume carries `Ambience`, `Integrity` and `Cavernous` from its record. Gateways keep a hull for this test only (`InteriorVolume.IsGateway`, `ZoneObjects.GateHulls`: `FUN_140551b20` builds the interior object of any building with an `interior` list, no gateway test, **Verified**; they are no room for roof hiding, sight or the view). Differences: destroyed buildings have no volume (the exe's hull would still be hit), and the hull is the convex footprint of the
-  mask's collision, and a hull whose top lies below the terrain at the pivot's X/Z still counts (the exe's ray hits the terrain first; `ContainsGround` ignores terrain). Rendered (`audio render … Indoors:<name> Building_Integrity=100 Enter_Building`, `Camera_Zoom` 50): about −84 (Wood), −78 (Metal), −84 (Stone), −87 (Wicker) dBFS; integrity 0 is 4 dB louder than 100
+  volume carries `Ambience`, `Integrity` and `Cavernous` from its record. Gateways keep a hull for this test only (`InteriorVolume.IsGateway`, `ZoneObjects.GateHulls`: `FUN_140551b20` builds the interior object of any building with an `interior` list, no gateway test, **Verified**; they are no room for roof hiding, sight or the view). Differences: destroyed buildings have no volume (the exe's hull would still be hit), each shape of the mask's collision is taken as
+  its convex footprint, and a hull whose top lies below the terrain at the pivot's X/Z still counts (the exe's ray hits the terrain first; `ContainsGround` ignores terrain). Rendered (`audio render … Indoors:<name> Building_Integrity=100 Enter_Building`, `Camera_Zoom` 50): about −84 (Wood), −78 (Metal), −84 (Stone), −87 (Wicker) dBFS; integrity 0 is 4 dB louder than 100
   (**Observed**; it fades in over 1 s and `Leave_Building` ends it in 1 to 2 s).
 
 ### Point emitters
@@ -585,7 +585,7 @@ main theme or the remembered biome music, seconds until the timer next posts it,
     all, and the nearest one's name and distance.
   - **Characters and interface.** `UpdateAudio` also calls `CharacterAudio.Update` (`GameSound.Characters`, [Characters](#characters-footsteps-combat-voices)); the interface sounds are on from `AttachAudio`, also on the
     title screen (`UiAudio`). `VO_Bank` loads with the first character. The `--quit-after` log shows `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
-  - Not in screenshots, the headless paths or tests: only the interactive run creates the audio.
+  - Not in screenshots, `--headless`, the other headless paths or tests: only the interactive run creates the audio.
 
 ## Tools
 

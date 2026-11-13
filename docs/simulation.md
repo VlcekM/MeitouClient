@@ -14,8 +14,7 @@ accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multip
 `AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
-a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a plain on/off switch outside the Faithful / Meitou sides, default off as
-the game runs a loaded save at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
+a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a Faithful / Meitou switch, Meitou and on by default; Faithful runs a loaded save at once as the game does, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs.
 
 ### Engine choices against the original's frame loop
 
@@ -155,7 +154,7 @@ start through `TaskStart.Start`, the lock orders' worker choice and the player's
 a crawler or one staying low (0x40, posture 1 or 2) can start only rows that register it (move, first aid, loot, talk, attacks, prospect, sleep; not carry, put down 69, stealth KO 228, Splint
 Rigging 250, operate, build, repair, dismantle, put in bed, sit 275, ditch 242, set free 110, unlock door 140, put in cage 108, smash 226); an animal only 0x20 rows (so no bed, no carry,
 no loot 26 / 177 / 42, no first aid, no operate, no medic, no lock, cage or door work but smashing 226; it may pick up items, 3 (Meitou: a player's animal only with the Advanced setting
-"Animals pick up items", off by default, `PlayerSystem.AnimalsPickUp`, and only into its bag, its grid being shut; a limb for its mouth always); job 289 is animal-only, so a human with that job never runs it).
+"Animals pick up items", whose Faithful side is on and Meitou side (the default) off, `PlayerSystem.AnimalsPickUp`, and only into its bag, its grid being shut; a limb for its mouth always); job 289 is animal-only, so a human with that job never runs it).
 Loot is 26 for the orders, 177 for NPC scavenging and 42 for an NPC arming itself. The engine's starts test their rows too ("Task starts"): a refused errand walk counts
 as a walk that ended short (the errand gives up after its tries); a refused standing task (`TaskStart.Become`) gives way to 14 Idleness, which every repertoire registers (a crippled
 character does not wander, 24, after a flight, a trade or at a roaming mill). Rows with no TaskData (shoo 158, ransack 216, liberate 276, approach 126, the arrest cage walk 206, the
@@ -616,8 +615,10 @@ orders find eligible still patients, walk to reach and apply aid serially. The m
 update budget's turns ([character-stats.md](game/character-stats.md#time), which owns the original rules).
 
 Limbs: `HealthPart.Limb` / `Replacement` / `ReplacementItem` per slot; saves round-trip them ([save.md](formats/save.md#limbs-medical_state-limbs)).
-A severed limb queues (character, limb) on `CharacterTable.LimbsChanged`; between ticks the population system rebuilds the look
-(`Loadout.Limbs`: stump or prosthetic mesh, natural limb hidden) and drops the race's severed-limb item (Ground items). Prosthetics are
+A severed limb queues (character, limb, drops) on `CharacterTable.LimbsChanged`; between ticks the population system rebuilds the look
+(`Loadout.Limbs`: stump or prosthetic mesh, natural limb hidden) and drops the race's severed-limb item (Ground items), except for an eaten
+limb: the sever's third argument gates the item, 1 from a blow, the medical tick and the rack, 0 from being eaten (`FUN_14064f300`,
+`FUN_14064f5c0`, `FUN_14029af90`, `FUN_140650370`, **Verified** by decompile). Prosthetics are
 fitted and removed by holding them onto or off the limbs window's slots (a `*_replace` section takes a LIMB_REPLACEMENT of its side on a stump; lifting a fitted one leaves a
 stump; [held item](#items-and-eating), rules in [character-stats.md](game/character-stats.md)) or by a right click (`QuickMoveItem`).
 
@@ -1658,7 +1659,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
 - **Engine gaps:**
   - A quick right click on the player's furnace walks the selection there and opens its window
     (the original's 26 LOOT_TARGET); on the player's turret the nearest able selected character operates it (146 USE_TURRET, `UseTurretOrder`): it
-    walks to its gunner spot (as for town turrets below), stands there facing it holding `combatstance`, counts as its operator (so it draws power) and the
+    walks to its gunner spot (as for town turrets below) and mans it from within the turret's `use range` of its position (doubled once stopped, at the
+    spot's height; the original's arrival rule, [work distance](game/buildings-production.md), no settle slack), facing it holding `combatstance`, counts as its operator (so it draws power) and the
     combat system fires it ([Ranged](#ranged)); one gunner, engine choice; someone else at it: "is already in use".
   - Plants are not drawn.
 
