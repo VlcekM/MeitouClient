@@ -271,8 +271,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// <summary>
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu,
     /// so the cage's own verbs come here (engine stand-ins for the original's cage menu beside the occupant's): Unlock or Lock the player's own cage
-    /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, from
-    /// outside), and once it is open Escape (207, the selected prisoner), Set Free (110), or Pick Up (225, a mate lifts it out; out of another
+    /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, the
+    /// same), and once it is open Escape (207, the selected prisoner), Set Free (110), or Pick Up (225, a mate lifts it out; out of another
     /// faction's cage a crime, locks.md "Cages and beds").
     /// </summary>
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
@@ -302,7 +302,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
             }
 
             // Another faction's locked cage also has Use Tools and Use Strength (285, 286; FUN_1407a6bc0 tests the lock and owner, not the occupant),
-            // worked from outside.
+            // worked from outside or by the prisoner on its own.
             if (prison.CageId is { } cage && !ownCage)
             {
                 verbs.Add(("Use Tools", () => player.Say(new ForceLockOrder([], cage, LockForce.Tools) { Tick = player.Session.World.Tick })));

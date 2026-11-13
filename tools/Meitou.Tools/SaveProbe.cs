@@ -69,6 +69,7 @@ static class SaveProbe
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
+            case ("force", >= 2): Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength); return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
             case ("talk", >= 1): Talk(probe, a[0]); return true;
@@ -479,7 +480,29 @@ static class SaveProbe
         Console.WriteLine($"{probe.Who(who)} inWhat={c.InWhat} inSomething={c.InSomething}");
 
         foreach (var f in probe.World.Fixtures.All.Where(f => Vector2.Distance(new(f.Position.X, f.Position.Z), new(at.X, at.Z)) < 300))
-            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)}");
+        {
+            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)} "
+                + $"designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
+        }
+    }
+
+    /// <summary>
+    /// Orders the first character named like <paramref name="name"/>, a prisoner, to cut or break its own cage's lock and follows it for 120 ticks.
+    /// </summary>
+    static void Force(ProbeWorld probe, string name, LockForce force)
+    {
+        int who = probe.Named(name)[0];
+        var c = probe.Characters.Cold(who)!;
+        var cage = probe.World.Fixtures.Find(c.InWhat!)!;
+        probe.World.Commands.Enqueue(new ForceLockOrder([probe.Characters.IdOf(who)], cage.Id, force) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < 6; round++)
+        {
+            probe.Tick(20);
+            Console.WriteLine($"tick {probe.World.Tick} {probe.Who(who)} forcing={c.ForcingLock} locked={cage.Lock?.EffectivelyLocked} "
+                + $"hardness={cage.Lock?.Hardness:F2} in={c.InSomething}");
+            probe.PrintMessages();
+        }
     }
 
     /// <summary>
@@ -704,7 +727,8 @@ static class SaveProbe
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
-              cages <name>             fixtures within 300 of a character, with occupants
+              cages <name>             fixtures within 300 of a character, with occupants and building designation
+              force <name> <tools|strength>  a caged character cuts or breaks its own cage's lock; 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               talk <name>              whether a character can be talked to, and its talk roots
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted

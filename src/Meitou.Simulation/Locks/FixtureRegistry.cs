@@ -43,6 +43,11 @@ public sealed partial class FixtureRegistry
     public const float CageSearchScale = 4608;
 
     /// <summary>
+    /// BuildingDesignation 7, the police station (the bounty desk squads' and the police's <c>building designation</c>).
+    /// </summary>
+    const int PoliceDesignation = 7;
+
+    /// <summary>
     /// A sentence above this bounty is <see cref="LifeSentence"/> hours (economy.md 11.5).
     /// </summary>
     public const int LifeBounty = 25000;
@@ -1639,11 +1644,19 @@ public sealed partial class FixtureRegistry
         SetSentence(world, c, cage, prisonTime);
 
         // FUN_140330600 assigns the cage's owner handle as well as slave state 1. The resident squad stands in for that handle here.
-        if (c.SlaveOwner >= 0 && cage.Owner >= 0) Enslave(world, c, cage.Owner, CageMaster(world, cage));
+        if (TakesSlave(c, cage)) Enslave(world, c, cage.Owner, CageMaster(world, cage));
 
         NoteCaging(world, prisoner, cage, carrier);
         return true;
     }
+
+    /// <summary>
+    /// Whether caging <paramref name="c"/> makes it the cage owner's slave (<c>FUN_140330600</c>, <b>Observed</b>): it has an owner already, the
+    /// cage has one, and the cage's building (its parent, <c>+0xc4</c>) is no police station. A slaver's captive or an ex-slave jailed there keeps
+    /// its owner and state.
+    /// </summary>
+    bool TakesSlave(CharacterCold c, Fixture cage) =>
+        c.SlaveOwner >= 0 && cage.Owner >= 0 && RecordOf(cage.Building)?.Designation != PoliceDesignation;
 
     /// <summary>
     /// A caged character's sentence from the captor faction's booked bounty, or no sentence when it has none.
