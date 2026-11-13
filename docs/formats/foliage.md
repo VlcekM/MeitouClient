@@ -38,8 +38,10 @@ Algorithm verification does not establish screenshot parity for complete generat
   (`player_town_template`, 1000; `FoliageWorld.ExtraTowns`, fed by `NavSystem.SetPlayerTowns` from the snapshot's outposts, owned flag = the player's faction). A town founded, moved or gone drops the
   kept obstacles of the zones it can change (within the larger of its range and the level's largest range, since it can become the nearest town for points a level town covered)
   and builds the loaded zones again, and the navmesh cache key (`BuildingHash`) carries the towns near the zone. Timing differs from the original, which re-places a zone's foliage only when
-  it pages in: Meitou builds again at once, the nearest approximation (the original's exact trigger is **Unknown**). Not modelled: the drawn foliage (`FoliageRenderer`, its layout cache keyed by the level's
-  towns and the load-time `PlayerTowns` snapshot) still shows the rocks the navmesh no longer has, so a rock can be drawn that is walked through.
+  it pages in: Meitou builds again at once, the nearest approximation (the original's exact trigger is **Unknown**).
+  The drawn foliage uses the same list (round 11, **Observed**: the three Goonrock boulder spots draw empty ground): `FoliageRenderer.SetPlayerTowns`, fed from `BuildingSync` with
+  `NavRuntimeBuildings.FoliageTowns`, sets `FoliageWorld.ExtraTowns` on each worker's layout and drops the laid-out zones a changed town can reach (a layout already running keeps what it started
+  with). A zone a town reaches is neither read from nor saved to the layout cache (`FoliageWorld.ExtraTownsReach`: the cache key knows only the level's towns).
   A town with range 0 keeps nothing away (**Observed**: Newwworld's The Hub `18919-Newwworld.mod`, so its trees grow among the buildings, issue #522).
 - **No building test** (**Verified (decompiled)**, `FUN_1406d2410`): the mesh placer rejects by slope, zone, town range, altitude and the overlay's road
   channel only (the grid test there is the overlay A byte, `FUN_1406d82d0`); nothing checks buildings, so a tree can stand in a building's yard or room.
