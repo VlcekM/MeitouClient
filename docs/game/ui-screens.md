@@ -804,7 +804,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     player's, its town to that one. So slot 113 reads the player's faction once a player character starts working the rock; before, "No Faction" (**Verified**:
     every class branch of the factory builds the town hand from the town's own handle, `FUN_1407925c0`, and NO_TOWN's is type 0xd, registered in
     `DAT_142133fc8`, the registry `FUN_1400f6c20` → `FUN_1409f9100` asks for a type 0xd hand; NO_TOWN is explored, +0x181 = 1, and not secret).
-    Not saved (the original saves no rock). Meitou: `ProductionSystem` sets the rock's owner on arrival, its town by the outposts' radius
+    No rock state was seen in the original's saves (**Observed**); Meitou saves a worked rock ([rock machines](../formats/save.md)). Meitou: `ProductionSystem` sets the rock's owner on arrival, its town by the outposts' radius
     (`RichnessView.Owner` / `TownName`); `Town:` shows only that town.
   Meitou (`ProductionWindows`, `MachineSnapshot.Efficiency` and `Panel`): the lines per class as above, unmined rocks too (0 workers), the turret's
   section 7 in `ExtendedStatsText` while the panel is expanded; the turret's gun lines from `WorldSnapshot.InspectedTurret` (`CombatSystem.TurretPanelOf`; a

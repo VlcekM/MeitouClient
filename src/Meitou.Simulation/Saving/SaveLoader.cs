@@ -195,7 +195,7 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// The research, the player's buildings and machines, the NPC town machines and the zones' loose items.
+    /// The research, the player's buildings and machines, the NPC town and rock machines and the zones' loose items.
     /// </summary>
     static void LoadWorks(World world, SaveGame save, PopulationData data, int playerIndex, LoadedSave loaded)
     {
@@ -210,9 +210,12 @@ public static class SaveLoader
         if (playerFaction is not null && world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
             MachineSave.Read(save, world, production, data.Items);
 
-        // The machines of NPC town buildings (docs/formats/save.md "Town machines").
+        // The machines of NPC town buildings and of worked rocks (docs/formats/save.md "Town machines", "Rock machines").
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } townProduction)
+        {
             TownMachineSave.Read(camera.Record, world, townProduction, TownMachineSave.Resolver(data));
+            RockMachineSave.Read(camera.Record, world, townProduction);
+        }
 
         // The loose items of the zone files (docs/simulation.md "Ground items"); a zone with a file is not loaded fresh (no nest items are laid
         // there).

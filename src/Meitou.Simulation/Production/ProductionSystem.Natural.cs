@@ -10,7 +10,7 @@ namespace Meitou.Simulation.Production;
 /// Natural sites (docs/simulation.md "Production"; the original's rocks are ProductionBuildings with "is foliage", docs/game/buildings-production.md
 /// "Resources"): a rock the foliage system places is worked like a player's mine. It is no BuildSite of the registry: its site is made from its id, a
 /// pure function of the rock's BUILDING and position, so orders and perma-jobs name it and a saved job finds it again. Its machine lives in
-/// World.Machines like any other and is not saved (the original saves no rock either, Observed).
+/// World.Machines like any other and is saved as Meitou-only keys (Saving/RockMachineSave; no rock state was seen in the original's saves).
 /// </summary>
 public sealed partial class ProductionSystem
 {
@@ -116,40 +116,82 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a
-    /// rock source, one of that BUILDING must stand within a unit of the position. Owned by no faction (-1: the original's <c>nofac</c> of its town
-    /// NO_TOWN) until a player character works it; complete.
+    /// The rock a natural id names (<see cref="ParseNatural"/>); with a rock source, one of that BUILDING must stand within a unit of the position.
+    /// A rock restored from a save (<see cref="RestoreRock"/>) keeps its owner and town.
     /// </summary>
     BuildSite? Natural(string id)
     {
         if (!IsNatural(id)) return null;
         if (_naturalSites.TryGetValue(id, out var known)) return known;
-        BuildSite? site = null;
-        int at = id.LastIndexOf('@');
-        var parts = at > 0 ? id[(at + 1)..].Split(',') : [];
-        if (parts.Length == 3 && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
-            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
-        {
-            string record = id[NaturalPrefix.Length..at];
-            var position = new Vector3(x, y, z);
-            if (_db.Find(record) is { Type: FcsRecordType.Building } building && building.GetBool("is foliage")
-                && Data(record) is { Operable: true, Resource: not 0 })
-            {
-                // No rock there is not remembered: the host's rock source may not have placed that zone yet.
-                if (_nodes is not null)
-                {
-                    if (_nodes.Near(0, x, z, 1).FirstOrDefault(n => n.Record == record) is not { Record.Length: > 0 } rock) return null;
-                    _naturalBounds[id] = new RockBounds(rock.Centre ?? rock.Position, rock.Radius, rock.Shape, rock.Transform);
-                }
+        if (ParseNatural(id) is not { } site) return _naturalSites[id] = null;
 
-                site = new BuildSite { Id = id, Record = record, Name = building.Name, Position = position, Owner = -1, Materials = [],
-                    Complete = true };
-            }
+        // No rock there is not remembered: the host's rock source may not have placed that zone yet.
+        if (_nodes is not null)
+        {
+            var at = site.Position;
+            if (_nodes.Near(0, at.X, at.Z, 1).FirstOrDefault(n => n.Record == site.Record) is not { Record.Length: > 0 } rock) return null;
+            _naturalBounds[id] = new RockBounds(rock.Centre ?? rock.Position, rock.Radius, rock.Shape, rock.Transform);
         }
 
+        if (_restoredRocks.Remove(id, out var restored)) site = restored;
         return _naturalSites[id] = site;
     }
+
+    /// <summary>
+    /// The site a natural id describes, whether or not a rock stands there yet: a BUILDING with <c>is foliage</c> whose machine is an operable mine
+    /// of a <c>world resource mining</c>. Owned by no faction (-1: the original's <c>nofac</c> of its town NO_TOWN) until a player character works
+    /// it; complete. Null for an id naming no such BUILDING.
+    /// </summary>
+    BuildSite? ParseNatural(string id)
+    {
+        int at = id.LastIndexOf('@');
+        var parts = at > 0 ? id[(at + 1)..].Split(',') : [];
+        if (parts.Length != 3 || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+            return null;
+
+        string record = id[NaturalPrefix.Length..at];
+        if (_db.Find(record) is not { Type: FcsRecordType.Building } building || !building.GetBool("is foliage")) return null;
+        if (Data(record) is not { Operable: true, Resource: not 0 }) return null;
+
+        return new BuildSite { Id = id, Record = record, Name = building.Name, Position = new Vector3(x, y, z), Owner = -1, Materials = [],
+            Complete = true };
+    }
+
+    /// <summary>
+    /// The sites of rocks a save restored before the host's rock source placed them, by id: <see cref="Natural"/> takes one when its rock appears.
+    /// </summary>
+    readonly Dictionary<string, BuildSite> _restoredRocks = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The machine of a worked rock read from a save (docs/formats/save.md "Rock machines"): made empty with the given owner and player town, for
+    /// the caller to fill. Null for an id naming no rock, or one that already has a machine.
+    /// </summary>
+    public Machine? RestoreRock(World world, string id, int owner, int town)
+    {
+        if (!IsNatural(id) || world.Machines.Find(id) is not null || ParseNatural(id) is not { } site) return null;
+        if (Create(world, site) is not { } m) return null;
+
+        site.Owner = owner;
+        site.Town = town;
+        _restoredRocks[id] = site;
+        _naturalSites.Remove(id);
+
+        world.Machines.Add(m);
+        return m;
+    }
+
+    /// <summary>
+    /// The owner and player town of a worked rock's site, for the save; (-1, 0) for one not resolved yet (a restored rock not placed again).
+    /// </summary>
+    public (int Owner, int Town) RockClaim(string id) =>
+        (_naturalSites.GetValueOrDefault(id) ?? _restoredRocks.GetValueOrDefault(id)) is { } site ? (site.Owner, site.Town) : (-1, 0);
+
+    /// <summary>
+    /// Whether a rock restored from a save still waits for the rock source to place it: its machine is kept, not dropped as a gone site's.
+    /// </summary>
+    bool RockAwaited(string id) => _restoredRocks.ContainsKey(id);
 
     /// <summary>
     /// The rocks' resource yields by building instance, read from the resource map on first use.

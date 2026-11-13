@@ -23,46 +23,23 @@ public static class TownMachineSave
     const string Prefix = "meitou tm";
 
     /// <summary>
-    /// The key of entry <paramref name="i"/> with the given part.
+    /// The key of entry <paramref name="i"/>.
     /// </summary>
-    static string Key(int i, string part = "") => Prefix + i.ToString(CultureInfo.InvariantCulture) + part;
+    static string Key(int i) => Prefix + i.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Writes the town machines over the camera record's entries (the old ones removed first).
     /// </summary>
     public static void Write(FcsRecord camera, World world)
     {
-        for (int i = 0; camera.Strings.ContainsKey(Key(i)); i++)
-        {
-            var keys = camera.Strings.Keys.Concat(camera.Floats.Keys).Concat(camera.Ints.Keys)
-                .Where(k => k.StartsWith(Key(i), StringComparison.Ordinal))
-                .ToList();
-            foreach (var k in keys)
-            {
-                camera.Strings.Remove(k);
-                camera.Floats.Remove(k);
-                camera.Ints.Remove(k);
-            }
-        }
+        Clear(camera, Prefix);
 
         int n = 0;
         foreach (var m in world.Machines.All)
         {
             if (!ProductionSystem.IsTownWork(m.Site)) continue;
             camera.Strings[Key(n)] = m.Site[ProductionSystem.TownWorkPrefix.Length..];
-            camera.Ints[Key(n, " st")] = m.Status;
-            if (m.Output is { } o)
-            {
-                camera.Floats[Key(n, " out")] = o.Progress;
-                camera.Ints[Key(n, " outn")] = o.Count;
-            }
-
-            for (int k = 0; k < m.Inputs.Length; k++)
-            {
-                camera.Ints[Key(n, " in" + k.ToString(CultureInfo.InvariantCulture))] = m.Inputs[k].Count;
-                camera.Floats[Key(n, " lv" + k.ToString(CultureInfo.InvariantCulture))] = m.Inputs[k].Level;
-            }
-
+            WriteState(camera, Key(n), m);
             n++;
         }
     }
@@ -98,21 +75,70 @@ public static class TownMachineSave
         for (int i = 0; camera.Strings.TryGetValue(Key(i), out var key); i++)
         {
             if (resolve(key) is not { } found || production.TownWork(world, found.Building, found.Owner) is not { } m) continue;
-            m.Status = (byte)camera.Ints.GetValueOrDefault(Key(i, " st"), m.Status);
-            if (m.Output is { } o)
-            {
-                o.Progress = camera.Floats.GetValueOrDefault(Key(i, " out"));
-                o.Count = Math.Clamp(camera.Ints.GetValueOrDefault(Key(i, " outn")), 0, o.Recipe.Capacity);
-            }
-
-            for (int k = 0; k < m.Inputs.Length; k++)
-            {
-                string part = k.ToString(CultureInfo.InvariantCulture);
-                m.Inputs[k].Count = Math.Clamp(camera.Ints.GetValueOrDefault(Key(i, " in" + part)), 0, m.Inputs[k].Recipe.Capacity);
-                m.Inputs[k].Level = camera.Floats.GetValueOrDefault(Key(i, " lv" + part));
-            }
+            ReadState(camera, Key(i), m);
         }
 
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Removes the entries of the keys <paramref name="prefix"/>&lt;i&gt; (each with its parts) from the camera record.
+    /// </summary>
+    internal static void Clear(FcsRecord camera, string prefix)
+    {
+        for (int i = 0; camera.Strings.ContainsKey(prefix + i.ToString(CultureInfo.InvariantCulture)); i++)
+        {
+            string entry = prefix + i.ToString(CultureInfo.InvariantCulture);
+            var keys = camera.Strings.Keys.Concat(camera.Floats.Keys).Concat(camera.Ints.Keys).Concat(camera.Bools.Keys)
+                .Where(k => k.StartsWith(entry, StringComparison.Ordinal) && (k.Length == entry.Length || k[entry.Length] == ' '))
+                .ToList();
+            foreach (var k in keys)
+            {
+                camera.Strings.Remove(k);
+                camera.Floats.Remove(k);
+                camera.Ints.Remove(k);
+                camera.Bools.Remove(k);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes a machine's status, output and inputs as the parts of the entry <paramref name="entry"/>.
+    /// </summary>
+    internal static void WriteState(FcsRecord camera, string entry, Machine m)
+    {
+        camera.Ints[entry + " st"] = m.Status;
+        if (m.Output is { } o)
+        {
+            camera.Floats[entry + " out"] = o.Progress;
+            camera.Ints[entry + " outn"] = o.Count;
+        }
+
+        for (int k = 0; k < m.Inputs.Length; k++)
+        {
+            string part = k.ToString(CultureInfo.InvariantCulture);
+            camera.Ints[entry + " in" + part] = m.Inputs[k].Count;
+            camera.Floats[entry + " lv" + part] = m.Inputs[k].Level;
+        }
+    }
+
+    /// <summary>
+    /// Reads a machine's status, output and inputs from the parts of the entry <paramref name="entry"/> (counts clamped to the slots' capacities).
+    /// </summary>
+    internal static void ReadState(FcsRecord camera, string entry, Machine m)
+    {
+        m.Status = (byte)camera.Ints.GetValueOrDefault(entry + " st", m.Status);
+        if (m.Output is { } o)
+        {
+            o.Progress = camera.Floats.GetValueOrDefault(entry + " out");
+            o.Count = Math.Clamp(camera.Ints.GetValueOrDefault(entry + " outn"), 0, o.Recipe.Capacity);
+        }
+
+        for (int k = 0; k < m.Inputs.Length; k++)
+        {
+            string part = k.ToString(CultureInfo.InvariantCulture);
+            m.Inputs[k].Count = Math.Clamp(camera.Ints.GetValueOrDefault(entry + " in" + part), 0, m.Inputs[k].Recipe.Capacity);
+            m.Inputs[k].Level = camera.Floats.GetValueOrDefault(entry + " lv" + part);
+        }
     }
 }
