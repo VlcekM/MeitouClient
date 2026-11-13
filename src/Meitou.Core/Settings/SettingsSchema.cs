@@ -335,6 +335,11 @@ public sealed record SettingDescription
     /// shows it either way).
     /// </summary>
     public SettingCondition? ShownWhen { get; set; }
+    /// <summary>
+    /// The renderer the setting belongs to (<c>vulkan</c> or <c>metal</c>); the launcher shows it only while the game would start with that one.
+    /// Null: both (an older launcher shows it either way).
+    /// </summary>
+    public string? Renderer { get; set; }
 
     /// <summary>
     /// How the slider reads at <paramref name="value"/>: <see cref="OffText"/>, a label, or the scaled, formatted value with its suffix.
@@ -369,7 +374,8 @@ public sealed record SettingMode
 }
 
 /// <summary>
-/// A setting (<see cref="Key"/>) at one of its whole values: a choice's index from its slider's left end, a switch's 1 or 0.
+/// A setting (<see cref="Key"/>) at one of its whole values (or, with <see cref="Not"/>, at any other): a choice's index from its slider's left end,
+/// a switch's 1 or 0; with <see cref="And"/> another condition must hold too.
 /// </summary>
 public sealed record SettingCondition
 {
@@ -381,6 +387,20 @@ public sealed record SettingCondition
     /// The whole value that setting must be at.
     /// </summary>
     public float Value { get; set; }
+    /// <summary>
+    /// The condition holds while the setting is at any value but <see cref="Value"/>. An older launcher ignores it.
+    /// </summary>
+    public bool Not { get; set; }
+    /// <summary>
+    /// A second condition that must hold as well. An older launcher ignores it.
+    /// </summary>
+    public SettingCondition? And { get; set; }
+
+    /// <summary>
+    /// Whether the condition holds, <paramref name="valueOf"/> giving a setting's value by key (null: unknown, the condition then holds).
+    /// </summary>
+    public bool Holds(Func<string, float?> valueOf) =>
+        (valueOf(Key) is not { } value || Matches(value) != Not) && (And?.Holds(valueOf) ?? true);
 
     /// <summary>
     /// Whether <paramref name="value"/> rounds to <see cref="Value"/> (within half a step either way).

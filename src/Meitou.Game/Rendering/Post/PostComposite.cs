@@ -86,6 +86,10 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly FxaaPass _fxaa;
     /// <summary>
+    /// The nearest-pixel stretch of a picture to a larger target.
+    /// </summary>
+    readonly StretchPass _stretch;
+    /// <summary>
     /// SMAA's three passes.
     /// </summary>
     readonly SmaaPasses _smaa;
@@ -184,6 +188,7 @@ sealed class PostComposite : IDisposable
         _shaftScatterP = new ShaftScatterPass(ctx, vertex);
         _shaftApplyP = new ShaftApplyPass(ctx, vertex);
         _fxaa = new FxaaPass(ctx, vertex);
+        _stretch = new StretchPass(ctx, vertex);
         _smaa = new SmaaPasses(ctx, vertex);
         _haze = new HeatHazePass(ctx, vertex);
         _particleDepthP = new ParticleDepthPass(ctx, vertex);
@@ -303,6 +308,17 @@ sealed class PostComposite : IDisposable
             picture = hazeOn ? _ldrFxaa! : target;
         }
         if (hazeOn) RunHeatHaze(cmd, depth, target, picture, o, inputs);
+    }
+
+    /// <summary>
+    /// <paramref name="picture"/> copied into <paramref name="target"/> at the target's size with the nearest pixel (no filtering: a render size that
+    /// divides the target's is shown as exact blocks of pixels).
+    /// </summary>
+    public void Stretch(IGpuCommandList cmd, GpuTexture picture, GpuTexture target)
+    {
+        var s = _stretch;
+        s.P.Bind(s.Image, _pointSampler with { View = picture.View() });
+        Fullscreen(cmd, s.P, target, target.Desc.Width, target.Desc.Height);
     }
 
     /// <summary>
@@ -880,6 +896,7 @@ sealed class PostComposite : IDisposable
         _shaftScatterP.P.Dispose();
         _shaftApplyP.P.Dispose();
         _fxaa.P.Dispose();
+        _stretch.P.Dispose();
         _smaa.Dispose();
         _haze.P.Dispose();
         _particleDepthP.P.Dispose();
@@ -1113,6 +1130,22 @@ sealed class PostComposite : IDisposable
         /// </summary>
         public FxaaPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Fxaa, "post fxaa") =>
             (Image, Texel) = (P.Sampler("uImage"), P.Uniform("uTexel"));
+    }
+
+    /// <summary>
+    /// The stretch (<see cref="PostProcessShaders.Stretch"/>).
+    /// </summary>
+    sealed class StretchPass : Pass
+    {
+        /// <summary>
+        /// The program's sampler <c>uImage</c>.
+        /// </summary>
+        public readonly SamplerSlot Image;
+        /// <summary>
+        /// Compiles the program and resolves its sampler.
+        /// </summary>
+        public StretchPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Stretch, "post stretch") =>
+            Image = P.Sampler("uImage");
     }
 
     /// <summary>

@@ -223,7 +223,13 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, a slider with `modes`
   (named values; render scale's Ultra performance 0.33 to DLAA 1.00) a drop-down of them and Custom with the slider under it, locked to the
   mode's value but under Custom (the game's Display page alike; a value none of them reads Custom), any other slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A setting with `shownWhen` (`key`, `value`)
-  is shown only while that setting is at that value (the DLSS preset while anti-aliasing is DLSS; the game's Display page alike). A look setting that differs from the look's
+  is shown only while that setting is at that value (the DLSS preset while anti-aliasing is DLSS; the game's Display page alike); with `not`
+  at any other value, and with `and` another condition must hold too (older launchers ignore both). A setting with `renderer` (`vulkan`
+  or `metal`) is shown only while Play would start the game with that renderer (`GraphicsRenderer`, as `SetUpRenderer` picks it; no
+  `renderer`: always): the Vulkan anti-aliasing and upscaling rows are Vulkan's, and on macOS the schema adds Metal's Display rows
+  after the world tick: the switch `metalUseUpscaling` (default on) and two trees under it. On: `metalUpscaler` (MetalFX temporal, MetalFX
+  spatial, TAA) and `metalRenderScale` (modes). Off: `metalRetinaResolution` (while `fullScreen` is off), `metalRenderDivisor` (while it is on) and `metalUiAtScreenResolution` (always;
+  [metal-backend](metal-backend.md)). A look setting that differs from the look's
   value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
   as in the game's menu. Reset graphics, in a footer
   under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.

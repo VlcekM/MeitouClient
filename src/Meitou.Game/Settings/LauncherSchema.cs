@@ -23,6 +23,11 @@ static class LauncherSchema
     static readonly string[] LowMediumHigh = ["Low", "Medium", "High"];
 
     /// <summary>
+    /// The names a setting's <see cref="SettingDescription.Renderer"/> takes.
+    /// </summary>
+    const string VulkanRenderer = "vulkan", MetalRenderer = "metal";
+
+    /// <summary>
     /// The schema key of a <see cref="UserConfig"/> property: its name in camel case.
     /// </summary>
     static string Key(string property) => JsonNamingPolicy.CamelCase.ConvertName(property);
@@ -52,16 +57,18 @@ static class LauncherSchema
         Graphics(WorldFrame.TextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
             { Name = "Texture quality", Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
         Graphics(WorldFrame.FilteringSlider, 0, 4, 1, 4) with { Name = "Texture filtering", Labels = ["1x", "2x", "4x", "8x", "16x"] },
+        // The Vulkan renderer's anti-aliasing and upscaling; Metal has its own rows (MetalUpscalingSettings).
         Graphics(WorldFrame.UpscalerSliders[0], 0, 5, 1, 3) with
-            { Name = "Anti-aliasing/upscaling", Labels = ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"] },
+            { Name = "Anti-aliasing/upscaling", Labels = ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"], Renderer = VulkanRenderer },
         Graphics(WorldFrame.DlssPresetSlider, 0, UpscaleOptions.DlssPresets.Length - 1, 1, 0) with
         {
             Labels = [.. UpscaleOptions.DlssPresets.Select(p => p.Name)],
             ShownWhen = new() { Key = WorldFrame.UpscalerSliders[0], Value = 5 },   // anti-aliasing at DLSS
+            Renderer = VulkanRenderer,
         },
         Graphics(WorldFrame.UpscalerSliders[1], 0.33f, 1, 0.01f, Percent(UpscaleOptions.DefaultScale)) with
-            { Scale = 100, Suffix = " %", Modes = RenderScaleModes() },
-        Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with { Format = "0.00" },
+            { Scale = 100, Suffix = " %", Modes = RenderScaleModes(), Renderer = VulkanRenderer },
+        Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with { Format = "0.00", Renderer = VulkanRenderer },
         // World
         Graphics(WorldFrame.ObjectDistanceSlider, 1000, 400000, 100, Enhancements.MeitouObjectDistance) with { Logarithmic = true },
         Graphics(WorldFrame.LandmarkDistanceSlider, 1000, 400000, 100, Enhancements.MeitouLandmarkDistance) with { Logarithmic = true },
@@ -152,6 +159,18 @@ static class LauncherSchema
         new() { Name = "Quality", Value = Percent(1 / 1.5f) },
         new() { Name = "Ultra quality", Value = Percent(UpscaleOptions.UltraQualityScale) },
         new() { Name = "DLAA", Value = 1 },
+    ];
+
+    /// <summary>
+    /// The Metal render scale's quality modes, lowest first: the game's MetalFX presets (<c>MetalUpscaling</c>).
+    /// </summary>
+    static List<SettingMode> MetalScaleModes() =>
+    [
+        new() { Name = "Ultra performance", Value = 0.40f },
+        new() { Name = "Performance", Value = 0.50f },
+        new() { Name = "Balanced", Value = 0.59f },
+        new() { Name = "Quality", Value = 0.67f },
+        new() { Name = "Super quality", Value = 0.77f },
     ];
 
     /// <summary>
@@ -281,6 +300,64 @@ static class LauncherSchema
     ];
 
     /// <summary>
+    /// The Metal renderer's upscaling (docs/metal-backend.md "Upscaling"): the Use Metal upscaling switch, and two trees under it. On: the upscaler
+    /// (MetalFX, TAA) and the render scale. Off: in a window whether to render in its real or virtual Retina pixels, in full screen the render
+    /// resolution (the screen's pixels divided by 1 to 4), and whether the interface is drawn at the screen's size over the stretched picture.
+    /// </summary>
+    static SettingDescription[] MetalUpscalingSettings(UserConfig defaults)
+    {
+        var useUpscaling = Key(nameof(UserConfig.MetalUseUpscaling));
+        var upscalingOn = new SettingCondition { Key = useUpscaling, Value = 1 };
+        var upscalingOff = new SettingCondition { Key = useUpscaling, Value = 0 };
+        var fullScreen = Key(nameof(UserConfig.FullScreen));
+        var upscalingOffInFullScreen = upscalingOff with { And = new() { Key = fullScreen, Value = 1 } };
+        var upscalingOffInWindow = upscalingOff with { And = new() { Key = fullScreen, Value = 0 } };
+        return
+        [
+            new()
+            {
+                Key = useUpscaling, Kind = SettingKind.Toggle, Name = SettingsMenu.MetalUseUpscalingSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalUseUpscalingSlider), Default = defaults.MetalUseUpscaling ? 1 : 0,
+                On = "On", Off = "Off", Renderer = MetalRenderer,
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.MetalUpscaler)), Kind = SettingKind.Slider, Name = SettingsMenu.MetalPresetSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalPresetSlider), Default = (int)defaults.MetalUpscaler,
+                Shown = (int)defaults.MetalUpscaler, Min = (int)MetalUpscalerMode.Temporal, Max = (int)MetalUpscalerMode.Taa, Step = 1,
+                Labels = ["MetalFX temporal", "MetalFX spatial", "TAA (experimental)"], ShownWhen = upscalingOn, Renderer = MetalRenderer,
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.MetalRenderScale)), Kind = SettingKind.Slider, Name = SettingsMenu.MetalRenderScaleSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalRenderScaleSlider), Default = defaults.MetalRenderScale,
+                Shown = defaults.MetalRenderScale, Min = 0.4f, Max = 1, Step = 0.01f, Scale = 100, Suffix = " %", Modes = MetalScaleModes(),
+                ShownWhen = upscalingOn, Renderer = MetalRenderer,
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.MetalRetinaResolution)), Kind = SettingKind.Toggle, Name = SettingsMenu.MetalRetinaResolutionSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalRetinaResolutionSlider), Default = defaults.MetalRetinaResolution ? 1 : 0,
+                On = "On", Off = "Off", ShownWhen = upscalingOffInWindow, Renderer = MetalRenderer,
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.MetalRenderDivisor)), Kind = SettingKind.Slider, Name = SettingsMenu.MetalRenderResolutionSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalRenderResolutionSlider), Default = defaults.MetalRenderDivisor,
+                Shown = defaults.MetalRenderDivisor, Min = 1, Max = UserConfig.MetalRenderDivisorMax, Step = 1,
+                Labels = ["Screen resolution", .. Enumerable.Range(2, UserConfig.MetalRenderDivisorMax - 1).Select(d => $"Screen / {d}")],
+                ShownWhen = upscalingOffInFullScreen, Renderer = MetalRenderer,
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.MetalUiAtScreenResolution)), Kind = SettingKind.Toggle, Name = SettingsMenu.MetalUiResolutionSlider,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalUiResolutionSlider), Default = defaults.MetalUiAtScreenResolution ? 1 : 0,
+                On = "On", Off = "Off", ShownWhen = upscalingOff, Renderer = MetalRenderer,
+            },
+        ];
+    }
+
+    /// <summary>
     /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of
     /// the given sliders.
     /// </summary>
@@ -313,6 +390,7 @@ static class LauncherSchema
                 Description = SettingsMenu.TickAheadHint, Default = (int)defaults.TickAhead, Shown = (int)defaults.TickAhead, Min = 0, Max = 2,
                 Step = 1, Labels = [.. SettingsMenu.TickAheadChoices],
             },
+            .. (OperatingSystem.IsMacOS() ? MetalUpscalingSettings(defaults) : []),
             // Null defaults below: the game's value depends on the Faithful / Meitou mode and the computer until the setting is saved.
             .. sliders.Where(s => SettingsMenu.Section(s.Key) == "Display"),
         ],

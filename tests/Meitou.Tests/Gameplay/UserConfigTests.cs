@@ -57,10 +57,10 @@ public class UserConfigTests : IDisposable
         Assert.Equal(UserConfig.CurrentVersion, (int)oldSaved["version"]!);
         Assert.Empty(oldBackups);
 
-        var (config, saved, backups) = RoundTrip("""{"version": 3, "fpsLimit": 60, "brandNewKey": {"a": [1, 2]}}""");
+        var (config, saved, backups) = RoundTrip("""{"version": 99, "fpsLimit": 60, "brandNewKey": {"a": [1, 2]}}""");
 
         Assert.Equal(60, config.FpsLimit);
-        Assert.Equal(3, (int)saved["version"]!);
+        Assert.Equal(99, (int)saved["version"]!);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"a": [1, 2]}"""), saved["brandNewKey"]));
         Assert.Empty(backups);
     }
