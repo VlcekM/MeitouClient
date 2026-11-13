@@ -1649,6 +1649,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _shiftDown;
 
     /// <summary>
+    /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu repeats here, to scroll its lists: after 0.5 s,
+    /// then 30 times a second (the Windows defaults). No other key repeats.
+    /// </summary>
+    (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldMenuKey;
+
+    /// <summary>
     /// F11: the frame's stats panel.
     /// </summary>
     bool _statsVisible;
@@ -1710,9 +1716,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void HookKeyboard(Silk.NET.Input.IKeyboard keyboard)
     {
-        keyboard.KeyDown += (keyboard, key, _) => OnKeyDown(keyboard, key);
+        keyboard.KeyDown += (keyboard, key, _) =>
+        {
+            _heldMenuKey = key is SilkKey.Up or SilkKey.Down && host.DebugMenu.DebugMenuOpen
+                ? (keyboard, key, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
+            OnKeyDown(keyboard, key);
+        };
         keyboard.KeyUp += (_, key, _) =>
         {
+            if (_heldMenuKey?.Key == key) _heldMenuKey = null;
             if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight)
             {
                 _shiftDown = false;
@@ -1732,6 +1744,23 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
             else _hud?.UiText(value);
         };
+    }
+
+    /// <summary>
+    /// Repeats a held Up or Down in the debug menu (<see cref="_heldMenuKey"/>): when its time has come, again 30 times a second; a release or
+    /// the menu closing stops it.
+    /// </summary>
+    void RepeatMenuKey()
+    {
+        if (_heldMenuKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
+        if (!held.Keyboard.IsKeyPressed(held.Key) || !host.DebugMenu.DebugMenuOpen)
+        {
+            _heldMenuKey = null;
+            return;
+        }
+
+        _heldMenuKey = held with { Next = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 30 };
+        OnKeyDown(held.Keyboard, held.Key);
     }
 
     /// <summary>
@@ -2372,6 +2401,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     bool Frame()
     {
+        RepeatMenuKey();
         double now = _clock.Elapsed.TotalSeconds, frameStart = now, dt = now - _last;
         _last = now;
         TraceFrame(now, dt);
@@ -2914,9 +2944,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         if (host.DebugMenu.DebugMenuOpen && _hud is not null && !feedbackShot)
         {
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10");
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale);
             wrote = true;
         }
+
         if (_settings?.Visible == true && !feedbackShot)
         {
             _settings.Draw(size.X, size.Y, overlayPass);

@@ -37,7 +37,7 @@ public sealed partial class World
             or Dialogue.EndConversation or Dialogue.ConfirmCharacterTrade or Dialogue.CloseCharacterTrade
             or Construction.PlaceBuildings or Construction.CancelSite or Construction.ConfirmDismantle or Construction.PauseSite
             or Editing.EditCharacter or Editing.FinishCreation
-            or Locks.ToggleDoorsOrder or Locks.ToggleDoorLocksOrder or DebugGiveItem);
+            or Locks.ToggleDoorsOrder or Locks.ToggleDoorLocksOrder or DebugGiveItem or DebugPlaceItem);
         if (due.Count == 0) return;
 
         Characters.BeginTick();

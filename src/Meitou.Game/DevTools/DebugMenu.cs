@@ -117,6 +117,11 @@ sealed class DebugMenu(GameHost host)
         /// Switches explode on click.
         /// </summary>
         ExplodeClick,
+
+        /// <summary>
+        /// Opens the item picker; Enter on its last step drops the chosen item at the camera's target.
+        /// </summary>
+        DropItem,
     }
 
     /// <summary>
@@ -127,7 +132,7 @@ sealed class DebugMenu(GameHost host)
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)",
         "Max out skills", "Damage (cut)",
         "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)",
-            "Explosion level", "Explode at target", "Explode on click",
+            "Explosion level", "Explode at target", "Explode on click", "Drop item (at camera target)",
     ];
 
     /// <summary>
@@ -136,7 +141,7 @@ sealed class DebugMenu(GameHost host)
     static readonly (string Title, DebugRow[] Rows)[] DebugCheatSections =
     [
         ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
-        ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.Money, DebugRow.UnlockResearch]),
+        ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.DropItem, DebugRow.Money, DebugRow.UnlockResearch]),
         ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.ExplodeLevel, DebugRow.Explode,
             DebugRow.ExplodeClick]),
     ];
@@ -177,6 +182,11 @@ sealed class DebugMenu(GameHost host)
     /// The record each typed name means, by whether a character is wanted and the text; null when none matches.
     /// </summary>
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> _debugMatches = [];
+
+    /// <summary>
+    /// The Drop item row's sub-view: categories, name filter, quality, and the drops.
+    /// </summary>
+    readonly DebugItemPicker _itemPicker = new(host);
 
     /// <summary>
     /// The menu is open.
@@ -533,7 +543,7 @@ sealed class DebugMenu(GameHost host)
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode
-            or DebugRow.ExplodeClick));
+            or DebugRow.ExplodeClick or DebugRow.DropItem));
 
     /// <summary>
     /// The rows that open the body part list.
@@ -557,6 +567,12 @@ sealed class DebugMenu(GameHost host)
     internal void DebugMenuKey(EngineKey key)
     {
         host.Modding.EnsureDebugFields();
+        if (_itemPicker.Open)
+        {
+            _itemPicker.Key(key);
+            return;
+        }
+
         string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
         if (DebugParts is { } parts)
         {
@@ -589,6 +605,9 @@ sealed class DebugMenu(GameHost host)
                 _debugStatus = $"explosion {ExplodeLevels.Label(_explodeLevel)}: r={shown.Radius:0.#}, force {shown.Force:0.#}, "
                     + $"dmg {shown.Damage:0.#} (click: r={ExplodeLevels.Values(_explodeLevel, true).Radius:0.#}, "
                     + $"force {ExplodeLevels.Values(_explodeLevel, true).Force:0.#}, dmg {ExplodeLevels.Values(_explodeLevel, true).Damage:0.#})";
+                break;
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.DropItem:
+                _itemPicker.Begin();
                 break;
             case EngineKey.Enter or EngineKey.Right when DebugPicksPart(_debugRow):
                 DebugParts = (DebugRow)_debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
@@ -671,7 +690,8 @@ sealed class DebugMenu(GameHost host)
     internal void DebugMenuText(char c)
     {
         host.Modding.EnsureDebugFields();
-        if (DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
+        if (_itemPicker.Open) _itemPicker.Type(c);
+        else if (DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
     /// <summary>
@@ -1016,9 +1036,17 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): the title with the switches on, the
     /// rows (scrolled to the highlighted one), the selection, camera target and money, the hint with <paramref name="close"/> and the status.
+    /// <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display): the text and every size in the menu grow with it.
+    /// While the item picker is open it is drawn instead of the rows.
     /// </summary>
-    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false)
+    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1)
     {
+        if (_itemPicker.Open)
+        {
+            _itemPicker.Draw(o, width, height, top, scale, close, atRight);
+            return;
+        }
+
         var world = host.Session.World;
         var here = host.Session.Camera.Current.Target;
         // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
@@ -1032,16 +1060,16 @@ sealed class DebugMenu(GameHost host)
             : $"Up/Down pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
                 + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
-        float pad = 10, y0 = top + 16;
+        float pad = 10 * scale, y0 = top + 16 * scale, charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale;
         int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, 30)));
         // The title line names every switch that is on, cut with "+N more" to the panel's width.
         string title = $"Debug   ({close} closes)";
         if (onNames.Count > 0) title = DebugOnSummary(title, onNames, chars);
         chars = Math.Max(chars, title.Length);
-        float w = chars * o.CharWidth + 2 * pad;
+        float w = chars * charWidth + 2 * pad;
         // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view (titles take a little
         // extra height).
-        int room = (int)((height - y0 - 4 * pad) / o.LineHeight) - 6;
+        int room = (int)((height - y0 - 4 * pad) / lineHeight) - 6;
         int first = 0, count = lines.Count;
         if (count > room && room > 4)
         {
@@ -1049,33 +1077,33 @@ sealed class DebugMenu(GameHost host)
             first = Math.Clamp(at - room / 2, 0, count - room);
             count = room;
         }
-        float h = (count + 8) * o.LineHeight + 2 * pad;
-        float x0 = atRight ? Math.Max(8, width - w - 16) : 16;
+        float h = (count + 8) * lineHeight + 2 * pad;
+        float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
-        o.Text(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour);
-        y += 1.5f * o.LineHeight;
-        for (int i = first; i < first + count; i++, y += o.LineHeight)
+        o.TextScaled(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour, scale);
+        y += 1.5f * lineHeight;
+        for (int i = first; i < first + count; i++, y += lineHeight)
         {
             var (text, isTitle, highlight, on) = lines[i];
             if (isTitle)
             {
-                o.Text("-- " + text + " --", x0 + pad, y, dim);
+                o.TextScaled("-- " + text + " --", x0 + pad, y, dim, scale);
                 continue;
             }
-            if (on) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, DebugOnTint);
-            if (highlight) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            if (on) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, DebugOnTint);
+            if (highlight) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
             if (on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
-            o.Text(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour);
+            o.TextScaled(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour, scale);
         }
-        y += 0.5f * o.LineHeight;
-        o.Text(info, x0 + pad, y, dim);
-        o.Text(hint, x0 + pad, y + o.LineHeight, dim);
+        y += 0.5f * lineHeight;
+        o.TextScaled(info, x0 + pad, y, dim, scale);
+        o.TextScaled(hint, x0 + pad, y + lineHeight, dim, scale);
         // The status never sets the panel's width: it wraps to it, at most three lines, cut with "...".
         var status = WrapStatus(_debugStatus, chars, 3);
         for (int k = 0; k < status.Count; k++)
-            o.Text(status[k], x0 + pad, y + (2 + k) * o.LineHeight, new Vector4(1f, 0.9f, 0.4f, 1));
+            o.TextScaled(status[k], x0 + pad, y + (2 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
         o.Flush(width, height);
     }
 
@@ -1157,6 +1185,9 @@ sealed class DebugMenu(GameHost host)
                 case DebugRow.Godmode:
                     value = OnOff(world.Player.Godmode);
                     rowOn = world.Player.Godmode;
+                    break;
+                case DebugRow.DropItem:
+                    value = "Enter: pick an item";
                     break;
                 case DebugRow.ExplodeClick:
                     rowOn = ExplodeClickOn;

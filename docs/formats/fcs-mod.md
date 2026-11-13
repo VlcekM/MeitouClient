@@ -166,6 +166,22 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
   also has many enums built in (e.g. `DialogConditionEnum`, `DialogActionEnum`) that aren't in the
   .def files; the dialogue ones are in [dialogue](../game/dialogue.md#enums).
 
+## Item categories
+
+What tells item records apart, for lists of every item (the debug menu's Drop item picker, `DebugItemCatalog`). The record type is the first level;
+the second is one int field per type (names from the editor's built-in enums, **Verified** by decompiling `forgotten construction set.exe`: they are not in
+`fcs_enums.def`; the item counts are **Observed** on the vanilla install, 568 named item records):
+
+| Type | Field | Values |
+| --- | --- | --- |
+| WEAPON | `skill category` (`WeaponCategory`) | 0 Katanas, 1 Sabres, 2 Blunt, 3 Heavy, 4 Hackers, 5 Unarmed, 6 Bow, 7 Turret, 8 Polearms, 9-20 creature attacks, 21 none |
+| ARMOUR | `slot` (`AttachSlot`, `fcs_enums.def`; default 5 Body) | 0 Weapon, 1 Back, 2 Hair, 3 Hat, 4 Eyes, 5 Body, 6 Legs, 7 None, 8 Shirt, 9 Boots, 10 Gloves, 11 Neck, 12 Backpack, 13 Beard, 14 Belt |
+| ITEM | `item function` (`ItemFunction`) | 0 none, 1 first aid, 2 med rigging (splints), 3 food, 4 container, 5 weapon, 6 clothing, 7 unused, 8 narcotic, 9 tool, 10 anything, 11 blueprint, 12 robot repair, 13 book, 14 money, 15 restricted food (raw meat), 16 ammo, 17 severed limb |
+| LIMB_REPLACEMENT | `slot` (`LimbSlot`) | 50 left arm, 51 right arm, 52 left leg, 53 right leg |
+
+CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugGiveItem.QualityTypes`): armour, crossbows and limbs are graded 5 / 20 /
+40 / 60 / 80 / 95 (Prototype to Masterwork, `ArmourTooltip.GradeNames`); a weapon is graded by a MATERIAL_SPECS_WEAPON model that a WEAPON_MANUFACTURER lists in `weapon models` (value 0 = level; **Observed** on the vanilla install with Rebirth: the player's `PLAYER_WEAPONS` maker lists levels 5 to 80, and the Meitou grade, level 100, is only in a Rebirth maker's list).
+
 ## Open questions
 
 - The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.

@@ -1827,7 +1827,7 @@ sealed class GameLoop(GameHost host)
         }
         if (host.DebugMenu.DebugMenuOpen)
             host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
-                atRight: host.DebugMenu.StatsVisible);
+                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
         if (host.Player.WorldMap.MapPick is not null && host.Player.WorldMap.MapTabShown) host.DebugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.ExplodeClickOn) host.DebugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.InspectorMenuOpen) host.DebugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
@@ -1836,6 +1836,11 @@ sealed class GameLoop(GameHost host)
         host.DebugMenu.Profiler?.Draw(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.DrawVram(overlay, size.X, size.Y);
     }
+
+    /// <summary>
+    /// The debug menu's text scale: the framebuffer's pixels per window point (2 on a Retina display), 1 without a window.
+    /// </summary>
+    float DebugTextScale() => _window is null ? 1 : MathF.Max(1, _window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1));
 
     /// <summary>
     /// One line in a panel at the left below <paramref name="top"/>; returns the new bottom (the panels add their own 16 px margin).
