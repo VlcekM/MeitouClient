@@ -8,8 +8,9 @@ namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// A debugging read of the navmesh round a point (the agent control channel's <c>navnear</c>): the polygons of the loaded zones that reach into
-/// the square of half size <c>radius</c> round it, and the closest walkable point the town refit's snap would take for that point
-/// (<see cref="WalkableSpots.Closest"/> with <see cref="TownRefit.SnapReach"/>, the query <see cref="TownRefit"/> makes).
+/// the square of half size <c>radius</c> round it, and the point the town refit's snap would take for it (<see cref="TownRefit.Snap"/>: the 3D
+/// <see cref="RefitSnap"/> where the walkability knows its faces, else the 2D <see cref="WalkableSpots.Closest"/>, both with
+/// <see cref="TownRefit.SnapReach"/>), started at the ground height of the point.
 /// </summary>
 public static class NavNear
 {
@@ -19,9 +20,14 @@ public static class NavNear
     public const float DefaultRadius = 200;
 
     /// <summary>
+    /// The largest half size of the square the command answers for (a larger one is cut to it, so a mistyped radius does not print the whole map).
+    /// </summary>
+    public const float MaxRadius = 1000;
+
+    /// <summary>
     /// The JSON of the navmesh round (<paramref name="x"/>, <paramref name="z"/>): <c>query</c> (the point and radius), <c>zones</c> (the zones under
     /// the square, each with whether its navmesh is loaded; an unloaded zone answers with open ground, as the refit does), <c>snap</c> (the refit's
-    /// closest-point result: whether the point itself is walkable, the point found, its distance, its height) and <c>faces</c> (zone, polygon index,
+    /// result: whether the point itself is walkable, which path answered (<c>via</c>: "3d" or "2d"), the point found, its distance, its height) and <c>faces</c> (zone, polygon index,
     /// area, <c>walkable</c> = kept by the seed pass, so a walkability query can stand on it, and the vertices as [x, y, z]).
     /// </summary>
     public static string Json(IWalkability walk, float x, float z, float radius)
@@ -83,18 +89,22 @@ public static class NavNear
     }
 
     /// <summary>
-    /// What <see cref="WalkableSpots.Closest"/> gives for the point (the refit's snap), with the height the refit puts the centre at.
+    /// What <see cref="TownRefit.Snap"/> gives for the point (the refit's snap, started at the ground height), with the height the refit puts the
+    /// centre at and the path that answered.
     /// </summary>
     static void WriteSnap(Utf8JsonWriter w, IWalkability walk, float x, float z)
     {
         var at = new Vector2(x, z);
-        bool found = WalkableSpots.Closest(walk, at, TownRefit.SnapReach, out var spot);
+        var centre = new Vector3(x, walk.GroundHeight(x, z), z);
+        bool faces = walk.SurfaceFaces(centre, TownRefit.SnapReach) is not null;
+        var snapped = TownRefit.Snap(walk, centre);
 
         w.WriteStartObject("snap");
         w.WriteBoolean("pointWalkable", walk.IsWalkable(x, z));
-        w.WriteBoolean("found", found);
+        w.WriteString("via", faces ? "3d" : "2d");
+        w.WriteBoolean("found", snapped is not null);
         w.WriteNumber("reach", TownRefit.SnapReach);
-        if (found)
+        if (snapped is { } spot)
         {
             w.WriteNumber("x", R2(spot.X));
             w.WriteNumber("z", R2(spot.Y));

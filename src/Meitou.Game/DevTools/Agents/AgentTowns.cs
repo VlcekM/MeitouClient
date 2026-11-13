@@ -32,8 +32,9 @@ sealed class AgentTowns(GameHost host)
             + "(step when paused); ids from town or observe.buildings.own", ControlDismantleSite);
 
         add("navnear", "navnear <x> <z> [radius]", "debug: JSON of the navmesh polygons of the loaded zones within radius (default 200) of the point: "
-            + "zone, polygon, area, walkable flag, vertices; the zones under it and whether they are loaded; and the closest walkable point the town "
-            + "refit's snap would take for the point (same query and 500 box)", ControlNavNear);
+            + "zone, polygon, area, walkable flag, vertices; the zones under it and whether they are loaded; and the point the town refit's "
+            + "snap takes for it (the 3D snap where the navmesh faces are known, else the 2D closest walkable point; snap.via says which; started at the "
+            + "ground height, 500 box); radius at most 1000", ControlNavNear);
     }
 
     /// <summary>
@@ -137,7 +138,6 @@ sealed class AgentTowns(GameHost host)
             return;
         }
 
-
         float radius = NavNear.DefaultRadius;
         if (args.Count == 3 && (!TryNumber(args[2], out radius) || radius <= 0))
         {
@@ -145,7 +145,7 @@ sealed class AgentTowns(GameHost host)
             return;
         }
 
-        host.AgentChannel.PrintData(con, NavNear.Json(host.Session.World.Walkability, x, z, radius));
+        host.AgentChannel.PrintData(con, NavNear.Json(host.Session.World.Walkability, x, z, Math.Min(radius, NavNear.MaxRadius)));
     }
 
     /// <summary>
