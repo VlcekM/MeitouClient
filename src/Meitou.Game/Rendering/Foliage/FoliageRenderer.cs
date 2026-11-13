@@ -16,6 +16,7 @@ using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Game.Rendering.Foliage;
 
@@ -235,6 +236,32 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     _dropping.Add(state);
             foreach (var state in _dropping) Drop(state);
         }
+    }
+
+    /// <summary>
+    /// The player's towns the layouts are placed with (<see cref="SetPlayerTowns"/>); a layout started now sees them.
+    /// </summary>
+    volatile PlayerFoliageTowns _playerTowns = PlayerFoliageTowns.None;
+
+    /// <summary>
+    /// The player's towns now, which keep <c>avoid towns</c> foliage away like the level's (the same list the navmesh's foliage uses,
+    /// docs/formats/foliage.md "Towns"): the laid-out zones a founded, moved or gone town reaches are dropped and laid out again. A zone whose layout
+    /// is running keeps what it was started with.
+    /// </summary>
+    public void SetPlayerTowns(PlayerFoliageTowns towns)
+    {
+        var before = _playerTowns;
+        if (ReferenceEquals(before, towns)) return;
+
+        _playerTowns = towns;
+        var changed = PlayerFoliageTowns.Difference(before.Towns, towns.Towns);
+        _dropping.Clear();
+        foreach (var state in _zones.Values)
+        {
+            var (min, max) = PlayerFoliageTowns.Box(state.Zone);
+            if (state.Job is null && changed.Any(t => towns.Affects(t, min, max, 0))) _dropping.Add(state);
+        }
+        foreach (var state in _dropping) Drop(state);
     }
 
     /// <summary>
@@ -922,6 +949,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 }
                 try
                 {
+                    world.ExtraTowns = _playerTowns.Towns;
+
                     // Grouped on the worker (thousands of instances cost 15 to 20 ms on the render thread), straight from the cache file's records
                     // when it has the zone.
                     return world.LoadGrouped(zone, farOnly);

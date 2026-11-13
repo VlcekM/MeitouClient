@@ -175,8 +175,9 @@ public sealed class FoliageWorld : IDisposable
     public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);
-        if (_cache?.TryLoad(zone, farOnly) is { } hit) return (hit.Zone, hit.Ground);
-        return Place(zone, farOnly);
+        bool cached = !ExtraTownsReach(zone);
+        if (cached && _cache?.TryLoad(zone, farOnly) is { } hit) return (hit.Zone, hit.Ground);
+        return Place(zone, farOnly, cached);
     }
 
     /// <summary>
@@ -186,8 +187,9 @@ public sealed class FoliageWorld : IDisposable
     public GroupedFoliageZone LoadGrouped(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return FoliageGrouping.Group(new FoliageZone { Zone = zone }, null);
-        if (_cache?.TryLoadGrouped(zone, farOnly) is { } hit) return hit;
-        var (laid, ground) = Place(zone, farOnly);
+        bool cached = !ExtraTownsReach(zone);
+        if (cached && _cache?.TryLoadGrouped(zone, farOnly) is { } hit) return hit;
+        var (laid, ground) = Place(zone, farOnly, cached);
         var grouped = FoliageGrouping.Group(laid, ground);
         laid.Instances.Clear();
         laid.Instances.TrimExcess();
@@ -195,9 +197,32 @@ public sealed class FoliageWorld : IDisposable
     }
 
     /// <summary>
-    /// Places one zone's foliage from the maps (and saves it to the layout cache when there is one).
+    /// Whether an extra town can change the zone's placement: it lies within the larger of its own range and the level towns' largest range of the
+    /// zone's box (a new town can become the nearest one for a point a level town's range covered). Such a layout is neither read from nor saved to
+    /// the layout cache, whose key knows only the level's towns.
     /// </summary>
-    (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly)
+    bool ExtraTownsReach(ZoneCoordinate zone)
+    {
+        if (ExtraTowns.Count == 0) return false;
+
+        Open();
+        float levelRange = _towns!.Select(t => t.Range).DefaultIfEmpty(0).Max();
+        var (x0, z0) = WorldLayout.ZoneOrigin(zone);
+        foreach (var t in ExtraTowns)
+        {
+            float dx = MathF.Max(MathF.Max((float)x0 - t.At.X, t.At.X - (float)(x0 + WorldLayout.ZoneSize)), 0);
+            float dz = MathF.Max(MathF.Max((float)z0 - t.At.Y, t.At.Y - (float)(z0 + WorldLayout.ZoneSize)), 0);
+            float reach = MathF.Max(t.Range, levelRange);
+            if (dx * dx + dz * dz <= reach * reach) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Places one zone's foliage from the maps (and saves it to the layout cache when there is one and <paramref name="save"/> is set).
+    /// </summary>
+    (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly, bool save = true)
     {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         Open();
@@ -221,7 +246,7 @@ public sealed class FoliageWorld : IDisposable
             NearestTown = NearestTown,
         };
         var laid = FoliageLayout.Place(input, Catalog, farOnly);
-        _cache?.Save(zone, farOnly, laid, ground, System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        if (save) _cache?.Save(zone, farOnly, laid, ground, System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
         return (laid, ground);
     }
 
