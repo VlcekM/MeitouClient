@@ -308,17 +308,8 @@ public sealed class UiHost
             Math.Max(0, Math.Min(b.Y + b.Height, clip.Y + clip.Height) - y));
         if (visible.Width <= 0 || visible.Height <= 0) return;
 
-        var style = Style(node.Style);
         bool enabled = parentEnabled && node.Enabled;
-        var kind = node.Kind == UiNodeKind.Button ? "Button" : node.Kind == UiNodeKind.Label ? "TextBox" : "Widget";
-        var properties = new Dictionary<string, string>
-        {
-            ["TextAlign"] = style.TextAlign,
-            ["FontName"] = style.FontName,
-            ["TextPadding"] = style.TextPadding.ToString(),
-        };
-        result.Add(new(node.Id, kind, visible, node.Text, node.Action, style.Skin, enabled, properties,
-            style.Background, style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument, style.TextScale));
+        result.Add(Control(node, b, visible, enabled));
 
         var content = new UiRect(
             b.X + node.Padding, b.Y + node.Padding, Math.Max(0, b.Width - node.Padding * 2), Math.Max(0, b.Height - node.Padding * 2));
@@ -342,6 +333,38 @@ public sealed class UiHost
             ArrangeNode(child, content, visible, enabled, result, childRect);
         }
     }
+
+    /// <summary>
+    /// <paramref name="node"/>'s control: its <paramref name="visible"/> part, or for an image the whole of <paramref name="bounds"/> clipped to
+    /// it (a picture is cut off, not squeezed).
+    /// </summary>
+    UiControl Control(UiNode node, UiRect bounds, UiRect visible, bool enabled)
+    {
+        var style = Style(node.Style);
+        bool image = node.Kind == UiNodeKind.Image;
+        var properties = new Dictionary<string, string>
+        {
+            ["TextAlign"] = style.TextAlign,
+            ["FontName"] = style.FontName,
+            ["TextPadding"] = style.TextPadding.ToString(),
+        };
+        if (image && node.Image.Length > 0) properties["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(node.Image);
+
+        return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, style.Skin, enabled, properties,
+            style.Background, style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument, style.TextScale,
+            image ? visible : null);
+    }
+
+    /// <summary>
+    /// The MyGUI widget type a node kind is drawn as.
+    /// </summary>
+    static string ControlType(UiNodeKind kind) => kind switch
+    {
+        UiNodeKind.Button => "Button",
+        UiNodeKind.Label => "TextBox",
+        UiNodeKind.Image => "ImageBox",
+        _ => "Widget",
+    };
 
     #endregion
 

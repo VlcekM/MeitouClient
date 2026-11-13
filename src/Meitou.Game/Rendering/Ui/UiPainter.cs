@@ -726,10 +726,11 @@ public sealed partial class UiPainter : IDisposable
         || texture.StartsWith(IconPrefix, StringComparison.Ordinal) && !_textures.ContainsKey(texture);
 
     /// <summary>
-    /// Whether an ImageBox's texture can be drawn now: a file icon only once loaded, a rendered icon once the host has made it (this asks for it).
+    /// Whether an ImageBox's texture can be drawn now: a file icon only once loaded, a rendered icon once the host has made it (this asks for
+    /// either).
     /// </summary>
     bool IsImageReady(string texture) =>
-        (!texture.StartsWith(IconPrefix, StringComparison.Ordinal) || _textures.ContainsKey(texture))
+        (!texture.StartsWith(IconPrefix, StringComparison.Ordinal) || IconReady(texture[IconPrefix.Length..]))
         && (!texture.StartsWith(RenderedIconPrefix, StringComparison.Ordinal) || RenderedIconReady(texture));
 
     /// <summary>

@@ -91,6 +91,11 @@ public enum UiNodeKind
     /// A button.
     /// </summary>
     Button,
+
+    /// <summary>
+    /// A picture, <see cref="UiNode.Image"/>, stretched over the node (not pickable by default).
+    /// </summary>
+    Image,
 }
 
 /// <summary>
@@ -180,6 +185,12 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     public string Text { get; init; } = "";
 
     /// <summary>
+    /// An image node's picture: the full path of a PNG, TGA, JPEG, BMP or DDS file (a mod's own: under <c>ModContext.Folder</c>). It is read off
+    /// the UI thread and shown once loaded; a file that cannot be read shows nothing.
+    /// </summary>
+    public string Image { get; init; } = "";
+
+    /// <summary>
     /// The action a click dispatches; empty for none.
     /// </summary>
     public string Action { get; init; } = "";
@@ -200,9 +211,9 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     public bool Visible { get; init; } = true;
 
     /// <summary>
-    /// The node takes the pointer (all but labels by default).
+    /// The node takes the pointer (all but labels and images by default).
     /// </summary>
-    public bool Pickable { get; init; } = kind != UiNodeKind.Label;
+    public bool Pickable { get; init; } = kind is not (UiNodeKind.Label or UiNodeKind.Image);
 
     /// <summary>
     /// How the children are placed.
