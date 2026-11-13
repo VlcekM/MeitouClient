@@ -1118,7 +1118,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     section's item count; its setter `setItemsLimitCount` is `0x140745bb0`, whose only reference is its thunk `0x14004ff25`, called by no E8/E9 in the exe, so which sections get a cap is
     **Unknown**, possibly none); one item locked (shackles) on either side: "Item is locked in place."; one of the same kind that stacks
     (same type, material and quality): merged up to the stack limit (partial charges combined), the stack at the drop cell, the rest on the mouse; any other: swapped, the old item on the mouse.
-  - Over no window (`FUN_1407136a0`): a character picked under the pointer other than the source owner is given the item (auto-placed into its inventory, the rest into its bag; no trade;
+  - Over no window (`FUN_1407136a0`): a character picked under the pointer other than the source owner is given the item (auto-placed into its inventory, the rest into its bag, through the inventory's own add, whose use of the equipment slots is **Unknown**; Meitou, engine choice as a pick-up: what no grid takes goes into a free slot that takes it, e.g. a 10x1 polearm into `back`; no trade;
     range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground only from the player's
     own windows or a window of a player-faction owner, else it goes back.
   - Back to origin (`FUN_14070d860`): its old cell if still free, else auto-added to that inventory, else that inventory is arranged and it is tried again, else it is dropped on the ground.
