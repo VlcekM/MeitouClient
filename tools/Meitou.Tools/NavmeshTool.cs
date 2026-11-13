@@ -90,7 +90,7 @@ static class NavmeshTool
         var collision = new CollisionCache(install);
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, collision);
         watch.Restart();
-        if (o.Ragdoll) return CountRagdollTriangles(gatherer, zone);
+        if (o.Ragdoll) return CountRagdollTriangles(gatherer, zone, o.Probe);
         var g = gatherer.Gather(zone);
         if (s_verbose) WarmGathers(gatherer, zone);
         PrintGathered(gatherer, g, zone, watch);
@@ -110,9 +110,10 @@ static class NavmeshTool
     }
 
     /// <summary>
-    /// <c>--ragdoll</c>: what ragdolls land on in the zone (RagdollGeometry): building and map feature triangles.
+    /// <c>--ragdoll</c>: what ragdolls land on in the zone (RagdollGeometry): building and map feature triangles; with <c>--probe x,z</c> also the
+    /// heights of the ones over that point (a building's floors, top first).
     /// </summary>
-    static int CountRagdollTriangles(ZoneGeometryGatherer gatherer, ZoneCoordinate zone)
+    static int CountRagdollTriangles(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, float[]? probe)
     {
         var all = new List<Vector3>();
         var sw = Stopwatch.StartNew();
@@ -121,7 +122,23 @@ static class NavmeshTool
         var features = new List<Vector3>();
         gatherer.AddRagdollFeatures(zone, features);
         Console.WriteLine($"ragdoll triangles in {zone}: {all.Count / 3} ({features.Count / 3} of them map features), gathered in {ms} ms");
+        if (probe is { Length: >= 2 }) Console.WriteLine($"  over {probe[0]:0}, {probe[1]:0}: y {RagdollHeights(all, probe[0], probe[1])}");
+
         return 0;
+    }
+
+    /// <summary>
+    /// The heights of the triangles (three points each) over a point, top first.
+    /// </summary>
+    static string RagdollHeights(List<Vector3> triangles, float x, float z)
+    {
+        var heights = new List<float>();
+        for (int t = 0; t + 2 < triangles.Count; t += 3)
+            if (InTriangle(x, z, triangles[t], triangles[t + 1], triangles[t + 2], out float y)) heights.Add(y);
+
+        heights.Sort();
+        heights.Reverse();
+        return heights.Count == 0 ? "none" : string.Join(", ", heights.Select(y => y.ToString("0.0", CultureInfo.InvariantCulture)));
     }
 
     /// <summary>

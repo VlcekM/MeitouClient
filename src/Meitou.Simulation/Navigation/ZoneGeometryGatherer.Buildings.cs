@@ -468,7 +468,11 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var node = NodeMatrix(building, position, rotation);
         var doors = building.GetReferences("doors").Select(r => r.TargetStringId).ToHashSet();
-        foreach (var mesh in WorldObjectLayout.Building(_db, building, placementId, position, rotation, new BuildingState(destroyed)))
+
+        // With the `interior` list, as the navmesh takes it (AddBuilding): inner stairs, and the upper floors of the Watchtower, the Snailhouse and
+        // the outposts. Without it a body upstairs fell to the ground floor and a bolt or a line of sight passed the floors between (#608).
+        var state = new BuildingState(destroyed) { WithInterior = !destroyed };
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, placementId, position, rotation, state))
         {
             var part = mesh.Source;
             string path = mesh.CollisionPath(destroyed);
