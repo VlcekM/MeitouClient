@@ -426,7 +426,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width,
                     item.Height * area.Height / grid.Height),
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
+                slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
     }
 
@@ -523,7 +523,7 @@ sealed class ProductionWindows(PlayerInterface player)
                     new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell,
                         item.Height * player.InventoryCell),
                     item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                    g.Clip, charge: item.Charge, colour: item.Colour);
+                    g.Clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
             }
         }
     }

@@ -222,6 +222,17 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     }
 
     /// <summary>
+    /// Turns a grid item of one of the player's characters a quarter in place (<see cref="Items.RotateItem"/>).
+    /// </summary>
+    static void RotateItem(World world, Items.RotateItem rotate)
+    {
+        if (!world.Characters.TryResolveNext(rotate.Character, out int slot)) return;
+        if (world.Characters.Cold(slot) is not { IsPlayer: true, Inventory: { } inventory }) return;
+
+        Items.InventoryCommands.Rotate(inventory, rotate.Item);
+    }
+
+    /// <summary>
     /// Applies an order, item, faction, squad, editing or debug command.
     /// </summary>
     void ApplyActionCommand(World world, SimCommand command)
@@ -241,6 +252,9 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 break;
             case Items.QuickMoveItem quick:
                 _quickMoves.QuickMove(world, quick);
+                break;
+            case Items.RotateItem rotate:
+                RotateItem(world, rotate);
                 break;
             case RenameFactionCommand rename:
                 RenameFaction(world, rename.Name);

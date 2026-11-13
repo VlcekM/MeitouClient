@@ -90,6 +90,10 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// </summary>
     public string Material { get; init; } = "";
     /// <summary>
+    /// The item lies turned a quarter (<see cref="Items.ItemInstance.Rotated"/>): its size is the turned footprint's, and the icon is drawn turned.
+    /// </summary>
+    public bool Rotated { get; init; }
+    /// <summary>
     /// The COLOR_DATA it is dyed with (<see cref="Items.ItemInstance.ColourId"/>), which picks its icon.
     /// </summary>
     public string Colour { get; init; } = "";
@@ -1378,6 +1382,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 Container = item.Contents is not null,
                 BagItems = item.Contents?.Items.Count ?? -1,
                 Material = item.MaterialId,
+                Rotated = item.Rotated,
                 Colour = item.ColourId,
                 Charge = item.ChargeFraction,
                 Value = value,

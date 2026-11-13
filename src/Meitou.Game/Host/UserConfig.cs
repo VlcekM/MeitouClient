@@ -543,6 +543,29 @@ sealed class UserConfig
     /// </summary>
     public bool LuckyrenMode { get; set; }
     /// <summary>
+    /// The camera following a character looks at a point moved up and sideways from the game's (Advanced settings; optional, off by default;
+    /// <see cref="Cameras.FollowFocus"/>, after ErasmianFolly's Camera Tweaks mod).
+    /// </summary>
+    public bool FollowCameraOffset { get; set; }
+    /// <summary>
+    /// With <see cref="FollowCameraOffset"/>: the point is at the followed character's head bone's height instead of <see cref="FollowCameraRaise"/>
+    /// above the game's.
+    /// </summary>
+    public bool FollowCameraHeadLock { get; set; }
+    /// <summary>
+    /// With <see cref="FollowCameraOffset"/>: how far above the game's point the camera looks, in world units (0: the game's height).
+    /// </summary>
+    public float FollowCameraRaise { get; set; } = Cameras.FollowFocus.DefaultRaise;
+    /// <summary>
+    /// With <see cref="FollowCameraOffset"/>: how far to the camera's right the point is, in world units (positive: over the right shoulder).
+    /// </summary>
+    public float FollowCameraSide { get; set; }
+    /// <summary>
+    /// Inventory items turn a quarter with the Rotate item control (Advanced settings; optional, off by default; docs/game/ui-screens.md "Rotating an
+    /// item", after ErasmianFolly's GetRotatedIdiot mod).
+    /// </summary>
+    public bool RotateItems { get; set; }
+    /// <summary>
     /// The second and third speed buttons' (and keys') game speeds (Advanced settings; the game's 2 and 5 by default; <see
     /// cref="Meitou.Simulation.Session.SimulationClock.SetFastSpeeds"/>).
     /// </summary>

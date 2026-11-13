@@ -48,6 +48,11 @@ sealed class InventoryWindows(PlayerInterface player)
     internal bool PressShift, PressCtrl;
 
     /// <summary>
+    /// Meitou's item rotation (the Advanced page's Item rotation; docs/game/ui-screens.md "Rotating an item"): <see cref="RotateAt"/> turns items.
+    /// </summary>
+    internal bool RotateItems;
+
+    /// <summary>
     /// The pinned inventory windows (<see cref="PinnedPrefix"/> and a number) and the character each stays on (docs/game/ui-screens.md section 6).
     /// </summary>
     internal readonly Dictionary<string, CharacterId> PinnedInventories = new(StringComparer.Ordinal);
@@ -382,6 +387,49 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
+    /// The Rotate item control at <paramref name="p"/> (docs/game/ui-screens.md "Rotating an item"): turns the held item a quarter, else the grid
+    /// item under the pointer in a window of one of the player's characters. False when there is nothing to turn there (the control is then free for
+    /// what else it is bound to, the camera's orbit by default).
+    /// </summary>
+    internal bool RotateAt(Vector2 p)
+    {
+        if (!RotateItems || !player.UiVisible || player.FaithfulScreens.HasModal) return false;
+        if (Held is { } held) return RotateHeldItem(held);
+        if (player.FaithfulScreens.HitTest(p) is not { } picked || !picked.Control.Enabled) return false;
+        if (!picked.Control.Properties.TryGetValue("InventoryItem", out var index)) return false;
+
+        return RotateInPlace(picked.Screen, int.Parse(index, CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Turns the item on the mouse (<see cref="RotateHeld"/>), drawn turned at once; false for a square one.
+    /// </summary>
+    bool RotateHeldItem(HeldItemView held)
+    {
+        if (held.Width == held.Height) return false;
+
+        SayHeld(new RotateHeld { Tick = player.Session.World.Tick });
+        Held = held.Turned();
+        _heldGrab = ClampGrab(_heldGrab, Held);
+        return true;
+    }
+
+    /// <summary>
+    /// Turns grid item <paramref name="code"/> of a character window where it lies (<see cref="RotateItem"/>); false for a loot's window, a slot's
+    /// item or a square one.
+    /// </summary>
+    bool RotateInPlace(string screen, int code)
+    {
+        if (IsLootWindow(screen) || WindowCharacter(screen) is not { IsPlayer: true, ItemGrid: { } grid } owner) return false;
+        if (grid.Items.FirstOrDefault(i => i.Index == code) is not { } item) return false;
+        if (!InventoryCommands.IsGridSection(item.Section) || item.Width == item.Height) return false;
+
+        var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
+        player.Say(new RotateItem(owner.Id, token) { Tick = player.Session.World.Tick });
+        return true;
+    }
+
+    /// <summary>
     /// A press on an item cell lifts it (<c>FUN_1407139a0</c>): a character's item, the stock's, a machine's or container's. Nothing for the other
     /// controls. The cell's footprint gives the grab offset.
     /// </summary>
@@ -416,8 +464,8 @@ sealed class InventoryWindows(PlayerInterface player)
     /// The held view of a lifted item: one unit unless the whole stack goes.
     /// </summary>
     static HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from,
-        bool whole) =>
-        new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1);
+        bool whole, bool rotated = false) =>
+        new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1) { Rotated = rotated };
 
     /// <summary>
     /// A stock item of the open trade, taken by the customer.
@@ -430,7 +478,8 @@ sealed class InventoryWindows(PlayerInterface player)
             return null;
 
         var (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
-        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window, whole);
+        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window, whole,
+            stock.Rotated);
         return new(code, window, actor, token, whole, view);
     }
 
@@ -458,7 +507,8 @@ sealed class InventoryWindows(PlayerInterface player)
         {
             (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
                 || PressCtrl || stored.Quantity <= 1);
-            view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window, whole);
+            view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window, whole,
+                stored.Rotated);
         }
         else if (code == 8 && m.Craft is { Done: [var made, ..] })
         {
@@ -493,7 +543,7 @@ sealed class InventoryWindows(PlayerInterface player)
         var (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
         var (token, whole) = (new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality),
             PressShift || PressCtrl || item.Quantity <= 1);
-        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole);
+        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole, item.Rotated);
         return new(code, window, actor, token, whole, view);
     }
 
@@ -733,7 +783,8 @@ sealed class InventoryWindows(PlayerInterface player)
             float cell = player.InventoryCell;
             player.ItemCells.AddItemCell(controls, "held-item", new(player.Mouse.X - _heldGrab.X * cell, player.Mouse.Y - _heldGrab.Y * cell,
                 h.Width * cell, h.Height * cell),
-                h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour);
+                h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour,
+                rotated: h.Rotated);
         }
 
         player.TradeWindows.AddFencePrompt(controls);

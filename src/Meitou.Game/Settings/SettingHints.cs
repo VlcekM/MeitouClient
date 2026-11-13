@@ -238,6 +238,8 @@ static class SettingHints
         InputAction.Prospect => "Prospect the ground with the selected character nearest the camera.",
         InputAction.Rest => "The selection sits down to rest.",
         InputAction.PutDown => "The selected carriers put their bodies down.",
+        InputAction.RotateItem => "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the "
+            + "Advanced page).",
         InputAction.TogglePhotoMode => "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, "
             + "time of day and composition guides takes pictures.",
         _ => $"Choose the control for {SettingsMenu.ActionLabel(action).ToLowerInvariant()}.",

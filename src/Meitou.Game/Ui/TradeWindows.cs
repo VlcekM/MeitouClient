@@ -271,7 +271,7 @@ sealed class TradeWindows(PlayerInterface player)
                 new(area.X + item.X * area.Width / columns, area.Y + item.Y * area.Height / rows, item.Width * area.Width / columns,
                     item.Height * area.Height / rows),
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "TradeItem", item.Index, slot.Clip,
-                charge: item.Charge, colour: item.Colour);
+                charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
     }
 

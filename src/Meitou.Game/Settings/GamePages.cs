@@ -1,6 +1,7 @@
 using Meitou.Data.Ui;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
+using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Title;
@@ -83,6 +84,11 @@ sealed class GamePages(SettingsMenu menu)
     /// The dropped items kept slider, made on first use.
     /// </summary>
     Slider? _groundItemsSlider;
+
+    /// <summary>
+    /// The follow camera offset's height and side sliders, made on first use.
+    /// </summary>
+    Slider? _followRaiseSlider, _followSideSlider;
 
     #endregion
 
@@ -554,6 +560,7 @@ sealed class GamePages(SettingsMenu menu)
         AddFightRows(result);
         AddOffscreenRows(result);
         AddWorldRows(result);
+        AddOptionalRows(result);
         AddSceneRows(result);
         result.Insert(0, menu.PageSidesEntry(result, "All gameplay changes", "Every change on this page as the game plays, or every Meitou change.",
             "gameplay change"));
@@ -668,6 +675,76 @@ sealed class GamePages(SettingsMenu menu)
             "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. "
             + "Items that were on the ground in the save always stay.",
             Slider: GroundItemsSlider));
+    }
+
+    /// <summary>
+    /// The follow camera offset's height slider, in half steps, marked at the game's 0.
+    /// </summary>
+    Slider FollowRaiseSlider => _followRaiseSlider ??= new("Follow camera height", FollowFocus.MinRaise, FollowFocus.MaxRaise,
+        () => menu.Config.FollowCameraRaise, v => menu.Config.FollowCameraRaise = HalfStep(v, FollowFocus.MinRaise, FollowFocus.MaxRaise), "0.0",
+        Faithful: 0, Step: 0.5f);
+
+    /// <summary>
+    /// The follow camera offset's side slider, in half steps, marked at the game's 0.
+    /// </summary>
+    Slider FollowSideSlider => _followSideSlider ??= new("Follow camera side", -FollowFocus.MaxSide, FollowFocus.MaxSide,
+        () => menu.Config.FollowCameraSide, v => menu.Config.FollowCameraSide = HalfStep(v, -FollowFocus.MaxSide, FollowFocus.MaxSide), "0.0",
+        Faithful: 0, Step: 0.5f);
+
+    /// <summary>
+    /// <paramref name="v"/> rounded to a half and kept within <paramref name="min"/> and <paramref name="max"/>.
+    /// </summary>
+    static float HalfStep(float v, float min, float max) => Math.Clamp(MathF.Round(v * 2) / 2, min, max);
+
+    /// <summary>
+    /// The optional rows, off by default and in neither the all Faithful nor the all Meitou switch: the follow camera offset and item rotation
+    /// (after ErasmianFolly's Camera Tweaks and GetRotatedIdiot mods).
+    /// </summary>
+    void AddOptionalRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Follow camera offset",
+            "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view "
+            + "from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks.",
+            Toggle: new("Follow camera offset", () => menu.Config.FollowCameraOffset, v => menu.Config.FollowCameraOffset = v)));
+        if (menu.Config.FollowCameraOffset) AddFollowCameraRows(result);
+
+        result.Add(new("Item rotation",
+            "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the "
+            + "item under the pointer in your own characters' grids, so long items fit across. Worn items are never turned. In the game items "
+            + "cannot be turned. From ErasmianFolly's GetRotatedIdiot.",
+            Toggle: new("Item rotation", () => menu.Config.RotateItems, SetRotateItems)));
+    }
+
+    /// <summary>
+    /// The follow camera offset's own rows: the head lock, the height and the side.
+    /// </summary>
+    void AddFollowCameraRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Follow camera head lock",
+            "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used.",
+            Toggle: new("Follow camera head lock", () => menu.Config.FollowCameraHeadLock, v => menu.Config.FollowCameraHeadLock = v, OnOff: true),
+            Depth: 1));
+        result.Add(new(FollowRaiseSlider.Label, "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head.",
+            Slider: FollowRaiseSlider, Depth: 1));
+        result.Add(new(FollowSideSlider.Label,
+            "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 "
+            + "right of it. It shows less the farther the camera is.",
+            Slider: FollowSideSlider, Depth: 1));
+    }
+
+    /// <summary>
+    /// The Item rotation switch, into the config and the inventory windows.
+    /// </summary>
+    void SetRotateItems(bool on) => menu.Player.InventoryWindows.RotateItems = menu.Config.RotateItems = on;
+
+    /// <summary>
+    /// Restore defaults for the optional rows: both off, the follow camera's values as shipped.
+    /// </summary>
+    internal void ResetOptional()
+    {
+        SetRotateItems(false);
+        (menu.Config.FollowCameraOffset, menu.Config.FollowCameraHeadLock) = (false, false);
+        (menu.Config.FollowCameraRaise, menu.Config.FollowCameraSide) = (FollowFocus.DefaultRaise, 0);
     }
 
     /// <summary>

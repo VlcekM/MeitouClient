@@ -384,7 +384,7 @@ sealed class ScreenRouter(PlayerInterface player)
             var tip = TooltipRuntime.ItemTip.Of(item, player.TradeWindows.SellTip(lead.Id, item.Index), player.WorldMap.MapItemCaption(item.Record));
             var clip = slot.Bounds.Intersect(slot.Clip ?? slot.Bounds);
             player.ItemCells.AddItemCell(controls, name, area, item.Record, item.Material, item.Name, item.Quantity, tip, "InventoryItem",
-                item.Index, clip, charge: item.Charge, colour: item.Colour);
+                item.Index, clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
     }
 

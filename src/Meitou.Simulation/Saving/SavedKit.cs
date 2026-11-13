@@ -31,7 +31,7 @@ public static class SavedKit
         foreach (var s in items)
         {
             if (s.Section == "main" && factory.Info(s.BaseId) is { } info)
-                height = Math.Max(height, s.Y + Math.Max(info.Height, 1));
+                height = Math.Max(height, s.Y + Math.Max(s.Rotated ? info.Width : info.Height, 1));
         }
 
         var inventory = new Inventory(width, height);
@@ -114,6 +114,7 @@ public static class SavedKit
             return null;
 
         item.Section = s.Section;
+        item.Rotated = s.Rotated;   // after the section, which sets an item upright outside the grids (a furnace's in1 is a grid)
         item.X = s.X;
         item.Y = s.Y;
 
@@ -197,6 +198,7 @@ public static class SavedKit
             Stun = i.LimbStun,
             Death = i.Death,
             Unique = i.Unique,
+            Rotated = i.Rotated,
             Lock = i.Lock is { } l ? new SaveItemLock(l.Level, l.EffectivelyLocked, l.Broken, l.Hardness) : null,
             Contents = i.Contents is { } bag ? FromInventory(bag) : null,
             OwnedBy = !i.Owner.IsNone || i.OwnerFromSave ? Hand.Null : null,

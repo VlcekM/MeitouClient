@@ -89,7 +89,7 @@ mirrored, `Slider.Reversed`).
 The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
 Advanced (stealth counts its light). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
 `ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start
-with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode left out).
+with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode, Follow camera offset and Item rotation left out: optional, off by default).
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows
 focus/adjust, Enter activates. Binding capture rejects conflicting/reserved controls; Esc cancels,
 Delete unbinds. Defaults and cache deletion ask first. The viewer retains its debug panel.

@@ -1440,7 +1440,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return;
         }
 
-        var conflicts = Enum.GetValues<InputAction>().Where(a => a != action && Bindings.Get(a).Contains(binding)).ToArray();
+        // Rotate item acts only over an inventory item, so it shares its control with whatever acts elsewhere (the camera's orbit by default).
+        bool shared = action == InputAction.RotateItem;
+        var conflicts = Enum.GetValues<InputAction>()
+            .Where(a => a != action && a != InputAction.RotateItem && !shared && Bindings.Get(a).Contains(binding))
+            .ToArray();
 
         // A mouse button taken from another action is swapped: that action gets this one's old button, so the three buttons can be shuffled (the
         // buttons form a cycle otherwise).
@@ -1532,6 +1536,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.BuildingOutline = true;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
         Config.LuckyrenMode = false;
+        GamePages.ResetOptional();
         Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
         (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
         TimeSpeedsChanged?.Invoke();

@@ -318,6 +318,7 @@ public sealed partial class World
                     e.item.Width, e.item.Height, e.item.Quantity, e.item.Weight, e.item.Quality)
                 {
                     Material = e.item.MaterialId,
+                    Rotated = e.item.Rotated,
                     Colour = e.item.ColourId,
                     Charge = e.item.ChargeFraction,
                     Company = e.item.CompanyId,
@@ -803,6 +804,7 @@ public sealed partial class World
             shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality)
         {
             Material = shown.Item.MaterialId,
+            Rotated = shown.Item.Rotated,
             Colour = shown.Item.ColourId,
             Charge = shown.Item.ChargeFraction,
             Company = shown.Item.CompanyId,

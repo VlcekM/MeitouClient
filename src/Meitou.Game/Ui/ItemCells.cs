@@ -37,10 +37,12 @@ sealed class ItemCells(PlayerInterface player)
     /// <summary>
     /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what
     /// its hover tooltip lists (the name only when null). The transparent text control handles picking and carries <paramref name="property"/>;
-    /// <paramref name="colour"/> is the item's <c>color sid</c>.
+    /// <paramref name="colour"/> is the item's <c>color sid</c>. <paramref name="rotated"/>: the item lies turned a quarter, <paramref name="area"/>
+    /// being its turned footprint (<see cref="Meitou.Simulation.Items.ItemInstance.Rotated"/>).
     /// </summary>
     internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity,
-        TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "")
+        TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "",
+        bool rotated = false)
     {
         player.TooltipRuntime.ItemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
         string count = quantity > 1 ? quantity.ToString(CultureInfo.InvariantCulture) : "";
@@ -59,7 +61,11 @@ sealed class ItemCells(PlayerInterface player)
         controls.Add(new($"{name}-background", "Widget", area, "", "", "", true,
             new Dictionary<string, string>(), new(0.12f, 0.08f, 0.04f, 0.25f), Pickable: false, Clip: clip));
         if (shown)
-            controls.Add(new($"{name}-icon", "ImageBox", area, "", "", "", true, image!, System.Numerics.Vector4.Zero, Pickable: false, Clip: clip));
+        {
+            if (rotated) image!["ImageAngle"] = QuarterTurn;
+            var box = rotated ? Upright(area) : area;
+            controls.Add(new($"{name}-icon", "ImageBox", box, "", "", "", true, image!, System.Numerics.Vector4.Zero, Pickable: false, Clip: clip));
+        }
 
         if (charge is { } fill)
             AddCharge(controls, name, area, fill, clip);
@@ -76,6 +82,18 @@ sealed class ItemCells(PlayerInterface player)
         controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero,
             TextColour: System.Numerics.Vector4.One, Pickable: pickable, TextScale: 0.9f * player.UiScale, Clip: clip));
     }
+
+    /// <summary>
+    /// A quarter turn clockwise as an <c>ImageAngle</c> (radians).
+    /// </summary>
+    static readonly string QuarterTurn = (MathF.PI / 2).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The box of a turned item's icon before its turn: <paramref name="area"/>'s sides swapped about its centre, so the picture turned a quarter
+    /// (<c>ImageAngle</c> turns about the box's centre) fills <paramref name="area"/>.
+    /// </summary>
+    static UiRect Upright(UiRect area) =>
+        new(area.X + (area.Width - area.Height) / 2, area.Y + (area.Height - area.Width) / 2, area.Height, area.Width);
 
     /// <summary>
     /// A white line over a black track along the cell's bottom edge, as long as what is left (the vanilla inventory and trader screenshots show it

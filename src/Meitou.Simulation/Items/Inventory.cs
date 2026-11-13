@@ -298,7 +298,8 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Adds the items (record, place, quantity, level, quality, charges, the unique flag, buy-back coins, a bag's contents) to the world hash.
+    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, buy-back coins, a bag's contents) to the world
+    /// hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -314,6 +315,7 @@ public sealed class Inventory(int width, int height)
             h.Add(i.Quality);
             h.Add(i.Charges);
             if (i.Unique) h.Add(Rng.StableHash("Unique"));
+            if (i.Rotated) h.Add(Rng.StableHash("Rotated"));
             if (i.Buyback is { } receipt)
             {
                 h.Add(Rng.StableHash("Buyback"));

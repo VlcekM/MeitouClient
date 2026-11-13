@@ -76,6 +76,10 @@ public sealed class HeldItem
     /// </summary>
     public int Y { get; init; }
     /// <summary>
+    /// Whether it lay turned there (<see cref="ItemInstance.Rotated"/>): put back, it lies as it did, whatever was done with it on the mouse.
+    /// </summary>
+    public bool Rotated { get; init; }
+    /// <summary>
     /// The character whose inventory window holds it (none: no one).
     /// </summary>
     public CharacterId Actor { get; init; } = CharacterId.None;
@@ -95,7 +99,18 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     public static HeldItemView Of(HeldItem held)
             => new(held.Item.Record, held.Item.Name, held.Item.MaterialId, held.Item.Type, held.Item.EquipmentSection, held.Item.Quantity,
         held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1)
-    { WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId };
+    { WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId, Rotated = held.Item.Rotated };
+
+    /// <summary>
+    /// The item lies turned a quarter (<see cref="ItemInstance.Rotated"/>): <see cref="Width"/> and <see cref="Height"/> are the turned footprint's,
+    /// and the icon is drawn turned.
+    /// </summary>
+    public bool Rotated { get; init; }
+
+    /// <summary>
+    /// The view with the item turned a quarter: what the interface draws until the world has applied its <see cref="RotateHeld"/>.
+    /// </summary>
+    public HeldItemView Turned() => this with { Width = Height, Height = Width, Rotated = !Rotated };
 
     /// <summary>
     /// The COLOR_DATA it is dyed with (<see cref="ItemInstance.ColourId"/>).
@@ -155,6 +170,18 @@ public sealed record DropHeld : HeldCommand;
 /// Puts the held item back where it came from (<c>FUN_14070d860</c>).
 /// </summary>
 public sealed record ReturnHeld : HeldCommand;
+
+/// <summary>
+/// Meitou's item rotation (docs/game/ui-screens.md "Rotating an item"; the original has none): turns the held item a quarter, its footprint's sides
+/// swapped (<see cref="ItemInstance.Rotated"/>). Nothing for a square item.
+/// </summary>
+public sealed record RotateHeld : HeldCommand;
+
+/// <summary>
+/// Meitou's item rotation in place: turns the grid item <see cref="Item"/> of the player character <see cref="Character"/> a quarter where it lies,
+/// or at the nearest cell with room (<see cref="InventoryCommands.Rotate"/>).
+/// </summary>
+public sealed record RotateItem(CharacterId Character, InventoryItemToken Item) : SimCommand;
 
 /// <summary>
 /// A right click on an item of a player character's own window with no other owner's window open (<c>FUN_140714a20</c>): a money item (function 14)

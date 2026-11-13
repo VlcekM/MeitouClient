@@ -105,7 +105,12 @@ public static class InventoryCommands
     /// <summary>
     /// Whether items may be moved into <paramref name="section"/>: the main grid, a backpack's contents or an equipment section.
     /// </summary>
-    public static bool IsMovableSection(string section) => section is "main" or "backpack_content" || IsEquipmentSection(section);
+    public static bool IsMovableSection(string section) => IsGridSection(section) || IsEquipmentSection(section);
+    /// <summary>
+    /// Whether <paramref name="section"/> is a plain grid, where an item may lie turned (<see cref="ItemInstance.Rotated"/>): the main grid (a
+    /// character's, a stock's, a storage's or a container's) or a backpack's contents.
+    /// </summary>
+    public static bool IsGridSection(string section) => section is "main" or "backpack_content";
     /// <summary>
     /// A fitted prosthetic's section (<see cref="Meitou.Data.Gameplay.Bodies.LimbReplacement.SlotOf"/>): the limbs window's slots; not traded, not
     /// saved with the inventory.
@@ -142,6 +147,20 @@ public static class InventoryCommands
     /// <see cref="ItemInstance.WearableBy"/>), nor in a section closed for it (<see cref="SectionClosed"/>).
     /// </summary>
     public static bool TryEquip(Inventory root, ItemInstance item, CharacterCold? wearer = null)
+    {
+        // Worn, an item lies as its record has it: a turned one is tried upright, and stays turned when no slot takes it.
+        bool turned = item.Rotated;
+        item.Rotated = false;
+        if (EquipUpright(root, item, wearer)) return true;
+
+        item.Rotated = turned;
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="TryEquip"/> for an item lying upright.
+    /// </summary>
+    static bool EquipUpright(Inventory root, ItemInstance item, CharacterCold? wearer)
     {
         if (!WearableBy(item, wearer) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
         string[] sections = item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow ? ["back", "hip"]
@@ -220,6 +239,22 @@ public static class InventoryCommands
     public static bool Transfer(Inventory from, InventoryItemToken token, Inventory into, string section, int x, int y, bool limbs = false,
             CharacterCold? wearer = null)
     {
+        // Outside the grids an item lies as its record has it: a turned one is tried upright, and stays turned when the place refuses it.
+        var moved = from.All().ElementAtOrDefault(token.Index);
+        bool turned = moved?.Rotated == true;
+        if (moved is not null && !IsGridSection(section)) moved.Rotated = false;
+        if (TransferAsLying(from, token, into, section, x, y, limbs, wearer)) return true;
+
+        if (moved is not null) moved.Rotated = turned;
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="Transfer"/> with the item's footprint as it lies now.
+    /// </summary>
+    static bool TransferAsLying(Inventory from, InventoryItemToken token, Inventory into, string section, int x, int y, bool limbs,
+            CharacterCold? wearer)
+    {
         var item = from.All().ElementAtOrDefault(token.Index);
         bool Movable(string s) => IsMovableSection(s) || limbs && IsLimbSection(s);
         if (item is null || item.Record != token.Record || item.Section != token.Section || item.X != token.X || item.Y != token.Y
@@ -270,6 +305,53 @@ public static class InventoryCommands
         item.Y = y;
         return true;
     }
+    /// <summary>
+    /// Meitou's item rotation (docs/game/ui-screens.md "Rotating an item"; the original has none): turns the grid item <paramref name="token"/>
+    /// names in <paramref name="root"/> a quarter, its footprint's sides swapped, at its own cell when the turned footprint is free there, else at
+    /// the nearest cell of its grid where it is. False, nothing changed: the token is stale, the item is square or not in a grid section, or no
+    /// cell has room.
+    /// </summary>
+    public static bool Rotate(Inventory root, InventoryItemToken token)
+    {
+        var item = root.All().ElementAtOrDefault(token.Index);
+        if (!HeldItems.Matches(item, token) || !IsGridSection(item!.Section) || item.Width == item.Height) return false;
+        if (HeldItems.HolderOf(root, item) is not { } grid) return false;
+
+        // Out of the grid while its new place is looked for, so its own cells count as free; back at its index, which the windows' tokens name.
+        int at = grid.Items.IndexOf(item);
+        grid.Items.RemoveAt(at);
+        item.Rotated = !item.Rotated;
+        var free = NearestFree(grid, item);
+        if (free is var (x, y)) (item.X, item.Y) = (x, y);
+        else
+            item.Rotated = !item.Rotated;
+
+        grid.Items.Insert(at, item);
+        return free is not null;
+    }
+
+    /// <summary>
+    /// The free cell of <paramref name="grid"/> nearest <paramref name="item"/>'s own where its footprint as it lies fits (its own first, then by
+    /// rows); null when none has room.
+    /// </summary>
+    static (int X, int Y)? NearestFree(Inventory grid, ItemInstance item)
+    {
+        (int X, int Y)? best = null;
+        long bestDistance = long.MaxValue;
+        for (int y = 0; y + item.Height <= grid.Height; y++)
+        {
+            for (int x = 0; x + item.Width <= grid.Width; x++)
+            {
+                long distance = (long)(x - item.X) * (x - item.X) + (long)(y - item.Y) * (y - item.Y);
+                if (distance >= bestDistance || !grid.IsFree(item.Section, x, y, item.Width, item.Height)) continue;
+
+                (best, bestDistance) = ((x, y), distance);
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>
     /// ARRANGE (<c>FUN_14070f740</c>, <b>Observed</b>): every grid section (the main grid and the worn bag's) is emptied and its items added again
     /// through the auto-add (<see cref="Inventory.AddTo"/>: partial stacks merge) in a sorted order: first by the longer side of the footprint, then

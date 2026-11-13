@@ -72,7 +72,19 @@ public sealed class ItemInstance
     /// Where it is: <c>main</c>, <c>shirt</c>, <c>head</c>, <c>boots</c>, <c>armour</c>, <c>legs</c>, <c>hip</c>, <c>back</c>, <c>backpack_attach</c>
     /// (a worn backpack), <c>backpack_content</c> (inside it).
     /// </summary>
-    public string Section { get; set; } = "main";
+    public string Section
+    {
+        get => _section;
+        set
+        {
+            _section = value;
+            if (!InventoryCommands.IsGridSection(value)) Rotated = false;
+        }
+    }
+    /// <summary>
+    /// The section it is in.
+    /// </summary>
+    string _section = "main";
     /// <summary>
     /// The cell column in its section's grid (the save's <c>inventory x</c>).
     /// </summary>
@@ -172,13 +184,27 @@ public sealed class ItemInstance
     /// </summary>
     public float LimbStun { get; set; }
     /// <summary>
-    /// Its width in inventory cells.
+    /// Its width in inventory cells as it lies: the record's, or the record's height while <see cref="Rotated"/>.
     /// </summary>
-    public int Width { get; init; } = 1;
+    public int Width { get => Rotated ? _height : _width; init => _width = value; }
     /// <summary>
-    /// Its height in inventory cells.
+    /// Its height in inventory cells as it lies: the record's, or the record's width while <see cref="Rotated"/>.
     /// </summary>
-    public int Height { get; init; } = 1;
+    public int Height { get => Rotated ? _width : _height; init => _height = value; }
+    /// <summary>
+    /// The record's width in cells, before any turn.
+    /// </summary>
+    readonly int _width = 1;
+    /// <summary>
+    /// The record's height in cells, before any turn.
+    /// </summary>
+    readonly int _height = 1;
+    /// <summary>
+    /// Meitou's item rotation (docs/game/ui-screens.md "Rotating an item"; the original has none): the item lies turned a quarter, its footprint's
+    /// sides swapped. Only in a grid section (<see cref="InventoryCommands.IsGridSection"/>): any other section sets it upright. Saved as
+    /// <see cref="Meitou.Data.Save.SaveItem.RotatedKey"/>.
+    /// </summary>
+    public bool Rotated { get; set; }
     /// <summary>
     /// Weight of one unit in kg as it counts in the inventory total (weapons already scaled by <c>weapon inventory weight mult</c>).
     /// </summary>
@@ -303,8 +329,9 @@ public sealed class ItemInstance
         Quality = Quality,
         Charges = quantity < Quantity && MaxCharges > 1 ? MaxCharges : Charges,
         MaxCharges = MaxCharges,
-        Width = Width,
-        Height = Height,
+        Width = _width,
+        Height = _height,
+        Rotated = Rotated,
         UnitWeight = _baseWeight,
         DynamicWeight = DynamicWeight,
         StackLimit = StackLimit,

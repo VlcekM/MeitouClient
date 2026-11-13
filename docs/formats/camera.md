@@ -150,6 +150,11 @@ engine feel (its Q/E turn the view left/right as named, not as the strategy came
 16 times, so scrolling back always reaches 100%; a label shows the speed for 3 s after a change; Shift does not boost it). The sea height clamps the camera's ground
 (**Observed**: the water node's height is the water height, 100). The settings above are constants of `CameraSettings`, not read
 from `settings.cfg`; `.`/`,` are no longer the time-step keys (they tilt, as in the game).
+**Follow camera offset** (Meitou, optional: Advanced → Follow camera offset, `UserConfig.FollowCameraOffset`, default off; the game has none;
+after ErasmianFolly's Camera Tweaks mod; `FollowFocus`): while the strategy camera follows a character the target is moved from the game's
+position + 10: up by Follow camera height (-10 to 30, default 17, about a person's head), or with Follow camera head lock to the height of the
+tracked character's `Bip01 Head` as last drawn (its last height over the target while it is not drawn), then sideways along the camera's right
+by Follow camera side (-40 to 40; positive puts the character left of the middle). The pivot stays on the character.
 The free camera more than 3000 above the ground under its eye stops moving the world's focus (`KenshiCamera.FlightHeight`, engine choice; the
 strategy camera never gets that high): the loaded zones, their squads and navmesh stay where the flight left the ground and load round the
 focus again once it comes down, so a high flight spawns and builds nothing.

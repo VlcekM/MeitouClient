@@ -280,6 +280,11 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public string Material { get; init; } = "";
     /// <summary>
+    /// The item lies turned a quarter (<see cref="Items.ItemInstance.Rotated"/>): <see cref="Width"/> and <see cref="Height"/> are the turned
+    /// footprint's, and the icon is drawn turned.
+    /// </summary>
+    public bool Rotated { get; init; }
+    /// <summary>
     /// The COLOR_DATA it is dyed with (<see cref="Items.ItemInstance.ColourId"/>; "" none), which also picks its icon.
     /// </summary>
     public string Colour { get; init; } = "";
